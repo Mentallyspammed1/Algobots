@@ -34,8 +34,8 @@ def display_market_info(
     if resistance:
         print(f"{COLOR_CYAN}Resistance Levels Detected:{COLOR_RESET}")
         for r_level in resistance:
-            print(f"  {COLOR_CYAN}- {r_level['price']:.4f} ({r_level['type']}){COLOR_RESET}")
+            print(f"  {COLOR_CYAN}- {r_level['price']:.2f} ({r_level['type']}){COLOR_RESET}")
     if support:
         print(f"{COLOR_MAGENTA}Support Levels Detected:{COLOR_RESET}")
         for s_level in support:
-            print(f"  {COLOR_MAGENTA}- {s_level['price']:.4f} ({s_level['type']}){COLOR_RESET}")
+            print(f"  {COLOR_MAGENTA}- {s_level['price']:.2f} ({s_level['type']}){COLOR_RESET}")

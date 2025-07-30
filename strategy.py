@@ -8,26 +8,9 @@ from config import SMA_PERIOD, PIVOT_TOLERANCE_PCT # Import new config parameter
 
 # Initialize logging for strategy
 strategy_logger = logging.getLogger('strategy')
-strategy_logger.setLevel(logging.INFO)
-# Ensure handlers are not duplicated if setup_logging is called elsewhere
-if not strategy_logger.handlers:
-    setup_logging() # Call the centralized setup
+strategy_logger.setLevel(logging.DEBUG)
 
-from typing import List, Dict, Any, Tuple, TYPE_CHECKING
-from decimal import Decimal
 
-from bot_logger import setup_logging
-from config import SMA_PERIOD, PIVOT_TOLERANCE_PCT # Import new config parameters
-
-if TYPE_CHECKING:
-    from PSG import OrderBlock # Import OrderBlock for type hinting
-
-# Initialize logging for strategy
-strategy_logger = logging.getLogger('strategy')
-strategy_logger.setLevel(logging.INFO)
-# Ensure handlers are not duplicated if setup_logging is called elsewhere
-if not strategy_logger.handlers:
-    setup_logging() # Call the centralized setup
 
 def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], support_levels: List[Dict[str, Any]],
                     active_bull_obs: List['OrderBlock'], active_bear_obs: List['OrderBlock'],
@@ -232,6 +215,33 @@ def generate_exit_signals(df: pd.DataFrame, current_position_side: str,
     # Trend filter: Only exit in the direction of the SMA (or against if reversal)
     is_uptrend = latest_close > latest_sma
     is_downtrend = latest_close < latest_sma
+
+    # Fibonacci Pivot Exit Check
+    fib_exit_triggered = False
+    fib_exit_reason = ""
+
+    if enable_fib_pivot_actions:
+        if current_position_side == 'BUY': # Long position
+            # Check proximity to nearest RESISTANCE levels
+            for name, price in pivot_resistance_levels.items():
+                if price > Decimal('0') and abs(latest_close - price) / price <= Decimal(str(fib_exit_warn_percent)):
+                    fib_exit_triggered = True
+                    fib_exit_reason = f"Price {latest_close:.2f} approaching Fib Resistance {name}={price:.2f} ({fib_exit_warn_percent*100:.3f}%)"
+                    break # Found one resistance level too close
+        elif current_position_side == 'SELL': # Short position
+            # Check proximity to nearest SUPPORT levels
+            for name, price in pivot_support_levels.items():
+                if price > Decimal('0') and abs(latest_close - price) / price <= Decimal(str(fib_exit_warn_percent)):
+                    fib_exit_triggered = True
+                    fib_exit_reason = f"Price {latest_close:.2f} approaching Fib Support {name}={price:.2f} ({fib_exit_warn_percent*100:.3f}%)"
+                    break # Found one support level too close
+
+    if fib_exit_triggered and fib_exit_action == "exit":
+        strategy_logger.warning(f"{COLOR_RED}Fib Pivot Exit Signal: {fib_exit_reason}. Triggering immediate exit.{COLOR_RESET}")
+        # Return an immediate exit signal
+        return [(current_position_side, latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'exit_type': 'fib_pivot_exit', 'reason': fib_exit_reason})]
+    elif fib_exit_triggered and fib_exit_action == "warn":
+        strategy_logger.warning(f"{COLOR_YELLOW}Fib Pivot Exit Warning: {fib_exit_reason}{COLOR_RESET}")
 
     if prev_stoch_k is not None and prev_stoch_d is not None:
         if current_position_side == 'BUY':

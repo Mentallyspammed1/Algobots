@@ -22,46 +22,11 @@ def setup_logging():
 
     # Create a custom logger
     bot_logger = logging.getLogger('scalper_bot')
-    bot_logger.setLevel(logging.INFO) # Overall minimum level
+    bot_logger.setLevel(logging.DEBUG) # Overall minimum level
 
-    # Prevent adding multiple handlers if already configured (e.g., during hot reload)
-    if not bot_logger.handlers:
-        # File Handler
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.INFO) # File logs all INFO and above
-        file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(file_formatter)
-        bot_logger.addHandler(file_handler)
-
-        # Console Handler
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO) # Console logs INFO and above
-
-        # Custom formatter for console with colors
-        class ColorFormatter(logging.Formatter):
-            FORMAT = f"{PYRMETHUS_BLUE}%(asctime)s{COLOR_RESET} - %(levelname)s - %(message)s"
-
-            LOG_COLORS = {
-                logging.DEBUG: COLOR_CYAN,
-                logging.INFO: COLOR_GREEN,
-                logging.WARNING: COLOR_YELLOW,
-                logging.ERROR: COLOR_RED,
-                logging.CRITICAL: COLOR_BOLD + COLOR_RED,
-                TRADE_LEVEL: PYRMETHUS_ORANGE, # For trade execution
-                METRICS_LEVEL: PYRMETHUS_GREY, # For trade metrics
-            }
-
-            def format(self, record):
-                log_fmt = self.FORMAT
-                # Add color based on level
-                log_fmt = self.LOG_COLORS.get(record.levelno, COLOR_RESET) + log_fmt + COLOR_RESET
-                formatter = logging.Formatter(log_fmt)
-                return formatter.format(record)
-
-        console_handler.setFormatter(ColorFormatter())
-        bot_logger.addHandler(console_handler)
-
-    bot_logger.info("Bot logging initialized.")
+    # Ensure root logger also processes DEBUG messages
+    logging.getLogger().setLevel(logging.DEBUG)
+    return bot_logger
     return bot_logger
 
 def log_trade(logger: logging.Logger, message: str, trade_data: dict):

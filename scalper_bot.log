@@ -3025,3 +3025,469 @@ TypeError: unsupported operand type(s) for -: 'decimal.Decimal' and 'float'
 2025-07-30 05:09:18,837 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
 2025-07-30 05:09:23,841 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
 2025-07-30 05:09:28,844 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 05:56:42,249 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 05:56:42,260 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 05:56:42,261 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 05:56:42,883 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 05:56:42,884 - scalper_bot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 05:56:43,132 - scalper_bot - INFO - BybitContractAPI initialized.
+2025-07-30 05:56:45,572 - scalper_bot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3250[0m
+2025-07-30 05:56:46,348 - scalper_bot - ERROR - Critical error in main loop: name 'ROUND_HALF_UP' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 464, in run
+    resistance, support = calculate_fibonacci_pivot_points(self.klines_df)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/indicators.py", line 78, in calculate_fibonacci_pivot_points
+    r1 = (r1 / Decimal('5')).quantize(Decimal('1'), rounding=ROUND_HALF_UP) * Decimal('5')
+                                                             ^^^^^^^^^^^^^
+NameError: name 'ROUND_HALF_UP' is not defined
+2025-07-30 05:56:46,381 - scalper_bot - INFO - [33m🔄 Recovering and restarting main loop after 10 seconds...[0m
+2025-07-30 05:56:56,389 - scalper_bot - INFO - [33mAll listener tasks cancelled and awaited.[0m
+2025-07-30 06:05:38,710 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:05:38,713 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:05:38,713 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:05:39,320 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:05:39,320 - scalper_bot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 06:05:39,591 - scalper_bot - INFO - BybitContractAPI initialized.
+2025-07-30 06:05:41,577 - scalper_bot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3390[0m
+2025-07-30 06:05:42,386 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:05:47,398 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:07:13,193 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:07:13,196 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:07:13,196 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:08:39,515 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:08:39,518 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:08:39,518 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:08:40,108 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:08:40,109 - scalper_bot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 06:08:40,394 - scalper_bot - INFO - BybitContractAPI initialized.
+2025-07-30 06:08:42,592 - scalper_bot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3400[0m
+2025-07-30 06:08:43,398 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:08:48,403 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:08:53,414 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:08:58,419 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:03,423 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:08,433 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:13,444 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:18,454 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:23,459 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:28,472 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:33,483 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:38,493 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:43,499 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:48,507 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:53,518 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:09:58,526 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:03,537 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:08,546 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:13,561 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:18,568 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:23,576 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:28,585 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:33,588 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:38,593 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:43,599 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:48,607 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:53,611 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:10:58,615 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:11:37,580 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:11:37,584 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:11:37,585 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:11:38,231 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:11:38,231 - scalper_bot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 06:11:38,496 - scalper_bot - INFO - BybitContractAPI initialized.
+2025-07-30 06:11:40,355 - scalper_bot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3490[0m
+2025-07-30 06:11:41,466 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:11:46,474 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:11:51,479 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:11:56,488 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:01,494 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:06,504 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:11,509 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:16,514 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:21,519 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:26,527 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:31,537 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:36,547 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:41,553 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:46,562 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:51,571 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:12:56,575 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:01,579 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:06,587 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:11,597 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:15,689 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:13:15,691 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:13:15,691 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:13:16,191 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:13:16,192 - scalper_bot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 06:13:16,409 - scalper_bot - INFO - BybitContractAPI initialized.
+2025-07-30 06:13:16,604 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:18,383 - scalper_bot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3430[0m
+2025-07-30 06:13:19,141 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:21,608 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:24,151 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:26,615 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:29,161 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:31,621 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:34,167 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:36,627 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:39,174 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:41,631 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:44,179 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:46,641 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:49,183 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:51,647 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:54,188 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:56,654 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:13:59,196 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:01,659 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:04,205 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:06,664 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:09,215 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:11,669 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:14,226 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:16,677 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:19,233 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:21,681 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:24,239 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:26,687 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:29,247 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:31,692 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:34,253 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:36,697 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:39,258 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:41,702 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:44,265 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:46,707 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:49,273 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:51,710 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:54,280 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:56,717 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:14:59,285 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:01,720 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:04,291 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:06,724 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:09,299 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:11,729 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:14,307 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:16,736 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:19,312 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:21,741 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:24,323 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:26,746 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:29,330 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:31,751 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:34,336 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:36,755 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:39,342 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:41,761 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:44,351 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:46,765 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:49,358 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:51,773 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:54,365 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:56,780 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:15:59,372 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:01,785 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:04,383 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:06,791 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:09,394 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:11,799 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:14,401 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:16,808 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:19,406 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:21,813 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:24,414 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:26,819 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:29,419 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:31,823 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:34,426 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:36,833 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:39,432 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:41,838 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:44,440 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:46,841 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:49,445 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:51,849 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:54,451 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:56,856 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:16:59,456 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:01,860 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:04,461 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:06,866 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:09,467 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:11,871 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:14,473 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:16,876 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:19,479 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:21,880 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:24,489 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:26,885 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:29,498 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:31,897 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:34,505 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:36,909 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:39,510 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:41,915 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:44,531 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:46,925 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:49,537 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:51,931 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:54,541 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:56,937 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:17:59,547 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:01,943 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:04,557 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:06,953 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:09,565 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:11,961 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:16,965 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:17,440 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:18:17,442 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:18:17,442 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:18:18,046 - scalper_bot - INFO - Bot logging initialized.
+2025-07-30 06:18:18,046 - scalper_bot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 06:18:18,300 - scalper_bot - INFO - BybitContractAPI initialized.
+2025-07-30 06:18:20,231 - scalper_bot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.2860[0m
+2025-07-30 06:18:21,296 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:21,970 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:26,303 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:26,977 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:31,309 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:31,981 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:36,315 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:36,986 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:41,322 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:41,992 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:46,330 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:46,999 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:51,335 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:52,009 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:56,339 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:18:57,014 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:01,346 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:02,021 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:06,354 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:07,028 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:11,364 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:12,033 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:16,370 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:17,037 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:21,378 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:22,042 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:26,382 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:27,047 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:31,387 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:32,054 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:36,392 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:37,060 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:41,399 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:42,064 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:46,409 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:47,070 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:51,419 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:52,076 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:56,425 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:19:57,079 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:01,433 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:02,083 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:06,438 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:07,091 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:11,443 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:12,095 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:16,448 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:17,098 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:21,454 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:22,103 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:26,463 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:27,106 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:31,468 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:32,111 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:36,474 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:37,115 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:41,481 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:42,120 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:46,488 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:47,125 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:52,130 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:20:57,135 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:02,140 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:07,147 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:12,151 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:17,155 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:22,161 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:27,167 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:32,171 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:37,176 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:42,184 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:47,190 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:52,194 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:21:57,198 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:02,201 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:07,207 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:12,212 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:17,217 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:22,221 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:27,227 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:32,233 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:37,236 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:42,244 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:47,255 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:52,258 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:22:57,267 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:02,274 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:07,280 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:12,284 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:17,287 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:22,291 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:27,296 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:32,300 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:37,305 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:42,310 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:47,316 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:52,322 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:23:57,327 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:02,330 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:07,337 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:12,343 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:17,349 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:22,358 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:27,363 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:32,371 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:37,390 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:42,401 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:47,432 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:52,442 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:24:57,447 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:02,462 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:07,473 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:12,480 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:17,493 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:22,508 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:27,523 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:32,530 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:37,540 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:42,555 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:47,560 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:52,573 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:25:57,587 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:02,605 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:07,610 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:12,619 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:17,625 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:22,633 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:27,639 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:32,643 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:37,740 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:42,746 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:47,752 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:52,757 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:26:57,763 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:02,776 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:07,783 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:12,789 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:17,794 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:22,800 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:27,806 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:32,811 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:37,814 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:42,819 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:47,823 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:52,828 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:27:57,831 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:02,838 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:07,844 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:12,854 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:17,861 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:22,865 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:27,869 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:32,874 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:37,880 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:42,891 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:47,897 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:52,903 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:28:57,907 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:02,912 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:07,917 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:12,930 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:17,934 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:22,939 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:27,943 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:32,947 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:37,955 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:42,960 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:47,966 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:52,971 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:29:57,984 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:02,996 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:07,999 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:13,003 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:18,006 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:23,010 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:28,015 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:33,022 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:38,032 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:43,037 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:48,043 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:53,050 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:30:58,055 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:03,061 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:08,066 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:13,071 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:18,077 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:23,087 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:28,092 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:33,098 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:38,105 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:43,110 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:48,113 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:53,120 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:31:58,126 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:03,131 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:08,136 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:13,146 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:18,150 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:23,155 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:28,161 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:33,170 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:38,175 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:43,180 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:48,185 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:53,190 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:32:58,195 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:03,198 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:08,206 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:13,210 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:18,216 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:23,223 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:28,232 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:33,238 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:38,241 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:43,248 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:48,251 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:53,257 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:33:58,274 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:03,284 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:08,289 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:13,292 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:18,298 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:23,308 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:28,313 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:33,316 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:38,322 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:43,326 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:48,349 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:53,372 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:34:58,382 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:03,387 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:08,391 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:13,398 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:18,403 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:23,409 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:28,414 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:33,421 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:38,427 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:43,445 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:48,450 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m
+2025-07-30 06:35:53,455 - scalper_bot - INFO - [38;5;208mSleeping for 5 seconds...[0m

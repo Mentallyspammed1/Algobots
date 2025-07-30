@@ -36,7 +36,9 @@ from config import (
     STOCHRSI_K_PERIOD, STOCHRSI_D_PERIOD, STOCHRSI_OVERBOUGHT_LEVEL,
     STOCHRSI_OVERSOLD_LEVEL, USE_STOCHRSI_CROSSOVER, STOP_LOSS_PCT,
     TAKE_PROFIT_PCT, BYBIT_API_ENDPOINT, BYBIT_CATEGORY, CANDLE_FETCH_LIMIT,
-    POLLING_INTERVAL_SECONDS, API_REQUEST_RETRIES, API_BACKOFF_FACTOR, ATR_PERIOD
+    POLLING_INTERVAL_SECONDS, API_REQUEST_RETRIES, API_BACKOFF_FACTOR, ATR_PERIOD,
+    ENABLE_FIB_PIVOT_ACTIONS, PIVOT_TIMEFRAME, FIB_LEVELS_TO_CALC, FIB_NEAREST_COUNT,
+    FIB_ENTRY_CONFIRM_PERCENT, FIB_EXIT_WARN_PERCENT, FIB_EXIT_ACTION
 )
 from indicators import calculate_fibonacci_pivot_points, calculate_stochrsi, calculate_atr, calculate_sma, calculate_ehlers_fisher_transform, calculate_ehlers_super_smoother
 from strategy import generate_signals, generate_exit_signals
@@ -462,15 +464,71 @@ class PyrmethusBot:
                         continue
 
                     resistance, support = calculate_fibonacci_pivot_points(self.klines_df)
-                    
-                    display_market_info(self.klines_df, self.current_price, SYMBOL, resistance, support, self.bot_logger)
+
+                    # --- Calculate Fibonacci Pivot Levels (if enabled) ---
+                    nearest_pivots: Dict[str, Decimal] = {}
+                    pivot_support_levels: Dict[str, Decimal] = {}
+                    pivot_resistance_levels: Dict[str, Decimal] = {}
+
+                    if ENABLE_FIB_PIVOT_ACTIONS:
+                        self.bot_logger.debug(f"Calculating Fibonacci Pivots based on {PIVOT_TIMEFRAME} timeframe...")
+                        try:
+                            # Fetch data for the pivot timeframe (need previous closed candle)
+                            # Fetch 2 candles to ensure we have the completed previous one
+                            pivot_ohlcv_response = await self.bybit_client.get_kline_rest_fallback(
+                                category=BYBIT_CATEGORY, symbol=SYMBOL, interval=PIVOT_TIMEFRAME, limit=2
+                            )
+                            if pivot_ohlcv_response and pivot_ohlcv_response.get('result') and pivot_ohlcv_response['result'].get('list'):
+                                pivot_data = []
+                                for kline in pivot_ohlcv_response['result']['list']:
+                                    pivot_data.append({
+                                        'timestamp': pd.to_datetime(int(kline[0]), unit='ms', utc=True),
+                                        'open': Decimal(kline[1]),
+                                        'high': Decimal(kline[2]),
+                                        'low': Decimal(kline[3]),
+                                        'close': Decimal(kline[4]),
+                                        'volume': Decimal(kline[5]),
+                                    })
+                                pivot_ohlcv_df = pd.DataFrame(pivot_data).set_index('timestamp').sort_index()
+
+                                if len(pivot_ohlcv_df) >= 2:
+                                    # Use the second to last row (index -2) which is the *last completed* candle
+                                    prev_pivot_candle = pivot_ohlcv_df.iloc[-2]
+                                    # Pass a DataFrame with a single row to calculate_fibonacci_pivot_points
+                                    temp_df = pd.DataFrame([prev_pivot_candle]).set_index('timestamp')
+                                    resistance, support = calculate_fibonacci_pivot_points(temp_df)
+
+                                    # Separate into support and resistance relative to current price
+                                    # (This logic is now handled within calculate_fibonacci_pivot_points)
+                                    # We just need to extract the levels from the returned lists
+                                    for r_level in resistance:
+                                        pivot_resistance_levels[r_level['type']] = r_level['price']
+                                    for s_level in support:
+                                        pivot_support_levels[s_level['type']] = s_level['price']
+
+                                    self.bot_logger.debug(f"Nearest Support Pivots: {pivot_support_levels}")
+                                    self.bot_logger.debug(f"Nearest Resistance Pivots: {pivot_resistance_levels}")
+                                else:
+                                    self.bot_logger.warning(f"{COLOR_YELLOW}Could not fetch sufficient data ({len(pivot_ohlcv_df)} candles) for {PIVOT_TIMEFRAME} pivots.{COLOR_RESET}")
+                            else:
+                                self.bot_logger.warning(f"{COLOR_YELLOW}Failed to fetch pivot data for {PIVOT_TIMEFRAME}.{COLOR_RESET}")
+                        except Exception as pivot_e:
+                            log_exception(self.bot_logger, f"Error during Fibonacci Pivot calculation: {pivot_e}", pivot_e)
+
+                    display_market_info(self.klines_df, self.current_price, SYMBOL, resistance, support, self.bot_logger, price_precision_digits=4) # Assuming 4 for now, will make dynamic later
 
                     if not self.position_open:
                         signals = generate_signals(self.klines_df, resistance, support,
                                                    self.active_bull_obs, self.active_bear_obs,
                                                    stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD,
                                                    overbought=STOCHRSI_OVERBOUGHT_LEVEL, oversold=STOCHRSI_OVERSOLD_LEVEL,
-                                                   use_crossover=USE_STOCHRSI_CROSSOVER)
+                                                   use_crossover=USE_STOCHRSI_CROSSOVER,
+                                                   enable_fib_pivot_actions=ENABLE_FIB_PIVOT_ACTIONS,
+                                                   fib_entry_confirm_percent=FIB_ENTRY_CONFIRM_PERCENT,
+                                                   fib_exit_warn_percent=FIB_EXIT_WARN_PERCENT,
+                                                   fib_exit_action=FIB_EXIT_ACTION,
+                                                   pivot_support_levels=pivot_support_levels,
+                                                   pivot_resistance_levels=pivot_resistance_levels)
                         for signal in signals:
                             signal_type, signal_price, signal_timestamp, signal_info = signal
                             if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
@@ -481,7 +539,13 @@ class PyrmethusBot:
                                                              self.active_bull_obs, self.active_bear_obs,
                                                              stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD,
                                                              overbought=STOCHRSI_OVERBOUGHT_LEVEL, oversold=STOCHRSI_OVERSOLD_LEVEL,
-                                                             use_crossover=USE_STOCHRSI_CROSSOVER)
+                                                             use_crossover=USE_STOCHRSI_CROSSOVER,
+                                                             enable_fib_pivot_actions=ENABLE_FIB_PIVOT_ACTIONS,
+                                                             fib_entry_confirm_percent=FIB_ENTRY_CONFIRM_PERCENT,
+                                                             fib_exit_warn_percent=FIB_EXIT_WARN_PERCENT,
+                                                             fib_exit_action=FIB_EXIT_ACTION,
+                                                             pivot_support_levels=pivot_support_levels,
+                                                             pivot_resistance_levels=pivot_resistance_levels)
                         if exit_signals:
                             for exit_signal in exit_signals:
                                 exit_type, exit_price, exit_timestamp, exit_info = exit_signal

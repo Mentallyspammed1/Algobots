@@ -36,6 +36,7 @@ ATR_MULTIPLIER_TP = 2.0 # Multiplier for ATR to set Take Profit
 
 # --- Strategy Parameters (Trend Filter) ---
 SMA_PERIOD = 8 # Period for Simple Moving Average (SMA) trend filter
+ATR_PERIOD = 10 # Period for Average True Range (ATR) calculation
 
 # --- API Configuration ---
 # Bybit API endpoint and category.
@@ -43,7 +44,6 @@ SMA_PERIOD = 8 # Period for Simple Moving Average (SMA) trend filter
 # For testnet: "https://api-testnet.bybit.com"
 BYBIT_API_ENDPOINT = "https://api.bybit.com" # <<< CHANGE TO LIVE API FOR REAL TRADING
 BYBIT_CATEGORY = "linear" # Options: 'linear', 'inverse', 'spot'
-ATR_PERIOD = 10 # Period for Average True Range (ATR) calculation
 
 # IMPORTANT: API_KEY and API_SECRET should NOT be hardcoded here.
 # Store them in environment variables or a .env file (e.g., `BYBIT_API_KEY="your_key"`).

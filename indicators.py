@@ -2,7 +2,7 @@
 import pandas as pd
 import logging
 from typing import List, Dict, Any, Tuple
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, ROUND_HALF_UP
 import math
 
 from bot_logger import setup_logging
@@ -12,7 +12,6 @@ getcontext().prec = 38
 
 # Initialize logging for indicators
 indicators_logger = logging.getLogger('indicators')
-indicators_logger.setLevel(logging.INFO)
 # Ensure handlers are not duplicated if setup_logging is called elsewhere
 if not indicators_logger.handlers:
     setup_logging() # Call the centralized setup
@@ -58,29 +57,35 @@ def calculate_fibonacci_pivot_points(df: pd.DataFrame) -> Tuple[List[Dict[str, A
     low = Decimal(str(last_candle['low']))
     close = Decimal(str(last_candle['close']))
 
+    indicators_logger.debug(f"Input for Fibonacci: High={high:.8f}, Low={low:.8f}, Close={close:.8f}")
+
     # Calculate Pivot Point (PP)
     pp = (high + low + close) / Decimal('3')
 
     # Calculate Range
     price_range = high - low
+    indicators_logger.debug(f"Calculated PP: {pp:.8f}, Price Range: {price_range:.8f}")
 
     # Calculate Resistance Levels
-    r1 = pp + (price_range * Decimal('0.382'))
-    r2 = pp + (price_range * Decimal('0.618'))
-    r3 = pp + (price_range * Decimal('1.000'))
+    r1_unrounded = pp + (price_range * Decimal('0.382'))
+    r2_unrounded = pp + (price_range * Decimal('0.618'))
+    r3_unrounded = pp + (price_range * Decimal('1.000'))
 
     # Calculate Support Levels
-    s1 = pp - (price_range * Decimal('0.382'))
-    s2 = pp - (price_range * Decimal('0.618'))
-    s3 = pp - (price_range * Decimal('1.000'))
+    s1_unrounded = pp - (price_range * Decimal('0.382'))
+    s2_unrounded = pp - (price_range * Decimal('0.618'))
+    s3_unrounded = pp - (price_range * Decimal('1.000'))
 
-    # Round to nearest 5
-    r1 = round(r1 / 5) * 5
-    r2 = round(r2 / 5) * 5
-    r3 = round(r3 / 5) * 5
-    s1 = round(s1 / 5) * 5
-    s2 = round(s2 / 5) * 5
-    s3 = round(s3 / 5) * 5
+    indicators_logger.debug(f"Unrounded R1: {r1_unrounded:.8f}, R2: {r2_unrounded:.8f}, R3: {r3_unrounded:.8f}")
+    indicators_logger.debug(f"Unrounded S1: {s1_unrounded:.8f}, S2: {s2_unrounded:.8f}, S3: {s3_unrounded:.8f}")
+
+    # Round to 2 decimal places for more meaningful values on low-priced assets
+    r1 = r1_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    r2 = r2_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    r3 = r3_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    s1 = s1_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    s2 = s2_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    s3 = s3_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     resistance_levels.append({'price': r1, 'type': 'R1'})
     resistance_levels.append({'price': r2, 'type': 'R2'})
