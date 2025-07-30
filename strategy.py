@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Tuple
 from decimal import Decimal # Import Decimal
 
 from bot_logger import setup_logging
+from config import SMA_PERIOD, PIVOT_TOLERANCE_PCT # Import new config parameters
 
 # Initialize logging for strategy
 strategy_logger = logging.getLogger('strategy')
@@ -62,45 +63,79 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
     # --- StochRSI Signal Logic ---
     stoch_info = {'stoch_k': latest_stoch_k, 'stoch_d': latest_stoch_d}
 
+    # Ensure the DataFrame has the sma, ehlers_fisher, and ehlers_supersmoother columns
+    if 'sma' not in df.columns or 'ehlers_fisher' not in df.columns or 'ehlers_supersmoother' not in df.columns:
+        strategy_logger.error("DataFrame must contain 'sma', 'ehlers_fisher', and 'ehlers_supersmoother' columns for signal generation.")
+        return signals
+
+    latest_sma = df['sma'].iloc[-1]
+    latest_ehlers_fisher = df['ehlers_fisher'].iloc[-1]
+    latest_ehlers_supersmoother = df['ehlers_supersmoother'].iloc[-1]
+
+    # --- StochRSI Signal Logic ---
+    stoch_info = {'stoch_k': latest_stoch_k, 'stoch_d': latest_stoch_d}
+    ehlers_info = {'fisher': latest_ehlers_fisher, 'supersmoother': latest_ehlers_supersmoother}
+
+    # Trend filter: Only trade in the direction of the SMA
+    is_uptrend = latest_close > latest_sma
+    is_downtrend = latest_close < latest_sma
+
     if prev_stoch_k is not None and prev_stoch_d is not None:
-        if use_crossover:
-            # Buy signal: %K crosses above %D, both below oversold
-            if prev_stoch_k < prev_stoch_d and latest_stoch_k > latest_stoch_d and \
-               latest_stoch_k < oversold_dec:
-                signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, 'stoch_type': 'k_cross_d_buy'}))
-                strategy_logger.info(f"StochRSI Buy Signal (K cross D below {oversold_dec:.2f}): K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
+        # Buy signal conditions
+        if is_uptrend: # Only consider buy signals in an uptrend
+            if use_crossover:
+                # %K crosses above %D, both below oversold
+                if prev_stoch_k < prev_stoch_d and latest_stoch_k > latest_stoch_d and \
+                   latest_stoch_k < oversold_dec:
+                    # Check for confluence with support levels
+                    near_support = False
+                    for s_level in support_levels:
+                        if abs(latest_close - s_level['price']) <= latest_close * Decimal(str(PIVOT_TOLERANCE_PCT)):
+                            near_support = True
+                            break
+                    if near_support:
+                        signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_cross_d_buy', 'confluence': 'pivot_support'}))
+                        strategy_logger.info(f"StochRSI Buy Signal (K cross D below {oversold_dec:.2f}) with Pivot Support: K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
+            else:
+                # %K crosses above oversold level
+                if prev_stoch_k < oversold_dec and latest_stoch_k >= oversold_dec:
+                    # Check for confluence with support levels
+                    near_support = False
+                    for s_level in support_levels:
+                        if abs(latest_close - s_level['price']) <= latest_close * Decimal(str(PIVOT_TOLERANCE_PCT)):
+                            near_support = True
+                            break
+                    if near_support:
+                        signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_oversold_bounce', 'confluence': 'pivot_support'}))
+                        strategy_logger.info(f"StochRSI Buy Signal (K bounce from {oversold_dec:.2f}) with Pivot Support: K={latest_stoch_k:.2f}")
 
-            # Sell signal: %K crosses below %D, both above overbought
-            elif prev_stoch_k > prev_stoch_d and latest_stoch_k < latest_stoch_d and \
-                 latest_stoch_k > overbought_dec:
-                signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, 'stoch_type': 'k_cross_d_sell'}))
-                strategy_logger.info(f"StochRSI Sell Signal (K cross D above {overbought_dec:.2f}): K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
-        else:
-            # Buy signal: %K crosses above oversold level
-            if prev_stoch_k < oversold_dec and latest_stoch_k >= oversold_dec:
-                signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, 'stoch_type': 'k_oversold_bounce'}))
-                strategy_logger.info(f"StochRSI Buy Signal (K bounce from {oversold_dec:.2f}): K={latest_stoch_k:.2f}")
-
-            # Sell signal: %K crosses below overbought level
-            elif prev_stoch_k > overbought_dec and latest_stoch_k <= overbought_dec:
-                signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, 'stoch_type': 'k_overbought_rejection'}))
-                strategy_logger.info(f"StochRSI Sell Signal (K rejection from {overbought_dec:.2f}): K={latest_stoch_k:.2f}")
-
-    # --- Optional: Pivot Point Confirmation (Fibonacci) ---
-    # For Fibonacci pivots, we don't use tolerance percentage in the same way.
-    # We can check if the current price is near any of the levels.
-    # This part might need more sophisticated logic depending on how you want to use Fibonacci pivots.
-    # For now, we'll just log them.
-    if resistance_levels:
-        for r_level in resistance_levels:
-            strategy_logger.debug(f"Fibonacci Resistance {r_level['type']}: {r_level['price']:.2f}")
-    if support_levels:
-        for s_level in support_levels:
-            strategy_logger.debug(f"Fibonacci Support {s_level['type']}: {s_level['price']:.2f}")
-
-    # Example: If price is near R1 and StochRSI is overbought, consider a sell signal
-    # This is a placeholder and needs to be refined based on your strategy
-    # For now, the primary signals come from StochRSI crossovers/levels.
+        # Sell signal conditions
+        if is_downtrend: # Only consider sell signals in a downtrend
+            if use_crossover:
+                # %K crosses below %D, both above overbought
+                if prev_stoch_k > prev_stoch_d and latest_stoch_k < latest_stoch_d and \
+                   latest_stoch_k > overbought_dec:
+                    # Check for confluence with resistance levels
+                    near_resistance = False
+                    for r_level in resistance_levels:
+                        if abs(latest_close - r_level['price']) <= latest_close * Decimal(str(PIVOT_TOLERANCE_PCT)):
+                            near_resistance = True
+                            break
+                    if near_resistance:
+                        signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_cross_d_sell', 'confluence': 'pivot_resistance'}))
+                        strategy_logger.info(f"StochRSI Sell Signal (K cross D above {overbought_dec:.2f}) with Pivot Resistance: K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
+            else:
+                # %K crosses below overbought level
+                if prev_stoch_k > overbought_dec and latest_stoch_k <= overbought_dec:
+                    # Check for confluence with resistance levels
+                    near_resistance = False
+                    for r_level in resistance_levels:
+                        if abs(latest_close - r_level['price']) <= latest_close * Decimal(str(PIVOT_TOLERANCE_PCT)):
+                            near_resistance = True
+                            break
+                    if near_resistance:
+                        signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_overbought_rejection', 'confluence': 'pivot_resistance'}))
+                        strategy_logger.info(f"StochRSI Sell Signal (K rejection from {overbought_dec:.2f}) with Pivot Resistance: K={latest_stoch_k:.2f}")
 
     return signals
 
@@ -146,31 +181,41 @@ def generate_exit_signals(df: pd.DataFrame, current_position_side: str,
     overbought_dec = Decimal(str(overbought))
     oversold_dec = Decimal(str(oversold))
 
+    # Ensure the DataFrame has the sma, ehlers_fisher, and ehlers_supersmoother columns
+    if 'sma' not in df.columns or 'ehlers_fisher' not in df.columns or 'ehlers_supersmoother' not in df.columns:
+        strategy_logger.error("DataFrame must contain 'sma', 'ehlers_fisher', and 'ehlers_supersmoother' columns for exit signal generation.")
+        return exit_signals
+
+    latest_sma = df['sma'].iloc[-1]
+    latest_ehlers_fisher = df['ehlers_fisher'].iloc[-1]
+    latest_ehlers_supersmoother = df['ehlers_supersmoother'].iloc[-1]
+
     stoch_info = {'stoch_k': latest_stoch_k, 'stoch_d': latest_stoch_d}
+    ehlers_info = {'fisher': latest_ehlers_fisher, 'supersmoother': latest_ehlers_supersmoother}
+
+    # Trend filter: Only exit in the direction of the SMA (or against if reversal)
+    is_uptrend = latest_close > latest_sma
+    is_downtrend = latest_close < latest_sma
 
     if prev_stoch_k is not None and prev_stoch_d is not None:
         if current_position_side == 'BUY':
             # Exit Long signal: StochRSI becomes overbought or crosses down
-            if use_crossover:
-                if prev_stoch_k > prev_stoch_d and latest_stoch_k < latest_stoch_d and \
-                   latest_stoch_k > overbought_dec: # K crosses below D from overbought
-                    exit_signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, 'stoch_type': 'k_cross_d_exit_long'}))
-                    strategy_logger.info(f"StochRSI Exit Long Signal (K cross D from overbought): K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
-            else:
-                if prev_stoch_k > overbought_dec and latest_stoch_k <= overbought_dec: # K crosses below overbought
-                    exit_signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, 'stoch_type': 'k_overbought_exit_long'}))
-                    strategy_logger.info(f"StochRSI Exit Long Signal (K crosses below overbought): K={latest_stoch_k:.2f}")
+            # Consider exiting if in downtrend or StochRSI indicates reversal
+            if is_downtrend or (use_crossover and prev_stoch_k > prev_stoch_d and latest_stoch_k < latest_stoch_d and latest_stoch_k > overbought_dec): # K crosses below D from overbought
+                exit_signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_cross_d_exit_long'}))
+                strategy_logger.info(f"StochRSI Exit Long Signal (K cross D from overbought) or Downtrend: K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
+            elif not use_crossover and prev_stoch_k > overbought_dec and latest_stoch_k <= overbought_dec: # K crosses below overbought
+                exit_signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_overbought_exit_long'}))
+                strategy_logger.info(f"StochRSI Exit Long Signal (K crosses below overbought): K={latest_stoch_k:.2f}")
 
         elif current_position_side == 'SELL':
             # Exit Short signal: StochRSI becomes oversold or crosses up
-            if use_crossover:
-                if prev_stoch_k < prev_stoch_d and latest_stoch_k > latest_stoch_d and \
-                   latest_stoch_k < oversold_dec: # K crosses above D from oversold
-                    exit_signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, 'stoch_type': 'k_cross_d_exit_short'}))
-                    strategy_logger.info(f"StochRSI Exit Short Signal (K cross D from oversold): K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
-            else:
-                if prev_stoch_k < oversold_dec and latest_stoch_k >= oversold_dec: # K crosses above oversold
-                    exit_signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, 'stoch_type': 'k_oversold_exit_short'}))
-                    strategy_logger.info(f"StochRSI Exit Short Signal (K crosses above oversold): K={latest_stoch_k:.2f}")
+            # Consider exiting if in uptrend or StochRSI indicates reversal
+            if is_uptrend or (use_crossover and prev_stoch_k < prev_stoch_d and latest_stoch_k > latest_stoch_d and latest_stoch_k < oversold_dec): # K crosses above D from oversold
+                exit_signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_cross_d_exit_short'}))
+                strategy_logger.info(f"StochRSI Exit Short Signal (K cross D from oversold) or Uptrend: K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
+            elif not use_crossover and prev_stoch_k < oversold_dec and latest_stoch_k >= oversold_dec: # K crosses above oversold
+                exit_signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_oversold_exit_short'}))
+                strategy_logger.info(f"StochRSI Exit Short Signal (K crosses above oversold): K={latest_stoch_k:.2f}")
 
     return exit_signals

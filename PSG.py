@@ -23,7 +23,7 @@ from config import (
     STOCHRSI_K_PERIOD, STOCHRSI_D_PERIOD, STOCHRSI_OVERBOUGHT_LEVEL,
     STOCHRSI_OVERSOLD_LEVEL, USE_STOCHRSI_CROSSOVER, STOP_LOSS_PCT,
     TAKE_PROFIT_PCT, BYBIT_API_ENDPOINT, BYBIT_CATEGORY, CANDLE_FETCH_LIMIT,
-    POLLING_INTERVAL_SECONDS, API_REQUEST_RETRIES, API_BACKOFF_FACTOR
+    POLLING_INTERVAL_SECONDS, API_REQUEST_RETRIES, API_BACKOFF_FACTOR, ATR_PERIOD
 )
 from indicators import calculate_fibonacci_pivot_points, calculate_stochrsi, calculate_atr
 from strategy import generate_signals, generate_exit_signals
@@ -62,6 +62,16 @@ class PyrmethusBot:
         self.klines_df: Optional[pd.DataFrame] = None
         self.cached_atr: Optional[Decimal] = None
 
+    def _reset_position_state(self):
+        """Resets all internal state variables related to an open position."""
+        self.inventory = Decimal('0')
+        self.entry_price = Decimal('0')
+        self.unrealized_pnl = Decimal('0')
+        self.position_open = False
+        self.current_position_side = None
+        self.entry_price_for_trade_metrics = Decimal('0')
+        self.entry_fee_for_trade_metrics = Decimal('0')
+
     async def _handle_position_update(self, message: Dict[str, Any]):
         """
         Asynchronous handler for WebSocket position updates.
@@ -84,14 +94,7 @@ class PyrmethusBot:
                 )
                 log_metrics(self.bot_logger, "Overall Trade Statistics", self.trade_metrics.get_trade_statistics())
             
-            # Reset all position state variables
-            self.inventory = Decimal('0')
-            self.entry_price = Decimal('0')
-            self.unrealized_pnl = Decimal('0')
-            self.position_open = False
-            self.current_position_side = None
-            self.entry_price_for_trade_metrics = Decimal('0')
-            self.entry_fee_for_trade_metrics = Decimal('0')
+            self._reset_position_state()
             self.bot_logger.info(f"{PYRMETHUS_GREY}✅ No open position for {SYMBOL} (WS). Seeking new trade opportunities...{COLOR_RESET}")
             return
 
@@ -142,32 +145,48 @@ class PyrmethusBot:
             self.bot_logger.debug(f"[{SYMBOL}] No open position to set TP/SL for.")
             return
 
-        if STOP_LOSS_PCT is None and TAKE_PROFIT_PCT is None:
-            self.bot_logger.debug(f"[{SYMBOL}] No TP or SL percentage configured. Skipping.")
+        if STOP_LOSS_PCT is None and TAKE_PROFIT_PCT is None and self.cached_atr is None:
+            self.bot_logger.debug(f"[{SYMBOL}] No static TP/SL percentage or ATR configured. Skipping.")
             return
 
         take_profit_price = None
         stop_loss_price = None
 
-        if self.inventory > 0: # Long position
-            if TAKE_PROFIT_PCT is not None:
-                take_profit_price = self.entry_price * (Decimal('1') + Decimal(str(TAKE_PROFIT_PCT)))
-            if STOP_LOSS_PCT is not None:
-                stop_loss_price = self.entry_price * (Decimal('1') - Decimal(str(STOP_LOSS_PCT)))
-        elif self.inventory < 0: # Short position
-            if TAKE_PROFIT_PCT is not None:
-                take_profit_price = self.entry_price * (Decimal('1') - Decimal(str(TAKE_PROFIT_PCT)))
-            if STOP_LOSS_PCT is not None:
-                stop_loss_price = self.entry_price * (Decimal('1') + Decimal(str(STOP_LOSS_PCT)))
+        # Dynamic TP/SL using ATR
+        if self.cached_atr is not None and ATR_MULTIPLIER_SL is not None and ATR_MULTIPLIER_TP is not None:
+            atr_sl_value = self.cached_atr * Decimal(str(ATR_MULTIPLIER_SL))
+            atr_tp_value = self.cached_atr * Decimal(str(ATR_MULTIPLIER_TP))
 
-        self.bot_logger.info(f"{PYRMETHUS_ORANGE}Attempting to set TP/SL for {SYMBOL}: TP={take_profit_price}, SL={stop_loss_price}{COLOR_RESET}")
-        await self.bybit_client.set_trading_stop(
-            category=BYBIT_CATEGORY,
-            symbol=SYMBOL,
-            take_profit=f"{take_profit_price:.4f}" if take_profit_price else None,
-            stop_loss=f"{stop_loss_price:.4f}" if stop_loss_price else None,
-            positionIdx=0
-        )
+            if self.inventory > 0: # Long position
+                stop_loss_price = self.entry_price - atr_sl_value
+                take_profit_price = self.entry_price + atr_tp_value
+            elif self.inventory < 0: # Short position
+                stop_loss_price = self.entry_price + atr_sl_value
+                take_profit_price = self.entry_price - atr_tp_value
+            self.bot_logger.info(f"{PYRMETHUS_ORANGE}Dynamic TP/SL (ATR-based) for {SYMBOL}: TP={take_profit_price:.4f}, SL={stop_loss_price:.4f}{COLOR_RESET}")
+        # Fallback to static TP/SL if ATR is not available or multipliers not set
+        else:
+            if self.inventory > 0: # Long position
+                if TAKE_PROFIT_PCT is not None:
+                    take_profit_price = self.entry_price * (Decimal('1') + Decimal(str(TAKE_PROFIT_PCT)))
+                if STOP_LOSS_PCT is not None:
+                    stop_loss_price = self.entry_price * (Decimal('1') - Decimal(str(STOP_LOSS_PCT)))
+            elif self.inventory < 0: # Short position
+                if TAKE_PROFIT_PCT is not None:
+                    take_profit_price = self.entry_price * (Decimal('1') - Decimal(str(TAKE_PROFIT_PCT)))
+                if STOP_LOSS_PCT is not None:
+                    stop_loss_price = self.entry_price * (Decimal('1') + Decimal(str(STOP_LOSS_PCT)))
+            self.bot_logger.info(f"{PYRMETHUS_ORANGE}Static TP/SL (Percentage-based) for {SYMBOL}: TP={take_profit_price}, SL={stop_loss_price}{COLOR_RESET}")
+
+        # Only set if a valid price is calculated
+        if take_profit_price or stop_loss_price:
+            await self.bybit_client.set_trading_stop(
+                category=BYBIT_CATEGORY,
+                symbol=SYMBOL,
+                take_profit=f"{take_profit_price:.4f}" if take_profit_price else None,
+                stop_loss=f"{stop_loss_price:.4f}" if stop_loss_price else None,
+                positionIdx=0
+            )
 
     async def _handle_kline_update(self, message: Dict[str, Any]):
         """
@@ -186,6 +205,12 @@ class PyrmethusBot:
             # Recalculate indicators on the updated DataFrame
             self.klines_df = calculate_stochrsi(self.klines_df.copy(), rsi_period=STOCHRSI_K_PERIOD, stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD)
             self.klines_df['atr'] = calculate_atr(self.klines_df)
+            self.klines_df['sma'] = calculate_sma(self.klines_df, length=10) # Default SMA length
+            self.klines_df['ehlers_fisher'] = calculate_ehlers_fisher_transform(self.klines_df, length=9) # Default Fisher length
+            self.klines_df['ehlers_supersmoother'] = calculate_ehlers_super_smoother(self.klines_df, length=10) # Default Super Smoother length
+            self.klines_df['sma'] = calculate_sma(self.klines_df, SMA_PERIOD)
+            self.klines_df['ehlers_fisher'] = calculate_ehlers_fisher_transform(self.klines_df)
+            self.klines_df['ehlers_supersmoother'] = calculate_ehlers_super_smoother(self.klines_df)
             self.cached_atr = self.klines_df['atr'].iloc[-1]
             self.current_price = self.klines_df['close'].iloc[-1]
             self.bot_logger.debug(f"{PYRMETHUS_CYAN}Kline updated via WebSocket. Current price: {self.current_price:.4f}{COLOR_RESET}")
@@ -195,7 +220,7 @@ class PyrmethusBot:
     async def _initial_kline_fetch(self) -> bool:
         """Fetches initial historical kline data to populate the DataFrame."""
         try:
-            klines_response = await self.bybit_client.get_kline(
+            klines_response = await self.bybit_client.get_kline_rest_fallback(
                 category=BYBIT_CATEGORY, symbol=SYMBOL, interval=INTERVAL, limit=CANDLE_FETCH_LIMIT
             )
             if not klines_response or not klines_response.get('result') or not klines_response['result'].get('list'):
@@ -214,12 +239,15 @@ class PyrmethusBot:
                 })
             df = pd.DataFrame(data).set_index('timestamp').sort_index()
 
-            if len(df) < max(STOCHRSI_K_PERIOD, 14): # 14 for ATR
-                self.bot_logger.warning(f"{COLOR_YELLOW}Insufficient initial data for indicators ({len(df)} candles). Need at least {max(STOCHRSI_K_PERIOD, 14)}.{COLOR_RESET}")
+            if len(df) < max(STOCHRSI_K_PERIOD, ATR_PERIOD):
+                self.bot_logger.warning(f"{COLOR_YELLOW}Insufficient initial data for indicators ({len(df)} candles). Need at least {max(STOCHRSI_K_PERIOD, ATR_PERIOD)}.{COLOR_RESET}")
                 return False
 
             self.klines_df = calculate_stochrsi(df.copy(), rsi_period=STOCHRSI_K_PERIOD, stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD)
             self.klines_df['atr'] = calculate_atr(self.klines_df)
+            self.klines_df['sma'] = calculate_sma(self.klines_df, length=10) # Default SMA length
+            self.klines_df['ehlers_fisher'] = calculate_ehlers_fisher_transform(self.klines_df, length=9) # Default Fisher length
+            self.klines_df['ehlers_supersmoother'] = calculate_ehlers_super_smoother(self.klines_df, length=10) # Default Super Smoother length
             self.cached_atr = self.klines_df['atr'].iloc[-1]
             self.current_price = self.klines_df['close'].iloc[-1]
             self.bot_logger.info(f"{PYRMETHUS_GREEN}Initial kline data fetched and processed. Current price: {self.current_price:.4f}{COLOR_RESET}")
@@ -241,7 +269,8 @@ class PyrmethusBot:
         min_qty = Decimal(instrument_details.get('lotSizeFilter', {}).get('minOrderQty', '0'))
         qty_step = Decimal(instrument_details.get('lotSizeFilter', {}).get('qtyStep', '0'))
 
-        calculated_quantity = calculate_order_quantity(USDT_AMOUNT_PER_TRADE, self.current_price, min_qty, qty_step)
+        calculated_quantity_float = calculate_order_quantity(USDT_AMOUNT_PER_TRADE, self.current_price, min_qty, qty_step)
+        calculated_quantity = Decimal(str(calculated_quantity_float)) # Convert to Decimal immediately
         if calculated_quantity <= 0:
             self.bot_logger.error(f"{COLOR_RED}Calculated entry quantity is zero or negative: {calculated_quantity}. Cannot place order.{COLOR_RESET}")
             return
@@ -313,10 +342,10 @@ class PyrmethusBot:
         )
         self.bot_logger.info("BybitContractAPI initialized.")
 
-        private_listener_task = await self.bybit_client.start_private_websocket_listener(self._handle_position_update)
+        private_listener_task = asyncio.create_task(self.bybit_client.start_private_websocket_listener(self._handle_position_update))
         await self.bybit_client.subscribe_ws_private_topic("position")
 
-        public_listener_task = await self.bybit_client.start_public_websocket_listener(self._handle_kline_update)
+        public_listener_task = asyncio.create_task(self.bybit_client.start_public_websocket_listener(self._handle_kline_update))
         await self.bybit_client.subscribe_ws_public_topic(f"kline.{INTERVAL}.{SYMBOL}")
 
         # Initial fetch of historical kline data
@@ -331,11 +360,14 @@ class PyrmethusBot:
         else:
             await self._handle_position_update({"topic": "position", "data": []})
 
+        # Gather all listener tasks to run concurrently
+        listener_tasks = [private_listener_task, public_listener_task]
+
         async with self.bybit_client:
-            while True:
-                try:
+            try:
+                while True:
                     # Ensure klines_df is not None and has enough data for calculations
-                    if self.klines_df is None or len(self.klines_df) < max(STOCHRSI_K_PERIOD, 14):
+                    if self.klines_df is None or len(self.klines_df) < max(STOCHRSI_K_PERIOD, ATR_PERIOD):
                         self.bot_logger.warning(f"{COLOR_YELLOW}Insufficient kline data for calculations. Waiting for more data...{COLOR_RESET}")
                         await asyncio.sleep(POLLING_INTERVAL_SECONDS)
                         continue
@@ -370,13 +402,18 @@ class PyrmethusBot:
                     self.bot_logger.info(f"{PYRMETHUS_ORANGE}Sleeping for {POLLING_INTERVAL_SECONDS} seconds...{COLOR_RESET}")
                     await asyncio.sleep(POLLING_INTERVAL_SECONDS)
 
-                except KeyboardInterrupt:
-                    log_exception(self.bot_logger, "Bot stopped by user (KeyboardInterrupt).", None)
-                    break
-                except Exception as e:
-                    log_exception(self.bot_logger, f"Critical error in main loop: {str(e)}", e)
-                    self.bot_logger.info(f"{COLOR_YELLOW}🔄 Recovering and restarting main loop after 10 seconds...{COLOR_RESET}")
-                    await asyncio.sleep(10)
+            except KeyboardInterrupt:
+                self.bot_logger.info(f"{COLOR_YELLOW}Bot stopped by user (KeyboardInterrupt).{COLOR_RESET}")
+            except Exception as e:
+                log_exception(self.bot_logger, f"Critical error in main loop: {str(e)}", e)
+                self.bot_logger.info(f"{COLOR_YELLOW}🔄 Recovering and restarting main loop after 10 seconds...{COLOR_RESET}")
+                await asyncio.sleep(10)
+            finally:
+                # Ensure listener tasks are cancelled on exit
+                for task in listener_tasks:
+                    task.cancel()
+                await asyncio.gather(*listener_tasks, return_exceptions=True) # Await cancellation
+                self.bot_logger.info(f"{COLOR_YELLOW}All listener tasks cancelled and awaited.{COLOR_RESET}")
 
 async def main():
     """Entry point for the Pyrmethus Bot."""

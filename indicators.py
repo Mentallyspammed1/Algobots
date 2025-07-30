@@ -3,6 +3,7 @@ import pandas as pd
 import logging
 from typing import List, Dict, Any, Tuple
 from decimal import Decimal, getcontext
+import math
 
 from bot_logger import setup_logging
 
@@ -136,6 +137,92 @@ def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: i
 
     indicators_logger.debug(f"StochRSI calculated with rsi_period={rsi_period}, stoch_k_period={stoch_k_period}, stoch_d_period={stoch_d_period}.")
     return df
+
+def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
+    """
+    Calculates the Simple Moving Average (SMA) for the 'close' prices.
+    """
+    if 'close' not in df.columns:
+        indicators_logger.error("DataFrame must contain a 'close' column for SMA calculation.")
+        return pd.Series(dtype='object')
+    
+    # Ensure 'close' column is Decimal type
+    close_prices = df['close'].apply(Decimal)
+    sma = close_prices.rolling(window=length).mean()
+    return sma
+
+def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9) -> pd.Series:
+    """
+    Calculates the Ehlers Fisher Transform.
+    """
+    if 'high' not in df.columns or 'low' not in df.columns:
+        indicators_logger.error("DataFrame must contain 'high' and 'low' columns for Fisher Transform.")
+        return pd.Series(dtype='object')
+
+    high = df['high'].apply(Decimal)
+    low = df['low'].apply(Decimal)
+
+    # Calculate the median price
+    median_price = (high + low) / Decimal('2')
+
+    # Normalize the price to a range of -1 to +1
+    # This is a simplified approach; Ehlers' original might involve more complex normalization
+    min_val = median_price.rolling(window=length).min()
+    max_val = median_price.rolling(window=length).max()
+
+    # Avoid division by zero
+    range_val = max_val - min_val
+    range_val = range_val.replace(Decimal('0'), Decimal('1e-38')) # Replace 0 with a small number
+
+    x = Decimal('2') * ((median_price - min_val) / range_val - Decimal('0.5'))
+
+    # Ensure x is within (-0.999, 0.999) to avoid issues with log
+    x = x.apply(lambda val: Decimal('0.999') if val >= Decimal('1') else (Decimal('-0.999') if val <= Decimal('-1') else val))
+
+    # Fisher Transform formula
+    # Using Decimal for calculations, but math.log requires float, so convert back and forth carefully
+    fisher_transform = x.apply(lambda val: Decimal('0.5') * Decimal(str(math.log((1 + float(val)) / (1 - float(val))))))
+    
+    return fisher_transform
+
+def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Series:
+    """
+    Calculates the Ehlers 2-pole Super Smoother Filter.
+    """
+    if 'close' not in df.columns:
+        indicators_logger.error("DataFrame must contain a 'close' column for Super Smoother.")
+        return pd.Series(dtype='object')
+
+    close_prices = df['close'].apply(Decimal)
+
+    # Convert length to float for math functions
+    float_length = float(length)
+
+    # Calculate coefficients
+    # Ensure pi and sqrt(2) are Decimal for intermediate calculations if needed, but math functions take float
+    a1 = Decimal(str(math.exp(-math.sqrt(2) * math.pi / float_length)))
+    b1 = Decimal(str(2 * a1 * Decimal(str(math.cos(math.sqrt(2) * math.pi / float_length)))))
+    c2 = b1
+    c3 = -a1 * a1
+    c1 = Decimal('1') - c2 - c3
+
+    filtered_values = pd.Series(index=df.index, dtype='object')
+    filt1 = Decimal('0')
+    filt2 = Decimal('0')
+
+    for i in range(len(close_prices)):
+        current_input = close_prices.iloc[i]
+        prev_input = close_prices.iloc[i-1] if i > 0 else Decimal('0')
+
+        if i == 0:
+            filtered_values.iloc[i] = current_input
+        elif i == 1:
+            filtered_values.iloc[i] = c1 * (current_input + prev_input) / Decimal('2') + c2 * filtered_values.iloc[i-1]
+        else:
+            filt = c1 * (current_input + prev_input) / Decimal('2') + c2 * filtered_values.iloc[i-1] + c3 * filtered_values.iloc[i-2]
+            filtered_values.iloc[i] = filt
+    
+    return filtered_values
 
 def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd.DataFrame:
     """

@@ -30,12 +30,20 @@ USE_STOCHRSI_CROSSOVER = True
 STOP_LOSS_PCT = 0.005
 TAKE_PROFIT_PCT = 0.01
 
+# --- Risk Management (Dynamic) ---
+ATR_MULTIPLIER_SL = 1.5 # Multiplier for ATR to set Stop Loss
+ATR_MULTIPLIER_TP = 2.0 # Multiplier for ATR to set Take Profit
+
+# --- Strategy Parameters (Trend Filter) ---
+SMA_PERIOD = 50 # Period for Simple Moving Average (SMA) trend filter
+
 # --- API Configuration ---
 # Bybit API endpoint and category.
 # For live trading: "https://api.bybit.com"
 # For testnet: "https://api-testnet.bybit.com"
 BYBIT_API_ENDPOINT = "https://api.bybit.com" # <<< CHANGE TO LIVE API FOR REAL TRADING
 BYBIT_CATEGORY = "linear" # Options: 'linear', 'inverse', 'spot'
+ATR_PERIOD = 14 # Period for Average True Range (ATR) calculation
 
 # IMPORTANT: API_KEY and API_SECRET should NOT be hardcoded here.
 # Store them in environment variables or a .env file (e.g., `BYBIT_API_KEY="your_key"`).
@@ -48,10 +56,9 @@ CANDLE_FETCH_LIMIT = 200
 
 # How often the bot fetches new data and checks for signals (in seconds).
 # Be mindful of Bybit's rate limits and your strategy's interval.
-POLLING_INTERVAL_SECONDS = 5
+POLLING_INTERVAL_SECONDS = 5 # Poll every 5 seconds
 
-# --- Error Handling & Retries ---
-# Number of times to retry an API request if it fails due to network issues or temporary API errors.
-API_REQUEST_RETRIES = 5
-# Factor for exponential backoff between retries (e.g., 0.3, 0.6, 1.2, 2.4, ...)
+# API request retry settings
+API_REQUEST_RETRIES = 3
 API_BACKOFF_FACTOR = 0.5
+    

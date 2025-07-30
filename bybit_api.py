@@ -127,7 +127,7 @@ class BybitContractAPI:
         return hmac.new(self.api_secret, param_str.encode('utf-8'), hashlib.sha256).hexdigest()
 
     def _generate_ws_signature(self, expires: int) -> str:
-        sign_string = f"GET/realtime{expires}{self.api_key}"
+        sign_string = f"GET/realtime{expires}"
         return hmac.new(self.api_secret, sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
 
     async def _get_server_time_ms(self) -> int:
@@ -141,34 +141,63 @@ class BybitContractAPI:
             logger.warning(f"{Color.YELLOW}Error fetching server time: {e}. Using local time.{Color.RESET}")
         return int(time.time() * 1000)
 
+    MAX_RETRIES = 3
+    INITIAL_BACKOFF = 1  # seconds
+
     async def _make_request(self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None, signed: bool = True) -> Dict[str, Any]:
-        current_timestamp = str(await self._get_server_time_ms())
-        headers = {
-            "X-BAPI-API-KEY": self.api_key,
-            "X-BAPI-TIMESTAMP": current_timestamp,
-            "X-BAPI-RECV-WINDOW": DEFAULT_RECV_WINDOW,
-        }
-        request_params = params.copy() if params else {}
-        
-        if signed:
-            body_str = json.dumps(request_params) if method == "POST" else ""
-            signature = self._generate_rest_signature(request_params, current_timestamp, DEFAULT_RECV_WINDOW, method, body=body_str)
-            headers["X-BAPI-SIGN"] = signature
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                current_timestamp = str(await self._get_server_time_ms())
+                headers = {
+                    "X-BAPI-API-KEY": self.api_key,
+                    "X-BAPI-TIMESTAMP": current_timestamp,
+                    "X-BAPI-RECV-WINDOW": DEFAULT_RECV_WINDOW,
+                }
+                request_params = params.copy() if params else {}
+                
+                if signed:
+                    body_str = json.dumps(request_params) if method == "POST" else ""
+                    signature = self._generate_rest_signature(request_params, current_timestamp, DEFAULT_RECV_WINDOW, method, body=body_str)
+                    headers["X-BAPI-SIGN"] = signature
 
-        if method == "POST":
-            headers["Content-Type"] = "application/json"
-            response = await self.client.post(endpoint, content=json.dumps(request_params), headers=headers)
-        else: # GET
-            response = await self.client.get(endpoint, params=request_params, headers=headers)
+                if method == "POST":
+                    headers["Content-Type"] = "application/json"
+                    response = await self.client.post(endpoint, content=json.dumps(request_params), headers=headers)
+                else: # GET
+                    response = await self.client.get(endpoint, params=request_params, headers=headers)
 
-        response.raise_for_status()
-        json_response = response.json()
-        if json_response.get("retCode") != 0:
-            raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
-        return json_response
+                response.raise_for_status()
+                json_response = response.json()
+                if json_response.get("retCode") != 0:
+                    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+                return json_response
+            except httpx.RequestError as e:
+                logger.warning(f"{Color.YELLOW}Attempt {attempt + 1}/{self.MAX_RETRIES}: Request error for {endpoint}: {e}{Color.RESET}")
+                if attempt < self.MAX_RETRIES - 1:
+                    await asyncio.sleep(self.INITIAL_BACKOFF * (2 ** attempt))
+                else:
+                    raise
+            except httpx.HTTPStatusError as e:
+                logger.warning(f"{Color.YELLOW}Attempt {attempt + 1}/{self.MAX_RETRIES}: HTTP status error for {endpoint}: {e.response.status_code} - {e.response.text}{Color.RESET}")
+                if e.response.status_code >= 500 and attempt < self.MAX_RETRIES - 1: # Retry on 5xx errors
+                    await asyncio.sleep(self.INITIAL_BACKOFF * (2 ** attempt))
+                else:
+                    raise
+            except BybitAPIError as e:
+                # Do not retry on Bybit specific API errors (retCode != 0)
+                raise
+            except Exception as e:
+                logger.error(f"{Color.RED}An unexpected error occurred during REST request to {endpoint}: {e}{Color.RESET}")
+                raise
 
     async def get_kline(self, **kwargs) -> Dict[str, Any]:
+        """Fetches kline data via REST API."""
         return await self._make_request("GET", "/v5/market/kline", kwargs, signed=False)
+
+    async def get_kline_rest_fallback(self, **kwargs) -> Dict[str, Any]:
+        """Fetches kline data via REST API as a fallback mechanism."""
+        logger.warning(f"{Color.YELLOW}Falling back to REST API for kline data.{Color.RESET}")
+        return await self.get_kline(**kwargs)
 
     async def get_instruments_info(self, **kwargs) -> Dict[str, Any]:
         return await self._make_request("GET", "/v5/market/instruments-info", kwargs, signed=False)
