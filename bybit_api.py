@@ -180,7 +180,7 @@ class BybitContractAPI:
             self.connection_state.is_connected = True
             logger.info(f"{Color.GREEN}Connected to Bybit private WebSocket.{Color.RESET}")
 
-            expires = await self._get_server_time_ms() + 10000
+            expires = int(time.time() * 1000) + 30000  # 30 seconds expiration
             signature = self._generate_ws_signature(expires)
             auth_message = {"op": "auth", "args": [self.api_key, expires, signature]}
             await self._send_ws_message(auth_message)
