@@ -525,8 +525,6 @@ class PyrmethusBot:
                                                    use_crossover=USE_STOCHRSI_CROSSOVER,
                                                    enable_fib_pivot_actions=ENABLE_FIB_PIVOT_ACTIONS,
                                                    fib_entry_confirm_percent=FIB_ENTRY_CONFIRM_PERCENT,
-                                                   fib_exit_warn_percent=FIB_EXIT_WARN_PERCENT,
-                                                   fib_exit_action=FIB_EXIT_ACTION,
                                                    pivot_support_levels=pivot_support_levels,
                                                    pivot_resistance_levels=pivot_resistance_levels)
                         for signal in signals:

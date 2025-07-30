@@ -346,7 +346,7 @@ class BybitContractAPI:
                     await self._connect_public_ws()
                     while self.public_connection_state.is_connected:
                         try:
-                            message = await asyncio.wait_for(self.public_websocket.recv(), timeout=30)
+                            message = await asyncio.wait_for(self.public_websocket.recv(), timeout=60)
                             parsed_message = json.loads(message)
                             logger.debug(f"Public WS Received: {parsed_message}")
 
