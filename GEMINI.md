@@ -294,3 +294,44 @@ The modular design of PSG makes it relatively easy to extend and customize:
 ## 📄 License
 
 This project is open-source and available under the [MIT License](LICENSE).
+
+## 🧑‍💻 Code Care Steps
+
+To ensure the longevity, maintainability, and collaborative development of Pyrmethus's Ultra Scalper Bot, please adhere to the following code care steps:
+
+### 1. Code Style and Readability
+*   **PEP 8 Compliance**: All Python code must follow [PEP 8](https://www.python.org/dev/peps/pep-0008/) guidelines for maximum readability and consistency. Use linters like `flake8` or `pylint` to check compliance.
+*   **Meaningful Naming**: Use descriptive names for variables, functions, classes, and modules. Avoid single-letter variables unless their context is immediately clear (e.g., `i` in a simple loop).
+*   **Clear Comments**: Add comments to explain *why* a particular piece of code exists or *how* a complex algorithm works, rather than *what* it does (which should be evident from the code itself).
+*   **Docstrings**: All functions, classes, and modules should have clear and concise docstrings explaining their purpose, arguments, and return values.
+*   **Modular Design**: Keep functions and modules small and focused on a single responsibility. This improves readability, testability, and reusability.
+
+### 2. Testing
+*   **Unit Tests**: Write unit tests for individual functions and methods to ensure they work as expected. Use `pytest` for testing.
+*   **Integration Tests**: Develop integration tests to verify the interaction between different modules and external services (e.g., Bybit API).
+*   **Test Coverage**: Aim for high test coverage to minimize the risk of introducing bugs.
+*   **Testnet First**: Always test new features and significant changes on a Bybit testnet account before deploying to a live account.
+
+### 3. Version Control (Git)
+*   **Atomic Commits**: Each commit should represent a single, logical change. Avoid committing unrelated changes together.
+*   **Descriptive Commit Messages**: Write clear, concise, and informative commit messages. Follow a convention (e.g., Conventional Commits) if possible.
+*   **Branching Strategy**: Use a clear branching strategy (e.g., Git Flow or GitHub Flow) for feature development, bug fixes, and releases.
+*   **Regular Pull Requests**: Submit pull requests for all changes and ensure they are reviewed by at least one other developer before merging.
+
+### 4. Error Handling and Robustness
+*   **Specific Exceptions**: Catch specific exceptions rather than broad `Exception` types to handle errors more precisely.
+*   **Graceful Degradation**: Design the bot to handle unexpected errors gracefully, logging them appropriately and attempting to recover or shut down safely without losing funds.
+*   **Input Validation**: Validate all inputs, especially those coming from external sources (e.g., API responses, configuration files), to prevent unexpected behavior.
+*   **Logging Levels**: Use appropriate logging levels (DEBUG, INFO, WARNING, ERROR, CRITICAL) to provide sufficient detail for debugging and monitoring without overwhelming the logs.
+
+### 5. Dependencies and Environment
+*   **`requirements.txt`**: Keep `requirements.txt` up-to-date with all project dependencies and their exact versions.
+*   **Virtual Environments**: Always use virtual environments to manage project dependencies, isolating them from system-wide Python installations.
+*   **Environment Variables**: Store sensitive information (API keys, secrets) in environment variables (`.env` file) and never commit them to version control.
+
+### 6. Performance and Optimization
+*   **Profiling**: Use Python's built-in profiling tools (`cProfile`) to identify performance bottlenecks in critical sections of the code.
+*   **Asynchronous Best Practices**: Ensure `asyncio` is used effectively to prevent blocking operations and maximize concurrency.
+*   **Decimal Usage**: Continue to use `Decimal` for all financial calculations to maintain precision and avoid floating-point errors.
+
+By following these guidelines, we can collectively ensure that Pyrmethus's Ultra Scalper Bot remains a powerful, reliable, and maintainable tool for automated trading.

@@ -11,7 +11,6 @@ strategy_logger = logging.getLogger('strategy')
 strategy_logger.setLevel(logging.DEBUG)
 
 
-
 def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], support_levels: List[Dict[str, Any]],
                     active_bull_obs: List['OrderBlock'], active_bear_obs: List['OrderBlock'],
                     stoch_k_period: int, stoch_d_period: int,
