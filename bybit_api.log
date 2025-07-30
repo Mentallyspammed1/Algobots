@@ -1,0 +1,55 @@
+2025-07-29 22:35:10,531 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:35:36,182 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:36:34,463 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:36:36,521 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:36:42,722 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:36:44,228 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:37:42,221 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:37:44,713 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:37:56,582 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:37:58,163 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:39:23,901 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:39:25,924 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:39:27,439 - bybit_api - ERROR - Error getting open positions with pybit: Http status code is not 200. (ErrCode: 401) (ErrTime: 03:39:27).
+Request → GET https://api-testnet.bybit.com/v5/position/list: category=linear&symbol=BTCUSDT.
+2025-07-29 22:39:28,023 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:39:33,495 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:39:38,931 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:39:44,540 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:39:49,972 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:18,727 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:42:21,362 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:42:22,882 - bybit_api - ERROR - Error getting open positions with pybit: Http status code is not 200. (ErrCode: 401) (ErrTime: 03:42:22).
+Request → GET https://api-testnet.bybit.com/v5/position/list: category=linear&symbol=BTCUSDT.
+2025-07-29 22:42:23,255 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:29,161 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:34,586 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:40,546 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:45,963 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:51,207 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:42:51,392 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:52,713 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:42:53,792 - bybit_api - ERROR - Error getting open positions with pybit: Http status code is not 200. (ErrCode: 401) (ErrTime: 03:42:53).
+Request → GET https://api-testnet.bybit.com/v5/position/list: category=linear&symbol=BTCUSDT.
+2025-07-29 22:42:54,182 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:56,968 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:42:59,633 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:02,394 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:05,055 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:10,429 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:43:10,645 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:11,868 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:43:12,926 - bybit_api - ERROR - Error getting open positions with pybit: Http status code is not 200. (ErrCode: 401) (ErrTime: 03:43:12).
+Request → GET https://api-testnet.bybit.com/v5/position/list: category=linear&symbol=BTCUSDT.
+2025-07-29 22:43:13,299 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:16,063 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:18,769 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:21,507 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:26,955 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:43:32,377 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:45:19,199 - bybit_api - INFO - BybitClient initialized with pybit HTTP session.
+2025-07-29 22:45:21,365 - bybit_api - INFO - BybitClient initialized with pybit WebSocket session.
+2025-07-29 22:45:22,984 - bybit_api - ERROR - Error getting open positions with pybit: Http status code is not 200. (ErrCode: 401) (ErrTime: 03:45:22).
+Request → GET https://api-testnet.bybit.com/v5/position/list: category=linear&symbol=BTCUSDT.
+2025-07-29 22:45:23,904 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
+2025-07-29 22:45:29,383 - bybit_api - INFO - Fetched 200 klines for BTCUSDT-1 using pybit.
