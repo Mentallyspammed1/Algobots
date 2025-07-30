@@ -156,13 +156,13 @@ def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
     sma = close_prices.rolling(window=length).mean()
     return sma
 
-def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9) -> pd.Series:
+def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_length: int = 1) -> Tuple[pd.Series, pd.Series]:
     """
-    Calculates the Ehlers Fisher Transform.
+    Calculates the Ehlers Fisher Transform and its signal line.
     """
     if 'high' not in df.columns or 'low' not in df.columns:
         indicators_logger.error("DataFrame must contain 'high' and 'low' columns for Fisher Transform.")
-        return pd.Series(dtype='object')
+        return pd.Series(dtype='object'), pd.Series(dtype='object')
 
     high = df['high'].apply(Decimal)
     low = df['low'].apply(Decimal)
@@ -190,7 +190,10 @@ def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9) -> pd.S
     # Using Decimal for calculations, but math.log requires float, so convert back and forth carefully
     fisher_transform = x.apply(lambda val: Decimal('NaN') if val.is_nan() else Decimal('0.5') * Decimal(str(math.log((1 + float(val)) / (1 - float(val))))))
     
-    return fisher_transform
+    # Calculate Fisher Signal
+    fisher_signal = fisher_transform.rolling(window=signal_length).mean()
+
+    return fisher_transform, fisher_signal
 
 def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Series:
     """
@@ -230,6 +233,63 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
             filtered_values.iloc[i] = filt
     
     return filtered_values
+
+def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> Tuple[pd.Series, pd.Series]:
+    """
+    Identifies Pivot Highs and Lows based on lookback periods.
+    A pivot high is a candle whose high is greater than or equal to the highs of 'left' candles to its left
+    and 'right' candles to its right.
+    A pivot low is a candle whose low is less than or equal to the lows of 'left' candles to its left
+    and 'right' candles to its right.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        indicators_logger.error("DataFrame index must be a DatetimeIndex for pivot calculation.")
+        return pd.Series(dtype='bool'), pd.Series(dtype='bool')
+
+    if 'high' not in df.columns or 'low' not in df.columns:
+        indicators_logger.error("DataFrame must contain 'high' and 'low' columns for pivot identification.")
+        return pd.Series(dtype='bool'), pd.Series(dtype='bool')
+
+    # Ensure high and low columns are Decimal for accurate comparison
+    high_prices = df['high'].apply(Decimal)
+    low_prices = df['low'].apply(Decimal)
+
+    pivot_highs = pd.Series(False, index=df.index)
+    pivot_lows = pd.Series(False, index=df.index)
+
+    # Iterate through the DataFrame to find pivots
+    # Start from 'left' index and end at 'len(df) - right'
+    for i in range(left, len(df) - right):
+        # Check for Pivot High
+        is_pivot_high = True
+        current_high = high_prices.iloc[i]
+        for j in range(1, left + 1):
+            if current_high < high_prices.iloc[i - j]:
+                is_pivot_high = False
+                break
+        if is_pivot_high:
+            for j in range(1, right + 1):
+                if current_high < high_prices.iloc[i + j]:
+                    is_pivot_high = False
+                    break
+        pivot_highs.iloc[i] = is_pivot_high
+
+        # Check for Pivot Low
+        is_pivot_low = True
+        current_low = low_prices.iloc[i]
+        for j in range(1, left + 1):
+            if current_low > low_prices.iloc[i - j]:
+                is_pivot_low = False
+                break
+        if is_pivot_low:
+            for j in range(1, right + 1):
+                if current_low > low_prices.iloc[i + j]:
+                    is_pivot_low = False
+                    break
+        pivot_lows.iloc[i] = is_pivot_low
+
+    indicators_logger.debug(f"Pivots identified with left={left}, right={right}, use_wicks={use_wicks}.")
+    return pivot_highs, pivot_lows
 
 def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd.DataFrame:
     """

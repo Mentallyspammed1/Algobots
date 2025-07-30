@@ -27,7 +27,6 @@ def setup_logging():
     # Ensure root logger also processes DEBUG messages
     logging.getLogger().setLevel(logging.DEBUG)
     return bot_logger
-    return bot_logger
 
 def log_trade(logger: logging.Logger, message: str, trade_data: dict):
     """

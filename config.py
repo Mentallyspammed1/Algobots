@@ -6,6 +6,15 @@ INTERVAL = "1"      # Kline interval (e.g., "1", "5", "15", "60", "D"). "1" for 
 USDT_AMOUNT_PER_TRADE = 5.0 # Desired USDT amount to trade per order (e.g., 10 USDT).
                              # IMPORTANT: Adjust this based on your capital and risk tolerance.
 
+# --- Strategy Selection ---
+STRATEGY_NAME = "DUAL_SUPERTREND" # Options: "DUAL_SUPERTREND", "STOCHRSI_MOMENTUM", "EHLERS_FISHER", "EHLERS_MA_CROSS"
+
+# --- Strategy Parameters (Dual Supertrend) ---
+ST_ATR_LENGTH = 7
+ST_MULTIPLIER = 2.5
+CONFIRM_ST_ATR_LENGTH = 5
+CONFIRM_ST_MULTIPLIER = 2.0
+
 # --- Strategy Parameters (Pivot Points) ---
 # Defines the number of bars to the left and right to detect a pivot point.
 # A higher number means a more significant (but less frequent) pivot.
@@ -15,14 +24,14 @@ PIVOT_RIGHT_BARS = 5
 # E.g., 0.001 means 0.1% deviation is considered "near".
 PIVOT_TOLERANCE_PCT = 0.002
 
-# --- Strategy Parameters (StochRSI) ---
-# Standard StochRSI calculation periods and overbought/oversold levels.
-STOCHRSI_K_PERIOD = 12 # This is the period for RSI calculation within StochRSI
-STOCHRSI_D_PERIOD = 3  # This is the smoothing period for both %K and %D lines of StochRSI
-STOCHRSI_OVERBOUGHT_LEVEL = 80  # StochRSI value indicating overbought conditions
-STOCHRSI_OVERSOLD_LEVEL = 20    # StochRSI value indicating oversold conditions
-# Set to True for K/D line crossover signals, False for K line crossing overbought/oversold levels.
-USE_STOCHRSI_CROSSOVER = True
+# --- Strategy Parameters (StochRSI Momentum) ---
+STOCHRSI_RSI_LENGTH = 14
+STOCHRSI_STOCH_LENGTH = 14
+STOCHRSI_K_PERIOD = 3
+STOCHRSI_D_PERIOD = 3
+STOCHRSI_OVERBOUGHT = 80.0
+STOCHRSI_OVERSOLD = 20.0
+MOMENTUM_LENGTH = 5
 
 # --- Strategy Parameters (StochRSI) ---
 # Standard StochRSI calculation periods and overbought/oversold levels.
@@ -32,6 +41,10 @@ STOCHRSI_OVERBOUGHT_LEVEL = 80  # StochRSI value indicating overbought condition
 STOCHRSI_OVERSOLD_LEVEL = 20    # StochRSI value indicating oversold conditions
 # Set to True for K/D line crossover signals, False for K line crossing overbought/oversold levels.
 USE_STOCHRSI_CROSSOVER = True
+
+# --- Strategy Parameters (Ehlers Fisher Transform) ---
+EHLERS_FISHER_LENGTH = 10
+EHLERS_FISHER_SIGNAL_LENGTH = 1
 
 # --- Strategy Parameters (Fibonacci Pivots) ---
 ENABLE_FIB_PIVOT_ACTIONS = False # Master switch for Fib pivots
@@ -41,6 +54,10 @@ FIB_NEAREST_COUNT = 5 # How many nearest levels to track
 FIB_ENTRY_CONFIRM_PERCENT = 0.002 # Price must be within X% of a Fib support(long)/resistance(short)
 FIB_EXIT_WARN_PERCENT = 0.0015 # Warn/Exit if price within Y% of Fib resistance(long)/support(short)
 FIB_EXIT_ACTION = "warn" # Action on exit warning: "warn", "exit"
+
+# --- Strategy Parameters (Ehlers MA Cross) ---
+EHLERS_FAST_PERIOD = 10
+EHLERS_SLOW_PERIOD = 30
 
 # --- Risk Management ---
 # Stop Loss and Take Profit percentages relative to the entry price.
@@ -54,7 +71,21 @@ ATR_MULTIPLIER_TP = 2.0 # Multiplier for ATR to set Take Profit
 
 # --- Strategy Parameters (Trend Filter) ---
 SMA_PERIOD = 8 # Period for Simple Moving Average (SMA) trend filter
+SMA_LENGTH = 20 # Period for Simple Moving Average (SMA) calculation
 ATR_PERIOD = 10 # Period for Average True Range (ATR) calculation
+
+# --- Strategy Parameters (Ehlers Fisher Transform) ---
+EHLERS_FISHER_LENGTH = 9 # Period for Ehlers Fisher Transform
+
+# --- Strategy Parameters (Ehlers Super Smoother) ---
+EHLERS_SUPERSMOOTHER_LENGTH = 10 # Period for Ehlers Super Smoother
+
+# --- Order Block Settings ---
+MAX_ACTIVE_OBS = 10 # Maximum number of active Order Blocks to track
+OB_TOLERANCE_PCT = 0.001 # Percentage tolerance for price proximity to Order Blocks
+
+# --- Ehlers Fisher Transform Settings ---
+EHLERS_FISHER_SIGNAL_PERIOD = 1 # Period for Ehlers Fisher Signal line
 
 # --- API Configuration ---
 # Bybit API endpoint and category.
@@ -79,4 +110,3 @@ POLLING_INTERVAL_SECONDS = 5 # Poll every 5 seconds
 # API request retry settings
 API_REQUEST_RETRIES = 3
 API_BACKOFF_FACTOR = 0.5
-    
