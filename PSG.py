@@ -3,9 +3,22 @@ import os
 import asyncio
 import pandas as pd
 import logging
-from typing import Any, Dict, List, Tuple, Union, Optional, Callable
+from typing import Any, Dict, List, Tuple, Union, Optional, Callable, TypedDict
 from dotenv import load_dotenv
 from decimal import Decimal, getcontext
+
+# --- Type Definitions for Structured Data ---
+class OrderBlock(TypedDict):
+    """Represents a bullish or bearish Order Block identified on the chart."""
+    id: str                 # Unique identifier (e.g., "B_231026143000")
+    type: str               # 'bull' or 'bear'
+    timestamp: pd.Timestamp # Timestamp of the candle that formed the OB
+    top: Decimal            # Top price level of the OB
+    bottom: Decimal         # Bottom price level of the OB
+    active: bool            # True if the OB is currently considered valid
+    violated: bool          # True if the price has closed beyond the OB boundary
+    violation_ts: Optional[pd.Timestamp] # Timestamp when violation occurred
+    extended_to_ts: Optional[pd.Timestamp] # Timestamp the OB box currently extends to
 
 # --- Set Decimal Precision ---
 getcontext().prec = 38
@@ -25,7 +38,7 @@ from config import (
     TAKE_PROFIT_PCT, BYBIT_API_ENDPOINT, BYBIT_CATEGORY, CANDLE_FETCH_LIMIT,
     POLLING_INTERVAL_SECONDS, API_REQUEST_RETRIES, API_BACKOFF_FACTOR, ATR_PERIOD
 )
-from indicators import calculate_fibonacci_pivot_points, calculate_stochrsi, calculate_atr
+from indicators import calculate_fibonacci_pivot_points, calculate_stochrsi, calculate_atr, calculate_sma, calculate_ehlers_fisher_transform, calculate_ehlers_super_smoother
 from strategy import generate_signals, generate_exit_signals
 from bybit_api import BybitContractAPI
 from bot_ui import display_market_info
@@ -62,6 +75,12 @@ class PyrmethusBot:
         self.klines_df: Optional[pd.DataFrame] = None
         self.cached_atr: Optional[Decimal] = None
 
+        # --- Order Block Tracking (Placeholder for future implementation) ---
+        self.active_bull_obs: List[Any] = []
+        self.active_bear_obs: List[Any] = []
+        self.active_bull_obs: List[OrderBlock] = []
+        self.active_bear_obs: List[OrderBlock] = []
+
     def _reset_position_state(self):
         """Resets all internal state variables related to an open position."""
         self.inventory = Decimal('0')
@@ -71,6 +90,75 @@ class PyrmethusBot:
         self.current_position_side = None
         self.entry_price_for_trade_metrics = Decimal('0')
         self.entry_fee_for_trade_metrics = Decimal('0')
+
+    def _identify_and_manage_order_blocks(self):
+        """
+        Identifies new Pivot High/Low based Order Blocks and manages existing ones.
+        This function should be called after klines_df is updated.
+        """
+        if self.klines_df is None or self.klines_df.empty:
+            self.bot_logger.debug("No klines_df to identify Order Blocks from.")
+            return
+
+        # Use the last complete candle for OB identification
+        last_candle_idx = self.klines_df.index[-1]
+        last_candle = self.klines_df.iloc[-1]
+        
+        # Find pivots (using the function from indicators.py)
+        # Note: find_pivots expects the full DataFrame and returns boolean series
+        pivot_highs, pivot_lows = find_pivots(self.klines_df, PIVOT_LEFT_BARS, PIVOT_RIGHT_BARS, use_wicks=True) # Assuming wicks for now
+
+        # Identify new Order Blocks
+        if pivot_highs.iloc[-1]: # If the last candle is a Pivot High
+            ob_top = last_candle['high']
+            ob_bottom = last_candle['low'] # For bearish OB, body or wick low
+            if ob_top > ob_bottom:
+                new_ob = OrderBlock(id=f"B_{last_candle_idx.value}", type='bear', timestamp=last_candle_idx, top=ob_top, bottom=ob_bottom, active=True, violated=False, violation_ts=None, extended_to_ts=last_candle_idx)
+                self.active_bear_obs.append(new_ob)
+                self.bot_logger.info(f"New Bearish OB identified: {new_ob['id']} at {ob_top:.4f}-{ob_bottom:.4f}")
+
+        if pivot_lows.iloc[-1]: # If the last candle is a Pivot Low
+            ob_bottom = last_candle['low']
+            ob_top = last_candle['high'] # For bullish OB, body or wick high
+            if ob_top > ob_bottom:
+                new_ob = OrderBlock(id=f"L_{last_candle_idx.value}", type='bull', timestamp=last_candle_idx, top=ob_top, bottom=ob_bottom, active=True, violated=False, violation_ts=None, extended_to_ts=last_candle_idx)
+                self.active_bull_obs.append(new_ob)
+                self.bot_logger.info(f"New Bullish OB identified: {new_ob['id']} at {ob_top:.4f}-{ob_bottom:.4f}")
+
+        # Manage existing Order Blocks (violation and extension)
+        current_price = self.current_price
+        for ob in self.active_bull_obs:
+            if ob['active']:
+                if current_price < ob['bottom']:
+                    ob['active'] = False
+                    ob['violated'] = True
+                    ob['violation_ts'] = last_candle_idx
+                    self.bot_logger.info(f"Bullish OB {ob['id']} violated by price {current_price:.4f}")
+                else:
+                    ob['extended_to_ts'] = last_candle_idx # Extend active OB
+        
+        for ob in self.active_bear_obs:
+            if ob['active']:
+                if current_price > ob['top']:
+                    ob['active'] = False
+                    ob['violated'] = True
+                    ob['violation_ts'] = last_candle_idx
+                    self.bot_logger.info(f"Bearish OB {ob['id']} violated by price {current_price:.4f}")
+                else:
+                    ob['extended_to_ts'] = last_candle_idx # Extend active OB
+
+        # Filter out inactive/violated OBs (optional, but good for performance)
+        self.active_bull_obs = [ob for ob in self.active_bull_obs if ob['active']]
+        self.active_bear_obs = [ob for ob in self.active_bear_obs if ob['active']]
+
+        # Limit the number of active OBs to prevent excessive memory usage
+        # Sort by timestamp and keep only the most recent ones
+        self.active_bull_obs.sort(key=lambda x: x['timestamp'], reverse=True)
+        self.active_bull_obs = self.active_bull_obs[:10] # Limit to 10 for now
+        self.active_bear_obs.sort(key=lambda x: x['timestamp'], reverse=True)
+        self.active_bear_obs = self.active_bear_obs[:10] # Limit to 10 for now
+
+        self.bot_logger.debug(f"Active OBs after management: Bull={len(self.active_bull_obs)}, Bear={len(self.active_bear_obs)}")
 
     async def _handle_position_update(self, message: Dict[str, Any]):
         """
@@ -211,6 +299,7 @@ class PyrmethusBot:
             self.klines_df['sma'] = calculate_sma(self.klines_df, SMA_PERIOD)
             self.klines_df['ehlers_fisher'] = calculate_ehlers_fisher_transform(self.klines_df)
             self.klines_df['ehlers_supersmoother'] = calculate_ehlers_super_smoother(self.klines_df)
+            self._identify_and_manage_order_blocks() # Call OB management here
             self.cached_atr = self.klines_df['atr'].iloc[-1]
             self.current_price = self.klines_df['close'].iloc[-1]
             self.bot_logger.debug(f"{PYRMETHUS_CYAN}Kline updated via WebSocket. Current price: {self.current_price:.4f}{COLOR_RESET}")
@@ -378,6 +467,7 @@ class PyrmethusBot:
 
                     if not self.position_open:
                         signals = generate_signals(self.klines_df, resistance, support,
+                                                   self.active_bull_obs, self.active_bear_obs,
                                                    stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD,
                                                    overbought=STOCHRSI_OVERBOUGHT_LEVEL, oversold=STOCHRSI_OVERSOLD_LEVEL,
                                                    use_crossover=USE_STOCHRSI_CROSSOVER)
@@ -388,6 +478,7 @@ class PyrmethusBot:
                     else:
                         self.bot_logger.info(f"{PYRMETHUS_BLUE}🚫 Position already open: {self.current_position_side} {SYMBOL}. Checking for exit signals...{COLOR_RESET}")
                         exit_signals = generate_exit_signals(self.klines_df, self.current_position_side,
+                                                             self.active_bull_obs, self.active_bear_obs,
                                                              stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD,
                                                              overbought=STOCHRSI_OVERBOUGHT_LEVEL, oversold=STOCHRSI_OVERSOLD_LEVEL,
                                                              use_crossover=USE_STOCHRSI_CROSSOVER)

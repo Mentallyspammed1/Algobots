@@ -13,7 +13,24 @@ strategy_logger.setLevel(logging.INFO)
 if not strategy_logger.handlers:
     setup_logging() # Call the centralized setup
 
+from typing import List, Dict, Any, Tuple, TYPE_CHECKING
+from decimal import Decimal
+
+from bot_logger import setup_logging
+from config import SMA_PERIOD, PIVOT_TOLERANCE_PCT # Import new config parameters
+
+if TYPE_CHECKING:
+    from PSG import OrderBlock # Import OrderBlock for type hinting
+
+# Initialize logging for strategy
+strategy_logger = logging.getLogger('strategy')
+strategy_logger.setLevel(logging.INFO)
+# Ensure handlers are not duplicated if setup_logging is called elsewhere
+if not strategy_logger.handlers:
+    setup_logging() # Call the centralized setup
+
 def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], support_levels: List[Dict[str, Any]],
+                    active_bull_obs: List['OrderBlock'], active_bear_obs: List['OrderBlock'],
                     stoch_k_period: int, stoch_d_period: int,
                     overbought: int, oversold: int, use_crossover: bool) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
     """
@@ -83,6 +100,15 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
     if prev_stoch_k is not None and prev_stoch_d is not None:
         # Buy signal conditions
         if is_uptrend: # Only consider buy signals in an uptrend
+            # Check for confluence with active bullish Order Blocks
+            ob_confluence = False
+            for ob in active_bull_obs:
+                # Price needs to be close to or inside the OB
+                entry_threshold = ob['top'] # Assuming top of OB is entry point
+                if latest_close <= entry_threshold and latest_close >= ob['bottom']:
+                    ob_confluence = True
+                    break
+
             if use_crossover:
                 # %K crosses above %D, both below oversold
                 if prev_stoch_k < prev_stoch_d and latest_stoch_k > latest_stoch_d and \
@@ -93,9 +119,9 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
                         if abs(latest_close - s_level['price']) <= latest_close * Decimal(str(PIVOT_TOLERANCE_PCT)):
                             near_support = True
                             break
-                    if near_support:
-                        signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_cross_d_buy', 'confluence': 'pivot_support'}))
-                        strategy_logger.info(f"StochRSI Buy Signal (K cross D below {oversold_dec:.2f}) with Pivot Support: K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
+                    if near_support or ob_confluence: # Confluence with Pivot Support or OB
+                        signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_cross_d_buy', 'confluence': 'pivot_support' if near_support else 'order_block'}))
+                        strategy_logger.info(f"StochRSI Buy Signal (K cross D below {oversold_dec:.2f}) with Confluence: K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
             else:
                 # %K crosses above oversold level
                 if prev_stoch_k < oversold_dec and latest_stoch_k >= oversold_dec:
@@ -105,12 +131,21 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
                         if abs(latest_close - s_level['price']) <= latest_close * Decimal(str(PIVOT_TOLERANCE_PCT)):
                             near_support = True
                             break
-                    if near_support:
-                        signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_oversold_bounce', 'confluence': 'pivot_support'}))
-                        strategy_logger.info(f"StochRSI Buy Signal (K bounce from {oversold_dec:.2f}) with Pivot Support: K={latest_stoch_k:.2f}")
+                    if near_support or ob_confluence: # Confluence with Pivot Support or OB
+                        signals.append(('BUY', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_oversold_bounce', 'confluence': 'pivot_support' if near_support else 'order_block'}))
+                        strategy_logger.info(f"StochRSI Buy Signal (K bounce from {oversold_dec:.2f}) with Confluence: K={latest_stoch_k:.2f}")
 
         # Sell signal conditions
         if is_downtrend: # Only consider sell signals in a downtrend
+            # Check for confluence with active bearish Order Blocks
+            ob_confluence = False
+            for ob in active_bear_obs:
+                # Price needs to be close to or inside the OB
+                entry_threshold = ob['bottom'] # Assuming bottom of OB is entry point
+                if latest_close >= entry_threshold and latest_close <= ob['top']:
+                    ob_confluence = True
+                    break
+
             if use_crossover:
                 # %K crosses below %D, both above overbought
                 if prev_stoch_k > prev_stoch_d and latest_stoch_k < latest_stoch_d and \
@@ -121,9 +156,9 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
                         if abs(latest_close - r_level['price']) <= latest_close * Decimal(str(PIVOT_TOLERANCE_PCT)):
                             near_resistance = True
                             break
-                    if near_resistance:
-                        signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_cross_d_sell', 'confluence': 'pivot_resistance'}))
-                        strategy_logger.info(f"StochRSI Sell Signal (K cross D above {overbought_dec:.2f}) with Pivot Resistance: K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
+                    if near_resistance or ob_confluence: # Confluence with Pivot Resistance or OB
+                        signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_cross_d_sell', 'confluence': 'pivot_resistance' if near_resistance else 'order_block'}))
+                        strategy_logger.info(f"StochRSI Sell Signal (K cross D above {overbought_dec:.2f}) with Confluence: K={latest_stoch_k:.2f}, D={latest_stoch_d:.2f}")
             else:
                 # %K crosses below overbought level
                 if prev_stoch_k > overbought_dec and latest_stoch_k <= overbought_dec:
@@ -133,13 +168,14 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
                         if abs(latest_close - r_level['price']) <= latest_close * Decimal(str(PIVOT_TOLERANCE_PCT)):
                             near_resistance = True
                             break
-                    if near_resistance:
-                        signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_overbought_rejection', 'confluence': 'pivot_resistance'}))
-                        strategy_logger.info(f"StochRSI Sell Signal (K rejection from {overbought_dec:.2f}) with Pivot Resistance: K={latest_stoch_k:.2f}")
+                    if near_resistance or ob_confluence: # Confluence with Pivot Resistance or OB
+                        signals.append(('SELL', latest_close, current_timestamp, {**stoch_info, **ehlers_info, 'stoch_type': 'k_overbought_rejection', 'confluence': 'pivot_resistance' if near_resistance else 'order_block'}))
+                        strategy_logger.info(f"StochRSI Sell Signal (K rejection from {overbought_dec:.2f}) with Confluence: K={latest_stoch_k:.2f}")
 
     return signals
 
 def generate_exit_signals(df: pd.DataFrame, current_position_side: str,
+                          active_bull_obs: List['OrderBlock'], active_bear_obs: List['OrderBlock'],
                           stoch_k_period: int, stoch_d_period: int,
                           overbought: int, oversold: int, use_crossover: bool) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
     """

@@ -167,21 +167,23 @@ def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9) -> pd.S
 
     # Normalize the price to a range of -1 to +1
     # This is a simplified approach; Ehlers' original might involve more complex normalization
-    min_val = median_price.rolling(window=length).min()
-    max_val = median_price.rolling(window=length).max()
+    min_val = median_price.rolling(window=length).min().apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
+    max_val = median_price.rolling(window=length).max().apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
 
-    # Avoid division by zero
+    # Avoid division by zero and handle NaN propagation
     range_val = max_val - min_val
-    range_val = range_val.replace(Decimal('0'), Decimal('1e-38')) # Replace 0 with a small number
+    # Replace 0 with a small number only if min_val and max_val are not NaN
+    range_val = range_val.replace(Decimal('0'), Decimal('1e-38'))
 
-    x = Decimal('2') * ((median_price - min_val) / range_val - Decimal('0.5'))
+    x = (median_price - min_val) / range_val
+    x = x.apply(lambda val: Decimal('2') * (val - Decimal('0.5')) if not val.is_nan() else Decimal('NaN'))
 
     # Ensure x is within (-0.999, 0.999) to avoid issues with log
-    x = x.apply(lambda val: Decimal('0.999') if val >= Decimal('1') else (Decimal('-0.999') if val <= Decimal('-1') else val))
+    x = x.apply(lambda val: Decimal('NaN') if val.is_nan() else (Decimal('0.999') if val >= Decimal('1') else (Decimal('-0.999') if val <= Decimal('-1') else val)))
 
     # Fisher Transform formula
     # Using Decimal for calculations, but math.log requires float, so convert back and forth carefully
-    fisher_transform = x.apply(lambda val: Decimal('0.5') * Decimal(str(math.log((1 + float(val)) / (1 - float(val))))))
+    fisher_transform = x.apply(lambda val: Decimal('NaN') if val.is_nan() else Decimal('0.5') * Decimal(str(math.log((1 + float(val)) / (1 - float(val))))))
     
     return fisher_transform
 
