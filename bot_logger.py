@@ -22,10 +22,10 @@ def setup_logging():
 
     # Create a custom logger
     bot_logger = logging.getLogger('scalper_bot')
-    bot_logger.setLevel(logging.DEBUG) # Overall minimum level
+    bot_logger.setLevel(logging.INFO) # Overall minimum level
 
-    # Ensure root logger also processes DEBUG messages
-    logging.getLogger().setLevel(logging.DEBUG)
+    # Ensure root logger also processes INFO messages
+    logging.getLogger().setLevel(logging.INFO)
     return bot_logger
 
 def log_trade(logger: logging.Logger, message: str, trade_data: dict):

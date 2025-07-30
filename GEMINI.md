@@ -10,22 +10,22 @@ The bot leverages a combination of Stochastic RSI for momentum, Fibonacci Pivot 
 
 ## ✨ Features
 
-*   **Real-time Data Processing:** Utilizes Bybit WebSocket APIs for live kline and position updates, ensuring immediate reaction to market changes.
-*   **Multi-Indicator Strategy:**
-    *   **Stochastic RSI:** Identifies overbought/oversold conditions and potential reversals, with optional crossover confirmation.
-    *   **Fibonacci Pivot Points:** Calculates dynamic support and resistance levels based on a configurable higher timeframe, used for entry/exit confluence.
+*   **Real-time Data Processing**: Utilizes Bybit WebSocket APIs for live kline and position updates, ensuring immediate reaction to market changes.
+*   **Multi-Indicator Strategy**:
+    *   **Stochastic RSI**: Identifies overbought/oversold conditions and potential reversals, with optional crossover confirmation.
+    *   **Fibonacci Pivot Points**: Calculates dynamic support and resistance levels based on a configurable higher timeframe, used for entry/exit confluence.
     *   **Order Block Identification (Initial):** Tracks potential supply/demand zones based on pivot highs/lows for future strategy integration.
-    *   **ATR, SMA, Ehlers Fisher Transform, Ehlers Super Smoother:** Additional indicators for market analysis and potential future strategy enhancements.
-*   **Dynamic Position Management:**
-    *   **Flexible Entry/Exit:** Executes market orders for quick entries and exits based on generated signals.
-    *   **Automatic TP/SL:** Sets Take Profit and Stop Loss orders based on configurable percentages or dynamic ATR multipliers.
-    *   **Robust State Tracking:** Maintains accurate internal state of open positions, entry prices, and PnL, synchronized with exchange data via WebSockets.
-*   **Precision & Reliability:**
-    *   **Decimal Arithmetic:** Uses Python's `Decimal` type for all financial calculations to prevent floating-point inaccuracies.
-    *   **Error Handling & Retries:** Implements retry mechanisms for API requests and robust exception handling for continuous operation.
-*   **Comprehensive Logging:** Detailed logging of bot actions, trade executions, market data, and performance metrics for analysis and debugging.
-*   **Modular Architecture:** Clean separation of concerns (API interaction, indicators, strategy, logging, UI) for easy maintenance and extensibility.
-*   **Configurable Parameters:** All key trading parameters are externalized in `config.py` and `.env` for easy customization.
+    *   **ATR, SMA, Ehlers Fisher Transform, Ehlers Super Smoother**: Additional indicators for market analysis and potential future strategy enhancements.
+*   **Dynamic Position Management**:
+    *   **Flexible Entry/Exit**: Executes market orders for quick entries and exits based on generated signals.
+    *   **Automatic TP/SL**: Sets Take Profit and Stop Loss orders based on configurable percentages or dynamic ATR multipliers.
+    *   **Robust State Tracking**: Maintains accurate internal state of open positions, entry prices, and PnL, synchronized with exchange data via WebSockets.
+*   **Precision & Reliability**:
+    *   **Decimal Arithmetic**: Uses Python's `Decimal` type for all financial calculations to prevent floating-point inaccuracies.
+    *   **Error Handling & Retries**: Implements retry mechanisms for API requests and robust exception handling for continuous operation.
+*   **Comprehensive Logging**: Detailed logging of bot actions, trade executions, market data, and performance metrics for analysis and debugging.
+*   **Modular Architecture**: Clean separation of concerns (API interaction, indicators, strategy, logging, UI) for easy maintenance and extensibility.
+*   **Configurable Parameters**: All key trading parameters are externalized in `config.py` and `.env` for easy customization.
 
 ## 🧠 Core Concepts & Strategy Overview
 
