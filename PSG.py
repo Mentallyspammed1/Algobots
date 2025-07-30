@@ -169,14 +169,37 @@ class PyrmethusBot:
             positionIdx=0
         )
 
-    async def _fetch_and_process_klines(self) -> bool:
-        """Fetches kline data, processes it, and updates internal DataFrame."""
+    async def _handle_kline_update(self, message: Dict[str, Any]):
+        """
+        Asynchronous handler for WebSocket kline updates.
+        Updates the internal klines_df and derived indicators.
+        """
+        if message.get("topic") != f"kline.{INTERVAL}.{SYMBOL}" or not message.get("data"):
+            self.bot_logger.debug(f"Received non-kline or empty WS update: {message}")
+            return
+
+        # Use the handle_websocket_kline_data from indicators.py
+        updated_df = handle_websocket_kline_data(self.klines_df, message)
+        
+        if updated_df is not None and not updated_df.empty:
+            self.klines_df = updated_df
+            # Recalculate indicators on the updated DataFrame
+            self.klines_df = calculate_stochrsi(self.klines_df.copy(), rsi_period=STOCHRSI_K_PERIOD, stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD)
+            self.klines_df['atr'] = calculate_atr(self.klines_df)
+            self.cached_atr = self.klines_df['atr'].iloc[-1]
+            self.current_price = self.klines_df['close'].iloc[-1]
+            self.bot_logger.debug(f"{PYRMETHUS_CYAN}Kline updated via WebSocket. Current price: {self.current_price:.4f}{COLOR_RESET}")
+        else:
+            self.bot_logger.warning(f"{COLOR_YELLOW}Failed to update klines_df from WebSocket message: {message}{COLOR_RESET}")
+
+    async def _initial_kline_fetch(self) -> bool:
+        """Fetches initial historical kline data to populate the DataFrame."""
         try:
             klines_response = await self.bybit_client.get_kline(
                 category=BYBIT_CATEGORY, symbol=SYMBOL, interval=INTERVAL, limit=CANDLE_FETCH_LIMIT
             )
             if not klines_response or not klines_response.get('result') or not klines_response['result'].get('list'):
-                self.bot_logger.info(f"{COLOR_YELLOW}⚠️ No kline data fetched for {SYMBOL}. Skipping signal generation.{COLOR_RESET}")
+                self.bot_logger.error(f"{COLOR_RED}Initial kline data fetch failed for {SYMBOL}. Bot cannot start.{COLOR_RESET}")
                 return False
 
             data = []
@@ -192,16 +215,17 @@ class PyrmethusBot:
             df = pd.DataFrame(data).set_index('timestamp').sort_index()
 
             if len(df) < max(STOCHRSI_K_PERIOD, 14): # 14 for ATR
-                self.bot_logger.warning(f"{COLOR_YELLOW}Insufficient data for indicators ({len(df)} candles). Need at least {max(STOCHRSI_K_PERIOD, 14)}.{COLOR_RESET}")
+                self.bot_logger.warning(f"{COLOR_YELLOW}Insufficient initial data for indicators ({len(df)} candles). Need at least {max(STOCHRSI_K_PERIOD, 14)}.{COLOR_RESET}")
                 return False
 
             self.klines_df = calculate_stochrsi(df.copy(), rsi_period=STOCHRSI_K_PERIOD, stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD)
             self.klines_df['atr'] = calculate_atr(self.klines_df)
             self.cached_atr = self.klines_df['atr'].iloc[-1]
             self.current_price = self.klines_df['close'].iloc[-1]
+            self.bot_logger.info(f"{PYRMETHUS_GREEN}Initial kline data fetched and processed. Current price: {self.current_price:.4f}{COLOR_RESET}")
             return True
         except Exception as e:
-            log_exception(self.bot_logger, f"Error fetching or processing klines: {e}", e)
+            log_exception(self.bot_logger, f"Error during initial kline fetch: {e}", e)
             return False
 
     async def _execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: Dict[str, Any]):
@@ -289,8 +313,16 @@ class PyrmethusBot:
         )
         self.bot_logger.info("BybitContractAPI initialized.")
 
-        listener_task = await self.bybit_client.start_websocket_listener(self._handle_position_update)
+        private_listener_task = await self.bybit_client.start_private_websocket_listener(self._handle_position_update)
         await self.bybit_client.subscribe_ws_private_topic("position")
+
+        public_listener_task = await self.bybit_client.start_public_websocket_listener(self._handle_kline_update)
+        await self.bybit_client.subscribe_ws_public_topic(f"kline.{INTERVAL}.{SYMBOL}")
+
+        # Initial fetch of historical kline data
+        if not await self._initial_kline_fetch():
+            self.bot_logger.critical(f"{COLOR_RED}Failed to fetch initial kline data. Exiting bot.{COLOR_RESET}")
+            return
 
         initial_pos_response = await self.bybit_client.get_positions(category=BYBIT_CATEGORY, symbol=SYMBOL)
         if initial_pos_response and initial_pos_response.get('result') and initial_pos_response['result'].get('list'):
@@ -302,7 +334,9 @@ class PyrmethusBot:
         async with self.bybit_client:
             while True:
                 try:
-                    if not await self._fetch_and_process_klines():
+                    # Ensure klines_df is not None and has enough data for calculations
+                    if self.klines_df is None or len(self.klines_df) < max(STOCHRSI_K_PERIOD, 14):
+                        self.bot_logger.warning(f"{COLOR_YELLOW}Insufficient kline data for calculations. Waiting for more data...{COLOR_RESET}")
                         await asyncio.sleep(POLLING_INTERVAL_SECONDS)
                         continue
 

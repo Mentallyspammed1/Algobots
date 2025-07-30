@@ -136,3 +136,42 @@ def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: i
 
     indicators_logger.debug(f"StochRSI calculated with rsi_period={rsi_period}, stoch_k_period={stoch_k_period}, stoch_d_period={stoch_d_period}.")
     return df
+
+def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd.DataFrame:
+    """
+    Processes a single kline data message from a WebSocket stream.
+    It updates the last row if the candle is not confirmed, or appends a new row if it is.
+    """
+    if not isinstance(message, dict) or 'data' not in message or not message['data']:
+        indicators_logger.error(f"Invalid kline WebSocket message received: {message}")
+        return df
+
+    kline_data = message['data'][0] # Extract the kline object from the 'data' list
+
+    # Extract and format the new kline data
+    new_kline = {
+        'timestamp': pd.to_datetime(kline_data['start'], unit='ms'),
+        'open': Decimal(kline_data['open']),
+        'high': Decimal(kline_data['high']),
+        'low': Decimal(kline_data['low']),
+        'close': Decimal(kline_data['close']),
+        'volume': Decimal(kline_data['volume']),
+    }
+    
+    # Set the timestamp as the index for the new kline
+    new_kline_df = pd.DataFrame([new_kline]).set_index('timestamp')
+
+    if df.empty:
+        indicators_logger.info("DataFrame is empty, initializing with new kline data.")
+        return new_kline_df
+
+    # If the new kline's timestamp matches the last one in the DataFrame, update it
+    if new_kline_df.index[0] == df.index[-1]:
+        df.iloc[-1] = new_kline_df.iloc[0]
+        indicators_logger.debug(f"Updated last kline at {new_kline_df.index[0]}")
+    # Otherwise, append it as a new row
+    else:
+        df = pd.concat([df, new_kline_df])
+        indicators_logger.debug(f"Appended new kline at {new_kline_df.index[0]}")
+
+    return df

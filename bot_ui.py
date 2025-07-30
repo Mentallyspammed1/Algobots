@@ -1,5 +1,6 @@
 import pandas as pd
 from typing import Any, Dict, List, Optional
+from decimal import Decimal # Import Decimal
 
 # --- Pyrmethus's Color Codex ---
 from color_codex import (
@@ -10,7 +11,7 @@ from color_codex import (
 
 def display_market_info(
     klines_df: Optional[pd.DataFrame],
-    current_price: float,
+    current_price: Decimal, # Changed to Decimal
     symbol: str,
     resistance: List[Dict[str, Any]],
     support: List[Dict[str, Any]],
@@ -25,8 +26,9 @@ def display_market_info(
     latest_stoch_d = klines_df['stoch_d'].iloc[-1] if 'stoch_d' in klines_df.columns and not pd.isna(klines_df['stoch_d'].iloc[-1]) else "N/A"
 
     print(f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {current_price:.4f} @ {klines_df.index[-1].strftime('%Y-%m-%d %H:%M:%S')}{COLOR_RESET}")
-    stoch_k_str = f"{latest_stoch_k:.2f}" if isinstance(latest_stoch_k, float) else str(latest_stoch_k)
-    stoch_d_str = f"{latest_stoch_d:.2f}" if isinstance(latest_stoch_d, float) else str(latest_stoch_d)
+    # Updated isinstance checks to Decimal
+    stoch_k_str = f"{latest_stoch_k:.2f}" if isinstance(latest_stoch_k, Decimal) else str(latest_stoch_k)
+    stoch_d_str = f"{latest_stoch_d:.2f}" if isinstance(latest_stoch_d, Decimal) else str(latest_stoch_d)
     print(f"{PYRMETHUS_BLUE}📈 StochRSI K: {stoch_k_str}, D: {stoch_d_str}{COLOR_RESET}")
 
     if resistance:

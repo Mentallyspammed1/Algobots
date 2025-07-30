@@ -42,6 +42,11 @@ BYBIT_REST_MAINNET = "https://api.bybit.com"
 BYBIT_REST_TESTNET = "https://api-testnet.bybit.com"
 BYBIT_WS_PRIVATE_MAINNET = "wss://stream.bybit.com/v5/private"
 BYBIT_WS_PRIVATE_TESTNET = "wss://stream-testnet.bybit.com/v5/private"
+
+# Public WebSocket URLs
+BYBIT_WS_PUBLIC_LINEAR_MAINNET = "wss://stream.bybit.com/v5/public/linear"
+BYBIT_WS_PUBLIC_LINEAR_TESTNET = "wss://stream-testnet.bybit.com/v5/public/linear"
+
 DEFAULT_RECV_WINDOW = "5000"
 
 logging.basicConfig(level=logging.INFO, format=f'{Color.CYAN}[BybitAPI]{Color.RESET} %(levelname)s: %(message)s')
@@ -69,12 +74,19 @@ class BybitContractAPI:
         self.api_secret = api_secret.strip().encode('utf-8')
         self.base_rest_url = BYBIT_REST_TESTNET if testnet else BYBIT_REST_MAINNET
         self.base_ws_private_url = BYBIT_WS_PRIVATE_TESTNET if testnet else BYBIT_WS_PRIVATE_MAINNET
+        self.base_ws_public_linear_url = BYBIT_WS_PUBLIC_LINEAR_TESTNET if testnet else BYBIT_WS_PUBLIC_LINEAR_MAINNET
         self.client = httpx.AsyncClient(base_url=self.base_rest_url, timeout=30.0)
         
-        self.websocket: Optional[websockets.WebSocketClientProtocol] = None
-        self.connection_state = ConnectionState()
+        self.private_websocket: Optional[websockets.WebSocketClientProtocol] = None
+        self.public_websocket: Optional[websockets.WebSocketClientProtocol] = None
+
+        self.private_connection_state = ConnectionState()
+        self.public_connection_state = ConnectionState()
+
         self._ws_authenticated_event = asyncio.Event()
-        self._subscriptions: set = set()
+        self._private_subscriptions: set = set()
+        self._public_subscriptions: set = set()
+
 
         logger.info(f"{Color.GREEN}BybitContractAPI initialized. Testnet mode: {testnet}{Color.RESET}")
 
@@ -86,14 +98,21 @@ class BybitContractAPI:
 
     async def close_connections(self):
         """Gracefully close all connections."""
-        self.connection_state.is_active = False
-        self.connection_state.is_connected = False
-        self.connection_state.is_authenticated = False
+        self.private_connection_state.is_active = False
+        self.private_connection_state.is_connected = False
+        self.private_connection_state.is_authenticated = False
         self._ws_authenticated_event.clear()
 
-        if self.websocket:
-            await self.websocket.close()
-            logger.info(f"{Color.YELLOW}WebSocket connection closed.{Color.RESET}")
+        self.public_connection_state.is_active = False
+        self.public_connection_state.is_connected = False
+
+        if self.private_websocket:
+            await self.private_websocket.close()
+            logger.info(f"{Color.YELLOW}Private WebSocket connection closed.{Color.RESET}")
+        
+        if self.public_websocket:
+            await self.public_websocket.close()
+            logger.info(f"{Color.YELLOW}Public WebSocket connection closed.{Color.RESET}")
         
         await self.client.aclose()
         logger.info(f"{Color.YELLOW}HTTP client closed.{Color.RESET}")
@@ -163,90 +182,160 @@ class BybitContractAPI:
     async def set_trading_stop(self, **kwargs) -> Dict[str, Any]:
         return await self._make_request("POST", "/v5/position/set-trading-stop", kwargs)
 
-    async def _connect_ws(self) -> None:
-        if self.connection_state.is_connected and self.websocket:
+    async def _connect_private_ws(self) -> None:
+        if self.private_connection_state.is_connected and self.private_websocket:
             return
 
         self._ws_authenticated_event.clear()
-        self.connection_state.is_connected = False
-        self.connection_state.is_authenticated = False
+        self.private_connection_state.is_connected = False
+        self.private_connection_state.is_authenticated = False
 
         try:
-            self.websocket = await websockets.connect(
+            self.private_websocket = await websockets.connect(
                 self.base_ws_private_url,
                 ping_interval=20,
                 ping_timeout=10
             )
-            self.connection_state.is_connected = True
+            self.private_connection_state.is_connected = True
             logger.info(f"{Color.GREEN}Connected to Bybit private WebSocket.{Color.RESET}")
 
             expires = int(time.time() * 1000) + 30000  # 30 seconds expiration
             signature = self._generate_ws_signature(expires)
             auth_message = {"op": "auth", "args": [self.api_key, expires, signature]}
-            await self._send_ws_message(auth_message)
-            logger.info(f"{Color.GREEN}WebSocket authentication message sent.{Color.RESET}")
+            await self._send_private_ws_message(auth_message)
+            logger.info(f"{Color.GREEN}Private WebSocket authentication message sent.{Color.RESET}")
 
         except websockets.exceptions.WebSocketException as e:
-            self.connection_state.is_connected = False
-            logger.error(f"{Color.RED}WebSocket connection error: {e}{Color.RESET}")
-            raise WebSocketConnectionError(f"WebSocket connection error: {e}")
+            self.private_connection_state.is_connected = False
+            logger.error(f"{Color.RED}Private WebSocket connection error: {e}{Color.RESET}")
+            raise WebSocketConnectionError(f"Private WebSocket connection error: {e}")
 
-    async def _send_ws_message(self, message: Dict[str, Any]) -> None:
-        if not self.websocket or not self.connection_state.is_connected:
-            raise WebSocketConnectionError("WebSocket not connected.")
-        await self.websocket.send(json.dumps(message))
-        logger.debug(f"WS Sent: {message}")
+    async def _connect_public_ws(self) -> None:
+        if self.public_connection_state.is_connected and self.public_websocket:
+            return
+
+        self.public_connection_state.is_connected = False
+
+        try:
+            self.public_websocket = await websockets.connect(
+                self.base_ws_public_linear_url,
+                ping_interval=20,
+                ping_timeout=10
+            )
+            self.public_connection_state.is_connected = True
+            logger.info(f"{Color.GREEN}Connected to Bybit public WebSocket (Linear).{Color.RESET}")
+
+        except websockets.exceptions.WebSocketException as e:
+            self.public_connection_state.is_connected = False
+            logger.error(f"{Color.RED}Public WebSocket connection error: {e}{Color.RESET}")
+            raise WebSocketConnectionError(f"Public WebSocket connection error: {e}")
+
+    async def _send_private_ws_message(self, message: Dict[str, Any]) -> None:
+        if not self.private_websocket or not self.private_connection_state.is_connected:
+            raise WebSocketConnectionError("Private WebSocket not connected.")
+        await self.private_websocket.send(json.dumps(message))
+        logger.debug(f"Private WS Sent: {message}")
+
+    async def _send_public_ws_message(self, message: Dict[str, Any]) -> None:
+        if not self.public_websocket or not self.public_connection_state.is_connected:
+            raise WebSocketConnectionError("Public WebSocket not connected.")
+        await self.public_websocket.send(json.dumps(message))
+        logger.debug(f"Public WS Sent: {message}")
 
     async def subscribe_ws_private_topic(self, topic: str) -> None:
-        self._subscriptions.add(topic)
-        if self.connection_state.is_authenticated:
-            await self._send_ws_message({"op": "subscribe", "args": [topic]})
-            logger.info(f"{Color.MAGENTA}Subscribing to WebSocket topic: {topic}{Color.RESET}")
+        self._private_subscriptions.add(topic)
+        if self.private_connection_state.is_authenticated:
+            await self._send_private_ws_message({"op": "subscribe", "args": [topic]})
+            logger.info(f"{Color.MAGENTA}Subscribing to private WebSocket topic: {topic}{Color.RESET}")
         else:
-            logger.info(f"{Color.YELLOW}Queued subscription for '{topic}'. Will subscribe after auth.{Color.RESET}")
+            logger.info(f"{Color.YELLOW}Queued private subscription for '{topic}'. Will subscribe after auth.{Color.RESET}")
 
-    async def _resubscribe_topics(self):
-        if not self._subscriptions:
+    async def subscribe_ws_public_topic(self, topic: str) -> None:
+        self._public_subscriptions.add(topic)
+        if self.public_connection_state.is_connected:
+            await self._send_public_ws_message({"op": "subscribe", "args": [topic]})
+            logger.info(f"{Color.MAGENTA}Subscribing to public WebSocket topic: {topic}{Color.RESET}")
+        else:
+            logger.info(f"{Color.YELLOW}Queued public subscription for '{topic}'. Will subscribe after connection.{Color.RESET}")
+
+    async def _resubscribe_private_topics(self):
+        if not self._private_subscriptions:
             return
-        logger.info(f"{Color.GREEN}Resubscribing to topics: {list(self._subscriptions)}{Color.RESET}")
-        await self._send_ws_message({"op": "subscribe", "args": list(self._subscriptions)})
+        logger.info(f"{Color.GREEN}Resubscribing to private topics: {list(self._private_subscriptions)}{Color.RESET}")
+        await self._send_private_ws_message({"op": "subscribe", "args": list(self._private_subscriptions)})
 
-    async def start_websocket_listener(self, callback: callable, reconnect_delay: int = 5) -> asyncio.Task:
+    async def _resubscribe_public_topics(self):
+        if not self._public_subscriptions:
+            return
+        logger.info(f"{Color.GREEN}Resubscribing to public topics: {list(self._public_subscriptions)}{Color.RESET}")
+        await self._send_public_ws_message({"op": "subscribe", "args": list(self._public_subscriptions)})
+
+    async def start_private_websocket_listener(self, callback: callable, reconnect_delay: int = 5) -> asyncio.Task:
         async def _listener_task():
-            while self.connection_state.is_active:
+            while self.private_connection_state.is_active:
                 try:
-                    await self._connect_ws()
-                    while self.connection_state.is_connected:
+                    await self._connect_private_ws()
+                    while self.private_connection_state.is_connected:
                         try:
-                            message = await asyncio.wait_for(self.websocket.recv(), timeout=30)
+                            message = await asyncio.wait_for(self.private_websocket.recv(), timeout=30)
                             parsed_message = json.loads(message)
-                            logger.debug(f"WS Received: {parsed_message}")
+                            logger.debug(f"Private WS Received: {parsed_message}")
 
                             if parsed_message.get("op") == "auth":
                                 if parsed_message.get("success"):
-                                    self.connection_state.is_authenticated = True
+                                    self.private_connection_state.is_authenticated = True
                                     self._ws_authenticated_event.set()
-                                    logger.info(f"{Color.GREEN}WebSocket authenticated successfully.{Color.RESET}")
-                                    await self._resubscribe_topics()
+                                    logger.info(f"{Color.GREEN}Private WebSocket authenticated successfully.{Color.RESET}")
+                                    await self._resubscribe_private_topics()
                                 else:
-                                    logger.error(f"{Color.RED}WebSocket auth failed: {parsed_message.get('retMsg', 'Unknown error')}. Full response: {json.dumps(parsed_message)}{Color.RESET}")
+                                    logger.error(f"{Color.RED}Private WebSocket auth failed: {parsed_message.get('retMsg', 'Unknown error')}. Full response: {json.dumps(parsed_message)}{Color.RESET}")
                                     break
                             elif parsed_message.get("op") != "pong":
                                 await callback(parsed_message)
 
                         except asyncio.TimeoutError:
-                            logger.warning(f"{Color.YELLOW}WebSocket recv timed out. Reconnecting...{Color.RESET}")
+                            logger.warning(f"{Color.YELLOW}Private WebSocket recv timed out. Reconnecting...{Color.RESET}")
                             break
                         except websockets.exceptions.ConnectionClosed as e:
-                            logger.warning(f"{Color.YELLOW}WebSocket closed: {e}. Reconnecting...{Color.RESET}")
+                            logger.warning(f"{Color.YELLOW}Private WebSocket closed: {e}. Reconnecting...{Color.RESET}")
                             break
                 except Exception as e:
-                    logger.error(f"{Color.RED}Error in WebSocket listener: {e}. Retrying...{Color.RESET}")
+                    logger.error(f"{Color.RED}Error in private WebSocket listener: {e}. Retrying...{Color.RESET}")
                 
-                self.connection_state.is_connected = False
-                self.connection_state.is_authenticated = False
+                self.private_connection_state.is_connected = False
+                self.private_connection_state.is_authenticated = False
                 self._ws_authenticated_event.clear()
-                if self.connection_state.is_active:
+                if self.private_connection_state.is_active:
                     await asyncio.sleep(reconnect_delay)
-            logger.info(f"{Color.YELLOW}WebSocket listener stopped.{Color.RESET}")
+            logger.info(f"{Color.YELLOW}Private WebSocket listener stopped.{Color.RESET}")
+        return asyncio.create_task(_listener_task())
+
+    async def start_public_websocket_listener(self, callback: callable, reconnect_delay: int = 5) -> asyncio.Task:
+        async def _listener_task():
+            while self.public_connection_state.is_active:
+                try:
+                    await self._connect_public_ws()
+                    while self.public_connection_state.is_connected:
+                        try:
+                            message = await asyncio.wait_for(self.public_websocket.recv(), timeout=30)
+                            parsed_message = json.loads(message)
+                            logger.debug(f"Public WS Received: {parsed_message}")
+
+                            # Public WS does not have 'auth' messages, just data or pongs
+                            if parsed_message.get("op") != "pong":
+                                await callback(parsed_message)
+
+                        except asyncio.TimeoutError:
+                            logger.warning(f"{Color.YELLOW}Public WebSocket recv timed out. Reconnecting...{Color.RESET}")
+                            break
+                        except websockets.exceptions.ConnectionClosed as e:
+                            logger.warning(f"{Color.YELLOW}Public WebSocket closed: {e}. Reconnecting...{Color.RESET}")
+                            break
+                except Exception as e:
+                    logger.error(f"{Color.RED}Error in public WebSocket listener: {e}. Retrying...{Color.RESET}")
+                
+                self.public_connection_state.is_connected = False
+                if self.public_connection_state.is_active:
+                    await asyncio.sleep(reconnect_delay)
+            logger.info(f"{Color.YELLOW}Public WebSocket listener stopped.{Color.RESET}")
         return asyncio.create_task(_listener_task())
