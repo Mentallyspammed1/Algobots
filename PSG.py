@@ -515,7 +515,7 @@ class PyrmethusBot:
                         except Exception as pivot_e:
                             log_exception(self.bot_logger, f"Error during Fibonacci Pivot calculation: {pivot_e}", pivot_e)
 
-                    display_market_info(self.klines_df, self.current_price, SYMBOL, resistance, support, self.bot_logger, price_precision_digits=4) # Assuming 4 for now, will make dynamic later
+                    display_market_info(self.klines_df, self.current_price, SYMBOL, resistance, support, self.bot_logger)
 
                     if not self.position_open:
                         signals = generate_signals(self.klines_df, resistance, support,
@@ -541,7 +541,6 @@ class PyrmethusBot:
                                                              overbought=STOCHRSI_OVERBOUGHT_LEVEL, oversold=STOCHRSI_OVERSOLD_LEVEL,
                                                              use_crossover=USE_STOCHRSI_CROSSOVER,
                                                              enable_fib_pivot_actions=ENABLE_FIB_PIVOT_ACTIONS,
-                                                             fib_entry_confirm_percent=FIB_ENTRY_CONFIRM_PERCENT,
                                                              fib_exit_warn_percent=FIB_EXIT_WARN_PERCENT,
                                                              fib_exit_action=FIB_EXIT_ACTION,
                                                              pivot_support_levels=pivot_support_levels,

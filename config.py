@@ -24,6 +24,24 @@ STOCHRSI_OVERSOLD_LEVEL = 20    # StochRSI value indicating oversold conditions
 # Set to True for K/D line crossover signals, False for K line crossing overbought/oversold levels.
 USE_STOCHRSI_CROSSOVER = True
 
+# --- Strategy Parameters (StochRSI) ---
+# Standard StochRSI calculation periods and overbought/oversold levels.
+STOCHRSI_K_PERIOD = 12 # This is the period for RSI calculation within StochRSI
+STOCHRSI_D_PERIOD = 3  # This is the smoothing period for both %K and %D lines of StochRSI
+STOCHRSI_OVERBOUGHT_LEVEL = 80  # StochRSI value indicating overbought conditions
+STOCHRSI_OVERSOLD_LEVEL = 20    # StochRSI value indicating oversold conditions
+# Set to True for K/D line crossover signals, False for K line crossing overbought/oversold levels.
+USE_STOCHRSI_CROSSOVER = True
+
+# --- Strategy Parameters (Fibonacci Pivots) ---
+ENABLE_FIB_PIVOT_ACTIONS = False # Master switch for Fib pivots
+PIVOT_TIMEFRAME = "1d" # Timeframe for Pivot calculation (e.g., '1d', '1W')
+FIB_LEVELS_TO_CALC = [0.382, 0.618, 1.0] # Fibonacci levels (based on H-L range)
+FIB_NEAREST_COUNT = 5 # How many nearest levels to track
+FIB_ENTRY_CONFIRM_PERCENT = 0.002 # Price must be within X% of a Fib support(long)/resistance(short)
+FIB_EXIT_WARN_PERCENT = 0.0015 # Warn/Exit if price within Y% of Fib resistance(long)/support(short)
+FIB_EXIT_ACTION = "warn" # Action on exit warning: "warn", "exit"
+
 # --- Risk Management ---
 # Stop Loss and Take Profit percentages relative to the entry price.
 # E.g., 0.005 means 0.5%

@@ -15,7 +15,9 @@ strategy_logger.setLevel(logging.DEBUG)
 def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], support_levels: List[Dict[str, Any]],
                     active_bull_obs: List['OrderBlock'], active_bear_obs: List['OrderBlock'],
                     stoch_k_period: int, stoch_d_period: int,
-                    overbought: int, oversold: int, use_crossover: bool) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+                    overbought: int, oversold: int, use_crossover: bool,
+                    enable_fib_pivot_actions: bool, fib_entry_confirm_percent: float,
+                    pivot_support_levels: Dict[str, Decimal], pivot_resistance_levels: Dict[str, Decimal]) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
     """
     Generates trading signals based on StochRSI and optionally pivot points.
 
@@ -80,9 +82,42 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
     is_uptrend = latest_close > latest_sma
     is_downtrend = latest_close < latest_sma
 
+    # Fibonacci Pivot Confirmation
+    fib_long_confirm = False
+    fib_short_confirm = False
+    fib_reason_part = ""
+
+    if enable_fib_pivot_actions:
+        if not pivot_support_levels and not pivot_resistance_levels:
+            strategy_logger.warning("Fib Pivot confirmation enabled, but no pivot levels calculated. Entry check will fail.")
+        
+        # Check Long confirmation against nearest SUPPORT pivots
+        if is_uptrend: # Only check if base signal is long
+            for name, price in pivot_support_levels.items():
+                if abs(latest_close - price) / price <= Decimal(str(fib_entry_confirm_percent)):
+                    fib_long_confirm = True
+                    fib_reason_part = f"Near Fib Support {name}={price:.2f} ({fib_entry_confirm_percent*100:.3f}%)"
+                    break # Found one confirmation
+            if not fib_long_confirm:
+                strategy_logger.debug(f"Base Long signal, but price {latest_close:.2f} not near any Fib support level within {fib_entry_confirm_percent*100:.3f}%. (Current: {pivot_support_levels})")
+
+        # Check Short confirmation against nearest RESISTANCE pivots
+        if is_downtrend: # Only check if base signal is short
+            for name, price in pivot_resistance_levels.items():
+                if price > Decimal('0') and abs(latest_close - price) / price <= Decimal(str(fib_entry_confirm_percent)):
+                    fib_short_confirm = True
+                    fib_reason_part = f"Near Fib Resistance {name}={price:.2f} ({fib_entry_confirm_percent*100:.3f}%)"
+                    break # Found one confirmation
+            if not fib_short_confirm:
+                strategy_logger.debug(f"Base Short signal, but price {latest_close:.2f} not near any Fib resistance level within {fib_entry_confirm_percent*100:.3f}%. (Current: {pivot_resistance_levels})")
+    else:
+        # If Fib pivots are disabled, confirmation is implicitly true
+        fib_long_confirm = True
+        fib_short_confirm = True
+
     if prev_stoch_k is not None and prev_stoch_d is not None:
         # Buy signal conditions
-        if is_uptrend: # Only consider buy signals in an uptrend
+        if is_uptrend and fib_long_confirm: # Only consider buy signals in an uptrend and with Fib confirmation
             # Check for confluence with active bullish Order Blocks
             ob_confluence = False
             for ob in active_bull_obs:
@@ -119,7 +154,7 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
                         strategy_logger.info(f"StochRSI Buy Signal (K bounce from {oversold_dec:.2f}) with Confluence: K={latest_stoch_k:.2f}")
 
         # Sell signal conditions
-        if is_downtrend: # Only consider sell signals in a downtrend
+        if is_downtrend and fib_short_confirm: # Only consider sell signals in a downtrend and with Fib confirmation
             # Check for confluence with active bearish Order Blocks
             ob_confluence = False
             for ob in active_bear_obs:
@@ -160,7 +195,9 @@ def generate_signals(df: pd.DataFrame, resistance_levels: List[Dict[str, Any]], 
 def generate_exit_signals(df: pd.DataFrame, current_position_side: str,
                           active_bull_obs: List['OrderBlock'], active_bear_obs: List['OrderBlock'],
                           stoch_k_period: int, stoch_d_period: int,
-                          overbought: int, oversold: int, use_crossover: bool) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+                          overbought: int, oversold: int, use_crossover: bool,
+                          enable_fib_pivot_actions: bool, fib_exit_warn_percent: float, fib_exit_action: str,
+                          pivot_support_levels: Dict[str, Decimal], pivot_resistance_levels: Dict[str, Decimal]) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
     """
     Generates exit signals based on StochRSI for an open position.
 
