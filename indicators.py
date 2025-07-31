@@ -40,7 +40,7 @@ def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
     tr = tr_df[['h_l', 'h_pc', 'l_pc']].apply(lambda row: max(row.dropna()), axis=1)
     
     # Using SMA for ATR calculation with Decimals
-    atr = tr.rolling(window=length).mean()
+    atr = tr.rolling(window=length).mean().apply(Decimal)
     indicators_logger.debug(Fore.CYAN + f"ATR calculated with length={length}." + Style.RESET_ALL)
     return atr
 

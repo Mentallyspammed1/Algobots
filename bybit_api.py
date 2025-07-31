@@ -180,9 +180,9 @@ class BybitContractAPI:
             param_str = f"{timestamp}{self.api_key}{recv_window}{body}"
         return hmac.new(self.api_secret, param_str.encode('utf-8'), hashlib.sha256).hexdigest()
 
-    def _generate_ws_signature(self, expires: int, path: str = "/realtime") -> str:
+    def _generate_ws_signature(self, expires: int) -> str:
         """Generates the signature for WebSocket authentication."""
-        sign_string = f"GET{path}{expires}"
+        sign_string = f"GET/realtime{expires}"
         return hmac.new(self.api_secret, sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
 
     async def _get_server_time_ms(self) -> int:
@@ -390,7 +390,7 @@ class BybitContractAPI:
 
             if auth_required:
                 expires = int(time.time() * 1000) + 30_000
-                sig = self._generate_ws_signature(expires, path="/v5/private")
+                sig = self._generate_ws_signature(expires)
                 auth_msg = {"op": "auth", "args": [self.api_key, expires, sig]}
                 await self._send_ws_message(ws, auth_msg, is_private=True)
 

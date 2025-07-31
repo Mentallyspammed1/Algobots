@@ -23464,3 +23464,311 @@ Traceback (most recent call last):
 NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
 2025-07-31 03:59:09,234 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
 2025-07-31 03:59:09,235 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.82s < 5s). Skipping entry.[0m
+2025-07-31 03:59:15,816 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:15,817 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 03:59:15,818 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 03:59:15,819 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 03:59:15,820 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:15,821 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 03:59:15,822 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 03:59:15,824 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:16,654 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 03:59:16,676 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 03:59:16,677 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.85s < 5s). Skipping entry.[0m
+2025-07-31 03:59:23,266 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:23,267 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 03:59:23,268 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 03:59:23,269 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 03:59:23,270 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:23,271 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 03:59:23,273 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 03:59:23,274 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:24,107 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 03:59:24,159 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 03:59:24,160 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.88s < 5s). Skipping entry.[0m
+2025-07-31 03:59:30,449 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:30,450 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 03:59:30,450 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 03:59:30,450 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 03:59:30,450 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:30,450 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 03:59:30,451 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 03:59:30,451 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:31,261 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 03:59:31,274 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 03:59:31,275 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.82s < 5s). Skipping entry.[0m
+2025-07-31 03:59:32,771 - PyrmethusBot - INFO - marketmakingstrategy.py:86 - [36mSummoning Enhanced MarketMakingStrategy...[0m
+2025-07-31 03:59:32,772 - PyrmethusBot - INFO - PSG.py:670 - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-31 03:59:33,001 - PyrmethusBot - INFO - PSG.py:677 - BybitContractAPI initialized.
+2025-07-31 03:59:33,002 - PyrmethusBot - INFO - PSG.py:384 - [33mFetching initial kline data for TRUMPUSDT (1)... Attempt 1[0m
+2025-07-31 03:59:34,878 - PyrmethusBot - INFO - PSG.py:425 - [32mInitial kline data fetched and indicators calculated. Current price: 9.4340, ATR: 0.0034[0m
+2025-07-31 03:59:35,550 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 03:59:35,551 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.4340, ATR: 0.0034[0m
+2025-07-31 03:59:35,552 - PyrmethusBot - DEBUG - PSG.py:344 - Received non-kline or empty WS update: {'success': True, 'ret_msg': '', 'conn_id': '0f41f630-9d6b-43ac-b6d5-3bb223d297b8', 'req_id': '', 'op': 'subscribe'}
+2025-07-31 03:59:35,965 - PyrmethusBot - DEBUG - PSG.py:131 - [2mPosition state reset.[0m
+2025-07-31 03:59:35,965 - PyrmethusBot - INFO - PSG.py:223 - [2m✅ No open position for TRUMPUSDT (WS). Seeking new trade opportunities...[0m
+2025-07-31 03:59:36,758 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:36,758 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.78 bps.[0m
+2025-07-31 03:59:36,758 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.43871700[0m
+2025-07-31 03:59:36,759 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.43871700[0m
+2025-07-31 03:59:36,759 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:36,759 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.42843858, Qty: 0.0100[0m
+2025-07-31 03:59:36,760 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.44899542, Qty: 0.0100[0m
+2025-07-31 03:59:36,760 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected BUY_LIMIT signal at 9.4284 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099982210379297423533775541999623748947'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:36,761 - PyrmethusBot - WARNING - PSG.py:444 - [33mSignal received too quickly. Skipping entry.[0m
+2025-07-31 03:59:36,761 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected SELL_LIMIT signal at 9.4490 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099982210379297423533775541999623748947'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 03:59:36,762 - PyrmethusBot - WARNING - PSG.py:444 - [33mSignal received too quickly. Skipping entry.[0m
+2025-07-31 03:59:37,560 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:37,561 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 03:59:37,563 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 03:59:37,564 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 03:59:37,565 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:37,566 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 03:59:37,568 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 03:59:37,570 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:38,394 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 03:59:38,419 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 03:59:38,420 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.85s < 5s). Skipping entry.[0m
+2025-07-31 03:59:41,649 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 03:59:41,649 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.4350, ATR: 0.0034[0m
+2025-07-31 03:59:43,051 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:43,052 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.78 bps.[0m
+2025-07-31 03:59:43,054 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.43971750[0m
+2025-07-31 03:59:43,055 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.43971750[0m
+2025-07-31 03:59:43,056 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:43,058 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.42943808, Qty: 0.0100[0m
+2025-07-31 03:59:43,059 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.44999692, Qty: 0.0100[0m
+2025-07-31 03:59:43,061 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected BUY_LIMIT signal at 9.4294 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099982212264454427443826574969737796871'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:43,851 - PyrmethusBot - DEBUG - PSG.py:454 - [36mFetched current execution price: 9.4350[0m
+2025-07-31 03:59:44,637 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 03:59:44,637 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.4340, ATR: 0.0034[0m
+2025-07-31 03:59:44,641 - PyrmethusBot - WARNING - PSG.py:482 - [33mInstrument info missing or invalid minOrderIv for TRUMPUSDT. Using default 10 USDT.[0m
+2025-07-31 03:59:44,669 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:44,669 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 03:59:44,670 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 03:59:44,670 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 03:59:44,670 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:44,671 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 03:59:44,671 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 03:59:44,672 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:45,443 - PyrmethusBot - ERROR - bot_logger.py:171 - Error fetching USDT balance for dynamic sizing: unsupported operand type(s) for /: 'float' and 'decimal.Decimal'
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 502, in _execute_entry
+    volatility_factor = min(Decimal('1'), self.cached_atr / Decimal(str(effective_price)) if effective_price != 0 else Decimal('1'))
+                                          ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+TypeError: unsupported operand type(s) for /: 'float' and 'decimal.Decimal'
+2025-07-31 03:59:45,451 - PyrmethusBot - ERROR - bot_logger.py:171 - An unexpected error occurred in the main trading loop: unsupported operand type(s) for /: 'float' and 'decimal.Decimal'
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 779, in run
+    if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 517, in _execute_entry
+    quantity = target_usdt_value / current_execution_price # Use fetched price here
+               ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+TypeError: unsupported operand type(s) for /: 'float' and 'decimal.Decimal'
+2025-07-31 03:59:45,458 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 03:59:45,473 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 03:59:45,474 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.80s < 5s). Skipping entry.[0m
+2025-07-31 03:59:51,775 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:51,776 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 03:59:51,776 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 03:59:51,777 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 03:59:51,777 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:51,777 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 03:59:51,778 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 03:59:51,778 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:52,588 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 03:59:52,601 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 03:59:52,602 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.82s < 5s). Skipping entry.[0m
+2025-07-31 03:59:55,455 - PyrmethusBot - INFO - PSG.py:807 - Shutting down WebSocket listeners...
+2025-07-31 03:59:55,456 - PyrmethusBot - INFO - PSG.py:810 - WebSocket listeners stopped.
+2025-07-31 03:59:58,904 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 03:59:58,904 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 03:59:58,905 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 03:59:58,905 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 03:59:58,905 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 03:59:58,906 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 03:59:58,906 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 03:59:58,907 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 03:59:59,710 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 03:59:59,732 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 03:59:59,732 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.83s < 5s). Skipping entry.[0m
+2025-07-31 04:00:06,019 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:00:06,021 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:00:06,021 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:00:06,022 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:00:06,022 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:00:06,022 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:00:06,022 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:00:06,023 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:00:06,825 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:00:06,839 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:00:06,840 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.82s < 5s). Skipping entry.[0m
+2025-07-31 04:00:13,156 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:00:13,156 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:00:13,157 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:00:13,157 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:00:13,157 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:00:13,157 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:00:13,158 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:00:13,158 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:00:13,949 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:00:13,964 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:00:13,964 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.81s < 5s). Skipping entry.[0m
+2025-07-31 04:00:20,511 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:00:20,516 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:00:20,516 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:00:20,516 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:00:20,517 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:00:20,517 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:00:20,517 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:00:20,518 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:00:21,302 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:00:21,319 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:00:21,320 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.80s < 5s). Skipping entry.[0m
+2025-07-31 04:00:27,825 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:00:27,825 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:00:27,825 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:00:27,826 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:00:27,826 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:00:27,826 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:00:27,827 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:00:27,827 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:00:28,625 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:00:28,639 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:00:28,640 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.81s < 5s). Skipping entry.[0m
+2025-07-31 04:00:34,945 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:00:34,945 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:00:34,945 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:00:34,947 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:00:34,947 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:00:34,947 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:00:34,948 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:00:34,948 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:00:35,738 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:00:35,753 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:00:35,754 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.81s < 5s). Skipping entry.[0m
+2025-07-31 04:00:42,093 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:00:42,094 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:00:42,096 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:00:42,097 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:00:42,099 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:00:42,100 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:00:42,101 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:00:42,102 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:00:42,908 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:00:42,935 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:00:42,935 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.83s < 5s). Skipping entry.[0m
+2025-07-31 04:00:49,235 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:00:49,236 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:00:49,236 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:00:49,236 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:00:49,237 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:00:49,237 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:00:49,237 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:00:49,238 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:00:50,039 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:00:50,055 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:00:50,055 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.82s < 5s). Skipping entry.[0m
+2025-07-31 04:00:56,336 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:00:56,337 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:00:56,337 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:00:56,337 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:00:56,337 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:00:56,337 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:00:56,338 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:00:56,338 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:00:57,129 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:00:57,150 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:00:57,151 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.81s < 5s). Skipping entry.[0m
+2025-07-31 04:01:03,411 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-31 04:01:03,411 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 21.63 bps.[0m
+2025-07-31 04:01:03,412 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Uptrend, Skewed Mid Price (after trend): 9.44371950[0m
+2025-07-31 04:01:03,412 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.44371950[0m
+2025-07-31 04:01:03,412 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 04:01:03,412 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.43350754, Qty: 0.0100[0m
+2025-07-31 04:01:03,412 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.45393146, Qty: 0.0100[0m
+2025-07-31 04:01:03,413 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected BUY_LIMIT signal at 9.4335 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 04:01:04,199 - PyrmethusBot - ERROR - bot_logger.py:171 - Failed to fetch current price for TRUMPUSDT before execution: name 'PYRMETHUS_CYAN' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 457, in _execute_entry
+    return False
+                 
+NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
+2025-07-31 04:01:04,219 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 04:01:04,219 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.81s < 5s). Skipping entry.[0m

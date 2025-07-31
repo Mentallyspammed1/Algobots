@@ -499,7 +499,7 @@ class PyrmethusBot:
                         # Use the fetched execution price for volatility calculation if available
                         effective_price = current_execution_price if current_execution_price > 0 else self.current_price
                         if self.cached_atr and effective_price > 0:
-                            volatility_factor = min(Decimal('1'), self.cached_atr / Decimal(str(effective_price)) if effective_price != 0 else Decimal('1'))
+                            volatility_factor = min(Decimal('1'), Decimal(str(self.cached_atr)) / Decimal(str(effective_price)) if effective_price != 0 else Decimal('1'))
                         
                         target_usdt_value = usdt_balance * (Decimal(str(ORDER_SIZE_PERCENT_OF_BALANCE)) / Decimal('100')) * volatility_factor
                         self.bot_logger.info(f"{PYRMETHUS_BLUE}Dynamic sizing: Balance={usdt_balance:.2f}, Volatility Factor={volatility_factor:.3f}, Target USDT={target_usdt_value:.2f}{COLOR_RESET}")
