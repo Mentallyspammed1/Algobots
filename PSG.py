@@ -437,6 +437,7 @@ class PyrmethusBot:
         """
         Executes an entry trade with dynamic position sizing based on account balance and volatility.
         """
+        quantity = Decimal('0') # Initialize quantity to prevent UnboundLocalError
         self.bot_logger.info(f"{PYRMETHUS_PURPLE}💡 Detected {signal_type.upper()} signal at {signal_price:.4f} (Info: {signal_info}){COLOR_RESET}")
 
         current_time = time.time()
@@ -510,19 +511,23 @@ class PyrmethusBot:
             except Exception as e:
                 log_exception(self.bot_logger, f"Error fetching USDT balance for dynamic sizing: {e}", e)
 
-        if target_usdt_value < min_order_value:
-            target_usdt_value = min_order_value
-            self.bot_logger.debug(f"{PYRMETHUS_BLUE}Adjusted target USDT to minimum order value: {target_usdt_value:.2f}{COLOR_RESET}")
+        # --- Final Order Value & Quantity Adjustments ---
+        # Ensure the final order value meets the minimum required by the exchange
+        if quantity * current_execution_price < min_order_value:
+            quantity = min_order_value / current_execution_price
+            self.bot_logger.warning(f"{PYRMETHUS_YELLOW}Adjusted quantity to meet minimum order value of {min_order_value} USDT. New Qty: {quantity:.8f}{COLOR_RESET}")
 
-        quantity = target_usdt_value / current_execution_price # Use fetched price here
-        
-        if qty_step > 0:
-            steps = float(quantity) / float(qty_step)
-            quantity = Decimal(str(round(steps))) * qty_step
-            
+        # After potential adjustment for min value, re-check against min_qty and round to qty_step again
         if quantity < min_qty:
             quantity = min_qty
-            self.bot_logger.debug(f"{PYRMETHUS_BLUE}Adjusted quantity to minimum lot size: {quantity:.4f}{COLOR_RESET}")
+
+        if qty_step > 0:
+            quantity = (quantity // qty_step) * qty_step # Use floor division for deterministic rounding down to the nearest step
+
+        # Final check: if quantity is zero after all adjustments, something is wrong.
+        if quantity <= 0:
+            self.bot_logger.error(f"{COLOR_RED}Final calculated quantity is zero or negative. Aborting order.{COLOR_RESET}")
+            return False
 
         order_type = "Market" if "MARKET" in signal_type else "Limit"
         side = "Buy" if "BUY" in signal_type else "Sell"
@@ -577,7 +582,9 @@ class PyrmethusBot:
             await asyncio.sleep(POLLING_INTERVAL_SECONDS)
 
             try:
-                order_status_resp = await self.bybit_client.get_order_status(order_id=order_id, symbol=symbol)
+                order_status_resp = await self.bybit_client.get_order_status(
+                    category=BYBIT_CATEGORY, order_id=order_id, symbol=symbol
+                )
                 current_order_status = order_status_resp.get('result', {}).get('list', [{}])[0].get('orderStatus')
                 if current_order_status not in ['New', 'PartiallyFilled']:
                     self.bot_logger.info(f"{PYRMETHUS_GREEN}Order {order_id} is no longer active ({current_order_status}). Stopping chase.{COLOR_RESET}")
@@ -663,6 +670,14 @@ class PyrmethusBot:
             log_exception(self.bot_logger, f"Exception during exit order execution for {SYMBOL}: {e}", e)
             return False
 
+    async def shutdown(self, listener_tasks: List[asyncio.Task]):
+        """Gracefully shuts down the bot and its WebSocket listeners."""
+        self.bot_logger.info("Shutting down WebSocket listeners...")
+        for task in listener_tasks:
+            task.cancel()
+        await asyncio.gather(*listener_tasks, return_exceptions=True)
+        self.bot_logger.info("WebSocket listeners stopped.")
+
     async def run(self):
         """
         Main execution loop for the Pyrmethus trading bot.
@@ -716,7 +731,7 @@ class PyrmethusBot:
                     pivot_support_levels: Dict[str, Decimal] = {}
                     pivot_resistance_levels: Dict[str, Decimal] = {}
 
-                    if ENABLE_FIB_PIVOT_ACTIONS:
+                    if ENABLE_FIB_PIVOT_ACTIONS and isinstance(self.klines_df.index, pd.DatetimeIndex):
                         try:
                             pivot_ohlcv_response = await self.bybit_client.get_kline_rest_fallback(
                                 category=BYBIT_CATEGORY, symbol=SYMBOL, interval=PIVOT_TIMEFRAME, limit=2
@@ -731,10 +746,13 @@ class PyrmethusBot:
                                     for kline in pivot_ohlcv_response['result']['list']
                                 ]
                                 pivot_ohlcv_df = pd.DataFrame(pivot_data).set_index('timestamp').sort_index()
+                                pivot_ohlcv_df.index = pd.to_datetime(pivot_ohlcv_df.index)
                                 
                                 if len(pivot_ohlcv_df) >= 2:
                                     prev_pivot_candle = pivot_ohlcv_df.iloc[-2]
-                                    temp_df = pd.DataFrame([prev_pivot_candle]).set_index('timestamp')
+                                    # Ensure the temporary DataFrame for pivot calculation has a proper DatetimeIndex.
+                                    temp_df = pd.DataFrame([prev_pivot_candle])
+                                    temp_df.index = pd.to_datetime(temp_df.index)
                                     
                                     fib_resistance, fib_support = calculate_fibonacci_pivot_points(temp_df)
 
@@ -753,15 +771,17 @@ class PyrmethusBot:
                         except Exception as e:
                             log_exception(self.bot_logger, f"Error calculating Fibonacci Pivot Points: {e}", e)
 
-                    order_book_imbalance = Decimal('0')
+                    order_book_imbalance: Optional[Decimal] = None
                     try:
                         order_book_response = await self.bybit_client.get_orderbook(category=BYBIT_CATEGORY, symbol=SYMBOL)
                         if order_book_response and order_book_response.get('retCode') == 0 and order_book_response.get('result'):
-                            order_book_imbalance, _ = calculate_order_book_imbalance(order_book_response['result'])
+                            imbalance, _ = calculate_order_book_imbalance(order_book_response['result'])
+                            if imbalance:
+                                order_book_imbalance = imbalance
                     except Exception as e:
                         log_exception(self.bot_logger, f"Order book fetch error: {e}", e)
 
-                    display_market_info(self.klines_df, self.current_price, SYMBOL, pivot_resistance_levels, pivot_support_levels, order_book_imbalance, self.bot_logger)
+                    display_market_info(self.klines_df, self.current_price, SYMBOL, pivot_resistance_levels, pivot_support_levels, self.bot_logger, order_book_imbalance)
 
                     if not self.has_open_position:
                         signals = self.strategy.generate_signals(
@@ -802,12 +822,9 @@ class PyrmethusBot:
                 self.bot_logger.info(f"{COLOR_YELLOW}Bot execution interrupted by user (Ctrl+C).{COLOR_RESET}")
             except Exception as e:
                 log_exception(self.bot_logger, f"An unexpected error occurred in the main trading loop: {e}", e)
-                await asyncio.sleep(10) 
+                await asyncio.sleep(10)
             finally:
-                self.bot_logger.info("Shutting down WebSocket listeners...")
-                for task in listener_tasks: task.cancel()
-                await asyncio.gather(*listener_tasks, return_exceptions=True)
-                self.bot_logger.info("WebSocket listeners stopped.")
+                await self.shutdown(listener_tasks)
 
 async def main():
     """

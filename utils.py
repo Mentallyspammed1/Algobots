@@ -524,3 +524,12 @@ def calculate_order_quantity(usdt_amount: float, current_price: float, min_qty: 
     
     # Convert back to float for return, preserving Decimal precision
     return float(adjusted_qty)
+
+def json_decimal_default(obj: Any) -> Any:
+    """
+    Custom JSON serializer for objects not serializable by default json code.
+    Specifically handles Decimal objects by converting them to floats.
+    """
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")

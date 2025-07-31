@@ -56,8 +56,8 @@ def display_market_info(
     symbol: str,
     pivot_resistance_levels: Dict[str, Decimal],
     pivot_support_levels: Dict[str, Decimal],
-    order_book_imbalance: Decimal,
-    bot_logger: Any # Assuming bot_logger is passed for warnings
+    bot_logger: Any, # Assuming bot_logger is passed for warnings
+    order_book_imbalance: Optional[Decimal] = None
 ):
     """
     Prints current market information to the console with enhanced formatting and clarity.

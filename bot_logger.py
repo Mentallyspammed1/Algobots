@@ -8,6 +8,7 @@ from color_codex import (
     COLOR_BLUE, COLOR_MAGENTA, COLOR_CYAN, PYRMETHUS_ORANGE, PYRMETHUS_GREY
 )
 from typing import Optional
+from utils import json_decimal_default
 
 # Define custom log levels
 TRADE_LEVEL = 25
@@ -159,12 +160,12 @@ def setup_logging(console_log_level: int = logging.INFO):
 def log_trade(logger: logging.Logger, message: str, trade_data: dict):
     """Logs a trade event with structured data to the TRADE level."""
     # Directly call the custom method, which now exists on CustomBotLogger instances
-    logger.trade(f"{message} - {json.dumps(trade_data)}")
+    logger.trade(f"{message} - {json.dumps(trade_data, default=json_decimal_default)}")
 
 def log_metrics(logger: logging.Logger, message: str, metrics_data: dict):
     """Logs trade metrics with structured data."""
     # Directly call the custom method
-    logger.metrics(f"{message} - {json.dumps(metrics_data)}")
+    logger.metrics(f"{message} - {json.dumps(metrics_data, default=json_decimal_default)}")
 
 def log_exception(logger: logging.Logger, message: str, exc: Exception):
     """Logs an exception with traceback."""

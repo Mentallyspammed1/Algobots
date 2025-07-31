@@ -1,46 +1,3 @@
-The Ehlers Supertrend strategy combines the Supertrend indicator for trend identification with the Ehlers Fisher Transform for confirmation and filtering.
-
-**Strategy Logic:**
-
-*   **Supertrend:** Identifies the primary trend direction. It switches from bullish to bearish (and vice-versa) based on price crossing its bands (derived from Average True Range).
-*   **Ehlers Fisher Transform:** A technical indicator that converts prices into a Gaussian normal distribution. Its primary purpose is to identify turning points in the market with high accuracy. A key aspect is the cross between the Fisher Transform line and its signal line (often a lagged version of the Fisher Transform itself).
-
-**Entry Signals:**
-
-*   **BUY Signal:**
-    *   Supertrend turns bullish (i.e., its direction changes from bearish to bullish).
-    *   **AND** Ehlers Fisher Transform crosses above its signal line, confirming bullish momentum.
-*   **SELL Signal:**
-    *   Supertrend turns bearish (i.e., its direction changes from bullish to bearish).
-    *   **AND** Ehlers Fisher Transform crosses below its signal line, confirming bearish momentum.
-
-**Exit Signals:**
-
-*   **Exit Long Position (SELL_TO_CLOSE):**
-    *   Supertrend turns bearish.
-    *   **OR** Ehlers Fisher Transform crosses below its signal line.
-*   **Exit Short Position (BUY_TO_CLOSE):**
-    *   Supertrend turns bullish.
-    *   **OR** Ehlers Fisher Transform crosses above its signal line.
-
-**Parameters:**
-
-*   `ehlers_period`: The period used for calculating the Ehlers Fisher Transform.
-*   `supertrend_period`: The period used for calculating the Average True Range (ATR) in the Supertrend.
-*   `supertrend_multiplier`: The multiplier used in the Supertrend calculation to determine the bands.
-*   `stop_loss_percentage`: The percentage-based stop loss applied to entry orders.
-*   `take_profit_percentage`: The percentage-based take profit applied to entry orders.
-
-**Implementation Details:**
-
-*   The strategy includes private helper methods (`_calculate_ehlers_fisher`, `_calculate_supertrend`) to compute the indicators iteratively. This ensures correct historical calculation and avoids reliance on external libraries that might not be available.
-*   The `ehlers_signal` is implemented as a 1-period lag of the `ehlers_fisher` value, which is a common approach by Ehlers.
-*   The Supertrend calculation carefully handles the iterative nature of its bands and direction changes.
-*   `pd.DataFrame.copy()` is used to prevent modifying the original DataFrame passed to the signal generation methods.
-*   Checks for sufficient historical data are included to prevent errors during indicator calculation.
-*   All price and percentage values are handled using `Decimal` for precision, as is standard practice in financial applications.
-
-```python
 from typing import List, Dict, Any, Tuple
 from decimal import Decimal
 import pandas as pd
@@ -402,4 +359,4 @@ class EhlersSupertrendStrategy:
                 exit_signals.append(("BUY_TO_CLOSE", current_price, pd.Timestamp(last_bar.name), exit_info))
         
         return exit_signals
-```
+
