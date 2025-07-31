@@ -59,3 +59,134 @@ bybit_api.BybitAPIError: Bybit API Error 10001: Side invalid
 2025-07-30 22:30:32,199 - PyrmethusBot - INFO - [33m🔄 Attempting to recover and restart main loop after 10 seconds...[0m
 2025-07-30 22:30:42,210 - PyrmethusBot - INFO - [33mInitiating shutdown: Cancelling listener tasks...[0m
 2025-07-30 22:30:42,211 - PyrmethusBot - INFO - [33mAll listener tasks cancelled and awaited. Bot shutdown complete.[0m
+2025-07-30 22:36:50,666 - PyrmethusBot - INFO - [36mSummoning Enhanced MarketMakingStrategy...[0m
+2025-07-30 22:36:50,667 - PyrmethusBot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 22:36:50,898 - PyrmethusBot - INFO - BybitContractAPI initialized.
+2025-07-30 22:36:50,898 - PyrmethusBot - INFO - [38;5;208mFetching initial kline data for TRUMPUSDT (1)...[0m
+2025-07-30 22:36:52,975 - PyrmethusBot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3980[0m
+2025-07-30 22:36:52,976 - PyrmethusBot - INFO - [38;5;208mSynchronizing initial position state via REST API...[0m
+2025-07-30 22:36:53,839 - PyrmethusBot - DEBUG - Received non-position or empty WS update: {'success': True, 'ret_msg': '', 'op': 'subscribe', 'conn_id': 'd157a7favkf4mm3ibuvg-1c0knz'}
+2025-07-30 22:36:54,240 - PyrmethusBot - DEBUG - [38;5;242mPosition state reset.[0m
+2025-07-30 22:36:54,241 - PyrmethusBot - INFO - [38;5;242m✅ No open position for TRUMPUSDT (WS). Seeking new trade opportunities...[0m
+2025-07-30 22:36:54,241 - PyrmethusBot - INFO - [38;5;118mInitial position synchronization complete.[0m
+2025-07-30 22:36:55,501 - PyrmethusBot - DEBUG - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-30 22:36:55,502 - PyrmethusBot - DEBUG - [34mDynamic spread adjusted to 21.86 bps.[0m
+2025-07-30 22:36:55,503 - PyrmethusBot - DEBUG - [35mTrend: Uptrend, Skewed Mid Price: 9.40269900[0m
+2025-07-30 22:36:55,504 - PyrmethusBot - DEBUG - [33mInventory Skew: 0.00000000, Adjusted Mid Price: 9.40269900[0m
+2025-07-30 22:36:55,506 - PyrmethusBot - INFO - [32mGenerated 2 signals: [('BUY_LIMIT', Decimal('9.3924208635000000001000500000000000000'), Timestamp('2025-07-31 03:36:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099981382483576690871565337003294272528'), 'strategy_id': 'MM_BID'}), ('SELL_LIMIT', Decimal('9.4129771364999999998999499999999999999'), Timestamp('2025-07-31 03:36:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099981382483576690871565337003294272528'), 'strategy_id': 'MM_ASK'})][0m
+2025-07-30 22:36:55,507 - PyrmethusBot - INFO - [38;5;141m💡 Detected BUY_LIMIT signal at 9.3924 (Info: N/A)[0m
+2025-07-30 22:36:57,153 - PyrmethusBot - ERROR - Critical error in main loop: name 'HEDGE_MODE' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 694, in run
+    if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 494, in _execute_entry
+    if HEDGE_MODE:
+       ^^^^^^^^^^
+NameError: name 'HEDGE_MODE' is not defined
+2025-07-30 22:36:57,178 - PyrmethusBot - INFO - [33m🔄 Attempting to recover and restart main loop after 10 seconds...[0m
+2025-07-30 22:37:07,186 - PyrmethusBot - INFO - [33mInitiating shutdown: Cancelling listener tasks...[0m
+2025-07-30 22:37:07,187 - PyrmethusBot - INFO - [33mAll listener tasks cancelled and awaited. Bot shutdown complete.[0m
+2025-07-30 22:37:55,053 - PyrmethusBot - INFO - [36mSummoning Enhanced MarketMakingStrategy...[0m
+2025-07-30 22:37:55,053 - PyrmethusBot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 22:37:55,249 - PyrmethusBot - INFO - BybitContractAPI initialized.
+2025-07-30 22:37:55,250 - PyrmethusBot - INFO - [38;5;208mFetching initial kline data for TRUMPUSDT (1)...[0m
+2025-07-30 22:37:57,398 - PyrmethusBot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3980[0m
+2025-07-30 22:37:57,399 - PyrmethusBot - INFO - [38;5;208mSynchronizing initial position state via REST API...[0m
+2025-07-30 22:37:58,264 - PyrmethusBot - DEBUG - Received non-position or empty WS update: {'success': True, 'ret_msg': '', 'op': 'subscribe', 'conn_id': 'd157ah4fnonu3951i38g-1c0j2j'}
+2025-07-30 22:37:58,275 - PyrmethusBot - DEBUG - [38;5;242mPosition state reset.[0m
+2025-07-30 22:37:58,276 - PyrmethusBot - INFO - [38;5;242m✅ No open position for TRUMPUSDT (WS). Seeking new trade opportunities...[0m
+2025-07-30 22:37:58,276 - PyrmethusBot - INFO - [38;5;118mInitial position synchronization complete.[0m
+2025-07-30 22:37:59,159 - PyrmethusBot - DEBUG - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-30 22:37:59,160 - PyrmethusBot - DEBUG - [34mDynamic spread adjusted to 22.01 bps.[0m
+2025-07-30 22:37:59,160 - PyrmethusBot - DEBUG - [35mTrend: Downtrend, Skewed Mid Price: 9.39330100[0m
+2025-07-30 22:37:59,160 - PyrmethusBot - DEBUG - [33mInventory Skew: 0.00000000, Adjusted Mid Price: 9.39330100[0m
+2025-07-30 22:37:59,161 - PyrmethusBot - INFO - [32mGenerated 2 signals: [('BUY_LIMIT', Decimal('9.3829617436428571427857500000000000000'), Timestamp('2025-07-31 03:37:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099979862992359335401239681865790881580'), 'strategy_id': 'MM_BID'}), ('SELL_LIMIT', Decimal('9.4036402563571428572142500000000000003'), Timestamp('2025-07-31 03:37:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099979862992359335401239681865790881580'), 'strategy_id': 'MM_ASK'})][0m
+2025-07-30 22:37:59,161 - PyrmethusBot - INFO - [38;5;141m💡 Detected BUY_LIMIT signal at 9.3830 (Info: N/A)[0m
+2025-07-30 22:38:00,035 - PyrmethusBot - INFO - [38;5;208mAttempting to place BUY_LIMIT order for 0.5000 TRUMPUSDT at market price...[0m
+2025-07-30 22:38:01,172 - PyrmethusBot - ERROR - Critical error in main loop: Bybit API Error 110094: Order does not meet minimum order value 5USDT
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 694, in run
+    if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 500, in _execute_entry
+    if await self.bybit_client.create_order(**order_kwargs):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 213, in create_order
+    return await self._make_request("POST", "/v5/order/create", kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 172, in _make_request
+    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+bybit_api.BybitAPIError: Bybit API Error 110094: Order does not meet minimum order value 5USDT
+2025-07-30 22:38:01,191 - PyrmethusBot - INFO - [33m🔄 Attempting to recover and restart main loop after 10 seconds...[0m
+2025-07-30 22:38:11,198 - PyrmethusBot - INFO - [33mInitiating shutdown: Cancelling listener tasks...[0m
+2025-07-30 22:38:11,201 - PyrmethusBot - INFO - [33mAll listener tasks cancelled and awaited. Bot shutdown complete.[0m
+2025-07-30 23:17:24,698 - PyrmethusBot - INFO - [36mSummoning Enhanced MarketMakingStrategy...[0m
+2025-07-30 23:17:24,699 - PyrmethusBot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 23:17:24,952 - PyrmethusBot - INFO - BybitContractAPI initialized.
+2025-07-30 23:17:24,952 - PyrmethusBot - INFO - [38;5;208mFetching initial kline data for TRUMPUSDT (1)...[0m
+2025-07-30 23:17:27,073 - PyrmethusBot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3990[0m
+2025-07-30 23:17:27,077 - PyrmethusBot - INFO - [38;5;208mSynchronizing initial position state via REST API...[0m
+2025-07-30 23:17:27,499 - PyrmethusBot - DEBUG - Received non-position or empty WS update: {'success': True, 'ret_msg': '', 'op': 'subscribe', 'conn_id': 'd1579n8f2tdr9af30pdg-1c1np9'}
+2025-07-30 23:17:27,938 - PyrmethusBot - DEBUG - [38;5;242mPosition state reset.[0m
+2025-07-30 23:17:27,938 - PyrmethusBot - INFO - [38;5;242m✅ No open position for TRUMPUSDT (WS). Seeking new trade opportunities...[0m
+2025-07-30 23:17:27,939 - PyrmethusBot - INFO - [38;5;118mInitial position synchronization complete.[0m
+2025-07-30 23:17:28,842 - PyrmethusBot - DEBUG - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-30 23:17:28,842 - PyrmethusBot - DEBUG - [34mDynamic spread adjusted to 21.67 bps.[0m
+2025-07-30 23:17:28,842 - PyrmethusBot - DEBUG - [35mTrend: Downtrend, Skewed Mid Price: 9.39430050[0m
+2025-07-30 23:17:28,843 - PyrmethusBot - DEBUG - [33mInventory Skew: 0.00000000, Adjusted Mid Price: 9.39430050[0m
+2025-07-30 23:17:28,843 - PyrmethusBot - INFO - [32mGenerated 2 signals: [('BUY_LIMIT', Decimal('9.3841208780714285713928750000000000000'), Timestamp('2025-07-31 04:17:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983283690961035802534927331993791901'), 'strategy_id': 'MM_BID'}), ('SELL_LIMIT', Decimal('9.4044801219285714286071250000000000004'), Timestamp('2025-07-31 04:17:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983283690961035802534927331993791901'), 'strategy_id': 'MM_ASK'})][0m
+2025-07-30 23:17:28,843 - PyrmethusBot - INFO - [38;5;141m💡 Detected BUY_LIMIT signal at 9.3841 (Info: N/A)[0m
+2025-07-30 23:17:29,711 - PyrmethusBot - INFO - [38;5;208mAttempting to place BUY_LIMIT order for 0.0100 TRUMPUSDT at market price...[0m
+2025-07-30 23:17:30,567 - PyrmethusBot - ERROR - Critical error in main loop: Bybit API Error 10001: The number of contracts exceeds minimum limit allowed
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 699, in run
+    if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 505, in _execute_entry
+    if await self.bybit_client.create_order(**order_kwargs):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 213, in create_order
+    return await self._make_request("POST", "/v5/order/create", kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 172, in _make_request
+    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+bybit_api.BybitAPIError: Bybit API Error 10001: The number of contracts exceeds minimum limit allowed
+2025-07-30 23:17:30,581 - PyrmethusBot - INFO - [33m🔄 Attempting to recover and restart main loop after 10 seconds...[0m
+2025-07-30 23:17:40,590 - PyrmethusBot - INFO - [33mInitiating shutdown: Cancelling listener tasks...[0m
+2025-07-30 23:17:40,591 - PyrmethusBot - INFO - [33mAll listener tasks cancelled and awaited. Bot shutdown complete.[0m
+2025-07-30 23:28:39,514 - PyrmethusBot - INFO - [36mSummoning Enhanced MarketMakingStrategy...[0m
+2025-07-30 23:28:39,514 - PyrmethusBot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 23:28:39,781 - PyrmethusBot - INFO - BybitContractAPI initialized.
+2025-07-30 23:28:39,782 - PyrmethusBot - INFO - [38;5;208mFetching initial kline data for TRUMPUSDT (1)...[0m
+2025-07-30 23:28:42,434 - PyrmethusBot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.3880[0m
+2025-07-30 23:28:42,435 - PyrmethusBot - INFO - [38;5;208mSynchronizing initial position state via REST API...[0m
+2025-07-30 23:28:43,300 - PyrmethusBot - DEBUG - Received non-position or empty WS update: {'success': True, 'ret_msg': '', 'op': 'subscribe', 'conn_id': 'd1578ulhv255aand18pg-1c24wr'}
+2025-07-30 23:28:43,305 - PyrmethusBot - DEBUG - [38;5;242mPosition state reset.[0m
+2025-07-30 23:28:43,306 - PyrmethusBot - INFO - [38;5;242m✅ No open position for TRUMPUSDT (WS). Seeking new trade opportunities...[0m
+2025-07-30 23:28:43,306 - PyrmethusBot - INFO - [38;5;118mInitial position synchronization complete.[0m
+2025-07-30 23:28:44,167 - PyrmethusBot - DEBUG - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9998)[0m
+2025-07-30 23:28:44,168 - PyrmethusBot - DEBUG - [34mDynamic spread adjusted to 21.90 bps.[0m
+2025-07-30 23:28:44,168 - PyrmethusBot - DEBUG - [35mTrend: Downtrend, Skewed Mid Price: 9.38330600[0m
+2025-07-30 23:28:44,168 - PyrmethusBot - DEBUG - [33mInventory Skew: 0.00000000, Adjusted Mid Price: 9.38330600[0m
+2025-07-30 23:28:44,169 - PyrmethusBot - INFO - [32mGenerated 2 signals: [('BUY_LIMIT', Decimal('9.3730302832857142856214750000000000000'), Timestamp('2025-07-31 04:28:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099980982374464653839202548710425400706'), 'strategy_id': 'MM_BID'}), ('SELL_LIMIT', Decimal('9.3935817167142857143785250000000000002'), Timestamp('2025-07-31 04:28:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099980982374464653839202548710425400706'), 'strategy_id': 'MM_ASK'})][0m
+2025-07-30 23:28:44,169 - PyrmethusBot - INFO - [38;5;141m💡 Detected BUY_LIMIT signal at 9.3730 (Info: N/A)[0m
+2025-07-30 23:28:45,024 - PyrmethusBot - WARNING - [33mCalculated quantity 0.0 is below min_qty 0.1. Adjusting to min_qty.[0m
+2025-07-30 23:28:45,025 - PyrmethusBot - INFO - [38;5;208mAttempting to place BUY_LIMIT order for 0.1000 TRUMPUSDT at market price...[0m
+2025-07-30 23:28:45,893 - PyrmethusBot - ERROR - Critical error in main loop: Bybit API Error 110094: Order does not meet minimum order value 5USDT
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 708, in run
+    if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 514, in _execute_entry
+    if await self.bybit_client.create_order(**order_kwargs):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 213, in create_order
+    return await self._make_request("POST", "/v5/order/create", kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 172, in _make_request
+    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+bybit_api.BybitAPIError: Bybit API Error 110094: Order does not meet minimum order value 5USDT
+2025-07-30 23:28:45,905 - PyrmethusBot - INFO - [33m🔄 Attempting to recover and restart main loop after 10 seconds...[0m
+2025-07-30 23:28:55,914 - PyrmethusBot - INFO - [33mInitiating shutdown: Cancelling listener tasks...[0m
+2025-07-30 23:28:55,914 - PyrmethusBot - INFO - [33mAll listener tasks cancelled and awaited. Bot shutdown complete.[0m

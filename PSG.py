@@ -31,7 +31,7 @@ from config import (
     FIB_ENTRY_CONFIRM_PERCENT, FIB_EXIT_WARN_PERCENT, FIB_EXIT_ACTION,
     ATR_MULTIPLIER_SL, ATR_MULTIPLIER_TP, SMA_PERIOD,
     SMA_LENGTH, EHLERS_FISHER_LENGTH, EHLERS_SUPERSMOOTHER_LENGTH, EHLERS_FISHER_SIGNAL_PERIOD,
-    MAX_ACTIVE_OBS
+    MAX_ACTIVE_OBS, HEDGE_MODE
 )
 from indicators import (
     calculate_fibonacci_pivot_points, calculate_stochrsi, calculate_atr,
@@ -470,10 +470,24 @@ class PyrmethusBot:
         min_qty = Decimal(instrument_details.get('lotSizeFilter', {}).get('minOrderQty', '0'))
         qty_step = Decimal(instrument_details.get('lotSizeFilter', {}).get('qtyStep', '0'))
 
-        # Calculate the order quantity based on USDT amount and current price, respecting exchange rules
-        calculated_quantity = calculate_order_quantity(USDT_AMOUNT_PER_TRADE, self.current_price, min_qty, qty_step)
+        # --- Get Quantity from Strategy or Calculate ---
+        if 'quantity' in signal_info and signal_info['quantity'] is not None:
+            # If the strategy provides a quantity, use it directly
+            calculated_quantity = signal_info['quantity']
+        else:
+            # Fallback to old calculation method if strategy doesn't provide quantity
+            calculated_quantity = calculate_order_quantity(USDT_AMOUNT_PER_TRADE, self.current_price, min_qty, qty_step)
+
+        # Ensure the final quantity is correctly rounded to the qty_step
+        if qty_step > 0:
+            calculated_quantity = (calculated_quantity // qty_step) * qty_step
+
+        if calculated_quantity < min_qty:
+            self.bot_logger.warning(f"{COLOR_YELLOW}Calculated quantity {calculated_quantity} is below min_qty {min_qty}. Adjusting to min_qty.{COLOR_RESET}")
+            calculated_quantity = min_qty
+
         if calculated_quantity <= Decimal('0'):
-            self.bot_logger.error(f"{COLOR_RED}Calculated entry quantity is zero or negative: {calculated_quantity}. Cannot place order.{COLOR_RESET}")
+            self.bot_logger.error(f"{COLOR_RED}Final calculated entry quantity is zero or negative: {calculated_quantity}. Cannot place order.{COLOR_RESET}")
             return False
 
         # --- Determine Order Type and Side ---
