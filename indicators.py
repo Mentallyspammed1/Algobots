@@ -49,6 +49,9 @@ def calculate_fibonacci_pivot_points(df: pd.DataFrame, fib_ratios: List[float] =
     Calculates Fibonacci Pivot Points with customizable ratios and ATR-based adjustments.
     Returns resistance and support levels as lists of dictionaries.
     """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        indicators_logger.error(Fore.RED + "DataFrame index must be a DatetimeIndex for pivot calculation." + Style.RESET_ALL)
+        return [], []
     resistance_levels = []
     support_levels = []
 
@@ -298,7 +301,7 @@ def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd
 
     # Extract and format the new kline data
     new_kline = {
-        'timestamp': pd.to_datetime(kline_data['start'], unit='ms'),
+        'timestamp': pd.to_datetime(int(kline_data['start']), unit='ms'),
         'open': Decimal(kline_data['open']),
         'high': Decimal(kline_data['high']),
         'low': Decimal(kline_data['low']),
@@ -315,7 +318,9 @@ def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd
 
     # If the new kline's timestamp matches the last one in the DataFrame, update it
     if new_kline_df.index[0] == df.index[-1]:
-        df.iloc[-1] = new_kline_df.iloc[0]
+        for col in new_kline_df.columns:
+            if col in df.columns:
+                df.loc[new_kline_df.index[0], col] = new_kline_df.loc[new_kline_df.index[0], col]
         indicators_logger.debug(Fore.CYAN + f"Updated last kline at {new_kline_df.index[0]}" + Style.RESET_ALL)
     # Otherwise, append it as a new row
     else:

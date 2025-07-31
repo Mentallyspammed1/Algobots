@@ -32,4 +32,5 @@ PYRMETHUS_GREEN = "\033[38;5;118m" # A vibrant green
 PYRMETHUS_BLUE = "\033[38;5;63m"  # A deep blue
 PYRMETHUS_PURPLE = "\033[38;5;141m" # A mystical purple
 PYRMETHUS_ORANGE = "\033[38;5;208m" # A fiery orange
+PYRMETHUS_CYAN = "\033[38;5;80m"   # A shimmering cyan
 PYRMETHUS_GREY = "\033[38;5;242m" # A subtle grey

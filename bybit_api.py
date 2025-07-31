@@ -92,6 +92,11 @@ class ConnectionState:
     listener_task: Optional[asyncio.Task] = None
     _ws_authenticated_event: asyncio.Event = field(default_factory=asyncio.Event)
 
+    @property
+    def open(self) -> bool:
+        """Property to check if the connection is considered open."""
+        return self.is_connected
+
 class BybitContractAPI:
     """
     A comprehensive asynchronous Python client for Bybit V5 Contract Account API.
@@ -406,7 +411,7 @@ class BybitContractAPI:
         """Safely send a JSON message over WebSocket."""
         state = self.private_connection_state if is_private else self.public_connection_state
 
-        if not websocket or websocket.closed:
+        if not websocket:
             state.is_connected = False
             logger.warning(f"{Color.YELLOW}WS not open, msg dropped: {message}{Color.RESET}")
             return
@@ -449,11 +454,7 @@ class BybitContractAPI:
         """
         Main message receiving loop for handling WebSocket connections.
         """
-        while connection_state.is_connected and connection_state.is_active:
-            if not websocket or not websocket.open:
-                logger.warning(f"{Color.YELLOW}{'Private' if auth_required else 'Public'} WebSocket no longer open. Breaking to reconnect. {Color.RESET}")
-                break
-
+        while connection_state.is_active:
             try:
                 message = await asyncio.wait_for(websocket.recv(), timeout=self.ws_ping_interval + self.ws_ping_timeout)
                 parsed_message = json.loads(message)
@@ -522,7 +523,7 @@ class BybitContractAPI:
                 connection_state.is_authenticated = False
                 if auth_required: connection_state._ws_authenticated_event.clear()
                 
-                if websocket and not websocket.closed:
+                if websocket and connection_state.is_connected:
                     try: await websocket.close()
                     except Exception as close_e: logger.warning(f"Error during cleanup close: {close_e}")
                 

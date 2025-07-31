@@ -3,6 +3,7 @@ import asyncio
 import pandas as pd
 import logging
 import importlib
+import time
 from typing import Any, Dict, List, Tuple, Union, Optional, Callable
 from dotenv import load_dotenv
 from decimal import Decimal, getcontext
@@ -12,28 +13,22 @@ from algobots_types import OrderBlock
 getcontext().prec = 38
 
 # --- Pyrmethus's Color Codex ---
-try:
-    from color_codex import (
-        COLOR_RESET, COLOR_BOLD, COLOR_DIM,
-        COLOR_RED, COLOR_GREEN, COLOR_YELLOW, COLOR_BLUE, COLOR_MAGENTA, COLOR_CYAN,
-        PYRMETHUS_GREEN, PYRMETHUS_BLUE, PYRMETHUS_PURPLE, PYRMETHUS_ORANGE, PYRMETHUS_GREY, PYRMETHUS_YELLOW
-    )
-except ImportError:
-    COLOR_RESET = "\033[0m"
-    COLOR_BOLD = "\033[1m"
-    COLOR_DIM = "\033[2m"
-    COLOR_RED = "\033[31m"
-    COLOR_GREEN = "\033[32m"
-    COLOR_YELLOW = "\033[33m"
-    COLOR_BLUE = "\033[34m"
-    COLOR_MAGENTA = "\033[35m"
-    COLOR_CYAN = "\033[36m"
-    PYRMETHUS_GREEN = COLOR_GREEN
-    PYRMETHUS_BLUE = COLOR_BLUE
-    PYRMETHUS_PURPLE = COLOR_MAGENTA
-    PYRMETHUS_ORANGE = COLOR_YELLOW
-    PYRMETHUS_GREY = COLOR_DIM
-    PYRMETHUS_YELLOW = COLOR_YELLOW
+COLOR_RESET = "\033[0m"
+COLOR_BOLD = "\033[1m"
+COLOR_DIM = "\033[2m"
+COLOR_RED = "\033[31m"
+COLOR_GREEN = "\033[32m"
+COLOR_YELLOW = "\033[33m"
+COLOR_BLUE = "\033[34m"
+COLOR_MAGENTA = "\033[35m"
+COLOR_CYAN = "\033[36m"
+PYRMETHUS_GREEN = COLOR_GREEN
+PYRMETHUS_BLUE = COLOR_BLUE
+PYRMETHUS_PURPLE = COLOR_MAGENTA
+PYRMETHUS_ORANGE = COLOR_YELLOW
+PYRMETHUS_GREY = COLOR_DIM
+PYRMETHUS_YELLOW = COLOR_YELLOW
+PYRMETHUS_CYAN = COLOR_CYAN
 
 # --- Import Configuration and Indicator Logic ---
 try:
@@ -109,6 +104,7 @@ class PyrmethusBot:
         self.trailing_stop_active: bool = False
         self.trailing_stop_distance: Decimal = Decimal('0')
         self.last_signal_timestamp: Optional[pd.Timestamp] = None
+        self.last_signal_time = time.time()
 
     @property
     def has_open_position(self) -> bool:
@@ -228,10 +224,10 @@ class PyrmethusBot:
             return
 
         symbol = pos.get('symbol')
-        size = Decimal(pos.get('size', '0'))
+        size = Decimal(str(pos.get('size', '0')))
         side = pos.get('side')
-        avg_price = Decimal(pos.get('avgPrice', '0'))
-        unrealized_pnl = Decimal(pos.get('unrealisedPnl', '0')) if pos.get('unrealisedPnl') is not None else Decimal('0')
+        avg_price = Decimal(str(pos.get('avgPrice', '0')))
+        unrealized_pnl = Decimal(str(pos.get('unrealisedPnl', '0'))) if pos.get('unrealisedPnl') is not None else Decimal('0')
 
         signed_inventory = size if side == 'Buy' else -size
         position_size_changed = self.inventory != signed_inventory
@@ -396,8 +392,8 @@ class PyrmethusBot:
                 data = [
                     {
                         'timestamp': pd.to_datetime(int(kline[0]), unit='ms', utc=True),
-                        'open': Decimal(kline[1]), 'high': Decimal(kline[2]), 'low': Decimal(kline[3]),
-                        'close': Decimal(kline[4]), 'volume': Decimal(kline[5]),
+                        'open': Decimal(str(kline[1])), 'high': Decimal(str(kline[2])), 'low': Decimal(str(kline[3])),
+                        'close': Decimal(str(kline[4])), 'volume': Decimal(str(kline[5])),
                     }
                     for kline in klines_response['result']['list']
                 ]
@@ -443,17 +439,18 @@ class PyrmethusBot:
         """
         self.bot_logger.info(f"{PYRMETHUS_PURPLE}💡 Detected {signal_type.upper()} signal at {signal_price:.4f} (Info: {signal_info}){COLOR_RESET}")
 
-        if self.last_signal_timestamp and (pd.Timestamp.now(tz='UTC') - self.last_signal_timestamp).total_seconds() < POLLING_INTERVAL_SECONDS:
-             self.bot_logger.warning(f"{PYRMETHUS_YELLOW}Signal received too quickly after last one ({ (pd.Timestamp.now(tz='UTC') - self.last_signal_timestamp).total_seconds():.2f}s < {POLLING_INTERVAL_SECONDS}s). Skipping entry.{COLOR_RESET}")
+        current_time = time.time()
+        if current_time - self.last_signal_time < POLLING_INTERVAL_SECONDS:
+             self.bot_logger.warning(f"{PYRMETHUS_YELLOW}Signal received too quickly. Skipping entry.{COLOR_RESET}")
              return False
-        self.last_signal_timestamp = pd.Timestamp.now(tz='UTC')
+        self.last_signal_time = current_time
 
         # --- Fetch current price directly from API for execution ---
         try:
             ticker_info = await self.bybit_client.get_symbol_ticker(category=BYBIT_CATEGORY, symbol=SYMBOL)
             if not ticker_info or ticker_info.get('retCode') != 0 or not ticker_info.get('result', {}).get('list'):
                 raise ValueError(f"Failed to fetch ticker info for {SYMBOL}: {ticker_info.get('retMsg', 'N/A')}")
-            current_execution_price = Decimal(ticker_info['result']['list'][0]['lastPrice'])
+            current_execution_price = Decimal(str(ticker_info['result']['list'][0]['lastPrice']))
             self.bot_logger.debug(f"{PYRMETHUS_CYAN}Fetched current execution price: {current_execution_price:.4f}{COLOR_RESET}")
         except Exception as e:
             log_exception(self.bot_logger, f"Failed to fetch current price for {SYMBOL} before execution: {e}", e)
@@ -502,7 +499,7 @@ class PyrmethusBot:
                         # Use the fetched execution price for volatility calculation if available
                         effective_price = current_execution_price if current_execution_price > 0 else self.current_price
                         if self.cached_atr and effective_price > 0:
-                            volatility_factor = min(Decimal('1'), self.cached_atr / effective_price if effective_price != 0 else Decimal('1'))
+                            volatility_factor = min(Decimal('1'), self.cached_atr / Decimal(str(effective_price)) if effective_price != 0 else Decimal('1'))
                         
                         target_usdt_value = usdt_balance * (Decimal(str(ORDER_SIZE_PERCENT_OF_BALANCE)) / Decimal('100')) * volatility_factor
                         self.bot_logger.info(f"{PYRMETHUS_BLUE}Dynamic sizing: Balance={usdt_balance:.2f}, Volatility Factor={volatility_factor:.3f}, Target USDT={target_usdt_value:.2f}{COLOR_RESET}")
