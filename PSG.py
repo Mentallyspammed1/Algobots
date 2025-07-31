@@ -38,7 +38,19 @@ from indicators import (
     calculate_sma, calculate_ehlers_fisher_transform, calculate_ehlers_super_smoother,
     find_pivots, handle_websocket_kline_data
 )
-from strategy import generate_signals, generate_exit_signals
+import importlib
+
+# --- Strategy Management ---
+from config import STRATEGY_NAME
+
+# Dynamically load the selected strategy
+try:
+    strategy_module = importlib.import_module(f"strategies.{STRATEGY_NAME.lower()}")
+    StrategyClass = getattr(strategy_module, STRATEGY_NAME)
+except ImportError:
+    raise ImportError(f"Could not import strategy '{STRATEGY_NAME}'. Make sure the file 'strategies/{STRATEGY_NAME.lower()}.py' exists and contains a class named '{STRATEGY_NAME}'.")
+except AttributeError:
+    raise AttributeError(f"Strategy module 'strategies.{STRATEGY_NAME.lower()}' found, but no class named '{STRATEGY_NAME}' within it.")
 from bybit_api import BybitContractAPI
 from bot_ui import display_market_info
 
@@ -57,6 +69,7 @@ class PyrmethusBot:
         self.bot_logger = setup_logging()
         self.trade_metrics = TradeMetrics()
         self.bybit_client: Optional[BybitContractAPI] = None
+        self.strategy = StrategyClass(self.bot_logger)
 
         # --- Bot State Variables (using Decimal for precision) ---
         # `inventory` is the single source of truth for the bot's position.
@@ -498,6 +511,7 @@ class PyrmethusBot:
             "side": side_for_exit,
             "order_type": "Market",
             "qty": str(abs(self.inventory)), # Exit the full current position size
+            "positionIdx": 0, # For One-Way Mode
         }
 
         self.bot_logger.info(f"{PYRMETHUS_ORANGE}Attempting to place {side_for_exit} exit order for {abs(self.inventory):.4f} {SYMBOL} at market price...{COLOR_RESET}")
@@ -601,11 +615,30 @@ class PyrmethusBot:
                                     temp_df_for_fib = pd.DataFrame([prev_pivot_candle]).set_index('timestamp')
                                     fib_resistance, fib_support = calculate_fibonacci_pivot_points(temp_df_for_fib)
 
-                                    # Extract and store the calculated Fibonacci levels
+                                    # Filter and store Fibonacci levels based on configuration
+                                    all_fib_levels = []
                                     for r_level in fib_resistance:
-                                        pivot_resistance_levels[r_level['type']] = r_level['price']
+                                        all_fib_levels.append({'type': r_level['type'], 'price': r_level['price'], 'is_resistance': True})
                                     for s_level in fib_support:
-                                        pivot_support_levels[s_level['type']] = s_level['price']
+                                        all_fib_levels.append({'type': s_level['type'], 'price': s_level['price'], 'is_resistance': False})
+
+                                    # Filter by FIB_LEVELS_TO_CALC
+                                    filtered_fib_levels = [
+                                        level for level in all_fib_levels
+                                        if any(str(fib_level_val) in level['type'] for fib_level_val in FIB_LEVELS_TO_CALC)
+                                    ]
+
+                                    # Sort by proximity to current price and select FIB_NEAREST_COUNT
+                                    current_price_dec = self.current_price
+                                    filtered_fib_levels.sort(key=lambda x: abs(x['price'] - current_price_dec))
+                                    
+                                    selected_fib_levels = filtered_fib_levels[:FIB_NEAREST_COUNT]
+
+                                    for level in selected_fib_levels:
+                                        if level['is_resistance']:
+                                            pivot_resistance_levels[level['type']] = level['price']
+                                        else:
+                                            pivot_support_levels[level['type']] = level['price']
 
                                     self.bot_logger.debug(f"Calculated Fib Support Pivots: {pivot_support_levels}")
                                     self.bot_logger.debug(f"Calculated Fib Resistance Pivots: {pivot_resistance_levels}")
@@ -620,7 +653,7 @@ class PyrmethusBot:
                     display_market_info(self.klines_df, self.current_price, SYMBOL, pivot_resistance_levels, pivot_support_levels, self.bot_logger)
 
                     if not self.has_open_position:
-                        signals = generate_signals(self.klines_df, pivot_resistance_levels, pivot_support_levels,
+                        signals = self.strategy.generate_signals(self.klines_df, pivot_resistance_levels, pivot_support_levels,
                                                    self.active_bull_obs, self.active_bear_obs,
                                                    stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD,
                                                    overbought=STOCHRSI_OVERBOUGHT_LEVEL, oversold=STOCHRSI_OVERSOLD_LEVEL,
@@ -636,7 +669,7 @@ class PyrmethusBot:
                                 break 
                     else:
                         self.bot_logger.info(f"{PYRMETHUS_BLUE}🚫 Position already open: {self.current_position_side} {SYMBOL}. Checking for exit signals...{COLOR_RESET}")
-                        exit_signals = generate_exit_signals(self.klines_df, self.current_position_side,
+                        exit_signals = self.strategy.generate_exit_signals(self.klines_df, self.current_position_side,
                                                              self.active_bull_obs, self.active_bear_obs,
                                                              stoch_k_period=STOCHRSI_K_PERIOD, stoch_d_period=STOCHRSI_D_PERIOD,
                                                              overbought=STOCHRSI_OVERBOUGHT_LEVEL, oversold=STOCHRSI_OVERSOLD_LEVEL,
