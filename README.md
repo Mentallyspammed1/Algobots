@@ -35,10 +35,13 @@ Built with `asyncio`, it ensures efficient, non-blocking operations, including r
 *   **Comprehensive Logging**: Detailed logging of bot actions, trade executions, market data, and performance metrics for analysis and debugging.
 *   **Modular Architecture**: Clean separation of concerns (API interaction, indicators, strategy, logging, UI) for easy maintenance and extensibility.
 *   **Configurable Parameters**: All key trading parameters are externalized in `config.py` and `.env` for easy customization.
+*   **Dynamic Strategy Loading**: Easily switch between different trading strategies by changing the `STRATEGY_NAME` in `config.py`.
 
 ## 🧠 How it Works (Strategy Overview)
 
-PSG's trading logic is built around identifying high-probability scalping opportunities using a confluence of technical analysis techniques:
+PSG's trading logic is now dynamically loaded based on the `STRATEGY_NAME` set in `config.py`. The core engine provides a framework of data and indicators, which the selected strategy uses to generate buy and sell signals.
+
+The default `StochRSI_Fib_OB_Strategy` uses a confluence of technical analysis techniques:
 
 1.  **Stochastic RSI (Momentum):**
     *   The primary trigger for entries and exits.
@@ -68,6 +71,15 @@ PSG's trading logic is built around identifying high-probability scalping opport
     *   All position updates are primarily driven by Bybit's private WebSocket stream for real-time accuracy.
     *   `_update_take_profit_stop_loss` ensures TP/SL orders are always active and updated with the latest position data.
     *   Trades are logged, and overall trade statistics are maintained by the `TradeMetrics` class.
+
+## 💡 Available Strategies
+
+The bot includes several pre-built strategies located in the `strategies/` directory. You can select one in `config.py`:
+
+*   **`StochRSI_Fib_OB_Strategy`**: The original, complex strategy using StochRSI, Fibonacci Pivots, and Order Blocks.
+*   **`MarketMakingStrategy`**: A strategy for market making.
+*   **`SMA_Crossover_Strategy`**: A simple trend-following strategy based on the crossover of two Simple Moving Averages.
+*   **`Strategy_Template`**: A template for creating your own strategies.
 
 ## 🛠️ Prerequisites
 
@@ -104,7 +116,7 @@ BYBIT_API_SECRET=YOUR_BYBIT_API_SECRET
 
 ### 2. Trading Parameters (`config.py`)
 
-Adjust parameters in `config.py` to your preferences.
+Adjust parameters in `config.py` to your preferences, especially the `STRATEGY_NAME`.
 
 ## 🚀 Running the Bot
 
@@ -119,14 +131,18 @@ pyrmethus-scalper-bot/
 ├── PSG.py
 ├── config.py
 ├── indicators.py
-├── strategy.py
 ├── bybit_api.py
 ├── bot_logger.py
 ├── trade_metrics.py
 ├── utils.py
 ├── color_codex.py
 ├── .env
-└── requirements.txt
+├── requirements.txt
+└── strategies/
+    ├── stochrsi_fib_ob_strategy.py
+    ├── marketmakingstrategy.py
+    ├── sma_crossover_strategy.py
+    └── strategy_template.py
 ```
 
 ## 📊 Logging and Metrics

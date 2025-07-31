@@ -68,30 +68,29 @@ The Pyrmethus Bot is structured into several modular components to enhance reada
     *   The main class `PyrmethusBot` orchestrates the entire trading process.
     *   Manages bot state (position, inventory, PnL).
     *   Handles WebSocket data streams (`_handle_position_update`, `_handle_kline_update`).
-    *   Calls external modules for indicator calculation, signal generation, and API interaction.
+    *   **Dynamically loads the selected trading strategy from the `strategies/` directory.**
+    *   Calls external modules for indicator calculation and API interaction.
     *   Implements trade execution (`_execute_entry`, `_execute_exit`) and TP/SL management.
+*   **`strategies/` (Directory):**
+    *   Contains individual strategy files. Each file must contain a class with the same name as the file (e.g., `marketmakingstrategy.py` contains class `MarketMakingStrategy`).
+    *   The strategy class is responsible for generating `entry` and `exit` signals based on the data provided by the core bot.
 *   **`bybit_api.py`:**
     *   Encapsulates all interactions with the Bybit API (REST and WebSockets).
     *   Handles authentication, rate limits, and error retries.
-    *   Provides methods for fetching klines, getting account info, placing orders, and setting trading stops.
 *   **`indicators.py`:**
-    *   Contains implementations for various technical indicators (StochRSI, ATR, SMA, Ehlers Fisher, Ehlers Super Smoother, Fibonacci Pivots).
-    *   Includes `find_pivots` for identifying swing highs/lows and `handle_websocket_kline_data` for processing real-time kline updates into the DataFrame.
-*   **`strategy.py`:**
-    *   Houses the core trading logic for generating `entry` and `exit` signals.
-    *   Evaluates current market conditions and indicator values based on the configured strategy parameters.
+    *   Contains implementations for various technical indicators (StochRSI, ATR, SMA, Ehlers Fisher, etc.).
 *   **`config.py`:**
-    *   Stores all static configuration parameters for the bot (symbols, intervals, amounts, indicator settings, API endpoints, etc.).
+    *   Stores all static configuration parameters for the bot, including the `STRATEGY_NAME` to be loaded.
 *   **`bot_logger.py`:**
-    *   Configures and manages the logging system, directing output to console and file, with custom formatting and color coding.
+    *   Configures and manages the logging system.
 *   **`trade_metrics.py`:**
-    *   Tracks and calculates performance metrics for trades (PnL, win rate, total fees, etc.).
+    *   Tracks and calculates performance metrics for trades.
 *   **`bot_ui.py`:**
-    *   Provides simple console-based market information display for real-time monitoring.
+    *   Provides simple console-based market information display.
 *   **`utils.py`:**
-    *   Contains utility functions, such as `calculate_order_quantity` for precise quantity calculation based on exchange rules.
+    *   Contains utility functions.
 *   **`color_codex.py`:**
-    *   Defines ANSI escape codes for colorful console output, improving readability.
+    *   Defines ANSI escape codes for colorful console output.
 *   **`.env`:**
     *   Used to securely store sensitive information like API keys and secrets.
 
@@ -274,11 +273,13 @@ The modular design of PSG makes it relatively easy to extend and customize:
 *   **Adding New Indicators:**
     *   Implement your new indicator logic within `indicators.py`.
     *   Call your new indicator function from `PSG.py` within `_initial_kline_fetch` and `_handle_kline_update` to calculate it on your `klines_df`.
-    *   Pass the new indicator data to `strategy.py`.
-*   **Modifying Strategies:**
-    *   Adjust the logic within `strategy.py`'s `generate_signals` and `generate_exit_signals` functions.
-    *   You can combine existing indicators in new ways or integrate newly added indicators.
-    *   Experiment with different entry/exit conditions and risk management rules.
+    *   The new indicator data will be available in the `klines_df` passed to your strategy.
+*   **Creating a New Strategy:**
+    1.  **Create a new file** in the `strategies/` directory (e.g., `mystrategy.py`).
+    2.  **Create a class** in the new file with the same name as the file (e.g., `class MyStrategy:`).
+    3.  **Implement `generate_signals` and `generate_exit_signals` methods** within your class. These methods will receive the `klines_df` and other relevant data.
+    4.  **Return a list of signals** from these methods. Each signal should be a tuple containing `(signal_type, signal_price, signal_timestamp, signal_info)`.
+    5.  **Activate your new strategy** by setting `STRATEGY_NAME = "MyStrategy"` in `config.py`.
 *   **Integrating Other Exchanges:**
     *   Create a new API client module similar to `bybit_api.py` for the desired exchange.
     *   Modify `PSG.py` to use the new client, ensuring it implements similar methods for fetching data, placing orders, and managing positions. This will require significant changes to the `PyrmethusBot` class.
