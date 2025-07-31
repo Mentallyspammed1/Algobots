@@ -11,9 +11,6 @@ import httpx
 import websockets
 import websockets.protocol
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
-import decimal
-import pandas as pd
 
 # --- Color Codex ---
 class Color:
@@ -65,6 +62,10 @@ class WebSocketConnectionError(Exception):
     """Custom exception for WebSocket connection issues."""
     pass
 
+class RESTRequestError(Exception):
+    """Exception for REST request failures."""
+    pass
+
 # --- Configuration & Constants ---
 BYBIT_REST_MAINNET = "https://api.bybit.com"
 BYBIT_REST_TESTNET = "https://api-testnet.bybit.com"
@@ -96,12 +97,13 @@ class BybitContractAPI:
     A comprehensive asynchronous Python client for Bybit V5 Contract Account API.
     Enhanced with robust reconnection, error handling, rate limiting, and structured message processing.
     """
-    def __init__(self, testnet: bool = False):
+    def __init__(self, testnet: bool = False, log_level: int = logging.INFO):
+        logger.setLevel(log_level)
         api_key = os.getenv("BYBIT_API_KEY")
         api_secret = os.getenv("BYBIT_API_SECRET")
 
         if not api_key or not api_secret:
-            raise ValueError(f"{Color.RED}API Key and Secret must be set via BYBIT_API_KEY and BYBIT_API_SECRET environment variables.{Color.RESET}")
+            raise ValueError(f"{Color.RED}API Key and Secret must be set in BYBIT_API_KEY and BYBIT_API_SECRET{Color.RESET}")
 
         self.api_key = api_key.strip()
         self.api_secret = api_secret.strip().encode('utf-8')
@@ -109,7 +111,10 @@ class BybitContractAPI:
         self.base_ws_private_url = BYBIT_WS_PRIVATE_TESTNET if testnet else BYBIT_WS_PRIVATE_MAINNET
         self.base_ws_public_linear_url = BYBIT_WS_PUBLIC_LINEAR_TESTNET if testnet else BYBIT_WS_PUBLIC_LINEAR_MAINNET
         
-        self.client = httpx.AsyncClient(base_url=self.base_rest_url, timeout=30.0)
+        self.client = httpx.AsyncClient(
+            base_url=self.base_rest_url,
+            timeout=httpx.Timeout(5.0, connect=5.0, read=30.0)
+        )
         
         self.private_websocket: Optional[websockets.WebSocketClientProtocol] = None
         self.public_websocket: Optional[websockets.WebSocketClientProtocol] = None
@@ -170,9 +175,9 @@ class BybitContractAPI:
             param_str = f"{timestamp}{self.api_key}{recv_window}{body}"
         return hmac.new(self.api_secret, param_str.encode('utf-8'), hashlib.sha256).hexdigest()
 
-    def _generate_ws_signature(self, expires: int) -> str:
+    def _generate_ws_signature(self, expires: int, path: str = "/realtime") -> str:
         """Generates the signature for WebSocket authentication."""
-        sign_string = f"GET/realtime{expires}"
+        sign_string = f"GET{path}{expires}"
         return hmac.new(self.api_secret, sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
 
     async def _get_server_time_ms(self) -> int:
@@ -224,7 +229,8 @@ class BybitContractAPI:
                 request_body = body.copy() if body else {}
                 
                 if signed:
-                    body_str = json.dumps(request_body) if method == "POST" else ""
+                    # Sort keys for canonical representation
+                    body_str = json.dumps(request_body, separators=(",", ":"), sort_keys=True) if method == "POST" else ""
                     signature = self._generate_rest_signature(request_params, current_timestamp, DEFAULT_RECV_WINDOW, method, body=body_str)
                     headers["X-BAPI-SIGN"] = signature
 
@@ -232,7 +238,7 @@ class BybitContractAPI:
 
                 if method == "POST":
                     headers["Content-Type"] = "application/json"
-                    response = await self.client.post(endpoint, content=json.dumps(request_params), headers=headers)
+                    response = await self.client.post(endpoint, json=request_body, headers=headers)
                 else: # GET
                     response = await self.client.get(endpoint, params=request_params, headers=headers)
 
@@ -250,7 +256,7 @@ class BybitContractAPI:
                 if attempt < self.MAX_RETRIES - 1:
                     await asyncio.sleep(self.INITIAL_BACKOFF * (2 ** attempt))
                 else:
-                    raise WebSocketConnectionError(f"REST request failed after {self.MAX_RETRIES} retries: {e}") from e
+                    raise RESTRequestError(f"REST request failed after {self.MAX_RETRIES} retries: {e}") from e
             except httpx.HTTPStatusError as e:
                 logger.warning(f"{Color.YELLOW}Attempt {attempt + 1}/{self.MAX_RETRIES}: HTTP status error for {endpoint}: {e.response.status_code} - {e.response.text}{Color.RESET}")
                 if e.response.status_code >= 500 and attempt < self.MAX_RETRIES - 1:
@@ -272,7 +278,7 @@ class BybitContractAPI:
     # --- Public API Endpoints ---
     async def get_kline(self, **kwargs) -> Dict[str, Any]:
         """Fetches kline data via REST API."""
-        return await self._make_request("GET", "/v5/market/kline", kwargs, signed=False)
+        return await self._make_request("GET", "/v5/market/kline", params=kwargs, signed=False)
 
     async def get_kline_rest_fallback(self, **kwargs) -> Dict[str, Any]:
         """Fetches kline data via REST API as a fallback mechanism."""
@@ -281,27 +287,27 @@ class BybitContractAPI:
 
     async def get_instruments_info(self, **kwargs) -> Dict[str, Any]:
         """Fetches instrument information."""
-        return await self._make_request("GET", "/v5/market/instruments-info", kwargs, signed=False)
+        return await self._make_request("GET", "/v5/market/instruments-info", params=kwargs, signed=False)
 
     async def get_positions(self, **kwargs) -> Dict[str, Any]:
         """Fetches current positions."""
-        return await self._make_request("GET", "/v5/position/list", kwargs)
+        return await self._make_request("GET", "/v5/position/list", params=kwargs)
 
     async def get_orderbook(self, **kwargs) -> Dict[str, Any]:
         """Fetches order book data."""
-        return await self._make_request("GET", "/v5/market/orderbook", kwargs, signed=False)
+        return await self._make_request("GET", "/v5/market/orderbook", params=kwargs, signed=False)
 
     async def create_order(self, **kwargs) -> Dict[str, Any]:
         """Creates a new order."""
-        return await self._make_request("POST", "/v5/order/create", body=kwargs)
+        return await self._make_request("POST", "/v5/order/create", signed=True, body=kwargs)
 
     async def amend_order(self, **kwargs) -> Dict[str, Any]:
         """Amends an existing order."""
-        return await self._make_request("POST", "/v5/order/amend", body=kwargs)
+        return await self._make_request("POST", "/v5/order/amend", signed=True, body=kwargs)
 
     async def set_trading_stop(self, **kwargs) -> Dict[str, Any]:
         """Sets or updates stop loss and take profit orders."""
-        return await self._make_request("POST", "/v5/position/set-trading-stop", body=kwargs)
+        return await self._make_request("POST", "/v5/position/set-trading-stop", signed=True, body=kwargs)
 
     async def get_order_status(self, **kwargs) -> Dict[str, Any]:
         """Gets the status of orders (history or real-time). Use precise params like orderId."""
@@ -310,124 +316,125 @@ class BybitContractAPI:
     async def get_open_order_id(self, **kwargs) -> Optional[str]:
         """
         Gets the order ID of the first open order matching the criteria.
-        Assumes the endpoint '/v5/order/realtime' or similar is used and returns a list.
-        Adjust endpoint and parsing if Bybit's API differs.
+        Uses the '/v5/order/realtime' endpoint and returns the first list item.
         """
         try:
-            response = await self._make_request("GET", "/v5/order/realtime", params=kwargs)
-            if response and response.get('result') and response['result'].get('list'):
-                return response['result']['list'][0].get('orderId')
+            resp = await self._make_request("GET", "/v5/order/realtime", params=kwargs)
+            lst = resp.get("result", {}).get("list", [])
+            return lst[0].get("orderId") if lst else None
+
         except BybitAPIError as e:
-            if e.ret_code == 10009: # Example: Order not found error code
-                logger.info(f"{Color.YELLOW}No open orders found matching criteria: {kwargs}{Color.RESET}")
+            if e.ret_code == 10009:  # Order not found
+                logger.info(f"{Color.YELLOW}No open orders matching {kwargs}.{Color.RESET}")
                 return None
-            else:
-                logger.error(f"{Color.RED}Error getting open order status: {e}{Color.RESET}")
-                raise
-        except Exception as e:
-            logger.error(f"{Color.RED}Unexpected error getting open order status: {e}{Color.RESET}")
             raise
-        return None
 
     async def get_wallet_balance(self, **kwargs) -> Dict[str, Any]:
         """Gets the wallet balance."""
-        return await self._make_request("GET", "/v5/account/wallet-balance", kwargs)
-        
+        return await self._make_request("GET", "/v5/account/wallet-balance", params=kwargs)
+
     async def get_symbol_ticker(self, **kwargs) -> Dict[str, Any]:
         """Fetches the ticker price for a symbol."""
         try:
-            return await self._make_request("GET", "/v5/market/ticker", kwargs, signed=False)
-        except BybitAPIError as e:
-            # Handle specific Bybit API errors, like invalid symbol/category
-            if e.ret_code == 10009: # Common code for invalid symbol/category
-                logger.error(f"{Color.RED}Failed to fetch ticker for {kwargs.get('symbol', 'N/A')} with category {kwargs.get('category', 'N/A')}: Invalid symbol or category. Check parameters. Error: {e.ret_msg}{Color.RESET}")
-                # Raise a more specific error to indicate the failure reason
-                raise WebSocketConnectionError(f"Invalid symbol/category: {kwargs.get('symbol')}/{kwargs.get('category')}") from e
-            else:
-                logger.error(f"{Color.RED}Bybit API Error fetching ticker: {e.ret_msg} (Code: {e.ret_code}){Color.RESET}")
-                raise # Re-raise other BybitAPIError
-        except WebSocketConnectionError as e:
-             logger.error(f"{Color.RED}Failed to fetch ticker due to connection error: {e}{Color.RESET}")
-             raise # Re-raise connection errors
-        except Exception as e:
-             logger.error(f"{Color.RED}Failed to fetch ticker due to unexpected error: {e}{Color.RESET}")
-             raise # Re-raise other unexpected errors
+            return await self._make_request("GET", "/v5/market/tickers", params=kwargs, signed=False)
 
-    # --- WebSocket Handling ---
-    async def _connect_websocket(self, url: str, connection_state: ConnectionState, subscriptions: set, resubscribe_func: Callable, callback: callable, auth_required: bool = False, reconnect_delay: int = 5) -> Optional[websockets.WebSocketClientProtocol]:
-        """Handles the common logic for connecting and authenticating WebSockets."""
+        except BybitAPIError as e:
+            if e.ret_code == 10009:
+                logger.error(
+                    f"{Color.RED}Invalid symbol/category: "
+                    f"{kwargs.get('symbol')}/{kwargs.get('category')}. "
+                    f"{e.ret_msg}{Color.RESET}"
+                )
+                raise RESTRequestError(f"Invalid symbol/category: {kwargs}") from e
+            raise
+
+        except Exception as e:
+            logger.error(f"{Color.RED}Unexpected error in get_symbol_ticker: {e}{Color.RESET}")
+            raise
+
+# --- WebSocket Handling ---
+    async def _connect_websocket(
+        self,
+        url: str,
+        connection_state: ConnectionState,
+        subscriptions: set,
+        resubscribe_func: Callable,
+        callback: Callable,
+        auth_required: bool = False,
+        reconnect_delay: int = 5
+    ) -> Optional[websockets.WebSocketClientProtocol]:
+        """Common logic for connecting/authenticating & initial subscribe."""
         if connection_state.is_connected and connection_state.is_active:
             return connection_state.websocket_instance
 
-        connection_state.is_active = True
+        # reset state
         connection_state.is_connected = False
         connection_state.is_authenticated = False
         connection_state._ws_authenticated_event.clear()
-        
-        websocket_instance = None
+
         try:
-            websocket_instance = await websockets.connect(
+            ws = await websockets.connect(
                 url,
                 ping_interval=self.ws_ping_interval,
                 ping_timeout=self.ws_ping_timeout,
-                open_timeout=15 # Add timeout for initial connection
+                open_timeout=15
             )
+            connection_state.websocket_instance = ws
             connection_state.is_connected = True
-            logger.info(f"{Color.GREEN}Connected to WebSocket: {url}{Color.RESET}")
+            logger.info(f"{Color.GREEN}WS connected: {url}{Color.RESET}")
 
             if auth_required:
-                expires = int(time.time() * 1000) + 30000
-                signature = self._generate_ws_signature(expires)
-                auth_message = {"op": "auth", "args": [self.api_key, expires, signature]}
-                await self._send_ws_message(websocket_instance, auth_message, is_private=True)
-                logger.info(f"{Color.GREEN}Private WebSocket authentication message sent.{Color.RESET}")
-            
-            await resubscribe_func() # Resubscribe immediately after connection/auth
+                expires = int(time.time() * 1000) + 30_000
+                sig = self._generate_ws_signature(expires, path="/v5/private")
+                auth_msg = {"op": "auth", "args": [self.api_key, expires, sig]}
+                await self._send_ws_message(ws, auth_msg, is_private=True)
 
-            connection_state.websocket_instance = websocket_instance
-            return websocket_instance
+            await resubscribe_func()
+            return ws
 
         except (websockets.exceptions.WebSocketException, ConnectionError, asyncio.TimeoutError) as e:
-            logger.error(f"{Color.RED}{url} WebSocket connection error: {e}. Retrying...{Color.RESET}")
-            connection_state.is_connected = False
-            if websocket_instance:
-                try: await websocket_instance.close()
-                except: pass
+            logger.error(f"{Color.RED}WS conn error {url}: {e}{Color.RESET}")
             await asyncio.sleep(reconnect_delay)
             return None
 
-    async def _send_ws_message(self, websocket: Optional[websockets.WebSocketClientProtocol], message: Dict[str, Any], is_private: bool = False) -> None:
-        """Sends a message over the specified WebSocket connection, with improved safety checks."""
-        if not websocket or not websocket.open: # Check if websocket instance exists and is open
-            logger.warning(f"{Color.YELLOW}Cannot send message: WebSocket is not open or instance is missing. Message: {message}{Color.RESET}")
-            if is_private: self.private_connection_state.is_connected = False
-            else: self.public_connection_state.is_connected = False
+    async def _send_ws_message(
+        self,
+        websocket: Optional[websockets.WebSocketClientProtocol],
+        message: Dict[str, Any],
+        is_private: bool = False
+    ) -> None:
+        """Safely send a JSON message over WebSocket."""
+        state = self.private_connection_state if is_private else self.public_connection_state
+
+        if not websocket or websocket.closed:
+            state.is_connected = False
+            logger.warning(f"{Color.YELLOW}WS not open, msg dropped: {message}{Color.RESET}")
             return
+
         try:
             await websocket.send(json.dumps(message))
-            logger.debug(f"{'Private' if is_private else 'Public'} WS Sent: {message}")
-        except websockets.exceptions.ConnectionClosed:
-            logger.warning(f"{Color.YELLOW}Attempted to send message on closed WebSocket: {message}{Color.RESET}")
-            if is_private: self.private_connection_state.is_connected = False
-            else: self.public_connection_state.is_connected = False
+            logger.debug(f"{'Priv' if is_private else 'Pub'} WS → {message}")
         except Exception as e:
-            logger.error(f"{Color.RED}Error sending WebSocket message: {e}{Color.RESET}")
+            state.is_connected = False
+            logger.error(f"{Color.RED}WS send failed: {e}{Color.RESET}")
 
-    async def subscribe_ws_topic(self, websocket: Optional[websockets.WebSocketClientProtocol], subscriptions: set, topic: str, is_private: bool = False) -> None:
-        """Subscribes to a WebSocket topic if not already subscribed."""
-        if not websocket or not websocket.open:
-            logger.warning(f"{Color.YELLOW}Cannot subscribe to '{topic}': WebSocket is not open.{Color.RESET}")
-            if topic not in subscriptions:
-                subscriptions.add(topic)
+    async def subscribe_ws_topic(
+        self,
+        websocket: Optional[websockets.WebSocketClientProtocol],
+        subscriptions: set,
+        topic: str,
+        is_private: bool = False
+    ) -> None:
+        """Subscribes to a WebSocket topic if not already in the set."""
+        state = self.private_connection_state if is_private else self.public_connection_state
+
+        if topic in subscriptions:
+            logger.debug(f"Already subscribed to {topic}")
             return
-            
-        if topic not in subscriptions:
-            subscriptions.add(topic)
-            message = {"op": "subscribe", "args": [topic]}
-            await self._send_ws_message(websocket, message, is_private=is_private)
-            logger.info(f"{Color.MAGENTA}Subscribing to WebSocket topic: {topic}{Color.RESET}")
-        else:
-            logger.debug(f"Already subscribed to topic: {topic}")
+
+        subscriptions.add(topic)
+        sub_msg = {"op": "subscribe", "args": [topic]}
+        await self._send_ws_message(websocket, sub_msg, is_private)
 
     async def _resubscribe_topics(self, connection_state: ConnectionState, subscriptions: set, url: str, is_private: bool) -> None:
         """Resubscribes to all topics when connection is re-established."""
@@ -438,7 +445,61 @@ class BybitContractAPI:
         message = {"op": "subscribe", "args": list(subscriptions)}
         await self._send_ws_message(connection_state.websocket_instance, message, is_private=is_private)
 
-    async def start_websocket_listener(self, url: str, connection_state: ConnectionState, subscriptions: set, resubscribe_func: Callable, callback: callable, auth_required: bool = False, reconnect_delay: int = 5) -> asyncio.Task:
+    async def _message_receiving_loop(self, websocket: websockets.WebSocketClientProtocol, connection_state: ConnectionState, auth_required: bool, callback: Callable):
+        """
+        Main message receiving loop for handling WebSocket connections.
+        """
+        while connection_state.is_connected and connection_state.is_active:
+            if not websocket or not websocket.open:
+                logger.warning(f"{Color.YELLOW}{'Private' if auth_required else 'Public'} WebSocket no longer open. Breaking to reconnect. {Color.RESET}")
+                break
+
+            try:
+                message = await asyncio.wait_for(websocket.recv(), timeout=self.ws_ping_interval + self.ws_ping_timeout)
+                parsed_message = json.loads(message)
+                logger.debug(f"{'Private' if auth_required else 'Public'} WS Received: {parsed_message}")
+
+                if parsed_message.get("op") == "pong":
+                    connection_state.last_pong_time = time.time()
+                    logger.debug(f"{'Private' if auth_required else 'Public'} WS Pong received.")
+                    continue
+                
+                if auth_required and parsed_message.get("op") == "auth":
+                    if parsed_message.get("success"):
+                        connection_state.is_authenticated = True
+                        connection_state._ws_authenticated_event.set()
+                        logger.info(f"{Color.GREEN}Private WebSocket authenticated successfully.{Color.RESET}")
+                    else:
+                        logger.error(f"{Color.RED}Private WebSocket auth failed: {parsed_message.get('retMsg', 'Unknown error')}. Response: {json.dumps(parsed_message)}{Color.RESET}")
+                        break # Auth failed, break to reconnect
+
+                await callback(parsed_message)
+
+            except asyncio.TimeoutError:
+                logger.warning(f"{Color.YELLOW}{'Private' if auth_required else 'Public'} WebSocket recv timed out. Checking connection health...{Color.RESET}")
+                if connection_state.last_pong_time < connection_state.last_ping_time:
+                    logger.error(f"{Color.RED}No pong received after ping. Connection likely dead. Reconnecting...{Color.RESET}")
+                    break
+                else:
+                    connection_state.last_ping_time = time.time()
+                    try:
+                        await websocket.ping()
+                    except Exception as ping_e:
+                         logger.error(f"{Color.RED}Error sending ping: {ping_e}{Color.RESET}")
+                         break
+                    logger.debug(f"{'Private' if auth_required else 'Public'} WS Ping sent.")
+
+            except websockets.exceptions.ConnectionClosed as e:
+                logger.warning(f"{Color.YELLOW}{'Private' if auth_required else 'Public'} WebSocket closed: {e}. Reconnecting...{Color.RESET}")
+                break
+            except json.JSONDecodeError:
+                logger.error(f"{Color.RED}Failed to decode JSON message: {message}{Color.RESET}")
+            except Exception as e:
+                logger.error(f"{Color.RED}Error processing message in {'private' if auth_required else 'public'} WebSocket listener: {e}{Color.RESET}")
+                if isinstance(e, WebSocketConnectionError):
+                    break
+
+    async def start_websocket_listener(self, url: str, connection_state: ConnectionState, subscriptions: set, resubscribe_func: Callable, callback: Callable, auth_required: bool = False, reconnect_delay: int = 5) -> asyncio.Task:
         """Generic listener task for both private and public WebSockets."""
         async def _listener_task():
             while connection_state.is_active:
@@ -448,50 +509,8 @@ class BybitContractAPI:
                     if not websocket: # Connection failed, retry after delay
                         continue
 
-                    # Main message receiving loop
-                    while connection_state.is_connected and connection_state.is_active:
-                        try:
-                            message = await asyncio.wait_for(websocket.recv(), timeout=self.ws_ping_interval + self.ws_ping_timeout)
-                            parsed_message = json.loads(message)
-                            logger.debug(f"{'Private' if auth_required else 'Public'} WS Received: {parsed_message}")
-
-                            if parsed_message.get("op") == "pong":
-                                connection_state.last_pong_time = time.time()
-                                logger.debug(f"{'Private' if auth_required else 'Public'} WS Pong received.")
-                                continue
-                            
-                            if auth_required and parsed_message.get("op") == "auth":
-                                if parsed_message.get("success"):
-                                    connection_state.is_authenticated = True
-                                    connection_state._ws_authenticated_event.set()
-                                    logger.info(f"{Color.GREEN}Private WebSocket authenticated successfully.{Color.RESET}")
-                                else:
-                                    logger.error(f"{Color.RED}Private WebSocket auth failed: {parsed_message.get('retMsg', 'Unknown error')}. Response: {json.dumps(parsed_message)}{Color.RESET}")
-                                    break
-
-                            await callback(parsed_message)
-
-                        except asyncio.TimeoutError:
-                            logger.warning(f"{Color.YELLOW}{'Private' if auth_required else 'Public'} WebSocket recv timed out. Checking connection health...{Color.RESET}")
-                            if connection_state.last_pong_time < connection_state.last_ping_time:
-                                logger.error(f"{Color.RED}No pong received after ping. Connection likely dead. Reconnecting...{Color.RESET}")
-                                break
-                            else:
-                                connection_state.last_ping_time = time.time()
-                                try: await websocket.ping()
-                                except Exception as ping_e:
-                                     logger.error(f"{Color.RED}Error sending ping: {ping_e}{Color.RESET}")
-                                     break
-                                logger.debug(f"{'Private' if auth_required else 'Public'} WS Ping sent.")
-
-                        except websockets.exceptions.ConnectionClosed as e:
-                            logger.warning(f"{Color.YELLOW}{'Private' if auth_required else 'Public'} WebSocket closed: {e}. Reconnecting...{Color.RESET}")
-                            break
-                        except json.JSONDecodeError:
-                            logger.error(f"{Color.RED}Failed to decode JSON message: {message}{Color.RESET}")
-                        except Exception as e:
-                            logger.error(f"{Color.RED}Error processing message in {'private' if auth_required else 'public'} WebSocket listener: {e}{Color.RESET}")
-                            if isinstance(e, WebSocketConnectionError): break
+                    # Hand off to the message receiving loop
+                    await self._message_receiving_loop(websocket, connection_state, auth_required, callback)
 
                 except WebSocketConnectionError as e:
                     pass # Error already logged in _connect_websocket
@@ -519,7 +538,7 @@ class BybitContractAPI:
         connection_state.listener_task = task
         return task
 
-    def start_private_websocket_listener(self, callback: callable, reconnect_delay: int = 5) -> asyncio.Task:
+    def start_private_websocket_listener(self, callback: Callable, reconnect_delay: int = 5) -> asyncio.Task:
         """Starts the listener for private WebSocket events."""
         return self.start_websocket_listener(
             self.base_ws_private_url, self.private_connection_state, self._private_subscriptions,
@@ -527,7 +546,7 @@ class BybitContractAPI:
             callback, auth_required=True, reconnect_delay=reconnect_delay
         )
 
-    def start_public_websocket_listener(self, callback: callable, reconnect_delay: int = 5) -> asyncio.Task:
+    def start_public_websocket_listener(self, callback: Callable, reconnect_delay: int = 5) -> asyncio.Task:
         """Starts the listener for public WebSocket events."""
         return self.start_websocket_listener(
             self.base_ws_public_linear_url, self.public_connection_state, self._public_subscriptions,
@@ -602,8 +621,8 @@ async def main_example():
         await api.close_connections()
 
 # To run the example:
-# if __name__ == "__main__":
-#     # Ensure you have set BYBIT_API_KEY and BYBIT_API_SECRET environment variables
-#     # And have the necessary libraries installed (httpx, websockets, pandas, python-dotenv)
-#     # And have algobots_types.py and color_codex.py available if not using fallbacks.
-#     asyncio.run(main_example())
+if __name__ == "__main__":
+    # Ensure you have set BYBIT_API_KEY and BYBIT_API_SECRET environment variables
+    # And have the necessary libraries installed (httpx, websockets, pandas, python-dotenv)
+    # And have algobots_types.py and color_codex.py available if not using fallbacks.
+    asyncio.run(main_example())

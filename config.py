@@ -33,7 +33,7 @@ STRATEGY_NAME = "MarketMakingStrategy" # Options: "StochRSI_Fib_OB_Strategy", "S
 
 # --- Strategy Parameters (Market Making) ---
 # Base spread in BPS (Basis Points). 10 BPS = 0.1%.
-SPREAD_BPS = 10
+SPREAD_BPS = 22
 # Use order size adjusted for volatility
 USE_VOLATILITY_ADJUSTED_SIZE = True
 # Base quantity for orders (e.g., 0.01 BTC)
@@ -59,7 +59,7 @@ USE_ORDER_BLOCK_LOGIC = True
 # Avoidance zone around Order Blocks in BPS (e.g., 1 BPS = 0.01%)
 OB_AVOIDANCE_BPS = 1
 # Position size threshold to trigger rebalancing
-REBALANCE_THRESHOLD = "0.03" # Keep as string for Decimal conversion in strategy
+REBALANCE_THRESHOLD = "0.05" # Keep as string for Decimal conversion in strategy
 # Aggressiveness of rebalancing orders: 'MARKET' or 'AGGRESSIVE_LIMIT'
 REBALANCE_AGGRESSIVENESS = 'MARKET'
 # Use dynamic stop loss based on ATR
@@ -160,4 +160,4 @@ POLLING_INTERVAL_SECONDS = 5 # Poll every 5 seconds
 
 # API request retry settings
 API_REQUEST_RETRIES = 3
-API_BACKOFF_FACTOR = 0.5
+API_BACKOFF_FACTOR = 0.2
