@@ -108,6 +108,9 @@ def display_market_info(
             ("Fisher",      "ehlers_fisher",          4, "🎣"),
             ("Fisher Sig",  "ehlers_fisher_signal",   4, ""),
             ("Supersmth",   "ehlers_supersmoother",   4, "✨"),
+            ("EhlersFish",  "ehlers_fisher_strategy", 4, "🐟"),
+            ("Supertrend",  "supertrend",             4, "📈"),
+            ("SupertrendDir", "supertrend_direction", 0, "🧭"),
             ("Imbalance",   None,                     4, "⚖️"), # None for column as it's a direct value
         ]
 

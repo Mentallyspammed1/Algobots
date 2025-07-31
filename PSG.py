@@ -42,12 +42,14 @@ try:
         FIB_ENTRY_CONFIRM_PERCENT, FIB_EXIT_WARN_PERCENT, FIB_EXIT_ACTION,
         ATR_MULTIPLIER_SL, ATR_MULTIPLIER_TP, SMA_PERIOD,
         SMA_LENGTH, EHLERS_FISHER_LENGTH, EHLERS_SUPERSMOOTHER_LENGTH, EHLERS_FISHER_SIGNAL_PERIOD,
-        MAX_ACTIVE_OBS, HEDGE_MODE, USE_PERCENTAGE_ORDER_SIZING, ORDER_SIZE_PERCENT_OF_BALANCE
+        MAX_ACTIVE_OBS, HEDGE_MODE, USE_PERCENTAGE_ORDER_SIZING, ORDER_SIZE_PERCENT_OF_BALANCE,
+        EHLERS_PERIOD, SUPERTREND_PERIOD, SUPERTREND_MULTIPLIER
     )
     from indicators import (
         calculate_fibonacci_pivot_points, calculate_stochrsi, calculate_atr,
         calculate_sma, calculate_ehlers_fisher_transform, calculate_ehlers_super_smoother,
-        find_pivots, handle_websocket_kline_data, calculate_order_book_imbalance
+        find_pivots, handle_websocket_kline_data, calculate_order_book_imbalance,
+        calculate_ehlers_fisher_strategy, calculate_supertrend
     )
     from bybit_api import BybitContractAPI
     from bot_ui import display_market_info
@@ -359,6 +361,8 @@ class PyrmethusBot:
                 self.klines_df['sma'] = calculate_sma(self.klines_df, length=SMA_LENGTH)
                 self.klines_df['ehlers_fisher'], self.klines_df['ehlers_fisher_signal'] = calculate_ehlers_fisher_transform(self.klines_df, length=EHLERS_FISHER_LENGTH, signal_length=EHLERS_FISHER_SIGNAL_PERIOD)
                 self.klines_df['ehlers_supersmoother'] = calculate_ehlers_super_smoother(self.klines_df, length=EHLERS_SUPERSMOOTHER_LENGTH)
+                self.klines_df = calculate_ehlers_fisher_strategy(self.klines_df, length=EHLERS_PERIOD)
+                self.klines_df = calculate_supertrend(self.klines_df, period=SUPERTREND_PERIOD, multiplier=SUPERTREND_MULTIPLIER)
 
                 if 'atr' in self.klines_df.columns and not pd.isna(self.klines_df['atr'].iloc[-1]):
                     self.cached_atr = self.klines_df['atr'].iloc[-1]
@@ -411,6 +415,8 @@ class PyrmethusBot:
                 self.klines_df['sma'] = calculate_sma(self.klines_df, length=SMA_LENGTH)
                 self.klines_df['ehlers_fisher'], self.klines_df['ehlers_fisher_signal'] = calculate_ehlers_fisher_transform(self.klines_df, length=EHLERS_FISHER_LENGTH, signal_length=EHLERS_FISHER_SIGNAL_PERIOD)
                 self.klines_df['ehlers_supersmoother'] = calculate_ehlers_super_smoother(self.klines_df, length=EHLERS_SUPERSMOOTHER_LENGTH)
+                self.klines_df = calculate_ehlers_fisher_strategy(self.klines_df, length=EHLERS_PERIOD)
+                self.klines_df = calculate_supertrend(self.klines_df, period=SUPERTREND_PERIOD, multiplier=SUPERTREND_MULTIPLIER)
 
                 if 'atr' in self.klines_df.columns and not pd.isna(self.klines_df['atr'].iloc[-1]):
                     self.cached_atr = self.klines_df['atr'].iloc[-1]

@@ -372,3 +372,97 @@ def calculate_order_book_imbalance(order_book: Dict[str, List[List[str]]]) -> Tu
     imbalance = (bid_volume - ask_volume) / total_volume
     indicators_logger.debug(f"Order book imbalance calculated: {imbalance:.4f}")
     return imbalance, total_volume
+
+def calculate_ehlers_fisher_strategy(df: pd.DataFrame, length: int = 10) -> pd.DataFrame:
+    """Calculates the Ehlers Fisher Transform as per the strategy's logic."""
+    df['min_low_ehlers'] = df['low'].rolling(window=length).min()
+    df['max_high_ehlers'] = df['high'].rolling(window=length).max()
+
+    ehlers_value1 = [Decimal(0.0)] * len(df)
+    ehlers_fisher = [Decimal(0.0)] * len(df)
+    
+    prev_val1 = Decimal(0.0)
+
+    for i in range(len(df)):
+        if i >= length - 1:
+            min_low_val = df['min_low_ehlers'].iloc[i]
+            max_high_val = df['max_high_ehlers'].iloc[i]
+            close_val = df['close'].iloc[i]
+
+            if pd.isna(min_low_val) or pd.isna(max_high_val) or pd.isna(close_val):
+                continue
+
+            range_val = max_high_val - min_low_val
+            raw_norm_price = (close_val - min_low_val) / range_val if range_val > 0 else Decimal('0.5')
+            
+            current_val1 = Decimal('0.33') * (Decimal('2') * raw_norm_price - Decimal('1')) + Decimal('0.67') * prev_val1
+            current_val1 = max(Decimal('-0.999'), min(Decimal('0.999'), current_val1))
+            
+            ehlers_value1[i] = current_val1
+            prev_val1 = current_val1
+
+            fisher_val = Decimal('0.5') * Decimal(math.log((1 + float(current_val1)) / (1 - float(current_val1))))
+            ehlers_fisher[i] = fisher_val
+    
+    df['ehlers_fisher'] = ehlers_fisher
+    df['ehlers_signal'] = df['ehlers_fisher'].shift(1)
+    df.drop(columns=['min_low_ehlers', 'max_high_ehlers'], inplace=True)
+    return df
+
+def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> pd.DataFrame:
+    """Calculates Supertrend indicator."""
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = abs(df['high'] - df['close'].shift(1))
+    df['tr3'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+    df['atr'] = df['tr'].ewm(span=period, adjust=False).mean()
+    df['hl2'] = (df['high'] + df['low']) / 2
+
+    final_upper_band = [Decimal(0.0)] * len(df)
+    final_lower_band = [Decimal(0.0)] * len(df)
+    supertrend_values = [Decimal(0.0)] * len(df)
+    direction = [1] * len(df)
+
+    for i in range(1, len(df)):
+        if pd.isna(df['atr'].iloc[i]):
+            continue
+
+        curr_upper_basic = df['hl2'].iloc[i] + Decimal(multiplier) * df['atr'].iloc[i]
+        curr_lower_basic = df['hl2'].iloc[i] - Decimal(multiplier) * df['atr'].iloc[i]
+
+        prev_final_upper = final_upper_band[i-1] if final_upper_band[i-1] != 0 else curr_upper_basic
+        prev_final_lower = final_lower_band[i-1] if final_lower_band[i-1] != 0 else curr_lower_basic
+        prev_direction = direction[i-1]
+
+        current_close = df['close'].iloc[i]
+        prev_close = df['close'].iloc[i-1]
+
+        if curr_upper_basic < prev_final_upper or prev_close > prev_final_upper:
+            final_upper_band[i] = curr_upper_basic
+        else:
+            final_upper_band[i] = prev_final_upper
+
+        if curr_lower_basic > prev_final_lower or prev_close < prev_final_lower:
+            final_lower_band[i] = curr_lower_basic
+        else:
+            final_lower_band[i] = prev_final_lower
+
+        if prev_direction == 1:
+            if current_close < final_upper_band[i]:
+                direction[i] = -1
+                supertrend_values[i] = final_upper_band[i]
+            else:
+                direction[i] = 1
+                supertrend_values[i] = final_lower_band[i]
+        else:
+            if current_close > final_lower_band[i]:
+                direction[i] = 1
+                supertrend_values[i] = final_lower_band[i]
+            else:
+                direction[i] = -1
+                supertrend_values[i] = final_upper_band[i]
+
+    df['supertrend'] = supertrend_values
+    df['supertrend_direction'] = direction
+    df.drop(columns=['tr1', 'tr2', 'tr3', 'tr', 'atr', 'hl2'], inplace=True, errors='ignore')
+    return df
