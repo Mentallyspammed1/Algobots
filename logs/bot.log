@@ -23772,3 +23772,191 @@ Traceback (most recent call last):
 NameError: name 'PYRMETHUS_CYAN' is not defined. Did you mean: 'PYRMETHUS_GREEN'?
 2025-07-31 04:01:04,219 - PyrmethusBot - INFO - PSG.py:444 - [35m💡 Detected SELL_LIMIT signal at 9.4539 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099983732763349537517241613163218157862'), 'strategy_id': 'MM_ASK'})[0m
 2025-07-31 04:01:04,219 - PyrmethusBot - WARNING - PSG.py:447 - [33mSignal received too quickly after last one (0.81s < 5s). Skipping entry.[0m
+2025-07-31 12:02:07,064 - PyrmethusBot - INFO - marketmakingstrategy.py:86 - [36mSummoning Enhanced MarketMakingStrategy...[0m
+2025-07-31 12:02:07,066 - PyrmethusBot - INFO - PSG.py:670 - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-31 12:02:07,309 - PyrmethusBot - INFO - PSG.py:677 - BybitContractAPI initialized.
+2025-07-31 12:02:07,310 - PyrmethusBot - INFO - PSG.py:384 - [33mFetching initial kline data for TRUMPUSDT (1)... Attempt 1[0m
+2025-07-31 12:02:09,505 - PyrmethusBot - INFO - PSG.py:425 - [32mInitial kline data fetched and indicators calculated. Current price: 9.2620, ATR: 0.0098[0m
+2025-07-31 12:02:09,509 - PyrmethusBot - DEBUG - PSG.py:205 - Received non-position or empty WS update: {'success': True, 'ret_msg': '', 'op': 'auth', 'conn_id': 'd15797e8dkq88i1a06o0-1cku95'}
+2025-07-31 12:02:09,510 - PyrmethusBot - DEBUG - PSG.py:205 - Received non-position or empty WS update: {'success': True, 'ret_msg': '', 'op': 'subscribe', 'conn_id': 'd15797e8dkq88i1a06o0-1cku95'}
+2025-07-31 12:02:10,206 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:10,207 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2620, ATR: 0.0091[0m
+2025-07-31 12:02:10,207 - PyrmethusBot - DEBUG - PSG.py:344 - Received non-kline or empty WS update: {'success': True, 'ret_msg': '', 'conn_id': '388bf708-b1d7-4097-9d54-f5f368b8070f', 'req_id': '', 'op': 'subscribe'}
+2025-07-31 12:02:10,600 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:10,601 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2590, ATR: 0.0094[0m
+2025-07-31 12:02:10,627 - PyrmethusBot - DEBUG - PSG.py:131 - [2mPosition state reset.[0m
+2025-07-31 12:02:10,628 - PyrmethusBot - INFO - PSG.py:223 - [2m✅ No open position for TRUMPUSDT (WS). Seeking new trade opportunities...[0m
+2025-07-31 12:02:11,606 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:11,606 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2590, ATR: 0.0094[0m
+2025-07-31 12:02:11,612 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9995)[0m
+2025-07-31 12:02:11,613 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 25.05 bps.[0m
+2025-07-31 12:02:11,613 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Downtrend, Skewed Mid Price (after trend): 9.25437050[0m
+2025-07-31 12:02:11,613 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.25437050[0m
+2025-07-31 12:02:11,613 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 12:02:11,613 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.24277801, Qty: 0.0100[0m
+2025-07-31 12:02:11,614 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.26596299, Qty: 0.0100[0m
+2025-07-31 12:02:11,614 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected BUY_LIMIT signal at 9.2428 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099949495533631733767494907386648876152'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 12:02:11,614 - PyrmethusBot - WARNING - PSG.py:444 - [33mSignal received too quickly. Skipping entry.[0m
+2025-07-31 12:02:11,615 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected SELL_LIMIT signal at 9.2660 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099949495533631733767494907386648876152'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 12:02:11,615 - PyrmethusBot - WARNING - PSG.py:444 - [33mSignal received too quickly. Skipping entry.[0m
+2025-07-31 12:02:12,835 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:12,835 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2580, ATR: 0.0094[0m
+2025-07-31 12:02:13,784 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:13,784 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2570, ATR: 0.0095[0m
+2025-07-31 12:02:16,598 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:16,598 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2570, ATR: 0.0095[0m
+2025-07-31 12:02:18,180 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9995)[0m
+2025-07-31 12:02:18,181 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 25.13 bps.[0m
+2025-07-31 12:02:18,182 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Downtrend, Skewed Mid Price (after trend): 9.25237150[0m
+2025-07-31 12:02:18,184 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.25237150[0m
+2025-07-31 12:02:18,185 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 12:02:18,186 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.24074532, Qty: 0.0100[0m
+2025-07-31 12:02:18,188 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.26399768, Qty: 0.0100[0m
+2025-07-31 12:02:18,189 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected BUY_LIMIT signal at 9.2407 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099948713795988878992824257818949987200'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 12:02:19,047 - PyrmethusBot - DEBUG - PSG.py:454 - [36mFetched current execution price: 9.2570[0m
+2025-07-31 12:02:19,875 - PyrmethusBot - WARNING - PSG.py:482 - [33mInstrument info missing or invalid minOrderIv for TRUMPUSDT. Using default 10 USDT.[0m
+2025-07-31 12:02:20,700 - PyrmethusBot - INFO - PSG.py:505 - [34mDynamic sizing: Balance=12.05, Volatility Factor=0.001, Target USDT=0.00[0m
+2025-07-31 12:02:20,701 - PyrmethusBot - DEBUG - PSG.py:515 - [34mAdjusted target USDT to minimum order value: 10.00[0m
+2025-07-31 12:02:20,702 - PyrmethusBot - INFO - PSG.py:539 - [33mPlacing BUY_LIMIT order: Qty=1.1000 TRUMPUSDT, Price=9.2407[0m
+2025-07-31 12:02:21,638 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:21,639 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2550, ATR: 0.0096[0m
+2025-07-31 12:02:21,642 - PyrmethusBot - ERROR - bot_logger.py:171 - Exception during order execution for TRUMPUSDT: Bybit API Error 10004: error sign! origin_string[1753981342475pXXkHX8ryNx4tJw4oQ5000{"category":"linear","symbol":"TRUMPUSDT","side":"Buy","order_type":"Limit","qty":"1.10000000","price":"9.2407","positionIdx":1}]
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 542, in _execute_entry
+    response = await self.bybit_client.create_order(**order_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 307, in create_order
+    return await self._make_request("POST", "/v5/order/create", signed=True, body=kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 254, in _make_request
+    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+bybit_api.BybitAPIError: Bybit API Error 10004: error sign! origin_string[1753981342475pXXkHX8ryNx4tJw4oQ5000{"category":"linear","symbol":"TRUMPUSDT","side":"Buy","order_type":"Limit","qty":"1.10000000","price":"9.2407","positionIdx":1}]
+2025-07-31 12:02:21,652 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected SELL_LIMIT signal at 9.2640 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099948713795988878992824257818949987200'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 12:02:21,652 - PyrmethusBot - WARNING - PSG.py:444 - [33mSignal received too quickly. Skipping entry.[0m
+2025-07-31 12:02:24,609 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:24,609 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2550, ATR: 0.0096[0m
+2025-07-31 12:02:28,000 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9995)[0m
+2025-07-31 12:02:28,001 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 25.21 bps.[0m
+2025-07-31 12:02:28,002 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Downtrend, Skewed Mid Price (after trend): 9.25037250[0m
+2025-07-31 12:02:28,004 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.25037250[0m
+2025-07-31 12:02:28,006 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 12:02:28,008 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.23871262, Qty: 0.0100[0m
+2025-07-31 12:02:28,010 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.26203238, Qty: 0.0100[0m
+2025-07-31 12:02:28,012 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected BUY_LIMIT signal at 9.2387 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099947931732716227937204728358712257459'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 12:02:28,853 - PyrmethusBot - DEBUG - PSG.py:454 - [36mFetched current execution price: 9.2550[0m
+2025-07-31 12:02:29,720 - PyrmethusBot - WARNING - PSG.py:482 - [33mInstrument info missing or invalid minOrderIv for TRUMPUSDT. Using default 10 USDT.[0m
+2025-07-31 12:02:30,641 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:30,642 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2540, ATR: 0.0097[0m
+2025-07-31 12:02:30,645 - PyrmethusBot - INFO - PSG.py:505 - [34mDynamic sizing: Balance=12.05, Volatility Factor=0.001, Target USDT=0.00[0m
+2025-07-31 12:02:30,645 - PyrmethusBot - DEBUG - PSG.py:515 - [34mAdjusted target USDT to minimum order value: 10.00[0m
+2025-07-31 12:02:30,646 - PyrmethusBot - INFO - PSG.py:539 - [33mPlacing BUY_LIMIT order: Qty=1.1000 TRUMPUSDT, Price=9.2387[0m
+2025-07-31 12:02:31,599 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:31,599 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2530, ATR: 0.0098[0m
+2025-07-31 12:02:31,602 - PyrmethusBot - ERROR - bot_logger.py:171 - Exception during order execution for TRUMPUSDT: Bybit API Error 10004: error sign! origin_string[1753981352405pXXkHX8ryNx4tJw4oQ5000{"category":"linear","symbol":"TRUMPUSDT","side":"Buy","order_type":"Limit","qty":"1.10000000","price":"9.2387","positionIdx":1}]
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 542, in _execute_entry
+    response = await self.bybit_client.create_order(**order_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 307, in create_order
+    return await self._make_request("POST", "/v5/order/create", signed=True, body=kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 254, in _make_request
+    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+bybit_api.BybitAPIError: Bybit API Error 10004: error sign! origin_string[1753981352405pXXkHX8ryNx4tJw4oQ5000{"category":"linear","symbol":"TRUMPUSDT","side":"Buy","order_type":"Limit","qty":"1.10000000","price":"9.2387","positionIdx":1}]
+2025-07-31 12:02:31,604 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected SELL_LIMIT signal at 9.2620 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099947931732716227937204728358712257459'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 12:02:31,605 - PyrmethusBot - WARNING - PSG.py:444 - [33mSignal received too quickly. Skipping entry.[0m
+2025-07-31 12:02:32,663 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:32,663 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2510, ATR: 0.0099[0m
+2025-07-31 12:02:34,624 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:34,624 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2490, ATR: 0.0101[0m
+2025-07-31 12:02:35,863 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:35,864 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2490, ATR: 0.0101[0m
+2025-07-31 12:02:36,823 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:36,823 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2490, ATR: 0.0101[0m
+2025-07-31 12:02:38,218 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9995)[0m
+2025-07-31 12:02:38,219 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 25.44 bps.[0m
+2025-07-31 12:02:38,220 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Downtrend, Skewed Mid Price (after trend): 9.24437550[0m
+2025-07-31 12:02:38,221 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.24437550[0m
+2025-07-31 12:02:38,222 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 12:02:38,223 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.23261453, Qty: 0.0100[0m
+2025-07-31 12:02:38,225 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.25613647, Qty: 0.0100[0m
+2025-07-31 12:02:38,226 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected BUY_LIMIT signal at 9.2326 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099945583587083627596992123634111678129'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 12:02:38,638 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:38,638 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2450, ATR: 0.0104[0m
+2025-07-31 12:02:39,042 - PyrmethusBot - DEBUG - PSG.py:454 - [36mFetched current execution price: 9.2450[0m
+2025-07-31 12:02:39,906 - PyrmethusBot - WARNING - PSG.py:482 - [33mInstrument info missing or invalid minOrderIv for TRUMPUSDT. Using default 10 USDT.[0m
+2025-07-31 12:02:40,621 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:40,622 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2440, ATR: 0.0104[0m
+2025-07-31 12:02:40,735 - PyrmethusBot - INFO - PSG.py:505 - [34mDynamic sizing: Balance=12.05, Volatility Factor=0.001, Target USDT=0.00[0m
+2025-07-31 12:02:40,736 - PyrmethusBot - DEBUG - PSG.py:515 - [34mAdjusted target USDT to minimum order value: 10.00[0m
+2025-07-31 12:02:40,736 - PyrmethusBot - INFO - PSG.py:539 - [33mPlacing BUY_LIMIT order: Qty=1.1000 TRUMPUSDT, Price=9.2326[0m
+2025-07-31 12:02:41,599 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:41,599 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2420, ATR: 0.0106[0m
+2025-07-31 12:02:41,603 - PyrmethusBot - ERROR - bot_logger.py:171 - Exception during order execution for TRUMPUSDT: Bybit API Error 10004: error sign! origin_string[1753981362495pXXkHX8ryNx4tJw4oQ5000{"category":"linear","symbol":"TRUMPUSDT","side":"Buy","order_type":"Limit","qty":"1.10000000","price":"9.2326","positionIdx":1}]
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 542, in _execute_entry
+    response = await self.bybit_client.create_order(**order_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 307, in create_order
+    return await self._make_request("POST", "/v5/order/create", signed=True, body=kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 254, in _make_request
+    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+bybit_api.BybitAPIError: Bybit API Error 10004: error sign! origin_string[1753981362495pXXkHX8ryNx4tJw4oQ5000{"category":"linear","symbol":"TRUMPUSDT","side":"Buy","order_type":"Limit","qty":"1.10000000","price":"9.2326","positionIdx":1}]
+2025-07-31 12:02:41,605 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected SELL_LIMIT signal at 9.2561 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099945583587083627596992123634111678129'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 12:02:41,606 - PyrmethusBot - WARNING - PSG.py:444 - [33mSignal received too quickly. Skipping entry.[0m
+2025-07-31 12:02:44,624 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:44,625 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2400, ATR: 0.0107[0m
+2025-07-31 12:02:45,798 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:45,798 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2380, ATR: 0.0109[0m
+2025-07-31 12:02:46,600 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:46,601 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2380, ATR: 0.0109[0m
+2025-07-31 12:02:47,616 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:47,616 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2370, ATR: 0.0109[0m
+2025-07-31 12:02:48,028 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9994)[0m
+2025-07-31 12:02:48,029 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 25.92 bps.[0m
+2025-07-31 12:02:48,029 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Downtrend, Skewed Mid Price (after trend): 9.23238150[0m
+2025-07-31 12:02:48,029 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.23238150[0m
+2025-07-31 12:02:48,029 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 12:02:48,029 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.22041834, Qty: 0.0100[0m
+2025-07-31 12:02:48,030 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.24434466, Qty: 0.0100[0m
+2025-07-31 12:02:48,030 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected BUY_LIMIT signal at 9.2204 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099940878476287632011543098445481781566'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 12:02:48,837 - PyrmethusBot - DEBUG - PSG.py:454 - [36mFetched current execution price: 9.2370[0m
+2025-07-31 12:02:49,604 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:49,604 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2360, ATR: 0.0110[0m
+2025-07-31 12:02:49,643 - PyrmethusBot - WARNING - PSG.py:482 - [33mInstrument info missing or invalid minOrderIv for TRUMPUSDT. Using default 10 USDT.[0m
+2025-07-31 12:02:50,435 - PyrmethusBot - INFO - PSG.py:505 - [34mDynamic sizing: Balance=12.05, Volatility Factor=0.001, Target USDT=0.00[0m
+2025-07-31 12:02:50,436 - PyrmethusBot - DEBUG - PSG.py:515 - [34mAdjusted target USDT to minimum order value: 10.00[0m
+2025-07-31 12:02:50,436 - PyrmethusBot - INFO - PSG.py:539 - [33mPlacing BUY_LIMIT order: Qty=1.1000 TRUMPUSDT, Price=9.2204[0m
+2025-07-31 12:02:51,275 - PyrmethusBot - ERROR - bot_logger.py:171 - Exception during order execution for TRUMPUSDT: Bybit API Error 10004: error sign! origin_string[1753981372207pXXkHX8ryNx4tJw4oQ5000{"category":"linear","symbol":"TRUMPUSDT","side":"Buy","order_type":"Limit","qty":"1.10000000","price":"9.2204","positionIdx":1}]
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 542, in _execute_entry
+    response = await self.bybit_client.create_order(**order_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 307, in create_order
+    return await self._make_request("POST", "/v5/order/create", signed=True, body=kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 254, in _make_request
+    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+bybit_api.BybitAPIError: Bybit API Error 10004: error sign! origin_string[1753981372207pXXkHX8ryNx4tJw4oQ5000{"category":"linear","symbol":"TRUMPUSDT","side":"Buy","order_type":"Limit","qty":"1.10000000","price":"9.2204","positionIdx":1}]
+2025-07-31 12:02:51,280 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected SELL_LIMIT signal at 9.2443 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099940878476287632011543098445481781566'), 'strategy_id': 'MM_ASK'})[0m
+2025-07-31 12:02:51,280 - PyrmethusBot - WARNING - PSG.py:444 - [33mSignal received too quickly. Skipping entry.[0m
+2025-07-31 12:02:52,799 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:52,800 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2350, ATR: 0.0111[0m
+2025-07-31 12:02:54,752 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:54,752 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2350, ATR: 0.0111[0m
+2025-07-31 12:02:55,610 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:55,610 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2370, ATR: 0.0111[0m
+2025-07-31 12:02:56,600 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:56,600 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2380, ATR: 0.0111[0m
+2025-07-31 12:02:57,735 - PyrmethusBot - DEBUG - marketmakingstrategy.py:104 - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9994)[0m
+2025-07-31 12:02:57,736 - PyrmethusBot - DEBUG - marketmakingstrategy.py:153 - [34mDynamic spread adjusted from 20 to 25.99 bps.[0m
+2025-07-31 12:02:57,738 - PyrmethusBot - DEBUG - marketmakingstrategy.py:168 - [35mTrend: Downtrend, Skewed Mid Price (after trend): 9.23338100[0m
+2025-07-31 12:02:57,739 - PyrmethusBot - DEBUG - marketmakingstrategy.py:180 - [33mSigned Inventory: 0.0000, Inventory Ratio: 0.0000, Inventory Skew Adjustment: 0.00000000, Adjusted Mid Price (after inventory): 9.23338100[0m
+2025-07-31 12:02:57,742 - PyrmethusBot - DEBUG - marketmakingstrategy.py:111 - [33mCalculated hedge size 0.0000 is below min_order_quantity 0.0050. Not hedging.[0m
+2025-07-31 12:02:57,745 - PyrmethusBot - INFO - marketmakingstrategy.py:247 - [32mGenerated BUY LIMIT signal @ 9.22138115, Qty: 0.0100[0m
+2025-07-31 12:02:57,748 - PyrmethusBot - INFO - marketmakingstrategy.py:256 - [32mGenerated SELL LIMIT signal @ 9.24538085, Qty: 0.0100[0m
+2025-07-31 12:02:57,750 - PyrmethusBot - INFO - PSG.py:440 - [35m💡 Detected BUY_LIMIT signal at 9.2214 (Info: {'order_type': 'LIMIT', 'quantity': Decimal('0.0099940112588333932211897760871774048063'), 'strategy_id': 'MM_BID'})[0m
+2025-07-31 12:02:58,593 - PyrmethusBot - DEBUG - PSG.py:198 - Active OBs after management: Bull=0, Bear=0
+2025-07-31 12:02:58,594 - PyrmethusBot - DEBUG - PSG.py:372 - [36mKline updated via WebSocket. Current price: 9.2370, ATR: 0.0111[0m
+2025-07-31 12:02:58,597 - PyrmethusBot - DEBUG - PSG.py:454 - [36mFetched current execution price: 9.2370[0m

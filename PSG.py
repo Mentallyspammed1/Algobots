@@ -486,7 +486,7 @@ class PyrmethusBot:
             log_exception(self.bot_logger, f"Error fetching or parsing instrument info for {SYMBOL}: {e}", e)
             return False
 
-        target_usdt_value = USDT_AMOUNT_PER_TRADE
+        target_usdt_value = Decimal(str(USDT_AMOUNT_PER_TRADE))
         if USE_PERCENTAGE_ORDER_SIZING:
             try:
                 balance_response = await self.bybit_client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
