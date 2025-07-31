@@ -36,7 +36,7 @@ from config import (
 from indicators import (
     calculate_fibonacci_pivot_points, calculate_stochrsi, calculate_atr,
     calculate_sma, calculate_ehlers_fisher_transform, calculate_ehlers_super_smoother,
-    find_pivots, handle_websocket_kline_data
+    find_pivots, handle_websocket_kline_data, calculate_order_book_imbalance
 )
 import importlib
 
@@ -476,13 +476,25 @@ class PyrmethusBot:
             self.bot_logger.error(f"{COLOR_RED}Calculated entry quantity is zero or negative: {calculated_quantity}. Cannot place order.{COLOR_RESET}")
             return False
 
+        # --- Determine Order Type and Side ---
+        order_type = "Market" if "MARKET" in signal_type else "Limit"
+        side = "Buy" if "BUY" in signal_type else "Sell"
+
         order_kwargs = {
             "category": BYBIT_CATEGORY,
             "symbol": SYMBOL,
-            "side": signal_type.capitalize(), # 'Buy' or 'Sell'
-            "order_type": "Market",
+            "side": side,
+            "order_type": order_type,
             "qty": str(calculated_quantity), # Quantity must be a string for API
         }
+
+        if order_type == "Limit":
+            order_kwargs['price'] = f"{signal_price:.4f}"
+
+        if HEDGE_MODE:
+            order_kwargs['positionIdx'] = 1 if side == 'Buy' else 2
+        else:
+            order_kwargs['positionIdx'] = 0
 
         self.bot_logger.info(f"{PYRMETHUS_ORANGE}Attempting to place {signal_type.upper()} order for {calculated_quantity:.4f} {SYMBOL} at market price...{COLOR_RESET}")
         if await self.bybit_client.create_order(**order_kwargs):
