@@ -1,11 +1,14 @@
-# indicators.py
 import pandas as pd
 import logging
 from typing import List, Dict, Any, Tuple
 from decimal import Decimal, getcontext, ROUND_HALF_UP
 import math
+from colorama import init, Fore, Style
 
 from bot_logger import setup_logging
+
+# Initialize colorama for vibrant terminal output
+init()
 
 # Set precision for Decimal
 getcontext().prec = 38
@@ -21,7 +24,7 @@ def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
     Calculates the Average True Range (ATR), a measure of market volatility.
     """
     if not all(col in df.columns for col in ['high', 'low', 'close']):
-        indicators_logger.error("DataFrame must contain 'high', 'low', 'close' columns for ATR.")
+        indicators_logger.error(Fore.RED + "DataFrame must contain 'high', 'low', 'close' columns for ATR." + Style.RESET_ALL)
         return pd.Series(dtype='object')
 
     high = df['high'].apply(Decimal)
@@ -38,17 +41,25 @@ def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
     
     # Using SMA for ATR calculation with Decimals
     atr = tr.rolling(window=length).mean()
+    indicators_logger.debug(Fore.CYAN + f"ATR calculated with length={length}." + Style.RESET_ALL)
     return atr
 
-def calculate_fibonacci_pivot_points(df: pd.DataFrame) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def calculate_fibonacci_pivot_points(df: pd.DataFrame, fib_ratios: List[float] = [0.382, 0.618, 1.000], atr_length: int = 14) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
-    Calculates Fibonacci Pivot Points (Resistance and Support levels) using Decimal.
+    Calculates Fibonacci Pivot Points with customizable ratios and ATR-based adjustments.
+    Returns resistance and support levels as lists of dictionaries.
     """
     resistance_levels = []
     support_levels = []
 
-    if df.empty:
-        indicators_logger.warning("DataFrame is empty for Fibonacci pivot point calculation.")
+    # Validate input DataFrame
+    required_columns = ['high', 'low', 'close']
+    if not all(col in df.columns for col in required_columns):
+        indicators_logger.error(Fore.RED + f"DataFrame missing required columns: {', '.join(required_columns)}." + Style.RESET_ALL)
+        return resistance_levels, support_levels
+
+    if df.empty or len(df) < 2:
+        indicators_logger.warning(Fore.YELLOW + "DataFrame is empty or insufficient for Fibonacci pivot calculation." + Style.RESET_ALL)
         return resistance_levels, support_levels
 
     # Use the last complete candle for calculation
@@ -57,45 +68,38 @@ def calculate_fibonacci_pivot_points(df: pd.DataFrame) -> Tuple[List[Dict[str, A
     low = Decimal(str(last_candle['low']))
     close = Decimal(str(last_candle['close']))
 
-    indicators_logger.debug(f"Input for Fibonacci: High={high:.8f}, Low={low:.8f}, Close={close:.8f}")
+    indicators_logger.debug(Fore.BLUE + f"Summoning Fibonacci inputs: High={high:.8f}, Low={low:.8f}, Close={close:.8f}" + Style.RESET_ALL)
 
     # Calculate Pivot Point (PP)
     pp = (high + low + close) / Decimal('3')
 
     # Calculate Range
     price_range = high - low
-    indicators_logger.debug(f"Calculated PP: {pp:.8f}, Price Range: {price_range:.8f}")
 
-    # Calculate Resistance Levels
-    r1_unrounded = pp + (price_range * Decimal('0.382'))
-    r2_unrounded = pp + (price_range * Decimal('0.618'))
-    r3_unrounded = pp + (price_range * Decimal('1.000'))
+    # Calculate ATR for volatility adjustment
+    atr = calculate_atr(df, atr_length).iloc[-1] if atr_length > 0 else Decimal('0')
+    atr = Decimal(str(atr)) if pd.notna(atr) else Decimal('0')
+    volatility_adjustment = atr * Decimal('0.5')  # Adjust levels by half the ATR
+    indicators_logger.debug(Fore.CYAN + f"Pivot Point: {pp:.8f}, Range: {price_range:.8f}, ATR Adjustment: {volatility_adjustment:.8f}" + Style.RESET_ALL)
 
-    # Calculate Support Levels
-    s1_unrounded = pp - (price_range * Decimal('0.382'))
-    s2_unrounded = pp - (price_range * Decimal('0.618'))
-    s3_unrounded = pp - (price_range * Decimal('1.000'))
+    # Calculate and store levels
+    for i, ratio in enumerate(fib_ratios, 1):
+        fib_ratio = Decimal(str(ratio))
+        # Resistance level with volatility adjustment
+        r_unrounded = pp + (price_range * fib_ratio) + volatility_adjustment
+        r = r_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        resistance_levels.append({'price': r, 'type': f'R{i}', 'ratio': float(fib_ratio)})
 
-    indicators_logger.debug(f"Unrounded R1: {r1_unrounded:.8f}, R2: {r2_unrounded:.8f}, R3: {r3_unrounded:.8f}")
-    indicators_logger.debug(f"Unrounded S1: {s1_unrounded:.8f}, S2: {s2_unrounded:.8f}, S3: {s3_unrounded:.8f}")
+        # Support level with volatility adjustment
+        s_unrounded = pp - (price_range * fib_ratio) - volatility_adjustment
+        s = s_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        support_levels.append({'price': s, 'type': f'S{i}', 'ratio': float(fib_ratio)})
 
-    # Round to 2 decimal places for more meaningful values on low-priced assets
-    r1 = r1_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    r2 = r2_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    r3 = r3_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    s1 = s1_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    s2 = s2_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    s3 = s3_unrounded.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        indicators_logger.debug(Fore.YELLOW + f"Level R{i}: {r:.2f}, S{i}: {s:.2f} (Ratio: {fib_ratio})" + Style.RESET_ALL)
 
-    resistance_levels.append({'price': r1, 'type': 'R1'})
-    resistance_levels.append({'price': r2, 'type': 'R2'})
-    resistance_levels.append({'price': r3, 'type': 'R3'})
-
-    support_levels.append({'price': s1, 'type': 'S1'})
-    support_levels.append({'price': s2, 'type': 'S2'})
-    support_levels.append({'price': s3, 'type': 'S3'})
-
-    indicators_logger.debug(f"Fibonacci Pivot Points calculated: PP={pp:.2f}, R1={r1:.2f}, S1={s1:.2f}")
+    # Include Pivot Point in the output for reference
+    resistance_levels.append({'price': pp.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP), 'type': 'PP', 'ratio': 0.0})
+    indicators_logger.info(Fore.GREEN + f"Fibonacci Pivot Points conjured: PP={pp:.2f}" + Style.RESET_ALL)
     return resistance_levels, support_levels
 
 def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: int = 14, stoch_d_period: int = 3) -> pd.DataFrame:
@@ -103,7 +107,7 @@ def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: i
     Calculates the Stochastic RSI (StochRSI) for a given DataFrame using Decimal.
     """
     if 'close' not in df.columns:
-        indicators_logger.error("DataFrame must contain a 'close' column for StochRSI calculation.")
+        indicators_logger.error(Fore.RED + "DataFrame must contain a 'close' column for StochRSI calculation." + Style.RESET_ALL)
         return df
 
     # Convert to Decimal
@@ -119,7 +123,6 @@ def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: i
 
     # Ensure avg_loss does not contain zero before division
     rs = avg_gain / avg_loss.replace(Decimal('0'), Decimal('1e-38'))
-    # Convert the pandas Series to Decimal before performing arithmetic with a Decimal scalar
     df['rsi'] = rs.apply(lambda x: Decimal('100') - (Decimal('100') / (Decimal('1') + Decimal(str(x)))))
 
     # Calculate StochRSI
@@ -140,7 +143,7 @@ def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: i
     df['stoch_d'] = df['stoch_k'].rolling(window=stoch_d_period).mean()
     df['stoch_d'] = df['stoch_d'].fillna(Decimal('0'))
 
-    indicators_logger.debug(f"StochRSI calculated with rsi_period={rsi_period}, stoch_k_period={stoch_k_period}, stoch_d_period={stoch_d_period}.")
+    indicators_logger.debug(Fore.CYAN + f"StochRSI calculated with rsi_period={rsi_period}, stoch_k_period={stoch_k_period}, stoch_d_period={stoch_d_period}." + Style.RESET_ALL)
     return df
 
 def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
@@ -148,12 +151,13 @@ def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
     Calculates the Simple Moving Average (SMA) for the 'close' prices.
     """
     if 'close' not in df.columns:
-        indicators_logger.error("DataFrame must contain a 'close' column for SMA calculation.")
+        indicators_logger.error(Fore.RED + "DataFrame must contain a 'close' column for SMA calculation." + Style.RESET_ALL)
         return pd.Series(dtype='object')
     
     # Ensure 'close' column is Decimal type
     close_prices = df['close'].apply(Decimal)
     sma = close_prices.rolling(window=length).mean()
+    indicators_logger.debug(Fore.CYAN + f"SMA calculated with length={length}." + Style.RESET_ALL)
     return sma
 
 def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_length: int = 1) -> Tuple[pd.Series, pd.Series]:
@@ -161,7 +165,7 @@ def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_
     Calculates the Ehlers Fisher Transform and its signal line.
     """
     if 'high' not in df.columns or 'low' not in df.columns:
-        indicators_logger.error("DataFrame must contain 'high' and 'low' columns for Fisher Transform.")
+        indicators_logger.error(Fore.RED + "DataFrame must contain 'high' and 'low' columns for Fisher Transform." + Style.RESET_ALL)
         return pd.Series(dtype='object'), pd.Series(dtype='object')
 
     high = df['high'].apply(Decimal)
@@ -171,13 +175,11 @@ def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_
     median_price = (high + low) / Decimal('2')
 
     # Normalize the price to a range of -1 to +1
-    # This is a simplified approach; Ehlers' original might involve more complex normalization
     min_val = median_price.rolling(window=length).min().apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
     max_val = median_price.rolling(window=length).max().apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
 
     # Avoid division by zero and handle NaN propagation
     range_val = max_val - min_val
-    # Replace 0 with a small number only if min_val and max_val are not NaN
     range_val = range_val.replace(Decimal('0'), Decimal('1e-38'))
 
     x = (median_price - min_val) / range_val
@@ -187,12 +189,12 @@ def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_
     x = x.apply(lambda val: Decimal('NaN') if val.is_nan() else (Decimal('0.999') if val >= Decimal('1') else (Decimal('-0.999') if val <= Decimal('-1') else val)))
 
     # Fisher Transform formula
-    # Using Decimal for calculations, but math.log requires float, so convert back and forth carefully
     fisher_transform = x.apply(lambda val: Decimal('NaN') if val.is_nan() else Decimal('0.5') * Decimal(str(math.log((1 + float(val)) / (1 - float(val))))))
     
     # Calculate Fisher Signal
     fisher_signal = fisher_transform.rolling(window=signal_length).mean()
 
+    indicators_logger.debug(Fore.CYAN + f"Fisher Transform calculated with length={length}, signal_length={signal_length}." + Style.RESET_ALL)
     return fisher_transform, fisher_signal
 
 def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Series:
@@ -200,7 +202,7 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
     Calculates the Ehlers 2-pole Super Smoother Filter.
     """
     if 'close' not in df.columns:
-        indicators_logger.error("DataFrame must contain a 'close' column for Super Smoother.")
+        indicators_logger.error(Fore.RED + "DataFrame must contain a 'close' column for Super Smoother." + Style.RESET_ALL)
         return pd.Series(dtype='object')
 
     close_prices = df['close'].apply(Decimal)
@@ -209,7 +211,6 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
     float_length = float(length)
 
     # Calculate coefficients
-    # Ensure pi and sqrt(2) are Decimal for intermediate calculations if needed, but math functions take float
     a1 = Decimal(str(math.exp(-math.sqrt(2) * math.pi / float_length)))
     b1 = Decimal(str(2 * a1 * Decimal(str(math.cos(math.sqrt(2) * math.pi / float_length)))))
     c2 = b1
@@ -232,33 +233,27 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
             filt = c1 * (current_input + prev_input) / Decimal('2') + c2 * filtered_values.iloc[i-1] + c3 * filtered_values.iloc[i-2]
             filtered_values.iloc[i] = filt
     
+    indicators_logger.debug(Fore.CYAN + f"Super Smoother calculated with length={length}." + Style.RESET_ALL)
     return filtered_values
 
 def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> Tuple[pd.Series, pd.Series]:
     """
     Identifies Pivot Highs and Lows based on lookback periods.
-    A pivot high is a candle whose high is greater than or equal to the highs of 'left' candles to its left
-    and 'right' candles to its right.
-    A pivot low is a candle whose low is less than or equal to the lows of 'left' candles to its left
-    and 'right' candles to its right.
     """
     if not isinstance(df.index, pd.DatetimeIndex):
-        indicators_logger.error("DataFrame index must be a DatetimeIndex for pivot calculation.")
+        indicators_logger.error(Fore.RED + "DataFrame index must be a DatetimeIndex for pivot calculation." + Style.RESET_ALL)
         return pd.Series(dtype='bool'), pd.Series(dtype='bool')
 
     if 'high' not in df.columns or 'low' not in df.columns:
-        indicators_logger.error("DataFrame must contain 'high' and 'low' columns for pivot identification.")
+        indicators_logger.error(Fore.RED + "DataFrame must contain 'high' and 'low' columns for pivot identification." + Style.RESET_ALL)
         return pd.Series(dtype='bool'), pd.Series(dtype='bool')
 
-    # Ensure high and low columns are Decimal for accurate comparison
     high_prices = df['high'].apply(Decimal)
     low_prices = df['low'].apply(Decimal)
 
     pivot_highs = pd.Series(False, index=df.index)
     pivot_lows = pd.Series(False, index=df.index)
 
-    # Iterate through the DataFrame to find pivots
-    # Start from 'left' index and end at 'len(df) - right'
     for i in range(left, len(df) - right):
         # Check for Pivot High
         is_pivot_high = True
@@ -288,19 +283,18 @@ def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> Tup
                     break
         pivot_lows.iloc[i] = is_pivot_low
 
-    indicators_logger.debug(f"Pivots identified with left={left}, right={right}, use_wicks={use_wicks}.")
+    indicators_logger.debug(Fore.CYAN + f"Pivots identified with left={left}, right={right}, use_wicks={use_wicks}." + Style.RESET_ALL)
     return pivot_highs, pivot_lows
 
 def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd.DataFrame:
     """
     Processes a single kline data message from a WebSocket stream.
-    It updates the last row if the candle is not confirmed, or appends a new row if it is.
     """
     if not isinstance(message, dict) or 'data' not in message or not message['data']:
-        indicators_logger.error(f"Invalid kline WebSocket message received: {message}")
+        indicators_logger.error(Fore.RED + f"Invalid kline WebSocket message received: {message}" + Style.RESET_ALL)
         return df
 
-    kline_data = message['data'][0] # Extract the kline object from the 'data' list
+    kline_data = message['data'][0]
 
     # Extract and format the new kline data
     new_kline = {
@@ -316,16 +310,60 @@ def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd
     new_kline_df = pd.DataFrame([new_kline]).set_index('timestamp')
 
     if df.empty:
-        indicators_logger.info("DataFrame is empty, initializing with new kline data.")
+        indicators_logger.info(Fore.GREEN + "DataFrame is empty, initializing with new kline data." + Style.RESET_ALL)
         return new_kline_df
 
     # If the new kline's timestamp matches the last one in the DataFrame, update it
     if new_kline_df.index[0] == df.index[-1]:
         df.iloc[-1] = new_kline_df.iloc[0]
-        indicators_logger.debug(f"Updated last kline at {new_kline_df.index[0]}")
+        indicators_logger.debug(Fore.CYAN + f"Updated last kline at {new_kline_df.index[0]}" + Style.RESET_ALL)
     # Otherwise, append it as a new row
     else:
         df = pd.concat([df, new_kline_df])
-        indicators_logger.debug(f"Appended new kline at {new_kline_df.index[0]}")
+        indicators_logger.debug(Fore.CYAN + f"Appended new kline at {new_kline_df.index[0]}" + Style.RESET_ALL)
 
     return df
+
+def calculate_vwap(df: pd.DataFrame) -> pd.Series:
+    """
+    Calculates the Volume Weighted Average Price (VWAP).
+    """
+    if not all(col in df.columns for col in ['high', 'low', 'close', 'volume']):
+        indicators_logger.error("DataFrame must contain 'high', 'low', 'close', and 'volume' columns for VWAP.")
+        return pd.Series(dtype='object')
+
+    typical_price = (df['high'].apply(Decimal) + df['low'].apply(Decimal) + df['close'].apply(Decimal)) / Decimal('3')
+    volume = df['volume'].apply(Decimal)
+    
+    # Calculate cumulative typical price * volume and cumulative volume
+    cumulative_tpv = (typical_price * volume).cumsum()
+    cumulative_volume = volume.cumsum()
+    
+    # Avoid division by zero
+    vwap = cumulative_tpv / cumulative_volume.replace(Decimal('0'), Decimal('1e-38'))
+    
+    indicators_logger.debug("VWAP calculated.")
+    return vwap
+
+def calculate_order_book_imbalance(order_book: Dict[str, List[List[str]]]) -> Tuple[Decimal, Decimal]:
+    """
+    Calculates the order book imbalance from the raw order book data.
+    Returns the imbalance ratio and the total volume.
+    """
+    bids = order_book.get('b', [])
+    asks = order_book.get('a', [])
+
+    if not bids or not asks:
+        return Decimal('0'), Decimal('0')
+
+    bid_volume = sum(Decimal(price) * Decimal(qty) for price, qty in bids)
+    ask_volume = sum(Decimal(price) * Decimal(qty) for price, qty in asks)
+
+    total_volume = bid_volume + ask_volume
+
+    if total_volume == 0:
+        return Decimal('0'), total_volume
+
+    imbalance = (bid_volume - ask_volume) / total_volume
+    indicators_logger.debug(f"Order book imbalance calculated: {imbalance:.4f}")
+    return imbalance, total_volume

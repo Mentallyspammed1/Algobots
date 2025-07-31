@@ -15,12 +15,25 @@ def display_market_info(
     symbol: str,
     pivot_resistance_levels: Dict[str, Decimal],
     pivot_support_levels: Dict[str, Decimal],
+    order_book_imbalance: Decimal,
     bot_logger: Any # Assuming bot_logger is passed for warnings
 ):
     """Prints current market information to the console."""
-    if klines_df is None:
-        bot_logger.warning("No klines_df available to display market info.")
+    if klines_df is None or len(klines_df) < 2:
+        bot_logger.warning("No klines_df available or not enough data to display market info.")
+        # Still print the current price if available
+        if current_price > 0:
+             print(f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {COLOR_CYAN}{current_price:.4f}{COLOR_RESET}")
         return
+
+    # Determine price color
+    previous_close = klines_df['close'].iloc[-2]
+    if current_price > previous_close:
+        price_color = PYRMETHUS_GREEN
+    elif current_price < previous_close:
+        price_color = COLOR_RED
+    else:
+        price_color = COLOR_CYAN
 
     latest_stoch_k = klines_df['stoch_k'].iloc[-1] if 'stoch_k' in klines_df.columns and not pd.isna(klines_df['stoch_k'].iloc[-1]) else "N/A"
     latest_stoch_d = klines_df['stoch_d'].iloc[-1] if 'stoch_d' in klines_df.columns and not pd.isna(klines_df['stoch_d'].iloc[-1]) else "N/A"
@@ -30,7 +43,7 @@ def display_market_info(
     latest_ehlers_fisher_signal = klines_df['ehlers_fisher_signal'].iloc[-1] if 'ehlers_fisher_signal' in klines_df.columns and not pd.isna(klines_df['ehlers_fisher_signal'].iloc[-1]) else "N/A"
     latest_ehlers_supersmoother = klines_df['ehlers_supersmoother'].iloc[-1] if 'ehlers_supersmoother' in klines_df.columns and not pd.isna(klines_df['ehlers_supersmoother'].iloc[-1]) else "N/A"
 
-    print(f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {current_price:.4f} @ {klines_df.index[-1].strftime('%Y-%m-%d %H:%M:%S')}{COLOR_RESET}")
+    print(f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {price_color}{current_price:.4f}{COLOR_RESET} @ {klines_df.index[-1].strftime('%Y-%m-%d %H:%M:%S')}")
     stoch_k_str = f"{latest_stoch_k:.2f}" if isinstance(latest_stoch_k, Decimal) else str(latest_stoch_k)
     stoch_d_str = f"{latest_stoch_d:.2f}" if isinstance(latest_stoch_d, Decimal) else str(latest_stoch_d)
     atr_str = f"{latest_atr:.4f}" if isinstance(latest_atr, Decimal) else str(latest_atr)
@@ -44,6 +57,7 @@ def display_market_info(
     print(f"{PYRMETHUS_BLUE}📊 SMA: {sma_str}{COLOR_RESET}")
     print(f"{PYRMETHUS_BLUE}🎣 Ehlers Fisher: {ehlers_fisher_str}, Signal: {ehlers_fisher_signal_str}{COLOR_RESET}")
     print(f"{PYRMETHUS_BLUE}✨ Ehlers Super Smoother: {ehlers_supersmoother_str}{COLOR_RESET}")
+    print(f"{PYRMETHUS_BLUE}⚖️ Order Book Imbalance: {order_book_imbalance:.4f}{COLOR_RESET}")
 
     if pivot_resistance_levels:
         print(f"{COLOR_CYAN}Resistance Levels Detected:{COLOR_RESET}")

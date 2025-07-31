@@ -205,6 +205,10 @@ class BybitContractAPI:
     async def get_positions(self, **kwargs) -> Dict[str, Any]:
         return await self._make_request("GET", "/v5/position/list", kwargs)
 
+    async def get_orderbook(self, **kwargs) -> Dict[str, Any]:
+        """Fetches order book data."""
+        return await self._make_request("GET", "/v5/market/orderbook", kwargs, signed=False)
+
     async def create_order(self, **kwargs) -> Dict[str, Any]:
         return await self._make_request("POST", "/v5/order/create", kwargs)
 

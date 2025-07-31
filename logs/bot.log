@@ -1,0 +1,61 @@
+2025-07-30 22:27:31,328 - PyrmethusBot - INFO - [36mSummoning Enhanced MarketMakingStrategy...[0m
+2025-07-30 22:27:31,328 - PyrmethusBot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 22:27:31,586 - PyrmethusBot - INFO - BybitContractAPI initialized.
+2025-07-30 22:27:31,587 - PyrmethusBot - INFO - [38;5;208mFetching initial kline data for TRUMPUSDT (1)...[0m
+2025-07-30 22:27:33,725 - PyrmethusBot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.4000[0m
+2025-07-30 22:27:33,726 - PyrmethusBot - INFO - [38;5;208mSynchronizing initial position state via REST API...[0m
+2025-07-30 22:27:34,569 - PyrmethusBot - DEBUG - Received non-position or empty WS update: {'success': True, 'ret_msg': '', 'op': 'subscribe', 'conn_id': 'd15797e8dkq88i1a06o0-1c0ka4'}
+2025-07-30 22:27:34,598 - PyrmethusBot - DEBUG - [38;5;242mPosition state reset.[0m
+2025-07-30 22:27:34,598 - PyrmethusBot - INFO - [38;5;242m✅ No open position for TRUMPUSDT (WS). Seeking new trade opportunities...[0m
+2025-07-30 22:27:34,598 - PyrmethusBot - INFO - [38;5;118mInitial position synchronization complete.[0m
+2025-07-30 22:27:34,600 - PyrmethusBot - ERROR - Critical error in main loop: name 'order_book_imbalance' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 659, in run
+    display_market_info(self.klines_df, self.current_price, SYMBOL, pivot_resistance_levels, pivot_support_levels, self.bot_logger)
+  File "/data/data/com.termux/files/home/Algobots/bot_ui.py", line 59, in display_market_info
+    print(f"{PYRMETHUS_BLUE}⚖️ Order Book Imbalance: {order_book_imbalance:.4f}{COLOR_RESET}")
+                                                      ^^^^^^^^^^^^^^^^^^^^
+NameError: name 'order_book_imbalance' is not defined
+2025-07-30 22:27:34,623 - PyrmethusBot - INFO - [33m🔄 Attempting to recover and restart main loop after 10 seconds...[0m
+2025-07-30 22:27:44,634 - PyrmethusBot - INFO - [33mInitiating shutdown: Cancelling listener tasks...[0m
+2025-07-30 22:27:44,635 - PyrmethusBot - INFO - [33mAll listener tasks cancelled and awaited. Bot shutdown complete.[0m
+2025-07-30 22:30:26,386 - PyrmethusBot - INFO - [36mSummoning Enhanced MarketMakingStrategy...[0m
+2025-07-30 22:30:26,388 - PyrmethusBot - INFO - Starting Pyrmethus's Ultra Scalper Bot.
+2025-07-30 22:30:26,617 - PyrmethusBot - INFO - BybitContractAPI initialized.
+2025-07-30 22:30:26,618 - PyrmethusBot - INFO - [38;5;208mFetching initial kline data for TRUMPUSDT (1)...[0m
+2025-07-30 22:30:28,708 - PyrmethusBot - INFO - [38;5;118mInitial kline data fetched and processed. Current price: 9.4010[0m
+2025-07-30 22:30:28,709 - PyrmethusBot - INFO - [38;5;208mSynchronizing initial position state via REST API...[0m
+2025-07-30 22:30:29,547 - PyrmethusBot - DEBUG - Received non-position or empty WS update: {'success': True, 'ret_msg': '', 'op': 'subscribe', 'conn_id': 'd1579n8f2tdr9af30pdg-1c0i1q'}
+2025-07-30 22:30:29,568 - PyrmethusBot - DEBUG - [38;5;242mPosition state reset.[0m
+2025-07-30 22:30:29,569 - PyrmethusBot - INFO - [38;5;242m✅ No open position for TRUMPUSDT (WS). Seeking new trade opportunities...[0m
+2025-07-30 22:30:29,569 - PyrmethusBot - INFO - [38;5;118mInitial position synchronization complete.[0m
+2025-07-30 22:30:30,426 - PyrmethusBot - ERROR - Error fetching or calculating order book imbalance: name 'calculate_order_book_imbalance' is not defined
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 663, in run
+    order_book_imbalance, _ = calculate_order_book_imbalance(order_book_response['result'])
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'calculate_order_book_imbalance' is not defined
+2025-07-30 22:30:30,456 - PyrmethusBot - DEBUG - [32mVolatility-Adjusted Size: 0.0100 (Base: 0.01, Multiplier: 0.9999)[0m
+2025-07-30 22:30:30,456 - PyrmethusBot - DEBUG - [34mDynamic spread adjusted to 21.22 bps.[0m
+2025-07-30 22:30:30,456 - PyrmethusBot - DEBUG - [35mTrend: Downtrend, Skewed Mid Price: 9.39629950[0m
+2025-07-30 22:30:30,457 - PyrmethusBot - DEBUG - [33mInventory Skew: 0.00000000, Adjusted Mid Price: 9.39629950[0m
+2025-07-30 22:30:30,457 - PyrmethusBot - INFO - [32mGenerated 2 signals: [('BUY_LIMIT', Decimal('9.3863320576428571427107875000000000000'), Timestamp('2025-07-31 03:30:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099987844716250094960039883283927483178'), 'strategy_id': 'MM_BID'}), ('SELL_LIMIT', Decimal('9.4062669423571428572892125000000000005'), Timestamp('2025-07-31 03:30:00+0000', tz='UTC'), {'order_type': 'LIMIT', 'quantity': Decimal('0.0099987844716250094960039883283927483178'), 'strategy_id': 'MM_ASK'})][0m
+2025-07-30 22:30:30,457 - PyrmethusBot - INFO - [38;5;141m💡 Detected BUY_LIMIT signal at 9.3863 (Info: N/A)[0m
+2025-07-30 22:30:31,336 - PyrmethusBot - INFO - [38;5;208mAttempting to place BUY_LIMIT order for 0.5000 TRUMPUSDT at market price...[0m
+2025-07-30 22:30:32,189 - PyrmethusBot - ERROR - Critical error in main loop: Bybit API Error 10001: Side invalid
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 682, in run
+    if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/PSG.py", line 488, in _execute_entry
+    if await self.bybit_client.create_order(**order_kwargs):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 213, in create_order
+    return await self._make_request("POST", "/v5/order/create", kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/bybit_api.py", line 172, in _make_request
+    raise BybitAPIError(json_response.get("retCode"), json_response.get("retMsg", "Unknown error"), json_response)
+bybit_api.BybitAPIError: Bybit API Error 10001: Side invalid
+2025-07-30 22:30:32,199 - PyrmethusBot - INFO - [33m🔄 Attempting to recover and restart main loop after 10 seconds...[0m
+2025-07-30 22:30:42,210 - PyrmethusBot - INFO - [33mInitiating shutdown: Cancelling listener tasks...[0m
+2025-07-30 22:30:42,211 - PyrmethusBot - INFO - [33mAll listener tasks cancelled and awaited. Bot shutdown complete.[0m

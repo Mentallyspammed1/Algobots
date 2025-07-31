@@ -19,7 +19,7 @@ USDT_AMOUNT_PER_TRADE = 5.0 # Desired USDT amount to trade per order (e.g., 10 U
                              # IMPORTANT: Adjust this based on your capital and risk tolerance.
 
 # --- Strategy Selection ---
-STRATEGY_NAME = "SMA_Crossover_Strategy" # Options: "StochRSI_Fib_OB_Strategy", "SMA_Crossover_Strategy", "DUAL_SUPERTREND", "STOCHRSI_MOMENTUM", "EHLERS_FISHER", "EHLERS_MA_CROSS"
+STRATEGY_NAME = "MarketMakingStrategy" # Options: "StochRSI_Fib_OB_Strategy", "SMA_Crossover_Strategy", "DUAL_SUPERTREND", "STOCHRSI_MOMENTUM", "EHLERS_FISHER", "EHLERS_MA_CROSS"
 
 # --- Strategy Parameters (Dual Supertrend) ---
 ST_ATR_LENGTH = 7

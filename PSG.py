@@ -348,13 +348,19 @@ class PyrmethusBot:
         # Only set if a valid price is calculated for either TP or SL
         if take_profit_price or stop_loss_price:
             try:
-                await self.bybit_client.set_trading_stop(
-                    category=BYBIT_CATEGORY,
-                    symbol=SYMBOL,
-                    take_profit=f"{take_profit_price:.4f}" if take_profit_price else None,
-                    stop_loss=f"{stop_loss_price:.4f}" if stop_loss_price else None,
-                    positionIdx=0 # For unified margin / inverse perpetual
-                )
+                tp_sl_kwargs = {
+                    "category": BYBIT_CATEGORY,
+                    "symbol": SYMBOL,
+                    "take_profit": f"{take_profit_price:.4f}" if take_profit_price else None,
+                    "stop_loss": f"{stop_loss_price:.4f}" if stop_loss_price else None,
+                }
+                if HEDGE_MODE:
+                    # positionIdx is 1 for long positions, 2 for short positions
+                    tp_sl_kwargs['positionIdx'] = 1 if self.inventory > 0 else 2
+                else:
+                    tp_sl_kwargs['positionIdx'] = 0
+
+                await self.bybit_client.set_trading_stop(**tp_sl_kwargs)
                 self.bot_logger.info(f"{PYRMETHUS_GREEN}TP/SL orders submitted for {SYMBOL}.{COLOR_RESET}")
             except Exception as e:
                 log_exception(self.bot_logger, f"Failed to set TP/SL for {SYMBOL}: {e}", e)
@@ -649,8 +655,17 @@ class PyrmethusBot:
                         except Exception as pivot_e:
                             log_exception(self.bot_logger, f"Error during Fibonacci Pivot calculation: {pivot_e}", pivot_e)
                     
+                    # --- Fetch Order Book and Calculate Imbalance ---
+                    order_book_imbalance = Decimal('0')
+                    try:
+                        order_book_response = await self.bybit_client.get_orderbook(category=BYBIT_CATEGORY, symbol=SYMBOL)
+                        if order_book_response and order_book_response.get('result'):
+                            order_book_imbalance, _ = calculate_order_book_imbalance(order_book_response['result'])
+                    except Exception as ob_e:
+                        log_exception(self.bot_logger, f"Error fetching or calculating order book imbalance: {ob_e}", ob_e)
+
                     # Display current market information (from bot_ui)
-                    display_market_info(self.klines_df, self.current_price, SYMBOL, pivot_resistance_levels, pivot_support_levels, self.bot_logger)
+                    display_market_info(self.klines_df, self.current_price, SYMBOL, pivot_resistance_levels, pivot_support_levels, order_book_imbalance, self.bot_logger)
 
                     if not self.has_open_position:
                         signals = self.strategy.generate_signals(self.klines_df, pivot_resistance_levels, pivot_support_levels,
