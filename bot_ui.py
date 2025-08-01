@@ -57,7 +57,8 @@ def display_market_info(
     pivot_resistance_levels: Dict[str, Decimal],
     pivot_support_levels: Dict[str, Decimal],
     bot_logger: Any, # Assuming bot_logger is passed for warnings
-    order_book_imbalance: Optional[Decimal] = None
+    order_book_imbalance: Optional[Decimal] = None,
+    last_signal: Optional[Dict[str, Any]] = None # New parameter for last signal
 ):
     """
     Prints current market information to the console with enhanced formatting and clarity.
@@ -65,6 +66,7 @@ def display_market_info(
     - Uses a helper function for consistent indicator formatting.
     - Sorts and formats pivot levels for better readability.
     - Ensures consistent price formatting and handles potential data issues gracefully.
+    - Displays the last generated trading signal.
     """
     lines = []
     try:
@@ -100,15 +102,15 @@ def display_market_info(
         lines.append(f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {price_color}{current_price:.4f}{COLOR_RESET} @ {timestamp_str}")
         
         # indicators
+        lines.append(f"{COLOR_CYAN}--- Indicators ---{COLOR_RESET}")
         indicators_to_display = [
             ("StochRSI K",  "stoch_k",                2, "📈"),
             ("StochRSI D",  "stoch_d",                2, ""),
             ("ATR",         "atr",                    4, "🌊"),
             ("SMA",         "sma",                    4, "📊"),
             ("Fisher",      "ehlers_fisher",          4, "🎣"),
-            ("Fisher Sig",  "ehlers_fisher_signal",   4, ""),
+            ("Fisher Sig",  "ehlers_signal",          4, ""),
             ("Supersmth",   "ehlers_supersmoother",   4, "✨"),
-            ("EhlersFish",  "ehlers_fisher_strategy", 4, "🐟"),
             ("Supertrend",  "supertrend",             4, "📈"),
             ("SupertrendDir", "supertrend_direction", 0, "🧭"),
             ("Imbalance",   None,                     4, "⚖️"), # None for column as it's a direct value
@@ -134,6 +136,19 @@ def display_market_info(
                 label = "R" if is_res else "S"
                 price_str = _format_indicator(price, precision=4)
                 lines.append(f"  {colr}{label}{COLOR_RESET}: {price_str} ({lvl})")
+
+        # Last Signal Display
+        if last_signal:
+            lines.append(f"{COLOR_CYAN}--- Last Signal ---{COLOR_RESET}")
+            signal_type = last_signal.get("type", "N/A")
+            signal_price = _format_indicator(last_signal.get("price"), precision=4)
+            signal_info = last_signal.get("info", {})
+            
+            signal_color = PYRMETHUS_GREEN if "BUY" in signal_type.upper() else COLOR_RED
+            lines.append(f"{signal_color}💡 {signal_type.upper()} @ {signal_price}{COLOR_RESET}")
+            for key, value in signal_info.items():
+                if key not in ["stop_loss_percentage", "take_profit_percentage"]:
+                    lines.append(f"  {PYRMETHUS_GREY}{key.replace('_', ' ').title()}: {value}{COLOR_RESET}")
 
     except Exception as e:
         bot_logger.error(f"Error displaying market info: {e}")

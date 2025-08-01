@@ -39,8 +39,8 @@ def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
     # Use a custom apply for max because pandas max() can be tricky with Decimals
     tr = tr_df[['h_l', 'h_pc', 'l_pc']].apply(lambda row: max(row.dropna()), axis=1)
     
-    # Using SMA for ATR calculation with Decimals
-    atr = tr.rolling(window=length).mean().apply(Decimal)
+    # Using EMA for ATR calculation for smoother, more stable results
+    atr = tr.ewm(alpha=1/length, adjust=False).mean().fillna(Decimal('0')).apply(Decimal)
     indicators_logger.debug(Fore.CYAN + f"ATR calculated with length={length}." + Style.RESET_ALL)
     return atr
 
@@ -111,7 +111,12 @@ def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: i
     """
     if 'close' not in df.columns:
         indicators_logger.error(Fore.RED + "DataFrame must contain a 'close' column for StochRSI calculation." + Style.RESET_ALL)
-        return df
+        df_copy = df.copy()
+        df_copy['rsi'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
+        df_copy['stoch_rsi'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
+        df_copy['stoch_k'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
+        df_copy['stoch_d'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
+        return df_copy
 
     # Convert to Decimal
     df['close'] = df['close'].apply(lambda x: Decimal(str(x)))
@@ -159,43 +164,43 @@ def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
     
     # Ensure 'close' column is Decimal type
     close_prices = df['close'].apply(Decimal)
-    sma = close_prices.rolling(window=length).mean()
+    sma = close_prices.rolling(window=length).mean().apply(Decimal)
     indicators_logger.debug(Fore.CYAN + f"SMA calculated with length={length}." + Style.RESET_ALL)
     return sma
 
 def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_length: int = 1) -> Tuple[pd.Series, pd.Series]:
     """
-    Calculates the Ehlers Fisher Transform and its signal line.
+    Calculates the Ehlers Fisher Transform and its signal line using Decimal precision.
     """
     if 'high' not in df.columns or 'low' not in df.columns:
         indicators_logger.error(Fore.RED + "DataFrame must contain 'high' and 'low' columns for Fisher Transform." + Style.RESET_ALL)
         return pd.Series(dtype='object'), pd.Series(dtype='object')
 
-    high = df['high'].apply(Decimal)
-    low = df['low'].apply(Decimal)
+    high = df['high'].apply(lambda x: Decimal(str(x)))
+    low = df['low'].apply(lambda x: Decimal(str(x)))
 
     # Calculate the median price
     median_price = (high + low) / Decimal('2')
 
     # Normalize the price to a range of -1 to +1
-    min_val = median_price.rolling(window=length).min().apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
-    max_val = median_price.rolling(window=length).max().apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
+    min_val = median_price.rolling(window=length).min().apply(Decimal)
+    max_val = median_price.rolling(window=length).max().apply(Decimal)
 
     # Avoid division by zero and handle NaN propagation
     range_val = max_val - min_val
     range_val = range_val.replace(Decimal('0'), Decimal('1e-38'))
 
     x = (median_price - min_val) / range_val
-    x = x.apply(lambda val: Decimal('2') * (val - Decimal('0.5')) if not val.is_nan() else Decimal('NaN'))
+    x = x.apply(lambda val: Decimal('2') * (val - Decimal('0.5')) if pd.notna(val) else Decimal('NaN'))
 
-    # Ensure x is within (-0.999, 0.999) to avoid issues with log
-    x = x.apply(lambda val: Decimal('NaN') if val.is_nan() else (Decimal('0.999') if val >= Decimal('1') else (Decimal('-0.999') if val <= Decimal('-1') else val)))
+    # Ensure x is within (-1, 1) to avoid issues with ln()
+    x = x.apply(lambda val: Decimal('NaN') if pd.isna(val) else (Decimal('0.999999999999999999999999999') if val >= Decimal('1') else (Decimal('-0.999999999999999999999999999') if val <= Decimal('-1') else val)))
 
-    # Fisher Transform formula
-    fisher_transform = x.apply(lambda val: Decimal('NaN') if val.is_nan() else Decimal('0.5') * Decimal(str(math.log((1 + float(val)) / (1 - float(val))))))
+    # Fisher Transform formula using Decimal's ln()
+    fisher_transform = x.apply(lambda val: Decimal('NaN') if pd.isna(val) else Decimal('0.5') * ((Decimal('1') + val) / (Decimal('1') - val)).ln())
     
     # Calculate Fisher Signal
-    fisher_signal = fisher_transform.rolling(window=signal_length).mean()
+    fisher_signal = fisher_transform.rolling(window=signal_length).mean().apply(Decimal)
 
     indicators_logger.debug(Fore.CYAN + f"Fisher Transform calculated with length={length}, signal_length={signal_length}." + Style.RESET_ALL)
     return fisher_transform, fisher_signal
@@ -220,7 +225,7 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
     c3 = -a1 * a1
     c1 = Decimal('1') - c2 - c3
 
-    filtered_values = pd.Series(index=df.index, dtype='object')
+    filtered_values = pd.Series(index=df.index, dtype=object)
     filt1 = Decimal('0')
     filt2 = Decimal('0')
 
@@ -291,43 +296,56 @@ def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> Tup
 
 def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd.DataFrame:
     """
-    Processes a single kline data message from a WebSocket stream.
+    Processes one or more kline data messages from a WebSocket stream, ensuring robustness.
     """
-    if not isinstance(message, dict) or 'data' not in message or not message['data']:
-        indicators_logger.error(Fore.RED + f"Invalid kline WebSocket message received: {message}" + Style.RESET_ALL)
+    if not isinstance(message, dict) or 'data' not in message or not isinstance(message['data'], list):
+        indicators_logger.error(Fore.RED + f"Invalid or empty kline WebSocket message received: {message}" + Style.RESET_ALL)
         return df
 
-    kline_data = message['data'][0]
+    # Ensure the DataFrame index is a timezone-aware DatetimeIndex before processing
+    if not df.empty and not isinstance(df.index, pd.DatetimeIndex):
+        indicators_logger.error(Fore.RED + "DataFrame index must be a DatetimeIndex for kline handling." + Style.RESET_ALL)
+        return df
+    if not df.empty and df.index.tz is None:
+        df.index = df.index.tz_localize('UTC')
+    elif not df.empty:
+        df.index = df.index.tz_convert('UTC')
 
-    # Extract and format the new kline data
-    new_kline = {
-        'timestamp': pd.to_datetime(int(kline_data['start']), unit='ms'),
-        'open': Decimal(kline_data['open']),
-        'high': Decimal(kline_data['high']),
-        'low': Decimal(kline_data['low']),
-        'close': Decimal(kline_data['close']),
-        'volume': Decimal(kline_data['volume']),
-    }
+    all_new_klines = []
+    for kline_data in message['data']:
+        ts_key = 'timestamp' if 'timestamp' in kline_data else 'start'
+        if ts_key not in kline_data:
+            indicators_logger.warning(f"Kline data missing timestamp key: {kline_data}")
+            continue
+
+        try:
+            new_kline = {
+                'timestamp': pd.to_datetime(int(kline_data[ts_key]), unit='ms', utc=True),
+                'open': Decimal(kline_data['open']),
+                'high': Decimal(kline_data['high']),
+                'low': Decimal(kline_data['low']),
+                'close': Decimal(kline_data['close']),
+                'volume': Decimal(kline_data['volume']),
+            }
+            all_new_klines.append(new_kline)
+        except (ValueError, TypeError) as e:
+            indicators_logger.error(f"Error parsing kline data {kline_data}: {e}")
+            continue
+
+    if not all_new_klines:
+        return df
+
+    new_klines_df = pd.DataFrame(all_new_klines).set_index('timestamp')
+
+    # Combine the existing and new dataframes
+    # Using combine_first to update existing rows and append new ones
+    combined_df = new_klines_df.combine_first(df)
     
-    # Set the timestamp as the index for the new kline
-    new_kline_df = pd.DataFrame([new_kline]).set_index('timestamp')
-
-    if df.empty:
-        indicators_logger.info(Fore.GREEN + "DataFrame is empty, initializing with new kline data." + Style.RESET_ALL)
-        return new_kline_df
-
-    # If the new kline's timestamp matches the last one in the DataFrame, update it
-    if new_kline_df.index[0] == df.index[-1]:
-        for col in new_kline_df.columns:
-            if col in df.columns:
-                df.loc[new_kline_df.index[0], col] = new_kline_df.loc[new_kline_df.index[0], col]
-        indicators_logger.debug(Fore.CYAN + f"Updated last kline at {new_kline_df.index[0]}" + Style.RESET_ALL)
-    # Otherwise, append it as a new row
-    else:
-        df = pd.concat([df, new_kline_df])
-        indicators_logger.debug(Fore.CYAN + f"Appended new kline at {new_kline_df.index[0]}" + Style.RESET_ALL)
-
-    return df
+    # Sort the index to ensure chronological order after combining
+    combined_df.sort_index(inplace=True)
+    
+    indicators_logger.debug(Fore.CYAN + f"Processed {len(all_new_klines)} kline updates." + Style.RESET_ALL)
+    return combined_df
 
 def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     """
@@ -374,49 +392,89 @@ def calculate_order_book_imbalance(order_book: Dict[str, List[List[str]]]) -> Tu
     return imbalance, total_volume
 
 def calculate_ehlers_fisher_strategy(df: pd.DataFrame, length: int = 10) -> pd.DataFrame:
-    """Calculates the Ehlers Fisher Transform as per the strategy's logic."""
+    """
+    Calculates the Ehlers Fisher Transform as per the strategy's logic, ensuring Decimal precision.
+    """
+    # Ensure all input columns are of type Decimal
+    required_cols = ['high', 'low', 'close']
+    for col in required_cols:
+        if col not in df.columns:
+            indicators_logger.error(Fore.RED + f"DataFrame missing required column: '{col}' for Ehlers Fisher calculation." + Style.RESET_ALL)
+            # Return a copy of the original DataFrame with empty ehlers_fisher and ehlers_signal columns
+            df_copy = df.copy()
+            df_copy['ehlers_fisher'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
+            df_copy['ehlers_signal'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
+            return df_copy
+        df[col] = df[col].apply(lambda x: Decimal(str(x)))
+
     df['min_low_ehlers'] = df['low'].rolling(window=length).min()
     df['max_high_ehlers'] = df['high'].rolling(window=length).max()
 
-    ehlers_value1 = [Decimal(0.0)] * len(df)
-    ehlers_fisher = [Decimal(0.0)] * len(df)
+    ehlers_value1 = [Decimal("0.0")] * len(df)
+    ehlers_fisher = [Decimal("0.0")] * len(df)
     
-    prev_val1 = Decimal(0.0)
+    prev_val1 = Decimal("0.0")
 
     for i in range(len(df)):
         if i >= length - 1:
             min_low_val = df['min_low_ehlers'].iloc[i]
             max_high_val = df['max_high_ehlers'].iloc[i]
-            close_val = df['close'].iloc[i]
+            close_val = df['close'].iloc[i]  # Already a Decimal
 
             if pd.isna(min_low_val) or pd.isna(max_high_val) or pd.isna(close_val):
                 continue
 
+            # Ensure rolling values are also Decimal
+            min_low_val = Decimal(str(min_low_val))
+            max_high_val = Decimal(str(max_high_val))
+
             range_val = max_high_val - min_low_val
-            raw_norm_price = (close_val - min_low_val) / range_val if range_val > 0 else Decimal('0.5')
+            if range_val > Decimal("0"):
+                raw_norm_price = (close_val - min_low_val) / range_val
+            else:
+                raw_norm_price = Decimal("0.5")
             
             current_val1 = Decimal('0.33') * (Decimal('2') * raw_norm_price - Decimal('1')) + Decimal('0.67') * prev_val1
-            current_val1 = max(Decimal('-0.999'), min(Decimal('0.999'), current_val1))
             
+            # Clamp value to avoid math domain errors with ln()
+            if current_val1 >= Decimal("1"):
+                current_val1 = Decimal("0.999999999999999999999999999")
+            elif current_val1 <= Decimal("-1"):
+                current_val1 = Decimal("-0.999999999999999999999999999")
+
             ehlers_value1[i] = current_val1
             prev_val1 = current_val1
 
-            fisher_val = Decimal('0.5') * Decimal(math.log((1 + float(current_val1)) / (1 - float(current_val1))))
+            # Use Decimal's ln() for the Fisher Transform
+            fisher_val = Decimal("0.5") * ((Decimal("1") + current_val1) / (Decimal("1") - current_val1)).ln()
             ehlers_fisher[i] = fisher_val
     
     df['ehlers_fisher'] = ehlers_fisher
-    df['ehlers_signal'] = df['ehlers_fisher'].shift(1)
+    df['ehlers_signal'] = pd.Series(ehlers_fisher).shift(1).fillna(Decimal("0.0")).values
     df.drop(columns=['min_low_ehlers', 'max_high_ehlers'], inplace=True)
+    
+    indicators_logger.debug(Fore.CYAN + f"Ehlers Fisher Strategy calculated with length={length}." + Style.RESET_ALL)
     return df
 
 def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> pd.DataFrame:
-    """Calculates Supertrend indicator."""
-    df['tr1'] = df['high'] - df['low']
-    df['tr2'] = abs(df['high'] - df['close'].shift(1))
-    df['tr3'] = abs(df['low'] - df['close'].shift(1))
-    df['tr'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
-    df['atr'] = df['tr'].ewm(span=period, adjust=False).mean()
-    df['hl2'] = (df['high'] + df['low']) / 2
+    """
+    Calculates Supertrend indicator.
+    """
+    required_cols = ['high', 'low', 'close']
+    for col in required_cols:
+        if col not in df.columns:
+            indicators_logger.error(Fore.RED + f"DataFrame missing required column: '{col}' for Supertrend calculation." + Style.RESET_ALL)
+            df_copy = df.copy()
+            df_copy['supertrend'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
+            df_copy['supertrend_direction'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
+            return df_copy
+
+    df['tr1'] = df['high'].apply(Decimal) - df['low'].apply(Decimal)
+    df['tr2'] = (df['high'].apply(Decimal) - df['close'].shift(1).apply(Decimal)).abs()
+    df['tr3'] = (df['low'].apply(Decimal) - df['close'].shift(1).apply(Decimal)).abs()
+    df['tr'] = df[['tr1', 'tr2', 'tr3']].max(axis=1).apply(Decimal)
+    df['atr'] = df['tr'].ewm(span=period, adjust=False).mean().apply(Decimal)
+    df['hl2'] = ((df['high'].apply(Decimal) + df['low'].apply(Decimal)) / Decimal('2')).apply(Decimal)
 
     final_upper_band = [Decimal(0.0)] * len(df)
     final_lower_band = [Decimal(0.0)] * len(df)
@@ -464,5 +522,65 @@ def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float =
 
     df['supertrend'] = supertrend_values
     df['supertrend_direction'] = direction
-    df.drop(columns=['tr1', 'tr2', 'tr3', 'tr', 'atr', 'hl2'], inplace=True, errors='ignore')
+    df.drop(columns=['tr1', 'tr2', 'tr3', 'tr', 'hl2'], inplace=True, errors='ignore')
     return df
+
+# --- Self-contained demonstration block ---
+if __name__ == "__main__":
+    print(Fore.CYAN + "\n--- Indicators Demonstration ---" + Style.RESET_ALL)
+    
+    # Create a sample DataFrame for demonstration
+    data = {
+        'timestamp': pd.to_datetime([
+            '2023-01-01 00:00:00', '2023-01-01 00:01:00', '2023-01-01 00:02:00', 
+            '2023-01-01 00:03:00', '2023-01-01 00:04:00', '2023-01-01 00:05:00',
+            '2023-01-01 00:06:00', '2023-01-01 00:07:00', '2023-01-01 00:08:00',
+            '2023-01-01 00:09:00', '2023-01-01 00:10:00', '2023-01-01 00:11:00',
+            '2023-01-01 00:12:00', '2023-01-01 00:13:00', '2023-01-01 00:14:00',
+            '2023-01-01 00:15:00', '2023-01-01 00:16:00', '2023-01-01 00:17:00',
+            '2023-01-01 00:18:00', '2023-01-01 00:19:00', '2023-01-01 00:20:00'
+        ]).tz_localize('UTC'),
+        'open': [Decimal(str(x)) for x in [100, 101, 100.5, 102, 101.5, 103, 102.5, 104, 103.5, 105, 104.5, 106, 105.5, 107, 106.5, 108, 107.5, 109, 108.5, 110, 109.5]],
+        'high': [Decimal(str(x)) for x in [101, 101.5, 101, 102.5, 102, 103.5, 103, 104.5, 104, 105.5, 105, 106.5, 106, 107.5, 107, 108.5, 108, 109.5, 109, 110.5, 110]],
+        'low': [Decimal(str(x)) for x in [99, 100, 99.5, 101, 100.5, 102, 101.5, 103, 102.5, 104, 103.5, 105, 104.5, 106, 105.5, 107, 106.5, 108, 107.5, 109, 108.5]],
+        'close': [Decimal(str(x)) for x in [100.5, 100.8, 100.2, 101.8, 101.2, 102.8, 102.2, 103.8, 103.2, 104.8, 104.2, 105.8, 105.2, 106.8, 106.2, 107.8, 107.2, 108.8, 108.2, 109.8, 109.2]],
+        'volume': [Decimal(str(x)) for x in [1000, 1100, 1050, 1200, 1150, 1300, 1250, 1400, 1350, 1500, 1450, 1600, 1550, 1700, 1650, 1800, 1750, 1900, 1850, 2000, 1950]]
+    }
+    df = pd.DataFrame(data).set_index('timestamp')
+
+    print(Fore.BLUE + "\nOriginal DataFrame (last 5 rows):" + Style.RESET_ALL)
+    print(df.tail())
+
+    # Calculate ATR
+    df['atr'] = calculate_atr(df)
+    print(Fore.BLUE + "\nATR (last 5 values):" + Style.RESET_ALL)
+    print(df['atr'].tail())
+
+    # Calculate StochRSI
+    df = calculate_stochrsi(df)
+    print(Fore.BLUE + "\nStochRSI (last 5 values):" + Style.RESET_ALL)
+    print(df[['stoch_rsi', 'stoch_k', 'stoch_d']].tail())
+
+    # Calculate SMA
+    df['sma_10'] = calculate_sma(df, length=10)
+    print(Fore.BLUE + "\nSMA (last 5 values):" + Style.RESET_ALL)
+    print(df['sma_10'].tail())
+
+    # Calculate Ehlers Fisher Transform
+    fisher, signal = calculate_ehlers_fisher_transform(df)
+    df['ehlers_fisher'] = fisher
+    df['ehlers_signal'] = signal
+    print(Fore.BLUE + "\nEhlers Fisher Transform (last 5 values):" + Style.RESET_ALL)
+    print(df[['ehlers_fisher', 'ehlers_signal']].tail())
+
+    # Calculate Ehlers Super Smoother
+    df['ehlers_supersmoother'] = calculate_ehlers_super_smoother(df)
+    print(Fore.BLUE + "\nEhlers Super Smoother (last 5 values):" + Style.RESET_ALL)
+    print(df['ehlers_supersmoother'].tail())
+
+    # Calculate Supertrend
+    df = calculate_supertrend(df)
+    print(Fore.BLUE + "\nSupertrend (last 5 values):" + Style.RESET_ALL)
+    print(df[['supertrend', 'supertrend_direction']].tail())
+
+    print(Fore.CYAN + "\n--- Indicators Demonstration Complete ---" + Style.RESET_ALL)

@@ -7,6 +7,65 @@ from typing import Any, Dict, Optional, Type
 
 from colorama import Fore, Style, init
 
+class OrderBook:
+    def __init__(self, logger):
+        self.bids = {}
+        self.asks = {}
+        self.last_seq = 0
+        self.logger = logger
+
+    def handle_snapshot(self, data):
+        """
+        Initializes the order book from a snapshot message.
+        """
+        self.bids = {Decimal(price): Decimal(qty) for price, qty in data.get('b', []) if Decimal(qty) > 0}
+        self.asks = {Decimal(price): Decimal(qty) for price, qty in data.get('a', []) if Decimal(qty) > 0}
+        self.last_seq = data.get('seq', 0)
+        self.logger.debug(f"Order book snapshot initialized with seq: {self.last_seq}")
+
+    def apply_delta(self, data):
+        """
+        Applies incremental updates (deltas) to the order book.
+        """
+        update_seq = data.get('seq')
+        if update_seq is None or update_seq <= self.last_seq:
+            self.logger.debug(f"Stale or out-of-order order book update (current seq: {update_seq}, last seq: {self.last_seq}). Skipping.")
+            return
+
+        for price_str, qty_str in data.get('b', []):
+            try:
+                price = Decimal(price_str)
+                qty = Decimal(qty_str)
+                if qty == Decimal('0'):
+                    if price in self.bids:
+                        del self.bids[price]
+                else:
+                    self.bids[price] = qty
+            except InvalidOperation:
+                self.logger.warning(f"Invalid decimal value in bid: {price_str}, {qty_str}")
+
+        for price_str, qty_str in data.get('a', []):
+            try:
+                price = Decimal(price_str)
+                qty = Decimal(qty_str)
+                if qty == Decimal('0'):
+                    if price in self.asks:
+                        del self.asks[price]
+                else:
+                    self.asks[price] = qty
+            except InvalidOperation:
+                self.logger.warning(f"Invalid decimal value in ask: {price_str}, {qty_str}")
+
+        self.last_seq = update_seq
+
+    def get_imbalance(self) -> Decimal:
+        bid_volume = sum(price * qty for price, qty in self.bids.items())
+        ask_volume = sum(price * qty for price, qty in self.asks.items())
+        total_volume = bid_volume + ask_volume
+        if total_volume == 0:
+            return Decimal('0')
+        return (bid_volume - ask_volume) / total_volume
+
 # --- Module-level logger ---
 _module_logger = logging.getLogger(__name__)
 
@@ -253,6 +312,22 @@ class SensitiveFormatter(logging.Formatter):
             msg = msg.replace(SensitiveFormatter._api_secret, "***API_SECRET***")
         return msg
 
+    @classmethod
+    def from_environment_variables(cls) -> 'SensitiveFormatter':
+        """
+        Creates a SensitiveFormatter instance from environment variables.
+
+        Returns:
+            A SensitiveFormatter instance.
+        """
+        api_key = os.environ.get('API_KEY')
+        api_secret = os.environ.get('API_SECRET')
+
+        if not api_key or not api_secret:
+            raise ValueError("API key or secret is missing")
+
+        return cls(api_key, api_secret)
+
 def get_price_precision(market_info: Dict[str, Any], logger: logging.Logger) -> int:
     """
     Determines the number of decimal places for price formatting for a given market.
@@ -267,7 +342,12 @@ def get_price_precision(market_info: Dict[str, Any], logger: logging.Logger) -> 
 
     Returns:
         The determined price precision (number of decimal places). Defaults to 4.
+
+    Raises:
+        ValueError: If the market_info dictionary is missing or invalid.
     """
+    if not market_info:
+        raise ValueError("Market info dictionary is missing or invalid")
     symbol = market_info.get('symbol', 'UNKNOWN_SYMBOL')
     default_precision = 4 # Define default early for clarity
 
@@ -487,43 +567,70 @@ def round_decimal(value: float, precision: int) -> Decimal:
     # Round using ROUND_HALF_UP (standard rounding)
     return decimal_value.quantize(rounding_context, rounding=ROUND_HALF_UP)
 
-def calculate_order_quantity(usdt_amount: float, current_price: float, min_qty: float, qty_step: float) -> float:
+def calculate_order_quantity(
+    usdt_amount: Decimal,
+    current_price: Decimal,
+    min_qty: Decimal,
+    qty_step: Decimal,
+    min_order_value: Decimal,
+    logger: logging.Logger
+) -> Decimal:
     """
-    Calculates the appropriate order quantity based on a USDT amount, current price,
-    and symbol-specific minimum quantity and quantity step.
+    Calculates the appropriate order quantity ensuring all exchange constraints are met.
+
+    This function performs the following steps:
+    1. Calculates the raw quantity based on the desired USDT investment.
+    2. Adjusts the quantity down to the nearest valid quantity step.
+    3. Ensures the quantity meets the minimum order quantity.
+    4. Checks if the resulting order value meets the minimum required value.
+    5. If the value is too low, it recalculates the quantity to meet the minimum value and re-adjusts for the quantity step.
+    6. Returns the final, validated order quantity as a Decimal.
 
     Args:
-        usdt_amount (float): The desired amount in USDT to trade.
-        current_price (float): The current price of the asset.
-        min_qty (float): The minimum order quantity for the symbol.
-        qty_step (float): The quantity step (increment) for the symbol.
+        usdt_amount (Decimal): The desired amount in USDT to trade.
+        current_price (Decimal): The current price of the asset.
+        min_qty (Decimal): The minimum order quantity for the symbol.
+        qty_step (Decimal): The quantity step (increment) for the symbol.
+        min_order_value (Decimal): The minimum order value in USDT for the symbol.
+        logger (logging.Logger): Logger instance for logging warnings or errors.
 
     Returns:
-        float: The calculated and adjusted order quantity.
+        Decimal: The calculated and adjusted order quantity. Returns Decimal('0') if inputs are invalid.
     """
-    if usdt_amount <= 0 or current_price <= 0 or min_qty <= 0 or qty_step <= 0:
-        raise ValueError("All input values must be positive.")
+    if usdt_amount <= Decimal('0') or current_price <= Decimal('0'):
+        logger.error(f"{NEON_RED}USDT amount and current price must be positive for order calculation.{RESET_ALL_STYLE}")
+        return Decimal('0')
 
-    # Convert inputs to Decimal for precise calculations
-    dec_usdt_amount = Decimal(str(usdt_amount))
-    dec_current_price = Decimal(str(current_price))
-    dec_min_qty = Decimal(str(min_qty))
-    dec_qty_step = Decimal(str(qty_step))
+    # 1. Calculate raw quantity
+    raw_qty = usdt_amount / current_price
 
-    # Calculate raw quantity
-    raw_qty = dec_usdt_amount / dec_current_price
+    # 2. Adjust for quantity step (round down)
+    adjusted_qty = (raw_qty // qty_step) * qty_step if qty_step > Decimal('0') else raw_qty
 
-    # Adjust quantity to be a multiple of qty_step
-    # Round raw_qty down to the nearest multiple of qty_step
-    # This ensures we don't exceed the USDT amount and adhere to step size
-    adjusted_qty = (raw_qty // dec_qty_step) * dec_qty_step
+    # 3. Ensure quantity meets the minimum requirement
+    if adjusted_qty < min_qty:
+        logger.warning(f"{NEON_YELLOW}Initial quantity {adjusted_qty:.8f} was below min_qty {min_qty}. Adjusting to min_qty.{RESET_ALL_STYLE}")
+        adjusted_qty = min_qty
 
-    # Ensure the quantity meets the minimum requirement
-    if adjusted_qty < dec_min_qty:
-        adjusted_qty = dec_min_qty
-    
-    # Convert back to float for return, preserving Decimal precision
-    return float(adjusted_qty)
+    # 4. Check if the order value is sufficient
+    order_value = adjusted_qty * current_price
+    if order_value < min_order_value:
+        logger.warning(f"{NEON_YELLOW}Order value {order_value:.4f} is below min_order_value {min_order_value}. Recalculating quantity.{RESET_ALL_STYLE}")
+        # Recalculate quantity to meet min_order_value and re-apply step logic
+        required_qty = min_order_value / current_price
+        # Round up to the nearest step to ensure value is met
+        adjusted_qty = ((required_qty + qty_step - Decimal('1e-18')) // qty_step) * qty_step if qty_step > Decimal('0') else required_qty
+        logger.info(f"{NEON_BLUE}Quantity adjusted to {adjusted_qty:.8f} to meet minimum order value.{RESET_ALL_STYLE}")
+
+    # 5. Final check to ensure it's not below min_qty after all adjustments
+    if adjusted_qty < min_qty:
+        adjusted_qty = min_qty
+
+    if adjusted_qty <= Decimal('0'):
+        logger.error(f"{NEON_RED}Final calculated quantity is zero or negative. Aborting order calculation.{RESET_ALL_STYLE}")
+        return Decimal('0')
+
+    return adjusted_qty
 
 def json_decimal_default(obj: Any) -> Any:
     """

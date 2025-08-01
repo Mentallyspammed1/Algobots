@@ -156,12 +156,22 @@ class MarketMakingStrategy(StrategyTemplate):
 
         # --- Extract Data ---
         latest_candle = df.iloc[-1]
-        current_price = Decimal(str(latest_candle['close']))
-        latest_atr = Decimal(str(latest_candle['atr']))
+        
+        current_price_val = latest_candle['close']
+        latest_atr_val = latest_candle['atr']
+        ehlers_supersmoother_val = latest_candle['ehlers_supersmoother']
+
+        if pd.isna(current_price_val) or pd.isna(latest_atr_val) or pd.isna(ehlers_supersmoother_val):
+            self.logger.warning(Fore.RED + "Critical indicator values (close, atr, ehlers_supersmoother) are NaN. Cannot generate signals." + Style.RESET_ALL)
+            return []
+
+        current_price = Decimal(str(current_price_val))
+        latest_atr = Decimal(str(latest_atr_val))
         timestamp = df.index[-1]
 
         # Upgrade 9: Add defense against stale data
-        if datetime.utcnow() - timestamp.to_pydatetime() > timedelta(seconds=self.max_data_age_s):
+        now_utc = datetime.utcnow().replace(tzinfo=None)
+        if now_utc - timestamp.to_pydatetime().replace(tzinfo=None) > timedelta(seconds=self.max_data_age_s):
             self.logger.warning(Fore.YELLOW + "Data is stale. Skipping cycle." + Style.RESET_ALL)
             return []
 
@@ -336,15 +346,23 @@ class MarketMakingStrategy(StrategyTemplate):
             return []
 
         latest_candle = df.iloc[-1]
-        current_price = Decimal(str(latest_candle['close']))
-        latest_atr = Decimal(str(latest_candle['atr']))
+        current_price_val = latest_candle['close']
+        latest_atr_val = latest_candle['atr']
+
+        if pd.isna(current_price_val) or pd.isna(latest_atr_val):
+            self.logger.warning(Fore.RED + "Critical indicator values (close, atr) are NaN for exit signals. Cannot generate exit signals." + Style.RESET_ALL)
+            return []
+
+        current_price = Decimal(str(current_price_val))
+        latest_atr = Decimal(str(latest_atr_val))
         timestamp = df.index[-1]
         current_position_size = Decimal(str(kwargs.get('current_position_size', '0')))
         entry_price = Decimal(str(kwargs.get('entry_price', '0')))
         pnl = Decimal(str(kwargs.get('pnl', '0')))
 
         # Upgrade 9: Add defense against stale data
-        if datetime.utcnow() - timestamp.to_pydatetime() > timedelta(seconds=self.max_data_age_s):
+        now_utc = datetime.utcnow().replace(tzinfo=None)
+        if now_utc - timestamp.to_pydatetime().replace(tzinfo=None) > timedelta(seconds=self.max_data_age_s):
             self.logger.warning(Fore.YELLOW + "Data is stale. Skipping exit cycle." + Style.RESET_ALL)
             return []
 
