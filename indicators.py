@@ -400,11 +400,7 @@ def calculate_ehlers_fisher_strategy(df: pd.DataFrame, length: int = 10) -> pd.D
     for col in required_cols:
         if col not in df.columns:
             indicators_logger.error(Fore.RED + f"DataFrame missing required column: '{col}' for Ehlers Fisher calculation." + Style.RESET_ALL)
-            # Return a copy of the original DataFrame with empty ehlers_fisher and ehlers_signal columns
-            df_copy = df.copy()
-            df_copy['ehlers_fisher'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
-            df_copy['ehlers_signal'] = pd.Series([Decimal('NaN')] * len(df_copy), index=df_copy.index, dtype=object)
-            return df_copy
+            return df.copy() # Return a copy to prevent modifying the original DataFrame if columns are missing
         df[col] = df[col].apply(lambda x: Decimal(str(x)))
 
     df['min_low_ehlers'] = df['low'].rolling(window=length).min()
@@ -470,8 +466,8 @@ def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float =
             return df_copy
 
     df['tr1'] = df['high'].apply(Decimal) - df['low'].apply(Decimal)
-    df['tr2'] = (df['high'].apply(Decimal) - df['close'].shift(1).apply(Decimal)).abs()
-    df['tr3'] = (df['low'].apply(Decimal) - df['close'].shift(1).apply(Decimal)).abs()
+    df['tr2'] = (df['high'].apply(Decimal) - df['close'].shift(1).fillna(Decimal('0')).apply(Decimal)).abs()
+    df['tr3'] = (df['low'].apply(Decimal) - df['close'].shift(1).fillna(Decimal('0')).apply(Decimal)).abs()
     df['tr'] = df[['tr1', 'tr2', 'tr3']].max(axis=1).apply(Decimal)
     df['atr'] = df['tr'].ewm(span=period, adjust=False).mean().apply(Decimal)
     df['hl2'] = ((df['high'].apply(Decimal) + df['low'].apply(Decimal)) / Decimal('2')).apply(Decimal)
