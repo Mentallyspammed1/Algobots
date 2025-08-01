@@ -29,7 +29,7 @@ The bot's architecture is modular, allowing for the dynamic selection and loadin
 
 1.  **Create a New Strategy File**: In the `strategies/` directory, create a new Python file (e.g., `my_new_strategy.py`). The filename should be the lowercase version of your strategy's class name.
 2.  **Implement the Strategy Class**:
-    -   Inside your new file, create a class that inherits from `StrategyTemplate` (e.g., `class MyNewStrategy(StrategyTemplate):`).
+    -   Inside your new file, create a class that inherits from `StrategyTemplate` (e.g., `class My_New_Strategy(StrategyTemplate):`).
     -   Implement the two required methods:
         -   `generate_signals(...)`: This method should contain your logic for generating *entry* signals (BUY or SELL). It must return a list of signal tuples.
         -   `generate_exit_signals(...)`: This method should contain your logic for generating *exit* signals for an existing position. It must also return a list of signal tuples.
