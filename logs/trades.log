@@ -28,3 +28,4 @@
 {"timestamp": "2025-08-01 13:30:25,f", "level": "TRADE", "message": "New trade", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 21, "funcname": "trade", "symbol": "BTCUSDT", "price": 20000, "qty": 0.001}
 {"timestamp": "2025-08-01 13:31:34,f", "level": "TRADE", "message": "New trade", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 21, "funcname": "trade", "symbol": "BTCUSDT", "price": 20000, "qty": 0.001}
 {"timestamp": "2025-08-01 13:33:46,f", "level": "TRADE", "message": "New trade", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 21, "funcname": "trade", "symbol": "BTCUSDT", "price": 20000, "qty": 0.001}
+{"timestamp": "2025-08-01 13:35:25,f", "level": "TRADE", "message": "New trade", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 21, "funcname": "trade", "symbol": "BTCUSDT", "price": 20000, "qty": 0.001}
