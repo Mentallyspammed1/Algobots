@@ -8,6 +8,7 @@ from color_codex import (
     COLOR_BLUE, COLOR_MAGENTA, COLOR_CYAN, PYRMETHUS_ORANGE, PYRMETHUS_GREY
 )
 from typing import Optional
+from utils import json_decimal_default
 
 # Define custom log levels
 TRADE_LEVEL = 25
@@ -119,6 +120,7 @@ def setup_logging(console_log_level: int = logging.INFO):
         datefmt='%H:%M:%S'
     )
     console_handler = logging.StreamHandler()
+    console_handler.name = 'console_handler'
     console_handler.setFormatter(console_formatter)
     console_handler.setLevel(console_log_level) # Configurable console level
 
@@ -126,12 +128,14 @@ def setup_logging(console_log_level: int = logging.INFO):
     log_file_path = os.path.join(log_dir, 'bot.log')
     file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
     file_handler = RotatingFileHandler(log_file_path, maxBytes=5*1024*1024, backupCount=2)
+    file_handler.name = 'general_file_handler'
     file_handler.setFormatter(file_formatter)
     file_handler.setLevel(logging.DEBUG) # Log everything to the general log file
 
     # --- Trade File Handler (JSON Format) ---
     trade_log_path = os.path.join(log_dir, 'trades.log')
     trade_handler = logging.FileHandler(trade_log_path)
+    trade_handler.name = 'trade_file_handler'
     trade_handler.setFormatter(JsonFormatter(datefmt='%Y-%m-%d %H:%M:%S,%f')) # Use JSON formatter for trades
     trade_handler.setLevel(TRADE_LEVEL)
     trade_handler.addFilter(TradeLogFilter()) # Only log TRADE messages
@@ -139,6 +143,7 @@ def setup_logging(console_log_level: int = logging.INFO):
     # --- Metrics File Handler (JSON Format) ---
     metrics_log_path = os.path.join(log_dir, 'metrics.log')
     metrics_handler = logging.FileHandler(metrics_log_path)
+    metrics_handler.name = 'metrics_file_handler'
     metrics_handler.setFormatter(JsonFormatter(datefmt='%Y-%m-%d %H:%M:%S,%f')) # Use JSON formatter for metrics
     metrics_handler.setLevel(METRICS_LEVEL)
     metrics_handler.addFilter(MetricsLogFilter()) # Only log METRICS messages
@@ -159,12 +164,12 @@ def setup_logging(console_log_level: int = logging.INFO):
 def log_trade(logger: logging.Logger, message: str, trade_data: dict):
     """Logs a trade event with structured data to the TRADE level."""
     # Directly call the custom method, which now exists on CustomBotLogger instances
-    logger.trade(f"{message} - {json.dumps(trade_data)}")
+    logger.trade(f"{message} - {json.dumps(trade_data, default=json_decimal_default)}")
 
 def log_metrics(logger: logging.Logger, message: str, metrics_data: dict):
     """Logs trade metrics with structured data."""
     # Directly call the custom method
-    logger.metrics(f"{message} - {json.dumps(metrics_data)}")
+    logger.metrics(f"{message} - {json.dumps(metrics_data, default=json_decimal_default)}")
 
 def log_exception(logger: logging.Logger, message: str, exc: Exception):
     """Logs an exception with traceback."""

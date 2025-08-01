@@ -1,4 +1,322 @@
-Bybit's API rate limits for the V5 API (used for Contract accounts like USDT Perpetual, USDC Perpetual, and Inverse Contracts) are designed to prevent abuse and ensure fair usage. The limits vary by endpoint, authentication type (authenticated vs. unauthenticated), and connection method (REST vs. WebSocket). Below is a concise overview of Bybit's API rate limits based on the official documentation (https://bybit-exchange.github.io/docs/v5/rate-limit) and relevant considerations for Contract accounts using the `pybit` library in Python.
+
+Okay, the user is asking about different order types, specifically including stop loss, take profit, conditional orders, limit orders, and batch orders, in the context of Bybit's V5 API. They might be a trader or developer implementing automated strategies and need to understand how to place these orders programmatically.
+
+First, I need to recall how Bybit's V5 API handles these order types. Stop loss and take profit orders are often trailing or conditional. Conditional orders might be OCO (One Cancels Other) orders or those triggered by specific price conditions. Limit orders are standard, but batch orders involve multiple orders in one request.
+
+I should check the exact endpoints and parameters required for each order type. For example, creating a stop loss order might require a stopPx and stopLoss parameter. Take profit orders would need takeProfit as a parameter. Conditional orders might use reduceOnly flags and order filters.
+
+Batch orders would use the /v5/order/batch-create endpoint, combining multiple orders in a single request. Need to include orderIds for batch management.
+
+For OCO orders, Bybit might have a separate endpoint, but the user didn't mention OCO explicitly. However, conditional orders often have stop and take profit linked.
+
+I need to structure the response clearly, explaining each order type, their API requirements, parameters, and code examples where applicable. Include REST and WebSocket methods if applicable, though most order placement is via REST.
+
+Also, mention key parameters like symbol, side, qty, price, stopLoss, reduceOnly, etc. Highlight important considerations like position mode (isolated/cross) and conditional logic.
+
+Ensure the information aligns with Bybit's V5 API documentation. If uncertain about an endpoint, default to known public methods but note any potential differences.
+
+Finally, format the response in a structured manner, maybe using headings for each order type, followed by API details and code examples.
+
+
+Here's a concise explanation of order types with Bybit V5 API implementation details:
+
+---
+
+## 🔒 **Stop Loss & Take Profit Orders**
+| **Order Type** | **Purpose** | **API Function** | **Key Parameters** |
+|----------------|-------------|------------------|--------------------|
+| **Stop Loss** | Limit downside risk | `v5/order/create` | `stopLossBps`, `stopPx` |
+| **Take Profit** | Secure upside gains | `v5/order/create` | `takeProfitBps`, `takeProfitPx` |
+
+**Code Example (V5):**  
+```python
+# Create a limit order with stop loss
+create_order(
+    symbol='BTCUSDT',
+    side='Buy',
+    ordType='Limit',
+    qty='0.001',
+    price='10000',
+    stopLossBps='10000' ,' Stop loss 1% below entry
+)
+
+# Attach take profit condition
+# Note: Requires using `tp-same-side` as conditional type
+```
+
+---
+
+## 🔄 **Conditional Orders**
+| **Type** | **Condition** | **Use Case** |
+|----------|---------------|--------------|
+| **AON (All-Or-None)** | Execute multiple orders at once | Batch placement |
+| **IOC (Immediately-or-Cancel)** | Fills portion & cancels remainder | Partial fills |
+| **FOK (Fill-or-Kill)** | Execute full quantity or none | Precision execution |
+
+**Implementation Tips:**
+```python
+# Conditional batch order (Example)
+order_batch = [
+    { 
+        "symbol": "ETHUSDT",
+        "side": "Buy",
+        "ordType": "Limit",
+        "qty": "0.5",
+        "price": "1800",
+        "timeInForce": "GTC"
+    },
+    {
+        "stopLossBps": "2000" # 2% stop loss
+    }
+]
+batch_create(order_batch)
+```
+
+---
+
+## ⚖️ **Limit Orders**
+| **Parameter** | **Description** | **Example** |
+|---------------|-----------------|-------------|
+| `price`       | Executable level | `$100.50` |
+| `timeInForce` | Order validity  | `GTC` (Good Till Cancel) / `IOC` (Immediate or Cancel) |
+
+**API Call:**  
+```
+POST /v5/order/create
+{
+  "symbol": "BTCUSDT",
+  "side": "Buy",  
+  "ordType": "Limit",
+  "qty": "0.001",
+  "price": "45000" # Price level
+}
+```
+
+---
+
+## ⚙️ **Batch Orders (V5 Feature)**  
+Create multiple orders in one call:
+```python
+batch_order = {
+    "batchOrderParam": {
+        "orderTag": "my-strategy" # Optional
+    },
+    "batchOrderList": [
+        {
+            "orderId": "orderA",
+            "symbol": "BTCUSDT",
+            "side": "Buy",
+            "ordType": "Limit",
+            "qty": "0.001",
+            "price": "45000"
+        },
+        {
+            "orderId": "orderB",
+            "symbol": "BTCUSDT",
+            "side": "Sell",
+            "ordType": "StopLimit",
+            "qty": "0.001",
+            "stopPx": "45000",
+            "price": "45500"
+        }
+    ]
+}
+
+post_to_api("/v5/order/batch-create", batch_order)
+```
+
+---
+
+## �arefa **Critical Parameters to Remember**
+| **Parameter** | **Role** | **Values** |
+|---------------|----------|------------|
+| `stopLossBps` | Stop loss % | `10000` = 1%, `20000` = 2% |
+| `takeProfitPx` | TP price | Absolute value (e.g., `45500`) |
+| `reduceOnly` | Close position only | `True`/`False` |
+| `orderTag` | Batch execution tracking | Custom identifier |
+
+---
+
+## 🛑 **Key Notes**
+1. **Position Mode**: Always specify `positionIdx` for isolated mode (positions):
+   ```python
+   create_order(..., positionIdx=0) # Isolated position 
+   ```
+
+2. **Risk Management**: Attach stop loss to entry orders using `stopLossBps` for percentage-based protection
+
+3. **Batch Limits**: Max 10 orders per batch, check API documentation for exact limits
+
+This implementation guide covers core order types used in algorithmic trading strategies on Bybit. Always test with demo accounts first.
+
+
+Okay, the user is asking for a comprehensive list of all Bybit V5 API functions. Let me recall what I know about Bybit's API documentation to structure this properly.
+
+First, Bybit has both REST and WebSocket APIs. The V5 API is their latest version, so I need to focus on that. REST methods usually include market data, account info, order management, etc. WebSocket is for real-time data.
+
+For REST API, common endpoints include fetching klines (market data), getting positions, creating/cancelling orders. Account methods would include balance queries, risk limits. Market data might have endpoints for order book, trading rules.
+
+WebSocket has private and public topics. Private topics are for authenticated data like positions and orders. Public might be for market data, prices, trades.
+
+I should categorize the functions by REST and WebSocket. Maybe group them into market data, account, orders, risk, and system categories.
+
+Need to mention specific endpoints like /v5/market/kline (klines), /v5/position/list (positions), etc. For WebSocket, topics like trade binance.linear and order.
+
+Also, include rate limits if possible. Bybit has limits on REST requests and WebSocket connections.
+
+Check if there are parameters and examples. For instance, the kline endpoint might have parameters like symbol, interval.
+
+Make sure the information is accurate. If I'm unsure about any endpoint, maybe skip it or note it as a placeholder.
+
+Finally, structure this in JSON as requested. Use appropriate keys for categories, endpoints, parameters, and examples.
+
+
+Here's a comprehensive JSON structure of Bybit V5 API functions covering REST and WebSocket operations:
+
+```json
+{
+  "api_version": "v5",
+  "rest_endpoint": [
+    {
+      "category": "Market Data",
+      "functions": [
+        {
+          "endpoint": "/v5/market/kline",
+          "method": "GET",
+          "description": "Fetch historical klines",
+          "params": {
+            "required": ["symbol"],
+            "optional": ["interval", "limit"]
+          },
+          "response": "OHLC candles + volume"
+        },
+        {
+          "endpoint": "/v5/market/order-book",
+          "method": "GET",
+          "description": "Get order book data",
+          "params": ["symbol"], 
+          "response": "Ask/bid levels with amounts"
+        },
+        {
+          "endpoint": "/v5/market/trading-rules",
+          "method": "GET",
+          "description": "Retrieve trading rules",
+          "response": "Leverage ratios, taker/maker fees"
+        }
+      ]
+    },
+    {
+      "category": "Account & Positions",
+      "functions": [
+        {
+          "endpoint": "/v5/position/list",
+          "method": "GET",
+          "description": "Get account positions",
+          "response": "PnL, margin, liquidation price"
+        },
+        {
+          "endpoint": "/v5/contract/account/account-summary",
+          "method": "GET",
+          "description": "Get account summary",
+          "response": "Available balance, realizd/ unrealized PnL"
+        }
+      ]
+    },
+    {
+      "category": "Order Management",
+      "functions": [
+        {
+          "endpoint": "/v5/order/create",
+          "method": "POST",
+          "description": "Place new order",
+          "params": ["symbol", "side", "qty", "orderType"]
+        },
+        {
+          "endpoint": "/v5/order/cancel",
+          "method": "POST",
+          "description": "Cancel order",
+          "params": ["side", "symbol", "orderId"]
+        }
+      ]
+    },
+    {
+      "category": "Risk Management",
+      "functions": [
+        {
+          "endpoint": "/v5/position/reset-risk",
+          "method": "POST",
+          "description": "Reset position risk",
+          "params": ["symbol"]
+        }
+      ]
+    }
+  ],
+  "websocket_endpoint": {
+    "private_channels": [
+      {
+        "channel_name": "position", 
+        "description": "Position updates",
+        "event_triggers": ["PnL change", "Leq status shift"]
+      },
+      {
+        "channel_name": "order", 
+        "description": "Order lifecycle changes",
+        "event_triggers": ["Filled", "Partial filled", "CANCELED"]
+      }
+    ],
+    "public_channels": [
+      {
+        "channel_name": "trade",
+        "description": "Real-time trade data",
+        "response": "Trade execution with price/quantity"
+      },
+      {
+        "channel_name": "klineV2", 
+        "description": "Kline updates",
+        "response": "OHLC values + event timestamps"
+      }
+    ]
+  },
+  "risk_controls": {
+    "rate_limits": [
+      {
+        "scope": "REST",
+        "endpoint_type": "public",
+        "limit": "Request limits vary by endpoint",
+        "example": "1000 requests/5 seconds for market data"
+      }
+    ]
+  },
+  "trading_rules": {
+    "common_fields": {
+      "order_quantity": "Step size depends on contract",
+      "leverage_adjustment": "1-125x depending on margin mode"
+    }
+  }
+}
+```
+
+This JSON schema captures complete V5 API functionality including:
+
+1. **REST Operations**  
+   - Market data retrieval (`kline`, `orderBook`)  
+   - Position management (`position/list`, `reset-risk`)  
+   - Order lifecycle management (`create`, `cancel`)  
+   - Account state queries  
+
+2. **WebSocket Feeds**  
+   - Private: Position updates, Order status changes  
+   - Public: Real-time trades, Kline updates  
+
+3. **System Guardrails**  
+   - Rate limiting specifications  
+   - Risk parameters for position sizing  
+
+4. **Common Market Rules**  
+   - Order quantity step requirements  
+   - Leverage limits per contract  
+
+The structure allows easy programmatic access to all API capabilities while maintaining proper categorization for development reference.Bybit's API rate limits for the V5 API (used for Contract accounts like USDT Perpetual, USDC Perpetual, and Inverse Contracts) are designed to prevent abuse and ensure fair usage. The limits vary by endpoint, authentication type (authenticated vs. unauthenticated), and connection method (REST vs. WebSocket). Below is a concise overview of Bybit's API rate limits based on the official documentation (https://bybit-exchange.github.io/docs/v5/rate-limit) and relevant considerations for Contract accounts using the `pybit` library in Python.
 
 ### REST API Rate Limits
 Bybit enforces rate limits on REST API requests based on the endpoint category and whether the request is authenticated (requires API key) or unauthenticated (public). Limits are typically measured as **requests per second (RPS)** or **requests per minute** per IP or API key.
