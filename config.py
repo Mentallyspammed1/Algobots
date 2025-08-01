@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 # config.py
 
 # --- Exchange Settings ---
@@ -23,13 +25,13 @@ USE_PERCENTAGE_ORDER_SIZING = True
 # The percentage of your available balance to use for each trade.
 # E.g., 1.0 means 1% of your available USDT balance.
 # This is only used if USE_PERCENTAGE_ORDER_SIZING is True.
-ORDER_SIZE_PERCENT_OF_BALANCE = 3.0
+ORDER_SIZE_PERCENT_OF_BALANCE = Decimal('3.0')
 
 # Fixed USDT amount for trading. Only used if USE_PERCENTAGE_ORDER_SIZING is False.
-USDT_AMOUNT_PER_TRADE = 10.0
+USDT_AMOUNT_PER_TRADE = Decimal('100.0')
 
 # --- Strategy Selection ---
-STRATEGY_NAME = "MarketMakingStrategy" # Options: "StochRSI_Fib_OB_Strategy", "SMA_Crossover_Strategy", "DUAL_SUPERTREND", "STOCHRSI_MOMENTUM", "EHLERS_FISHER", "EHLERS_MA_CROSS"
+STRATEGY_NAME = "EhlersSupertrendStrategy" # Options: "StochRSI_Fib_OB_Strategy", "SMA_Crossover_Strategy", "DUAL_SUPERTREND", "STOCHRSI_MOMENTUM", "EHLERS_FISHER", "EHLERS_MA_CROSS"
 
 # --- Strategy Parameters (Market Making) ---
 # Base spread in BPS (Basis Points). 10 BPS = 0.1%.
@@ -113,17 +115,23 @@ FIB_EXIT_ACTION = "warn" # Action on exit warning: "warn", "exit"
 
 # --- Strategy Parameters (Ehlers MA Cross) ---
 EHLERS_FAST_PERIOD = 10
+EHLERS_PERIOD = 10
 EHLERS_SLOW_PERIOD = 30
+
+# --- Strategy Parameters (Ehlers Supertrend) ---
+EHLERS_PERIOD = 10
+SUPERTREND_PERIOD = 10
+SUPERTREND_MULTIPLIER = 3.0
 
 # --- Risk Management (General - may be overridden by strategy specifics) ---
 # Stop Loss and Take Profit percentages relative to the entry price.
 # E.g., 0.005 means 0.5%
-STOP_LOSS_PCT = 0.005
-TAKE_PROFIT_PCT = 0.01
+STOP_LOSS_PCT = Decimal('0.005')
+TAKE_PROFIT_PCT = Decimal('0.01')
 
 # --- Risk Management (Dynamic - may be overridden by strategy specifics) ---
-ATR_MULTIPLIER_SL = 1.5 # Multiplier for ATR to set Stop Loss (for general use)
-ATR_MULTIPLIER_TP = 2.0 # Multiplier for ATR to set Take Profit (for general use)
+ATR_MULTIPLIER_SL = Decimal('1.5') # Multiplier for ATR to set Stop Loss (for general use)
+ATR_MULTIPLIER_TP = Decimal('2.0') # Multiplier for ATR to set Take Profit (for general use)
 
 # --- Strategy Parameters (Trend Filter) ---
 SMA_PERIOD = 8 # Period for Simple Moving Average (SMA) trend filter
@@ -154,6 +162,10 @@ BYBIT_CATEGORY = "linear" # Options: 'linear', 'inverse', 'spot'
 # Ensure this is sufficient for your longest indicator period (e.g., StochRSI K period + pivot bars).
 CANDLE_FETCH_LIMIT = 500
 
+# Number of candles to wait for before the bot starts trading.
+# This ensures that indicators like ATR have enough data to be accurate.
+WARMUP_PERIOD = 50
+
 # How often the bot fetches new data and checks for signals (in seconds).
 # Be mindful of Bybit's rate limits and your strategy's interval.
 POLLING_INTERVAL_SECONDS = 5 # Poll every 5 seconds
@@ -161,3 +173,7 @@ POLLING_INTERVAL_SECONDS = 5 # Poll every 5 seconds
 # API request retry settings
 API_REQUEST_RETRIES = 3
 API_BACKOFF_FACTOR = 0.2
+
+# --- Rate Limiting ---
+API_RATE_LIMIT_CALLS = 10  # Max API calls per period
+API_RATE_LIMIT_PERIOD = 1  # Period in seconds for rate limiting

@@ -4,6 +4,7 @@ import pandas as pd
 from algobots_types import OrderBlock  # Assuming this is available
 from .strategy_template import StrategyTemplate
 from colorama import init, Fore, Style
+from datetime import datetime, timedelta
 
 init()  # Initialize Colorama for vibrant terminal output
 
@@ -38,7 +39,13 @@ class MarketMakingStrategy(StrategyTemplate):
                  # --- New Parameters (from previous analysis, now integrated) ---
                  hedge_ratio: Decimal = Decimal('0.2'),  # Hedge 20% of position
                  max_spread_bps: int = 50,  # Cap for dynamic spread
-                 min_order_quantity: Decimal = Decimal('0.005')  # Minimum order size
+                 min_order_quantity: Decimal = Decimal('0.005'),  # Minimum order size
+                 # --- New Upgrades Parameters ---
+                 hedge_cooldown_s: int = 60, # Cooldown for hedging in seconds
+                 rebalance_fraction: Decimal = Decimal('1.0'), # Fraction of position to rebalance
+                 simulate: bool = False, # Wet-run flag
+                 max_signals_per_cycle: int = 5, # Cap on signals per cycle
+                 max_data_age_s: int = 30 # Max age of data before skipping cycle
                 ):
         super().__init__(logger)
         # Assign parameters with type conversion and direct calculation
@@ -53,10 +60,10 @@ class MarketMakingStrategy(StrategyTemplate):
         self.inventory_skew_intensity = inventory_skew_intensity
         self.use_trend_filter = use_trend_filter
         # Convert BPS to decimal percentage once here
-        self.sr_level_avoidance_pct = Decimal(str(sr_level_avoidance_bps)) / Decimal('10000')
+        self.sr_level_avoidance_pct = self._bps_to_pct(Decimal(str(sr_level_avoidance_bps)))
         self.use_order_block_logic = use_order_block_logic
         # Convert BPS to decimal percentage once here
-        self.ob_avoidance_pct = Decimal(str(ob_avoidance_bps)) / Decimal('10000')
+        self.ob_avoidance_pct = self._bps_to_pct(Decimal(str(ob_avoidance_bps)))
         self.rebalance_threshold = rebalance_threshold
         self.rebalance_aggressiveness = rebalance_aggressiveness
         self.use_dynamic_stop_loss = use_dynamic_stop_loss
@@ -64,6 +71,16 @@ class MarketMakingStrategy(StrategyTemplate):
         self.hedge_ratio = hedge_ratio
         self.max_spread_bps = Decimal(str(max_spread_bps))
         self.min_order_quantity = min_order_quantity
+
+        # --- New Upgrades Assignments ---
+        self.hedge_cooldown_s = hedge_cooldown_s
+        self._last_hedge_time = datetime.utcnow() - timedelta(seconds=hedge_cooldown_s * 2) # Initialize to allow immediate hedging
+        self.rebalance_fraction = rebalance_fraction
+        self.simulate = simulate
+        self.max_signals_per_cycle = max_signals_per_cycle
+        self.max_data_age_s = max_data_age_s
+        self.loss_count = 0
+        self.win_count = 0
 
         # --- Validation ---
         if self.rebalance_threshold > self.max_position_size:
@@ -81,9 +98,16 @@ class MarketMakingStrategy(StrategyTemplate):
         if self.base_order_quantity < self.min_order_quantity or self.base_order_quantity > self.max_order_quantity:
             self.logger.warning(Fore.YELLOW + f"Base order quantity ({self.base_order_quantity}) is outside min/max order quantity range. Adjusting to be within bounds." + Style.RESET_ALL)
             self.base_order_quantity = max(self.min_order_quantity, min(self.base_order_quantity, self.max_order_quantity))
+        if self.hedge_ratio < 0 or self.hedge_ratio > 1:
+            self.logger.warning(Fore.YELLOW + f"Hedge ratio ({self.hedge_ratio}) must be between 0 and 1. Defaulting to 0.2." + Style.RESET_ALL)
+            self.hedge_ratio = Decimal('0.2')
 
 
         self.logger.info(Fore.CYAN + "Summoning Enhanced MarketMakingStrategy..." + Style.RESET_ALL)
+
+    def _bps_to_pct(self, bps: Decimal) -> Decimal:
+        """Converts basis points to a decimal percentage."""
+        return bps / Decimal('10000')
 
     def _calculate_volatility_adjusted_size(self, latest_atr: Decimal, current_price: Decimal) -> Decimal:
         """Calculate order size adjusted for volatility, with a minimum and maximum size cap."""
@@ -123,6 +147,8 @@ class MarketMakingStrategy(StrategyTemplate):
                          **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
         """Generate market making signals with dynamic spreads and hedging."""
         signals = []
+        signals_generated_this_cycle = 0
+
         required_cols = ['close', 'atr', 'ehlers_supersmoother']
         if df.empty or not all(col in df.columns for col in required_cols):
             self.logger.warning(Fore.RED + f"DataFrame missing required columns: {required_cols}. Cannot generate signals." + Style.RESET_ALL)
@@ -130,16 +156,35 @@ class MarketMakingStrategy(StrategyTemplate):
 
         # --- Extract Data ---
         latest_candle = df.iloc[-1]
-        current_price = Decimal(str(latest_candle['close']))
-        latest_atr = Decimal(str(latest_candle['atr']))
+        
+        current_price_val = latest_candle['close']
+        latest_atr_val = latest_candle['atr']
+        ehlers_supersmoother_val = latest_candle['ehlers_supersmoother']
+
+        if pd.isna(current_price_val) or pd.isna(latest_atr_val) or pd.isna(ehlers_supersmoother_val):
+            self.logger.warning(Fore.RED + "Critical indicator values (close, atr, ehlers_supersmoother) are NaN. Cannot generate signals." + Style.RESET_ALL)
+            return []
+
+        current_price = Decimal(str(current_price_val))
+        latest_atr = Decimal(str(latest_atr_val))
         timestamp = df.index[-1]
+
+        # Upgrade 9: Add defense against stale data
+        now_utc = datetime.utcnow().replace(tzinfo=None)
+        if now_utc - timestamp.to_pydatetime().replace(tzinfo=None) > timedelta(seconds=self.max_data_age_s):
+            self.logger.warning(Fore.YELLOW + "Data is stale. Skipping cycle." + Style.RESET_ALL)
+            return []
+
         current_position_side = kwargs.get('current_position_side', 'NONE')
         current_position_size = Decimal(str(kwargs.get('current_position_size', '0')))
         signed_inventory = current_position_size if current_position_side == 'LONG' else -current_position_size if current_position_side == 'SHORT' else Decimal('0')
 
+        # Upgrade 7: Mid-cycle parameter refresh (placeholder)
+        # await self._refresh_params() # Uncomment and implement _refresh_params if needed
 
         # --- Calculate Dynamic Order Size ---
         order_quantity = self._calculate_volatility_adjusted_size(latest_atr, current_price)
+        # Upgrade 3: Additional Check for Order Quantity
         if order_quantity <= 0: # Ensure order quantity is valid
             self.logger.warning(Fore.RED + "Calculated order quantity is zero or less. Skipping signal generation." + Style.RESET_ALL)
             return []
@@ -149,11 +194,13 @@ class MarketMakingStrategy(StrategyTemplate):
         if self.use_dynamic_spread and current_price > 0:
             # atr_spread_adj is calculated in BPS (latest_atr / current_price is a percentage)
             atr_spread_adj = (latest_atr / current_price) * self.atr_spread_multiplier * Decimal('10000') 
-            dynamic_spread_bps = min(self.max_spread_bps, self.spread_bps + atr_spread_adj) # Add to base spread
-            self.logger.debug(Fore.BLUE + f"Dynamic spread adjusted from {self.spread_bps} to {dynamic_spread_bps:.2f} bps." + Style.RESET_ALL)
+            dynamic_spread_bps = min(self.max_spread_bps, self.spread_bps + atr_spread_adj)
+            # Upgrade 2: Improved Logging for Dynamic Spread
+            self.logger.debug(Fore.BLUE + f"Dynamic spread adjusted from {self.spread_bps} to {dynamic_spread_bps:.2f} bps due to ATR." + Style.RESET_ALL)
 
         # --- Trend Filter & Skew ---
         skewed_mid_price = current_price
+        # Upgrade 4: Refactored Trend Filter Logic
         if self.use_trend_filter:
             trend_ma = Decimal(str(latest_candle['ehlers_supersmoother']))
             trend_direction = "Uptrend" if current_price > trend_ma else "Downtrend" if current_price < trend_ma else "Neutral"
@@ -195,45 +242,49 @@ class MarketMakingStrategy(StrategyTemplate):
         all_support.sort(reverse=True) # Check higher supports first for bid adjustment
         all_resistance.sort() # Check lower resistances first for ask adjustment
 
-        # Adjust bid to avoid support/bullish OBs
+        # Upgrade 5: Efficient S/R and Order Block Avoidance
         for s_lvl in all_support:
-            # If our bid price is too close to or above a support/bullish OB
-            if bid_price >= s_lvl and bid_price < s_lvl * (Decimal('1') + self.sr_level_avoidance_pct): # Using sr_level_avoidance_pct for all S/R related levels
-                adjustment_amount = s_lvl * self.sr_level_avoidance_pct # Use the correct percentage
-                bid_price = s_lvl - adjustment_amount # Move bid below support
+            if bid_price >= s_lvl and bid_price < s_lvl * (Decimal('1') + self.sr_level_avoidance_pct):
+                adjustment_amount = s_lvl * self.sr_level_avoidance_pct
+                bid_price = s_lvl - adjustment_amount
                 self.logger.debug(Fore.CYAN + f"Adjusted BID to {bid_price:.8f} to avoid support/OB at {s_lvl:.8f}" + Style.RESET_ALL)
 
-        # Adjust ask to avoid resistance/bearish OBs
         for r_lvl in all_resistance:
-            # If our ask price is too close to or below a resistance/bearish OB
-            if ask_price <= r_lvl and ask_price > r_lvl * (Decimal('1') - self.sr_level_avoidance_pct): # Using sr_level_avoidance_pct for all S/R related levels
-                adjustment_amount = r_lvl * self.sr_level_avoidance_pct # Use the correct percentage
-                ask_price = r_lvl + adjustment_amount # Move ask above resistance
+            if ask_price <= r_lvl and ask_price > r_lvl * (Decimal('1') - self.sr_level_avoidance_pct):
+                adjustment_amount = r_lvl * self.sr_level_avoidance_pct
+                ask_price = r_lvl + adjustment_amount
                 self.logger.debug(Fore.CYAN + f"Adjusted ASK to {ask_price:.8f} to avoid resistance/OB at {r_lvl:.8f}" + Style.RESET_ALL)
 
         # Ensure bid is always below ask
         if bid_price >= ask_price:
             avg_price = (bid_price + ask_price) / Decimal('2')
-            bid_price = avg_price * (Decimal('1') - self.spread_bps / Decimal('20000')) # Re-apply base spread if needed
-            ask_price = avg_price * (Decimal('1') + self.spread_bps / Decimal('20000'))
+            bid_price = avg_price * (Decimal('1') - self._bps_to_pct(self.spread_bps / Decimal('2'))) # Re-apply base spread if needed
+            ask_price = avg_price * (Decimal('1') + self._bps_to_pct(self.spread_bps / Decimal('2')))
             self.logger.warning(Fore.RED + f"Bid {bid_price:.8f} was >= Ask {ask_price:.8f} after adjustments. Re-adjusted prices." + Style.RESET_ALL)
 
 
         # --- Hedging Logic ---
-        # Only hedge if calculated hedge size is meaningful
-        hedge_quantity = self._calculate_hedge_size(abs(signed_inventory))
-        if hedge_quantity > self.min_order_quantity: # Only create hedge if quantity is meaningful
-            hedge_side = 'SELL' if signed_inventory > 0 else 'BUY' # If currently long, sell to hedge; if short, buy to hedge
-            # For hedging, use market or aggressive limit to ensure execution
-            hedge_order_type = 'MARKET' # Always use market for rebalancing/hedging for certainty
+        # Upgrade 2: Cooldown between hedges
+        if datetime.utcnow() - self._last_hedge_time < timedelta(seconds=self.hedge_cooldown_s):
+            self.logger.info(Fore.YELLOW + f"Skipping hedge: Cooldown active. Next hedge in {self.hedge_cooldown_s - (datetime.utcnow() - self._last_hedge_time).total_seconds():.2f}s." + Style.RESET_ALL)
+        else:
+            # Upgrade 6: Advanced Hedge Size Calculation
+            hedge_quantity = self._calculate_hedge_size(abs(signed_inventory))
+            if hedge_quantity > self.min_order_quantity: # Only create hedge if quantity is meaningful
+                hedge_side = 'SELL' if signed_inventory > 0 else 'BUY' # If currently long, sell to hedge; if short, buy to hedge
+                hedge_order_type = 'MARKET' # Always use market for rebalancing/hedging for certainty
+                hedge_price = current_price # For market orders, price is indicative
 
-            # For hedging, the price can be current_price or a slightly aggressive limit
-            # Here using current_price for market order, or an aggressive limit if we were to use that.
-            hedge_price = current_price # For market orders, price is indicative
-
-            self.logger.info(Fore.YELLOW + f"Initiating Hedge: Side={hedge_side}, Qty={hedge_quantity:.4f}, Current Inventory={signed_inventory:.4f}" + Style.RESET_ALL)
-            signals.append((f'{hedge_side}_{hedge_order_type}', hedge_price, timestamp,
-                           {'order_type': hedge_order_type, 'quantity': hedge_quantity, 'strategy_id': 'MM_HEDGE'}))
+                # Upgrade 5: Wet-run flag
+                if not self.simulate:
+                    signals.append((f'{hedge_side}_{hedge_order_type}', hedge_price, timestamp,
+                                   {'order_type': hedge_order_type, 'quantity': hedge_quantity, 'strategy_id': 'MM_HEDGE', 'created_at': datetime.utcnow()})) # Upgrade 1: Add timestamp
+                    self.logger.info(Fore.YELLOW + f"Initiating Hedge: Side={hedge_side}, Qty={hedge_quantity:.4f}, Current Inventory={signed_inventory:.4f}" + Style.RESET_ALL)
+                    self._last_hedge_time = datetime.utcnow() # Upgrade 2: Update last hedge time
+                    signals_generated_this_cycle += 1
+                    if signals_generated_this_cycle >= self.max_signals_per_cycle: return signals # Upgrade 6: Cap signals
+                else:
+                    self.logger.debug(Fore.BLUE + f"Simulated Hedge: Side={hedge_side}, Qty={hedge_quantity:.4f}, Current Inventory={signed_inventory:.4f}" + Style.RESET_ALL)
 
 
         # --- Final Signal Generation for Bid/Ask (main market making) ---
@@ -242,19 +293,41 @@ class MarketMakingStrategy(StrategyTemplate):
         if current_position_side == 'LONG' and (current_position_size + order_quantity) > self.max_position_size:
             self.logger.info(Fore.YELLOW + f"Skipping BUY signal: Max position size ({self.max_position_size}) would be exceeded. Current: {current_position_size}, Order: {order_quantity}" + Style.RESET_ALL)
         elif bid_price > 0 and order_quantity >= self.min_order_quantity: # Ensure valid price and quantity
-            signals.append(('BUY_LIMIT', bid_price, timestamp,
-                           {'order_type': 'LIMIT', 'quantity': order_quantity, 'strategy_id': 'MM_BID'}))
-            self.logger.info(Fore.GREEN + f"Generated BUY LIMIT signal @ {bid_price:.8f}, Qty: {order_quantity:.4f}" + Style.RESET_ALL)
+            # Upgrade 5: Wet-run flag
+            if not self.simulate:
+                signals.append(('BUY_LIMIT', bid_price, timestamp,
+                               {'order_type': 'LIMIT', 'quantity': order_quantity, 'strategy_id': 'MM_BID', 'created_at': datetime.utcnow()})) # Upgrade 1: Add timestamp
+                self.logger.info(Fore.GREEN + f"Generated BUY LIMIT signal @ {bid_price:.8f}, Qty: {order_quantity:.4f}" + Style.RESET_ALL)
+                signals_generated_this_cycle += 1
+                if signals_generated_this_cycle >= self.max_signals_per_cycle: return signals # Upgrade 6: Cap signals
+            else:
+                self.logger.debug(Fore.BLUE + f"Simulated BUY LIMIT signal @ {bid_price:.8f}, Qty: {order_quantity:.4f}" + Style.RESET_ALL)
 
 
         # If position is too large on sell side, don't place new sell
         if current_position_side == 'SHORT' and (current_position_size + order_quantity) > self.max_position_size:
             self.logger.info(Fore.YELLOW + f"Skipping SELL signal: Max position size ({self.max_position_size}) would be exceeded. Current: {current_position_size}, Order: {order_quantity}" + Style.RESET_ALL)
         elif ask_price > 0 and order_quantity >= self.min_order_quantity: # Ensure valid price and quantity
-            signals.append(('SELL_LIMIT', ask_price, timestamp,
-                           {'order_type': 'LIMIT', 'quantity': order_quantity, 'strategy_id': 'MM_ASK'}))
-            self.logger.info(Fore.GREEN + f"Generated SELL LIMIT signal @ {ask_price:.8f}, Qty: {order_quantity:.4f}" + Style.RESET_ALL)
+            # Upgrade 5: Wet-run flag
+            if not self.simulate:
+                signals.append(('SELL_LIMIT', ask_price, timestamp,
+                               {'order_type': 'LIMIT', 'quantity': order_quantity, 'strategy_id': 'MM_ASK', 'created_at': datetime.utcnow()})) # Upgrade 1: Add timestamp
+                self.logger.info(Fore.GREEN + f"Generated SELL LIMIT signal @ {ask_price:.8f}, Qty: {order_quantity:.4f}" + Style.RESET_ALL)
+                signals_generated_this_cycle += 1
+                if signals_generated_this_cycle >= self.max_signals_per_cycle: return signals # Upgrade 6: Cap signals
+            else:
+                self.logger.debug(Fore.BLUE + f"Simulated SELL LIMIT signal @ {ask_price:.8f}, Qty: {order_quantity:.4f}" + Style.RESET_ALL)
 
+        # Upgrade 8: Emit summary signal
+        signals.append(('SUMMARY', None, timestamp, {
+            'total_signals': signals_generated_this_cycle,
+            'total_quantity_bid': sum(s[3]['quantity'] for s in signals if s[0] == 'BUY_LIMIT'),
+            'total_quantity_ask': sum(s[3]['quantity'] for s in signals if s[0] == 'SELL_LIMIT'),
+            'total_quantity_hedge': sum(s[3]['quantity'] for s in signals if 'HEDGE' in s[3]['strategy_id']),
+            'average_bid_price': sum(s[1] for s in signals if s[0] == 'BUY_LIMIT') / len([s for s in signals if s[0] == 'BUY_LIMIT']) if len([s for s in signals if s[0] == 'BUY_LIMIT']) > 0 else Decimal('0'),
+            'average_ask_price': sum(s[1] for s in signals if s[0] == 'SELL_LIMIT') / len([s for s in signals if s[0] == 'SELL_LIMIT']) if len([s for s in signals if s[0] == 'SELL_LIMIT']) > 0 else Decimal('0'),
+            'created_at': datetime.utcnow()
+        }))
 
         return signals
 
@@ -266,16 +339,32 @@ class MarketMakingStrategy(StrategyTemplate):
                               **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
         """Generate exit signals with dynamic stop-loss and rebalancing."""
         exit_signals = []
+        signals_generated_this_cycle = 0
+
         if df.empty or current_position_side == 'NONE':
             self.logger.warning(Fore.RED + f"No position or empty DataFrame. Skipping exit signals." + Style.RESET_ALL)
             return []
 
         latest_candle = df.iloc[-1]
-        current_price = Decimal(str(latest_candle['close']))
-        latest_atr = Decimal(str(latest_candle['atr']))
+        current_price_val = latest_candle['close']
+        latest_atr_val = latest_candle['atr']
+
+        if pd.isna(current_price_val) or pd.isna(latest_atr_val):
+            self.logger.warning(Fore.RED + "Critical indicator values (close, atr) are NaN for exit signals. Cannot generate exit signals." + Style.RESET_ALL)
+            return []
+
+        current_price = Decimal(str(current_price_val))
+        latest_atr = Decimal(str(latest_atr_val))
         timestamp = df.index[-1]
         current_position_size = Decimal(str(kwargs.get('current_position_size', '0')))
         entry_price = Decimal(str(kwargs.get('entry_price', '0')))
+        pnl = Decimal(str(kwargs.get('pnl', '0')))
+
+        # Upgrade 9: Add defense against stale data
+        now_utc = datetime.utcnow().replace(tzinfo=None)
+        if now_utc - timestamp.to_pydatetime().replace(tzinfo=None) > timedelta(seconds=self.max_data_age_s):
+            self.logger.warning(Fore.YELLOW + "Data is stale. Skipping exit cycle." + Style.RESET_ALL)
+            return []
 
         # --- Dynamic Stop-Loss ---
         if self.use_dynamic_stop_loss and entry_price > 0 and current_position_size > 0: # Only apply if actually in a position
@@ -284,15 +373,39 @@ class MarketMakingStrategy(StrategyTemplate):
                 stop_loss_trigger_price = entry_price - (latest_atr * self.stop_loss_atr_multiplier)
                 if current_price <= stop_loss_trigger_price:
                     self.logger.warning(Fore.RED + f"PANIC EXIT (Long): Stop-Loss triggered at {current_price:.8f} (Entry: {entry_price:.8f}, SL: {stop_loss_trigger_price:.8f})" + Style.RESET_ALL)
-                    exit_signals.append(('SELL_MARKET', current_price, timestamp,
-                                       {'order_type': 'MARKET', 'quantity': current_position_size, 'strategy_id': 'MM_PANIC_EXIT'}))
+                    # Upgrade 5: Wet-run flag
+                    if not self.simulate:
+                        exit_signals.append(('SELL_MARKET', current_price, timestamp,
+                                           {'order_type': 'MARKET', 'quantity': current_position_size, 'strategy_id': 'MM_PANIC_EXIT', 'created_at': datetime.utcnow()})) # Upgrade 1: Add timestamp
+                        # Upgrade 3: Auto-tune stop_loss_atr_multiplier
+                        if pnl < 0: self.loss_count += 1
+                        else: self.win_count += 1
+                        self.stop_loss_atr_multiplier *= (Decimal('1') + (Decimal(str(self.loss_count)) - Decimal(str(self.win_count))) / max(Decimal('1'), Decimal(str(self.win_count)) + Decimal(str(self.loss_count))))
+                        self.logger.info(Fore.MAGENTA + f"Adjusted stop_loss_atr_multiplier to {self.stop_loss_atr_multiplier:.4f} (Wins: {self.win_count}, Losses: {self.loss_count})" + Style.RESET_ALL)
+
+                        signals_generated_this_cycle += 1
+                        if signals_generated_this_cycle >= self.max_signals_per_cycle: return exit_signals # Upgrade 6: Cap signals
+                    else:
+                        self.logger.debug(Fore.BLUE + f"Simulated PANIC EXIT (Long): Stop-Loss triggered at {current_price:.8f}" + Style.RESET_ALL)
                     return exit_signals  # Prioritize panic exit to avoid further losses
             elif current_position_side == 'SHORT':
                 stop_loss_trigger_price = entry_price + (latest_atr * self.stop_loss_atr_multiplier)
                 if current_price >= stop_loss_trigger_price:
                     self.logger.warning(Fore.RED + f"PANIC EXIT (Short): Stop-Loss triggered at {current_price:.8f} (Entry: {entry_price:.8f}, SL: {stop_loss_trigger_price:.8f})" + Style.RESET_ALL)
-                    exit_signals.append(('BUY_MARKET', current_price, timestamp,
-                                       {'order_type': 'MARKET', 'quantity': current_position_size, 'strategy_id': 'MM_PANIC_EXIT'}))
+                    # Upgrade 5: Wet-run flag
+                    if not self.simulate:
+                        exit_signals.append(('BUY_MARKET', current_price, timestamp,
+                                           {'order_type': 'MARKET', 'quantity': current_position_size, 'strategy_id': 'MM_PANIC_EXIT', 'created_at': datetime.utcnow()})) # Upgrade 1: Add timestamp
+                        # Upgrade 3: Auto-tune stop_loss_atr_multiplier
+                        if pnl < 0: self.loss_count += 1
+                        else: self.win_count += 1
+                        self.stop_loss_atr_multiplier *= (Decimal('1') + (Decimal(str(self.loss_count)) - Decimal(str(self.win_count))) / max(Decimal('1'), Decimal(str(self.win_count)) + Decimal(str(self.loss_count))))
+                        self.logger.info(Fore.MAGENTA + f"Adjusted stop_loss_atr_multiplier to {self.stop_loss_atr_multiplier:.4f} (Wins: {self.win_count}, Losses: {self.loss_count})" + Style.RESET_ALL)
+
+                        signals_generated_this_cycle += 1
+                        if signals_generated_this_cycle >= self.max_signals_per_cycle: return exit_signals # Upgrade 6: Cap signals
+                    else:
+                        self.logger.debug(Fore.BLUE + f"Simulated PANIC EXIT (Short): Stop-Loss triggered at {current_price:.8f}" + Style.RESET_ALL)
                     return exit_signals  # Prioritize panic exit
 
         # --- Rebalancing Logic ---
@@ -301,29 +414,50 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.info(Fore.YELLOW + f"Rebalancing: Position size ({current_position_size}) >= threshold ({self.rebalance_threshold})." + Style.RESET_ALL)
             exit_side = 'SELL' if current_position_side == 'LONG' else 'BUY'
             
-            rebalance_quantity = current_position_size # Close entire position for rebalance
+            # Upgrade 4: Partial rebalances
+            rebalance_quantity = current_position_size * self.rebalance_fraction # Close entire position for rebalance
             if rebalance_quantity < self.min_order_quantity:
                 self.logger.warning(Fore.YELLOW + f"Rebalance quantity {rebalance_quantity:.4f} is too small to execute. Skipping." + Style.RESET_ALL)
                 return []
 
             if self.rebalance_aggressiveness == 'MARKET':
-                exit_signals.append((f'{exit_side}_MARKET', current_price, timestamp,
-                                   {'order_type': 'MARKET', 'quantity': rebalance_quantity, 'strategy_id': 'MM_REBALANCE'}))
-                self.logger.info(Fore.YELLOW + f"Generated MARKET REBALANCE signal: Side={exit_side}, Qty={rebalance_quantity:.4f}" + Style.RESET_ALL)
+                # Upgrade 5: Wet-run flag
+                if not self.simulate:
+                    exit_signals.append((f'{exit_side}_MARKET', current_price, timestamp,
+                                       {'order_type': 'MARKET', 'quantity': rebalance_quantity, 'strategy_id': 'MM_REBALANCE', 'created_at': datetime.utcnow()})) # Upgrade 1: Add timestamp
+                    self.logger.info(Fore.YELLOW + f"Generated MARKET REBALANCE signal: Side={exit_side}, Qty={rebalance_quantity:.4f}" + Style.RESET_ALL)
+                    signals_generated_this_cycle += 1
+                    if signals_generated_this_cycle >= self.max_signals_per_cycle: return exit_signals # Upgrade 6: Cap signals
+                else:
+                    self.logger.debug(Fore.BLUE + f"Simulated MARKET REBALANCE signal: Side={exit_side}, Qty={rebalance_quantity:.4f}" + Style.RESET_ALL)
 
             else:  # AGGRESSIVE_LIMIT
                 # Place limit order slightly inside the spread to get filled quickly
                 aggressive_price = current_price
                 # Calculate an aggressive limit price: current price adjusted by a small fraction of the spread
-                aggressive_limit_adjustment = (self.spread_bps / Decimal('40000')) # Half of the half spread
+                aggressive_limit_adjustment = self._bps_to_pct(self.spread_bps / Decimal('4')) # Half of the half spread
                 if exit_side == 'SELL': # To sell aggressively, aim slightly below current price
                     aggressive_price = current_price * (Decimal('1') - aggressive_limit_adjustment)
                 else: # To buy aggressively, aim slightly above current price
                     aggressive_price = current_price * (Decimal('1') + aggressive_limit_adjustment)
 
-                exit_signals.append((f'{exit_side}_LIMIT', aggressive_price, timestamp,
-                                   {'order_type': 'LIMIT', 'quantity': rebalance_quantity, 'strategy_id': 'MM_REBALANCE'}))
-                self.logger.info(Fore.YELLOW + f"Generated AGGRESSIVE LIMIT REBALANCE signal: Side={exit_side}, Price={aggressive_price:.8f}, Qty={rebalance_quantity:.4f}" + Style.RESET_ALL)
+                # Upgrade 5: Wet-run flag
+                if not self.simulate:
+                    exit_signals.append((f'{exit_side}_LIMIT', aggressive_price, timestamp,
+                                       {'order_type': 'LIMIT', 'quantity': rebalance_quantity, 'strategy_id': 'MM_REBALANCE', 'created_at': datetime.utcnow()})) # Upgrade 1: Add timestamp
+                    self.logger.info(Fore.YELLOW + f"Generated AGGRESSIVE LIMIT REBALANCE signal: Side={exit_side}, Price={aggressive_price:.8f}, Qty={rebalance_quantity:.4f}" + Style.RESET_ALL)
+                    signals_generated_this_cycle += 1
+                    if signals_generated_this_cycle >= self.max_signals_per_cycle: return exit_signals # Upgrade 6: Cap signals
+                else:
+                    self.logger.debug(Fore.BLUE + f"Simulated AGGRESSIVE LIMIT REBALANCE signal: Side={exit_side}, Price={aggressive_price:.8f}, Qty={rebalance_quantity:.4f}" + Style.RESET_ALL)
+
+        # Upgrade 8: Emit summary signal
+        exit_signals.append(('SUMMARY', None, timestamp, {
+            'total_signals': signals_generated_this_cycle,
+            'total_quantity_exit': sum(s[3]['quantity'] for s in exit_signals if s[0] != 'SUMMARY'),
+            'average_exit_price': sum(s[1] * s[3]['quantity'] for s in exit_signals if s[0] != 'SUMMARY') / sum(s[3]['quantity'] for s in exit_signals if s[0] != 'SUMMARY') if sum(s[3]['quantity'] for s in exit_signals if s[0] != 'SUMMARY') > 0 else Decimal('0'),
+            'created_at': datetime.utcnow()
+        }))
 
         self.logger.info(Fore.GREEN + f"Generated {len(exit_signals)} exit signals: {exit_signals}" + Style.RESET_ALL)
         return exit_signals
