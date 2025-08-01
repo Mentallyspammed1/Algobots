@@ -40,7 +40,7 @@ The bot's architecture is modular, allowing for the dynamic selection and loadin
 ### How to Add a New Indicator
 
 1.  **Add the Indicator Function**: Open `indicators.py` and add a new function for your technical indicator.
-2.  **Input/Output**: The function should typically take a pandas DataFrame of kline data as input and return the calculated indicator data, usually as a new pandas Series or by adding a new column to the input DataFrame.
+2.  **Input/Output**: The function should typically take a pandas DataFrame of kline data as input. The return type can vary: some functions return a pandas Series with the indicator values, others return a modified DataFrame with a new indicator column, and some may return tuples of values or other data structures.
 3.  **Integration**: Call your new indicator function from within the strategy that needs it, or from the main bot loop in `PSG.py` if it's a globally used indicator.
 
 ### How to Run Tests
