@@ -4,6 +4,7 @@ import pandas as pd
 import logging
 import importlib
 import time
+import inspect
 from typing import Any, Dict, List, Tuple, Union, Optional, Callable
 from dotenv import load_dotenv
 from decimal import Decimal, getcontext
@@ -111,6 +112,7 @@ from bot_ui import display_market_info
 from bot_logger import setup_logging, log_trade, log_metrics, log_exception
 from trade_metrics import TradeMetrics
 from utils import calculate_order_quantity, OrderBook
+from order_manager import OrderManager
 
 # --- Strategy Management ---
 try:
@@ -149,7 +151,21 @@ class PyrmethusBot:
         self.bot_logger = setup_logging()
         self.trade_metrics = TradeMetrics()
         self.bybit_client: Optional[BybitContractAPI] = None
-        self.strategy = StrategyClass(self.bot_logger, sma_period=config.SMA_LENGTH)
+        self.order_manager: Optional[OrderManager] = None
+
+        # --- Dynamic Strategy Initialization ---
+        init_signature = inspect.signature(StrategyClass.__init__)
+        strategy_params = {}
+        for param in init_signature.parameters.values():
+            if param.name in ['self', 'logger']:
+                continue
+            config_param_name = param.name.upper()
+            if hasattr(config, config_param_name):
+                strategy_params[param.name] = getattr(config, config_param_name)
+
+        self.bot_logger.info(f"Initializing strategy '{config.STRATEGY_NAME}' with parameters: {strategy_params}")
+        self.strategy = StrategyClass(self.bot_logger, **strategy_params)
+
         self.order_book = OrderBook(self.bot_logger)
         self.state_manager = StateManager('bot_state.json')
 
@@ -166,9 +182,12 @@ class PyrmethusBot:
         self.cached_atr: Optional[Decimal] = None
         self.last_signal: Optional[Dict[str, Any]] = None
         
-        # --- Order Block Tracking ---
+        # --- Order Block & Pivot Point Tracking ---
         self.active_bull_obs: List[OrderBlock] = self.state_manager.state.get('active_bull_obs', [])
         self.active_bear_obs: List[OrderBlock] = self.state_manager.state.get('active_bear_obs', [])
+        self.last_pivot_calc_timestamp: Optional[pd.Timestamp] = None
+        self.pivot_support_levels: Dict[str, Decimal] = {}
+        self.pivot_resistance_levels: Dict[str, Decimal] = {}
 
         # --- Additional State Variables ---
         self.trailing_stop_active: bool = self.state_manager.state.get('trailing_stop_active', False)
@@ -662,307 +681,55 @@ class PyrmethusBot:
                     self.bot_logger.error(f"{COLOR_RED}Failed to fetch initial kline data after multiple retries.{COLOR_RESET}")
                     return False
     
-    async def _execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: Dict[str, Any]) -> bool:
+
+    async def _update_pivot_points_if_needed(self):
         """
-        Executes an entry trade with dynamic position sizing based on account balance and volatility.
+        Calculates Fibonacci pivot points only when a new candle for the pivot timeframe has closed.
+        This is a major optimization to prevent redundant API calls and calculations.
         """
-        quantity = Decimal('0') # Initialize quantity to prevent UnboundLocalError
-        self.bot_logger.info(f"{PYRMETHUS_PURPLE}💡 Detected {signal_type.upper()} signal at {signal_price:.4f} (Info: {signal_info}){COLOR_RESET}")
-
-        # Store the last signal for display
-        self.last_signal = {
-            "type": signal_type,
-            "price": signal_price,
-            "info": signal_info
-        }
-
-        current_time = time.time()
-        if current_time - self.last_signal_time < config.POLLING_INTERVAL_SECONDS:
-             self.bot_logger.warning(f"{PYRMETHUS_YELLOW}Signal received too quickly. Skipping entry.{COLOR_RESET}")
-             return False
-        self.last_signal_time = current_time
-
-        # --- Balance Check ---
-        try:
-            balance_response = await self.bybit_client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
-            if balance_response and balance_response.get('retCode') == 0 and balance_response.get('result', {}).get('list'):
-                usdt_balance_data = next((item for item in balance_response['result']['list'] if item['coin'][0]['coin'] == 'USDT'), None)
-                if usdt_balance_data:
-                    usdt_balance = Decimal(usdt_balance_data['coin'][0]['walletBalance'])
-                    if usdt_balance < Decimal(str(config.USDT_AMOUNT_PER_TRADE)):
-                        self.bot_logger.warning(f"{PYRMETHUS_YELLOW}Insufficient USDT balance ({usdt_balance:.2f}) to place order of {config.USDT_AMOUNT_PER_TRADE} USDT. Skipping entry.{COLOR_RESET}")
-                        return False
-                else:
-                    self.bot_logger.warning(f"{PYRMETHUS_YELLOW}USDT balance not found in wallet response. Skipping balance check.{COLOR_RESET}")
-            else:
-                self.bot_logger.warning(f"{PYRMETHUS_YELLOW}Failed to fetch USDT balance. Skipping balance check. Response: {balance_response.get('retMsg', 'N/A')}{COLOR_RESET}")
-        except BybitAPIError as e:
-            await self._handle_api_error(e, "fetching USDT balance for pre-check")
-            return False
-        except Exception as e:
-            log_exception(self.bot_logger, f"Error fetching USDT balance for pre-check: {e}", e)
-            return False
-        # --- End Balance Check ---
-
-        # --- Fetch current price directly from API for execution ---
-        try:
-            ticker_info = await self.bybit_client.get_symbol_ticker(category=config.BYBIT_CATEGORY, symbol=config.SYMBOL)
-            if not ticker_info or ticker_info.get('retCode') != 0 or not ticker_info.get('result', {}).get('list'):
-                raise ValueError(f"Failed to fetch ticker info for {config.SYMBOL}: {ticker_info.get('retMsg', 'N/A')}")
-            current_execution_price = Decimal(str(ticker_info['result']['list'][0]['lastPrice']))
-            self.bot_logger.debug(f"{PYRMETHUS_CYAN}Fetched current execution price: {current_execution_price:.4f}{COLOR_RESET}")
-        except BybitAPIError as e:
-            await self._handle_api_error(e, f"fetching current price for {config.SYMBOL} before execution")
-            return False
-        except Exception as e:
-            log_exception(self.bot_logger, f"Failed to fetch current price for {config.SYMBOL} before execution: {e}", e)
-            return False
-        # --- End Fetch ---
-
-        # Use the fetched price for calculations, but keep self.current_price updated by WS
-        if current_execution_price <= 0:
-            self.bot_logger.error(f"{COLOR_RED}Invalid current execution price ({current_execution_price}) detected. Cannot calculate order quantity or place order.{COLOR_RESET}")
-            return False
+        if not config.ENABLE_FIB_PIVOT_ACTIONS:
+            return
 
         try:
-            instrument_info_resp = await self.bybit_client.get_instruments_info(category=config.BYBIT_CATEGORY, symbol=config.SYMBOL)
-            if not instrument_info_resp or instrument_info_resp.get('retCode') != 0 or not instrument_info_resp.get('result', {}).get('list'):
-                raise ValueError(f"Failed to fetch instrument info for {config.SYMBOL}: {instrument_info_resp.get('retMsg', 'N/A')}")
-            
-            instrument = instrument_info_resp['result']['list'][0]
-            min_qty = Decimal(instrument.get('lotSizeFilter', {}).get('minOrderQty', '0'))
-            qty_step = Decimal(instrument.get('lotSizeFilter', {}).get('qtyStep', '0'))
-            min_order_value = Decimal(instrument.get('lotSizeFilter', {}).get('minOrderIv', '0'))
-            
-            if min_qty <= 0:
-                 self.bot_logger.warning(f"{COLOR_YELLOW}Instrument info missing or invalid minOrderQty for {config.SYMBOL}. Using default 0.001.{COLOR_RESET}")
-                 min_qty = Decimal('0.001') 
-            if qty_step <= 0:
-                 self.bot_logger.warning(f"{COLOR_YELLOW}Instrument info missing or invalid qtyStep for {config.SYMBOL}. Using default 0.001.{COLOR_RESET}")
-                 qty_step = Decimal('0.001') 
-            if min_order_value <= 0:
-                 self.bot_logger.warning(f"{COLOR_YELLOW}Instrument info missing or invalid minOrderIv for {config.SYMBOL}. Using default 10 USDT.{COLOR_RESET}")
-                 min_order_value = Decimal('10')
+            # Fetch the last 2 candles of the pivot timeframe to get the most recently closed one
+            pivot_ohlcv_response = await self.bybit_client.get_kline_rest_fallback(
+                category=config.BYBIT_CATEGORY, symbol=config.SYMBOL, interval=config.PIVOT_TIMEFRAME, limit=2
+            )
 
-        except BybitAPIError as e:
-            await self._handle_api_error(e, f"fetching instrument info for {config.SYMBOL}")
-            return False
+            if not (pivot_ohlcv_response and pivot_ohlcv_response.get('retCode') == 0 and pivot_ohlcv_response['result'].get('list')):
+                self.bot_logger.warning("Could not fetch pivot point data.")
+                return
+
+            # The second to last candle is the most recently closed one
+            last_closed_pivot_candle_data = pivot_ohlcv_response['result']['list'][-2]
+            candle_timestamp = pd.to_datetime(int(last_closed_pivot_candle_data[0]), unit='ms', utc=True)
+
+            # If we haven't calculated pivots before, or if a new candle has appeared
+            if self.last_pivot_calc_timestamp is None or candle_timestamp > self.last_pivot_calc_timestamp:
+                self.bot_logger.info(f"{PYRMETHUS_BLUE}New {config.PIVOT_TIMEFRAME} candle detected. Recalculating Fibonacci pivot points...{COLOR_RESET}")
+                
+                # Create a temporary DataFrame for the calculation
+                temp_df = pd.DataFrame([{
+                    'timestamp': candle_timestamp,
+                    'open': Decimal(last_closed_pivot_candle_data[1]),
+                    'high': Decimal(last_closed_pivot_candle_data[2]),
+                    'low': Decimal(last_closed_pivot_candle_data[3]),
+                    'close': Decimal(last_closed_pivot_candle_data[4]),
+                    'volume': Decimal(last_closed_pivot_candle_data[5]),
+                }]).set_index('timestamp')
+
+                fib_resistance, fib_support = calculate_fibonacci_pivot_points(temp_df)
+
+                # Reset and update the bot's pivot level state
+                self.pivot_resistance_levels = {r['type']: r['price'] for r in fib_resistance}
+                self.pivot_support_levels = {s['type']: s['price'] for s in fib_support}
+                self.last_pivot_calc_timestamp = candle_timestamp
+
+                self.bot_logger.info(f"Pivot Points Updated: R={self.pivot_resistance_levels}, S={self.pivot_support_levels}")
+
         except Exception as e:
-            log_exception(self.bot_logger, f"Error fetching or parsing instrument info for {config.SYMBOL}: {e}", e)
-            return False
+            log_exception(self.bot_logger, f"Error updating Fibonacci Pivot Points: {e}", e)
 
-        target_usdt_value = Decimal(str(config.USDT_AMOUNT_PER_TRADE))
-        if config.USE_PERCENTAGE_ORDER_SIZING:
-            try:
-                balance_response = await self.bybit_client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
-                if balance_response and balance_response.get('retCode') == 0 and balance_response.get('result', {}).get('list'):
-                    usdt_balance_data = next((item for item in balance_response['result']['list'] if item['coin'][0]['coin'] == 'USDT'), None)
-                    if usdt_balance_data:
-                        usdt_balance = Decimal(usdt_balance_data['coin'][0]['walletBalance'])
-                        
-                        volatility_factor = Decimal('1')
-                        # Use the fetched execution price for volatility calculation if available
-                        effective_price = current_execution_price if current_execution_price > 0 else self.current_price
-                        if self.cached_atr and effective_price > 0:
-                            volatility_factor = min(Decimal('1'), Decimal(str(self.cached_atr)) / Decimal(str(effective_price)) if effective_price != 0 else Decimal('1'))
-                        
-                        target_usdt_value = usdt_balance * (Decimal(str(config.ORDER_SIZE_PERCENT_OF_BALANCE)) / Decimal('100')) * volatility_factor
-                        self.bot_logger.info(f"{PYRMETHUS_BLUE}Dynamic sizing: Balance={usdt_balance:.2f}, Volatility Factor={volatility_factor:.3f}, Target USDT={target_usdt_value:.2f}{COLOR_RESET}")
-                    else:
-                        self.bot_logger.warning(f"{COLOR_YELLOW}USDT balance not found in wallet response. Using default USDT_AMOUNT_PER_TRADE.{COLOR_RESET}")
-                else:
-                    self.bot_logger.warning(f"{COLOR_YELLOW}Failed to fetch USDT balance. Using default USDT_AMOUNT_PER_TRADE. Response: {balance_response.get('retMsg', 'N/A')}{COLOR_RESET}")
-            except BybitAPIError as e:
-                await self._handle_api_error(e, "fetching USDT balance for dynamic sizing")
-                return False
-            except Exception as e:
-                log_exception(self.bot_logger, f"Error fetching USDT balance for dynamic sizing: {e}", e)
-
-        # --- Calculate Order Quantity using Centralized Utility Function ---
-        quantity = calculate_order_quantity(
-            usdt_amount=target_usdt_value,
-            current_price=current_execution_price,
-            min_qty=min_qty,
-            qty_step=qty_step,
-            min_order_value=min_order_value,
-            logger=self.bot_logger
-        )
-
-        # Final check: if quantity is zero after all adjustments, something is wrong.
-        if quantity <= 0:
-            self.bot_logger.error(f"{COLOR_RED}Final calculated quantity is zero or negative. Aborting order.{COLOR_RESET}")
-            return False
-
-        order_type = "Limit" # Always use Limit orders for entry
-        side = "Buy" if "BUY" in signal_type else "Sell"
-
-        order_kwargs = {
-            "category": config.BYBIT_CATEGORY, "symbol": config.SYMBOL, "side": side,
-            "order_type": order_type, "qty": f"{quantity:.8f}",
-            "price": f"{signal_price:.4f}" # Use the signal price for limit order
-        }
-        
-        if config.HEDGE_MODE: order_kwargs['positionIdx'] = 1 if side == 'Buy' else 2
-        else: order_kwargs['positionIdx'] = 0
-
-        self.bot_logger.info(f"{PYRMETHUS_ORANGE}Placing {signal_type.upper()} order: Qty={quantity:.4f} {config.SYMBOL}, Price={order_kwargs.get('price', 'N/A')}{COLOR_RESET}")
-        
-        try:
-            response = await self.bybit_client.create_order(**order_kwargs)
-            
-            if response and response.get('retCode') == 0:
-                order_id = response.get('result', {}).get('orderId')
-                filled_qty = Decimal(response.get('result', {}).get('qty', '0'))
-                # Use the actual filled price from the response if available, otherwise fallback
-                filled_price = Decimal(response.get('result', {}).get('avgPrice', '0')) if response.get('result', {}).get('avgPrice') else signal_price
-                
-                log_trade(self.bot_logger, "Entry trade executed", {
-                    "signal_type": signal_type.upper(), "order_id": order_id, "price": filled_price,
-                    "timestamp": str(signal_timestamp), "quantity": filled_qty,
-                    "usdt_value": filled_qty * filled_price
-                })
-
-                if order_id:
-                    asyncio.create_task(self.chase_limit_order(order_id, config.SYMBOL, side))
-                
-                # Update state after successful entry
-                self.state_manager.update_state('inventory', str(self.inventory))
-                self.state_manager.update_state('entry_price', str(self.entry_price))
-                self.state_manager.update_state('unrealized_pnl', str(self.unrealized_pnl))
-                self.state_manager.update_state('entry_price_for_trade_metrics', str(self.entry_price_for_trade_metrics))
-                self.state_manager.update_state('entry_fee_for_trade_metrics', str(self.entry_fee_for_trade_metrics))
-
-                return True
-            else:
-                self.bot_logger.error(f"{COLOR_RED}Order placement failed for {config.SYMBOL}. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
-                return False
-        except BybitAPIError as e:
-            await self._handle_api_error(e, f"order placement for {config.SYMBOL}")
-            return False
-        except Exception as e:
-            log_exception(self.bot_logger, f"Exception during order execution for {config.SYMBOL}: {e}", e)
-            return False
-
-    async def chase_limit_order(self, order_id: str, symbol: str, side: str, chase_aggressiveness: float = 0.0005):
-        """
-        Chases a limit order to keep it competitive in the order book.
-        """
-        self.bot_logger.info(f"{PYRMETHUS_ORANGE}Chasing limit order {order_id} for {symbol} with aggressiveness {chase_aggressiveness:.4f}...{COLOR_RESET}")
-        
-        max_amendments = 10 
-        amendment_count = 0
-
-        while amendment_count < max_amendments:
-            await asyncio.sleep(config.POLLING_INTERVAL_SECONDS)
-
-            try:
-                order_status_resp = await self.bybit_client.get_order_status(
-                    category=config.BYBIT_CATEGORY, order_id=order_id, symbol=symbol
-                )
-                current_order_status = order_status_resp.get('result', {}).get('list', [{}])[0].get('orderStatus')
-                if current_order_status not in ['New', 'PartiallyFilled']:
-                    self.bot_logger.info(f"{PYRMETHUS_GREEN}Order {order_id} is no longer active ({current_order_status}). Stopping chase.{COLOR_RESET}")
-                    break
-
-                order_book_resp = await self.bybit_client.get_orderbook(category=config.BYBIT_CATEGORY, symbol=symbol)
-                if not order_book_resp or order_book_resp.get('retCode') != 0 or not order_book_resp.get('result'):
-                    self.bot_logger.warning(f"{COLOR_YELLOW}Could not fetch order book for chasing order {order_id}.{COLOR_RESET}")
-                    continue
-
-                best_bid = Decimal(order_book_resp['result']['b'][0][0])
-                best_ask = Decimal(order_book_resp['result']['a'][0][0])
-                current_limit_price = Decimal(order_status_resp['result']['list'][0]['price'])
-
-                new_price = None
-                if side == 'Buy':
-                    if current_limit_price < best_bid * (Decimal('1') - Decimal(chase_aggressiveness)):
-                        new_price = best_bid
-                elif side == 'Sell':
-                    if current_limit_price > best_ask * (Decimal('1') + Decimal(chase_aggressiveness)):
-                        new_price = best_ask
-
-                if new_price:
-                    amendment_result = await self.bybit_client.amend_order(
-                        category=config.BYBIT_CATEGORY, symbol=symbol, orderId=order_id, price=f"{new_price:.4f}"
-                    )
-                    if amendment_result and amendment_result.get('retCode') == 0:
-                        self.bot_logger.info(f"{PYRMETHUS_BLUE}Amended order {order_id} to price {new_price:.4f}{COLOR_RESET}")
-                        amendment_count += 1
-                    else:
-                        self.bot_logger.error(f"{COLOR_RED}Failed to amend order {order_id}: {amendment_result.get('retMsg', 'Unknown error')}{COLOR_RESET}")
-                        if amendment_count > 3: break 
-                
-            except BybitAPIError as e:
-                await self._handle_api_error(e, f"chasing order {order_id} for {symbol}")
-                if e.ret_code in [10009, 110001]: break # Order not found or already filled/cancelled
-                if amendment_count > 5: break
-            except Exception as e:
-                log_exception(self.bot_logger, f"Error chasing order {order_id} for {symbol}: {e}", e)
-                if "order not found" in str(e).lower(): break 
-                if amendment_count > 5: break
-
-        if amendment_count == max_amendments:
-            self.bot_logger.warning(f"{COLOR_YELLOW}Reached maximum amendments ({max_amendments}) for order {order_id}. Stopping chase.{COLOR_RESET}")
-
-
-    async def _execute_exit(self, exit_type: str, exit_price: Decimal, exit_timestamp: Any, exit_info: Dict[str, Any]) -> bool:
-        """
-        Executes an exit trade for the current open position.
-        """
-        exit_info_safe = exit_info or {}
-        self.bot_logger.info(f"{PYRMETHUS_PURPLE}💡 Detected {exit_type.upper()} exit signal at {exit_price:.4f} (Info: {exit_info_safe}){COLOR_RESET}")
-
-        # Store the last signal for display
-        self.last_signal = {
-            "type": exit_type,
-            "price": exit_price,
-            "info": exit_info_safe
-        }
-
-        if not self.has_open_position:
-            self.bot_logger.warning(f"{COLOR_YELLOW}No open position to exit for {config.SYMBOL}. Signal ignored.{COLOR_RESET}")
-            return False
-
-        side_for_exit = 'Sell' if self.inventory > 0 else 'Buy'
-        exit_quantity = abs(self.inventory)
-
-        exit_order_kwargs = {
-            "category": config.BYBIT_CATEGORY, "symbol": config.SYMBOL, "side": side_for_exit,
-            "order_type": "Market", "qty": f"{exit_quantity:.8f}", "positionIdx": 0,
-        }
-        if config.HEDGE_MODE: exit_order_kwargs['positionIdx'] = 1 if side_for_exit == 'Buy' else 2
-
-        self.bot_logger.info(f"{PYRMETHUS_ORANGE}Placing {side_for_exit} Market exit order for {exit_quantity:.4f} {config.SYMBOL}{COLOR_RESET}")
-        
-        try:
-            response = await self.bybit_client.create_order(**exit_order_kwargs)
-            
-            if response and response.get('retCode') == 0:
-                filled_qty = Decimal(response.get('result', {}).get('qty', '0'))
-                filled_price = Decimal(response.get('result', {}).get('avgPrice', '0')) if response.get('result', {}).get('avgPrice') else self.current_price 
-                
-                log_trade(self.bot_logger, "Exit trade executed", {
-                    "exit_type": exit_type.upper(), "price": filled_price,
-                    "timestamp": str(exit_timestamp), "quantity": filled_qty
-                })
-                
-                self._reset_position_state() 
-                
-                # Update state after successful exit
-                self.state_manager.update_state('inventory', str(self.inventory))
-                self.state_manager.update_state('entry_price', str(self.entry_price))
-                self.state_manager.update_state('unrealized_pnl', str(self.unrealized_pnl))
-
-                return True
-            else:
-                self.bot_logger.error(f"{COLOR_RED}Exit order placement failed for {config.SYMBOL}. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
-                return False
-        except BybitAPIError as e:
-            await self._handle_api_error(e, f"exit order placement for {config.SYMBOL}")
-            return False
-        except Exception as e:
-            log_exception(self.bot_logger, f"Exception during exit order execution for {config.SYMBOL}: {e}", e)
-            return False
 
     async def _handle_restart(self):
         """Handles bot restart by stopping and starting the main loop."""
@@ -992,7 +759,8 @@ class PyrmethusBot:
         print(f"{PYRMETHUS_ORANGE}\n⚡ Initializing scalping engine...{COLOR_RESET}")
 
         self.bybit_client = BybitContractAPI(testnet="testnet" in config.BYBIT_API_ENDPOINT)
-        self.bot_logger.info("BybitContractAPI initialized.")
+        self.order_manager = OrderManager(self.bybit_client, self)
+        self.bot_logger.info("BybitContractAPI and OrderManager initialized.")
 
         private_listener_task = asyncio.create_task(self.bybit_client.start_private_websocket_listener(self._handle_position_update))
         await self.bybit_client.subscribe_ws_private_topic("position")
@@ -1065,55 +833,16 @@ class PyrmethusBot:
                         await asyncio.sleep(config.POLLING_INTERVAL_SECONDS)
                         continue
 
-                    pivot_support_levels: Dict[str, Decimal] = {}
-                    pivot_resistance_levels: Dict[str, Decimal] = {}
-
-                    if config.ENABLE_FIB_PIVOT_ACTIONS and isinstance(self.klines_df.index, pd.DatetimeIndex):
-                        try:
-                            pivot_ohlcv_response = await self.bybit_client.get_kline_rest_fallback(
-                                category=config.BYBIT_CATEGORY, symbol=config.SYMBOL, interval=config.PIVOT_TIMEFRAME, limit=2
-                            )
-                            if pivot_ohlcv_response and pivot_ohlcv_response.get('retCode') == 0 and pivot_ohlcv_response['result'].get('list'):
-                                pivot_data = [
-                                    {
-                                        'timestamp': pd.to_datetime(int(kline[0]), unit='ms', utc=True),
-                                        'open': Decimal(kline[1]), 'high': Decimal(kline[2]), 'low': Decimal(kline[3]),
-                                        'close': Decimal(kline[4]), 'volume': Decimal(kline[5]),
-                                    }
-                                    for kline in pivot_ohlcv_response['result']['list']
-                                ]
-                                pivot_ohlcv_df = pd.DataFrame(pivot_data).set_index('timestamp').sort_index()
-                                pivot_ohlcv_df.index = pd.to_datetime(pivot_ohlcv_df.index, utc=True)
-                                
-                                if len(pivot_ohlcv_df) >= 2:
-                                    prev_pivot_candle = pivot_ohlcv_df.iloc[-2]
-                                    # Ensure the temporary DataFrame for pivot calculation has a proper DatetimeIndex.
-                                    temp_df = pivot_ohlcv_df.iloc[[-2]]
-                                    
-                                    fib_resistance, fib_support = calculate_fibonacci_pivot_points(temp_df)
-
-                                    all_fib_levels = [
-                                        {'type': r['type'], 'price': r['price'], 'is_resistance': True} for r in fib_resistance
-                                    ] + [
-                                        {'type': s['type'], 'price': s['price'], 'is_resistance': False} for s in fib_support
-                                    ]
-                                    filtered_fib_levels = [level for level in all_fib_levels if any(str(fib_val) in level['type'] for fib_val in config.FIB_LEVELS_TO_CALC)]
-                                    filtered_fib_levels.sort(key=lambda x: abs(x['price'] - self.current_price))
-                                    selected_fib_levels = filtered_fib_levels[:config.FIB_NEAREST_COUNT]
-
-                                    for level in selected_fib_levels:
-                                        if level['is_resistance']: pivot_resistance_levels[level['type']] = level['price']
-                                        else: pivot_support_levels[level['type']] = level['price']
-                        except Exception as e:
-                            log_exception(self.bot_logger, f"Error calculating Fibonacci Pivot Points: {e}", e)
+                    # --- Pivot Point Calculation (Optimized) ---
+                    await self._update_pivot_points_if_needed()
 
                     order_book_imbalance, total_volume = self.order_book.get_imbalance()
 
-                    display_market_info(self.klines_df, self.current_price, config.SYMBOL, pivot_resistance_levels, pivot_support_levels, self.bot_logger, order_book_imbalance, self.last_signal)
+                    display_market_info(self.klines_df, self.current_price, config.SYMBOL, self.pivot_resistance_levels, self.pivot_support_levels, self.bot_logger, order_book_imbalance, self.last_signal)
 
                     if not self.has_open_position:
                         signals = self.strategy.generate_signals(
-                            self.klines_df, pivot_resistance_levels, pivot_support_levels,
+                            self.klines_df, self.pivot_resistance_levels, self.pivot_support_levels,
                             self.active_bull_obs, self.active_bear_obs,
                             current_position_side=self.current_position_side or 'NONE',
                             current_position_size=abs(self.inventory),
@@ -1121,7 +850,7 @@ class PyrmethusBot:
                         )
                         for signal in signals:
                             signal_type, signal_price, signal_timestamp, signal_info = signal
-                            if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
+                            if await self.order_manager.execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
                                 break
                     else:
                         exit_signals = self.strategy.generate_exit_signals(
@@ -1132,11 +861,6 @@ class PyrmethusBot:
                             current_position_size=abs(self.inventory),
                             order_book_imbalance=order_book_imbalance
                         )
-                        if exit_signals:
-                            for exit_signal in exit_signals:
-                                exit_type, exit_price, exit_timestamp, exit_info = exit_signal
-                                if await self._execute_exit(exit_type, exit_price, exit_timestamp, exit_info):
-                                    break
 
                     await asyncio.sleep(config.POLLING_INTERVAL_SECONDS)
 
