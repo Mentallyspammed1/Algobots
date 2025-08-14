@@ -177,3 +177,7 @@ API_BACKOFF_FACTOR = 0.2
 # --- Rate Limiting ---
 API_RATE_LIMIT_CALLS = 10  # Max API calls per period
 API_RATE_LIMIT_PERIOD = 1  # Period in seconds for rate limiting
+
+# Receive window for API requests (in milliseconds).
+# Per Bybit's error message, this should be 5000.
+RECV_WINDOW = 5000

@@ -115,7 +115,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot.inventory, Decimal('0'))
         self.assertFalse(self.bot.has_open_position)
         self.assertIsNone(self.bot.current_position_side)
-        self.assertIsNone(self.bot.klines_df)
+        self.assertTrue(self.bot.klines_df.empty)
         self.MockStrategyClass.assert_called_once()
 
     async def test_position_properties(self):

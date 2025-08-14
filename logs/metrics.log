@@ -5,3 +5,5 @@
 {"timestamp": "2025-08-01 13:31:34,f", "level": "METRICS", "message": "Daily metrics", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 25, "funcname": "metrics", "total_pnl": 100.5, "win_rate": 0.6}
 {"timestamp": "2025-08-01 13:33:46,f", "level": "METRICS", "message": "Daily metrics", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 25, "funcname": "metrics", "total_pnl": 100.5, "win_rate": 0.6}
 {"timestamp": "2025-08-01 13:35:25,f", "level": "METRICS", "message": "Daily metrics", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 25, "funcname": "metrics", "total_pnl": 100.5, "win_rate": 0.6}
+{"timestamp": "2025-08-01 19:08:47,%f", "level": "METRICS", "message": "Daily metrics", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 25, "funcname": "metrics", "total_pnl": 100.5, "win_rate": 0.6}
+{"timestamp": "2025-08-01 19:09:51,%f", "level": "METRICS", "message": "Daily metrics", "logger_name": "PyrmethusBot", "filename": "bot_logger.py", "lineno": 25, "funcname": "metrics", "total_pnl": 100.5, "win_rate": 0.6}

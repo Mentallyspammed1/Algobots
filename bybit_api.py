@@ -14,12 +14,12 @@ from dataclasses import dataclass, field
 from dotenv import load_dotenv
 from decimal import Decimal, InvalidOperation
 import traceback
+import config # Import config
 
 # --- Load environment variables for API keys ---
 load_dotenv(override=True)
 
 # --- Constants ---
-DEFAULT_RECV_WINDOW = 10000
 MAX_RETRIES = 3
 INITIAL_BACKOFF = 1
 WS_PING_INTERVAL = 20
@@ -226,17 +226,17 @@ class BybitContractAPI:
         for attempt in range(MAX_RETRIES):
             try:
                 ts = str(await self._get_server_time_ms())
-                headers = {"X-BAPI-API-KEY": self.api_key, "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": str(DEFAULT_RECV_WINDOW), "Content-Type": "application/json"}
+                headers = {"X-BAPI-API-KEY": self.api_key, "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": str(config.RECV_WINDOW), "Content-Type": "application/json"}
                 kwargs = {"headers": headers}
                 if signed:
                     if method == "POST":
                         payload = json.dumps(body, separators=(",", ":")) if body else ""
-                        headers["X-BAPI-SIGN"] = self._generate_rest_signature(ts, str(DEFAULT_RECV_WINDOW), payload)
+                        headers["X-BAPI-SIGN"] = self._generate_rest_signature(ts, str(config.RECV_WINDOW), payload)
                         kwargs["content"] = payload
                         r = await self.client.post(endpoint, **kwargs)
                     else:
                         payload = urllib.parse.urlencode(sorted(params.items())) if params else ""
-                        headers["X-BAPI-SIGN"] = self._generate_rest_signature(ts, str(DEFAULT_RECV_WINDOW), payload)
+                        headers["X-BAPI-SIGN"] = self._generate_rest_signature(ts, str(config.RECV_WINDOW), payload)
                         kwargs["params"] = params
                         r = await self.client.get(endpoint, **kwargs)
                 else:

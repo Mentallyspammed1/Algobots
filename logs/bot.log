@@ -46131,3 +46131,19 @@ Traceback (most recent call last):
   File "/data/data/com.termux/files/home/Algobots/tests/test_bot_logger.py", line 40, in test_log_exception
     raise ValueError("Test exception")
 ValueError: Test exception
+2025-08-01 19:08:47,332 - PyrmethusBot - INFO - test_bot_logger.py:20 - Test log message
+2025-08-01 19:08:47,334 - PyrmethusBot - TRADE - bot_logger.py:21 - New trade - {"symbol": "BTCUSDT", "price": 20000, "qty": 0.001}
+2025-08-01 19:08:47,336 - PyrmethusBot - METRICS - bot_logger.py:25 - Daily metrics - {"total_pnl": 100.5, "win_rate": 0.6}
+2025-08-01 19:08:47,338 - PyrmethusBot - ERROR - bot_logger.py:176 - An error occurred
+Traceback (most recent call last):
+  File "/app/tests/test_bot_logger.py", line 40, in test_log_exception
+    raise ValueError("Test exception")
+ValueError: Test exception
+2025-08-01 19:09:51,306 - PyrmethusBot - INFO - test_bot_logger.py:20 - Test log message
+2025-08-01 19:09:51,308 - PyrmethusBot - TRADE - bot_logger.py:21 - New trade - {"symbol": "BTCUSDT", "price": 20000, "qty": 0.001}
+2025-08-01 19:09:51,309 - PyrmethusBot - METRICS - bot_logger.py:25 - Daily metrics - {"total_pnl": 100.5, "win_rate": 0.6}
+2025-08-01 19:09:51,311 - PyrmethusBot - ERROR - bot_logger.py:176 - An error occurred
+Traceback (most recent call last):
+  File "/app/tests/test_bot_logger.py", line 40, in test_log_exception
+    raise ValueError("Test exception")
+ValueError: Test exception

@@ -162,7 +162,7 @@ class PyrmethusBot:
         self.entry_fee_for_trade_metrics: Decimal = Decimal(self.state_manager.state.get('entry_fee_for_trade_metrics', '0'))
         
         self.current_price: Decimal = Decimal('0')
-        self.klines_df: Optional[pd.DataFrame] = None
+        self.klines_df: pd.DataFrame = pd.DataFrame()
         self.cached_atr: Optional[Decimal] = None
         self.last_signal: Optional[Dict[str, Any]] = None
         

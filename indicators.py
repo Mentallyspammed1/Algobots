@@ -337,9 +337,10 @@ def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd
 
     new_klines_df = pd.DataFrame(all_new_klines).set_index('timestamp')
 
-    # Combine the existing and new dataframes
-    # Using combine_first to update existing rows and append new ones
-    combined_df = new_klines_df.combine_first(df)
+    # Use concat for a more robust merge, then remove duplicates, keeping the last entry
+    # This is safer than combine_first for time-series data from streams.
+    combined_df = pd.concat([df, new_klines_df])
+    combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
     
     # Sort the index to ensure chronological order after combining
     combined_df.sort_index(inplace=True)
