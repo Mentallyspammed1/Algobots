@@ -95,14 +95,7 @@
                 <strong class="text-red-400">WARNING:</strong> API keys are sent to the backend. Ensure your backend is secure.
             </p>
             <div class="grid md:grid-cols-2 gap-4">
-                <div>
-                    <label for="apiKey" class="block text-sm font-medium mb-1 text-slate-300">API Key</label>
-                    <input type="text" id="apiKey" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all" placeholder="Enter your API Key">
-                </div>
-                <div>
-                    <label for="apiSecret" class="block text-sm font-medium mb-1 text-slate-300">API Secret</label>
-                    <input type="password" id="apiSecret" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all" placeholder="Enter your API Secret">
-                </div>
+                
                 <div>
                     <label for="symbol" class="block text-sm font-medium mb-1 text-slate-300">Trading Symbol</label>
                     <select id="symbol" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
@@ -294,8 +287,6 @@
 
         const startBotBtn = document.getElementById('startBot');
         const buttonTextEl = document.getElementById('buttonText');
-        const apiKeyInput = document.getElementById('apiKey');
-        const apiSecretInput = document.getElementById('apiSecret');
         const symbolInput = document.getElementById('symbol');
         const intervalInput = document.getElementById('interval');
         const leverageInput = document.getElementById('leverage');
@@ -481,19 +472,9 @@
                 return;
             }
             
-            const apiKey = apiKeyInput.value;
-            const apiSecret = apiSecretInput.value;
-
-            if (!apiKey || !apiSecret) {
-                log('Master, you must bind the grimoire to your API keys first!', 'error');
-                return;
-            }
-
             log('Credentials verified. Initiating the ritual...', 'success');
 
             const config = {
-                apiKey: apiKey,
-                apiSecret: apiSecret,
                 symbol: symbolInput.value.toUpperCase(),
                 interval: intervalInput.value,
                 leverage: parseInt(leverageInput.value),

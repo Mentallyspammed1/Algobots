@@ -38,6 +38,11 @@ class TestBacktester(unittest.TestCase):
         self.test_config["supertrend_multiplier"] = 3.0
         self.test_config["rsi_length"] = 14
         self.test_config["ef_period"] = 10
+        self.test_config["macd_fast_period"] = 12
+        self.test_config["macd_slow_period"] = 26
+        self.test_config["macd_signal_period"] = 9
+        self.test_config["bb_period"] = 20
+        self.test_config["bb_std_dev"] = 2.0
         self.test_config["riskPct"] = 1
         self.test_config["leverage"] = 10
         self.test_config["stopLossPct"] = 2
@@ -70,14 +75,14 @@ class TestBacktester(unittest.TestCase):
         mock_side_effects = [
             None for _ in range(num_warmup_klines) # Warmup period
         ] + [
-            {'supertrend': {'direction': 1}, 'rsi': 40, 'fisher': 1.0}, # Buy signal
-            {'supertrend': {'direction': 1}, 'rsi': 45, 'fisher': 0.5},
-            {'supertrend': {'direction': -1}, 'rsi': 60, 'fisher': -1.0}, # Sell signal
-            {'supertrend': {'direction': -1}, 'rsi': 55, 'fisher': -0.5},
+            {'supertrend': {'direction': 1}, 'rsi': 40, 'fisher': 1.0, 'macd': {'macd_line': 1, 'signal_line': 0.5, 'histogram': 0.5}, 'bollinger_bands': {'middle_band': 100, 'upper_band': 105, 'lower_band': 95}}, # Buy signal
+            {'supertrend': {'direction': 1}, 'rsi': 45, 'fisher': 0.5, 'macd': {'macd_line': 1.2, 'signal_line': 0.6, 'histogram': 0.6}, 'bollinger_bands': {'middle_band': 101, 'upper_band': 106, 'lower_band': 96}},
+            {'supertrend': {'direction': -1}, 'rsi': 60, 'fisher': -1.0, 'macd': {'macd_line': -1, 'signal_line': -0.5, 'histogram': -0.5}, 'bollinger_bands': {'middle_band': 102, 'upper_band': 107, 'lower_band': 97}}, # Sell signal
+            {'supertrend': {'direction': -1}, 'rsi': 55, 'fisher': -0.5, 'macd': {'macd_line': -1.2, 'signal_line': -0.6, 'histogram': -0.6}, 'bollinger_bands': {'middle_band': 103, 'upper_band': 108, 'lower_band': 98}},
         ]
         # Fill the rest with neutral values
         while len(mock_side_effects) < len(self.mock_klines):
-            mock_side_effects.append({'supertrend': {'direction': 0}, 'rsi': 50, 'fisher': 0})
+            mock_side_effects.append({'supertrend': {'direction': 0}, 'rsi': 50, 'fisher': 0, 'macd': {'macd_line': 0, 'signal_line': 0, 'histogram': 0}, 'bollinger_bands': {'middle_band': 0, 'upper_band': 0, 'lower_band': 0}})
 
         mock_calculate_indicators.side_effect = mock_side_effects
 
@@ -101,8 +106,13 @@ class TestBacktester(unittest.TestCase):
         ]
         
         param_ranges = {
-            "supertrend_length": [10, 12],
-            "rsi_length": [14, 16],
+            "supertrend_length": [10],
+            "rsi_length": [14],
+            "macd_fast_period": [12],
+            "macd_slow_period": [26],
+            "macd_signal_period": [9],
+            "bb_period": [20],
+            "bb_std_dev": [2.0],
         }
         # Need to provide enough mock klines for run_backtest to not return None
         best_config = optimize_strategy(self.mock_klines, param_ranges)

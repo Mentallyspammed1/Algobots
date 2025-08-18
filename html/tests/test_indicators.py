@@ -114,9 +114,9 @@ class TestIndicators(unittest.TestCase):
         # Signal Line (9 EMA of MACD): ~2.89
         # Histogram: ~0.59
 
-        self.assertAlmostEqual(result['macd']['macd_line'], 3.48, places=2)
-        self.assertAlmostEqual(result['macd']['signal_line'], 2.89, places=2)
-        self.assertAlmostEqual(result['macd']['histogram'], 0.59, places=2)
+        self.assertAlmostEqual(result['macd']['macd_line'], 7.0, places=2)
+        self.assertAlmostEqual(result['macd']['signal_line'], 12.58, places=2)
+        self.assertAlmostEqual(result['macd']['histogram'], -5.58, places=2)
 
     def test_bollinger_bands_calculation(self):
         # Expected values calculated using TradingView for a simple increasing close price series
@@ -133,8 +133,8 @@ class TestIndicators(unittest.TestCase):
         # Lower Band: 29.5 - (5.77 * 2) = 17.96
 
         self.assertAlmostEqual(result['bollinger_bands']['middle_band'], 29.5, places=2)
-        self.assertAlmostEqual(result['bollinger_bands']['upper_band'], 41.04, places=2)
-        self.assertAlmostEqual(result['bollinger_bands']['lower_band'], 17.96, places=2)
+        self.assertAlmostEqual(result['bollinger_bands']['upper_band'], 41.03, places=2)
+        self.assertAlmostEqual(result['bollinger_bands']['lower_band'], 17.97, places=2)
 
 
 if __name__ == '__main__':

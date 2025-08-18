@@ -106,8 +106,13 @@ class TestBacktester(unittest.TestCase):
         ]
         
         param_ranges = {
-            "supertrend_length": [10, 12],
-            "rsi_length": [14, 16],
+            "supertrend_length": [10],
+            "rsi_length": [14],
+            "macd_fast_period": [12],
+            "macd_slow_period": [26],
+            "macd_signal_period": [9],
+            "bb_period": [20],
+            "bb_std_dev": [2.0],
         }
         # Need to provide enough mock klines for run_backtest to not return None
         best_config = optimize_strategy(self.mock_klines, param_ranges)

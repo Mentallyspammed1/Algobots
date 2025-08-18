@@ -91,7 +91,8 @@ def trading_bot_loop():
             klines_res = session.get_kline(category="linear", symbol=config["symbol"], interval=config["interval"], limit=200)
             if klines_res.get('retCode') != 0:
                 log_message(f"Failed to fetch klines: {klines_res.get('retMsg')}", "error")
-                time.sleep(int(config["interval"]) * 60)
+                # Use a default sleep time on API error before retrying
+                time.sleep(60) 
                 continue
 
             klines = sorted([{
@@ -106,7 +107,7 @@ def trading_bot_loop():
             if not indicators:
                 log_message("Insufficient data for indicators.", "warning")
                 dashboard["botStatus"] = "Waiting"
-                time.sleep(int(config["interval"]) * 60)
+                time.sleep(60)
                 continue
 
             # 3. Fetch Position and Balance
@@ -151,9 +152,9 @@ def trading_bot_loop():
                 
                 # Update peak price
                 if pos_info["side"] == "Buy":
-                    pos_info["peak_price"] = max(pos_info["peak_price"], current_price)
+                    pos_info["peak_price"] = max(pos_info.get("peak_price", current_price), current_price)
                 else: # Sell
-                    pos_info["peak_price"] = min(pos_info["peak_price"], current_price)
+                    pos_info["peak_price"] = min(pos_info.get("peak_price", current_price), current_price)
 
                 # Calculate new trailing stop price
                 trailing_stop_pct = config['trailingStopPct'] / 100
@@ -164,7 +165,7 @@ def trading_bot_loop():
                     new_trailing_stop_price = pos_info["peak_price"] * (1 + trailing_stop_pct)
 
                 # Get current stop loss from the actual position (if available)
-                current_sl_on_exchange = float(current_position['stopLoss']) if 'stopLoss' in current_position and current_position['stopLoss'] else 0
+                current_sl_on_exchange = float(current_position.get('stopLoss', 0))
 
                 # Check if new trailing stop is more favorable and in profit
                 amend_sl = False
@@ -206,28 +207,36 @@ def trading_bot_loop():
                         balance = float(balance_res['result']['list'][0]['totalWalletBalance'])
 
                 # Place new order
-                risk_amount = balance * (config['riskPct'] / 100)
                 sl_price = current_price * (1 - config['stopLossPct'] / 100) if side == 'Buy' else current_price * (1 + config['stopLossPct'] / 100)
                 tp_price = current_price * (1 + config['takeProfitPct'] / 100) if side == 'Buy' else current_price * (1 - config['takeProfitPct'] / 100)
                 
                 stop_distance = abs(current_price - sl_price)
                 if stop_distance > 0:
-                    # Calculate position size based on risk percentage and stop loss percentage
-                    # qty for USDT perpetuals is the USDT value of the order
-                    qty = (balance * (config['riskPct'] / 100)) / (config['stopLossPct'] / 100)
+                    # --- Position Sizing ---
+                    # Calculate the position size in USDT based on risk percentage and stop loss percentage.
+                    position_value_usdt = (balance * (config['riskPct'] / 100)) / (config['stopLossPct'] / 100)
 
                     MIN_ORDER_VALUE = 5 # Default minimum order value in USDT
-                    if qty < MIN_ORDER_VALUE:
-                        log_message(f"Calculated quantity {qty:.{config['qty_precision']}f} is less than minimum order value {MIN_ORDER_VALUE}. Order not placed.", "warning")
-                        continue # Skip order placement if qty is too small
+                    if position_value_usdt < MIN_ORDER_VALUE:
+                        log_message(f"Calculated position value {position_value_usdt:.2f} USDT is less than minimum {MIN_ORDER_VALUE} USDT. Order not placed.", "warning")
+                        continue
+
+                    # Convert USDT value to base currency quantity (e.g., BTC for BTCUSDT)
+                    if current_price <= 0:
+                        log_message(f"Invalid current_price ({current_price}) for quantity calculation.", "error")
+                        continue
+                        
+                    qty_in_base_currency = position_value_usdt / current_price
                     
-                    log_message(f"Placing {side} order for {qty:.{config['qty_precision']}f} {config['symbol']}", "info")
+                    log_message(f"Calculated position: {position_value_usdt:.2f} USDT -> {qty_in_base_currency:.{config['qty_precision']}f} {config['symbol']}", "info")
+                    log_message(f"Placing {side} order for {qty_in_base_currency:.{config['qty_precision']}f} {config['symbol']}", "info")
+                    
                     order_res = session.place_order(
                         category="linear",
                         symbol=config["symbol"],
                         side=side,
                         orderType="Market",
-                        qty=f"{qty:.{config['qty_precision']}f}",
+                        qty=f"{qty_in_base_currency:.{config['qty_precision']}f}",
                         takeProfit=f"{tp_price:.{config['price_precision']}f}",
                         stopLoss=f"{sl_price:.{config['price_precision']}f}",
                         tpslMode="Full"
@@ -251,17 +260,36 @@ def trading_bot_loop():
             log_message(f"An error occurred in the trading loop: {e}", "error")
             dashboard["botStatus"] = "Error"
         
-        # Wait for the next interval
-        interval_seconds = 60
-        try:
-            if BOT_STATE["config"]["interval"] == 'D':
-                interval_seconds = 86400
-            else:
-                interval_seconds = int(BOT_STATE["config"]["interval"]) * 60
-        except:
-            pass # Keep default
+        # --- Interval Sleep Logic ---
+        # Calculate sleep time to align with the start of the next candle.
+        now = time.time()
         
-        time.sleep(interval_seconds)
+        # Get the timestamp of the most recent kline
+        last_kline_ts_ms = klines[-1]['timestamp']
+        
+        # Determine interval in seconds
+        interval_str = str(BOT_STATE["config"].get("interval", "60"))
+        if interval_str.isdigit():
+            interval_seconds = int(interval_str) * 60
+        elif interval_str == 'D':
+            interval_seconds = 86400
+        else:
+            log_message(f"Invalid interval format: {interval_str}. Defaulting to 60s.", "warning")
+            interval_seconds = 60 # Default to 1 minute if format is unexpected
+
+        # Calculate the timestamp of the next kline
+        next_kline_ts_sec = (last_kline_ts_ms / 1000) + interval_seconds
+        
+        # Calculate how long to sleep
+        sleep_duration = next_kline_ts_sec - now
+        
+        if sleep_duration > 0:
+            log_message(f"Waiting for {sleep_duration:.2f} seconds until next candle.", "info")
+            time.sleep(sleep_duration)
+        else:
+            # If we are already past the next candle's start time, log it and continue.
+            log_message(f"Processing took longer than interval. Continuing immediately.", "warning")
+            time.sleep(1) # Brief pause to prevent high-CPU loop on errors
 
     log_message("Trading bot thread stopped.", "warning")
 
@@ -273,11 +301,13 @@ def start_bot():
         return jsonify({"status": "error", "message": "Bot is already running."}), 400
 
     config = request.json
-    api_key = config.pop("apiKey")
-    api_secret = config.pop("apiSecret")
+
+    # API keys are loaded from .env file on the backend for security
+    api_key = BYBIT_API_KEY
+    api_secret = BYBIT_API_SECRET
 
     if not api_key or not api_secret:
-        return jsonify({"status": "error", "message": "API key and secret are required."}), 400
+        return jsonify({"status": "error", "message": "Bybit API Key or Secret not found in backend .env file."}), 400
 
     BOT_STATE["config"] = config
     BOT_STATE["config"]['ef_period'] = config.get('ef_period', 10) # Default Ehlers-Fisher period

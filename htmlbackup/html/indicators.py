@@ -2,12 +2,45 @@ import math
 
 def calculate_indicators(klines: list, config: dict) -> dict | None:
     """
-    Calculates Supertrend, RSI, and Ehlers-Fisher Transform from a list of kline data.
+    Calculates Supertrend, RSI, Ehlers-Fisher Transform, MACD, and Bollinger Bands from a list of kline data.
     """
-    if not klines or len(klines) < max(config['supertrend_length'], config['rsi_length'], config['ef_period']) + 1:
+    # Determine the maximum lookback period required by any indicator
+    max_lookback = max(
+        config['supertrend_length'],
+        config['rsi_length'],
+        config['ef_period'],
+        config.get('macd_slow_period', 26), # Default for MACD
+        config.get('bb_period', 20) # Default for Bollinger Bands
+    )
+
+    if not klines or len(klines) < max_lookback + 1:
         return None
 
-    # Supertrend Calculation
+    closes = [k['close'] for k in klines]
+
+    # --- Helper Functions for Moving Averages ---
+    def calculate_ema(data, period):
+        if not data or len(data) < period: return [0] * len(data)
+        ema_values = []
+        smoothing_factor = 2 / (period + 1)
+        
+        # Initial SMA for first EMA value
+        initial_ema = sum(data[:period]) / period
+        ema_values.append(initial_ema)
+
+        for i in range(period, len(data)):
+            current_ema = (data[i] - ema_values[-1]) * smoothing_factor + ema_values[-1]
+            ema_values.append(current_ema)
+        return [0] * (period - 1) + ema_values # Pad with zeros for initial period
+
+    def calculate_sma(data, period):
+        if not data or len(data) < period: return [0] * len(data)
+        sma_values = []
+        for i in range(len(data) - period + 1):
+            sma_values.append(sum(data[i:i+period]) / period)
+        return [0] * (period - 1) + sma_values # Pad with zeros for initial period
+
+    # --- Supertrend Calculation ---
     atr_period = config['supertrend_length']
     multiplier = config['supertrend_multiplier']
     supertrend_data = []
@@ -45,9 +78,9 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
             else:
                 final_lower_band = prev_st_data['finalLowerBand']
 
-            if prev_st_data['direction'] in [0, 1] and kline['close'] <= final_lower_band:
+            if prev_st_data['direction'] in [0, 1] and kline['close'] <= final_lower_band: # Changed from final_upper_band to final_lower_band
                 direction = -1
-            elif prev_st_data['direction'] in [0, -1] and kline['close'] >= final_upper_band:
+            elif prev_st_data['direction'] in [0, -1] and kline['close'] >= final_upper_band: # Changed from final_lower_band to final_upper_band
                 direction = 1
             else:
                 direction = prev_st_data['direction']
@@ -66,8 +99,8 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
     
     final_supertrend = supertrend_data[-1]
 
-    # RSI Calculation
-    changes = [klines[i]['close'] - klines[i-1]['close'] for i in range(1, len(klines))]
+    # --- RSI Calculation ---
+    changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
     gains = [c if c > 0 else 0 for c in changes]
     losses = [-c if c < 0 else 0 for c in changes]
     
@@ -81,7 +114,7 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
     rs = avg_gain / avg_loss if avg_loss > 0 else float('inf')
     final_rsi = 100 - (100 / (1 + rs))
 
-    # Ehlers-Fisher Transform Calculation
+    # --- Ehlers-Fisher Transform Calculation ---
     ef_period = config['ef_period']
     fisher_data = []
     
@@ -112,4 +145,50 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
 
     final_fisher = fisher_data[-1]['fisher']
 
-    return {"supertrend": final_supertrend, "rsi": final_rsi, "fisher": final_fisher}
+    # --- MACD Calculation ---
+    macd_fast_period = config.get('macd_fast_period', 12)
+    macd_slow_period = config.get('macd_slow_period', 26)
+    macd_signal_period = config.get('macd_signal_period', 9)
+
+    fast_ema = calculate_ema(closes, macd_fast_period)
+    slow_ema = calculate_ema(closes, macd_slow_period)
+
+    macd_line = [f - s for f, s in zip(fast_ema, slow_ema)]
+    signal_line = calculate_ema(macd_line, macd_signal_period)
+
+    # MACD Histogram
+    macd_histogram = [m - s for m, s in zip(macd_line, signal_line)]
+
+    final_macd = {
+        'macd_line': macd_line[-1],
+        'signal_line': signal_line[-1],
+        'histogram': macd_histogram[-1]
+    }
+
+    # --- Bollinger Bands Calculation ---
+    bb_period = config.get('bb_period', 20)
+    bb_std_dev = config.get('bb_std_dev', 2.0)
+
+    sma_bb = calculate_sma(closes, bb_period)
+
+    # Calculate standard deviation for each window
+    std_dev_values = []
+    for i in range(len(closes) - bb_period + 1):
+        window = closes[i:i+bb_period]
+        mean = sum(window) / bb_period
+        variance = sum([(x - mean) ** 2 for x in window]) / bb_period
+        std_dev_values.append(math.sqrt(variance))
+    
+    # Pad std_dev_values to match closes length
+    std_dev_values = [0] * (bb_period - 1) + std_dev_values
+
+    upper_band = [s + (std * bb_std_dev) for s, std in zip(sma_bb, std_dev_values)]
+    lower_band = [s - (std * bb_std_dev) for s, std in zip(sma_bb, std_dev_values)]
+
+    final_bollinger_bands = {
+        'middle_band': sma_bb[-1],
+        'upper_band': upper_band[-1],
+        'lower_band': lower_band[-1]
+    }
+
+    return {"supertrend": final_supertrend, "rsi": final_rsi, "fisher": final_fisher, "macd": final_macd, "bollinger_bands": final_bollinger_bands}

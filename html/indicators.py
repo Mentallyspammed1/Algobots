@@ -1,4 +1,5 @@
 import math
+import sys
 
 def calculate_indicators(klines: list, config: dict) -> dict | None:
     """

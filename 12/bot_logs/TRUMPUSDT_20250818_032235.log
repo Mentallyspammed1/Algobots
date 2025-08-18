@@ -1,0 +1,27 @@
+2025-08-18 03:22:35,549 - TRUMPUSDT - INFO - [36mStarting analysis for TRUMPUSDT with interval 5[0m
+2025-08-18 03:22:38,121 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0244). Using 'high_volatility' weights.[0m
+2025-08-18 03:22:38,349 - TRUMPUSDT - ERROR - [91mError calculating FVE: unsupported operand type(s) for -: 'float' and 'decimal.Decimal'[0m
+2025-08-18 03:22:38,353 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:22:38,353 - TRUMPUSDT - ERROR - [91mAn unexpected error occurred: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().. Retrying in 5 seconds...[0m
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/12/whalebot.py", line 1412, in main
+    analyzer.analyze(current_price, timestamp, order_book_data)
+  File "/data/data/com.termux/files/home/Algobots/12/whalebot.py", line 1125, in analyze
+    if self.config["indicators"].get("stoch_rsi") and self.indicator_values.get("stoch_rsi_vals"):
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.12/site-packages/pandas/core/generic.py", line 1577, in __nonzero__
+    raise ValueError(
+ValueError: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+2025-08-18 03:22:45,736 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0244). Using 'high_volatility' weights.[0m
+2025-08-18 03:22:45,963 - TRUMPUSDT - ERROR - [91mError calculating FVE: unsupported operand type(s) for -: 'float' and 'decimal.Decimal'[0m
+2025-08-18 03:22:45,969 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:22:45,970 - TRUMPUSDT - ERROR - [91mAn unexpected error occurred: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().. Retrying in 5 seconds...[0m
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/12/whalebot.py", line 1412, in main
+    analyzer.analyze(current_price, timestamp, order_book_data)
+  File "/data/data/com.termux/files/home/Algobots/12/whalebot.py", line 1125, in analyze
+    if self.config["indicators"].get("stoch_rsi") and self.indicator_values.get("stoch_rsi_vals"):
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/usr/lib/python3.12/site-packages/pandas/core/generic.py", line 1577, in __nonzero__
+    raise ValueError(
+ValueError: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().

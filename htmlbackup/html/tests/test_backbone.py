@@ -63,7 +63,9 @@ class TestBackbone(unittest.TestCase):
         config_data = {
             "apiKey": "test_key", "apiSecret": "test_secret", "symbol": "BTCUSDT",
             "interval": "60", "leverage": 10, "riskPct": 1, "stopLossPct": 2,
-            "takeProfitPct": 5, "efPeriod": 10
+            "takeProfitPct": 5, "efPeriod": 10,
+            "macdFastPeriod": 12, "macdSlowPeriod": 26, "macdSignalPeriod": 9,
+            "bbPeriod": 20, "bbStdDev": 2.0
         }
         response = self.app.post('/api/start', data=json.dumps(config_data), content_type='application/json')
         data = json.loads(response.data)
@@ -75,6 +77,11 @@ class TestBackbone(unittest.TestCase):
         mock_log_message.assert_any_call("API connection successful.", "success")
         self.assertEqual(BOT_STATE["config"]["price_precision"], 2)
         self.assertEqual(BOT_STATE["config"]["qty_precision"], 3)
+        self.assertEqual(BOT_STATE["config"]["macd_fast_period"], 12)
+        self.assertEqual(BOT_STATE["config"]["macd_slow_period"], 26)
+        self.assertEqual(BOT_STATE["config"]["macd_signal_period"], 9)
+        self.assertEqual(BOT_STATE["config"]["bb_period"], 20)
+        self.assertEqual(BOT_STATE["config"]["bb_std_dev"], 2.0)
 
     @patch('backbone.HTTP')
     @patch('backbone.log_message')
@@ -120,6 +127,12 @@ class TestBackbone(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(data['running'])
         self.assertEqual(data['dashboard']['currentPrice'], "$50000")
+        self.assertIn('macdLine', data['dashboard'])
+        self.assertIn('macdSignal', data['dashboard'])
+        self.assertIn('macdHistogram', data['dashboard'])
+        self.assertIn('bbMiddle', data['dashboard'])
+        self.assertIn('bbUpper', data['dashboard'])
+        self.assertIn('bbLower', data['dashboard'])
         self.assertEqual(len(data['logs']), 1)
         self.assertEqual(data['logs'][0]['message'], "Test log")
 
@@ -152,7 +165,6 @@ class TestBackbone(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(data['status'], 'error')
         self.assertIn('Gemini API Error', data['message'])
-        print(mock_log_message.call_args_list) # Debug print
         mock_log_message.assert_any_call(unittest.mock.ANY, "error") # Check for any error message
 
     # TODO: Add tests for trading_bot_loop logic (requires extensive mocking of session.get_kline, session.get_positions, session.place_order, session.amend_order)
