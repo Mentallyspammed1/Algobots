@@ -1127,9 +1127,9 @@ class TradingAnalyzer:
             if stoch_rsi_vals and len(stoch_rsi_vals) >= 3: # Ensure we have K, D, and Stoch RSI values
                  output += f"{NEON_GREEN}Stoch RSI:{RESET} K={stoch_rsi_vals[1]:.2f}, D={stoch_rsi_vals[2]:.2f}, Stoch_RSI={stoch_rsi_vals[0]:.2f}\n"
         
-        if self.config["indicators"].get("stochastic_oscillator") and self.indicator_values.get("stoch_osc_vals"):
+        if self.config["indicators"].get("stochastic_oscillator") and self.indicator_values.get("stoch_osc_vals") is not None and not self.indicator_values["stoch_osc_vals"].empty:
             stoch_osc_vals = self.indicator_values.get("stoch_osc_vals")
-            if stoch_osc_vals and len(stoch_osc_vals) >= 2: # Ensure we have K and D values
+            if stoch_osc_vals is not None and not stoch_osc_vals.empty and len(stoch_osc_vals) >= 2: # Ensure we have K and D values
                 output += f"{NEON_CYAN}Stochastic Oscillator:{RESET} K={stoch_osc_vals[0]:.2f}, D={stoch_osc_vals[1]:.2f}\n"
 
 
