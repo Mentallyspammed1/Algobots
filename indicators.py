@@ -298,6 +298,14 @@ def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd
     """
     Processes one or more kline data messages from a WebSocket stream, ensuring robustness.
     """
+    dtype_mapping = {
+        'open': object,
+        'high': object,
+        'low': object,
+        'close': object,
+        'volume': object,
+    }
+
     if not isinstance(message, dict) or 'data' not in message or not isinstance(message['data'], list):
         indicators_logger.error(Fore.RED + f"Invalid or empty kline WebSocket message received: {message}" + Style.RESET_ALL)
         return df
@@ -319,31 +327,44 @@ def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd
             continue
 
         try:
+            # Ensure required keys exist and values are convertible to string for Decimal
+            required_kline_keys = ['open', 'high', 'low', 'close', 'volume']
+            if not all(key in kline_data and isinstance(kline_data[key], (str, int, float)) for key in required_kline_keys):
+                indicators_logger.warning(f"Kline data missing required keys or has unexpected types: {kline_data}")
+                continue
+
             new_kline = {
                 'timestamp': pd.to_datetime(int(kline_data[ts_key]), unit='ms', utc=True),
-                'open': Decimal(kline_data['open']),
-                'high': Decimal(kline_data['high']),
-                'low': Decimal(kline_data['low']),
-                'close': Decimal(kline_data['close']),
-                'volume': Decimal(kline_data['volume']),
+                'open': Decimal(str(kline_data['open'])),
+                'high': Decimal(str(kline_data['high'])),
+                'low': Decimal(str(kline_data['low'])),
+                'close': Decimal(str(kline_data['close'])),
+                'volume': Decimal(str(kline_data['volume'])),
             }
             all_new_klines.append(new_kline)
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, InvalidOperation) as e:
             indicators_logger.error(f"Error parsing kline data {kline_data}: {e}")
             continue
 
     if not all_new_klines:
         return df
 
-    new_klines_df = pd.DataFrame(all_new_klines).set_index('timestamp')
+    new_klines_df = pd.DataFrame(all_new_klines).set_index('timestamp').astype(dtype_mapping)
 
-    # Combine the existing and new dataframes
-    # Using combine_first to update existing rows and append new ones
-    combined_df = new_klines_df.combine_first(df)
-    
-    # Sort the index to ensure chronological order after combining
+    # Add a check for the number of columns in new_klines_df
+    if len(new_klines_df.columns) != 5: # 5 expected columns: open, high, low, close, volume
+        indicators_logger.error(f"Malformed new_klines_df: Expected 5 columns, got {len(new_klines_df.columns)}. Returning original df.")
+        return df
+
+    # Concatenate the existing and new dataframes
+    combined_df = pd.concat([df, new_klines_df])
+
+    # Drop duplicates, keeping the last (most recent) entry for each timestamp
+    combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+
+    # Ensure chronological order
     combined_df.sort_index(inplace=True)
-    
+
     indicators_logger.debug(Fore.CYAN + f"Processed {len(all_new_klines)} kline updates." + Style.RESET_ALL)
     return combined_df
 
