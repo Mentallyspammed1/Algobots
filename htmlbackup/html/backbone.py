@@ -131,12 +131,6 @@ def trading_bot_loop():
             dashboard['rsiValue'] = f"{indicators['rsi']:.2f}"
             dashboard['accountBalance'] = f"${balance:.2f}"
             dashboard['fisherValue'] = f"{indicators['fisher']:.2f}"
-            dashboard['macdLine'] = f"{indicators['macd']['macd_line']:.2f}"
-            dashboard['macdSignal'] = f"{indicators['macd']['signal_line']:.2f}"
-            dashboard['macdHistogram'] = f"{indicators['macd']['histogram']:.2f}"
-            dashboard['bbMiddle'] = f"{indicators['bollinger_bands']['middle_band']:.2f}"
-            dashboard['bbUpper'] = f"{indicators['bollinger_bands']['upper_band']:.2f}"
-            dashboard['bbLower'] = f"{indicators['bollinger_bands']['lower_band']:.2f}"
             if current_position:
                 dashboard['currentPosition'] = f"{current_position['side']} {current_position['size']}"
                 pnl = (current_price - float(current_position['avgPrice'])) * float(current_position['size']) if current_position['side'] == 'Buy' else (float(current_position['avgPrice']) - current_price) * float(current_position['size'])
@@ -282,11 +276,6 @@ def start_bot():
     BOT_STATE["config"] = config
     BOT_STATE["config"]['ef_period'] = config.get('ef_period', 10) # Default Ehlers-Fisher period
     BOT_STATE["config"]['trailingStopPct'] = config.get('trailingStopPct', 0.5) # Default Trailing Stop Loss Percentage
-    BOT_STATE["config"]['macd_fast_period'] = config.get('macd_fast_period', 12)
-    BOT_STATE["config"]['macd_slow_period'] = config.get('macd_slow_period', 26)
-    BOT_STATE["config"]['macd_signal_period'] = config.get('macd_signal_period', 9)
-    BOT_STATE["config"]['bb_period'] = config.get('bb_period', 20)
-    BOT_STATE["config"]['bb_std_dev'] = config.get('bb_std_dev', 2.0)
     BOT_STATE["bybit_session"] = HTTP(testnet=False, api_key=api_key, api_secret=api_secret) # LIVE TRADING
 
     # Verify API connection

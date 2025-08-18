@@ -145,26 +145,6 @@
                     <label for="efPeriod" class="block text-sm font-medium mb-1 text-slate-300">Ehlers-Fisher Period</label>
                     <input type="number" id="efPeriod" value="10" min="1" max="50" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
                 </div>
-                <div>
-                    <label for="macdFastPeriod" class="block text-sm font-medium mb-1 text-slate-300">MACD Fast Period</label>
-                    <input type="number" id="macdFastPeriod" value="12" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="macdSlowPeriod" class="block text-sm font-medium mb-1 text-slate-300">MACD Slow Period</label>
-                    <input type="number" id="macdSlowPeriod" value="26" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="macdSignalPeriod" class="block text-sm font-medium mb-1 text-slate-300">MACD Signal Period</label>
-                    <input type="number" id="macdSignalPeriod" value="9" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="bbPeriod" class="block text-sm font-medium mb-1 text-slate-300">Bollinger Bands Period</label>
-                    <input type="number" id="bbPeriod" value="20" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="bbStdDev" class="block text-sm font-medium mb-1 text-slate-300">Bollinger Bands Std Dev</label>
-                    <input type="number" id="bbStdDev" value="2.0" step="0.1" min="0.1" max="5.0" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
             </div>
             <button id="startBot" class="mt-6 w-full py-3 rounded-lg bg-gradient-neon text-white font-bold transition-transform transform hover:scale-105 shadow-md shadow-pink-500/50" aria-live="polite">
                 <span id="buttonText">Start the Bot</span>
@@ -204,30 +184,6 @@
                 <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-purple-500">
                     <p class="text-sm text-slate-400">Ehlers-Fisher</p>
                     <p id="fisherValue" class="text-xl font-bold text-purple-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-indigo-500">
-                    <p class="text-sm text-slate-400">MACD Line</p>
-                    <p id="macdLine" class="text-xl font-bold text-indigo-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-blue-500">
-                    <p class="text-sm text-slate-400">MACD Signal</p>
-                    <p id="macdSignal" class="text-xl font-bold text-blue-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-cyan-500">
-                    <p class="text-sm text-slate-400">MACD Histogram</p>
-                    <p id="macdHistogram" class="text-xl font-bold text-cyan-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-green-500">
-                    <p class="text-sm text-slate-400">BB Middle</p>
-                    <p id="bbMiddle" class="text-xl font-bold text-green-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-lime-500">
-                    <p class="text-sm text-slate-400">BB Upper</p>
-                    <p id="bbUpper" class="text-xl font-bold text-lime-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-teal-500">
-                    <p class="text-sm text-slate-400">BB Lower</p>
-                    <p id="bbLower" class="text-xl font-bold text-teal-400 mt-1">---</p>
                 </div>
                 <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-emerald-500">
                     <p class="text-sm text-slate-400">Total Trades</p>
@@ -285,12 +241,6 @@
         const winRateEl = document.getElementById('winRate');
         const botStatusEl = document.getElementById('botStatus');
         const fisherValueEl = document.getElementById('fisherValue');
-        const macdLineEl = document.getElementById('macdLine');
-        const macdSignalEl = document.getElementById('macdSignal');
-        const macdHistogramEl = document.getElementById('macdHistogram');
-        const bbMiddleEl = document.getElementById('bbMiddle');
-        const bbUpperEl = document.getElementById('bbUpper');
-        const bbLowerEl = document.getElementById('bbLower');
 
         const startBotBtn = document.getElementById('startBot');
         const buttonTextEl = document.getElementById('buttonText');
@@ -303,11 +253,6 @@
         const stopLossPctInput = document.getElementById('stopLossPct');
         const takeProfitPctInput = document.getElementById('takeProfitPct');
         const efPeriodInput = document.getElementById('efPeriod');
-        const macdFastPeriodInput = document.getElementById('macdFastPeriod');
-        const macdSlowPeriodInput = document.getElementById('macdSlowPeriod');
-        const macdSignalPeriodInput = document.getElementById('macdSignalPeriod');
-        const bbPeriodInput = document.getElementById('bbPeriod');
-        const bbStdDevInput = document.getElementById('bbStdDev');
 
         const askGeminiBtn = document.getElementById('askGemini');
         const clearLogsBtn = document.getElementById('clearLogs');
@@ -380,12 +325,6 @@
                 totalTradesEl.innerText = dashboard.totalTrades;
                 winRateEl.innerText = dashboard.winRate;
                 fisherValueEl.innerText = dashboard.fisherValue;
-                macdLineEl.innerText = dashboard.macdLine;
-                macdSignalEl.innerText = dashboard.macdSignal;
-                macdHistogramEl.innerText = dashboard.macdHistogram;
-                bbMiddleEl.innerText = dashboard.bbMiddle;
-                bbUpperEl.innerText = dashboard.bbUpper;
-                bbLowerEl.innerText = dashboard.bbLower;
                 updateBotStatusUI(dashboard.botStatus, dashboard.botStatus.toLowerCase());
 
                 // Update logs
@@ -501,11 +440,6 @@
                 stopLossPct: parseFloat(stopLossPctInput.value),
                 takeProfitPct: parseFloat(takeProfitPctInput.value),
                 efPeriod: parseInt(efPeriodInput.value),
-                macdFastPeriod: parseInt(macdFastPeriodInput.value),
-                macdSlowPeriod: parseInt(macdSlowPeriodInput.value),
-                macdSignalPeriod: parseInt(macdSignalPeriodInput.value),
-                bbPeriod: parseInt(bbPeriodInput.value),
-                bbStdDev: parseFloat(bbStdDevInput.value),
                 price_precision: 2, // Hardcoded for BTCUSDT, ideally fetched from exchange info
                 qty_precision: 4,   // Hardcoded for BTCUSDT
                 supertrend_length: 10,
