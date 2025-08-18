@@ -331,7 +331,7 @@ def fetch_klines(symbol: str, interval: str, api_key: str, api_secret: str, logg
         # Bybit's kline list order is: [timestamp, open, high, low, close, volume, turnover]
         columns = ["start_time", "open", "high", "low", "close", "volume", "turnover"]
         df = pd.DataFrame(data, columns=columns)
-        df["start_time"] = pd.to_datetime(df["start_time"], unit="ms")
+        df["start_time"] = pd.to_datetime(pd.to_numeric(df["start_time"]), unit="ms")
         # Convert numeric columns, coercing errors to NaN
         for col in df.columns[1:]:
             df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -1122,15 +1122,15 @@ class TradingAnalyzer:
             status = 'Bullish' if ema_alignment_score > 0 else 'Bearish' if ema_alignment_score < 0 else 'Neutral'
             output += f"{NEON_PURPLE}EMA Alignment:{RESET} Score={ema_alignment_score:.2f} ({status})\n"
 
-        if self.config["indicators"].get("stoch_rsi") and self.indicator_values.get("stoch_rsi_vals"):
+        if self.config["indicators"].get("stoch_rsi") and self.indicator_values.get("stoch_rsi_vals") is not None and not self.indicator_values["stoch_rsi_vals"].empty:
             stoch_rsi_vals = self.indicator_values.get("stoch_rsi_vals")
-            if stoch_rsi_vals and len(stoch_rsi_vals) >= 3: # Ensure we have K, D, and Stoch RSI values
-                 output += f"{NEON_GREEN}Stoch RSI:{RESET} K={stoch_rsi_vals[1]:.2f}, D={stoch_rsi_vals[2]:.2f}, Stoch_RSI={stoch_rsi_vals[0]:.2f}\n"
+            if stoch_rsi_vals is not None and not stoch_rsi_vals.empty and len(stoch_rsi_vals) >= 3: # Ensure we have K, D, and Stoch RSI values
+                 output += f"{NEON_GREEN}Stoch RSI:{RESET} K={stoch_rsi_vals['k'].iloc[-1]:.2f}, D={stoch_rsi_vals['d'].iloc[-1]:.2f}, Stoch_RSI={stoch_rsi_vals['stoch_rsi'].iloc[-1]:.2f}"
         
         if self.config["indicators"].get("stochastic_oscillator") and self.indicator_values.get("stoch_osc_vals") is not None and not self.indicator_values["stoch_osc_vals"].empty:
             stoch_osc_vals = self.indicator_values.get("stoch_osc_vals")
             if stoch_osc_vals is not None and not stoch_osc_vals.empty and len(stoch_osc_vals) >= 2: # Ensure we have K and D values
-                output += f"{NEON_CYAN}Stochastic Oscillator:{RESET} K={stoch_osc_vals[0]:.2f}, D={stoch_osc_vals[1]:.2f}\n"
+                output += f"{NEON_CYAN}Stochastic Oscillator:{RESET} K={stoch_osc_vals['k'].iloc[-1]:.2f}, D={stoch_osc_vals['d'].iloc[-1]:.2f}"
 
 
         # Order Book Wall Logging
