@@ -1,0 +1,45 @@
+# bot_config.yaml
+
+# --- Bybit API Credentials ---
+# IMPORTANT: Replace with your actual API Key and Secret.
+# It is highly recommended to use environment variables for security.
+# If BYBIT_API_KEY/BYBIT_API_SECRET are set in your environment, they will be used.
+BYBIT_API_KEY: ""
+BYBIT_API_SECRET: ""
+
+# --- Trading Settings ---
+# Set to true to use the Bybit Testnet, false for the live Bybit trading environment.
+BYBIT_USE_TESTNET: true
+# The trading category (e.g., 'linear', 'inverse', 'spot'). 'linear' is common for perpetual futures.
+CATEGORY: linear
+# The base currency for calculations and balance checks (e.g., USDT, USDC).
+BASE_CURRENCY: "USDT"
+# List of symbols to trade (e.g., BTCUSDT, ETHUSDT).
+SYMBOLS:
+  - "BTCUSDT"
+  - "ETHUSDT"
+# The main loop interval in seconds. Affects how often the strategy is re-evaluated.
+INTERVAL: 5
+# Maximum number of open positions the bot will manage across all symbols.
+MAX_OPEN_POSITIONS: 10
+# Maximum units of a single asset the bot will hold in inventory before attempting to close.
+MAX_INVENTORY_UNITS: 15
+# Percentage of available capital to risk per order. e.g., 0.0001 for 0.01%.
+ORDER_CAPITAL_PERCENTAGE: 0.00005
+# PNL Alerting
+# Alert when total unrealized PnL drops below this threshold. Set to a very low number to disable.
+PNL_ALERT_THRESHOLD: -50
+# Maximum number of retries for API calls before failing.
+MAX_RETRIES: 5
+
+# --- Alerting ---
+# Enable or disable email alerts.
+EMAIL_ALERTS: false
+# Email server configuration for sending alerts.
+EMAIL_SERVER:
+  host: ""
+  port: ""
+  user: ""
+  pass: ""
+  from: ""
+  to: ""

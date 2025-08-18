@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^1.13.0",
+    "colorama": "^0.0.0",
+    "dotenv": "^17.2.1",
+    "mime": "^4.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.0"
+  }
+}
