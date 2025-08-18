@@ -1,77 +1,56 @@
-from typing import List, Dict, Any, Tuple, Optional
-from decimal import Decimal
+"""
+Strategy Template: A template for creating custom trading strategies.
+
+This file provides a clear structure for implementing your own strategy.
+Duplicate this file, rename it, and implement your logic in the
+`generate_signals` method.
+"""
 import pandas as pd
-from algobots_types import OrderBlock
+from strategies.base_strategy import BaseStrategy
+import talib
 
-class StrategyTemplate:
+class MyAwesomeStrategy(BaseStrategy):
     """
-    Template for a trading strategy. All strategies should inherit from this class
-    and implement the generate_signals and generate_exit_signals methods.
+    An example strategy that uses RSI to generate trading signals.
     """
-    def __init__(self, logger):
-        self.logger = logger
-        # Initialize any strategy-specific parameters here
+    def __init__(self):
+        super().__init__("MyAwesomeStrategy")
+        self.rsi_period = 14
+        self.rsi_oversold = 30
+        self.rsi_overbought = 70
 
-    def generate_signals(self,
-                         df: pd.DataFrame,
-                         resistance_levels: List[Dict[str, Any]],
-                         support_levels: List[Dict[str, Any]],
-                         active_bull_obs: List[OrderBlock],
-                         active_bear_obs: List[OrderBlock],
-                         current_position_side: str,
-                         current_position_size: Decimal,
-                         order_book_imbalance: Optional[Decimal],
-                         **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+    def generate_signals(self, dataframe: pd.DataFrame) -> pd.DataFrame:
         """
-        Generates entry signals based on market data and indicators.
-        This method should be overridden by a specific strategy implementation.
+        Generates trading signals based on the Relative Strength Index (RSI).
 
         Args:
-            df (pd.DataFrame): DataFrame with kline data and indicators.
-            resistance_levels (List[Dict[str, Any]]): Detected resistance levels.
-            support_levels (List[Dict[str, Any]]): Detected support levels.
-            active_bull_obs (List[OrderBlock]): Active bullish order blocks.
-            active_bear_obs (List[OrderBlock]): Active bearish order blocks.
-            current_position_side (str): The side of the current open position ('Buy', 'Sell', or 'NONE').
-            current_position_size (Decimal): The size of the current open position.
-            order_book_imbalance (Optional[Decimal]): The current order book imbalance ratio.
-            **kwargs: Additional strategy-specific parameters passed from the main bot loop.
+            dataframe (pd.DataFrame): DataFrame with OHLCV data.
 
         Returns:
-            List[Tuple[str, Decimal, Any, Dict[str, Any]]]: A list of signal tuples.
-                Each tuple: (signal_type, price, timestamp, indicator_info).
+            pd.DataFrame: DataFrame with 'signal' column.
         """
-        self.logger.debug("StrategyTemplate: Generating entry signals (placeholder).")
-        return []
+        if 'close' not in dataframe.columns:
+            raise ValueError("DataFrame must have a 'close' column.")
 
-    def generate_exit_signals(self,
-                              df: pd.DataFrame,
-                              current_position_side: str,
-                              active_bull_obs: List[OrderBlock],
-                              active_bear_obs: List[OrderBlock],
-                              entry_price: Decimal,
-                              pnl: Decimal,
-                              current_position_size: Decimal,
-                              order_book_imbalance: Optional[Decimal],
-                              **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
-        """
-        Generates exit signals based on market data, indicators, and current position.
-        This method should be overridden by a specific strategy implementation.
+        df = dataframe.copy()
+        
+        # Calculate RSI
+        df['rsi'] = talib.RSI(df['close'], timeperiod=self.rsi_period)
 
-        Args:
-            df (pd.DataFrame): DataFrame with kline data and indicators.
-            current_position_side (str): The side of the current open position ('BUY' or 'SELL').
-            active_bull_obs (List[OrderBlock]): Active bullish order blocks.
-            active_bear_obs (List[OrderBlock]): Active bearish order blocks.
-            entry_price (Decimal): The entry price of the current position.
-            pnl (Decimal): The unrealized PnL of the current position.
-            current_position_size (Decimal): The size of the current open position.
-            order_book_imbalance (Optional[Decimal]): The current order book imbalance ratio.
-            **kwargs: Additional strategy-specific parameters passed from the main bot loop.
+        # Initialize signal column
+        df['signal'] = 'hold'
 
-        Returns:
-            List[Tuple[str, Decimal, Any, Dict[str, Any]]]: A list of exit signal tuples.
-                Each tuple: (exit_type, price, timestamp, indicator_info).
-        """
-        self.logger.debug("StrategyTemplate: Generating exit signals (placeholder).")
-        return []
+        # Generate signals
+        # Buy when RSI crosses above the oversold threshold
+        df.loc[df['rsi'] > self.rsi_oversold, 'signal'] = 'buy'
+        
+        # Sell when RSI crosses below the overbought threshold
+        df.loc[df['rsi'] < self.rsi_overbought, 'signal'] = 'sell'
+
+        # For simplicity, we take the last signal
+        # More complex logic could be implemented here (e.g., state machine)
+        last_signal = df['signal'].iloc[-1]
+        df['signal'] = 'hold' # Default to hold
+        df.loc[df.index[-1], 'signal'] = last_signal # Apply signal only to the last row
+
+        return df

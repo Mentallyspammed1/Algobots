@@ -11,22 +11,17 @@ import sys
 sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
 
 # Import the module and classes to be tested
-from PSG import PyrmethusBot, is_fresh, MAX_STALENESS_SECONDS
+from PSG import PyrmethusBot
 import config
 
 # --- Helper function to create sample DataFrame ---
-def create_sample_df(rows=100, is_stale=False, has_tz=True):
+def create_sample_df(rows=100):
     """Creates a sample DataFrame for testing."""
     now_ms = int(time.time() * 1000)
-    if is_stale:
-        # Make the last timestamp older than MAX_STALENESS_SECONDS
-        start_time = now_ms - (rows * 1000) - (MAX_STALENESS_SECONDS + 1) * 1000
-    else:
-        start_time = now_ms - (rows * 1000)
+    start_time = now_ms - (rows * 1000)
 
     timestamps = pd.to_datetime(range(start_time, start_time + rows * 1000, 1000), unit='ms')
-    if has_tz:
-        timestamps = timestamps.tz_localize('UTC')
+    timestamps = timestamps.tz_localize('UTC')
 
     data = {
         'open': [Decimal(str(100 + i * 0.1)) for i in range(rows)],
@@ -38,35 +33,6 @@ def create_sample_df(rows=100, is_stale=False, has_tz=True):
     return pd.DataFrame(data, index=timestamps)
 
 
-# --- Test Cases ---
-
-class TestIsFreshFunction(unittest.TestCase):
-    """Tests the standalone is_fresh function."""
-
-    def test_fresh_df(self):
-        """Test with a fresh, timezone-aware DataFrame."""
-        df = create_sample_df(is_stale=False, has_tz=True)
-        self.assertTrue(is_fresh(df))
-
-    def test_stale_df(self):
-        """Test with a stale DataFrame."""
-        df = create_sample_df(is_stale=True, has_tz=True)
-        self.assertFalse(is_fresh(df))
-
-    def test_empty_df(self):
-        """Test with an empty DataFrame."""
-        self.assertFalse(is_fresh(pd.DataFrame()))
-
-    def test_none_df(self):
-        """Test with a None DataFrame."""
-        self.assertFalse(is_fresh(None))
-
-    def test_fresh_naive_df(self):
-        """Test with a fresh, timezone-naive DataFrame."""
-        df = create_sample_df(is_stale=False, has_tz=False)
-        self.assertTrue(is_fresh(df))
-
-
 class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
     """Unit tests for the PyrmethusBot class."""
 
@@ -75,9 +41,8 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         # Apply patches at the class level and store the mock objects
         cls.mock_setup_logging = patch('PSG.setup_logging', return_value=MagicMock()).start()
         cls.mock_TradeMetrics = patch('PSG.TradeMetrics', return_value=MagicMock()).start()
-        cls.mock_OrderBook = patch('PSG.OrderBook', return_value=MagicMock()).start()
         cls.MockBybitAPIClass = patch('PSG.BybitContractAPI').start()
-        cls.mock_import_module = patch('importlib.import_module').start()
+        # No need to patch importlib.import_module anymore as strategy is directly imported
 
     @classmethod
     def tearDownClass(cls):
@@ -86,13 +51,13 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         # Mock the strategy class that gets imported dynamically
-        self.MockStrategyClass = MagicMock()
-        self.mock_strategy_instance = MagicMock()
-        self.MockStrategyClass.return_value = self.mock_strategy_instance
-        # Create a mock module object that will be returned by importlib.import_module
-        mock_strategy_module = MagicMock()
-        mock_strategy_module.EhlersSupertrendStrategy = self.MockStrategyClass
-        self.mock_import_module.return_value = mock_strategy_module
+        # This part is no longer needed as strategy is directly imported
+        # self.MockStrategyClass = MagicMock()
+        # self.mock_strategy_instance = MagicMock()
+        # self.MockStrategyClass.return_value = self.mock_strategy_instance
+        # mock_strategy_module = MagicMock()
+        # mock_strategy_module.EhlersSupertrendStrategy = self.MockStrategyClass
+        # self.mock_import_module.return_value = mock_strategy_module
 
         # Create an instance of the mocked BybitContractAPI
         self.mock_bybit_client = AsyncMock() # Use AsyncMock for the instance
@@ -105,9 +70,10 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
 
         # Reset config values to defaults for isolation
         config.SYMBOL = "TESTUSDT"
-        config.WARMUP_PERIOD = 50
-        config.API_REQUEST_RETRIES = 2
-        config.API_BACKOFF_FACTOR = 0.1
+        config.CANDLE_FETCH_LIMIT = 100 # Set a reasonable limit for tests
+        # config.WARMUP_PERIOD = 50 # No longer used in PSG.py
+        config.API_REQUEST_RETRIES = 0 # No retry logic in PSG.py _initial_kline_fetch
+        config.API_BACKOFF_FACTOR = 0.0 # No retry logic in PSG.py _initial_kline_fetch
 
 
     async def test_initialization(self):
@@ -116,7 +82,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.bot.has_open_position)
         self.assertIsNone(self.bot.current_position_side)
         self.assertIsNone(self.bot.klines_df)
-        self.MockStrategyClass.assert_called_once()
+        # self.MockStrategyClass.assert_called_once() # No longer dynamically imported
 
     async def test_position_properties(self):
         """Test the has_open_position and current_position_side properties."""
@@ -140,7 +106,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         # Give the bot a state
         self.bot.inventory = Decimal('10')
         self.bot.entry_price = Decimal('100')
-        self.bot.trailing_stop_active = True
+        # self.bot.trailing_stop_active = True # No longer exists
 
         # Reset the state
         self.bot._reset_position_state()
@@ -148,7 +114,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         # Assert state is cleared
         self.assertEqual(self.bot.inventory, Decimal('0'))
         self.assertEqual(self.bot.entry_price, Decimal('0'))
-        self.assertFalse(self.bot.trailing_stop_active)
+        # self.assertFalse(self.bot.trailing_stop_active) # No longer exists
 
     async def test_handle_position_update_new_long(self):
         """Test handling a WebSocket message for a new long position."""
@@ -170,7 +136,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot.entry_price, Decimal('50000'))
         self.assertEqual(self.bot.unrealized_pnl, Decimal('10.5'))
         self.assertEqual(self.bot.current_position_side, 'Buy')
-        self.bot.bybit_client.trading_stop.assert_called() # Should try to set TP/SL
+        self.bot.bybit_client.set_trading_stop.assert_called() # Should try to set TP/SL
 
     async def test_handle_position_update_close(self):
         """Test handling a position close message."""
@@ -214,15 +180,15 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         result = await self.bot._initial_kline_fetch()
 
         self.assertFalse(result)
-        # 1 initial call + 2 retries = 3
-        self.assertEqual(self.mock_bybit_client.get_kline_rest_fallback.call_count, 3)
+        # Expect only one call as retry logic is removed from PSG.py
+        self.assertEqual(self.mock_bybit_client.get_kline_rest_fallback.call_count, 1)
 
     @patch('PSG.handle_websocket_kline_data')
     async def test_handle_kline_update(self, mock_handle_ws_data):
         """Test the kline update handler."""
         # Arrange
         kline_message = {"topic": f"kline.{config.INTERVAL}.{config.SYMBOL}", "data": [{"start": 123}]}
-        mock_df = create_sample_df(rows=config.WARMUP_PERIOD + 10)
+        mock_df = create_sample_df(rows=100) # Use a fixed number of rows
         mock_df['atr'] = [Decimal('1.2')] * len(mock_df)
         mock_handle_ws_data.return_value = mock_df
         
