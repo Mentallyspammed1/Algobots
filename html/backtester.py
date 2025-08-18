@@ -15,6 +15,32 @@ BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
 # --- Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# --- Helper for API Calls with Retry ---
+def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, initial_delay=1):
+    """Generic function to make API calls with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            if method == 'get':
+                response = getattr(api_client, endpoint)(**params) if params else getattr(api_client, endpoint)()
+            elif method == 'post':
+                response = getattr(api_client, endpoint)(**params)
+            else:
+                logging.error(f"Invalid method '{method}' for API call.")
+                return {"retCode": 1, "retMsg": "Invalid method"}
+
+            if response.get('retCode') == 0:
+                return response
+            else:
+                ret_code = response.get('retCode')
+                ret_msg = response.get('retMsg')
+                logging.warning(f"API Error ({ret_code}): {ret_msg}. Retrying {endpoint} in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})")
+                time.sleep(initial_delay * (2**attempt)) # Exponential backoff
+        except Exception as e:
+            logging.error(f"Network/Client error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})")
+            time.sleep(initial_delay * (2**attempt)) # Exponential backoff
+    logging.error(f"Failed to complete API call to {endpoint} after {max_retries} attempts.")
+    return {"retCode": 1, "retMsg": f"Failed after {max_retries} attempts: {endpoint}"}
+
 # --- Bybit Session (for historical data) ---
 # Use testnet for fetching historical data if you don't want to use live API keys for this.
 # For backtesting, you might want to fetch from live if your keys allow.
@@ -66,12 +92,17 @@ def fetch_historical_klines(symbol: str, interval: str, start_time: int, end_tim
 
     while current_time > start_time:
         # Bybit API expects endTime in milliseconds
-        res = bybit_session.get_kline(
-            category=DEFAULT_CONFIG["category"],
-            symbol=symbol,
-            interval=interval,
-            end=int(current_time * 1000),
-            limit=limit
+        res = _make_api_call(
+            bybit_session,
+            'get',
+            'get_kline',
+            params={
+                "category": DEFAULT_CONFIG["category"],
+                "symbol": symbol,
+                "interval": interval,
+                "end": int(current_time * 1000),
+                "limit": limit
+            }
         )
         
         if res and res.get('retCode') == 0 and res['result']['list']:

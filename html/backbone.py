@@ -8,6 +8,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
+from pybit.exceptions import PybitAPIException # Import specific exception
 import google.generativeai as genai
 from indicators import calculate_indicators
 
@@ -74,6 +75,41 @@ def log_message(message, level='info'):
     else:
         logging.info(message)
 
+# --- Helper for API Calls with Retry and Specific Error Handling ---
+def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, initial_delay=1):
+    """
+    Generic function to make Bybit API calls with retry logic and specific error handling.
+    Handles PybitAPIException and general Exceptions.
+    """
+    for attempt in range(max_retries):
+        try:
+            if method == 'get':
+                response = getattr(api_client, endpoint)(**params) if params else getattr(api_client, endpoint)()
+            elif method == 'post':
+                response = getattr(api_client, endpoint)(**params)
+            elif method == 'amend': # For amend_order
+                response = getattr(api_client, endpoint)(**params)
+            else:
+                log_message(f"Invalid method '{method}' for API call.", "error")
+                return {"retCode": 1, "retMsg": "Invalid method"}
+
+            if response.get('retCode') == 0:
+                return response
+            else:
+                ret_code = response.get('retCode')
+                ret_msg = response.get('retMsg')
+                log_message(f"Bybit API Error ({ret_code}): {ret_msg}. Retrying {endpoint} in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "warning")
+                time.sleep(initial_delay * (2**attempt)) # Exponential backoff
+        except PybitAPIException as e:
+            log_message(f"Pybit API Exception for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "error")
+            time.sleep(initial_delay * (2**attempt)) # Exponential backoff
+        except Exception as e:
+            log_message(f"Network/Client error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "error")
+            time.sleep(initial_delay * (2**attempt)) # Exponential backoff
+    
+    log_message(f"Failed to complete API call to {endpoint} after {max_retries} attempts.", "error")
+    return {"retCode": 1, "retMsg": f"Failed after {max_retries} attempts: {endpoint}"}
+
 # --- Trading Logic ---
 def trading_bot_loop():
     """The main loop for the trading bot, running in a separate thread."""
@@ -88,11 +124,10 @@ def trading_bot_loop():
             dashboard["botStatus"] = "Scanning"
             
             # 1. Fetch Kline Data
-            klines_res = session.get_kline(category="linear", symbol=config["symbol"], interval=config["interval"], limit=200)
+            klines_res = _make_api_call(session, 'get', 'get_kline', params={"category": "linear", "symbol": config["symbol"], "interval": config["interval"], "limit": 200})
             if klines_res.get('retCode') != 0:
                 log_message(f"Failed to fetch klines: {klines_res.get('retMsg')}", "error")
-                # Use a default sleep time on API error before retrying
-                time.sleep(60) 
+                time.sleep(config.get('api_error_retry_delay', 60)) # Use configurable delay
                 continue
 
             klines = sorted([{
@@ -105,24 +140,28 @@ def trading_bot_loop():
             # 2. Calculate Indicators
             indicators = calculate_indicators(klines, config)
             if not indicators:
-                log_message("Insufficient data for indicators.", "warning")
+                log_message("Insufficient data for indicators. Waiting for more klines.", "warning")
                 dashboard["botStatus"] = "Waiting"
-                time.sleep(60)
+                time.sleep(config.get('indicator_wait_delay', 60)) # Use configurable delay
                 continue
 
             # 3. Fetch Position and Balance
-            position_res = session.get_positions(category="linear", symbol=config["symbol"])
-            balance_res = session.get_wallet_balance(accountType="UNIFIED", coin="USDT")
+            position_res = _make_api_call(session, 'get', 'get_positions', params={"category": "linear", "symbol": config["symbol"]})
+            balance_res = _make_api_call(session, 'get', 'get_wallet_balance', params={"accountType": "UNIFIED", "coin": "USDT"})
 
             current_position = None
             if position_res.get('retCode') == 0:
                 pos_list = [p for p in position_res['result']['list'] if float(p.get('size', 0)) > 0]
                 if pos_list:
                     current_position = pos_list[0]
+            else:
+                log_message(f"Failed to fetch positions: {position_res.get('retMsg')}", "error")
             
             balance = 0
             if balance_res.get('retCode') == 0 and balance_res['result']['list']:
                 balance = float(balance_res['result']['list'][0]['totalWalletBalance'])
+            else:
+                log_message(f"Failed to fetch balance: {balance_res.get('retMsg')}", "error")
 
             # 4. Update Dashboard
             dashboard['currentPrice'] = f"${current_price:.{config['price_precision']}f}"
@@ -165,7 +204,8 @@ def trading_bot_loop():
                     new_trailing_stop_price = pos_info["peak_price"] * (1 + trailing_stop_pct)
 
                 # Get current stop loss from the actual position (if available)
-                current_sl_on_exchange = float(current_position.get('stopLoss', 0))
+                # Ensure current_position.get('stopLoss') is a valid number before comparison
+                current_sl_on_exchange = float(current_position.get('stopLoss', 0)) if current_position.get('stopLoss') else 0.0
 
                 # Check if new trailing stop is more favorable and in profit
                 amend_sl = False
@@ -176,12 +216,12 @@ def trading_bot_loop():
                 
                 if amend_sl:
                     log_message(f"Amending trailing stop for {pos_info['side']} position from {current_sl_on_exchange:.{config['price_precision']}f} to {new_trailing_stop_price:.{config['price_precision']}f}", "info")
-                    amend_res = session.amend_order(
-                        category="linear",
-                        symbol=config["symbol"],
-                        orderId=pos_info["order_id"],
-                        stopLoss=f"{new_trailing_stop_price:.{config['price_precision']}f}"
-                    )
+                    amend_res = _make_api_call(session, 'post', 'amend_order', params={
+                        "category": "linear",
+                        "symbol": config["symbol"],
+                        "orderId": pos_info["order_id"],
+                        "stopLoss": f"{new_trailing_stop_price:.{config['price_precision']}f}"
+                    })
                     if amend_res.get('retCode') == 0:
                         log_message("Trailing stop amended successfully.", "success")
                     else:
@@ -199,12 +239,28 @@ def trading_bot_loop():
                 # Close existing position if it's opposite
                 if current_position and current_position['side'] != side:
                     log_message(f"Closing opposite {current_position['side']} position.", "warning")
-                    session.place_order(category="linear", symbol=config["symbol"], side="Sell" if current_position['side'] == "Buy" else "Buy", orderType="Market", qty=current_position['size'], reduceOnly=True)
-                    time.sleep(2) # Give time for position to close
-                    BOT_STATE["current_position_info"] = {"order_id": None, "entry_price": None, "side": None, "peak_price": None} # Reset position info
-                    balance_res = session.get_wallet_balance(accountType="UNIFIED", coin="USDT") # Refresh balance
-                    if balance_res.get('retCode') == 0 and balance_res['result']['list']:
-                        balance = float(balance_res['result']['list'][0]['totalWalletBalance'])
+                    close_res = _make_api_call(session, 'post', 'place_order', params={
+                        "category": "linear",
+                        "symbol": config["symbol"],
+                        "side": "Sell" if current_position['side'] == "Buy" else "Buy",
+                        "orderType": "Market",
+                        "qty": current_position['size'],
+                        "reduceOnly": True,
+                        "tpslMode": "Full" # Ensure existing TP/SL are cancelled
+                    })
+                    if close_res.get('retCode') == 0:
+                        log_message("Opposite position closed successfully.", "success")
+                        time.sleep(2) # Give time for position to close
+                        BOT_STATE["current_position_info"] = {"order_id": None, "entry_price": None, "side": None, "peak_price": None} # Reset position info
+                        balance_res = _make_api_call(session, 'get', 'get_wallet_balance', params={"accountType": "UNIFIED", "coin": "USDT"}) # Refresh balance
+                        if balance_res.get('retCode') == 0 and balance_res['result']['list']:
+                            balance = float(balance_res['result']['list'][0]['totalWalletBalance'])
+                        else:
+                            log_message(f"Failed to refresh balance after closing position: {balance_res.get('retMsg')}", "error")
+                    else:
+                        log_message(f"Failed to close opposite position: {close_res.get('retMsg')}", "error")
+                        # If closing fails, do not proceed with new order to avoid conflicting positions
+                        continue
 
                 # Place new order
                 sl_price = current_price * (1 - config['stopLossPct'] / 100) if side == 'Buy' else current_price * (1 + config['stopLossPct'] / 100)
@@ -231,16 +287,16 @@ def trading_bot_loop():
                     log_message(f"Calculated position: {position_value_usdt:.2f} USDT -> {qty_in_base_currency:.{config['qty_precision']}f} {config['symbol']}", "info")
                     log_message(f"Placing {side} order for {qty_in_base_currency:.{config['qty_precision']}f} {config['symbol']}", "info")
                     
-                    order_res = session.place_order(
-                        category="linear",
-                        symbol=config["symbol"],
-                        side=side,
-                        orderType="Market",
-                        qty=f"{qty_in_base_currency:.{config['qty_precision']}f}",
-                        takeProfit=f"{tp_price:.{config['price_precision']}f}",
-                        stopLoss=f"{sl_price:.{config['price_precision']}f}",
-                        tpslMode="Full"
-                    )
+                    order_res = _make_api_call(session, 'post', 'place_order', params={
+                        "category": "linear",
+                        "symbol": config["symbol"],
+                        "side": side,
+                        "orderType": "Market",
+                        "qty": f"{qty_in_base_currency:.{config['qty_precision']}f}",
+                        "takeProfit": f"{tp_price:.{config['price_precision']}f}",
+                        "stopLoss": f"{sl_price:.{config['price_precision']}f}",
+                        "tpslMode": "Full"
+                    })
                     if order_res.get('retCode') == 0:
                         log_message("Order placed successfully.", "success")
                         # Store position info for trailing stop
@@ -256,8 +312,8 @@ def trading_bot_loop():
             BOT_STATE["last_supertrend"] = indicators['supertrend']
             dashboard["botStatus"] = "Idle"
 
-        except Exception as e:
-            log_message(f"An error occurred in the trading loop: {e}", "error")
+        except Exception as e: # Catch any remaining unexpected errors
+            log_message(f"An unexpected error occurred in the trading loop: {e}", "error")
             dashboard["botStatus"] = "Error"
         
         # --- Interval Sleep Logic ---
@@ -265,8 +321,14 @@ def trading_bot_loop():
         now = time.time()
         
         # Get the timestamp of the most recent kline
-        last_kline_ts_ms = klines[-1]['timestamp']
-        
+        # Ensure klines is not empty before accessing its last element
+        if klines:
+            last_kline_ts_ms = klines[-1]['timestamp']
+        else:
+            log_message("Kline data is empty, cannot determine next candle time. Sleeping for default interval.", "warning")
+            time.sleep(config.get('api_error_retry_delay', 60))
+            continue # Skip to next iteration
+
         # Determine interval in seconds
         interval_str = str(BOT_STATE["config"].get("interval", "60"))
         if interval_str.isdigit():
@@ -288,7 +350,7 @@ def trading_bot_loop():
             time.sleep(sleep_duration)
         else:
             # If we are already past the next candle's start time, log it and continue.
-            log_message(f"Processing took longer than interval. Continuing immediately.", "warning")
+            log_message(f"Processing took longer than interval ({abs(sleep_duration):.2f}s over). Continuing immediately.", "warning")
             time.sleep(1) # Brief pause to prevent high-CPU loop on errors
 
     log_message("Trading bot thread stopped.", "warning")
@@ -303,24 +365,26 @@ def start_bot():
     config = request.json
 
     # API keys are loaded from .env file on the backend for security
-    api_key = BYBIT_API_KEY
-    api_secret = BYBIT_API_SECRET
-
-    if not api_key or not api_secret:
+    # Directly use global BYBIT_API_KEY and BYBIT_API_SECRET
+    if not BYBIT_API_KEY or not BYBIT_API_SECRET:
         return jsonify({"status": "error", "message": "Bybit API Key or Secret not found in backend .env file."}), 400
 
     BOT_STATE["config"] = config
-    BOT_STATE["config"]['ef_period'] = config.get('ef_period', 10) # Default Ehlers-Fisher period
-    BOT_STATE["config"]['trailingStopPct'] = config.get('trailingStopPct', 0.5) # Default Trailing Stop Loss Percentage
+    # Set default values for new config parameters if not provided by frontend
+    BOT_STATE["config"]['ef_period'] = config.get('ef_period', 10)
+    BOT_STATE["config"]['trailingStopPct'] = config.get('trailingStopPct', 0.5)
     BOT_STATE["config"]['macd_fast_period'] = config.get('macd_fast_period', 12)
     BOT_STATE["config"]['macd_slow_period'] = config.get('macd_slow_period', 26)
     BOT_STATE["config"]['macd_signal_period'] = config.get('macd_signal_period', 9)
     BOT_STATE["config"]['bb_period'] = config.get('bb_period', 20)
     BOT_STATE["config"]['bb_std_dev'] = config.get('bb_std_dev', 2.0)
-    BOT_STATE["bybit_session"] = HTTP(testnet=False, api_key=api_key, api_secret=api_secret) # LIVE TRADING
+    BOT_STATE["config"]['api_error_retry_delay'] = config.get('api_error_retry_delay', 60) # New configurable delay
+    BOT_STATE["config"]['indicator_wait_delay'] = config.get('indicator_wait_delay', 60) # New configurable delay
+
+    BOT_STATE["bybit_session"] = HTTP(testnet=False, api_key=BYBIT_API_KEY, api_secret=BYBIT_API_SECRET) # LIVE TRADING
 
     # Verify API connection
-    balance_check = BOT_STATE["bybit_session"].get_wallet_balance(accountType="UNIFIED", coin="USDT")
+    balance_check = _make_api_call(BOT_STATE["bybit_session"], 'get', 'get_wallet_balance', params={"accountType": "UNIFIED", "coin": "USDT"})
     if balance_check.get("retCode") != 0:
         log_message(f"API connection failed: {balance_check.get('retMsg')}", "error")
         return jsonify({"status": "error", "message": f"API connection failed: {balance_check.get('retMsg')}"}), 400
@@ -328,10 +392,23 @@ def start_bot():
     log_message("API connection successful.", "success")
 
     # Fetch instrument info for precision
-    instrument_info = BOT_STATE["bybit_session"].get_instruments_info(category="linear", symbol=config['symbol'])
+    instrument_info = _make_api_call(BOT_STATE["bybit_session"], 'get', 'get_instruments_info', params={"category": "linear", "symbol": config['symbol']})
     if instrument_info.get("retCode") == 0 and instrument_info['result']['list']:
-        price_precision = len(instrument_info['result']['list'][0]['priceFilter']['tickSize'].split('.')[-1]) if '.' in instrument_info['result']['list'][0]['priceFilter']['tickSize'] else 0
-        qty_precision = len(instrument_info['result']['list'][0]['lotFilter']['qtyStep'].split('.')[-1]) if '.' in instrument_info['result']['list'][0]['lotFilter']['qtyStep'] else 0
+        price_filter = instrument_info['result']['list'][0]['priceFilter']
+        lot_filter = instrument_info['result']['list'][0]['lotFilter']
+
+        # Calculate price precision
+        tick_size = float(price_filter['tickSize'])
+        price_precision = 0
+        if '.' in str(tick_size):
+            price_precision = len(str(tick_size).split('.')[-1])
+        
+        # Calculate quantity precision
+        qty_step = float(lot_filter['qtyStep'])
+        qty_precision = 0
+        if '.' in str(qty_step):
+            qty_precision = len(str(qty_step).split('.')[-1])
+
         BOT_STATE["config"]["price_precision"] = price_precision
         BOT_STATE["config"]["qty_precision"] = qty_precision
         log_message(f"Fetched instrument info: Price Precision={price_precision}, Quantity Precision={qty_precision}", "info")
@@ -342,7 +419,12 @@ def start_bot():
 
     # Set leverage
     leverage = config.get('leverage', 10)
-    lev_res = BOT_STATE["bybit_session"].set_leverage(category="linear", symbol=config['symbol'], buyLeverage=str(leverage), sellLeverage=str(leverage))
+    lev_res = _make_api_call(BOT_STATE["bybit_session"], 'post', 'set_leverage', params={
+        "category": "linear",
+        "symbol": config['symbol'],
+        "buyLeverage": str(leverage),
+        "sellLeverage": str(leverage)
+    })
     if lev_res.get('retCode') == 0:
         log_message(f"Leverage set to {leverage}x for {config['symbol']}", "success")
     else:
