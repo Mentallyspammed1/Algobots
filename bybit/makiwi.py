@@ -385,14 +385,20 @@ class BybitClient:
         """Callback when a WebSocket connection opens."""
         if ws_type == "public":
             self.is_public_ws_connected = True
-            logger.info(f"{Fore.GREEN}Public WebSocket connection established. Subscribing...{NC}")
-            self.ws_public.orderbook_stream(depth=1, symbol=SYMBOL, callback=on_public_ws_message)
+            logger.info(f"{Fore.GREEN}Public WebSocket connection established.{NC}")
         elif ws_type == "private":
             self.is_private_ws_connected = True
-            logger.info(f"{Fore.GREEN}Private WebSocket connection established. Subscribing...{NC}")
-            self.ws_private.position_stream(on_private_ws_message)
-            self.ws_private.order_stream(on_private_ws_message)
-            self.ws_private.wallet_stream(on_private_ws_message)
+            logger.info(f"{Fore.GREEN}Private WebSocket connection established.{NC}")
+
+    def start_websockets(self):
+        """Start public and private WebSocket streams."""
+        logger.info(f"{Fore.CYAN}Starting public orderbook stream for {SYMBOL}...{NC}")
+        self.ws_public.orderbook_stream(symbol=SYMBOL, depth=1, callback=on_public_ws_message)
+        logger.info(f"{Fore.CYAN}Starting private order and position streams...{NC}")
+        self.ws_private.position_stream(on_private_ws_message)
+        self.ws_private.order_stream(on_private_ws_message)
+        self.ws_private.wallet_stream(on_private_ws_message)
+        logger.info(f"{Fore.CYAN}WebSocket streams initiated.{NC}")
 
     def _on_ws_close(self, ws_type: str):
         """Callback when a WebSocket connection closes."""
@@ -628,16 +634,17 @@ class MakiwiStrategy:
             logger.error(f"{RED}API_KEY or API_SECRET not found in .env file. Exiting.{NC}")
             sys.exit(1)
 
-        # The BybitClient now handles subscriptions on connect.
-        # We just need to wait for the connections to establish.
-        logger.info("Waiting for WebSocket connections...")
+        # Initiate WebSocket connections and wait for them to establish and receive data.
+        logger.info("Initiating WebSocket connections and waiting for data...")
+        self.client.start_websockets() # Start the WebSocket connections
+        
         start_time = time.time()
-        while not (self.client.is_public_ws_connected and self.client.is_private_ws_connected):
+        while not (self.client.is_public_ws_connected and self.client.is_private_ws_connected and ws_state['mid_price'] > Decimal("0")):
             await asyncio.sleep(0.5)
             if time.time() - start_time > 20: # 20-second timeout
-                logger.error(f"{RED}WebSocket connection timeout. Public: {self.client.is_public_ws_connected}, Private: {self.client.is_private_ws_connected}. Exiting.{NC}")
+                logger.error(f"{RED}WebSocket connection timeout or no market data received. Public: {self.client.is_public_ws_connected}, Private: {self.client.is_private_ws_connected}, Mid Price: {ws_state['mid_price']}. Exiting.{NC}")
                 sys.exit(1)
-        logger.info(f"{Fore.GREEN}WebSockets connected successfully.{NC}")
+        logger.info(f"{Fore.GREEN}WebSockets connected and market data received successfully.{NC}")
 
         # Fetch initial market data and wallet balance
         if not await self.client.get_symbol_info():

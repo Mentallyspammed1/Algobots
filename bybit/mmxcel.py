@@ -45,11 +45,11 @@ try:
         config = json.load(f)
 except FileNotFoundError:
     print(f"{RED}config.json not found in the current realm. Please forge it with your trading parameters.{NC}")
-    os.system(f"termux-toast -b red -c white 'MMXCEL Error: config.json missing!'")
+    send_termux_toast('MMXCEL Error: config.json missing!', 'red', 'white')
     exit()
 except json.JSONDecodeError:
     print(f"{RED}A distortion detected in config.json. Please verify its crystalline structure (JSON format).{NC}")
-    os.system(f"termux-toast -b red -c white 'MMXCEL Error: config.json corrupt!'")
+    send_termux_toast('MMXCEL Error: config.json corrupt!', 'red', 'white')
     exit()
 
 # Set up logging with rotation to prevent log files from growing too large
@@ -101,6 +101,22 @@ def _calculate_decimal_precision(value: Decimal) -> int:
     return 0
 
 # --- Neon UI Helper Functions ---
+# --- Termux:API Toast Helper ---
+TERMUX_TOAST_AVAILABLE = False
+def _check_termux_toast_available():
+    global TERMUX_TOAST_AVAILABLE
+    if os.system("command -v termux-toast > /dev/null 2>&1") == 0:
+        TERMUX_TOAST_AVAILABLE = True
+
+def send_termux_toast(message: str, background_color: str = "black", text_color: str = "white"):
+    if TERMUX_TOAST_AVAILABLE:
+        os.system(f"termux-toast -b '{background_color}' -c '{text_color}' '{message}'")
+    else:
+        logger.warning(f"Termux-toast not available. Message: {message}")
+
+# Initialize toast availability check
+_check_termux_toast_available()
+
 def clear_screen() -> None:
     """Clears the terminal screen using ANSI escape codes, a quick vanishing spell."""
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -349,7 +365,7 @@ class BybitClient:
             logger.info("WebSocket streams started and listening for real-time updates.")
         except Exception as e:
             logger.error(f"Error starting WebSocket streams: {type(e).__name__} - {e}")
-            os.system(f"termux-toast -b red -c white 'MMXCEL Critical: WS streams failed to start!'")
+            send_termux_toast('MMXCEL Critical: WS streams failed to start!', 'red', 'white')
             raise # Re-raise to halt execution if core communication fails
 
     async def get_balance(self, account_type: str = "UNIFIED", coin: str = "USDT") -> Decimal:
@@ -466,6 +482,7 @@ class BybitClient:
 
             if order_type == "Limit":
                 order_payload["timeInForce"] = "GTC" # Good Till Cancelled
+                order_payload["postOnly"] = True # Ensure order is placed as a maker order
 
             response = await self._make_api_call(self.http_session.place_order, **order_payload)
 
@@ -782,7 +799,7 @@ class MarketMakingStrategy:
 
             logger.warning(f"{YELLOW}Inventory imbalance detected. Net position: {net_position:.{_calculate_decimal_precision(symbol_info['qty_precision'])}f}. "
                              f"Attempting to rebalance by placing a {side_to_rebalance} market order for {quantized_qty_to_rebalance}.{NC}")
-            os.system(f"termux-toast -b yellow -c black 'MMXCEL: Rebalancing {quantized_qty_to_rebalance:.2f} {SYMBOL}!'")
+            send_termux_toast(f'MMXCEL: Rebalancing {quantized_qty_to_rebalance:.2f} {SYMBOL}!', 'yellow', 'black')
 
             # Place a market order to quickly rebalance
             client_rebalance_id = f"mmxcel-rebal-{int(time.time() * 1000)}"
@@ -813,12 +830,12 @@ class MarketMakingStrategy:
             elif pnl_percentage < -STOP_LOSS_PERCENTAGE:
                 logger.critical(f"{RED}Stop-loss triggered for LONG position! Unrealised PnL: {pnl_usdt:.2f} ({pnl_percentage:.2%}). "
                                  f"Placing market sell order to close {quantized_long_size}.{NC}")
-                os.system(f"termux-toast -b red -c white 'MMXCEL: LONG SL triggered! PnL: {pnl_usdt:.2f}'")
+                send_termux_toast(f'MMXCEL: LONG SL triggered! PnL: {pnl_usdt:.2f}', 'red', 'white')
                 asyncio.create_task(self.client.place_order("Sell", quantized_long_size, order_type="Market", client_order_id=f"mmxcel-sl-long-{int(time.time() * 1000)}"))
             elif pnl_percentage >= PROFIT_PERCENTAGE:
                 logger.info(f"{GREEN}Profit-take triggered for LONG position. Unrealised PnL: {pnl_usdt:.2f} ({pnl_percentage:.2%}). "
                                  f"Placing market sell order to close {quantized_long_size}.{NC}")
-                os.system(f"termux-toast -b green -c black 'MMXCEL: LONG TP triggered! PnL: {pnl_usdt:.2f}'")
+                send_termux_toast(f'MMXCEL: LONG TP triggered! PnL: {pnl_usdt:.2f}', 'green', 'black')
                 asyncio.create_task(self.client.place_order("Sell", quantized_long_size, order_type="Market", client_order_id=f"mmxcel-tp-long-{int(time.time() * 1000)}"))
 
         # Check short position
@@ -840,12 +857,12 @@ class MarketMakingStrategy:
             elif pnl_percentage < -STOP_LOSS_PERCENTAGE:
                 logger.critical(f"{RED}Stop-loss triggered for SHORT position! Unrealised PnL: {pnl_usdt:.2f} ({pnl_percentage:.2%}). "
                                  f"Placing market buy order to close {quantized_short_size}.{NC}")
-                os.system(f"termux-toast -b red -c white 'MMXCEL: SHORT SL triggered! PnL: {pnl_usdt:.2f}'")
+                send_termux_toast(f'MMXCEL: SHORT SL triggered! PnL: {pnl_usdt:.2f}', 'red', 'white')
                 asyncio.create_task(self.client.place_order("Buy", quantized_short_size, order_type="Market", client_order_id=f"mmxcel-sl-short-{int(time.time() * 1000)}"))
             elif pnl_percentage >= PROFIT_PERCENTAGE:
                 logger.info(f"{GREEN}Profit-take triggered for SHORT position. Unrealised PnL: {pnl_usdt:.2f} ({pnl_percentage:.2%}). "
                                  f"Placing market buy order to close {quantized_short_size}.{NC}")
-                os.system(f"termux-toast -b green -c black 'MMXCEL: SHORT TP triggered! PnL: {pnl_usdt:.2f}'")
+                send_termux_toast(f'MMXCEL: SHORT TP triggered! PnL: {pnl_usdt:.2f}', 'green', 'black')
                 asyncio.create_task(self.client.place_order("Buy", quantized_short_size, order_type="Market", client_order_id=f"mmxcel-tp-short-{int(time.time() * 1000)}"))
 
     async def memory_cleanup(self):
@@ -859,7 +876,7 @@ class MarketMakingStrategy:
         if self.running:
             self.running = False
             logger.info("Shutdown initiated. Cancelling all open orders...")
-            os.system(f"termux-toast -b '#FFA500' -c white 'MMXCEL: Shutting down, cancelling orders...'")
+            send_termux_toast('MMXCEL: Shutting down, cancelling orders...', '#FFA500', 'white')
             await self.client.cancel_all_orders()
             # Stop any running tasks
             if self.rebalance_task and not self.rebalance_task.done():
@@ -872,7 +889,7 @@ class MarketMakingStrategy:
                 self.memory_cleanup_task.cancel()
 
             self.exit_flag.set()
-            os.system(f"termux-toast -b green -c white 'MMXCEL: Shutdown complete.'")
+            send_termux_toast('MMXCEL: Shutdown complete.', 'green', 'white')
 
     async def run(self):
         """Unleashes the bot's full power, beginning its market-making vigil."""
@@ -881,13 +898,13 @@ class MarketMakingStrategy:
         # Validate configuration values before starting operations
         if not self._validate_config():
             logger.critical("Configuration validation failed. Aborting bot startup.")
-            os.system(f"termux-toast -b red -c white 'MMXCEL Config Error! Check logs.'")
+            send_termux_toast('MMXCEL Config Error! Check logs.', 'red', 'white')
             return
 
         # Fetch symbol information first, crucial for correct price/quantity handling
         if not await self.client.get_symbol_info():
             logger.critical("Failed to fetch symbol information. Cannot proceed without it.")
-            os.system(f"termux-toast -b red -c white 'MMXCEL Error: Symbol info fetch failed!'")
+            send_termux_toast('MMXCEL Error: Symbol info fetch failed!', 'red', 'white')
             return
 
         self.client.start_websocket_streams()
@@ -981,7 +998,7 @@ class MarketMakingStrategy:
             logger.info("Main loop task cancelled.")
         except Exception as e:
             logger.critical(f"An unhandled critical error occurred in the main loop: {type(e).__name__} - {e}", exc_info=True)
-            os.system(f"termux-toast -b red -c white 'MMXCEL Critical Error: Bot crashed! Check logs!'")
+            send_termux_toast('MMXCEL Critical Error: Bot crashed! Check logs!', 'red', 'white')
         finally:
             await self.shutdown()
 
@@ -995,7 +1012,7 @@ class MarketMakingStrategy:
             logger.info(f"Periodic task '{name}' was cancelled.")
         except Exception as e:
             logger.error(f"Error in periodic task '{name}': {type(e).__name__} - {e}")
-            os.system(f"termux-toast -b red -c white 'MMXCEL Critical: {name} task failed!'")
+            send_termux_toast(f'MMXCEL Critical: {name} task failed!', 'red', 'white')
         finally:
             logger.info(f"Periodic task '{name}' has finished.")
 
@@ -1048,7 +1065,7 @@ async def main():
     if not API_KEY or not API_SECRET:
         print(f"{RED}BYBIT_API_KEY or BYBIT_API_SECRET not found in .env file. "
               f"Please ensure your magical credentials are in place.{NC}")
-        os.system(f"termux-toast -b red -c white 'MMXCEL Error: API credentials missing!'")
+        send_termux_toast('MMXCEL Error: API credentials missing!', 'red', 'white')
         return
 
     # Check for Termux:API and warn if not found
@@ -1056,7 +1073,7 @@ async def main():
         print(f"{YELLOW}Warning: 'termux-api' command not found. Toasts will be disabled. "
               f"Please install it via 'pkg install termux-api' and the Termux:API app.{NC}")
     else:
-        os.system(f"termux-toast -b green -c white 'MMXCEL: Bot started successfully!'")
+        send_termux_toast('MMXCEL: Bot started successfully!', 'green', 'white')
 
     print(f"{BOLD}{CYAN}MMXCEL Bybit Market Making Bot is being summoned...{NC}")
 
@@ -1074,18 +1091,18 @@ async def main():
         # Bybit API returns retCode 0 even if the mode is already set, so we just check for success.
         if response and response.get('retCode') == 0:
             logger.info(f"Successfully set position mode to Hedge Mode for the USDT category.")
-            os.system(f"termux-toast -b green -c black 'Hedge Mode set successfully!'")
+            send_termux_toast('Hedge Mode set successfully!', 'green', 'black')
         else:
             # This will catch API-level errors returned in a valid response (e.g., permission denied)
             error_message = response.get('retMsg', 'Unknown error')
             logger.error(f"Failed to set Hedge Mode: {error_message}. Please set it manually in your Bybit account settings.")
-            os.system(f"termux-toast -b red -c white 'Failed to set Hedge Mode! Check logs.'")
+            send_termux_toast('Failed to set Hedge Mode! Check logs.', 'red', 'white')
             return # Exit if we can't set the required mode.
     except Exception as e:
         # This will catch client-level errors (e.g., network issues, invalid request format)
         logger.error(f"An exception occurred while trying to set Hedge Mode: {type(e).__name__} - {e}")
         logger.error("Please ensure Hedge Mode is enabled for linear perpetuals in your Bybit account settings.")
-        os.system(f"termux-toast -b red -c white 'Error setting Hedge Mode! Check logs.'")
+        send_termux_toast('Error setting Hedge Mode! Check logs.', 'red', 'white')
         return # Exit if we can't set the required mode.
 
     logger.info(f"Starting MMXCEL Bybit Market Making Bot for {SYMBOL}...")
@@ -1105,7 +1122,7 @@ async def main():
         logger.info("Main strategy run task explicitly cancelled.")
     except Exception as e:
         logger.critical(f"{RED}A critical error occurred during the main invocation: {type(e).__name__} - {e}", exc_info=True)
-        os.system(f"termux-toast -b red -c white 'MMXCEL Critical Error: Bot crashed! Check logs!'")
+        send_termux_toast('MMXCEL Critical Error: Bot crashed! Check logs!', 'red', 'white')
     finally:
         # Ensure shutdown is called even if an error occurs or after cancellation
         # The strategy.shutdown() is implicitly called by the strategy.run() finally block.
