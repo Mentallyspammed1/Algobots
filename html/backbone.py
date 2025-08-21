@@ -126,12 +126,12 @@ class PrecisionManager:
             base_currency=inst['baseCoin'],
             quote_currency=inst['quoteCoin'],
             status=inst['status'],
-            min_price=Decimal(price_filter['minPrice']),
-            max_price=Decimal(price_filter['maxPrice']),
+            min_price=Decimal(price_filter.get('minPrice', '0')),
+            max_price=Decimal(price_filter.get('maxPrice', '100000000')),
             tick_size=Decimal(price_filter['tickSize']),
-            min_order_qty=Decimal(lot_size['basePrecision']),
+            min_order_qty=Decimal(lot_size['minOrderQty']),
             max_order_qty=Decimal(lot_size['maxOrderQty']),
-            qty_step=Decimal(lot_size['basePrecision']),
+            qty_step=Decimal(lot_size['qtyStep']),
             min_leverage=Decimal('1'),
             max_leverage=Decimal('1'),
             leverage_step=Decimal('1'),
@@ -330,7 +330,7 @@ def trading_bot_loop():
             dashboard["botStatus"] = "Scanning"
             
             # 1. Fetch Kline Data
-            klines_res = _make_api_call(session, 'get', 'get_kline', params={"category": "linear", "symbol": config["symbol"], "interval": config["interval"], "limit": 200})
+            klines_res = _make_api_call(session, 'get', 'get_kline', params={"category": config["category"], "symbol": config["symbol"], "interval": config["interval"], "limit": 200})
             if klines_res.get('retCode') != 0:
                 log_message(f"Failed to fetch klines: {klines_res.get('retMsg')}", "error")
                 time.sleep(config.get('api_error_retry_delay', 60)) # Use configurable delay
@@ -352,7 +352,7 @@ def trading_bot_loop():
                 continue
 
             # 3. Fetch Position and Balance
-            position_res = _make_api_call(session, 'get', 'get_positions', params={"category": "linear", "symbol": config["symbol"]})
+            position_res = _make_api_call(session, 'get', 'get_positions', params={"category": config["category"], "symbol": config["symbol"]})
             balance_res = _make_api_call(session, 'get', 'get_wallet_balance', params={"accountType": "UNIFIED", "coin": "USDT"})
 
             current_position = None
@@ -586,6 +586,7 @@ def start_bot():
 
     BOT_STATE["config"] = config
     # Set default values for new config parameters if not provided by frontend
+    BOT_STATE["config"]['category'] = config.get('category', 'linear')
     BOT_STATE["config"]['ef_period'] = config.get('ef_period', 10)
     BOT_STATE["config"]['trailingStopPct'] = config.get('trailingStopPct', 0.5)
     BOT_STATE["config"]['macd_fast_period'] = config.get('macd_fast_period', 12)
@@ -617,16 +618,28 @@ def start_bot():
 
     # Set leverage
     leverage = config.get('leverage', 10)
-    lev_res = _make_api_call(BOT_STATE["bybit_session"], 'post', 'set_leverage', params={
-        "category": "linear",
-        "symbol": config['symbol'],
-        "buyLeverage": str(leverage),
-        "sellLeverage": str(leverage)
-    })
-    if lev_res.get('retCode') == 0:
-        log_message(f"Leverage set to {leverage}x for {config['symbol']}", "success")
-    else:
-        log_message(f"Failed to set leverage: {lev_res.get('retMsg')}", "warning")
+    
+    # Check current leverage before setting
+    position_info_res = _make_api_call(BOT_STATE["bybit_session"], 'get', 'get_positions', params={"category": "linear", "symbol": config['symbol']})
+    
+    should_set_leverage = True
+    if position_info_res.get('retCode') == 0 and position_info_res['result']['list']:
+        current_leverage = float(position_info_res['result']['list'][0].get('leverage', 0))
+        if current_leverage == leverage:
+            log_message(f"Leverage is already set to {leverage}x for {config['symbol']}. Skipping.", "info")
+            should_set_leverage = False
+
+    if should_set_leverage:
+        lev_res = _make_api_call(BOT_STATE["bybit_session"], 'post', 'set_leverage', params={
+            "category": "linear",
+            "symbol": config['symbol'],
+            "buyLeverage": str(leverage),
+            "sellLeverage": str(leverage)
+        })
+        if lev_res.get('retCode') == 0:
+            log_message(f"Leverage set to {leverage}x for {config['symbol']}", "success")
+        else:
+            log_message(f"Failed to set leverage: {lev_res.get('retMsg')}", "warning")
 
 
     BOT_STATE["running"] = True
