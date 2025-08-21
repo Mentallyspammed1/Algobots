@@ -8,8 +8,214 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
-from pybit.exceptions import PybitAPIException # Import specific exception
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
+from dataclasses import dataclass
+from typing import Dict, Union, Tuple
+
 import google.generativeai as genai
+
+# =====================================================================
+# INSTRUMENT SPECIFICATIONS & PRECISION MANAGEMENT
+# =====================================================================
+
+@dataclass
+class InstrumentSpecs:
+    """Store instrument specifications from Bybit"""
+    symbol: str
+    category: str
+    base_currency: str
+    quote_currency: str
+    status: str
+    
+    # Price specifications
+    min_price: Decimal
+    max_price: Decimal
+    tick_size: Decimal  # Price precision
+    
+    # Quantity specifications
+    min_order_qty: Decimal
+    max_order_qty: Decimal
+    qty_step: Decimal  # Quantity precision
+    
+    # Leverage specifications
+    min_leverage: Decimal
+    max_leverage: Decimal
+    leverage_step: Decimal
+    
+    # Position limits
+    max_position_value: Decimal
+    min_position_value: Decimal
+    
+    # Contract specifications (for derivatives)
+    contract_value: Decimal = Decimal('1')
+    is_inverse: bool = False
+    
+    # Fee rates
+    maker_fee: Decimal = Decimal('0.0001')  # 0.01%
+    taker_fee: Decimal = Decimal('0.0006')  # 0.06% # 0.06%
+
+class PrecisionManager:
+    """Manage decimal precision for different trading pairs"""
+    
+    def __init__(self, session: HTTP, logger: logging.Logger):
+        self.session = session
+        self.logger = logger
+        self.instruments: Dict[str, InstrumentSpecs] = {}
+        self.load_all_instruments()
+    
+    def load_all_instruments(self):
+        """Load all instrument specifications from Bybit"""
+        categories = ['linear', 'inverse', 'spot', 'option']
+        
+        for category in categories:
+            try:
+                response = self.session.get_instruments_info(category=category)
+                
+                if response['retCode'] == 0:
+                    for inst in response['result']['list']:
+                        symbol = inst['symbol']
+                        
+                        # Parse specifications based on category
+                        if category in ['linear', 'inverse']:
+                            specs = self._parse_derivatives_specs(inst, category)
+                        elif category == 'spot':
+                            specs = self._parse_spot_specs(inst, category)
+                        else:  # option
+                            specs = self._parse_option_specs(inst, category)
+                        
+                        self.instruments[symbol] = specs
+                        
+            except Exception as e:
+                self.logger.error(f"Error loading {category} instruments: {e}")
+    
+    def _parse_derivatives_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+        """Parse derivatives instrument specifications"""
+        lot_size = inst['lotSizeFilter']
+        price_filter = inst['priceFilter']
+        leverage = inst['leverageFilter']
+        
+        return InstrumentSpecs(
+            symbol=inst['symbol'],
+            category=category,
+            base_currency=inst['baseCoin'],
+            quote_currency=inst['quoteCoin'],
+            status=inst['status'],
+            min_price=Decimal(price_filter['minPrice']),
+            max_price=Decimal(price_filter['maxPrice']),
+            tick_size=Decimal(price_filter['tickSize']),
+            min_order_qty=Decimal(lot_size['minOrderQty']),
+            max_order_qty=Decimal(lot_size['maxOrderQty']),
+            qty_step=Decimal(lot_size['qtyStep']),
+            min_leverage=Decimal(leverage['minLeverage']),
+            max_leverage=Decimal(leverage['maxLeverage']),
+            leverage_step=Decimal(leverage['leverageStep']),
+            max_position_value=Decimal(lot_size.get('maxMktOrderQty', '1000000')),
+            min_position_value=Decimal(lot_size.get('minOrderQty', '1')),
+            contract_value=Decimal(inst.get('contractValue', '1')),
+            is_inverse=(category == 'inverse')
+        )
+    
+    def _parse_spot_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+        """Parse spot instrument specifications"""
+        lot_size = inst['lotSizeFilter']
+        price_filter = inst['priceFilter']
+        
+        return InstrumentSpecs(
+            symbol=inst['symbol'],
+            category=category,
+            base_currency=inst['baseCoin'],
+            quote_currency=inst['quoteCoin'],
+            status=inst['status'],
+            min_price=Decimal(price_filter['minPrice']),
+            max_price=Decimal(price_filter['maxPrice']),
+            tick_size=Decimal(price_filter['tickSize']),
+            min_order_qty=Decimal(lot_size['basePrecision']),
+            max_order_qty=Decimal(lot_size['maxOrderQty']),
+            qty_step=Decimal(lot_size['basePrecision']),
+            min_leverage=Decimal('1'),
+            max_leverage=Decimal('1'),
+            leverage_step=Decimal('1'),
+            max_position_value=Decimal(lot_size.get('maxOrderAmt', '1000000')),
+            min_position_value=Decimal(lot_size.get('minOrderAmt', '1')),
+            contract_value=Decimal('1'),
+            is_inverse=False
+        )
+    
+    def _parse_option_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+        """Parse option instrument specifications"""
+        lot_size = inst['lotSizeFilter']
+        price_filter = inst['priceFilter']
+        
+        return InstrumentSpecs(
+            symbol=inst['symbol'],
+            category=category,
+            base_currency=inst['baseCoin'],
+            quote_currency=inst['quoteCoin'],
+            status=inst['status'],
+            min_price=Decimal(price_filter['minPrice']),
+            max_price=Decimal(price_filter['maxPrice']),
+            tick_size=Decimal(price_filter['tickSize']),
+            min_order_qty=Decimal(lot_size['minOrderQty']),
+            max_order_qty=Decimal(lot_size['maxOrderQty']),
+            qty_step=Decimal(lot_size['qtyStep']),
+            min_leverage=Decimal('1'),
+            max_leverage=Decimal('1'),
+            leverage_step=Decimal('1'),
+            max_position_value=Decimal(lot_size.get('maxOrderQty', '1000000')),
+            min_position_value=Decimal(lot_size.get('minOrderQty', '1')),
+            contract_value=Decimal('1'),
+            is_inverse=False
+        )
+    
+    def round_price(self, symbol: str, price: Union[float, Decimal]) -> Decimal:
+        """Round price to correct tick size"""
+        if symbol not in self.instruments:
+            self.logger.warning(f"Symbol {symbol} not found, using default price precision")
+            return Decimal(str(price)).quantize(Decimal('0.01'))
+        
+        specs = self.instruments[symbol]
+        price_decimal = Decimal(str(price))
+        tick_size = specs.tick_size
+        
+        # Round to nearest tick
+        rounded = (price_decimal / tick_size).quantize(Decimal('1'), rounding=ROUND_DOWN) * tick_size
+        
+        # Ensure within min/max bounds
+        rounded = max(specs.min_price, min(rounded, specs.max_price))
+        
+        return rounded
+    
+    def round_quantity(self, symbol: str, quantity: Union[float, Decimal]) -> Decimal:
+        """Round quantity to correct step size"""
+        if symbol not in self.instruments:
+            self.logger.warning(f"Symbol {symbol} not found, using default quantity precision")
+            return Decimal(str(quantity)).quantize(Decimal('0.001'))
+        
+        specs = self.instruments[symbol]
+        qty_decimal = Decimal(str(quantity))
+        qty_step = specs.qty_step
+        
+        # Round down to nearest step
+        rounded = (qty_decimal / qty_step).quantize(Decimal('1'), rounding=ROUND_DOWN) * qty_step
+        
+        # Ensure within min/max bounds
+        rounded = max(specs.min_order_qty, min(rounded, specs.max_order_qty))
+        
+        return rounded
+    
+    def get_decimal_places(self, symbol: str) -> Tuple[int, int]:
+        """Get decimal places for price and quantity"""
+        if symbol not in self.instruments:
+            return 2, 3  # Default values
+        
+        specs = self.instruments[symbol]
+        
+        # Calculate decimal places from tick size and qty step
+        price_decimals = abs(specs.tick_size.as_tuple().exponent)
+        qty_decimals = abs(specs.qty_step.as_tuple().exponent)
+        
+        return price_decimals, qty_decimals
+
 from indicators import calculate_indicators
 
 # --- Basic Setup ---
@@ -79,7 +285,7 @@ def log_message(message, level='info'):
 def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, initial_delay=1):
     """
     Generic function to make Bybit API calls with retry logic and specific error handling.
-    Handles PybitAPIException and general Exceptions.
+    Handles general Exceptions.
     """
     for attempt in range(max_retries):
         try:
@@ -100,8 +306,8 @@ def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, ini
                 ret_msg = response.get('retMsg')
                 log_message(f"Bybit API Error ({ret_code}): {ret_msg}. Retrying {endpoint} in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "warning")
                 time.sleep(initial_delay * (2**attempt)) # Exponential backoff
-        except PybitAPIException as e:
-            log_message(f"Pybit API Exception for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "error")
+        except Exception as e: # Catch any Pybit-related exceptions or other unexpected errors
+            log_message(f"API call error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "error")
             time.sleep(initial_delay * (2**attempt)) # Exponential backoff
         except Exception as e:
             log_message(f"Network/Client error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "error")
@@ -202,6 +408,10 @@ def trading_bot_loop():
                     new_trailing_stop_price = pos_info["peak_price"] * (1 - trailing_stop_pct)
                 else: # Sell
                     new_trailing_stop_price = pos_info["peak_price"] * (1 + trailing_stop_pct)
+                
+                # Round the new trailing stop price
+                precision_mgr = BOT_STATE["precision_manager"]
+                new_trailing_stop_price = float(precision_mgr.round_price(config["symbol"], new_trailing_stop_price))
 
                 # Get current stop loss from the actual position (if available)
                 # Ensure current_position.get('stopLoss') is a valid number before comparison
@@ -263,8 +473,12 @@ def trading_bot_loop():
                         continue
 
                 # Place new order
+                precision_mgr = BOT_STATE["precision_manager"]
                 sl_price = current_price * (1 - config['stopLossPct'] / 100) if side == 'Buy' else current_price * (1 + config['stopLossPct'] / 100)
                 tp_price = current_price * (1 + config['takeProfitPct'] / 100) if side == 'Buy' else current_price * (1 - config['takeProfitPct'] / 100)
+                
+                sl_price = float(precision_mgr.round_price(config["symbol"], sl_price))
+                tp_price = float(precision_mgr.round_price(config["symbol"], tp_price))
                 
                 stop_distance = abs(current_price - sl_price)
                 if stop_distance > 0:
@@ -283,6 +497,7 @@ def trading_bot_loop():
                         continue
                         
                     qty_in_base_currency = position_value_usdt / current_price
+                    qty_in_base_currency = float(precision_mgr.round_quantity(config["symbol"], qty_in_base_currency))
                     
                     log_message(f"Calculated position: {position_value_usdt:.2f} USDT -> {qty_in_base_currency:.{config['qty_precision']}f} {config['symbol']}", "info")
                     log_message(f"Placing {side} order for {qty_in_base_currency:.{config['qty_precision']}f} {config['symbol']}", "info")
@@ -382,6 +597,7 @@ def start_bot():
     BOT_STATE["config"]['indicator_wait_delay'] = config.get('indicator_wait_delay', 60) # New configurable delay
 
     BOT_STATE["bybit_session"] = HTTP(testnet=False, api_key=BYBIT_API_KEY, api_secret=BYBIT_API_SECRET) # LIVE TRADING
+    BOT_STATE["precision_manager"] = PrecisionManager(BOT_STATE["bybit_session"], logging)
 
     # Verify API connection
     balance_check = _make_api_call(BOT_STATE["bybit_session"], 'get', 'get_wallet_balance', params={"accountType": "UNIFIED", "coin": "USDT"})
@@ -391,31 +607,13 @@ def start_bot():
     
     log_message("API connection successful.", "success")
 
-    # Fetch instrument info for precision
-    instrument_info = _make_api_call(BOT_STATE["bybit_session"], 'get', 'get_instruments_info', params={"category": "linear", "symbol": config['symbol']})
-    if instrument_info.get("retCode") == 0 and instrument_info['result']['list']:
-        price_filter = instrument_info['result']['list'][0]['priceFilter']
-        lot_filter = instrument_info['result']['list'][0]['lotFilter']
+    # Fetch instrument info for precision using PrecisionManager
+    precision_mgr = BOT_STATE["precision_manager"]
+    price_precision, qty_precision = precision_mgr.get_decimal_places(config['symbol'])
 
-        # Calculate price precision
-        tick_size = float(price_filter['tickSize'])
-        price_precision = 0
-        if '.' in str(tick_size):
-            price_precision = len(str(tick_size).split('.')[-1])
-        
-        # Calculate quantity precision
-        qty_step = float(lot_filter['qtyStep'])
-        qty_precision = 0
-        if '.' in str(qty_step):
-            qty_precision = len(str(qty_step).split('.')[-1])
-
-        BOT_STATE["config"]["price_precision"] = price_precision
-        BOT_STATE["config"]["qty_precision"] = qty_precision
-        log_message(f"Fetched instrument info: Price Precision={price_precision}, Quantity Precision={qty_precision}", "info")
-    else:
-        log_message(f"Failed to fetch instrument info: {instrument_info.get('retMsg')}. Using default precisions.", "warning")
-        BOT_STATE["config"]["price_precision"] = 2 # Default
-        BOT_STATE["config"]["qty_precision"] = 4   # Default
+    BOT_STATE["config"]["price_precision"] = price_precision
+    BOT_STATE["config"]["qty_precision"] = qty_precision
+    log_message(f"Fetched instrument info: Price Precision={price_precision}, Quantity Precision={qty_precision}", "info")
 
     # Set leverage
     leverage = config.get('leverage', 10)
@@ -478,6 +676,22 @@ def get_gemini_insight():
         return jsonify({"status": "success", "insight": response.text})
     except Exception as e:
         log_message(f"Gemini API error: {e}", "error")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/symbols', methods=['GET'])
+def get_symbols():
+    try:
+        precision_mgr = BOT_STATE.get("precision_manager")
+        if not precision_mgr:
+            return jsonify({"status": "error", "message": "Precision manager not initialized."}), 500
+        
+        linear_symbols = sorted([
+            s for s, specs in precision_mgr.instruments.items() 
+            if specs.category == 'linear' and specs.status == 'trading'
+        ])
+        return jsonify({"status": "success", "symbols": linear_symbols})
+    except Exception as e:
+        log_message(f"Error fetching symbols: {e}", "error")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
