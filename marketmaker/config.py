@@ -49,3 +49,4 @@ class Config:
     SLIPPAGE: float = 0.0001  # 0.01%
     USE_ORDERBOOK: bool = True
     ORDERBOOK_DEPTH: int = 50
+    USE_WEBSOCKET: bool = False # Set to True for live trading with WebSocket

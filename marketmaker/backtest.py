@@ -1,432 +1,459 @@
 # backtest.py
 import math
 import time
-import json
+import uuid
+import random
+import argparse
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
+from pybit.unified_trading import HTTP
 
-try:
-    # pybit unified v5
-    from pybit.unified_trading import HTTP
-except Exception:
-    HTTP = None  # we will fall back to plain requests if needed
+# Import your bot and config
+from market_maker import MarketMaker  # rename if your file is different
+from config import Config
 
-import requests
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("Backtester")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-# ---------- Utilities ----------
+# -------- Utilities
 
 def to_ms(dt: datetime) -> int:
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return int(dt.timestamp() * 1000)
+    return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
 
 
-def interval_to_ms(interval: str) -> int:
-    # Bybit v5 intervals: '1','3','5','15','30','60','120','240','360','720','D','W','M'
-    if interval.isdigit():
-        return int(interval) * 60_000
-    if interval == 'D':
-        return 24 * 60 * 60_000
-    if interval == 'W':
-        return 7 * 24 * 60 * 60_000
-    if interval == 'M':
-        # Use 30-day month to chunk pagination; exact month length isn’t required for paging
-        return 30 * 24 * 60 * 60_000
-    raise ValueError(f"Unsupported interval: {interval}")
+def from_ms(ms: int) -> datetime:
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
 
 
-def floor_to_step(x: float, step: float) -> float:
-    if step <= 0:
-        return x
-    return math.floor(x / step) * step
+@dataclass
+class BacktestParams:
+    symbol: str
+    category: str = "linear"            # "linear" | "inverse" | "spot"
+    interval: str = "1"                 # Bybit kline interval as string: "1","3","5","15","60","240","D",...
+    start: datetime = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end: datetime = datetime(2024, 1, 2, tzinfo=timezone.utc)
+    testnet: bool = False
+    # Execution model
+    maker_fee: float = 0.0002           # 2 bps; set negative if you receive rebates (e.g., -0.00025)
+    fill_on_touch: bool = True          # fill if price touches order
+    volume_cap_ratio: float = 0.25      # cap fills to a fraction of candle volume (0..1)
+    rng_seed: int = 42                  # for deterministic intra-candle path
+    sl_tp_emulation: bool = True        # emulate SL/TP using Config STOP_LOSS_PCT / TAKE_PROFIT_PCT
 
 
-def round_to_step(x: float, step: float) -> float:
-    if step <= 0:
-        return x
-    return round(round(x / step) * step, 12)
-
-
-# ---------- Data Loader (Bybit v5 Klines) ----------
-
-class BybitKlineLoader:
+class BybitHistoricalData:
     """
-    Fetch historical klines (OHLCV) from Bybit v5 /market/kline.
-
-    Sorting: Bybit returns klines in reverse order per page. We normalize to ascending by open time.
-    Docs: https://bybit-exchange.github.io/docs/v5/market/kline
+    Pulls historical klines via Bybit v5 public API using pybit.
     """
-    BASE = {
-        False: "https://api.bybit.com",
-        True: "https://api-testnet.bybit.com",
-    }
 
-    def __init__(self, testnet: bool, category: str, symbol: str, interval: str):
-        self.testnet = testnet
-        self.category = category
-        self.symbol = symbol
-        self.interval = interval
+    def __init__(self, params: BacktestParams):
+        self.params = params
+        # For public endpoints, keys are optional
+        self.http = HTTP(testnet=params.testnet)
 
-        self.http = None
-        if HTTP is not None:
-            try:
-                # Public market data needs no keys
-                self.http = HTTP(testnet=self.testnet, recv_window=5000)
-            except Exception as e:
-                logger.warning(f"pybit HTTP init failed, will fallback to requests: {e}")
-
-    def _get_kline(self, start_ms: Optional[int], end_ms: Optional[int], limit: int = 1000) -> Dict:
-        params = {
-            "category": self.category,  # linear, inverse, spot
-            "symbol": self.symbol,
-            "interval": self.interval,
-            "limit": str(limit),
-        }
-        if start_ms is not None:
-            params["start"] = str(start_ms)
-        if end_ms is not None:
-            params["end"] = str(end_ms)
-
-        if self.http:
-            return self.http.get_kline(**params)
-        else:
-            url = f"{self.BASE[self.testnet]}/v5/market/kline"
-            resp = requests.get(url, params=params, timeout=10)
-            resp.raise_for_status()
-            return resp.json()
-
-    def load(self, start: datetime, end: datetime, limit_per_req: int = 1000) -> pd.DataFrame:
+    def get_klines(self) -> pd.DataFrame:
         """
-        Page forward from start to end, honoring Bybit limit per request.
+        Fetch klines over [start, end) range, handling pagination (limit=1000 bars).
+        Returns DataFrame sorted by start time with columns:
+        ['start', 'open', 'high', 'low', 'close', 'volume', 'turnover']
+        All price columns are floats; 'start' is int ms.
         """
-        start_ms = to_ms(start)
-        end_ms = to_ms(end)
-        step = interval_to_ms(self.interval)
+        start_ms = to_ms(self.params.start)
+        end_ms = to_ms(self.params.end)
+        all_rows: List[List[str]] = []
+        limit = 1000
 
-        rows: List[List[str]] = []
-        cursor = start_ms
-        while cursor <= end_ms:
-            # Request a chunk [cursor, chunk_end]
-            chunk_end = min(cursor + step * (limit_per_req - 1), end_ms)
-            data = self._get_kline(start_ms=cursor, end_ms=chunk_end, limit=limit_per_req)
-            if data.get("retCode") != 0:
-                raise RuntimeError(f"Bybit get_kline error: {data.get('retMsg')}")
+        while True:
+            resp = self.http.get_kline(
+                category=self.params.category,
+                symbol=self.params.symbol,
+                interval=self.params.interval,
+                start=start_ms,
+                end=end_ms,
+                limit=limit
+            )
+            if resp.get("retCode") != 0:
+                raise RuntimeError(f"Bybit get_kline error: {resp.get('retMsg')}")
 
-            lst = data.get("result", {}).get("list", [])
-            if not lst:
-                # No more data
+            rows = resp["result"]["list"]
+            if not rows:
                 break
 
-            # Bybit returns reverse sorted; gather then advance cursor
-            rows.extend(lst)
-            # Advance by exactly number of bars fetched
-            earliest = int(lst[-1][0])  # last element is earliest bar start when reverse sorted
-            latest = int(lst[0][0])     # first element is latest bar start
-            # Next cursor is latest + step
-            cursor = latest + step
+            # Bybit returns list of lists as strings:
+            # [start, open, high, low, close, volume, turnover]
+            # Some SDK versions return newest->oldest; sort when appending.
+            rows_sorted = sorted(rows, key=lambda r: int(r[0]))
+            all_rows.extend(rows_sorted)
 
-            # Be gentle on rate limits
-            time.sleep(0.02)
+            # Advance start_ms for pagination
+            last_ms = int(rows_sorted[-1][0])
+            # Prevent infinite loop
+            next_ms = last_ms + 1
+            if next_ms >= end_ms:
+                break
+            start_ms = next_ms
 
-        if not rows:
-            return pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume"])
+            # Be kind to the API
+            time.sleep(0.05)
 
-        # Normalize ascending by open time
-        df = pd.DataFrame(rows, columns=["open_time", "open", "high", "low", "close", "volume", "turnover"])
-        df = df[["open_time", "open", "high", "low", "close", "volume"]].copy()
-        for col in ["open_time"]:
-            df[col] = df[col].astype("int64")
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = df[col].astype("float64")
+        if not all_rows:
+            raise ValueError("No klines returned for the requested range.")
 
-        df.sort_values("open_time", inplace=True)
-        df["open_dt"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
-        df.set_index("open_dt", inplace=True)
+        df = pd.DataFrame(all_rows, columns=["start", "open", "high", "low", "close", "volume", "turnover"])
+        for col in ["start"]:
+            df[col] = df[col].astype(np.int64)
+        for col in ["open", "high", "low", "close", "volume", "turnover"]:
+            df[col] = df[col].astype(float)
+
+        df = df.sort_values("start").reset_index(drop=True)
         return df
 
 
-# ---------- Execution bookkeeping ----------
+class FillEngine:
+    """
+    Simulates maker fills using intra-candle path approximation.
+    """
+    def __init__(self, params: BacktestParams):
+        self.params = params
+        random.seed(params.rng_seed)
 
-@dataclass
-class Fill:
-    ts: pd.Timestamp
-    side: str        # 'Buy' or 'Sell'
-    price: float
-    qty: float
-    fee: float
-    maker: bool
+    def _intrabar_path(self, o: float, h: float, l: float, c: float, ts_ms: int) -> List[float]:
+        """
+        Generate a simple deterministic intra-candle path: open -> mid-extreme -> other extreme -> close.
+        The ordering (O-H-L-C) vs (O-L-H-C) is seeded by timestamp for variety but reproducibility.
+        """
+        rnd = (ts_ms // 60000) ^ self.params.rng_seed
+        go_high_first = (rnd % 2 == 0)
+        if go_high_first:
+            return [o, (o + h) / 2, h, (h + l) / 2, l, (l + c) / 2, c]
+        else:
+            return [o, (o + l) / 2, l, (l + h) / 2, h, (h + c) / 2, c]
 
+    def _volume_capacity(self, candle_volume: float) -> float:
+        """
+        Simplistic capacity: only a fraction of the candle's volume is available to our maker orders.
+        Interpreting 'volume' as contract or base-asset volume depending on market; adjust as needed.
+        """
+        return max(0.0, candle_volume) * self.params.volume_cap_ratio
 
-class ExecutionBook:
-    def __init__(self, maker_fee: float = 0.0001, taker_fee: float = 0.0006):
-        self.fills: List[Fill] = []
-        self.realized_pnl: float = 0.0
+    def simulate_fills_for_step(
+        self,
+        mm: MarketMaker,
+        krow: pd.Series
+    ) -> Dict[str, float]:
+        """
+        Apply fills to mm.active_orders for this kline step.
+        Returns dict with aggregate 'filled_buy' and 'filled_sell' notional sizes for logging/debug.
+        """
+        o, h, l, c = krow.open, krow.high, krow.low, krow.close
+        ts_ms = int(krow.start)
+        path = self._intrabar_path(o, h, l, c, ts_ms)
 
-    def record(self, fill: Fill):
-        self.fills.append(fill)
+        capacity_remaining = self._volume_capacity(krow.volume)
 
-    def realized(self) -> float:
-        return self.realized_pnl
+        filled_buy = 0.0
+        filled_sell = 0.0
 
+        # Snapshot orders at start of step
+        buy_orders = list(mm.active_orders.get("buy", {}).items())
+        sell_orders = list(mm.active_orders.get("sell", {}).items())
 
-# ---------- Backtester ----------
+        # Fill-on-touch logic
+        def path_touches_or_crosses(target_price: float, side: str) -> bool:
+            if not self.params.fill_on_touch:
+                return False
+            # If buy, we need low <= bid; if sell, high >= ask
+            if side == "buy":
+                return min(path) <= target_price
+            else:
+                return max(path) >= target_price
+
+        # Fills are price-time: we assume our orders rest the whole step.
+        # Capacity is shared across all orders within the step.
+        # You can enhance to prioritize better prices first, etc.
+        # Buy orders
+        for oid, od in buy_orders:
+            if capacity_remaining <= 0:
+                break
+            price = float(od["price"])
+            size = float(od["size"])
+            if path_touches_or_crosses(price, "buy"):
+                fill_size = min(size, capacity_remaining)
+                pnl_delta, pos_delta, new_avg = self._apply_fill(mm, side="Buy", price=price, size=fill_size)
+                capacity_remaining -= fill_size
+                filled_buy += fill_size
+                # Remove/adjust order
+                if fill_size >= size - 1e-12:
+                    del mm.active_orders["buy"][oid]
+                else:
+                    mm.active_orders["buy"][oid]["size"] = size - fill_size
+
+        # Sell orders
+        for oid, od in sell_orders:
+            if capacity_remaining <= 0:
+                break
+            price = float(od["price"])
+            size = float(od["size"])
+            if path_touches_or_crosses(price, "sell"):
+                fill_size = min(size, capacity_remaining)
+                pnl_delta, pos_delta, new_avg = self._apply_fill(mm, side="Sell", price=price, size=fill_size)
+                capacity_remaining -= fill_size
+                filled_sell += fill_size
+                # Remove/adjust order
+                if fill_size >= size - 1e-12:
+                    del mm.active_orders["sell"][oid]
+                else:
+                    mm.active_orders["sell"][oid]["size"] = size - fill_size
+
+        # Optional: SL/TP emulation for open inventory based on avg_entry
+        if self.params.sl_tp_emulation and mm.position != 0 and mm.avg_entry_price:
+            if mm.position > 0:
+                stop = mm.avg_entry_price * (1 - mm.config.STOP_LOSS_PCT)
+                tp = mm.avg_entry_price * (1 + mm.config.TAKE_PROFIT_PCT)
+                # If stop or TP touched intra-bar, close up to |position|
+                close_here = None
+                if min(path) <= stop:
+                    close_here = stop
+                elif max(path) >= tp:
+                    close_here = tp
+                if close_here is not None:
+                    self._apply_close_all(mm, price=close_here)
+            else:
+                stop = mm.avg_entry_price * (1 + mm.config.STOP_LOSS_PCT)
+                tp = mm.avg_entry_price * (1 - mm.config.TAKE_PROFIT_PCT)
+                close_here = None
+                if max(path) >= stop:
+                    close_here = stop
+                elif min(path) <= tp:
+                    close_here = tp
+                if close_here is not None:
+                    self._apply_close_all(mm, price=close_here)
+
+        # Update last/mid to close of candle for next step
+        mm.last_price = c
+        mm.mid_price = c
+
+        return {"filled_buy": filled_buy, "filled_sell": filled_sell}
+
+    def _apply_fill(self, mm: MarketMaker, side: str, price: float, size: float) -> Tuple[float, float, float]:
+        """
+        Apply a trade fill to MarketMaker state. Returns (realized_pnl_delta, position_delta, new_avg_entry).
+        Fee is charged on notional.
+        """
+        # Fee on notional (maker)
+        fee = abs(price * size) * self.params.maker_fee
+
+        pos_before = mm.position
+        avg_before = mm.avg_entry_price or 0.0
+
+        realized_pnl_delta = 0.0
+        pos_delta = size if side.lower() == "buy" else -size
+
+        # If position direction changes or reduces, compute realized pnl for the closed portion
+        if pos_before == 0 or np.sign(pos_before) == np.sign(pos_delta):
+            # Adding to same-direction inventory
+            new_pos = pos_before + pos_delta
+            new_avg = ((abs(pos_before) * avg_before) + (abs(pos_delta) * price)) / max(abs(new_pos), 1e-12)
+            mm.position = new_pos
+            mm.avg_entry_price = new_avg
+        else:
+            # Reducing or flipping
+            if abs(pos_delta) <= abs(pos_before):
+                # Partial or full reduction
+                closed = abs(pos_delta)
+                realized_pnl_delta = self._closed_pnl(side, entry=avg_before, fill=price, qty=closed)
+                new_pos = pos_before + pos_delta
+                mm.position = new_pos
+                mm.avg_entry_price = avg_before if new_pos != 0 else 0.0
+            else:
+                # Flip: close old, open new in opposite direction
+                closed = abs(pos_before)
+                realized_pnl_delta = self._closed_pnl(side, entry=avg_before, fill=price, qty=closed)
+                leftover = abs(pos_delta) - closed
+                new_side_delta = np.sign(pos_delta) * leftover
+                mm.position = new_side_delta
+                mm.avg_entry_price = price
+
+        # Accrue fees into realized pnl
+        mm.unrealized_pnl = (mm.last_price - mm.avg_entry_price) * mm.position if mm.position != 0 else 0.0
+
+        # Store realized pnl in a side buffer on mm via attribute injection if not present
+        if not hasattr(mm, "realized_pnl"):
+            mm.realized_pnl = 0.0
+        mm.realized_pnl += realized_pnl_delta - abs(fee)
+
+        return realized_pnl_delta - abs(fee), pos_delta, mm.avg_entry_price
+
+    def _apply_close_all(self, mm: MarketMaker, price: float):
+        """
+        Close entire position at given price (used for SL/TP emulation).
+        """
+        if mm.position == 0:
+            return
+        side = "Sell" if mm.position > 0 else "Buy"
+        qty = abs(mm.position)
+        # Realized PnL on close
+        realized = self._closed_pnl(side, entry=mm.avg_entry_price, fill=price, qty=qty)
+        fee = abs(price * qty) * self.params.maker_fee
+        if not hasattr(mm, "realized_pnl"):
+            mm.realized_pnl = 0.0
+        mm.realized_pnl += realized - abs(fee)
+        mm.position = 0.0
+        mm.avg_entry_price = 0.0
+        mm.unrealized_pnl = 0.0
+        # Cancel any resting orders (we just closed the book)
+        mm.active_orders = {"buy": {}, "sell": {}}
+
+    @staticmethod
+    def _closed_pnl(exec_side: str, entry: float, fill: float, qty: float) -> float:
+        """
+        Realized PnL for closing qty units.
+        If we execute a Sell, we are closing a long. If we execute a Buy, we are closing a short.
+        """
+        if exec_side.lower() == "sell":  # closing long
+            return (fill - entry) * qty
+        else:  # buy closes short
+            return (entry - fill) * qty
+
 
 class MarketMakerBacktester:
-    """
-    Bar-by-bar backtester for your MarketMaker class.
+    def __init__(self, params: BacktestParams, cfg: Optional[Config] = None):
+        self.params = params
+        self.cfg = cfg or Config()
+        self.data = BybitHistoricalData(params)
+        self.fill_engine = FillEngine(params)
 
-    Mechanics:
-    - At t0, set bot.mid/last to first bar close and call bot.update_orders() to seed orders.
-    - For each subsequent bar:
-        1) Check fills for EXISTING orders vs that bar’s high/low.
-        2) Update mark (mid/last) to bar close.
-        3) Call bot.update_orders() to cancel/replace for next bar.
-    """
+        # Bot under test
+        self.mm = MarketMaker()
+        # Force backtest mode (no session) but keep config and symbol/category consistent
+        self.mm.session = None
+        self.mm.config.SYMBOL = params.symbol
+        self.mm.config.CATEGORY = params.category
 
-    def __init__(
-        self,
-        bot,                              # your MarketMaker instance
-        klines: pd.DataFrame,             # DataFrame from BybitKlineLoader.load()
-        initial_cash: float = 10_000.0,
-        maker_fee: float = 0.0001,        # adjust if needed
-        taker_fee: float = 0.0006,        # adjust if needed
-        slippage_bps: float = 0.0,        # 1 bps = 0.01%
-        price_step: float = 0.01,         # optional; use instrument info for exact tick size
-        qty_step: float = 0.0001,         # optional; use instrument info for exact lot size
-    ):
-        self.bot = bot
-        self.df = klines
-        self.initial_cash = initial_cash
-        self.cash = initial_cash
-        self.maker_fee = maker_fee
-        self.taker_fee = taker_fee
-        self.slippage_bps = slippage_bps
-        self.price_step = price_step
-        self.qty_step = qty_step
+        # Metrics
+        self.equity_curve: List[Tuple[int, float]] = []   # (timestamp ms, equity)
+        self.drawdowns: List[float] = []
+        self.trades: List[Dict] = []  # optional detailed trade log
 
-        self.execs = ExecutionBook(maker_fee=maker_fee, taker_fee=taker_fee)
+    def run(self) -> Dict[str, float]:
+        klines = self.data.get_klines()
 
-        # Portfolio tracking
-        self.equity_curve = []   # list of (timestamp, equity, position, price)
-        self.max_equity = initial_cash
-        self.max_dd = 0.0
+        # Initialize prices with first candle open
+        first = klines.iloc[0]
+        self.mm.last_price = first.open
+        self.mm.mid_price = first.open
 
-        # Ensure bot runs in backtest mode (no session)
-        self.bot.session = None
-        self.bot.active_orders = {'buy': {}, 'sell': {}}
-        self.bot.position = 0.0
-        self.bot.avg_entry_price = 0.0
-        self.bot.unrealized_pnl = 0.0
+        # Track equity; assume starting cash (USDT) is implicit 0 and PnL purely from trading.
+        # If you want to start with specific cash, add it here and include fees accordingly.
+        if not hasattr(self.mm, "realized_pnl"):
+            self.mm.realized_pnl = 0.0
 
-    # --- core math ---
+        for idx, row in klines.iterrows():
+            # 1) Let bot update/cancel/place orders based on current mid
+            self.mm.update_orders()
 
-    def _apply_slippage(self, price: float, side: str) -> float:
-        if self.slippage_bps <= 0:
-            return price
-        slip = price * (self.slippage_bps / 10_000)
-        if side.lower() == "buy":
-            return price + slip
-        else:
-            return price - slip
+            # 2) Simulate fills within this step
+            fill_stats = self.fill_engine.simulate_fills_for_step(self.mm, row)
 
-    def _fill_one(self, ts: pd.Timestamp, side: str, price: float, qty: float, maker: bool = True):
-        price = round_to_step(price, self.price_step)
-        qty = round_to_step(qty, self.qty_step)
-        if qty <= 0:
-            return
+            # 3) Compute equity at close of step
+            equity = self.mm.realized_pnl + self._unrealized(self.mm, mark=row.close)
+            self.equity_curve.append((int(row.start), equity))
 
-        fee_rate = self.maker_fee if maker else self.taker_fee
-        fee = abs(price * qty) * fee_rate
-        self.execs.record(Fill(ts=ts, side=side, price=price, qty=qty, fee=fee, maker=maker))
+        # Final metrics
+        equity_series = pd.Series([e for (_, e) in self.equity_curve])
+        returns = equity_series.diff().fillna(0.0)
+        # If you want per-step percentage returns, divide by a notional NAV; here we use 1 as base.
+        sharpe = self._calc_sharpe(returns.values)
 
-        # Position/PnL accounting
-        pos = self.bot.position
-        avg = self.bot.avg_entry_price or 0.0
+        total_return = float(equity_series.iloc[-1]) if len(equity_series) > 0 else 0.0
+        max_dd = self._max_drawdown([e for (_, e) in self.equity_curve])
 
-        if side.lower() == "buy":
-            # closing short first
-            if pos < 0:
-                close_qty = min(abs(pos), qty)
-                realized = (avg - price) * close_qty  # short profit = (avg - fill)*qty
-                self.execs.realized_pnl += realized - fee
-                pos += close_qty  # pos less negative
-                qty -= close_qty
-                if pos == 0:
-                    avg = 0.0  # flat after closing short
-
-            # open/increase long
-            if qty > 0:
-                new_pos = pos + qty
-                if pos > 0:
-                    avg = (avg * pos + price * qty) / new_pos
-                elif pos == 0:
-                    avg = price
-                pos = new_pos
-
-        else:  # sell
-            # closing long first
-            if pos > 0:
-                close_qty = min(pos, qty)
-                realized = (price - avg) * close_qty
-                self.execs.realized_pnl += realized - fee
-                pos -= close_qty
-                qty -= close_qty
-                if pos == 0:
-                    avg = 0.0
-
-            # open/increase short
-            if qty > 0:
-                new_pos = pos - qty
-                if pos < 0:
-                    # average short entry
-                    avg = (avg * abs(pos) + price * qty) / abs(new_pos)
-                elif pos == 0:
-                    avg = price
-                pos = new_pos
-
-        self.bot.position = pos
-        self.bot.avg_entry_price = avg
-
-    def _mark_to_market(self, close_price: float):
-        pos = self.bot.position
-        avg = self.bot.avg_entry_price or 0.0
-        if pos == 0:
-            self.bot.unrealized_pnl = 0.0
-            return
-        if pos > 0:
-            self.bot.unrealized_pnl = (close_price - avg) * pos
-        else:
-            self.bot.unrealized_pnl = (avg - close_price) * abs(pos)
-
-    # --- simulation ---
-
-    def _process_fills_for_bar(self, row: pd.Series, ts: pd.Timestamp):
-        """
-        Fill existing orders against current bar's high/low.
-        """
-        high = float(row["high"])
-        low = float(row["low"])
-
-        # BUY orders fill if low <= price
-        to_remove = []
-        for oid, od in list(self.bot.active_orders.get('buy', {}).items()):
-            px, sz = float(od['price']), float(od['size'])
-            if low <= px <= high:
-                fpx = self._apply_slippage(px, "buy")
-                self._fill_one(ts, "Buy", fpx, sz, maker=True)
-                to_remove.append(("buy", oid))
-
-        # SELL orders fill if high >= price
-        for oid, od in list(self.bot.active_orders.get('sell', {}).items()):
-            px, sz = float(od['price']), float(od['size'])
-            if low <= px <= high:
-                fpx = self._apply_slippage(px, "sell")
-                self._fill_one(ts, "Sell", fpx, sz, maker=True)
-                to_remove.append(("sell", oid))
-
-        for side, oid in to_remove:
-            # remove filled orders
-            if oid in self.bot.active_orders[side]:
-                del self.bot.active_orders[side][oid]
-
-    def _record_equity(self, ts: pd.Timestamp, mark: float):
-        equity = self.initial_cash + self.execs.realized_pnl + self.bot.unrealized_pnl
-        self.equity_curve.append((ts, equity, self.bot.position, mark))
-        self.max_equity = max(self.max_equity, equity)
-        dd = (self.max_equity - equity) / self.max_equity if self.max_equity > 0 else 0.0
-        self.max_dd = max(self.max_dd, dd)
-
-    def run(self) -> Tuple[pd.DataFrame, Dict]:
-        """
-        Returns a DataFrame with equity curve and per-bar state.
-        """
-        if self.df.empty:
-            raise ValueError("No data in klines DataFrame.")
-
-        # Seed: use first bar close to place initial orders
-        first = self.df.iloc[0]
-        first_close = float(first["close"])
-        self.bot.last_price = first_close
-        self.bot.mid_price = first_close
-        self.bot.orderbook = {"bid": [(first_close * 0.999, 1.0)], "ask": [(first_close * 1.001, 1.0)]}
-
-        # Initial order placement
-        self.bot.update_orders()
-        self._mark_to_market(first_close)
-        self._record_equity(self.df.index[0], first_close)
-
-        # Iterate bars 1..N-1
-        for i in range(1, len(self.df)):
-            row = self.df.iloc[i]
-            ts = self.df.index[i]
-            close_px = float(row["close"])
-
-            # 1) fill existing orders vs this bar
-            self._process_fills_for_bar(row, ts)
-
-            # 2) mark to market at close, update bot market state
-            self.bot.last_price = close_px
-            self.bot.mid_price = close_px
-            # Simple synthetic top-of-book around close
-            self.bot.orderbook = {"bid": [(close_px * 0.9995, 1.0)], "ask": [(close_px * 1.0005, 1.0)]}
-
-            self._mark_to_market(close_px)
-            self._record_equity(ts, close_px)
-
-            # 3) ask bot to cancel/replace new orders for next bar
-            self.bot.update_orders()
-
-        ec = pd.DataFrame(self.equity_curve, columns=["ts", "equity", "position", "mark"])
-        ec.set_index("ts", inplace=True)
-
-        summary = {
-            "initial_cash": self.initial_cash,
-            "final_equity": float(ec["equity"].iloc[-1]),
-            "return_pct": (float(ec["equity"].iloc[-1]) / self.initial_cash - 1) * 100.0,
-            "max_drawdown_pct": self.max_dd * 100.0,
-            "realized_pnl": self.execs.realized_pnl,
-            "ending_position": self.bot.position,
-            "ending_avg_entry": self.bot.avg_entry_price,
-            "bars": len(self.df),
+        result = {
+            "net_pnl": round(total_return, 6),
+            "max_drawdown": round(max_dd, 6),
+            "sharpe_like": round(sharpe, 4),
+            "final_position": float(self.mm.position),
         }
-        logger.info("Backtest summary: %s", json.dumps(summary, indent=2))
-        return ec, summary
+        return result
+
+    @staticmethod
+    def _unrealized(mm: MarketMaker, mark: float) -> float:
+        if mm.position == 0:
+            return 0.0
+        return (mark - mm.avg_entry_price) * mm.position
+
+    @staticmethod
+    def _calc_sharpe(step_pnl: np.ndarray) -> float:
+        if len(step_pnl) < 2:
+            return 0.0
+        mu = np.mean(step_pnl)
+        sd = np.std(step_pnl)
+        if sd == 0:
+            return 0.0
+        # This is a per-step Sharpe proxy (no annualization here). Adjust as desired.
+        return float(mu / sd)
+
+    @staticmethod
+    def _max_drawdown(equity: List[float]) -> float:
+        peak = -float("inf")
+        max_dd = 0.0
+        for e in equity:
+            if e > peak:
+                peak = e
+            dd = peak - e
+            if dd > max_dd:
+                max_dd = dd
+        return max_dd
 
 
-# ---------- Convenience runner ----------
+def main():
+    parser = argparse.ArgumentParser(description="Backtest MarketMaker with Bybit historical data.")
+    parser.add_argument("--symbol", type=str, default="BTCUSDT")
+    parser.add_argument("--category", type=str, default="linear", choices=["linear", "inverse", "spot"])
+    parser.add_argument("--interval", type=str, default="1", help="Bybit kline interval: 1,3,5,15,60,240,D,...")
+    parser.add_argument("--start", type=str, required=True, help="UTC start, e.g. 2024-06-01T00:00:00")
+    parser.add_argument("--end", type=str, required=True, help="UTC end, e.g. 2024-06-07T00:00:00")
+    parser.add_argument("--testnet", action="store_true", help="Use Bybit testnet")
+    parser.add_argument("--maker_fee", type=float, default=0.0002)
+    parser.add_argument("--volume_cap_ratio", type=float, default=0.25)
+    parser.add_argument("--no_sl_tp", action="store_true", help="Disable SL/TP emulation")
+    args = parser.parse_args()
 
-def run_backtest(
-    bot,
-    category: str,
-    symbol: str,
-    interval: str,
-    start: datetime,
-    end: datetime,
-    testnet: bool = False,
-    initial_cash: float = 10_000.0,
-    maker_fee: float = 0.0001,
-    taker_fee: float = 0.0006,
-    slippage_bps: float = 0.0,
-) -> Dict:
-    loader = BybitKlineLoader(testnet=testnet, category=category, symbol=symbol, interval=interval)
-    df = loader.load(start=start, end=end)
-    logger.info(f"Loaded {len(df)} bars for {symbol} {interval} from {start} to {end}")
-    bt = MarketMakerBacktester(
-        bot=bot,
-        klines=df,
-        initial_cash=initial_cash,
-        maker_fee=maker_fee,
-        taker_fee=taker_fee,
-        slippage_bps=slippage_bps,
+    start = datetime.fromisoformat(args.start).replace(tzinfo=timezone.utc)
+    end = datetime.fromisoformat(args.end).replace(tzinfo=timezone.utc)
+
+    params = BacktestParams(
+        symbol=args.symbol,
+        category=args.category,
+        interval=args.interval,
+        start=start,
+        end=end,
+        testnet=args.testnet,
+        maker_fee=args.maker_fee,
+        volume_cap_ratio=args.volume_cap_ratio,
+        sl_tp_emulation=not args.no_sl_tp
     )
-    equity_curve, summary = bt.run()
-    return summary
+
+    bt = MarketMakerBacktester(params)
+    results = bt.run()
+
+    # Pretty print
+    print("Backtest results")
+    print("----------------")
+    for k, v in results.items():
+        print(f"{k:16s}: {v}")
+
+    # Optional: save equity curve
+    df_eq = pd.DataFrame(bt.equity_curve, columns=["timestamp_ms", "equity"])
+    df_eq["timestamp"] = df_eq["timestamp_ms"].apply(lambda x: from_ms(x).isoformat())
+    df_eq.to_csv("equity_curve.csv", index=False)
+    print("Saved equity_curve.csv")
+
+if __name__ == "__main__":
+    main()
