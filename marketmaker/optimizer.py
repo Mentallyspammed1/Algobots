@@ -1,4 +1,3 @@
-
 import itertools
 import logging
 import pandas as pd
@@ -6,7 +5,6 @@ import argparse
 from config import Config
 from backtester import BacktestEngine
 from market_maker import MarketMaker
-
 import asyncio
 
 logging.basicConfig(level=logging.INFO)
@@ -30,15 +28,14 @@ class Optimizer:
             market_maker.session = None # Disable live trading
 
             backtester = BacktestEngine(market_maker, config)
-            # Use asyncio.run to execute the async backtest method
             results = asyncio.run(backtester.run_backtest())
             
             # Store results
             if results:
                 result = {
                     'params': params,
-                    'pnl': results.get('total_pnl'),
-                    'sharpe_ratio': results.get('sharpe_ratio')
+                    'pnl': results['total_pnl'],
+                    'sharpe_ratio': results['sharpe_ratio']
                 }
                 self.results.append(result)
                 logger.info(f"Tested params: {params}, PnL: {result['pnl']:.2f}, Sharpe Ratio: {result['sharpe_ratio']:.2f}")
@@ -65,22 +62,19 @@ class Optimizer:
 
         results_df = pd.DataFrame(self.results)
         best_pnl_result = results_df.loc[results_df['pnl'].idxmax()]
-        best_sharpe_result = results_df.loc[results_df['sharpe_ratio'].idxmax()]
 
         print("\n" + "="*50)
         print("OPTIMIZATION RESULTS")
         print("="*50)
         print("Best PnL:")
         print(best_pnl_result)
-        print("\nBest Sharpe Ratio:")
-        print(best_sharpe_result)
         print("="*50 + "\n")
 
 if __name__ == '__main__':
     parameter_grid = {
-        'BASE_SPREAD': [0.001, 0.002, 0.003],
-        'ORDER_LEVELS': [3, 5, 7],
-        'VOLATILITY_WINDOW': [20, 30, 40]
+        'BASE_SPREAD': [0.001, 0.002, 0.003, 0.004, 0.005],
+        'ORDER_LEVELS': [3, 5, 7, 10],
+        'VOLATILITY_WINDOW': [10, 20, 30, 40, 50]
     }
 
     optimizer = Optimizer(parameter_grid=parameter_grid)

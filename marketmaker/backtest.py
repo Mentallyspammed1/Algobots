@@ -345,7 +345,7 @@ class MarketMakerBacktester:
         dd = (self.max_equity - equity) / self.max_equity if self.max_equity > 0 else 0.0
         self.max_dd = max(self.max_dd, dd)
 
-    def run(self) -> pd.DataFrame:
+    def run(self) -> Tuple[pd.DataFrame, Dict]:
         """
         Returns a DataFrame with equity curve and per-bar state.
         """
@@ -399,7 +399,7 @@ class MarketMakerBacktester:
             "bars": len(self.df),
         }
         logger.info("Backtest summary: %s", json.dumps(summary, indent=2))
-        return ec
+        return ec, summary
 
 
 # ---------- Convenience runner ----------
@@ -416,7 +416,7 @@ def run_backtest(
     maker_fee: float = 0.0001,
     taker_fee: float = 0.0006,
     slippage_bps: float = 0.0,
-) -> pd.DataFrame:
+) -> Dict:
     loader = BybitKlineLoader(testnet=testnet, category=category, symbol=symbol, interval=interval)
     df = loader.load(start=start, end=end)
     logger.info(f"Loaded {len(df)} bars for {symbol} {interval} from {start} to {end}")
@@ -428,5 +428,5 @@ def run_backtest(
         taker_fee=taker_fee,
         slippage_bps=slippage_bps,
     )
-    equity_curve = bt.run()
-    return equity_curve
+    equity_curve, summary = bt.run()
+    return summary

@@ -15,12 +15,12 @@ class Config:
     CATEGORY = 'linear'  # 'linear' for USDT perpetual, 'inverse' for inverse contracts
     
     # Market Making Parameters
-    BASE_SPREAD = 0.001  # 0.1% base spread
+    BASE_SPREAD = 0.003  # 0.3% base spread
     MIN_SPREAD = 0.0005  # Minimum spread during low volatility
     MAX_SPREAD = 0.01    # Maximum spread during high volatility
     
     # Order Management
-    ORDER_LEVELS = 5  # Number of orders on each side
+    ORDER_LEVELS = 7  # Number of orders on each side
     MIN_ORDER_SIZE = 0.001  # Minimum order size in BTC
     MAX_ORDER_SIZE = 0.01   # Maximum order size in BTC
     ORDER_SIZE_INCREMENT = 0.002  # Size increment per level
