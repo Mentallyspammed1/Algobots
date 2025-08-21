@@ -1,19 +1,20 @@
-
-import unittest
-import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import sys
+import unittest
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pandas as pd
-from market_maker import MarketMaker
+
 from config import Config
+from market_maker import MarketMaker
+
 
 class TestMarketMaker(unittest.TestCase):
-
     def setUp(self):
         """Set up a new MarketMaker instance for each test."""
         self.config = Config()
         self.market_maker = MarketMaker()
-        self.market_maker.session = None # Disable live trading
+        self.market_maker.session = None  # Disable live trading
 
     def test_calculate_volatility(self):
         """Test the volatility calculation."""
@@ -48,5 +49,6 @@ class TestMarketMaker(unittest.TestCase):
         buy_sizes, sell_sizes = self.market_maker.calculate_order_sizes()
         self.assertLess(buy_sizes[0], sell_sizes[0])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

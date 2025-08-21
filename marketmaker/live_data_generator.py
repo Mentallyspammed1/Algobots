@@ -1,12 +1,14 @@
-
 import logging
 import queue
-from typing import Iterator
+from collections.abc import Iterator
+
 from pybit.unified_trading import WebSocket
+
 from config import Config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class LiveDataGenerator:
     def __init__(self, symbol: str):
@@ -21,9 +23,11 @@ class LiveDataGenerator:
             testnet=self.config.TESTNET,
             channel_type="linear",
             api_key=self.config.API_KEY,
-            api_secret=self.config.API_SECRET
+            api_secret=self.config.API_SECRET,
         )
-        self.ws.orderbook_stream(depth=50, symbol=self.symbol, callback=self.handle_message)
+        self.ws.orderbook_stream(
+            depth=50, symbol=self.symbol, callback=self.handle_message
+        )
         self.ws.trade_stream(symbol=self.symbol, callback=self.handle_message)
         logger.info("WebSocket connection started.")
 
@@ -35,7 +39,7 @@ class LiveDataGenerator:
         """Yields live market data."""
         if not self.ws:
             self.start_websocket()
-        
+
         while True:
             try:
                 data = self.queue.get(timeout=1)  # Wait for 1 second
@@ -44,7 +48,8 @@ class LiveDataGenerator:
                 # logger.info("No new data in the last second.")
                 pass
 
-if __name__ == '__main__':
-    generator = LiveDataGenerator(symbol='TRUMPUSDT')
+
+if __name__ == "__main__":
+    generator = LiveDataGenerator(symbol="TRUMPUSDT")
     for data in generator.data_generator():
         logger.info(f"Received data: {data}")
