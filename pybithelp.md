@@ -135,3 +135,4535 @@ The bot will initialize, load your strategy, and start listening for market data
 ## 📝 Logging
 
 The bot creates a log file specified in `config.py` (default: `logs/trading_bot.log`). This file contains detailed information about the bot's activities, including signals, orders, and errors. Check this file to monitor the bot's performance and troubleshoot any issues.
+# Complete List of Order Placement and API Functions for Pybit and Bybit V5 API
+
+## Overview
+
+The Bybit V5 API and pybit library provide comprehensive functionality for building trading bots. The V5 API consolidates trading operations across different product types (spot, derivatives, options) into a unified interface. The official pybit library serves as a Python connector for both HTTP and WebSocket APIs.
+
+## Installation and Setup
+
+To get started with pybit, install it via pip:
+```python
+pip install pybit
+```
+
+Then initialize an HTTP session:
+```python
+from pybit.unified_trading import HTTP
+
+session = HTTP(
+    testnet=False,
+    api_key="your_api_key",
+    api_secret="your_api_secret"
+)
+```
+
+## Core Order Management Functions
+
+### **Order Placement Functions**
+
+The V5 API provides several methods for placing orders:
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `place_order()` | POST /v5/order/create | Place a single order |
+| `place_batch_order()` | POST /v5/order/create-batch | Place multiple orders in bulk |
+
+Example of placing a single order:
+```python
+session.place_order(
+    category='linear',
+    symbol='BTCUSDT',
+    side='Buy',
+    orderType='Limit',
+    qty='0.001',
+    price='30000',
+    timeInForce='GTC'
+)
+```
+
+Example of batch order placement:
+```python
+session.place_batch_order(
+    category="spot",
+    request=[
+        {
+            "symbol": "BTCUSDT",
+            "side": "Buy",
+            "orderType": "Limit",
+            "qty": "0.05",
+            "price": "30000"
+        },
+        {
+            "symbol": "ETHUSDT",
+            "side": "Sell",
+            "orderType": "Limit",
+            "qty": "0.1",
+            "price": "2000"
+        }
+    ]
+)
+```
+
+### **Order Cancellation Functions**
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `cancel_order()` | POST /v5/order/cancel | Cancel a single order |
+| `cancel_all_orders()` | POST /v5/order/cancel-all | Cancel all active orders |
+| `batch_cancel()` | POST /v5/order/cancel-batch | Cancel multiple orders |
+
+### **Order Modification Functions**
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `amend_order()` | POST /v5/order/amend | Modify an existing order |
+| `batch_amend()` | POST /v5/order/amend-batch | Modify multiple orders |
+
+## Order Query Functions
+
+### **Active Order Queries**
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `get_open_orders()` | GET /v5/order/realtime | Get real-time active orders |
+| `get_order_history()` | GET /v5/order/history | Get historical orders |
+
+## Advanced Order Types
+
+### **Conditional Orders**
+
+For conditional/trigger orders, set the `triggerPrice` parameter:
+```python
+session.place_order(
+    category='linear',
+    symbol='BTCUSDT',
+    orderType='Limit',
+    triggerDirection=1,  # 1 for rise, 2 for fall
+    triggerPrice='35000',
+    side='Buy',
+    qty='0.001',
+    price='34900'
+)
+```
+
+### **Take Profit / Stop Loss**
+
+You can set TP/SL while placing orders:
+```python
+session.place_order(
+    category='linear',
+    symbol='BTCUSDT',
+    side='Buy',
+    orderType='Market',
+    qty='0.001',
+    takeProfit='40000',
+    stopLoss='28000'
+)
+```
+
+## Position Management Functions
+
+### **Position Queries**
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `get_positions()` | GET /v5/position/list | Get all open positions |
+| `get_closed_pnl()` | GET /v5/position/closed-pnl | Get closed P&L records |
+
+### **Position Configuration**
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `set_leverage()` | POST /v5/position/set-leverage | Adjust position leverage |
+| `switch_margin_mode()` | POST /v5/position/switch-isolated | Switch between Cross/Isolated margin |
+| `set_trading_stop()` | POST /v5/position/trading-stop | Set position TP/SL |
+| `set_risk_limit()` | POST /v5/position/set-risk-limit | Set risk limit |
+| `add_margin()` | POST /v5/position/add-margin | Add/reduce margin |
+
+
+
+## Account and Wallet Functions
+
+### **Account Information**
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `get_wallet_balance()` | GET /v5/account/wallet-balance | Get wallet balance |
+| `get_account_info()` | GET /v5/account/info | Get account information |
+| `get_fee_rate()` | GET /v5/account/fee-rate | View trading fee rates |
+| `get_transaction_log()` | GET /v5/account/transaction-log | Get transaction history |
+
+### **Asset Management**
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `get_coin_info()` | GET /v5/asset/coin/query-info | Query coin information |
+| `get_deposit_records()` | GET /v5/asset/deposit/query-record | Get deposit history |
+| `get_withdrawal_records()` | GET /v5/asset/withdraw/query-record | Get withdrawal history |
+| `create_internal_transfer()` | POST /v5/asset/transfer/inter-transfer | Internal transfer between accounts |
+
+## Market Data Functions
+
+### **Public Market Data**
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `get_tickers()` | GET /v5/market/tickers | Get latest price snapshots |
+| `get_orderbook()` | GET /v5/market/orderbook | Retrieve order book depth |
+| `get_kline()` | GET /v5/market/kline | Get historical candlestick data |
+| `get_instruments_info()` | GET /v5/market/instruments-info | Get trading rules and instrument details |
+| `get_mark_price_kline()` | GET /v5/market/mark-price-kline | Get mark price kline |
+| `get_index_price_kline()` | GET /v5/market/index-price-kline | Get index price kline |
+| `get_public_trading_history()` | GET /v5/market/recent-trade | Get recent trades |
+
+## Legacy Pybit Functions (Deprecated)
+
+The older version of pybit included these functions which are now deprecated:
+
+- `place_active_order()`
+- `cancel_active_order()`
+- `place_conditional_order()`
+- `cancel_conditional_order()`
+- `query_active_order()`
+- `query_conditional_order()`
+- `replace_active_order()`
+
+## Order Parameters
+
+### **Required Parameters**
+
+When placing orders, these parameters are typically required:
+- **category**: "spot", "linear", "inverse", "option"
+- **symbol**: Trading pair (e.g., "BTCUSDT")
+- **side**: "Buy" or "Sell"
+- **orderType**: "Limit" or "Market"
+- **qty**: Order quantity
+
+### **Optional Parameters**
+
+- **price**: Required for limit orders
+- **timeInForce**: "GTC", "IOC", "FOK", "PostOnly"
+- **orderLinkId**: Custom order ID (max 36 characters)
+- **positionIdx**: 0 (one-way), 1 (buy-side), 2 (sell-side)
+- **reduceOnly**: true/false
+- **closeOnTrigger**: true/false
+- **triggerPrice**: For conditional orders
+- **triggerBy**: "LastPrice", "IndexPrice", "MarkPrice"
+- **tpslMode**: "Full" or "Partial"
+- **takeProfit**: Take profit price
+- **stopLoss**: Stop loss price
+
+## Rate Limits
+
+Be aware of API rate limits when building your trading bot:
+
+| API Category | Rate Limit |
+|--------------|------------|
+| Market Data | 120 requests per minute |
+| Order Management | 60 requests per minute |
+| Position Queries | 120 requests per minute |
+
+## Best Practices
+
+1. **Use WebSocket for real-time updates** instead of polling REST endpoints
+2. **Implement proper error handling** with try-except blocks
+3. **Set leverage and margin mode** before placing orders
+4. **Use orderLinkId** for tracking orders in your system
+5. **Check decimal precision** for each symbol before placing orders
+6. **Test on testnet** before deploying to production
+Based on my research of the pybit and Bybit v5 API documentation, here's a comprehensive list of order placement and API functions for a trading bot:
+
+## **Core Setup**
+
+```python
+from pybit.unified_trading import HTTP
+
+# Initialize session
+session = HTTP(
+    testnet=True,  # Set to False for live trading
+    api_key="your_api_key",
+    api_secret="your_api_secret"
+)
+```
+
+## **Order Management Functions**
+
+### **1. Order Placement**
+
+**place_order()** - Place a new order with parameters:
+- `category`: 'linear', 'spot', 'inverse', 'option'
+- `symbol`: Trading pair (e.g., 'BTCUSDT')
+- `orderType`: 'Limit', 'Market'
+- `side`: 'Buy', 'Sell' 
+- `qty`: Order quantity
+- `price`: Limit price (for limit orders)
+- `timeInForce`: 'GTC' (Good Till Cancel), 'IOC' (Immediate or Cancel), 'FOK' (Fill or Kill), 'PostOnly'
+- `takeProfit`: Take profit price (optional)
+- `stopLoss`: Stop loss price (optional)
+- `orderLinkId`: Custom order ID (optional)
+- `reduceOnly`: Boolean for reduce-only orders (optional)
+- `closeOnTrigger`: Boolean (optional)
+- `positionIdx`: Position index for hedge mode (optional)
+
+### **2. Order Modification**
+
+**amend_order()** - Modify an existing order
+- `category`: Market category
+- `symbol`: Trading pair
+- `orderId` or `orderLinkId`: Order identifier
+- `qty`: New quantity (optional)
+- `price`: New price (optional)
+- `takeProfit`: New TP (optional)
+- `stopLoss`: New SL (optional)
+
+### **3. Order Cancellation**
+
+**cancel_order()** - Cancel a single order
+- `category`: Market category
+- `symbol`: Trading pair  
+- `orderId` or `orderLinkId`: Order identifier
+
+**cancel_all_orders()** - Cancel all open orders
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+- `settleCoin`: Settlement coin for derivatives (optional)
+
+### **4. Batch Operations**
+
+**place_batch_order()** - Submit multiple orders in bulk (currently only USDC Options support this)
+- `category`: 'option'
+- `request`: List of order dictionaries
+
+**amend_batch_order()** - Modify multiple orders
+- `category`: Market category
+- `request`: List of modification requests
+
+**cancel_batch_order()** - Cancel multiple orders
+- `category`: Market category
+- `request`: List of order IDs to cancel
+
+## **Position Management Functions**
+
+### **1. Position Queries**
+
+**get_positions()** - Query real-time position data
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+- `settleCoin`: Settlement coin (optional)
+- `limit`: Number of results (optional)
+
+**get_closed_pnl()** - Get closed P&L records
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+- `startTime`: Start timestamp (optional)
+- `endTime`: End timestamp (optional)
+
+### **2. Position Modification**
+
+**set_trading_stop()** - Set/modify take profit and stop loss for positions
+- `category`: Market category
+- `symbol`: Trading pair
+- `takeProfit`: TP price (optional)
+- `stopLoss`: SL price (optional)
+- `tpTriggerBy`: 'MarkPrice', 'LastPrice', 'IndexPrice'
+- `slTriggerBy`: 'MarkPrice', 'LastPrice', 'IndexPrice'
+- `positionIdx`: Position index for hedge mode
+
+**set_leverage()** - Adjust position leverage
+- `category`: Market category
+- `symbol`: Trading pair
+- `buyLeverage`: Buy side leverage
+- `sellLeverage`: Sell side leverage
+
+**switch_position_mode()** - Switch between one-way and hedge mode
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+- `mode`: 0 (Merged Single), 3 (Both Sides)
+
+**set_risk_limit()** - Set risk limit
+- `category`: Market category
+- `symbol`: Trading pair
+- `riskId`: Risk limit ID
+
+## **Market Data Functions**
+
+**get_tickers()** - Get latest price snapshot and 24hr volume
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+
+**get_instruments_info()** - Get trading pair specifications
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+- `instrumentStatus`: Filter by status (optional)
+
+**get_orderbook()** - Get order book data
+- `category`: Market category
+- `symbol`: Trading pair
+- `limit`: Depth (1, 25, 50, 100, 200, 500)
+
+**get_kline()** - Get candlestick data
+- `category`: Market category
+- `symbol`: Trading pair
+- `interval`: Time interval (1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M)
+- `start`: Start timestamp
+- `end`: End timestamp
+
+**get_mark_price_kline()** - Get mark price kline
+**get_index_price_kline()** - Get index price kline
+**get_premium_index_price_kline()** - Get premium index kline
+
+## **Account Functions**
+
+**get_wallet_balance()** - Get wallet balance and account info
+- `accountType`: 'UNIFIED' or 'CONTRACT'
+
+**get_fee_rate()** - Get trading fee rates
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+
+**get_account_info()** - Get account information
+
+**get_transaction_log()** - Get transaction history
+
+**get_coin_exchange_records()** - Get coin exchange records
+
+## **Order Query Functions**
+
+**get_open_orders()** - Get all open orders
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+- `orderId` or `orderLinkId`: Specific order (optional)
+- `openOnly`: Filter open orders
+- `limit`: Number of results
+
+**get_order_history()** - Get historical orders
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+- `orderId` or `orderLinkId`: Specific order (optional)
+- `orderStatus`: Filter by status
+- `startTime`: Start timestamp
+- `endTime`: End timestamp
+
+**get_trade_history()** - Get execution history
+- `category`: Market category
+- `symbol`: Trading pair (optional)
+- `orderId` or `orderLinkId`: Related order (optional)
+- `startTime`: Start timestamp
+- `endTime`: End timestamp
+
+## **WebSocket Functions (Real-time Data)**
+
+```python
+from pybit.unified_trading import WebSocket
+
+ws = WebSocket(
+    testnet=True,
+    channel_type="private",  # or "linear", "spot", "inverse", "option"
+    api_key="your_api_key",
+    api_secret="your_api_secret"
+)
+```
+
+### **Private Streams**
+- **order_stream()** - Real-time order updates
+- **position_stream()** - Real-time position updates
+- **execution_stream()** - Real-time trade executions
+- **wallet_stream()** - Real-time wallet updates
+
+### **Public Streams**
+- **orderbook_stream()** - Real-time orderbook (depths: 1, 25, 50, 100, 200, 500)
+- **trade_stream()** - Real-time public trades
+- **ticker_stream()** - Real-time ticker updates
+- **kline_stream()** - Real-time candlestick data
+- **liquidation_stream()** - Real-time liquidations
+
+## **Additional Helper Functions**
+
+**get_server_time()** - Get server timestamp
+**get_announcement()** - Get platform announcements
+
+## **Error Handling**
+
+Common error codes to handle:
+- 10001: Parameter error
+- 10002: Invalid request
+- 10003: Invalid API key
+- 10004: Sign error
+- 10005: Permission denied
+- 110007: Insufficient balance
+- 130021: Order already exists
+- 130125: Order not found
+
+## **Best Practices for Trading Bot**
+
+1. Always implement proper error handling and retry logic
+2. Use `orderLinkId` for tracking your orders
+3. Implement rate limiting (check API limits)
+4. Use WebSocket for real-time data instead of polling
+5. Test thoroughly on testnet before live trading
+6. Keep logs of all orders and trades
+7. Implement position size management
+8. Use proper risk management with stop losses
+# Bybit WebSocket and Kline Fetching Functions
+
+## WebSocket Endpoints
+
+### Public WebSocket URLs
+
+Bybit provides dedicated WebSocket endpoints for different trading categories:
+
+**Mainnet Endpoints:**
+- **Spot**: `wss://stream.bybit.com/v5/public/spot`
+- **USDT/USDC Perpetual & Futures**: `wss://stream.bybit.com/v5/public/linear`
+- **Inverse Contracts**: `wss://stream.bybit.com/v5/public/inverse`
+- **Options**: `wss://stream.bybit.com/v5/public/option`
+- **Spread Trading**: `wss://stream.bybit.com/v5/public/spread`
+
+**Testnet Endpoints:**
+- **Spot**: `wss://stream-testnet.bybit.com/v5/public/spot`
+- **Linear**: `wss://stream-testnet.bybit.com/v5/public/linear`
+- **Inverse**: `wss://stream-testnet.bybit.com/v5/public/inverse`
+- **Options**: `wss://stream-testnet.bybit.com/v5/public/option`
+- **Spread**: `wss://stream-testnet.bybit.com/v5/public/spread`
+
+### Private WebSocket URLs
+
+For authenticated connections requiring API credentials:
+
+- **Mainnet**: `wss://stream.bybit.com/v5/private`
+- **Testnet**: `wss://stream-testnet.bybit.com/v5/private`
+
+### Trade WebSocket URLs
+
+For order management via WebSocket:
+
+- **Mainnet**: `wss://stream.bybit.com/v5/trade`
+- **Testnet**: `wss://stream-testnet.bybit.com/v5/trade`
+
+## Available WebSocket Channels
+
+### Public Channels
+
+Bybit offers numerous public WebSocket channels for real-time market data:
+
+- **Orderbook**: `orderbook.{depth}.{symbol}` (depth: 1, 25, 50, 100, 200, 500)
+- **Public Trades**: `publicTrade.{symbol}`
+- **Tickers**: `tickers.{symbol}`
+- **Kline/Candlestick**: `kline.{interval}.{symbol}`
+- **Liquidations**: `liquidation.{symbol}`
+
+### Private Channels
+
+Authenticated users can subscribe to:
+
+- **Position Updates**: `position`
+- **Order Updates**: `order`
+- **Wallet Updates**: `wallet`
+- **Execution/Trade Updates**: `execution`
+- **Greek Values**: `greeks` (options only)
+
+## Kline WebSocket Subscription
+
+### Kline Channel Format
+
+The Kline WebSocket channel follows this format:
+
+```
+kline.{interval}.{symbol}
+```
+
+Example: `kline.5.BTCUSDT` for 5-minute candles of BTC/USDT
+
+### Available Kline Intervals
+
+Bybit supports the following intervals for Kline data:
+
+- **Minutes**: 1, 3, 5, 15, 30, 60, 120, 240, 360, 720
+- **Daily**: D
+- **Weekly**: W  
+- **Monthly**: M
+
+### Kline Data Structure
+
+Each Kline update contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| start | number | Start timestamp (ms) |
+| end | number | End timestamp (ms) |
+| interval | string | Kline interval |
+| open | string | Open price |
+| close | string | Close price |
+| high | string | Highest price |
+| low | string | Lowest price |
+| volume | string | Trade volume |
+| turnover | string | Turnover value |
+| confirm | boolean | Whether candle is closed |
+| timestamp | number | Last matched order timestamp |
+
+## REST API Kline Functions
+
+### Get Kline Endpoint
+
+For fetching historical Kline data via REST API:
+
+```
+GET /v5/market/kline
+```
+
+**Parameters:**
+- `category`: Product type (spot, linear, inverse)
+- `symbol`: Trading pair
+- `interval`: Time interval
+- `start`: Start timestamp (ms)
+- `end`: End timestamp (ms)
+- `limit`: Number of results (default: 200, max: 1000)
+
+### Additional Kline REST Endpoints
+
+Bybit provides specialized Kline endpoints:
+
+- **Mark Price Kline**: `/v5/market/mark-price-kline`
+- **Index Price Kline**: `/v5/market/index-price-kline`
+- **Premium Index Price Kline**: `/v5/market/premium-index-price-kline`
+
+## Implementation Examples
+
+### WebSocket Connection (Node.js)
+
+Basic WebSocket connection and Kline subscription:
+
+```javascript
+const WebSocket = require('ws');
+
+// Connect to Bybit WebSocket
+const ws = new WebSocket('wss://stream.bybit.com/v5/public/linear');
+
+// Subscribe to Kline channel
+ws.on('open', function() {
+    const subscribeMsg = {
+        op: 'subscribe',
+        args: ['kline.5.BTCUSDT']
+    };
+    ws.send(JSON.stringify(subscribeMsg));
+});
+
+// Handle incoming Kline data
+ws.on('message', function(data) {
+    const message = JSON.parse(data);
+    console.log('Kline update:', message);
+});
+```
+
+
+
+### Python WebSocket Example
+
+Using the pybit library for Kline streaming:
+
+```python
+from pybit.unified_trading import WebSocket
+from time import sleep
+
+ws = WebSocket(
+    testnet=True,
+    channel_type="linear"
+)
+
+def handle_kline(message):
+    print(message)
+
+ws.kline_stream(
+    interval=5,
+    symbol="BTCUSDT",
+    callback=handle_kline
+)
+
+while True:
+    sleep(1)
+```
+
+### REST API Kline Fetch (Node.js)
+
+Using the bybit-api package:
+
+```javascript
+const { RestClientV5 } = require('bybit-api');
+
+const client = new RestClientV5({
+    testnet: true
+});
+
+// Fetch historical Klines
+client.getKline({
+    category: 'linear',
+    symbol: 'BTCUSDT',
+    interval: '60',
+    start: 1670601600000,
+    end: 1670608800000
+})
+.then(response => {
+    console.log('Kline data:', response);
+})
+.catch(error => {
+    console.error('Error:', error);
+});
+```
+
+## SDK Functions for Kline Data
+
+### JavaScript/TypeScript SDK Functions
+
+The bybit-api Node.js SDK provides these Kline-related functions:
+
+| Function | Description | Endpoint |
+|----------|-------------|----------|
+| `getKline()` | Get standard Klines | `/v5/market/kline` |
+| `getMarkPriceKline()` | Get mark price Klines | `/v5/market/mark-price-kline` |
+| `getIndexPriceKline()` | Get index price Klines | `/v5/market/index-price-kline` |
+| `getPremiumIndexPriceKline()` | Get premium index Klines | `/v5/market/premium-index-price-kline` |
+
+### WebSocket API Functions
+
+For order management via WebSocket, the SDK includes:
+
+- `submitNewOrder()` - Create orders via WebSocket
+- `amendOrder()` - Modify existing orders
+- `cancelOrder()` - Cancel orders
+- `batchSubmitOrders()` - Submit multiple orders
+- `batchAmendOrder()` - Amend multiple orders
+- `batchCancelOrder()` - Cancel multiple orders
+
+## Connection Management
+
+### Heartbeat/Ping-Pong
+
+To maintain WebSocket connections:
+
+```javascript
+// Send ping every 20 seconds
+setInterval(() => {
+    ws.send(JSON.stringify({
+        req_id: "100001",
+        op: "ping"
+    }));
+}, 20000);
+```
+
+### Authentication for Private Channels
+
+For private WebSocket channels:
+
+```javascript
+const crypto = require('crypto');
+Here's a comprehensive guide to **all Bybit WebSocket functions and Kline fetching functions** for the v5 API using pybit:
+
+## **WebSocket Setup & Connection**
+
+### **Basic WebSocket Initialization**
+
+```python
+from pybit.unified_trading import WebSocket
+from time import sleep
+
+# Public WebSocket channels
+ws_linear = WebSocket(
+    testnet=True,  # False for production
+    channel_type="linear"  # USDT/USDC perpetual
+)
+
+ws_spot = WebSocket(
+    testnet=True,
+    channel_type="spot"  # Spot trading
+)
+
+ws_inverse = WebSocket(
+    testnet=True,
+    channel_type="inverse"  # Inverse contracts
+)
+
+ws_option = WebSocket(
+    testnet=True,
+    channel_type="option"  # Options
+)
+
+# Private WebSocket (authenticated)
+ws_private = WebSocket(
+    testnet=True,
+    channel_type="private",
+    api_key="your_api_key",
+    api_secret="your_api_secret",
+    trace_logging=True  # Enable debug logging
+)
+```
+
+### **WebSocket Endpoints**
+
+**Mainnet:**
+- Spot: `wss://stream.bybit.com/v5/public/spot`
+- USDT/USDC perpetual: `wss://stream.bybit.com/v5/public/linear`
+- Inverse contract: `wss://stream.bybit.com/v5/public/inverse`
+- Options: `wss://stream.bybit.com/v5/public/option`
+
+**Testnet:**
+- Spot: `wss://stream-testnet.bybit.com/v5/public/spot`
+- USDT/USDC perpetual: `wss://stream-testnet.bybit.com/v5/public/linear`
+- Inverse contract: `wss://stream-testnet.bybit.com/v5/public/inverse`
+- Options: `wss://stream-testnet.bybit.com/v5/public/option`
+
+## **Public WebSocket Streams**
+
+### **1. Orderbook Stream**
+```python
+def handle_orderbook(message):
+    print(message)
+    
+# Subscribe to orderbook (depths: 1, 25, 50, 100, 200, 500)
+ws_linear.orderbook_stream(
+    depth=50,
+    symbol="BTCUSDT",
+    callback=handle_orderbook
+)
+```
+
+### **2. Trade Stream**
+```python
+def handle_trade(message):
+    print(message)
+    
+# Real-time public trades
+ws_linear.trade_stream(
+    symbol="BTCUSDT",
+    callback=handle_trade
+)
+```
+
+### **3. Ticker Stream**
+```python
+def handle_ticker(message):
+    print(message)
+    
+# Single symbol
+ws_linear.ticker_stream(
+    symbol="BTCUSDT",
+    callback=handle_ticker
+)
+
+# Multiple symbols (spot)
+ws_spot.ticker_stream(
+    symbol=["BTCUSDT", "ETHUSDT"],
+    callback=handle_ticker
+)
+```
+
+### **4. Kline Stream**
+```python
+def handle_kline(message):
+    data = message['data'][0]
+    print(f"Close: {data['close']}, Volume: {data['volume']}")
+    
+# Intervals: 1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M
+ws_linear.kline_stream(
+    interval=5,  # 5 minute candles
+    symbol="BTCUSDT",
+    callback=handle_kline
+)
+```
+
+### **5. Liquidation Stream**
+```python
+def handle_liquidation(message):
+    print(message)
+    
+ws_linear.liquidation_stream(
+    symbol="BTCUSDT",
+    callback=handle_liquidation
+)
+```
+
+### **6. LT (Leveraged Token) Streams**
+```python
+# LT Kline
+ws_spot.lt_kline_stream(
+    interval=5,
+    symbol="BTC3LUSDT",
+    callback=handle_kline
+)
+
+# LT Ticker
+ws_spot.lt_ticker_stream(
+    symbol="BTC3LUSDT",
+    callback=handle_ticker
+)
+
+# LT NAV (Net Asset Value)
+ws_spot.lt_nav_stream(
+    symbol="BTC3LUSDT",
+    callback=handle_message
+)
+```
+
+## **Private WebSocket Streams**
+
+### **1. Position Stream**
+```python
+def handle_position(message):
+    print(f"Position update: {message}")
+    
+ws_private.position_stream(callback=handle_position)
+```
+
+### **2. Order Stream**
+```python
+def handle_order(message):
+    print(f"Order update: {message}")
+    
+ws_private.order_stream(callback=handle_order)
+```
+
+### **3. Execution Stream**
+```python
+def handle_execution(message):
+    print(f"Trade execution: {message}")
+    
+ws_private.execution_stream(callback=handle_execution)
+```
+
+### **4. Wallet Stream**
+```python
+def handle_wallet(message):
+    print(f"Wallet update: {message}")
+    
+ws_private.wallet_stream(callback=handle_wallet)
+```
+
+### **5. Greek Stream (Options)**
+```python
+def handle_greek(message):
+    print(f"Greek update: {message}")
+    
+ws_private.greek_stream(callback=handle_greek)
+```
+
+## **WebSocket Management**
+
+### **Ping-Pong & Keep Alive**
+```python
+# Custom ping configuration
+ws = WebSocket(
+    testnet=True,
+    channel_type="linear",
+    ping_interval=30,  # Default is 30 seconds
+    ping_timeout=10,   # Default is 10 seconds
+    max_active_time="2m"  # Maximum connection time
+)
+```
+
+### **Unsubscribe & Exit**
+```python
+# Unsubscribe from specific topic
+ws.unsubscribe_orderbook(symbol="BTCUSDT")
+
+# Close connection
+ws.exit()
+```
+
+## **Kline (OHLCV) Fetching Functions**
+
+### **1. Get Historical Klines**
+
+Query for historical klines (candles/candlesticks). Charts are returned in groups based on the requested interval.
+
+```python
+from pybit.unified_trading import HTTP
+session = HTTP(testnet=False)
+
+# Basic kline fetch
+klines = session.get_kline(
+    category="linear",  # 'linear', 'spot', 'inverse'
+    symbol="BTCUSDT",
+    interval="60",  # 1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M
+    start=1670601600000,  # Start timestamp (milliseconds)
+    end=1670608800000,    # End timestamp (milliseconds)
+    limit=200  # Max 200 per request for most categories, 1000 for spot
+)
+```
+
+### **2. Get Mark Price Klines**
+
+Query for historical mark price klines. Charts are returned in groups based on the requested interval.
+
+```python
+mark_klines = session.get_mark_price_kline(
+    category="linear",
+    symbol="BTCUSDT",
+    interval="15",
+    start=1670601600000,
+    end=1670608800000,
+    limit=200
+)
+```
+
+### **3. Get Index Price Klines**
+```python
+index_klines = session.get_index_price_kline(
+    category="linear",
+    symbol="BTCUSDT",
+    interval="60",
+    start=1670601600000,
+    end=1670608800000,
+    limit=200
+)
+```
+
+### **4. Get Premium Index Klines**
+```python
+premium_klines = session.get_premium_index_price_kline(
+    category="linear",
+    symbol="BTCUSDT",
+    interval="60",
+    start=1670601600000,
+    end=1670608800000,
+    limit=200
+)
+```
+
+## **Advanced Kline Fetching with Pagination**
+
+For fetching large amounts of historical data with pagination:
+
+```python
+import pandas as pd
+from datetime import datetime, timedelta
+import dateparser
+import time
+import math
+
+def get_historical_data(symbol, start_date, end_date, interval="1", category="linear"):
+    """
+    Fetch historical kline data with pagination
+    """
+    session = HTTP(testnet=False)
+    
+    start_time = dateparser.parse(start_date)
+    end_time = dateparser.parse(end_date)
+    start_ts = int(start_time.timestamp() * 1000)  # milliseconds
+    end_ts = int(end_time.timestamp() * 1000)
+    
+    all_klines = []
+    current_start = start_ts
+    
+    while current_start < end_ts:
+        try:
+            # Fetch batch
+            response = session.get_kline(
+                category=category,
+                symbol=symbol,
+                interval=interval,
+                start=current_start,
+                end=min(current_start + 200 * 60 * 1000, end_ts),  # 200 candles max
+                limit=200
+            )
+            
+            if response['retCode'] == 0:
+                klines = response['result']['list']
+                if not klines:
+                    break
+                    
+                all_klines.extend(klines)
+                
+                # Update start time for next batch
+                last_timestamp = int(klines[0][0])  # First item (most recent)
+                current_start = last_timestamp + 1
+                
+                time.sleep(0.1)  # Rate limiting
+            else:
+                print(f"Error: {response['retMsg']}")
+                break
+                
+        except Exception as e:
+            print(f"Exception: {e}")
+            break
+    
+    # Convert to DataFrame
+    df = pd.DataFrame(all_klines, columns=[
+        'timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'
+    ])
+    df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='ms')
+    df.set_index('timestamp', inplace=True)
+    
+    # Convert string prices to float
+    for col in ['open', 'high', 'low', 'close', 'volume', 'turnover']:
+        df[col] = df[col].astype(float)
+    
+    return df
+```
+
+## **Kline Data Processing**
+
+### **Resample OHLC Data**
+```python
+def resample_ohlc(df, new_interval):
+    """
+    Resample OHLC data to different timeframe
+    new_interval: '5min', '15min', '30min', '1h', '4h', '1D', '1W'
+    """
+    ohlc_dict = {
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum',
+        'turnover': 'sum'
+    }
+    
+    return df.resample(new_interval).agg(ohlc_dict).dropna()
+```
+
+## **Complete WebSocket Example**
+
+```python
+from pybit.unified_trading import WebSocket
+from time import sleep
+import json
+
+class BybitWebSocketClient:
+    def __init__(self, testnet=True):
+        self.ws_public = WebSocket(
+            testnet=testnet,
+            channel_type="linear"
+        )
+        
+        self.ws_private = WebSocket(
+            testnet=testnet,
+            channel_type="private",
+            api_key="your_api_key",
+            api_secret="your_api_secret"
+        )
+        
+        self.orderbook_data = {}
+        self.position_data = {}
+    
+    def handle_orderbook(self, message):
+        """Process orderbook updates"""
+        if message['type'] == 'snapshot':
+            self.orderbook_data = message['data']
+        elif message['type'] == 'delta':
+            # Update orderbook with delta
+            pass
+        print(f"Orderbook update: {message['data']['s']}")
+    
+    def handle_position(self, message):
+        """Process position updates"""
+        self.position_data = message['data']
+        print(f"Position: {self.position_data}")
+    
+    def start_streams(self, symbols):
+        """Start all WebSocket streams"""
+        for symbol in symbols:
+            # Public streams
+            self.ws_public.orderbook_stream(50, symbol, self.handle_orderbook)
+            self.ws_public.ticker_stream(symbol, lambda msg: print(f"Ticker: {msg}"))
+            self.ws_public.kline_stream(1, symbol, lambda msg: print(f"Kline: {msg}"))
+        
+        # Private streams
+        self.ws_private.position_stream(self.handle_position)
+        self.ws_private.order_stream(lambda msg: print(f"Order: {msg}"))
+        self.ws_private.wallet_stream(lambda msg: print(f"Wallet: {msg}"))
+    
+    def run(self):
+        """Keep connection alive"""
+        try:
+            while True:
+                sleep(1)
+        except KeyboardInterrupt:
+            print("Closing WebSocket connections...")
+            self.ws_public.exit()
+            self.ws_private.exit()
+
+# Usage
+client = BybitWebSocketClient(testnet=True)
+client.start_streams(["BTCUSDT", "ETHUSDT"])
+client.run()
+```
+
+## **Important Notes**
+
+1. WebSocket requests are not counted against rate limits, making them ideal for real-time market data
+2. Connections will be cut off after 10 minutes without ping-pong or stream data, but you can configure this with max_active_time
+3. Do not build over 500 connections in 5 minutes
+4. WebSocket returns data in reverse chronological order (newest first)
+5. Use testnet for development and testing before going live
+
+This comprehensive guide covers all WebSocket streams and Kline fetching functions available in the Bybit v5 API through pybit. Make sure to handle errors appropriately and implement proper reconnection logic for production use.
+const expires = Date.now() + 10000;
+const signature = crypto
+    .createHmac('sha256', API_SECRET)
+    .update(`GET/realtime${expires}`)
+    .digest('hex');
+
+ws.send(JSON.stringify({
+    op: 'auth',
+    args: [API_KEY, expires, signature]
+}));
+```
+
+## Best Practices
+
+**Connection Limits**:
+- Maximum 500 connections per 5 minutes per domain
+- Keep connections alive with ping packets every 20 seconds
+- Maximum args length: 21,000 characters per subscription
+
+**Subscription Limits**:
+- Spot: Up to 10 args per subscription request
+- Options: Up to 2000 args per connection
+- No limits for Futures and Spread trading
+
+**Data # Bybit V5 API Trading Bot Strategy Template with PyBit and Pandas TA
+
+Here's a comprehensive strategy template for building a Bybit V5 API trading bot using PyBit with technical indicators from Pandas TA. This template provides a modular structure that you can customize with your own trading logic.
+
+## Installation and Setup
+
+First, install the required packages:
+
+```bash
+pip install pybit
+pip install pandas
+pip install pandas-ta
+pip install numpy
+```
+
+## Complete Strategy Template
+
+```python
+import pandas as pd
+import pandas_ta as ta
+from pybit.unified_trading import HTTP
+import time
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, Optional, Tuple
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+class BybitTradingBot:
+    """
+    A template for a Bybit V5 API trading bot using PyBit and Pandas TA indicators
+    """
+    
+    def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
+        """
+        Initialize the trading bot
+        
+        Args:
+            api_key: Your Bybit API key
+            api_secret: Your Bybit API secret
+            testnet: Whether to use testnet (True) or mainnet (False)
+        """
+        self.session = HTTP(
+            testnet=testnet,
+            api_key=api_key,
+            api_secret=api_secret
+        )
+        
+        # Trading parameters
+        self.symbol = "BTCUSDT"
+        self.category = "linear"  # For USDT perpetual
+        self.leverage = 5
+        self.risk_per_trade = 0.01  # 1% risk per trade
+        self.take_profit_ratio = 2  # Risk:Reward = 1:2
+        self.stop_loss_ratio = 1
+        
+        # Technical indicator parameters
+        self.ema_short = 20
+        self.ema_long = 50
+        self.rsi_period = 14
+        self.rsi_oversold = 30
+        self.rsi_overbought = 70
+        self.macd_fast = 12
+        self.macd_slow = 26
+        self.macd_signal = 9
+        
+        # Position tracking
+        self.in_position = False
+        self.position_side = None
+        
+    def get_kline_data(self, interval: str = "15", limit: int = 200) -> pd.DataFrame:
+        """
+        Fetch historical kline/candlestick data from Bybit
+        
+        Args:
+            interval: Timeframe (1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M)
+            limit: Number of candles to fetch
+            
+        Returns:
+            DataFrame with OHLCV data
+        """
+        try:
+            response = self.session.get_kline(
+                category=self.category,
+                symbol=self.symbol,
+                interval=interval,
+                limit=limit
+            )
+            
+            if response['retCode'] != 0:
+                logger.error(f"Error fetching kline data: {response['retMsg']}")
+                return pd.DataFrame()
+            
+            kline_data = response['result']['list']
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(kline_data, columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'
+            ])
+            
+            # Convert to numeric types
+            df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='ms')
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = df[col].astype(float)
+            
+            # Sort by timestamp
+            df = df.sort_values('timestamp').reset_index(drop=True)
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error in get_kline_data: {str(e)}")
+            return pd.DataFrame()
+    
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate technical indicators using Pandas TA
+        
+        Args:
+            df: DataFrame with OHLCV data
+            
+        Returns:
+            DataFrame with indicators added
+        """
+        if df.empty:
+            return df
+        
+        try:
+            # EMA - Exponential Moving Averages
+            df[f'EMA_{self.ema_short}'] = ta.ema(df['close'], length=self.ema_short)
+            df[f'EMA_{self.ema_long}'] = ta.ema(df['close'], length=self.ema_long)
+            
+            # RSI - Relative Strength Index
+            df['RSI'] = ta.rsi(df['close'], length=self.rsi_period)
+            
+            # MACD - Moving Average Convergence Divergence
+            macd = ta.macd(df['close'], 
+                          fast=self.macd_fast, 
+                          slow=self.macd_slow, 
+                          signal=self.macd_signal)
+            df = pd.concat([df, macd], axis=1)
+            
+            # Bollinger Bands
+            bbands = ta.bbands(df['close'], length=20, std=2)
+            df = pd.concat([df, bbands], axis=1)
+            
+            # ATR - Average True Range (for stop loss calculation)
+            df['ATR'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+            
+            # Stochastic Oscillator
+            stoch = ta.stoch(df['high'], df['low'], df['close'])
+            df = pd.concat([df, stoch], axis=1)
+            
+            # Volume indicators
+            df['OBV'] = ta.obv(df['close'], df['volume'])
+            df['VWAP'] = ta.vwap(df['high'], df['low'], df['close'], df['volume'])
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error calculating indicators: {str(e)}")
+            return df
+    
+    def generate_signals(self, df: pd.DataFrame) -> Dict[str, any]:
+        """
+        Generate trading signals based on technical indicators
+        
+        Args:
+            df: DataFrame with indicators
+            
+        Returns:
+            Dictionary with signal information
+        """
+        if df.empty or len(df) < 50:
+            return {'signal': 'NO_SIGNAL', 'reason': 'Insufficient data'}
+        
+        try:
+            last_row = df.iloc[-1]
+            prev_row = df.iloc[-2]
+            
+            signals = {
+                'signal': 'NO_SIGNAL',
+                'reason': [],
+                'strength': 0
+            }
+            
+            # EMA Crossover Strategy
+            ema_short = last_row[f'EMA_{self.ema_short}']
+            ema_long = last_row[f'EMA_{self.ema_long}']
+            prev_ema_short = prev_row[f'EMA_{self.ema_short}']
+            prev_ema_long = prev_row[f'EMA_{self.ema_long}']
+            
+            # Bullish crossover
+            if prev_ema_short <= prev_ema_long and ema_short > ema_long:
+                signals['signal'] = 'BUY'
+                signals['reason'].append('EMA bullish crossover')
+                signals['strength'] += 1
+            
+            # Bearish crossover
+            elif prev_ema_short >= prev_ema_long and ema_short < ema_long:
+                signals['signal'] = 'SELL'
+                signals['reason'].append('EMA bearish crossover')
+                signals['strength'] += 1
+            
+            # RSI Conditions
+            rsi = last_row['RSI']
+            if rsi < self.rsi_oversold and signals['signal'] != 'SELL':
+                if signals['signal'] == 'NO_SIGNAL':
+                    signals['signal'] = 'BUY'
+                signals['reason'].append(f'RSI oversold ({rsi:.2f})')
+                signals['strength'] += 1
+            elif rsi > self.rsi_overbought and signals['signal'] != 'BUY':
+                if signals['signal'] == 'NO_SIGNAL':
+                    signals['signal'] = 'SELL'
+                signals['reason'].append(f'RSI overbought ({rsi:.2f})')
+                signals['strength'] += 1
+            
+            # MACD Signal
+            if 'MACD_12_26_9' in last_row and 'MACDs_12_26_9' in last_row:
+                macd = last_row['MACD_12_26_9']
+                macd_signal = last_row['MACDs_12_26_9']
+                prev_macd = prev_row['MACD_12_26_9']
+                prev_macd_signal = prev_row['MACDs_12_26_9']
+                
+                # MACD crossover
+                if prev_macd <= prev_macd_signal and macd > macd_signal:
+                    if signals['signal'] == 'BUY' or signals['signal'] == 'NO_SIGNAL':
+                        signals['signal'] = 'BUY'
+                        signals['reason'].append('MACD bullish crossover')
+                        signals['strength'] += 1
+                elif prev_macd >= prev_macd_signal and macd < macd_signal:
+                    if signals['signal'] == 'SELL' or signals['signal'] == 'NO_SIGNAL':
+                        signals['signal'] = 'SELL'
+                        signals['reason'].append('MACD bearish crossover')
+                        signals['strength'] += 1
+            
+            # Bollinger Bands
+            if 'BBL_20_2.0' in last_row and 'BBU_20_2.0' in last_row:
+                close = last_row['close']
+                bb_lower = last_row['BBL_20_2.0']
+                bb_upper = last_row['BBU_20_2.0']
+                
+                if close <= bb_lower and signals['signal'] != 'SELL':
+                    if signals['signal'] == 'NO_SIGNAL':
+                        signals['signal'] = 'BUY'
+                    signals['reason'].append('Price at lower Bollinger Band')
+                    signals['strength'] += 0.5
+                elif close >= bb_upper and signals['signal'] != 'BUY':
+                    if signals['signal'] == 'NO_SIGNAL':
+                        signals['signal'] = 'SELL'
+                    signals['reason'].append('Price at upper Bollinger Band')
+                    signals['strength'] += 0.5
+            
+            # Add price and ATR to signals for position sizing
+            signals['price'] = last_row['close']
+            signals['atr'] = last_row['ATR']
+            
+            return signals
+            
+        except Exception as e:
+            logger.error(f"Error generating signals: {str(e)}")
+            return {'signal': 'NO_SIGNAL', 'reason': f'Error: {str(e)}'}
+    
+    def get_account_balance(self) -> float:
+        """
+        Get account balance
+        
+        Returns:
+            Available balance in USDT
+        """
+        try:
+            response = self.session.get_wallet_balance(accountType="UNIFIED")
+            if response['retCode'] == 0:
+                for coin in response['result']['list']['coin']:
+                    if coin['coin'] == 'USDT':
+                        return float(coin['walletBalance'])
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error getting balance: {str(e)}")
+            return 0.0
+    
+    def calculate_position_size(self, balance: float, atr: float, price: float) -> float:
+        """
+        Calculate position size based on risk management
+        
+        Args:
+            balance: Account balance
+            atr: Average True Range
+            price: Current price
+            
+        Returns:
+            Position size in contracts
+        """
+        risk_amount = balance * self.risk_per_trade
+        stop_loss_distance = atr * 2  # Use 2x ATR for stop loss
+        position_value = risk_amount / (stop_loss_distance / price)
+        position_size = position_value / price
+        
+        # Round to appropriate decimal places
+        return round(position_size, 3)
+    
+    def place_order(self, side: str, quantity: float, price: float, atr: float) -> bool:
+        """
+        Place an order with stop loss and take profit
+        
+        Args:
+            side: 'Buy' or 'Sell'
+            quantity: Position size
+            price: Entry price
+            atr: ATR for stop loss calculation
+            
+        Returns:
+            Success status
+        """
+        try:
+            # Calculate stop loss and take profit
+            if side == 'Buy':
+                stop_loss = price - (atr * 2)
+                take_profit = price + (atr * 4)
+            else:
+                stop_loss = price + (atr * 2)
+                take_profit = price - (atr * 4)
+            
+            # Place market order
+            response = self.session.place_order(
+                category=self.category,
+                symbol=self.symbol,
+                side=side,
+                orderType="Market",
+                qty=str(quantity),
+                stopLoss=str(round(stop_loss, 2)),
+                takeProfit=str(round(take_profit, 2)),
+                timeInForce="IOC",
+                positionIdx=0  # One-way mode
+            )
+            
+            if response['retCode'] == 0:
+                logger.info(f"Order placed successfully: {side} {quantity} {self.symbol}")
+                logger.info(f"Stop Loss: {stop_loss:.2f}, Take Profit: {take_profit:.2f}")
+                self.in_position = True
+                self.position_side = side
+                return True
+            else:
+                logger.error(f"Order failed: {response['retMsg']}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error placing order: {str(e)}")
+            return False
+    
+    def check_position(self) -> Dict:
+        """
+        Check current position status
+        
+        Returns:
+            Position information
+        """
+        try:
+            response = self.session.get_positions(
+                category=self.category,
+                symbol=self.symbol
+            )
+            
+            if response['retCode'] == 0 and response['result']['list']:
+                position = response['result']['list']
+                if float(position['size']) > 0:
+                    return {
+                        'in_position': True,
+                        'side': position['side'],
+                        'size': float(position['size']),
+                        'pnl': float(position['unrealisedPnl'])
+                    }
+            
+            return {'in_position': False}
+            
+        except Exception as e:
+            logger.error(f"Error checking position: {str(e)}")
+            return {'in_position': False}
+    
+    def run_strategy(self):
+        """
+        Main strategy execution loop
+        """
+        logger.info(f"Starting trading bot for {self.symbol}")
+        logger.info(f"Strategy: EMA {self.ema_short}/{self.ema_long}, RSI {self.rsi_period}, MACD")
+        
+        while True:
+            try:
+                # Check current position
+                position = self.check_position()
+                self.in_position = position['in_position']
+                
+                if self.in_position:
+                    logger.info(f"Current position: {position['side']} {position['size']} contracts, PnL: {position['pnl']:.2f} USDT")
+                
+                # Get market data
+                df = self.get_kline_data(interval="15", limit=200)
+                
+                if df.empty:
+                    logger.warning("No market data available")
+                    time.sleep(60)
+                    continue
+                
+                # Calculate indicators
+                df = self.calculate_indicators(df)
+                
+                # Generate signals
+                signals = self.generate_signals(df)
+                
+                logger.info(f"Signal: {signals['signal']}, Strength: {signals.get('strength', 0)}")
+                if signals['reason']:
+                    logger.info(f"Reasons: {', '.join(signals['reason'])}")
+                
+                # Execute trades only if not in position and signal strength is sufficient
+                if not self.in_position and signals['strength'] >= 2:
+                    balance = self.get_account_balance()
+                    
+                    if balance > 0 and 'price' in signals and 'atr' in signals:
+                        position_size = self.calculate_position_size(
+                            balance, 
+                            signals['atr'], 
+                            signals['price']
+                        )
+                        
+                        if signals['signal'] == 'BUY':
+                            logger.info(f"Executing BUY order: {position_size} contracts at {signals['price']:.2f}")
+                            self.place_order('Buy', position_size, signals['price'], signals['atr'])
+                        elif signals['signal'] == 'SELL':
+                            logger.info(f"Executing SELL order: {position_size} contracts at {signals['price']:.2f}")
+                            self.place_order('Sell', position_size, signals['price'], signals['atr'])
+                
+                # Wait before next iteration
+                time.sleep(60)  # Check every minute
+                
+            except KeyboardInterrupt:
+                logger.info("Bot stopped by user")
+                break
+            except Exception as e:
+                logger.error(f"Error in main loop: {str(e)}")
+                time.sleep(60)
+
+# Example usage
+if __name__ == "__main__":
+    # Configuration
+    API_KEY = "your_api_key_here"
+    API_SECRET = "your_api_secret_here"
+    USE_TESTNET = True  # Set to False for mainnet
+    
+    # Initialize and run bot
+    bot = BybitTradingBot(API_KEY, API_SECRET, USE_TESTNET)
+    
+    # Set leverage
+    try:
+        bot.session.set_leverage(
+            category=bot.category,
+            symbol=bot.symbol,
+            buyLeverage=str(bot.leverage),
+            sellLeverage=str(bot.leverage)
+        )
+        logger.info(f"Leverage set to {bot.leverage}x")
+    except Exception as e:
+        logger.error(f"Error setting leverage: {str(e)}")
+    
+    # Run the strategy
+    bot.run_strategy()
+```
+
+
+
+## Key Features
+
+### **Technical Indicators Integration**
+
+The template integrates multiple indicators from Pandas TA:
+- **Trend Indicators**: EMA (Exponential Moving Average), VWAP
+- **Momentum Indicators**: RSI, MACD, Stochastic Oscillator
+- **Volatility Indicators**: Bollinger Bands, ATR
+- **Volume Indicators**: OBV (On-Balance Volume)
+
+### **Risk Management**
+
+- **Position Sizing**: Based on ATR and account risk percentage
+- **Stop Loss**: Automatically set at 2x ATR from entry
+- **Take Profit**: Set at 4x ATR for a 1:2 risk-reward ratio
+- **Leverage Control**: Configurable leverage with proper risk limits
+
+### **Signal Generation**
+
+The bot uses a multi-confirmation approach:
+- Requires signals from multiple indicators (strength ≥ 2)
+- Combines trend-following (EMA crossover) with momentum (RSI, MACD)
+- Includes mean-reversion signals (Bollinger Bands)
+
+## Configuration Guide
+
+### API Setup
+
+1. Create a Bybit account and generate API keys
+2. For testnet, use: `https://testnet.bybit.com`
+3. Enable "Derivatives" trading permissions for your API key
+4. Never share your API secret key
+
+### Customization Options
+
+```python
+# Modify trading parameters
+bot.symbol = "ETHUSDT"  # Change trading pair
+bot.leverage = 3  # Adjust leverage
+bot.risk_per_trade = 0.02  # Risk 2% per trade
+
+# Adjust indicator parameters
+bot.ema_short = 9
+bot.ema_long = 21
+bot.rsi_period = 21
+```
+
+## Additional Strategies
+
+You can extend the template with more complex strategies:
+
+```python
+# Add Ichimoku Cloud
+ichimoku = ta.ichimoku(df['high'], df['low'], df['close'])
+df = pd.concat([df, ichimoku], axis=1)
+
+# Add Supertrend
+supertrend = ta.supertrend(df['high'], df['low'], df['close'], length=7, multiplier=3)
+df = pd.concat([df, supertrend], axis=1)
+
+# Add custom indicators
+df['custom_signal'] = ta.sma(df['close'], 50) - ta.sma(df['close'], 200)
+```
+Here's a comprehensive **strategy template for a Bybit v5 API trading bot** using pybit with pandas_ta indicators:
+
+## **Complete Trading Bot Strategy Template**
+
+```python
+import pandas as pd
+import pandas_ta as ta
+import numpy as np
+from pybit.unified_trading import HTTP, WebSocket
+from datetime import datetime, timedelta
+import time
+import json
+import logging
+from typing import Optional, Dict, List, Tuple
+import sys
+from dataclasses import dataclass
+from enum import Enum
+
+# =====================================================================
+# CONFIGURATION & DATA CLASSES
+# =====================================================================
+# Complete Bybit Trading Implementation with PyBit: Decimals, Precision, Order Sizing, Trailing Stops & PnL Tracking
+
+## Setting Up PyBit Connection
+
+First, establish your connection to Bybit using the PyBit library:
+
+```python
+from pybit.unified_trading import HTTP
+import json
+import time
+from datetime import datetime, timedelta
+import pandas as pd
+
+# Initialize session
+session = HTTP(
+    testnet=True,  # Set False for mainnet
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET"
+)
+```
+
+## Instrument Precision & Decimal Handling
+
+### Getting Symbol Specifications
+
+To handle decimals and precision correctly, you must fetch the instrument specifications for each trading pair:
+
+```python
+def get_symbol_precision(session, symbol, category="linear"):
+    """
+    Get price and quantity precision for a symbol
+    Returns: (price_precision, qty_precision, tick_size, qty_step)
+    """
+    try:
+        response = session.get_instruments_info(
+            category=category,
+            symbol=symbol
+        )
+        
+        if response['retCode'] == 0:
+            instrument = response['result']['list']
+            
+            # Extract price filter information
+            price_filter = instrument['priceFilter']
+            tick_size = float(price_filter['tickSize'])
+            
+            # Extract lot size filter information
+            lot_filter = instrument['lotSizeFilter']
+            qty_step = float(lot_filter['qtyStep'])
+            min_qty = float(lot_filter['minOrderQty'])
+            max_qty = float(lot_filter['maxOrderQty'])
+            
+            # Calculate precision from tick size and qty step
+            price_precision = len(str(tick_size).split('.')[-1]) if '.' in str(tick_size) else 0
+            qty_precision = len(str(qty_step).split('.')[-1]) if '.' in str(qty_step) else 0
+            
+            return {
+                'price_precision': price_precision,
+                'qty_precision': qty_precision,
+                'tick_size': tick_size,
+                'qty_step': qty_step,
+                'min_qty': min_qty,
+                'max_qty': max_qty,
+                'min_notional': float(lot_filter.get('minNotionalValue', 5))
+            }
+    except Exception as e:
+        print(f"Error getting precision: {e}")
+        return None
+```
+
+### Rounding Functions for Orders
+
+```python
+def round_price(price, tick_size):
+    """Round price to valid tick size"""
+    return round(price / tick_size) * tick_size
+
+def round_qty(qty, qty_step):
+    """Round quantity to valid step size"""
+    return round(qty / qty_step) * qty_step
+
+def format_value(value, precision):
+    """Format value with correct decimal places"""
+    return f"{value:.{precision}f}"
+```
+
+## Order Sizing Logic
+
+### Dynamic Position Sizing
+
+```python
+class PositionSizer:
+    def __init__(self, session, risk_percent=1.0, leverage=1):
+        self.session = session
+        self.risk_percent = risk_percent / 100
+        self.leverage = leverage
+    
+    def get_account_balance(self):
+        """Get available balance in USDT"""
+        try:
+            response = self.session.get_wallet_balance(
+                accountType="UNIFIED"
+            )
+            if response['retCode'] == 0:
+                balance = float(response['result']['list']['totalWalletBalance'])
+                return balance
+        except Exception as e:
+            print(f"Error getting balance: {e}")
+            return 0
+    
+    def calculate_position_size(self, symbol, entry_price, stop_loss_price, precision_info):
+        """
+        Calculate position size based on risk management
+        """
+        account_balance = self.get_account_balance()
+        risk_amount = account_balance * self.risk_percent
+        
+        # Calculate price difference
+        price_diff = abs(entry_price - stop_loss_price)
+        risk_per_unit = price_diff
+        
+        # Calculate raw position size
+        if risk_per_unit > 0:
+            position_size = risk_amount / risk_per_unit
+        else:
+            position_size = precision_info['min_qty']
+        
+        # Apply leverage
+        position_size = position_size * self.leverage
+        
+        # Round to valid quantity
+        position_size = round_qty(position_size, precision_info['qty_step'])
+        
+        # Check min/max constraints
+        position_size = max(position_size, precision_info['min_qty'])
+        position_size = min(position_size, precision_info['max_qty'])
+        
+        # Check minimum notional value
+        notional_value = position_size * entry_price
+        if notional_value < precision_info['min_notional']:
+            position_size = precision_info['min_notional'] / entry_price
+            position_size = round_qty(position_size, precision_info['qty_step'])
+        
+        return position_size
+```
+
+
+
+## Trailing Stop Loss Implementation
+
+### Basic Trailing Stop Manager
+
+```python
+class TrailingStopManager:
+    def __init__(self, session):
+        self.session = session
+        self.active_trailing_stops = {}
+    
+    def set_trailing_stop(self, symbol, side, trailing_distance, 
+                          activation_price=None, category="linear"):
+        """
+        Set trailing stop for a position
+        trailing_distance: Can be absolute value or percentage
+        """
+        try:
+            # Get current market price
+            ticker = self.session.get_tickers(
+                category=category,
+                symbol=symbol
+            )
+            current_price = float(ticker['result']['list']['markPrice'])
+            
+            params = {
+                "category": category,
+                "symbol": symbol,
+                "trailingStop": str(trailing_distance),
+                "activePrice": str(activation_price) if activation_price else str(current_price),
+                "positionIdx": 0  # One-way mode
+            }
+            
+            response = self.session.set_trading_stop(**params)
+            
+            if response['retCode'] == 0:
+                self.active_trailing_stops[symbol] = {
+                    'trailing_distance': trailing_distance,
+                    'activation_price': activation_price or current_price,
+                    'side': side,
+                    'status': 'active'
+                }
+                return True
+            return False
+            
+        except Exception as e:
+            print(f"Error setting trailing stop: {e}")
+            return False
+    
+    def update_trailing_stop_logic(self, symbol, category="linear"):
+        """
+        Custom trailing stop logic that can be more sophisticated
+        """
+        try:
+            # Get position info
+            positions = self.session.get_positions(
+                category=category,
+                symbol=symbol
+            )
+            
+            if positions['retCode'] == 0 and positions['result']['list']:
+                position = positions['result']['list']
+                size = float(position['size'])
+                
+                if size > 0:  # Long position
+                    unrealized_pnl = float(position['unrealizedPnl'])
+                    avg_price = float(position['avgPrice'])
+                    current_price = float(position['markPrice'])
+                    
+                    # If in profit, update trailing stop
+                    if unrealized_pnl > 0:
+                        profit_percent = (current_price - avg_price) / avg_price
+                        
+                        # Dynamic trailing distance based on profit
+                        if profit_percent > 0.05:  # 5% profit
+                            trailing_distance = current_price * 0.02  # 2% trailing
+                        elif profit_percent > 0.10:  # 10% profit
+                            trailing_distance = current_price * 0.015  # 1.5% trailing
+                        else:
+                            trailing_distance = current_price * 0.03  # 3% trailing
+                        
+                        self.set_trailing_stop(symbol, "Buy", trailing_distance)
+                        
+        except Exception as e:
+            print(f"Error updating trailing stop: {e}")
+```
+
+
+
+
+
+## PnL Tracking System
+
+### Comprehensive PnL Tracker
+
+```python
+class PnLTracker:
+    def __init__(self, session):
+        self.session = session
+        self.trades_history = []
+        self.daily_pnl = {}
+    
+    def get_closed_pnl(self, category="linear", start_time=None, end_time=None):
+        """
+        Fetch closed P&L for a time period
+        """
+        try:
+            params = {
+                "category": category,
+                "limit": 200
+            }
+            
+            if start_time:
+                params["startTime"] = int(start_time.timestamp() * 1000)
+            if end_time:
+                params["endTime"] = int(end_time.timestamp() * 1000)
+            
+            response = self.session.get_closed_pnl(**params)
+            
+            if response['retCode'] == 0:
+                return response['result']['list']
+            return []
+            
+        except Exception as e:
+            print(f"Error fetching closed PnL: {e}")
+            return []
+    
+    def calculate_metrics(self, trades):
+        """
+        Calculate comprehensive trading metrics
+        """
+        if not trades:
+            return {}
+        
+        df = pd.DataFrame(trades)
+        df['closedPnl'] = df['closedPnl'].astype(float)
+        df['createdTime'] = pd.to_datetime(df['createdTime'], unit='ms')
+        
+        metrics = {
+            'total_trades': len(trades),
+            'profitable_trades': len(df[df['closedPnl'] > 0]),
+            'losing_trades': len(df[df['closedPnl'] < 0]),
+            'total_pnl': df['closedPnl'].sum(),
+            'average_pnl': df['closedPnl'].mean(),
+            'max_profit': df['closedPnl'].max(),
+            'max_loss': df['closedPnl'].min(),
+            'win_rate': len(df[df['closedPnl'] > 0]) / len(df) * 100 if len(df) > 0 else 0,
+            'profit_factor': abs(df[df['closedPnl'] > 0]['closedPnl'].sum() / 
+                               df[df['closedPnl'] < 0]['closedPnl'].sum()) 
+                               if df[df['closedPnl'] < 0]['closedPnl'].sum() != 0 else 0,
+            'sharpe_ratio': self.calculate_sharpe_ratio(df)
+        }
+        
+        return metrics
+    
+    def calculate_sharpe_ratio(self, df, risk_free_rate=0.02):
+        """Calculate Sharpe ratio from trades DataFrame"""
+        if len(df) < 2:
+            return 0
+        
+        daily_returns = df.groupby(df['createdTime'].dt.date)['closedPnl'].sum()
+        
+        if len(daily_returns) < 2:
+            return 0
+        
+        mean_return = daily_returns.mean()
+        std_return = daily_returns.std()
+        
+        if std_return == 0:
+            return 0
+        
+        daily_risk_free = risk_free_rate / 365
+        sharpe = (mean_return - daily_risk_free) / std_return * (365 ** 0.5)
+        
+        return sharpe
+    
+    def track_real_time_pnl(self, symbol, category="linear"):
+        """
+        Track real-time P&L for open positions
+        """
+        try:
+            positions = self.session.get_positions(
+                category=category,
+                symbol=symbol
+            )
+            
+            if positions['retCode'] == 0 and positions['result']['list']:
+                position_data = []
+                for pos in positions['result']['list']:
+                    data = {
+                        'symbol': pos['symbol'],
+                        'side': pos['side'],
+                        'size': float(pos['size']),
+                        'avgPrice': float(pos['avgPrice']),
+                        'markPrice': float(pos['markPrice']),
+                        'unrealizedPnl': float(pos['unrealizedPnl']),
+                        'realizedPnl': float(pos['cumRealisedPnl']),
+                        'pnl_percent': (float(pos['unrealizedPnl']) / 
+                                      (float(pos['size']) * float(pos['avgPrice'])) * 100)
+                                      if float(pos['size']) > 0 else 0
+                    }
+                    position_data.append(data)
+                
+                return position_data
+            return []
+            
+        except Exception as e:
+            print(f"Error tracking real-time PnL: {e}")
+            return []
+```
+
+
+
+## Complete Order Placement with All Features
+
+### Advanced Order Manager
+
+```python
+class AdvancedOrderManager:
+    def __init__(self, session):
+        self.session = session
+        self.position_sizer = PositionSizer(session)
+        self.trailing_stop_manager = TrailingStopManager(session)
+        self.pnl_tracker = PnLTracker(session)
+    
+    def place_order_with_risk_management(self, symbol, side, entry_price=None, 
+                                        stop_loss_percent=2, take_profit_percent=4,
+                                        use_trailing_stop=True, trailing_percent=1,
+                                        category="linear"):
+        """
+        Place order with complete risk management
+        """
+        try:
+            # Get precision info
+            precision_info = get_symbol_precision(self.session, symbol, category)
+            
+            # Get current market price if not specified
+            if not entry_price:
+                ticker = self.session.get_tickers(
+                    category=category,
+                    symbol=symbol
+                )
+                entry_price = float(ticker['result']['list']['lastPrice'])
+            
+            # Round entry price
+            entry_price = round_price(entry_price, precision_info['tick_size'])
+            
+            # Calculate stop loss and take profit prices
+            if side == "Buy":
+                stop_loss_price = entry_price * (1 - stop_loss_percent/100)
+                take_profit_price = entry_price * (1 + take_profit_percent/100)
+            else:
+                stop_loss_price = entry_price * (1 + stop_loss_percent/100)
+                take_profit_price = entry_price * (1 - take_profit_percent/100)
+            
+            # Round SL and TP prices
+            stop_loss_price = round_price(stop_loss_price, precision_info['tick_size'])
+            take_profit_price = round_price(take_profit_price, precision_info['tick_size'])
+            
+            # Calculate position size
+            position_size = self.position_sizer.calculate_position_size(
+                symbol, entry_price, stop_loss_price, precision_info
+            )
+            
+            # Format values
+            qty_str = format_value(position_size, precision_info['qty_precision'])
+            price_str = format_value(entry_price, precision_info['price_precision'])
+            sl_str = format_value(stop_loss_price, precision_info['price_precision'])
+            tp_str = format_value(take_profit_price, precision_info['price_precision'])
+            
+            # Place order with TP/SL
+            order_params = {
+                "category": category,
+                "symbol": symbol,
+                "side": side,
+                "orderType": "Limit",
+                "qty": qty_str,
+                "price": price_str,
+                "stopLoss": sl_str,
+                "takeProfit": tp_str,
+                "timeInForce": "GTC",
+                "positionIdx": 0,  # One-way mode
+                "tpslMode": "Full",
+                "tpOrderType": "Limit",
+                "slOrderType": "Market"
+            }
+            
+            response = self.session.place_order(**order_params)
+            
+            if response['retCode'] == 0:
+                order_id = response['result']['orderId']
+                
+                # Set trailing stop if requested
+                if use_trailing_stop:
+                    trailing_distance = entry_price * (trailing_percent / 100)
+                    self.trailing_stop_manager.set_trailing_stop(
+                        symbol, side, trailing_distance
+                    )
+                
+                return {
+                    'success': True,
+                    'order_id': order_id,
+                    'entry_price': entry_price,
+                    'stop_loss': stop_loss_price,
+                    'take_profit': take_profit_price,
+                    'quantity': position_size
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': response['retMsg']
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+```
+
+## Example Usage
+
+```python
+# Initialize the advanced order manager
+order_manager = AdvancedOrderManager(session)
+
+# Place a complete order with risk management
+result = order_manager.place_order_with_risk_management(
+    symbol="BTCUSDT",
+    side="Buy",
+    stop_loss_percent=2,
+    take_profit_percent=5,
+    use_trailing_stop=True,
+    trailing_percent=1
+)
+
+if result['success']:
+    print(f"Order placed successfully!")
+    print(f"Order ID: {result['order_id']}")
+    print(f"Entry: {result['entry_price']}")
+    print(f"Stop Loss: {result['stop_loss']}")
+    print(f"Take Profit: {result['take_profit']}")
+    print(f"Quantity: {result['quantity']}")
+
+# Track PnL
+pnl_data = order_manager.pnl_tracker.track_real_time_pnl("BTCUSDT")
+for position in pnl_data:
+    print(f"Symbol: {position['symbol']}")
+    print(f"Unrealized PnL: ${position['unrealizedPnl']:.2f}")
+    print(f"PnL %: {position['pnl_percent']:.2f}%")
+
+# Get trading metrics
+trades = order_manager.pnl_tracker.get_closed_pnl()
+metrics = order_manager.pnl_tracker.calculate_metrics(trades)
+print(f"Win Rate: {metrics['win_rate']:.2f}%")
+print(f"Total PnL: ${metrics['total_pnl']:.2f}")
+print(f"Profit Factor: {metrics['profit_factor']:.2f}")
+```
+
+## Key Implementation Notes
+
+**Decimal Precision**:
+- Always fetch instrument info before placing orders to get correct tick_size and qty_step
+- Use proper rounding functions to avoid order rejection
+- Format values as strings with correct decimal places
+
+**Order Sizing**:
+- Respect minimum notional value (usually $5 for USDT perpetuals)
+- Check min/max order quantities from instrument info
+- Account for leverage when calculating position size
+
+**Trailing Stops**:
+- Trailing stops can be set after position is opened
+- Use `set_trading_stop` endpoint for adding trailing stops
+- Can be specified as absolute value or percentage
+Here's a comprehensive implementation of **decimal precision, order sizing, trailing stop loss, trade metrics, and PnL tracking** for Bybit API using pybit:
+
+## **Complete Precision & Metrics Management System**
+
+```python
+import pandas as pd
+import numpy as np
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
+from pybit.unified_trading import HTTP
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass, field
+import json
+import logging
+import time
+from enum import Enum
+
+# =====================================================================
+# INSTRUMENT SPECIFICATIONS & PRECISION MANAGEMENT
+# =====================================================================
+
+@dataclass
+class InstrumentSpecs:
+    """Store instrument specifications from Bybit"""
+    symbol: str
+    category: str
+    base_currency: str
+    quote_currency: str
+    status: str
+    
+    # Price specifications
+    min_price: Decimal
+    max_price: Decimal
+    tick_size: Decimal  # Price precision
+    
+    # Quantity specifications
+    min_order_qty: Decimal
+    max_order_qty: Decimal
+    qty_step: Decimal  # Quantity precision
+    
+    # Leverage specifications
+    min_leverage: Decimal
+    max_leverage: Decimal
+    leverage_step: Decimal
+    
+    # Position limits
+    max_position_value: Decimal
+    min_position_value: Decimal
+    
+    # Contract specifications (for derivatives)
+    contract_value: Decimal = Decimal('1')
+    is_inverse: bool = False
+    
+    # Fee rates
+    maker_fee: Decimal = Decimal('0.0001')  # 0.01%
+    taker_fee: Decimal = Decimal('0.0006')  # 0.06%
+
+class PrecisionManager:
+    """Manage decimal precision for different trading pairs"""
+    
+    def __init__(self, session: HTTP, logger: logging.Logger):
+        self.session = session
+        self.logger = logger
+        self.instruments: Dict[str, InstrumentSpecs] = {}
+        self.load_all_instruments()
+    
+    def load_all_instruments(self):
+        """Load all instrument specifications from Bybit"""
+        categories = ['linear', 'inverse', 'spot', 'option']
+        
+        for category in categories:
+            try:
+                response = self.session.get_instruments_info(category=category)
+                
+                if response['retCode'] == 0:
+                    for inst in response['result']['list']:
+                        symbol = inst['symbol']
+                        
+                        # Parse specifications based on category
+                        if category in ['linear', 'inverse']:
+                            specs = self._parse_derivatives_specs(inst, category)
+                        elif category == 'spot':
+                            specs = self._parse_spot_specs(inst, category)
+                        else:  # option
+                            specs = self._parse_option_specs(inst, category)
+                        
+                        self.instruments[symbol] = specs
+                        
+            except Exception as e:
+                self.logger.error(f"Error loading {category} instruments: {e}")
+    
+    def _parse_derivatives_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+        """Parse derivatives instrument specifications"""
+        lot_size = inst['lotSizeFilter']
+        price_filter = inst['priceFilter']
+        leverage = inst['leverageFilter']
+        
+        return InstrumentSpecs(
+            symbol=inst['symbol'],
+            category=category,
+            base_currency=inst['baseCoin'],
+            quote_currency=inst['quoteCoin'],
+            status=inst['status'],
+            min_price=Decimal(price_filter['minPrice']),
+            max_price=Decimal(price_filter['maxPrice']),
+            tick_size=Decimal(price_filter['tickSize']),
+            min_order_qty=Decimal(lot_size['minOrderQty']),
+            max_order_qty=Decimal(lot_size['maxOrderQty']),
+            qty_step=Decimal(lot_size['qtyStep']),
+            min_leverage=Decimal(leverage['minLeverage']),
+            max_leverage=Decimal(leverage['maxLeverage']),
+            leverage_step=Decimal(leverage['leverageStep']),
+            max_position_value=Decimal(lot_size.get('maxMktOrderQty', '1000000')),
+            min_position_value=Decimal(lot_size.get('minOrderQty', '1')),
+            contract_value=Decimal(inst.get('contractValue', '1')),
+            is_inverse=(category == 'inverse')
+        )
+    
+    def _parse_spot_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+        """Parse spot instrument specifications"""
+        lot_size = inst['lotSizeFilter']
+        price_filter = inst['priceFilter']
+        
+        return InstrumentSpecs(
+            symbol=inst['symbol'],
+            category=category,
+            base_currency=inst['baseCoin'],
+            quote_currency=inst['quoteCoin'],
+            status=inst['status'],
+            min_price=Decimal(price_filter['minPrice']),
+            max_price=Decimal(price_filter['maxPrice']),
+            tick_size=Decimal(price_filter['tickSize']),
+            min_order_qty=Decimal(lot_size['basePrecision']),
+            max_order_qty=Decimal(lot_size['maxOrderQty']),
+            qty_step=Decimal(lot_size['basePrecision']),
+            min_leverage=Decimal('1'),
+            max_leverage=Decimal('1'),
+            leverage_step=Decimal('1'),
+            max_position_value=Decimal(lot_size.get('maxOrderAmt', '1000000')),
+            min_position_value=Decimal(lot_size.get('minOrderAmt', '1')),
+            contract_value=Decimal('1'),
+            is_inverse=False
+        )
+    
+    def _parse_option_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+        """Parse option instrument specifications"""
+        lot_size = inst['lotSizeFilter']
+        price_filter = inst['priceFilter']
+        
+        return InstrumentSpecs(
+            symbol=inst['symbol'],
+            category=category,
+            base_currency=inst['baseCoin'],
+            quote_currency=inst['quoteCoin'],
+            status=inst['status'],
+            min_price=Decimal(price_filter['minPrice']),
+            max_price=Decimal(price_filter['maxPrice']),
+            tick_size=Decimal(price_filter['tickSize']),
+            min_order_qty=Decimal(lot_size['minOrderQty']),
+            max_order_qty=Decimal(lot_size['maxOrderQty']),
+            qty_step=Decimal(lot_size['qtyStep']),
+            min_leverage=Decimal('1'),
+            max_leverage=Decimal('1'),
+            leverage_step=Decimal('1'),
+            max_position_value=Decimal(lot_size.get('maxOrderQty', '1000000')),
+            min_position_value=Decimal(lot_size.get('minOrderQty', '1')),
+            contract_value=Decimal('1'),
+            is_inverse=False
+        )
+    
+    def round_price(self, symbol: str, price: Union[float, Decimal]) -> Decimal:
+        """Round price to correct tick size"""
+        if symbol not in self.instruments:
+            self.logger.warning(f"Symbol {symbol} not found, using default precision")
+            return Decimal(str(price)).quantize(Decimal('0.01'))
+        
+        specs = self.instruments[symbol]
+        price_decimal = Decimal(str(price))
+        tick_size = specs.tick_size
+        
+        # Round to nearest tick
+        rounded = (price_decimal / tick_size).quantize(Decimal('1'), rounding=ROUND_DOWN) * tick_size
+        
+        # Ensure within min/max bounds
+        rounded = max(specs.min_price, min(rounded, specs.max_price))
+        
+        return rounded
+    
+    def round_quantity(self, symbol: str, quantity: Union[float, Decimal]) -> Decimal:
+        """Round quantity to correct step size"""
+        if symbol not in self.instruments:
+            self.logger.warning(f"Symbol {symbol} not found, using default precision")
+            return Decimal(str(quantity)).quantize(Decimal('0.001'))
+        
+        specs = self.instruments[symbol]
+        qty_decimal = Decimal(str(quantity))
+        qty_step = specs.qty_step
+        
+        # Round down to nearest step
+        rounded = (qty_decimal / qty_step).quantize(Decimal('1'), rounding=ROUND_DOWN) * qty_step
+        
+        # Ensure within min/max bounds
+        rounded = max(specs.min_order_qty, min(rounded, specs.max_order_qty))
+        
+        return rounded
+    
+    def get_decimal_places(self, symbol: str) -> Tuple[int, int]:
+        """Get decimal places for price and quantity"""
+        if symbol not in self.instruments:
+            return 2, 3  # Default values
+        
+        specs = self.instruments[symbol]
+        
+        # Calculate decimal places from tick size and qty step
+        price_decimals = abs(specs.tick_size.as_tuple().exponent)
+        qty_decimals = abs(specs.qty_step.as_tuple().exponent)
+        
+        return price_decimals, qty_decimals
+
+# =====================================================================
+# ORDER SIZING CALCULATOR
+# =====================================================================
+
+class OrderSizingCalculator:
+    """Calculate optimal order sizes based on risk management"""
+    
+    def __init__(self, precision_manager: PrecisionManager, logger: logging.Logger):
+        self.precision = precision_manager
+        self.logger = logger
+    
+    def calculate_position_size_fixed_risk(
+        self,
+        symbol: str,
+        account_balance: float,
+        risk_percent: float,
+        entry_price: float,
+        stop_loss_price: float,
+        leverage: float = 1.0
+    ) -> Dict[str, Decimal]:
+        """
+        Calculate position size based on fixed risk percentage
+        
+        Returns:
+            Dict containing position metrics
+        """
+        specs = self.precision.instruments.get(symbol)
+        if not specs:
+            raise ValueError(f"Symbol {symbol} not found")
+        
+        # Convert to Decimal for precision
+        balance = Decimal(str(account_balance))
+        risk_pct = Decimal(str(risk_percent / 100))
+        entry = Decimal(str(entry_price))
+        stop_loss = Decimal(str(stop_loss_price))
+        lev = Decimal(str(leverage))
+        
+        # Calculate risk amount
+        risk_amount = balance * risk_pct
+        
+        # Calculate stop loss distance
+        stop_distance = abs(entry - stop_loss)
+        stop_distance_pct = stop_distance / entry
+        
+        # Calculate base position size (before leverage)
+        if stop_distance_pct > 0:
+            position_value = risk_amount / stop_distance_pct
+        else:
+            position_value = specs.min_position_value
+        
+        # Apply leverage
+        position_value_with_leverage = position_value * lev
+        
+        # Calculate quantity based on category
+        if specs.category == 'spot':
+            quantity = position_value_with_leverage / entry
+        elif specs.category in ['linear', 'inverse']:
+            if specs.is_inverse:
+                # Inverse contracts (value in base currency)
+                quantity = position_value_with_leverage / specs.contract_value
+            else:
+                # Linear contracts (value in quote currency)
+                quantity = position_value_with_leverage / entry
+        else:  # option
+            quantity = position_value_with_leverage / entry
+        
+        # Round quantity to correct precision
+        quantity = self.precision.round_quantity(symbol, quantity)
+        
+        # Validate against limits
+        if quantity < specs.min_order_qty:
+            self.logger.warning(f"Calculated quantity {quantity} below minimum {specs.min_order_qty}")
+            quantity = specs.min_order_qty
+        elif quantity > specs.max_order_qty:
+            self.logger.warning(f"Calculated quantity {quantity} above maximum {specs.max_order_qty}")
+            quantity = specs.max_order_qty
+        
+        # Calculate actual position value and risk
+        actual_position_value = quantity * entry
+        actual_risk = actual_position_value * stop_distance_pct / lev
+        actual_risk_pct = (actual_risk / balance * 100).quantize(Decimal('0.01'))
+        
+        return {
+            'quantity': quantity,
+            'position_value': actual_position_value,
+            'risk_amount': actual_risk,
+            'risk_percent': actual_risk_pct,
+            'entry_price': self.precision.round_price(symbol, entry),
+            'stop_loss': self.precision.round_price(symbol, stop_loss),
+            'stop_distance': stop_distance,
+            'stop_distance_pct': (stop_distance_pct * 100).quantize(Decimal('0.01')),
+            'leverage': lev,
+            'margin_required': actual_position_value / lev
+        }
+    
+    def calculate_position_size_kelly_criterion(
+        self,
+        symbol: str,
+        account_balance: float,
+        win_rate: float,
+        avg_win: float,
+        avg_loss: float,
+        kelly_fraction: float = 0.25
+    ) -> Dict[str, Decimal]:
+        """
+        Calculate position size using Kelly Criterion
+        
+        Args:
+            win_rate: Probability of winning (0-1)
+            avg_win: Average win amount
+            avg_loss: Average loss amount
+            kelly_fraction: Fraction of Kelly to use (default 0.25 for safety)
+        """
+        specs = self.precision.instruments.get(symbol)
+        if not specs:
+            raise ValueError(f"Symbol {symbol} not found")
+        
+        # Kelly formula: f = (p * b - q) / b
+        # where f = fraction to bet, p = win probability, q = loss probability, b = win/loss ratio
+        p = Decimal(str(win_rate))
+        q = Decimal('1') - p
+        b = Decimal(str(avg_win / avg_loss)) if avg_loss != 0 else Decimal('1')
+        
+        kelly_full = (p * b - q) / b if b != 0 else Decimal('0')
+        
+        # Apply Kelly fraction for safety
+        kelly_adjusted = kelly_full * Decimal(str(kelly_fraction))
+        
+        # Ensure Kelly percentage is reasonable (max 25% of account)
+        kelly_adjusted = min(kelly_adjusted, Decimal('0.25'))
+        kelly_adjusted = max(kelly_adjusted, Decimal('0'))
+        
+        # Calculate position size
+        position_value = Decimal(str(account_balance)) * kelly_adjusted
+        
+        return {
+            'kelly_percentage': (kelly_adjusted * 100).quantize(Decimal('0.01')),
+            'position_value': position_value,
+            'kelly_full': (kelly_full * 100).quantize(Decimal('0.01')),
+            'win_rate': (p * 100).quantize(Decimal('0.01')),
+            'win_loss_ratio': b.quantize(Decimal('0.01'))
+        }
+    
+    def calculate_pyramid_sizes(
+        self,
+        symbol: str,
+        total_capital: float,
+        num_levels: int,
+        scaling_factor: float = 1.5
+    ) -> List[Dict[str, Decimal]]:
+        """
+        Calculate pyramid/scaling position sizes
+        
+        Args:
+            total_capital: Total capital to allocate
+            num_levels: Number of pyramid levels
+            scaling_factor: How much to scale each level (>1 for increasing, <1 for decreasing)
+        """
+        specs = self.precision.instruments.get(symbol)
+        if not specs:
+            raise ValueError(f"Symbol {symbol} not found")
+        
+        levels = []
+        remaining_capital = Decimal(str(total_capital))
+        base_size = remaining_capital / Decimal(str(sum(scaling_factor**i for i in range(num_levels))))
+        
+        for i in range(num_levels):
+            level_size = base_size * Decimal(str(scaling_factor**i))
+            levels.append({
+                'level': i + 1,
+                'position_value': level_size,
+                'percentage': (level_size / Decimal(str(total_capital)) * 100).quantize(Decimal('0.01'))
+            })
+        
+        return levels
+
+# =====================================================================
+# TRAILING STOP LOSS MANAGER
+# =====================================================================
+
+class TrailingStopManager:
+    """Manage trailing stop losses for profitable positions"""
+    
+    def __init__(self, session: HTTP, precision_manager: PrecisionManager, logger: logging.Logger):
+        self.session = session
+        self.precision = precision_manager
+        self.logger = logger
+        self.trailing_stops: Dict[str, Dict] = {}
+    
+    def initialize_trailing_stop(
+        self,
+        symbol: str,
+        position_side: str,
+        entry_price: float,
+        current_price: float,
+        trail_percent: float = 1.0,
+        activation_percent: float = 0.5
+    ) -> Dict:
+        """
+        Initialize trailing stop for a position
+        
+        Args:
+            trail_percent: Percentage to trail from highest profit
+            activation_percent: Minimum profit % before trailing starts
+        """
+        entry = Decimal(str(entry_price))
+        current = Decimal(str(current_price))
+        trail_pct = Decimal(str(trail_percent / 100))
+        activation_pct = Decimal(str(activation_percent / 100))
+        
+        # Calculate activation price
+        if position_side == "Buy":
+            activation_price = entry * (Decimal('1') + activation_pct)
+            is_activated = current >= activation_price
+            highest_price = current if is_activated else entry
+            stop_loss = highest_price * (Decimal('1') - trail_pct)
+        else:  # Sell/Short
+            activation_price = entry * (Decimal('1') - activation_pct)
+            is_activated = current <= activation_price
+            lowest_price = current if is_activated else entry
+            stop_loss = lowest_price * (Decimal('1') + trail_pct)
+        
+        trailing_stop = {
+            'symbol': symbol,
+            'side': position_side,
+            'entry_price': entry,
+            'activation_price': activation_price,
+            'trail_percent': trail_pct,
+            'is_activated': is_activated,
+            'highest_price': highest_price if position_side == "Buy" else None,
+            'lowest_price': lowest_price if position_side == "Sell" else None,
+            'current_stop': self.precision.round_price(symbol, stop_loss),
+            'last_update': datetime.now()
+        }
+        
+        self.trailing_stops[symbol] = trailing_stop
+        return trailing_stop
+    
+    def update_trailing_stop(
+        self,
+        symbol: str,
+        current_price: float,
+        update_exchange: bool = True
+    ) -> Optional[Dict]:
+        """
+        Update trailing stop based on current price
+        
+        Returns:
+            Updated trailing stop info or None if not found
+        """
+        if symbol not in self.trailing_stops:
+            return None
+        
+        ts = self.trailing_stops[symbol]
+        current = Decimal(str(current_price))
+        updated = False
+        
+        if ts['side'] == "Buy":
+            # Check if trailing stop should be activated
+            if not ts['is_activated'] and current >= ts['activation_price']:
+                ts['is_activated'] = True
+                ts['highest_price'] = current
+                self.logger.info(f"Trailing stop activated for {symbol} at {current}")
+            
+            # Update highest price and stop loss if activated
+            if ts['is_activated'] and current > ts['highest_price']:
+                ts['highest_price'] = current
+                new_stop = current * (Decimal('1') - ts['trail_percent'])
+                
+                # Only update if new stop is higher than current stop
+                if new_stop > ts['current_stop']:
+                    ts['current_stop'] = self.precision.round_price(symbol, new_stop)
+                    updated = True
+                    self.logger.info(f"Trailing stop updated for {symbol}: {ts['current_stop']}")
+        
+        else:  # Sell/Short position
+            # Check if trailing stop should be activated
+            if not ts['is_activated'] and current <= ts['activation_price']:
+                ts['is_activated'] = True
+                ts['lowest_price'] = current
+                self.logger.info(f"Trailing stop activated for {symbol} at {current}")
+            
+            # Update lowest price and stop loss if activated
+            if ts['is_activated'] and current < ts['lowest_price']:
+                ts['lowest_price'] = current
+                new_stop = current * (Decimal('1') + ts['trail_percent'])
+                
+                # Only update if new stop is lower than current stop
+                if new_stop < ts['current_stop']:
+                    ts['current_stop'] = self.precision.round_price(symbol, new_stop)
+                    updated = True
+                    self.logger.info(f"Trailing stop updated for {symbol}: {ts['current_stop']}")
+        
+        # Update on exchange if requested and changed
+        if updated and update_exchange:
+            self._update_stop_on_exchange(symbol, ts['current_stop'])
+        
+        ts['last_update'] = datetime.now()
+        return ts
+    
+    def _update_stop_on_exchange(self, symbol: str, stop_price: Decimal) -> bool:
+        """Update stop loss on exchange"""
+        try:
+            response = self.session.set_trading_stop(
+                category=self.precision.instruments[symbol].category,
+                symbol=symbol,
+                stopLoss=str(stop_price)
+            )
+            
+            if response['retCode'] == 0:
+                self.logger.info(f"Stop loss updated on exchange for {symbol}: {stop_price}")
+                return True
+            else:
+                self.logger.error(f"Failed to update stop loss: {response['retMsg']}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Exception updating stop loss: {e}")
+            return False
+    
+    def calculate_atr_trailing_stop(
+        self,
+        symbol: str,
+        position_side: str,
+        current_price: float,
+        atr: float,
+        multiplier: float = 2.0
+    ) -> Decimal:
+        """Calculate trailing stop based on ATR (Average True Range)"""
+        current = Decimal(str(current_price))
+        atr_value = Decimal(str(atr))
+        mult = Decimal(str(multiplier))
+        
+        if position_side == "Buy":
+            stop_price = current - (atr_value * mult)
+        else:  # Sell/Short
+            stop_price = current + (atr_value * mult)
+        
+        return self.precision.round_price(symbol, stop_price)
+    
+    def calculate_chandelier_exit(
+        self,
+        symbol: str,
+        position_side: str,
+        period_high: float,
+        period_low: float,
+        atr: float,
+        multiplier: float = 3.0
+    ) -> Decimal:
+        """Calculate Chandelier Exit stop loss"""
+        high = Decimal(str(period_high))
+        low = Decimal(str(period_low))
+        atr_value = Decimal(str(atr))
+        mult = Decimal(str(multiplier))
+        
+        if position_side == "Buy":
+            stop_price = high - (atr_value * mult)
+        else:  # Sell/Short
+            stop_price = low + (atr_value * mult)
+        
+        return self.precision.round_price(symbol, stop_price)
+
+# =====================================================================
+# TRADE METRICS & PNL TRACKER
+# =====================================================================
+
+@dataclass
+class Trade:
+    """Individual trade record"""
+    trade_id: str
+    symbol: str
+    category: str
+    side: str  # Buy/Sell
+    entry_time: datetime
+    entry_price: Decimal
+    quantity: Decimal
+    exit_time: Optional[datetime] = None
+    exit_price: Optional[Decimal] = None
+    status: str = "OPEN"  # OPEN, CLOSED, PARTIAL
+    
+    # Fees
+    entry_fee: Decimal = Decimal('0')
+    exit_fee: Decimal = Decimal('0')
+    
+    # Risk management
+    stop_loss: Optional[Decimal] = None
+    take_profit: Optional[Decimal] = None
+    
+    # PnL
+    realized_pnl: Decimal = Decimal('0')
+    unrealized_pnl: Decimal = Decimal('0')
+    pnl_percentage: Decimal = Decimal('0')
+    
+    # Additional metrics
+    max_profit: Decimal = Decimal('0')
+    max_loss: Decimal = Decimal('0')
+    hold_time: Optional[timedelta] = None
+    notes: str = ""
+
+class TradeMetricsTracker:
+    """Track and analyze trading performance metrics"""
+    
+    def __init__(self, logger: logging.Logger):
+        self.logger = logger
+        self.trades: List[Trade] = []
+        self.open_trades: Dict[str, Trade] = {}
+        self.closed_trades: List[Trade] = []
+        self.daily_metrics: Dict[str, Dict] = {}
+        self.account_history: List[Dict] = []
+    
+    def add_trade(self, trade: Trade):
+        """Add a new trade"""
+        self.trades.append(trade)
+        if trade.status == "OPEN":
+            self.open_trades[trade.trade_id] = trade
+        else:
+            self.closed_trades.append(trade)
+        
+        self.logger.info(f"Trade added: {trade.trade_id} - {trade.symbol} {trade.side}")
+    
+    def update_trade_exit(
+        self,
+        trade_id: str,
+        exit_price: float,
+        exit_time: datetime,
+        exit_fee: float = 0
+    ):
+        """Update trade with exit information"""
+        if trade_id not in self.open_trades:
+            self.logger.error(f"Trade {trade_id} not found in open trades")
+            return
+        
+        trade = self.open_trades[trade_id]
+        trade.exit_price = Decimal(str(exit_price))
+        trade.exit_time = exit_time
+        trade.exit_fee = Decimal(str(exit_fee))
+        trade.status = "CLOSED"
+        trade.hold_time = exit_time - trade.entry_time
+        
+        # Calculate PnL
+        self._calculate_trade_pnl(trade)
+        
+        # Move to closed trades
+        self.closed_trades.append(trade)
+        del self.open_trades[trade_id]
+        
+        self.logger.info(f"Trade closed: {trade_id} - PnL: {trade.realized_pnl}")
+    
+    def _calculate_trade_pnl(self, trade: Trade):
+        """Calculate PnL for a trade"""
+        if trade.exit_price is None:
+            return
+        
+        # Calculate gross PnL
+        if trade.side == "Buy":
+            gross_pnl = (trade.exit_price - trade.entry_price) * trade.quantity
+        else:  # Sell/Short
+            gross_pnl = (trade.entry_price - trade.exit_price) * trade.quantity
+        
+        # Subtract fees
+        total_fees = trade.entry_fee + trade.exit_fee
+        trade.realized_pnl = gross_pnl - total_fees
+        
+        # Calculate percentage
+        position_value = trade.entry_price * trade.quantity
+        if position_value > 0:
+            trade.pnl_percentage = (trade.realized_pnl / position_value * 100).quantize(Decimal('0.01'))
+    
+    def update_unrealized_pnl(self, current_prices: Dict[str, float]):
+        """Update unrealized PnL for all open trades"""
+        total_unrealized = Decimal('0')
+        
+        for trade_id, trade in self.open_trades.items():
+            if trade.symbol in current_prices:
+                current_price = Decimal(str(current_prices[trade.symbol]))
+                
+                # Calculate unrealized PnL
+                if trade.side == "Buy":
+                    trade.unrealized_pnl = (current_price - trade.entry_price) * trade.quantity
+                else:  # Sell/Short
+                    trade.unrealized_pnl = (trade.entry_price - current_price) * trade.quantity
+                
+                # Update max profit/loss
+                trade.max_profit = max(trade.max_profit, trade.unrealized_pnl)
+                trade.max_loss = min(trade.max_loss, trade.unrealized_pnl)
+                
+                total_unrealized += trade.unrealized_pnl
+        
+        return total_unrealized
+    
+    def calculate_metrics(self) -> Dict:
+        """Calculate comprehensive trading metrics"""
+        if not self.closed_trades:
+            return self._empty_metrics()
+        
+        # Basic metrics
+        total_trades = len(self.closed_trades)
+        winning_trades = [t for t in self.closed_trades if t.realized_pnl > 0]
+        losing_trades = [t for t in self.closed_trades if t.realized_pnl < 0]
+        
+        win_rate = len(winning_trades) / total_trades if total_trades > 0 else 0
+        
+        # PnL metrics
+        total_pnl = sum(t.realized_pnl for t in self.closed_trades)
+        gross_profit = sum(t.realized_pnl for t in winning_trades)
+        gross_loss = sum(t.realized_pnl for t in losing_trades)
+        
+        # Average metrics
+        avg_win = gross_profit / len(winning_trades) if winning_trades else Decimal('0')
+        avg_loss = abs(gross_loss / len(losing_trades)) if losing_trades else Decimal('0')
+        
+        # Risk metrics
+        profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else Decimal('0')
+        
+        # Calculate expectancy
+        expectancy = (win_rate * avg_win) - ((1 - win_rate) * avg_loss)
+        
+        # Maximum drawdown
+        equity_curve = self._calculate_equity_curve()
+        max_drawdown = self._calculate_max_drawdown(equity_curve)
+        
+        # Sharpe Ratio (simplified daily)
+        returns = [t.pnl_percentage for t in self.closed_trades]
+        if len(returns) > 1:
+            returns_mean = np.mean([float(r) for r in returns])
+            returns_std = np.std([float(r) for r in returns])
+            sharpe_ratio = (returns_mean / returns_std * np.sqrt(252)) if returns_std > 0 else 0
+        else:
+            sharpe_ratio = 0
+        
+        # Calmar Ratio
+        calmar_ratio = float(total_pnl) / float(max_drawdown['value']) if max_drawdown['value'] > 0 else 0
+        
+        # Trade duration
+        hold_times = [t.hold_time.total_seconds() / 3600 for t in self.closed_trades if t.hold_time]
+        avg_hold_time = np.mean(hold_times) if hold_times else 0
+        
+        return {
+            'total_trades': total_trades,
+            'winning_trades': len(winning_trades),
+            'losing_trades': len(losing_trades),
+            'win_rate': round(win_rate * 100, 2),
+            'total_pnl': float(total_pnl),
+            'gross_profit': float(gross_profit),
+            'gross_loss': float(gross_loss),
+            'avg_win': float(avg_win),
+            'avg_loss': float(avg_loss),
+            'largest_win': float(max(t.realized_pnl for t in self.closed_trades)),
+            'largest_loss': float(min(t.realized_pnl for t in self.closed_trades)),
+            'profit_factor': float(profit_factor),
+            'expectancy': float(expectancy),
+            'max_drawdown': max_drawdown,
+            'sharpe_ratio': round(sharpe_ratio, 2),
+            'calmar_ratio': round(calmar_ratio, 2),
+            'avg_hold_time_hours': round(avg_hold_time, 2),
+            'avg_win_loss_ratio': float(avg_win / avg_loss) if avg_loss > 0 else 0,
+            'consecutive_wins': self._max_consecutive_wins(),
+            'consecutive_losses': self._max_consecutive_losses()
+        }
+    
+    def _empty_metrics(self) -> Dict:
+        """Return empty metrics structure"""
+        return {
+            'total_trades': 0,
+            'winning_trades': 0,
+            'losing_trades': 0,
+            'win_rate': 0,
+            'total_pnl': 0,
+            'gross_profit': 0,
+            'gross_loss': 0,
+            'avg_win': 0,
+            'avg_loss': 0,
+            'largest_win': 0,
+            'largest_loss': 0,
+            'profit_factor': 0,
+            'expectancy': 0,
+            'max_drawdown': {'value': 0, 'percentage': 0},
+            'sharpe_ratio': 0,
+            'calmar_ratio': 0,
+            'avg_hold_time_hours': 0,
+            'avg_win_loss_ratio': 0,
+            'consecutive_wins': 0,
+            'consecutive_losses': 0
+        }
+    
+    def _calculate_equity_curve(self) -> List[float]:
+        """Calculate equity curve from trades"""
+        equity = []
+        cumulative_pnl = Decimal('0')
+        
+        for trade in sorted(self.closed_trades, key=lambda x: x.exit_time):
+            cumulative_pnl += trade.realized_pnl
+            equity.append(float(cumulative_pnl))
+        
+        return equity
+    
+    def _calculate_max_drawdown(self, equity_curve: List[float]) -> Dict:
+        """Calculate maximum drawdown from equity curve"""
+        if not equity_curve:
+            return {'value': 0, 'percentage': 0}
+        
+        peak = equity_curve[0]
+        max_dd = 0
+        max_dd_pct = 0
+        
+        for value in equity_curve:
+            if value > peak:
+                peak = value
+            
+            drawdown = peak - value
+            drawdown_pct = (drawdown / peak * 100) if peak > 0 else 0
+            
+            if drawdown > max_dd:
+                max_dd = drawdown
+                max_dd_pct = drawdown_pct
+        
+        return {
+            'value': round(max_dd, 2),
+            'percentage': round(max_dd_pct, 2)
+        }
+    
+    def _max_consecutive_wins(self) -> int:
+        """Calculate maximum consecutive winning trades"""
+        max_streak = 0
+        current_streak = 0
+        
+        for trade in self.closed_trades:
+            if trade.realized_pnl > 0:
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 0
+        
+        return max_streak
+    
+    def _max_consecutive_losses(self) -> int:
+        """Calculate maximum consecutive losing trades"""
+        max_streak = 0
+        current_streak = 0
+        
+        for trade in self.closed_trades:
+            if trade.realized_pnl < 0:
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 0
+        
+        return max_streak
+    
+    def get_daily_summary(self, date: datetime = None) -> Dict:
+        """Get daily trading summary"""
+        if date is None:
+            date = datetime.now()
+        
+        date_str = date.strftime('%Y-%m-%d')
+        
+        # Filter trades for the day
+        daily_trades = [
+            t for t in self.closed_trades
+            if t.exit_time and t.exit_time.date() == date.date()
+        ]
+        
+        if not daily_trades:
+            return {
+                'date': date_str,
+                'trades': 0,
+                'pnl': 0,
+                'win_rate': 0
+            }
+        
+        # Calculate daily metrics
+        daily_pnl = sum(t.realized_pnl for t in daily_trades)
+        winning = len([t for t in daily_trades if t.realized_pnl > 0])
+        
+        return {
+            'date': date_str,
+            'trades': len(daily_trades),
+            'winning_trades': winning,
+            'losing_trades': len(daily_trades) - winning,
+            'pnl': float(daily_pnl),
+            'win_rate': round(winning / len(daily_trades) * 100, 2),
+            'best_trade': float(max(t.realized_pnl for t in daily_trades)),
+            'worst_trade': float(min(t.realized_pnl for t in daily_trades))
+        }
+    
+    def export_trades_to_csv(self, filename: str = "trades.csv"):
+        """Export all trades to CSV file"""
+        import csv
+        
+        with open(filename, 'w', newline='') as csvfile:
+            fieldnames = [
+                'trade_id', 'symbol', 'side', 'entry_time', 'entry_price',
+                'quantity', 'exit_time', 'exit_price', 'realized_pnl',
+                'pnl_percentage', 'hold_time', 'status'
+            ]
+            
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for trade in self.trades:
+                writer.writerow({
+                    'trade_id': trade.trade_id,
+                    'symbol': trade.symbol,
+                    'side': trade.side,
+                    'entry_time': trade.entry_time,
+                    'entry_price': float(trade.entry_price),
+                    'quantity': float(trade.quantity),
+                    'exit_time': trade.exit_time,
+                    'exit_price': float(trade.exit_price) if trade.exit_price else None,
+                    'realized_pnl': float(trade.realized_pnl),
+                    'pnl_percentage': float(trade.pnl_percentage),
+                    'hold_time': str(trade.hold_time) if trade.hold_time else None,
+                    'status': trade.status
+                })
+        
+        self.logger.info(f"Trades exported to {filename}")
+
+# =====================================================================
+# COMPREHENSIVE PNL MANAGER
+# =====================================================================
+
+class PnLManager:
+    """Comprehensive PnL tracking and management"""
+    
+    def __init__(
+        self,
+        session: HTTP,
+        precision_manager: PrecisionManager,
+        metrics_tracker: TradeMetricsTracker,
+        logger: logging.Logger
+    ):
+        self.session = session
+        self.precision = precision_manager
+        self.metrics = metrics_tracker
+        self.logger = logger
+        
+        # PnL tracking
+        self.initial_balance = Decimal('0')
+        self.current_balance = Decimal('0')
+        self.realized_pnl = Decimal('0')
+        self.unrealized_pnl = Decimal('0')
+        self.fees_paid = Decimal('0')
+        
+        # Position tracking
+        self.positions = {}
+        self.position_history = []
+        
+    def initialize_balance(self, category: str = "linear"):
+        """Initialize account balance"""
+        try:
+            account_type = "UNIFIED" if category != "spot" else "SPOT"
+            response = self.session.get_wallet_balance(accountType=account_type)
+            
+            if response['retCode'] == 0:
+                coins = response['result']['list'][0]['coin']
+                for coin in coins:
+                    if coin['coin'] == 'USDT':
+                        self.initial_balance = Decimal(coin['walletBalance'])
+                        self.current_balance = self.initial_balance
+                        self.logger.info(f"Initial balance: {self.initial_balance} USDT")
+                        return float(self.initial_balance)
+            
+            return 0
+            
+        except Exception as e:
+            self.logger.error(f"Error initializing balance: {e}")
+            return 0
+    
+    def update_position_pnl(self, symbol: str, category: str = "linear"):
+        """Update PnL for a specific position"""
+        try:
+            response = self.session.get_positions(
+                category=category,
+                symbol=symbol
+            )
+            
+            if response['retCode'] == 0 and response['result']['list']:
+                position = response['result']['list'][0]
+                
+                # Parse position data
+                size = Decimal(position['size'])
+                if size == 0:
+                    if symbol in self.positions:
+                        del self.positions[symbol]
+                    return
+                
+                avg_price = Decimal(position['avgPrice'])
+                mark_price = Decimal(position['markPrice'])
+                unrealized_pnl = Decimal(position['unrealisedPnl'])
+                realized_pnl = Decimal(position.get('realisedPnl', '0'))
+                
+                # Update position tracking
+                self.positions[symbol] = {
+                    'size': size,
+                    'side': position['side'],
+                    'avg_price': avg_price,
+                    'mark_price': mark_price,
+                    'unrealized_pnl': unrealized_pnl,
+                    'realized_pnl': realized_pnl,
+                    'value': size * mark_price,
+                    'margin': Decimal(position.get('positionIM', '0')),
+                    'leverage': Decimal(position.get('leverage', '1')),
+                    'liq_price': Decimal(position.get('liqPrice', '0')),
+                    'updated_at': datetime.now()
+                }
+                
+                self.logger.debug(f"Position updated for {symbol}: PnL={unrealized_pnl}")
+                
+        except Exception as e:
+            self.logger.error(f"Error updating position PnL: {e}")
+    
+    def calculate_total_pnl(self) -> Dict:
+        """Calculate total account PnL"""
+        # Update all positions
+        for symbol in list(self.positions.keys()):
+            self.update_position_pnl(symbol)
+        
+        # Calculate totals
+        total_unrealized = sum(p['unrealized_pnl'] for p in self.positions.values())
+        total_realized = self.metrics.calculate_metrics()['total_pnl']
+        
+        # Update current balance
+        self.update_current_balance()
+        
+        # Calculate returns
+        total_return = self.current_balance - self.initial_balance
+        return_percentage = (total_return / self.initial_balance * 100) if self.initial_balance > 0 else Decimal('0')
+        
+        return {
+            'initial_balance': float(self.initial_balance),
+            'current_balance': float(self.current_balance),
+            'total_return': float(total_return),
+            'return_percentage': float(return_percentage),
+            'realized_pnl': float(total_realized),
+            'unrealized_pnl': float(total_unrealized),
+            'total_pnl': float(Decimal(str(total_realized)) + total_unrealized),
+            'fees_paid': float(self.fees_paid),
+            'num_positions': len(self.positions),
+            'position_value': float(sum(p['value'] for p in self.positions.values())),
+            'total_margin': float(sum(p['margin'] for p in self.positions.values()))
+        }
+    
+    def update_current_balance(self, category: str = "linear"):
+        """Update current account balance"""
+        try:
+            account_type = "UNIFIED" if category != "spot" else "SPOT"
+            response = self.session.get_wallet_balance(accountType=account_type)
+            
+            if response['retCode'] == 0:
+                coins = response['result']['list'][0]['coin']
+                for coin in coins:
+                    if coin['coin'] == 'USDT':
+                        self.current_balance = Decimal(coin['walletBalance'])
+                        return float(self.current_balance)
+            
+            return float(self.current_balance)
+            
+        except Exception as e:
+            self.logger.error(f"Error updating balance: {e}")
+            return float(self.current_balance)
+    
+    def get_position_summary(self) -> List[Dict]:
+        """Get summary of all positions"""
+        summaries = []
+        
+        for symbol, position in self.positions.items():
+            # Calculate position metrics
+            pnl_percentage = (position['unrealized_pnl'] / (position['avg_price'] * position['size']) * 100)
+            distance_to_liq = abs(position['mark_price'] - position['liq_price']) / position['mark_price'] * 100
+            
+            summaries.append({
+                'symbol': symbol,
+                'side': position['side'],
+                'size': float(position['size']),
+                'avg_price': float(position['avg_price']),
+                'mark_price': float(position['mark_price']),
+                'value': float(position['value']),
+                'unrealized_pnl': float(position['unrealized_pnl']),
+                'pnl_percentage': float(pnl_percentage),
+                'leverage': float(position['leverage']),
+                'margin': float(position['margin']),
+                'liq_price': float(position['liq_price']),
+                'distance_to_liq': float(distance_to_liq)
+            })
+        
+        return summaries
+
+# =====================================================================
+# EXAMPLE USAGE
+# =====================================================================
+
+def main():
+    """Example usage of the complete system"""
+    
+    # Setup logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger('TradingSystem')
+    
+    # Initialize Bybit session
+    session = HTTP(
+        testnet=True,
+        api_key="your_api_key",
+        api_secret="your_api_secret"
+    )
+    
+    # Initialize managers
+    precision_mgr = PrecisionManager(session, logger)
+    sizing_calc = OrderSizingCalculator(precision_mgr, logger)
+    trailing_mgr = TrailingStopManager(session, precision_mgr, logger)
+    metrics_tracker = TradeMetricsTracker(logger)
+    pnl_mgr = PnLManager(session, precision_mgr, metrics_tracker, logger)
+    
+    # Initialize balance
+    pnl_mgr.initialize_balance()
+    
+    # Example: Calculate position size
+    symbol = "BTCUSDT"
+    position_info = sizing_calc.calculate_position_size_fixed_risk(
+        symbol=symbol,
+        account_balance=10000,
+        risk_percent=2.0,  # 2% risk
+        entry_price=50000,
+        stop_loss_price=49000,
+        leverage=5
+    )
+    
+    print("Position Sizing:")
+    for key, value in position_info.items():
+        print(f"  {key}: {value}")
+    
+    # Example: Create and track a trade
+    trade = Trade(
+        trade_id="test_001",
+        symbol=symbol,
+        category="linear",
+        side="Buy",
+        entry_time=datetime.now(),
+        entry_price=Decimal("50000"),
+        quantity=position_info['quantity'],
+        stop_loss=position_info['stop_loss']
+    )
+    
+    metrics_tracker.add_trade(trade)
+    
+    # Example: Initialize trailing stop
+    trailing_info = trailing_mgr.initialize_trailing_stop(
+        symbol=symbol,
+        position_side="Buy",
+        entry_price=50000,
+        current_price=51000,
+        trail_percent=1.0,
+        activation_percent=0.5
+    )
+    
+    print("\nTrailing Stop Info:")
+    for key, value in trailing_info.items():
+        print(f"  {key}: {value}")
+    
+    # Example: Update PnL
+    pnl_summary = pnl_mgr.calculate_total_pnl()
+    
+    print("\nPnL Summary:")
+    for key, value in pnl_summary.items():
+        print(f"  {key}: {value}")
+    
+    # Example: Get trading metrics
+    metrics = metrics_tracker.calculate_metrics()
+    
+    print("\nTrading Metrics:")
+    for key, value in metrics.items():
+        print(f"  {key}: {value}")
+
+if __name__ == "__main__":
+    main()
+```
+
+## **Key Features Implemented**
+
+### **1. Precision Management**
+- Automatic loading of instrument specifications
+- Proper rounding for prices and quantities
+- Min/max order validation
+- Support for all Bybit categories (linear, inverse, spot, options)
+
+### **2. Order Sizing**
+- Fixed risk percentage calculation
+- Kelly Criterion sizing
+- Pyramid/scaling position sizes
+- Proper leverage adjustment
+- Margin requirement calculation
+
+### **3. Trailing Stop Loss**
+- Activation threshold before trailing begins
+- Dynamic stop adjustment in profit
+- ATR-based trailing stops
+- Chandelier Exit calculation
+- Automatic exchange updates
+
+### **4. Trade Metrics**
+- Comprehensive trade tracking
+- Win rate and profit factor
+- Maximum drawdown calculation
+- Sharpe and Calmar ratios
+- Consecutive wins/losses tracking
+- Daily performance summaries
+- CSV export functionality
+
+### **5. PnL Management**
+- Real-time position tracking
+- Unrealized and realized PnL
+- Fee tracking
+- Position summary with liquidation distance
+- Account balance monitoring
+- Return percentage calculation
+
+## **Best Practices**
+
+1. **Always use Decimal for financial calculations** to avoid floating-point errors
+2. **Round prices and quantities properly** according to exchange specifications
+3. **Validate order sizes** against minimum and maximum limits
+4. **Track fees** as they significantly impact profitability
+5. **Monitor liquidation prices** for leveraged positions
+6. **Keep detailed trade records** for analysis and tax purposes
+7. **Use trailing stops** to protect profits while allowing winners to run
+8. **Calculate position sizes** based on risk, not arbitrary amounts
+9. **Track metrics continuously** to identify strategy performance issues
+10. **Test thoroughly on testnet** before deploying with real funds
+
+This comprehensive system provides all the essential components for professional-grade trading with proper decimal precision, risk management, and performance tracking on Bybit.
+**PnL Tracking**:
+- Use `get_closed_pnl` for historical data
+- Track unrealized PnL from position endpoints
+- Calculate comprehensive metrics including win rate, profit factor, and Sharpe ratio
+
+This implementation provides a complete framework for professional trading on Bybit with proper decimal handling, position sizing, trailing stops, and comprehensive PnL tracking.
+@dataclass
+class Config:
+    """Bot configuration"""
+    # API Configuration
+    API_KEY: str = "your_api_key"
+    API_SECRET: str = "your_api_secret"
+    TESTNET: bool = True
+    
+    # Trading Configuration
+    SYMBOL: str = "BTCUSDT"
+    CATEGORY: str = "linear"  # 'linear', 'spot', 'inverse', 'option'
+    LEVERAGE: int = 5
+    
+    # Position Sizing
+    RISK_PER_TRADE: float = 0.02  # 2% risk per trade
+    MAX_POSITION_SIZE: float = 10000  # Maximum position size in USDT
+    MIN_POSITION_SIZE: float = 10  # Minimum position size
+    
+    # Strategy Parameters
+    TIMEFRAME: str = "15"  # Kline interval (1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M)
+    LOOKBACK_PERIODS: int = 200  # Historical data to fetch
+    
+    # Risk Management
+    STOP_LOSS_PCT: float = 0.02  # 2% stop loss
+    TAKE_PROFIT_PCT: float = 0.04  # 4% take profit
+    TRAILING_STOP_PCT: float = 0.01  # 1% trailing stop
+    MAX_DAILY_LOSS: float = 0.05  # 5% max daily loss
+    MAX_OPEN_POSITIONS: int = 3
+    
+    # Technical Indicators Settings
+    EMA_FAST: int = 9
+    EMA_SLOW: int = 21
+    RSI_PERIOD: int = 14
+    RSI_OVERBOUGHT: float = 70
+    RSI_OVERSOLD: float = 30
+    BB_PERIOD: int = 20
+    BB_STD: float = 2
+    MACD_FAST: int = 12
+    MACD_SLOW: int = 26
+    MACD_SIGNAL: int = 9
+    ATR_PERIOD: int = 14
+    
+    # Execution Settings
+    ORDER_TYPE: str = "Limit"  # 'Market' or 'Limit'
+    TIME_IN_FORCE: str = "GTC"  # 'GTC', 'IOC', 'FOK', 'PostOnly'
+    REDUCE_ONLY: bool = False
+    
+    # Bot Settings
+    LOOP_INTERVAL: int = 60  # Check interval in seconds
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = "trading_bot.log"
+
+class Signal(Enum):
+    """Trading signals"""
+    STRONG_BUY = 2
+    BUY = 1
+    NEUTRAL = 0
+    SELL = -1
+    STRONG_SELL = -2
+
+# =====================================================================
+# LOGGING SETUP
+# =====================================================================
+
+def setup_logger(config: Config) -> logging.Logger:
+    """Setup logging configuration"""
+    logger = logging.getLogger('TradingBot')
+    logger.setLevel(getattr(logging, config.LOG_LEVEL))
+    
+    # File handler
+    fh = logging.FileHandler(config.LOG_FILE)
+    fh.setLevel(logging.DEBUG)
+    
+    # Console handler
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    
+    # Formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+    
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+    
+    return logger
+
+# =====================================================================
+# MAIN TRADING BOT CLASS
+# =====================================================================
+
+class TradingBot:
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = setup_logger(config)
+        
+        # Initialize API connections
+        self.session = HTTP(
+            testnet=config.TESTNET,
+            api_key=config.API_KEY,
+            api_secret=config.API_SECRET
+        )
+        
+        # WebSocket for real-time data (optional)
+        self.ws = None
+        
+        # Data storage
+        self.market_data = pd.DataFrame()
+        self.positions = {}
+        self.open_orders = {}
+        self.account_balance = 0
+        self.daily_pnl = 0
+        self.start_balance = 0
+        
+        # Strategy state
+        self.in_position = False
+        self.last_signal = Signal.NEUTRAL
+        self.indicators = {}
+        
+        self.logger.info("Trading Bot initialized")
+    
+    # =====================================================================
+    # DATA FETCHING METHODS
+    # =====================================================================
+    
+    def fetch_klines(self, limit: int = None) -> pd.DataFrame:
+        """Fetch historical kline data"""
+        try:
+            limit = limit or self.config.LOOKBACK_PERIODS
+            
+            response = self.session.get_kline(
+                category=self.config.CATEGORY,
+                symbol=self.config.SYMBOL,
+                interval=self.config.TIMEFRAME,
+                limit=limit
+            )
+            
+            if response['retCode'] == 0:
+                klines = response['result']['list']
+                
+                # Create DataFrame
+                df = pd.DataFrame(klines, columns=[
+                    'timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'
+                ])
+                
+                # Convert types
+                df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='ms')
+                for col in ['open', 'high', 'low', 'close', 'volume', 'turnover']:
+                    df[col] = df[col].astype(float)
+                
+                # Sort by timestamp (oldest first)
+                df = df.sort_values('timestamp')
+                df.set_index('timestamp', inplace=True)
+                
+                self.logger.debug(f"Fetched {len(df)} klines")
+                return df
+            else:
+                self.logger.error(f"Failed to fetch klines: {response['retMsg']}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            self.logger.error(f"Exception fetching klines: {e}")
+            return pd.DataFrame()
+    
+    def get_ticker(self) -> Dict:
+        """Get current ticker data"""
+        try:
+            response = self.session.get_tickers(
+                category=self.config.CATEGORY,
+                symbol=self.config.SYMBOL
+            )
+            
+            if response['retCode'] == 0:
+                return response['result']['list'][0]
+            else:
+                self.logger.error(f"Failed to fetch ticker: {response['retMsg']}")
+                return {}
+                
+        except Exception as e:
+            self.logger.error(f"Exception fetching ticker: {e}")
+            return {}
+    
+    # =====================================================================
+    # TECHNICAL INDICATORS
+    # =====================================================================
+    
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate all technical indicators using pandas_ta"""
+        try:
+            # Trend Indicators
+            # EMA (Exponential Moving Average)
+            df[f'ema_{self.config.EMA_FAST}'] = ta.ema(df['close'], length=self.config.EMA_FAST)
+            df[f'ema_{self.config.EMA_SLOW}'] = ta.ema(df['close'], length=self.config.EMA_SLOW)
+            
+            # SMA (Simple Moving Average)
+            df['sma_20'] = ta.sma(df['close'], length=20)
+            df['sma_50'] = ta.sma(df['close'], length=50)
+            df['sma_200'] = ta.sma(df['close'], length=200)
+            
+            # MACD
+            macd = ta.macd(df['close'], 
+                          fast=self.config.MACD_FAST, 
+                          slow=self.config.MACD_SLOW, 
+                          signal=self.config.MACD_SIGNAL)
+            df['macd'] = macd[f'MACD_{self.config.MACD_FAST}_{self.config.MACD_SLOW}_{self.config.MACD_SIGNAL}']
+            df['macd_signal'] = macd[f'MACDs_{self.config.MACD_FAST}_{self.config.MACD_SLOW}_{self.config.MACD_SIGNAL}']
+            df['macd_histogram'] = macd[f'MACDh_{self.config.MACD_FAST}_{self.config.MACD_SLOW}_{self.config.MACD_SIGNAL}']
+            
+            # Momentum Indicators
+            # RSI (Relative Strength Index)
+            df['rsi'] = ta.rsi(df['close'], length=self.config.RSI_PERIOD)
+            
+            # Stochastic
+            stoch = ta.stoch(df['high'], df['low'], df['close'])
+            df['stoch_k'] = stoch['STOCHk_14_3_3']
+            df['stoch_d'] = stoch['STOCHd_14_3_3']
+            
+            # CCI (Commodity Channel Index)
+            df['cci'] = ta.cci(df['high'], df['low'], df['close'], length=20)
+            
+            # Williams %R
+            df['williams_r'] = ta.willr(df['high'], df['low'], df['close'])
+            
+            # Volatility Indicators
+            # Bollinger Bands
+            bbands = ta.bbands(df['close'], length=self.config.BB_PERIOD, std=self.config.BB_STD)
+            df['bb_upper'] = bbands[f'BBU_{self.config.BB_PERIOD}_{self.config.BB_STD}']
+            df['bb_middle'] = bbands[f'BBM_{self.config.BB_PERIOD}_{self.config.BB_STD}']
+            df['bb_lower'] = bbands[f'BBL_{self.config.BB_PERIOD}_{self.config.BB_STD}']
+            df['bb_width'] = bbands[f'BBB_{self.config.BB_PERIOD}_{self.config.BB_STD}']
+            df['bb_percent'] = bbands[f'BBP_{self.config.BB_PERIOD}_{self.config.BB_STD}']
+            
+            # ATR (Average True Range)
+            df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=self.config.ATR_PERIOD)
+            
+            # Keltner Channels
+            kc = ta.kc(df['high'], df['low'], df['close'], length=20)
+            df['kc_upper'] = kc['KCUe_20_2']
+            df['kc_lower'] = kc['KCLe_20_2']
+            
+            # Volume Indicators
+            # OBV (On Balance Volume)
+            df['obv'] = ta.obv(df['close'], df['volume'])
+            
+            # Volume SMA
+            df['volume_sma'] = ta.sma(df['volume'], length=20)
+            
+            # MFI (Money Flow Index)
+            df['mfi'] = ta.mfi(df['high'], df['low'], df['close'], df['volume'], length=14)
+            
+            # VWAP (Volume Weighted Average Price)
+            df['vwap'] = ta.vwap(df['high'], df['low'], df['close'], df['volume'])
+            
+            # Support/Resistance
+            # Pivot Points
+            pivots = ta.pivots(df['high'], df['low'], df['close'])
+            if pivots is not None:
+                df = pd.concat([df, pivots], axis=1)
+            
+            # Custom Indicators
+            # Price change
+            df['price_change'] = df['close'].pct_change()
+            
+            # EMA Cross
+            df['ema_cross'] = np.where(
+                df[f'ema_{self.config.EMA_FAST}'] > df[f'ema_{self.config.EMA_SLOW}'], 1, -1
+            )
+            
+            # Trend strength
+            df['trend_strength'] = (df['close'] - df['sma_50']) / df['sma_50'] * 100
+            
+            # Drop NaN values for latest rows
+            df = df.fillna(method='ffill').fillna(0)
+            
+            self.logger.debug("Indicators calculated successfully")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating indicators: {e}")
+            return df
+    
+    # =====================================================================
+    # STRATEGY LOGIC
+    # =====================================================================
+    
+    def generate_signal(self, df: pd.DataFrame) -> Signal:
+        """
+        Generate trading signal based on multiple indicators
+        This is a sample strategy - customize based on your needs
+        """
+        try:
+            if df.empty or len(df) < 50:
+                return Signal.NEUTRAL
+            
+            latest = df.iloc[-1]
+            prev = df.iloc[-2]
+            
+            signals = []
+            
+            # 1. EMA Crossover Signal
+            if latest[f'ema_{self.config.EMA_FAST}'] > latest[f'ema_{self.config.EMA_SLOW}']:
+                if prev[f'ema_{self.config.EMA_FAST}'] <= prev[f'ema_{self.config.EMA_SLOW}']:
+                    signals.append(Signal.STRONG_BUY)
+                else:
+                    signals.append(Signal.BUY)
+            elif latest[f'ema_{self.config.EMA_FAST}'] < latest[f'ema_{self.config.EMA_SLOW}']:
+                if prev[f'ema_{self.config.EMA_FAST}'] >= prev[f'ema_{self.config.EMA_SLOW}']:
+                    signals.append(Signal.STRONG_SELL)
+                else:
+                    signals.append(Signal.SELL)
+            
+            # 2. RSI Signal
+            if latest['rsi'] < self.config.RSI_OVERSOLD:
+                signals.append(Signal.BUY)
+            elif latest['rsi'] > self.config.RSI_OVERBOUGHT:
+                signals.append(Signal.SELL)
+            
+            # 3. MACD Signal
+            if latest['macd'] > latest['macd_signal']:
+                if prev['macd'] <= prev['macd_signal']:
+                    signals.append(Signal.STRONG_BUY)
+                else:
+                    signals.append(Signal.BUY)
+            elif latest['macd'] < latest['macd_signal']:
+                if prev['macd'] >= prev['macd_signal']:
+                    signals.append(Signal.STRONG_SELL)
+                else:
+                    signals.append(Signal.SELL)
+            
+            # 4. Bollinger Bands Signal
+            if latest['close'] < latest['bb_lower']:
+                signals.append(Signal.BUY)
+            elif latest['close'] > latest['bb_upper']:
+                signals.append(Signal.SELL)
+            
+            # 5. Stochastic Signal
+            if latest['stoch_k'] < 20 and latest['stoch_d'] < 20:
+                signals.append(Signal.BUY)
+            elif latest['stoch_k'] > 80 and latest['stoch_d'] > 80:
+                signals.append(Signal.SELL)
+            
+            # 6. Volume Confirmation
+            if latest['volume'] > latest['volume_sma'] * 1.5:
+                # High volume confirms the trend
+                if signals:
+                    if signals[-1] in [Signal.BUY, Signal.STRONG_BUY]:
+                        signals.append(Signal.BUY)
+                    elif signals[-1] in [Signal.SELL, Signal.STRONG_SELL]:
+                        signals.append(Signal.SELL)
+            
+            # 7. MFI (Money Flow Index) Signal
+            if latest['mfi'] < 20:
+                signals.append(Signal.BUY)
+            elif latest['mfi'] > 80:
+                signals.append(Signal.SELL)
+            
+            # Aggregate signals
+            if not signals:
+                return Signal.NEUTRAL
+            
+            # Calculate average signal
+            signal_values = [s.value for s in signals]
+            avg_signal = np.mean(signal_values)
+            
+            # Log signal details
+            self.logger.debug(f"Signals: {signals}, Average: {avg_signal}")
+            
+            # Return final signal based on threshold
+            if avg_signal >= 1.5:
+                return Signal.STRONG_BUY
+            elif avg_signal >= 0.5:
+                return Signal.BUY
+            elif avg_signal <= -1.5:
+                return Signal.STRONG_SELL
+            elif avg_signal <= -0.5:
+                return Signal.SELL
+            else:
+                return Signal.NEUTRAL
+                
+        except Exception as e:
+            self.logger.error(f"Error generating signal: {e}")
+            return Signal.NEUTRAL
+    
+    # =====================================================================
+    # RISK MANAGEMENT
+    # =====================================================================
+    
+    def calculate_position_size(self, entry_price: float, stop_loss_price: float) -> float:
+        """Calculate position size based on risk management rules"""
+        try:
+            # Get account balance
+            balance = self.get_account_balance()
+            if balance <= 0:
+                return 0
+            
+            # Calculate risk amount
+            risk_amount = balance * self.config.RISK_PER_TRADE
+            
+            # Calculate position size based on stop loss distance
+            stop_loss_distance = abs(entry_price - stop_loss_price) / entry_price
+            
+            if stop_loss_distance == 0:
+                return 0
+            
+            position_size = risk_amount / stop_loss_distance
+            
+            # Apply leverage
+            position_size = position_size * self.config.LEVERAGE
+            
+            # Apply limits
+            position_size = min(position_size, self.config.MAX_POSITION_SIZE)
+            position_size = max(position_size, self.config.MIN_POSITION_SIZE)
+            
+            # Round to appropriate decimal places
+            position_size = round(position_size, 2)
+            
+            self.logger.info(f"Calculated position size: {position_size} USDT")
+            return position_size
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating position size: {e}")
+            return self.config.MIN_POSITION_SIZE
+    
+    def check_daily_loss_limit(self) -> bool:
+        """Check if daily loss limit has been reached"""
+        try:
+            if self.start_balance == 0:
+                return True
+            
+            current_balance = self.get_account_balance()
+            daily_loss = (self.start_balance - current_balance) / self.start_balance
+            
+            if daily_loss >= self.config.MAX_DAILY_LOSS:
+                self.logger.warning(f"Daily loss limit reached: {daily_loss:.2%}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error checking daily loss limit: {e}")
+            return False
+    
+    # =====================================================================
+    # ORDER MANAGEMENT
+    # =====================================================================
+    
+    def place_order(self, side: str, qty: float, order_type: str = None,
+                   price: float = None, stop_loss: float = None, 
+                   take_profit: float = None) -> Optional[Dict]:
+        """Place an order"""
+        try:
+            order_type = order_type or self.config.ORDER_TYPE
+            
+            # Prepare order parameters
+            params = {
+                "category": self.config.CATEGORY,
+                "symbol": self.config.SYMBOL,
+                "side": side,
+                "orderType": order_type,
+                "qty": str(qty),
+                "timeInForce": self.config.TIME_IN_FORCE,
+                "reduceOnly": self.config.REDUCE_ONLY,
+                "closeOnTrigger": False
+            }
+            
+            # Add price for limit orders
+            if order_type == "Limit" and price:
+                params["price"] = str(price)
+            
+            # Add stop loss
+            if stop_loss:
+                params["stopLoss"] = str(stop_loss)
+            
+            # Add take profit
+            if take_profit:
+                params["takeProfit"] = str(take_profit)
+            
+            # Place order
+            response = self.session.place_order(**params)
+            
+            if response['retCode'] == 0:
+                order_id = response['result']['orderId']
+                self.logger.info(f"Order placed successfully: {order_id}")
+                self.logger.info(f"Side: {side}, Qty: {qty}, Type: {order_type}")
+                return response['result']
+            else:
+                self.logger.error(f"Failed to place order: {response['retMsg']}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Exception placing order: {e}")
+            return None
+    
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel an order"""
+        try:
+            response = self.session.cancel_order(
+                category=self.config.CATEGORY,
+                symbol=self.config.SYMBOL,
+                orderId=order_id
+            )
+            
+            if response['retCode'] == 0:
+                self.logger.info(f"Order cancelled: {order_id}")
+                return True
+            else:
+                self.logger.error(f"Failed to cancel order: {response['retMsg']}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Exception cancelling order: {e}")
+            return False
+    
+    def cancel_all_orders(self) -> bool:
+        """Cancel all open orders"""
+        try:
+            response = self.session.cancel_all_orders(
+                category=self.config.CATEGORY,
+                symbol=self.config.SYMBOL
+            )
+            
+            if response['retCode'] == 0:
+                self.logger.info("All orders cancelled")
+                return True
+            else:
+                self.logger.error(f"Failed to cancel all orders: {response['retMsg']}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Exception cancelling all orders: {e}")
+            return False
+    
+    # =====================================================================
+    # POSITION MANAGEMENT
+    # =====================================================================
+    
+    def get_positions(self) -> Dict:
+        """Get current positions"""
+        try:
+            response = self.session.get_positions(
+                category=self.config.CATEGORY,
+                symbol=self.config.SYMBOL
+            )
+            
+            if response['retCode'] == 0:
+                positions = response['result']['list']
+                self.positions = {p['symbol']: p for p in positions}
+                return self.positions
+            else:
+                self.logger.error(f"Failed to get positions: {response['retMsg']}")
+                return {}
+                
+        except Exception as e:
+            self.logger.error(f"Exception getting positions: {e}")
+            return {}
+    
+    def close_position(self, symbol: str = None) -> bool:
+        """Close a position"""
+        try:
+            symbol = symbol or self.config.SYMBOL
+            position = self.positions.get(symbol)
+            
+            if not position:
+                self.logger.warning(f"No position found for {symbol}")
+                return False
+            
+            side = "Sell" if position['side'] == "Buy" else "Buy"
+            qty = float(position['size'])
+            
+            # Place market order to close
+            result = self.place_order(
+                side=side,
+                qty=qty,
+                order_type="Market"
+            )
+            
+            if result:
+                self.logger.info(f"Position closed for {symbol}")
+                self.in_position = False
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Exception closing position: {e}")
+            return False
+    
+    def update_stop_loss(self, stop_loss: float) -> bool:
+        """Update stop loss for current position"""
+        try:
+            response = self.session.set_trading_stop(
+                category=self.config.CATEGORY,
+                symbol=self.config.SYMBOL,
+                stopLoss=str(stop_loss)
+            )
+            
+            if response['retCode'] == 0:
+                self.logger.info(f"Stop loss updated to {stop_loss}")
+                return True
+            else:
+                self.logger.error(f"Failed to update stop loss: {response['retMsg']}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Exception updating stop loss: {e}")
+            return False
+    
+    # =====================================================================
+    # ACCOUNT MANAGEMENT
+    # =====================================================================
+    
+    def get_account_balance(self) -> float:
+        """Get account balance"""
+        try:
+            response = self.session.get_wallet_balance(
+                accountType="UNIFIED" if self.config.CATEGORY != "spot" else "SPOT"
+            )
+            
+            if response['retCode'] == 0:
+                coins = response['result']['list'][0]['coin']
+                for coin in coins:
+                    if coin['coin'] == 'USDT':
+                        balance = float(coin['walletBalance'])
+                        self.account_balance = balance
+                        return balance
+                        
+            self.logger.error(f"Failed to get balance: {response.get('retMsg', 'Unknown error')}")
+            return 0
+            
+        except Exception as e:
+            self.logger.error(f"Exception getting balance: {e}")
+            return 0
+    
+    def set_leverage(self) -> bool:
+        """Set leverage for the trading symbol"""
+        try:
+            if self.config.CATEGORY == "spot":
+                return True  # No leverage for spot
+            
+            response = self.session.set_leverage(
+                category=self.config.CATEGORY,
+                symbol=self.config.SYMBOL,
+                buyLeverage=str(self.config.LEVERAGE),
+                sellLeverage=str(self.config.LEVERAGE)
+            )
+            
+            if response['retCode'] == 0:
+                self.logger.info(f"Leverage set to {self.config.LEVERAGE}x")
+                return True
+            else:
+                self.logger.error(f"Failed to set leverage: {response['retMsg']}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Exception setting leverage: {e}")
+            return False
+    
+    # =====================================================================
+    # MAIN EXECUTION
+    # =====================================================================
+    
+    def execute_trade(self, signal: Signal):
+        """Execute trade based on signal"""
+        try:
+            # Check if we should trade
+            if not self.check_daily_loss_limit():
+                self.logger.warning("Daily loss limit reached, skipping trade")
+                return
+            
+            # Get current price
+            ticker = self.get_ticker()
+            if not ticker:
+                return
+            
+            current_price = float(ticker['lastPrice'])
+            
+            # Handle BUY signals
+            if signal in [Signal.BUY, Signal.STRONG_BUY] and not self.in_position:
+                # Calculate stop loss and take profit
+                stop_loss = current_price * (1 - self.config.STOP_LOSS_PCT)
+                take_profit = current_price * (1 + self.config.TAKE_PROFIT_PCT)
+                
+                # Calculate position size
+                position_size = self.calculate_position_size(current_price, stop_loss)
+                
+                if position_size > 0:
+                    # Place buy order
+                    if self.config.ORDER_TYPE == "Market":
+                        result = self.place_order(
+                            side="Buy",
+                            qty=position_size,
+                            order_type="Market",
+                            stop_loss=stop_loss,
+                            take_profit=take_profit
+                        )
+                    else:
+                        # For limit orders, place slightly below current price
+                        limit_price = current_price * 0.9995
+                        result = self.place_order(
+                            side="Buy",
+                            qty=position_size,
+                            order_type="Limit",
+                            price=limit_price,
+                            stop_loss=stop_loss,
+                            take_profit=take_profit
+                        )
+                    
+                    if result:
+                        self.in_position = True
+                        self.logger.info(f"BUY order executed at {current_price}")
+            
+            # Handle SELL signals
+            elif signal in [Signal.SELL, Signal.STRONG_SELL] and self.in_position:
+                # Close position
+                if self.close_position():
+                    self.logger.info(f"SELL order executed at {current_price}")
+            
+            # Update trailing stop for existing position
+            elif self.in_position and self.config.TRAILING_STOP_PCT > 0:
+                position = self.positions.get(self.config.SYMBOL)
+                if position:
+                    entry_price = float(position['avgPrice'])
+                    if current_price > entry_price * (1 + self.config.TRAILING_STOP_PCT):
+                        new_stop = current_price * (1 - self.config.TRAILING_STOP_PCT)
+                        self.update_stop_loss(new_stop)
+            
+        except Exception as e:
+            self.logger.error(f"Error executing trade: {e}")
+    
+    def run_strategy(self):
+        """Main strategy execution loop"""
+        try:
+            self.logger.info("Starting trading bot...")
+            
+            # Initial setup
+            self.set_leverage()
+            self.start_balance = self.get_account_balance()
+            self.logger.info(f"Starting balance: {self.start_balance} USDT")
+            
+            while True:
+                try:
+                    # Fetch latest market data
+                    self.market_data = self.fetch_klines()
+                    
+                    if self.market_data.empty:
+                        self.logger.warning("No market data available")
+                        time.sleep(self.config.LOOP_INTERVAL)
+                        continue
+                    
+                    # Calculate indicators
+                    self.market_data = self.calculate_indicators(self.market_data)
+                    
+                    # Generate trading signal
+                    signal = self.generate_signal(self.market_data)
+                    
+                    # Log current status
+                    self.get_positions()
+                    current_balance = self.get_account_balance()
+                    pnl = current_balance - self.start_balance
+                    pnl_pct = (pnl / self.start_balance * 100) if self.start_balance > 0 else 0
+                    
+                    self.logger.info(f"Signal: {signal.name}, Balance: {current_balance:.2f}, PnL: {pnl:.2f} ({pnl_pct:.2f}%)")
+                    
+                    # Execute trade if signal is not neutral
+                    if signal != Signal.NEUTRAL:
+                        self.execute_trade(signal)
+                    
+                    # Store last signal
+                    self.last_signal = signal
+                    
+                    # Wait for next iteration
+                    time.sleep(self.config.LOOP_INTERVAL)
+                    
+                except KeyboardInterrupt:
+                    self.logger.info("Bot stopped by user")
+                    break
+                except Exception as e:
+                    self.logger.error(f"Error in main loop: {e}")
+                    time.sleep(self.config.LOOP_INTERVAL)
+            
+        except Exception as e:
+            self.logger.critical(f"Critical error: {e}")
+        finally:
+            self.cleanup()
+    
+    def cleanup(self):
+        """Cleanup resources"""
+        try:
+            # Cancel all open orders
+            self.cancel_all_orders()
+            
+            # Close WebSocket if connected
+            if self.ws:
+                self.ws.exit()
+            
+            # Final summary
+            final_balance = self.get_account_balance()
+            total_pnl = final_balance - self.start_balance
+            total_pnl_pct = (total_pnl / self.start_balance * 100) if self.start_balance > 0 else 0
+            
+            self.logger.info("=" * 50)
+            self.logger.info("Trading Bot Stopped")
+            self.logger.info(f"Final Balance: {final_balance:.2f} USDT")
+            self.logger.info(f"Total PnL: {total_pnl:.2f} USDT ({total_pnl_pct:.2f}%)")
+            self.logger.info("=" * 50)
+            
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
+
+# =====================================================================
+# BACKTEST MODULE (Optional)
+# =====================================================================
+
+class Backtester:
+    """Simple backtesting framework for strategy validation"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = logging.getLogger('Backtester')
+        
+    def run_backtest(self, start_date: str, end_date: str):
+        """Run backtest on historical data"""
+        # Implementation of backtesting logic
+        pass
+
+# =====================================================================
+# MAIN ENTRY POINT
+# =====================================================================
+
+def main():
+    """Main entry point"""
+    # Load configuration
+    config = Config()
+    
+    # Override with environment variables if available
+    import os
+    config.API_KEY = os.getenv('BYBIT_API_KEY', config.API_KEY)
+    config.API_SECRET = os.getenv('BYBIT_API_SECRET', config.API_SECRET)
+    config.TESTNET = os.getenv('BYBIT_TESTNET', 'true').lower() == 'true'
+    
+    # Create and run bot
+    bot = TradingBot(config)
+    
+    try:
+        bot.run_strategy()
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+```
+
+## **Additional Strategy Templates**
+
+### **1. Grid Trading Strategy**
+
+```python
+class GridTradingStrategy:
+    """Grid trading strategy implementation"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.grid_levels = []
+        self.grid_orders = {}
+        
+    def create_grid(self, center_price: float, grid_size: int, grid_spacing: float):
+        """Create grid levels"""
+        self.grid_levels = []
+        for i in range(-grid_size//2, grid_size//2 + 1):
+            level = center_price * (1 + i * grid_spacing)
+            self.grid_levels.append(level)
+        return self.grid_levels
+    
+    def place_grid_orders(self, session):
+        """Place grid orders"""
+        for level in self.grid_levels:
+            # Place buy orders below current price
+            # Place sell orders above current price
+            pass
+```
+
+### **2. Mean Reversion Strategy**
+
+```python
+class MeanReversionStrategy:
+    """Mean reversion strategy using Bollinger Bands"""
+    
+    def generate_signal(self, df: pd.DataFrame) -> Signal:
+        latest = df.iloc[-1]
+        
+        # Check if price is outside Bollinger Bands
+        if latest['close'] < latest['bb_lower']:
+            # Oversold - potential buy
+            if latest['rsi'] < 30:
+                return Signal.STRONG_BUY
+            return Signal.BUY
+            
+        elif latest['close'] > latest['bb_upper']:
+            # Overbought - potential sell
+            if latest['rsi'] > 70:
+                return Signal.STRONG_SELL
+            return Signal.SELL
+            
+        return Signal.NEUTRAL
+```
+
+### **3. Momentum Strategy**
+
+```python
+class MomentumStrategy:
+    """Momentum following strategy"""
+    
+    def generate_signal(self, df: pd.DataFrame) -> Signal:
+        latest = df.iloc[-1]
+        
+        # Check momentum indicators
+        momentum_score = 0
+        
+        # MACD momentum
+        if latest['macd'] > latest['macd_signal']:
+            momentum_score += 1
+        else:
+            momentum_score -= 1
+        
+        # RSI momentum
+        if 50 < latest['rsi'] < 70:
+            momentum_score += 1
+        elif 30 < latest['rsi'] < 50:
+            momentum_score -= 1
+        
+        # Price above/below moving averages
+        if latest['close'] > latest['sma_50']:
+            momentum_score += 1
+        else:
+            momentum_score -= 1
+        
+        # Generate signal based on score
+        if momentum_score >= 2:
+            return Signal.BUY
+        elif momentum_score <= -2:
+            return Signal.SELL
+        
+        return Signal.NEUTRAL
+```
+
+## **Usage Instructions**
+
+1. **Install Dependencies:**
+```bash
+pip install pybit pandas pandas-ta numpy python-dateutil
+```
+
+2. **Configure API Keys:**
+- Get API keys from Bybit (testnet or mainnet)
+- Update the `Config` class with your credentials
+
+3. **Customize Strategy:**
+- Modify the `generate_signal()` method with your logic
+- Adjust indicator parameters in `Config`
+- Add custom indicators as needed
+
+4. **Run the Bot:**
+```bash
+python trading_bot.py
+```
+
+5. **Monitor Performance:**
+- Check logs in `trading_bot.log`
+- Monitor positions and PnL in real-time
+- Adjust parameters based on performance
+
+## **Important Notes**
+
+1. **Always test on testnet first** before using real funds
+2. **Implement proper risk management** - never risk more than you can afford to lose
+3. **Monitor the bot regularly** - don't leave it running unattended
+4. **Keep your API keys secure** - never commit them to version control
+5. **Respect rate limits** - Bybit has API rate limits that must be followed
+6. **Backtest your strategy** before live trading
+7. **Use stop losses** to protect against large losses
+8. **Keep logs** of all trades for analysis and tax purposes
+
+This template provides a solid foundation for building a sophisticated trading bot with technical indicators. Customize the strategy logic based on your trading style and risk tolerance.
+
+
+## Best Practices
+
+1. **Always test on testnet first** before deploying with real funds
+2. **Implement proper error handling** for API failures and network issues
+3. **Log all trades** for analysis and improvement
+4. **Monitor position status** regularly to avoid orphaned positions
+5. **Use appropriate timeframes** - 15-minute for scalping, 1-hour or 4-hour for swing trading
+6. **Backtest your strategy** before live deployment
+
+## Safety Considerations
+
+- Never hardcode API credentials in your code
+- Use environment variables or secure configuration files
+- Implement maximum position limits
+- Add circuit breakers for excessive losses
+- Monitor API rate limits (Bybit allows 120 requests per minute)
+
+This template provides a solid foundation for building sophisticated trading strategies. You can enhance it by adding more indicators, implementing machine learning models for signal generation, or incorporating market sentiment analysis. Remember to thoroughly test any modifications before using real funds.**:
+- The `confirm` field in Kline data indicates if the candle is closed
+- Push frequency for Klines ranges from 1-60 seconds
+- Use REST API for historical data and WebSocket for real-time updates
+This comprehensive list covers the essential functions needed for building a trading bot with pybit and Bybit v5 API. Make sure to refer to the official Bybit API documentation for the most up-to-date parameters and requirements for each endpoint.
+This comprehensive list covers all major order placement and API functions available in the Bybit V5 API and pybit library for building trading bots. The unified trading interface simplifies development by providing consistent methods across different product types.
