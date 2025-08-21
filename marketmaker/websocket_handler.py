@@ -1,6 +1,7 @@
 
 import json
 import logging
+import threading
 from typing import Callable
 from pybit.unified_trading import WebSocket
 from config import Config
@@ -97,3 +98,7 @@ class WebSocketHandler:
         if self.ws:
             self.ws.exit()
             logger.info("WebSocket disconnected")
+
+    def is_connected(self) -> bool:
+        """Check if the WebSocket connection is active."""
+        return self.ws is not None and self.ws.is_connected()

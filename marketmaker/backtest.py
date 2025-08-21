@@ -5,6 +5,9 @@ import uuid
 import random
 import argparse
 import logging
+
+API_SLEEP_INTERVAL = 0.05 # Sleep interval for API calls to respect rate limits
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional
@@ -100,7 +103,7 @@ class BybitHistoricalData:
             start_ms = next_ms
 
             # Be kind to the API
-            time.sleep(0.05)
+            time.sleep(API_SLEEP_INTERVAL)
 
         if not all_rows:
             raise ValueError("No klines returned for the requested range.")
@@ -117,7 +120,8 @@ class BybitHistoricalData:
 
 class FillEngine:
     """
-    Simulates maker fills using intra-candle path approximation.
+    Simulates maker fills within a candle using intra-candle price path approximation.
+    It manages order fills based on available volume capacity and price touch logic.
     """
     def __init__(self, params: BacktestParams):
         self.params = params
@@ -241,21 +245,8 @@ class FillEngine:
 
         return {"filled_buy": filled_buy, "filled_sell": filled_sell}
 
-    def _apply_fill(self, mm: MarketMaker, side: str, price: float, size: float) -> Tuple[float, float, float]:
-        """
-        Apply a trade fill to MarketMaker state. Returns (realized_pnl_delta, position_delta, new_avg_entry).
-        Fee is charged on notional.
-        """
-        # Fee on notional (maker)
-        fee = abs(price * size) * self.params.maker_fee
-
-        pos_before = mm.position
-        avg_before = mm.avg_entry_price or 0.0
-
+    def _calculate_fill_pnl_and_position_update(self, mm: MarketMaker, pos_before: float, avg_before: float, side: str, pos_delta: float, price: float) -> float:
         realized_pnl_delta = 0.0
-        pos_delta = size if side.lower() == "buy" else -size
-
-        # If position direction changes or reduces, compute realized pnl for the closed portion
         if pos_before == 0 or np.sign(pos_before) == np.sign(pos_delta):
             # Adding to same-direction inventory
             new_pos = pos_before + pos_delta
@@ -279,13 +270,24 @@ class FillEngine:
                 new_side_delta = np.sign(pos_delta) * leftover
                 mm.position = new_side_delta
                 mm.avg_entry_price = price
+        return realized_pnl_delta
+
+    def _apply_fill(self, mm: MarketMaker, side: str, price: float, size: float) -> Tuple[float, float, float]:
+        """
+        Apply a trade fill to MarketMaker state. Returns (realized_pnl_delta, position_delta, new_avg_entry).
+        Fee is charged on notional.
+        """
+        # Fee on notional (maker)
+        fee = abs(price * size) * self.params.maker_fee
+
+        pos_before = mm.position
+        avg_before = mm.avg_entry_price or 0.0
+
+        pos_delta = size if side.lower() == "buy" else -size
+        realized_pnl_delta = self._calculate_fill_pnl_and_position_update(mm, pos_before, avg_before, side, pos_delta, price)
 
         # Accrue fees into realized pnl
         mm.unrealized_pnl = (mm.last_price - mm.avg_entry_price) * mm.position if mm.position != 0 else 0.0
-
-        # Store realized pnl in a side buffer on mm via attribute injection if not present
-        if not hasattr(mm, "realized_pnl"):
-            mm.realized_pnl = 0.0
         mm.realized_pnl += realized_pnl_delta - abs(fee)
 
         return realized_pnl_delta - abs(fee), pos_delta, mm.avg_entry_price
@@ -301,8 +303,6 @@ class FillEngine:
         # Realized PnL on close
         realized = self._closed_pnl(side, entry=mm.avg_entry_price, fill=price, qty=qty)
         fee = abs(price * qty) * self.params.maker_fee
-        if not hasattr(mm, "realized_pnl"):
-            mm.realized_pnl = 0.0
         mm.realized_pnl += realized - abs(fee)
         mm.position = 0.0
         mm.avg_entry_price = 0.0
@@ -323,6 +323,10 @@ class FillEngine:
 
 
 class MarketMakerBacktester:
+    """
+    Orchestrates the backtesting process for the MarketMaker bot.
+    It fetches historical data, simulates fills, and calculates performance metrics.
+    """
     def __init__(self, params: BacktestParams, cfg: Optional[Config] = None):
         self.params = params
         self.cfg = cfg or Config()
@@ -351,8 +355,6 @@ class MarketMakerBacktester:
 
         # Track equity; assume starting cash (USDT) is implicit 0 and PnL purely from trading.
         # If you want to start with specific cash, add it here and include fees accordingly.
-        if not hasattr(self.mm, "realized_pnl"):
-            self.mm.realized_pnl = 0.0
 
         for idx, row in klines.iterrows():
             # 1) Let bot update/cancel/place orders based on current mid

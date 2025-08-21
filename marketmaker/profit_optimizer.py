@@ -18,10 +18,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 
 def parse_dt(s: str) -> datetime:
+    """Parse an ISO-formatted datetime string to a UTC datetime object."""
     return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
 
 
 def clamp(x, lo, hi):
+    """Clamp a value x between a lower bound lo and an upper bound hi."""
     return max(lo, min(hi, x))
 
 
@@ -47,26 +49,26 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     """
     cfg = deepcopy(base_cfg)
 
-    # Spreads
+    # Spreads - Adjust these ranges to fine-tune spread optimization
     min_spread = tr.suggest_float("MIN_SPREAD", 5e-5, 1e-3, log=True)
     base_spread_raw = tr.suggest_float("BASE_SPREAD_raw", 1e-4, 5e-3, log=True)
     base_spread = max(base_spread_raw, min_spread)
     max_spread = tr.suggest_float("MAX_SPREAD", base_spread * 1.5, 2e-2, log=True)
 
-    # Order ladder
+    # Order ladder - Adjust these ranges to fine-tune order ladder shape
     order_levels = tr.suggest_int("ORDER_LEVELS", 1, 8)
     min_order_size = tr.suggest_float("MIN_ORDER_SIZE", 0.001, 0.2, log=True)
     order_size_increment = tr.suggest_float("ORDER_SIZE_INCREMENT", 0.0, min_order_size, log=False)
 
-    # Inventory control
+    # Inventory control - Adjust these ranges to fine-tune inventory management
     max_position = tr.suggest_float("MAX_POSITION", min_order_size * order_levels, min_order_size * order_levels * 20, log=True)
     inventory_extreme = tr.suggest_float("INVENTORY_EXTREME", 0.6, 1.0)
 
-    # Volatility model
+    # Volatility model - Adjust these ranges to fine-tune volatility parameters
     vol_window = tr.suggest_int("VOLATILITY_WINDOW", 20, 200)
     vol_std = tr.suggest_float("VOLATILITY_STD", 1.0, 3.0)
 
-    # Risk management
+    # Risk management - Adjust these ranges to fine-tune risk parameters
     stop_loss_pct = tr.suggest_float("STOP_LOSS_PCT", 0.002, 0.02, log=True)
     take_profit_pct = tr.suggest_float("TAKE_PROFIT_PCT", 0.002, 0.03, log=True)
 

@@ -3,7 +3,8 @@ import logging
 import pandas as pd
 import argparse
 from config import Config
-from backtester import BacktestEngine
+from backtest import MarketMakerBacktester, BacktestParams
+from datetime import datetime, timezone
 from market_maker import MarketMaker
 import asyncio
 
@@ -22,23 +23,43 @@ class Optimizer:
         param_combinations = self.get_parameter_combinations()
 
         for params in param_combinations:
-            config = self.create_config_from_params(params)
-            market_maker = MarketMaker()
-            market_maker.config = config
-            market_maker.session = None # Disable live trading
+            # Create a new MarketMaker instance for each backtest run
+            bot = MarketMaker()
+            # Apply optimized parameters to the bot's config
+            for key, value in params.items():
+                setattr(bot.config, key, value)
+            
+            # Parse dates from config
+            start_date = datetime.strptime(bot.config.START_DATE, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            end_date = datetime.strptime(bot.config.END_DATE, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
-            backtester = BacktestEngine(market_maker, config)
-            results = asyncio.run(backtester.run_backtest())
+            params_for_backtest = BacktestParams(
+                symbol=bot.config.SYMBOL,
+                category=bot.config.CATEGORY,
+                interval=bot.config.INTERVAL,
+                start=start_date,
+                end=end_date,
+                testnet=bot.config.TESTNET,
+                maker_fee=bot.config.MAKER_FEE,
+                # Assuming SLIPPAGE is used as volume_cap_ratio in backtest
+                volume_cap_ratio=bot.config.SLIPPAGE 
+            )
+            backtester = MarketMakerBacktester(params_for_backtest, cfg=bot.config)
+            summary_results = backtester.run()
             
             # Store results
-            if results:
+            if summary_results:
+                net_pnl = summary_results.get('net_pnl', 0.0)
+                initial_capital = bot.config.INITIAL_CAPITAL # Assuming this is always available
+                return_pct = (net_pnl / initial_capital) * 100 if initial_capital != 0 else 0.0
+
                 result = {
                     'params': params,
-                    'pnl': results['total_pnl'],
-                    'sharpe_ratio': results['sharpe_ratio']
+                    'pnl': net_pnl,
+                    'return_pct': return_pct
                 }
                 self.results.append(result)
-                logger.info(f"Tested params: {params}, PnL: {result['pnl']:.2f}, Sharpe Ratio: {result['sharpe_ratio']:.2f}")
+                logger.info(f"Tested params: {params}, PnL: {result['pnl']:.6f}, Return Pct: {result['return_pct']:.2f}")
 
         self.display_best_results()
 
@@ -47,7 +68,7 @@ class Optimizer:
         keys, values = zip(*self.parameter_grid.items())
         return [dict(zip(keys, v)) for v in itertools.product(*values)]
 
-    def create_config_from_params(self, params: dict) -> Config:
+    def create_config_from_params(self, params: dict) -> Config: # Added params: dict
         """Creates a Config object from a dictionary of parameters."""
         config = Config()
         for key, value in params.items():
@@ -62,12 +83,15 @@ class Optimizer:
 
         results_df = pd.DataFrame(self.results)
         best_pnl_result = results_df.loc[results_df['pnl'].idxmax()]
+        best_return_pct_result = results_df.loc[results_df['return_pct'].idxmax()] # Changed from sharpe_ratio
 
         print("\n" + "="*50)
         print("OPTIMIZATION RESULTS")
         print("="*50)
         print("Best PnL:")
         print(best_pnl_result)
+        print("\nBest Return Pct:") # Changed from Sharpe Ratio
+        print(best_return_pct_result)
         print("="*50 + "\n")
 
 if __name__ == '__main__':
