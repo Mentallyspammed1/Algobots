@@ -335,6 +335,9 @@ class MarketMakerBacktester:
 
         # Bot under test
         self.mm = MarketMaker()
+        print(f"MarketMaker imported from: {MarketMaker.__file__}")
+        import sys
+        print(f"sys.path: {sys.path}")
         # Force backtest mode (no session) but keep config and symbol/category consistent
         self.mm.session = None
         self.mm.config.SYMBOL = params.symbol
