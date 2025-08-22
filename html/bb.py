@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import collections
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
@@ -1039,6 +1039,12 @@ def _make_api_call(api_client: HTTP, method: str, endpoint: str, params: Optiona
 # =====================================================================
 # FLASK API ENDPOINTS
 # =====================================================================
+@app.route('/')
+def index():
+    """Serves the main HTML page."""
+    return send_from_directory('.', 'supertrend.html')
+
+
 @app.route('/api/start', methods=['POST'])
 def start_bot():
     """Starts the trading bot."""
