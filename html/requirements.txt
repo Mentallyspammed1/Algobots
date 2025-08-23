@@ -3,3 +3,5 @@ Flask-Cors
 python-dotenv
 pybit
 google-generativeai
+pandas
+pandas-ta
