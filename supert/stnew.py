@@ -1,25 +1,3 @@
-Here's an enhanced and upgraded version of your Ehlers SuperTrend trading bot.
-
-This version includes:
-
-1.  **Real-time Console UI (`BotUI` and `BotState`):** A dedicated thread for a dynamic, self-refreshing terminal interface that displays live prices, indicator values, position details, and PnL, making the bot's operation much more transparent.
-2.  **Centralized State Management (`BotState`):** A `dataclass` to hold all critical bot information, protected by a `threading.Lock`, ensuring data consistency between the main bot logic and the UI thread.
-3.  **Enhanced Order Placement and Verification:** The `place_order` method now includes a crucial step to verify if a market order was actually `Filled` or `PartiallyFilled` by fetching order history, rather than just relying on the API's initial order receipt confirmation.
-4.  **Refined `TrailingStopManager`:** The `TrailingStopManager` is now implemented to interact with Bybit's `set_trading_stop` using `callbackRate`, which is Bybit's native way to handle trailing stops. The manager focuses on setting this initial rate and tracking its internal state.
-5.  **ADX Indicator Integration:** The Average Directional Index (ADX) is now calculated and included in the strategy for trend strength confirmation.
-6.  **Improved `calculate_indicators`:** The method is more robust in handling insufficient data and consistently uses `ta` library functions for SuperTrend, RSI, MACD, and ADX.
-7.  **Robust `Decimal` Usage:** All financial calculations now strictly use `Decimal` for precision, minimizing floating-point errors.
-8.  **Comprehensive `PrecisionManager`:** The `PrecisionManager` is updated to handle more aspects of instrument specifications from Bybit, including `min_order_qty`, `max_order_qty`, `min_position_value`, and `max_position_value`.
-9.  **Graceful Shutdown:** Enhanced signal handling and cleanup ensures that the bot attempts to cancel open orders and optionally close positions upon termination.
-10. **WebSocket Robustness:** Improved reconnection logic for the WebSocket thread.
-11. **Code Structure and Readability:** Better comments, consistent formatting, and removal of duplicate code.
-12. **Termux Toasts:** Added `subprocess.run(["termux-toast", "..."])` for critical alerts on Android devices running Termux.
-13. **Global Logger:** Refined global logger setup to ensure it's initialized correctly and consistently used.
-14. **Bid/Ask Prices:** Fetches and displays current bid/ask prices in the UI for better market context.
-
----
-
-```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os
@@ -2698,4 +2676,3 @@ if __name__ == "__main__":
     main()
     
     print(Fore.MAGENTA + "\n# May your digital journey be ever enlightened." + Style.RESET_ALL)
-```
