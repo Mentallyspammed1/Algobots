@@ -1349,13 +1349,14 @@ class EhlersSuperTrendBot:
         
         return result
 
-    def api_call(self, api_method: Any, **kwargs) -> Optional[Dict[str, Any]]:
+    def api_call(self, api_method: Any, no_retry_codes: Optional[List[int]] = None, **kwargs) -> Optional[Dict[str, Any]]:
         """
         # A resilient incantation to invoke pybit HTTP methods,
         # equipped with retries, exponential backoff (with jitter), and wise error handling.
         # It guards against transient network whispers and rate limit enchantments.
         # Returns the 'result' data dictionary on success, or None if all retries fail.
         """
+        no_retry_codes = no_retry_codes or []
         for attempt in range(1, self.config.MAX_API_RETRIES + 1):
             try:
                 raw_resp = api_method(**kwargs)
@@ -1367,6 +1368,11 @@ class EhlersSuperTrendBot:
                 sys.exit(1) # Halt the bot immediately
             
             except (ConnectionRefusedError, RuntimeError, FailedRequestError, InvalidRequestError) as e:
+                # Explicitly check for the non-retriable error and re-raise immediately.
+                if "100028" in str(e):
+                    self.logger.debug("Received non-retriable error code 100028. Re-raising exception.")
+                    raise e
+
                 if self.stop_event.is_set(): # Check if shutdown is requested during retry loop
                     self.logger.warning(f"Shutdown requested during API retry. Aborting retries.")
                     return None
@@ -1632,7 +1638,8 @@ class EhlersSuperTrendBot:
                 self.bybit_client.switch_margin_mode,
                 category=self.config.CATEGORY_ENUM.value,
                 symbol=self.config.SYMBOL,
-                tradeMode=str(self.config.MARGIN_MODE)
+                tradeMode=str(self.config.MARGIN_MODE),
+                no_retry_codes=[100028]
             )
             self.logger.info(f"Margin mode set successfully to {margin_mode_str} for {self.config.SYMBOL}.")
         except RuntimeError as e:
@@ -1743,20 +1750,49 @@ class EhlersSuperTrendBot:
                              np.where(df['close'] < (filt - (volatility * self.config.SENSITIVITY)), -1, np.nan))
         df['ehlers_trend'] = pd.Series(raw_trend, index=df.index).ffill() # Fill NaNs forward
 
-        # --- SuperTrend (using ta.volatility.SuperTrend) ---
-        st_indicator = ta.volatility.SuperTrend(
-            df['high'], df['low'], df['close'],
+        # --- SuperTrend (Manual Implementation) ---
+        atr = ta.volatility.AverageTrueRange(
+            high=df['high'],
+            low=df['low'],
+            close=df['close'],
             window=self.config.EHLERS_ST_LENGTH,
-            multiplier=self.config.EHLERS_ST_MULTIPLIER,
-            fillna=True # Fill NaNs in the output Series directly
-        )
-        df['supertrend_direction'] = st_indicator.super_trend_indicator()
-        # SuperTrend line value: if direction is UP (1), it's super_trend_lower, else super_trend_upper
-        df['supertrend_line_value'] = np.where(
-            df['supertrend_direction'] == 1,
-            st_indicator.super_trend_lower(),
-            st_indicator.super_trend_upper()
-        )
+            fillna=True
+        ).average_true_range()
+
+        basic_upper = (df['high'] + df['low']) / 2 + self.config.EHLERS_ST_MULTIPLIER * atr
+        basic_lower = (df['high'] + df['low']) / 2 - self.config.EHLERS_ST_MULTIPLIER * atr
+
+        final_upper = pd.Series(np.nan, index=df.index)
+        final_lower = pd.Series(np.nan, index=df.index)
+        supertrend_line = pd.Series(np.nan, index=df.index)
+
+        if not df.empty:
+            final_upper.iloc[0] = basic_upper.iloc[0]
+            final_lower.iloc[0] = basic_lower.iloc[0]
+            supertrend_line.iloc[0] = final_lower.iloc[0]
+
+            for i in range(1, len(df)):
+                if basic_upper.iloc[i] < final_upper.iloc[i-1] or df['close'].iloc[i-1] > final_upper.iloc[i-1]:
+                    final_upper.iloc[i] = basic_upper.iloc[i]
+                else:
+                    final_upper.iloc[i] = final_upper.iloc[i-1]
+
+                if basic_lower.iloc[i] > final_lower.iloc[i-1] or df['close'].iloc[i-1] < final_lower.iloc[i-1]:
+                    final_lower.iloc[i] = basic_lower.iloc[i]
+                else:
+                    final_lower.iloc[i] = final_lower.iloc[i-1]
+
+                if supertrend_line.iloc[i-1] == final_upper.iloc[i-1] and df['close'].iloc[i] > final_upper.iloc[i]:
+                    supertrend_line.iloc[i] = final_lower.iloc[i]
+                elif supertrend_line.iloc[i-1] == final_upper.iloc[i-1] and df['close'].iloc[i] <= final_upper.iloc[i]:
+                    supertrend_line.iloc[i] = final_upper.iloc[i]
+                elif supertrend_line.iloc[i-1] == final_lower.iloc[i-1] and df['close'].iloc[i] < final_lower.iloc[i]:
+                    supertrend_line.iloc[i] = final_upper.iloc[i]
+                elif supertrend_line.iloc[i-1] == final_lower.iloc[i-1] and df['close'].iloc[i] >= final_lower.iloc[i]:
+                    supertrend_line.iloc[i] = final_lower.iloc[i]
+        
+        df['supertrend_line_value'] = supertrend_line
+        df['supertrend_direction'] = np.where(df['close'] > df['supertrend_line_value'], 1, -1)
 
         # Additional Filters - RSI: Measuring the momentum's fervor
         rsi = ta.momentum.RSIIndicator(df['close'], window=self.config.RSI_WINDOW, fillna=True)
