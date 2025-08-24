@@ -109,7 +109,7 @@ class Config:
     TESTNET: bool = field(default=False)
 
     # Trading Configuration
-    SYMBOL: str = field(default="TRUMPUSDT")
+    SYMBOLS: List[str] = field(default_factory=lambda: ["BTCUSDT"])
     CATEGORY: str = field(default="linear")
     LEVERAGE: int = field(default=5)
     MARGIN_MODE: int = field(default=1) # 0 for cross, 1 for isolated
@@ -182,7 +182,15 @@ class Config:
         self.API_KEY = os.getenv("BYBIT_API_KEY", self.API_KEY)
         self.API_SECRET = os.getenv("BYBIT_API_SECRET", self.API_SECRET)
         self.TESTNET = os.getenv("BYBIT_TESTNET", str(self.TESTNET)).lower() in ['true', '1', 't']
-        self.SYMBOL = os.getenv("TRADING_SYMBOL", self.SYMBOL)
+        
+        symbols_str = os.getenv("TRADING_SYMBOLS")
+        if symbols_str:
+            self.SYMBOLS = [s.strip().upper() for s in symbols_str.split(',')]
+        else:
+            # Fallback to single symbol env var for backward compatibility
+            single_symbol = os.getenv("TRADING_SYMBOL", self.SYMBOLS[0])
+            self.SYMBOLS = [single_symbol.strip().upper()]
+
         self.CATEGORY = os.getenv("BYBIT_CATEGORY", self.CATEGORY)
         self.LEVERAGE = int(os.getenv("BYBIT_LEVERAGE", self.LEVERAGE))
         self.MARGIN_MODE = int(os.getenv("BYBIT_MARGIN_MODE", self.MARGIN_MODE))
@@ -262,6 +270,7 @@ class Config:
         # Force leverage to 1 for spot trading to avoid potential API errors or incorrect settings
         if self.CATEGORY_ENUM == Category.SPOT:
             self.LEVERAGE = 1
+
 
 
 # =====================================================================
@@ -969,43 +978,35 @@ class BotState:
     """
     lock: threading.Lock = field(default_factory=threading.Lock) # Guards against simultaneous writes from different threads
     
-    current_price: Decimal = field(default=Decimal('0.0'))
-    bid_price: Decimal = field(default=Decimal('0.0'))
-    ask_price: Decimal = field(default=Decimal('0.0'))
-    
-    ehlers_supertrend_value: Decimal = field(default=Decimal('0.0')) # The actual ST line value
-    ehlers_supertrend_direction: str = field(default="NONE") # e.g., "UP", "DOWN"
-    ehlers_filter_value: Decimal = field(default=Decimal('0.0')) # From Ehlers Adaptive Trend custom filter
-    
-    adx_value: Decimal = field(default=Decimal('0.0'))
-    adx_plus_di: Decimal = field(default=Decimal('0.0'))
-    adx_minus_di: Decimal = field(default=Decimal('0.0'))
-    adx_trend_strength: str = field(default="N/A") # e.g., "Weak", "Developing", "Strong"
-    
-    rsi_value: Decimal = field(default=Decimal('0.0'))
-    rsi_state: str = field(default="N/A") # e.g., "Overbought", "Oversold", "Neutral"
-
-    macd_value: Decimal = field(default=Decimal('0.0'))
-    macd_signal_value: Decimal = field(default=Decimal('0.0'))
-    macd_diff_value: Decimal = field(default=Decimal('0.0'))
-
+    # General Bot Info
     initial_equity: Decimal = field(default=Decimal('0.0'))
     current_equity: Decimal = field(default=Decimal('0.0'))
-    open_position_qty: Decimal = field(default=Decimal('0.0'))
-    open_position_side: str = field(default="NONE") # "Buy" or "Sell"
-    open_position_entry_price: Decimal = field(default=Decimal('0.0'))
-    unrealized_pnl: Decimal = field(default=Decimal('0.0'))
-    unrealized_pnl_pct: Decimal = field(default=Decimal('0.0'))
     realized_pnl_total: Decimal = field(default=Decimal('0.0')) # Cumulative PnL from closed trades
-    
     last_updated_time: datetime = field(default_factory=datetime.now)
     bot_status: str = field(default="Initializing")
-    symbol: str = field(default="")
-    timeframe: str = field(default="")
-    price_precision: int = field(default=3) 
-    qty_precision: int = field(default=1)
     dry_run: bool = field(default=False)
-    testnet: bool = field(default=True) # Added testnet status for UI
+    testnet: bool = field(default=True)
+
+    # Per-Symbol Data - Dictionaries keyed by symbol
+    market_data: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    position_data: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+
+@dataclass
+class SymbolState:
+    """
+    # A scroll to hold the unique state and memories for a single symbol,
+    # allowing the bot to manage multiple market realms concurrently.
+    """
+    symbol: str
+    market_data: pd.DataFrame = field(default_factory=pd.DataFrame)
+    position_active: bool = False
+    current_position_side: Optional[str] = None
+    current_position_entry_price: Decimal = Decimal('0')
+    current_position_size: Decimal = Decimal('0')
+    last_signal: Optional[str] = None
+    last_kline_ts: int = 0
+    last_trade_time: float = 0.0
 
 
 # =====================================================================
@@ -1044,96 +1045,23 @@ class BotUI(threading.Thread):
             # Create a local copy of the state for consistent display during rendering
             state = self.bot_state 
             
-            # Formatting and Coloring Logic
-            pnl_color_realized = Fore.GREEN if state.realized_pnl_total >= Decimal('0') else Fore.RED
-            pnl_color_unrealized = Fore.GREEN if state.unrealized_pnl >= Decimal('0') else Fore.RED
-
-            adx_color = Fore.WHITE
-            if state.adx_trend_strength == "Strong":
-                adx_color = Fore.LIGHTGREEN_EX
-            elif state.adx_trend_strength == "Developing":
-                adx_color = Fore.LIGHTYELLOW_EX
-            elif state.adx_trend_strength == "Weak":
-                adx_color = Fore.LIGHTBLACK_EX
-
-            rsi_color = Fore.WHITE
-            if state.rsi_state == "Overbought":
-                rsi_color = Fore.RED
-            elif state.rsi_state == "Oversold":
-                rsi_color = Fore.GREEN
-            
-            ehlers_color = Fore.WHITE
-            if state.ehlers_supertrend_direction == "UP":
-                ehlers_color = Fore.LIGHTGREEN_EX
-            elif state.ehlers_supertrend_direction == "DOWN":
-                ehlers_color = Fore.LIGHTRED_EX
-            
             # --- UI Layout ---
             # Main Header
             print(f"{Fore.CYAN}╔═══════════════════════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
             dry_run_str = " [DRY RUN]" if state.dry_run else ""
-            header_title = f"{state.symbol} Ehlers SuperTrend Bot{dry_run_str}"
-            # Center header_title in 75 characters wide box, adjusted for borders
+            header_title = f"Multi-Symbol Ehlers SuperTrend Bot{dry_run_str}"
             print(f"{Fore.CYAN}║ {Fore.WHITE}{header_title:<73}{Fore.CYAN} ║{Style.RESET_ALL}")
             print(f"{Fore.CYAN}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
             status_text_display = f"Status: {Fore.GREEN}{state.bot_status} ({'TESTNET' if state.testnet else 'MAINNET'}){Fore.CYAN}"
             last_update_text = f"Last Updated: {state.last_updated_time.strftime('%H:%M:%S')}"
-            # Calculate padding dynamically
-            # Remove color codes for length calculation
             status_len_no_color = len(state.bot_status) + len(f" ({'TESTNET' if state.testnet else 'MAINNET'})")
             padding_len = 73 - (len("Status: ") + status_len_no_color + len(last_update_text) + len("Last Updated: "))
             
             print(f"{Fore.CYAN}║ {status_text_display}{' ' * padding_len}{last_update_text} {Fore.CYAN}║{Style.RESET_ALL}")
-            print(f"{Fore.CYAN}╚═══════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}\n")
-
-            # Market Data Section
-            print(f"{Fore.BLUE}╔═══════════════════════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
-            print(f"{Fore.BLUE}║ MARKET DATA                                                               {Fore.BLUE}║{Style.RESET_ALL}")
-            print(f"{Fore.BLUE}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
             
-            # Current Price string, 3 decimals
-            print(f"{Fore.BLUE}║ Current Price:          {Fore.YELLOW}${state.current_price:.{state.price_precision}f}{Fore.BLUE:<46}║{Style.RESET_ALL}")
-            
-            # Bid Price string, 3 decimals
-            print(f"{Fore.BLUE}║ Bid:                    {Fore.YELLOW}${state.bid_price:.{state.price_precision}f}{Fore.BLUE:<46}║{Style.RESET_ALL}")
-            
-            # Ask Price string, 3 decimals
-            print(f"{Fore.BLUE}║ Ask:                    {Fore.YELLOW}${state.ask_price:.{state.price_precision}f}{Fore.BLUE:<46}║{Style.RESET_ALL}")
-            print(f"{Fore.BLUE}╚═══════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}\n")
-
-            # Indicator Values Section
-            print(f"{Fore.MAGENTA}╔═══════════════════════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
-            print(f"{Fore.MAGENTA}║ INDICATOR VALUES                                                          {Fore.MAGENTA}║{Style.RESET_ALL}")
-            print(f"{Fore.MAGENTA}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
-            
-            ehlers_st_val_str = f"${state.ehlers_supertrend_value:.{state.price_precision}f}"
-            ehlers_st_display_str = f"{ehlers_st_val_str} ({state.ehlers_supertrend_direction})"
-            print(f"{Fore.MAGENTA}║ Ehlers SuperTrend:      {ehlers_color}{ehlers_st_display_str}{Fore.MAGENTA:<{73 - len('Ehlers SuperTrend:      ') - len(ehlers_st_display_str) + len(ehlers_color) + len(Style.RESET_ALL)}}║{Style.RESET_ALL}")
-            
-            ehlers_filter_str = f"{state.ehlers_filter_value:.2f}"
-            print(f"{Fore.MAGENTA}║ Ehlers Filter:          {Fore.WHITE}{ehlers_filter_str}{Fore.MAGENTA:<{73 - len('Ehlers Filter:          ') - len(ehlers_filter_str)}}║{Style.RESET_ALL}")
-            
-            adx_str = f"{state.adx_value:.1f} (Trend: {state.adx_trend_strength})"
-            print(f"{Fore.MAGENTA}║ ADX:                    {adx_color}{adx_str}{Fore.MAGENTA:<{73 - len('ADX:                    ') - len(adx_str) + len(adx_color) + len(Style.RESET_ALL)}}║{Style.RESET_ALL}")
-            
-            rsi_str = f"{state.rsi_value:.1f} (State: {state.rsi_state})"
-            print(f"{Fore.MAGENTA}║ RSI:                    {rsi_color}{rsi_str}{Fore.MAGENTA:<{73 - len('RSI:                    ') - len(rsi_str) + len(rsi_color) + len(Style.RESET_ALL)}}║{Style.RESET_ALL}")
-
-            # MACD (3 decimals for all MACD components)
-            print(f"{Fore.MAGENTA}║ MACD:                   {Fore.WHITE}{state.macd_value:.3f}{Fore.MAGENTA:<{73 - len('MACD:                   ') - len(f'{state.macd_value:.3f}')}}║{Style.RESET_ALL}")
-            print(f"{Fore.MAGENTA}║ MACD Signal:            {Fore.WHITE}{state.macd_signal_value:.3f}{Fore.MAGENTA:<{73 - len('MACD Signal:            ') - len(f'{state.macd_signal_value:.3f}')}}║{Style.RESET_ALL}")
-            print(f"{Fore.MAGENTA}║ MACD Diff:              {Fore.WHITE}{state.macd_diff_value:.3f}{Fore.MAGENTA:<{73 - len('MACD Diff:              ') - len(f'{state.macd_diff_value:.3f}')}}║{Style.RESET_ALL}")
-
-            print(f"{Fore.MAGENTA}╚═══════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}\n")
-
-            # Portfolio & PNL Section
-            print(f"{Fore.GREEN}╔═══════════════════════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
-            print(f"{Fore.GREEN}║ PORTFOLIO & PNL                                                           {Fore.GREEN}║{Style.RESET_ALL}")
-            print(f"{Fore.GREEN}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
-            
+            # Portfolio Summary
+            pnl_color_realized = Fore.GREEN if state.realized_pnl_total >= Decimal('0') else Fore.RED
             initial_equity_str = f"${state.initial_equity:.2f}"
-            print(f"{Fore.GREEN}║ Initial Equity:         {Fore.WHITE}{initial_equity_str}{Fore.GREEN:<{73 - len('Initial Equity:         ') - len(initial_equity_str)}}║{Style.RESET_ALL}")
-            
             current_equity_str = f"${state.current_equity:.2f}"
             equity_change_pct_val = Decimal('0.0')
             if state.initial_equity > Decimal('0') and state.current_equity > Decimal('0'):
@@ -1141,37 +1069,63 @@ class BotUI(threading.Thread):
             equity_color = Fore.GREEN if equity_change_pct_val >= Decimal('0') else Fore.RED
             equity_pct_str = f"{equity_change_pct_val:+.2f}%"
             current_equity_display_str = f"{current_equity_str} ({equity_pct_str})"
-            print(f"{Fore.GREEN}║ Current Equity:         {equity_color}{current_equity_display_str}{Fore.GREEN:<{73 - len('Current Equity:         ') - len(current_equity_display_str) + len(equity_color) + len(Style.RESET_ALL)}}║{Style.RESET_ALL}")
-            print(f"{Fore.GREEN}║                                                                           {Fore.GREEN}║{Style.RESET_ALL}")
+            realized_pnl_str = f"${state.realized_pnl_total:.2f}"
 
-            if state.open_position_qty > Decimal('0'):
-                pos_info = f"{state.open_position_qty:.{state.qty_precision}f} {state.symbol} ({state.open_position_side})"
-                entry_price_str = f"${state.open_position_entry_price:.{state.price_precision}f}"
-                unrealized_pnl_str = f"${state.unrealized_pnl:.2f} ({state.unrealized_pnl_pct:+.2f}%)" # PNL to 2 decimals, PCT to 2 decimals
+            print(f"{Fore.CYAN}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}║ Initial Equity: {Fore.WHITE}{initial_equity_str:<20} {Fore.CYAN}Current Equity: {equity_color}{current_equity_display_str:<20}{Fore.CYAN} ║")
+            print(f"{Fore.CYAN}║ Realized PNL (Total): {pnl_color_realized}{realized_pnl_str:<51}{Fore.CYAN} ║")
+            print(f"{Fore.CYAN}╚═══════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}
+")
+
+            # Per-Symbol Display
+            for symbol, market in state.market_data.items():
+                pos = state.position_data.get(symbol, {})
                 
-                print(f"{Fore.GREEN}║ Open Position:          {Fore.WHITE}{pos_info}{Fore.GREEN:<{73 - len('Open Position:          ') - len(pos_info)}}║{Style.RESET_ALL}")
-                print(f"{Fore.GREEN}║ Avg Entry Price:        {Fore.WHITE}{entry_price_str}{Fore.GREEN:<{73 - len('Avg Entry Price:        ') - len(entry_price_str)}}║{Style.RESET_ALL}")
-                print(f"{Fore.GREEN}║ Unrealized PNL:         {pnl_color_unrealized}{unrealized_pnl_str}{Fore.GREEN:<{73 - len('Unrealized PNL:         ') - len(unrealized_pnl_str) + len(pnl_color_unrealized) + len(Style.RESET_ALL)}}║{Style.RESET_ALL}")
-                # SL/TP for open position are not stored in BotState.open_position_info.
-                # If needed, they should be extracted from 'pos' dict in get_positions and passed to BotState.
-                # For now, print placeholders.
-                print(f"{Fore.GREEN}║ Stop Loss:              {Fore.WHITE}$0.000 (N/A){Fore.GREEN:<{73 - len('Stop Loss:              ') - len('$0.000 (N/A)')}}║{Style.RESET_ALL}")
-                print(f"{Fore.GREEN}║ Take Profit:            {Fore.WHITE}$0.000 (N/A){Fore.GREEN:<{73 - len('Take Profit:            ') - len('$0.000 (N/A)')}}║{Style.RESET_ALL}")
+                # Formatting and Coloring Logic
+                pnl_color_unrealized = Fore.GREEN if pos.get('unrealized_pnl', Decimal('0')) >= Decimal('0') else Fore.RED
+                adx_color = Fore.WHITE
+                if market.get('adx_trend_strength') == "Strong": adx_color = Fore.LIGHTGREEN_EX
+                elif market.get('adx_trend_strength') == "Developing": adx_color = Fore.LIGHTYELLOW_EX
+                elif market.get('adx_trend_strength') == "Weak": adx_color = Fore.LIGHTBLACK_EX
 
-            else:
-                # Consistent padding for "no open position" state
-                # Adjust formatting to use Decimal('0.0') for consistency and correct precision padding
-                print(f"{Fore.GREEN}║ Open Position:          {Fore.WHITE}{Decimal('0.0'):.{state.qty_precision}f} {state.symbol}{Fore.GREEN:<{73 - len('Open Position:          ') - len(f'{Decimal('0.0'):.{state.qty_precision}f} {state.symbol}')}}║{Style.RESET_ALL}")
-                print(f"{Fore.GREEN}║ Avg Entry Price:        {Fore.WHITE}${Decimal('0.0'):.{state.price_precision}f}{Fore.GREEN:<{73 - len('Avg Entry Price:        ') - len(f'${Decimal('0.0'):.{state.price_precision}f}')}}║{Style.RESET_ALL}")
-                print(f"{Fore.GREEN}║ Unrealized PNL:         {Fore.WHITE}${Decimal('0.0'):.2f} ({Decimal('0.0'):+.2f}%){Fore.GREEN:<{73 - len('Unrealized PNL:         ') - len(f'${Decimal('0.0'):.2f} ({Decimal('0.0'):+.2f}%)')}}║{Style.RESET_ALL}")
-                print(f"{Fore.GREEN}║ Stop Loss:              {Fore.WHITE}${Decimal('0.0'):.{state.price_precision}f} (N/A){Fore.GREEN:<{73 - len('Stop Loss:              ') - len(f'${Decimal('0.0'):.{state.price_precision}f} (N/A)')}}║{Style.RESET_ALL}")
-                print(f"{Fore.GREEN}║ Take Profit:            {Fore.WHITE}${Decimal('0.0'):.{state.price_precision}f} (N/A){Fore.GREEN:<{73 - len('Take Profit:            ') - len(f'${Decimal('0.0'):.{state.price_precision}f} (N/A)')}}║{Style.RESET_ALL}")
+                rsi_color = Fore.WHITE
+                if market.get('rsi_state') == "Overbought": rsi_color = Fore.RED
+                elif market.get('rsi_state') == "Oversold": rsi_color = Fore.GREEN
+                
+                ehlers_color = Fore.WHITE
+                if market.get('ehlers_supertrend_direction') == "UP": ehlers_color = Fore.LIGHTGREEN_EX
+                elif market.get('ehlers_supertrend_direction') == "DOWN": ehlers_color = Fore.LIGHTRED_EX
 
-            realized_pnl_str = f"${state.realized_pnl_total:.2f}" # Realized PNL to 2 decimals
-            print(f"{Fore.GREEN}║                                                                           {Fore.GREEN}║{Style.RESET_ALL}")
-            print(f"{Fore.GREEN}║ Realized PNL (Total):   {pnl_color_realized}{realized_pnl_str}{Fore.GREEN:<{73 - len('Realized PNL (Total):   ') - len(realized_pnl_str) + len(pnl_color_realized) + len(Style.RESET_ALL)}}║{Style.RESET_ALL}")
-            print(f"{Fore.GREEN}╚═══════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}")
+                # --- Symbol Header ---
+                print(f"{Fore.BLUE}╔══ {Fore.WHITE}{symbol:<15} ═══════════════════════════════════════════════════════╗{Style.RESET_ALL}")
+                
+                # --- Market & Indicators ---
+                price_str = f"${market.get('current_price', Decimal('0')):.{market.get('price_precision', 2)}f}"
+                ehlers_st_val_str = f"${market.get('ehlers_supertrend_value', Decimal('0')):.{market.get('price_precision', 2)}f}"
+                ehlers_st_display_str = f"{ehlers_st_val_str} ({market.get('ehlers_supertrend_direction', 'N/A')})"
+                adx_str = f"{market.get('adx_value', Decimal('0')):.1f} ({market.get('adx_trend_strength', 'N/A')})"
+                rsi_str = f"{market.get('rsi_value', Decimal('0')):.1f} ({market.get('rsi_state', 'N/A')})"
+
+                print(f"{Fore.BLUE}║ Price: {Fore.YELLOW}{price_str:<18} {Fore.BLUE}ADX: {adx_color}{adx_str:<20} {Fore.BLUE}║")
+                print(f"{Fore.BLUE}║ Ehlers ST: {ehlers_color}{ehlers_st_display_str:<14} {Fore.BLUE}RSI: {rsi_color}{rsi_str:<20} {Fore.BLUE}║")
+                
+                # --- Position Info ---
+                print(f"{Fore.BLUE}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
+                if pos.get('qty', Decimal('0')) > Decimal('0'):
+                    pos_info = f"{pos.get('qty'):.{pos.get('qty_precision', 1)}f} {symbol} ({pos.get('side', 'N/A')})"
+                    entry_price_str = f"${pos.get('entry_price'):.{market.get('price_precision', 2)}f}"
+                    unrealized_pnl_str = f"${pos.get('unrealized_pnl'):.2f} ({pos.get('unrealized_pnl_pct'):+.2f}%)"
+                    
+                    print(f"{Fore.BLUE}║ Position: {Fore.WHITE}{pos_info:<15} {Fore.BLUE}Entry: {Fore.WHITE}{entry_price_str:<15} {Fore.BLUE}║")
+                    print(f"{Fore.BLUE}║ PnL: {pnl_color_unrealized}{unrealized_pnl_str:<60}{Fore.BLUE} ║")
+                else:
+                    print(f"{Fore.BLUE}║ Position: {Fore.WHITE}None{Fore.BLUE:<65}║")
+
+                print(f"{Fore.BLUE}╚═══════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}
+")
+            
             print(Style.RESET_ALL) # Ensure all colors are reset at the end
+
 
 
 # =====================================================================
@@ -2626,6 +2580,10 @@ class EhlersSuperTrendBot:
 
         except Exception as e:
             self.logger.error(f"An error occurred during the cleanup process: {e}", exc_info=True)
+
+    def _pyrmethus_test_method(self):
+        """A test method to verify file writing."""
+        self.logger.info("Pyrmethus test method executed.")
 
 
 # =====================================================================
