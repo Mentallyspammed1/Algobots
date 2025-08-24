@@ -1,18 +1,18 @@
-import optuna
 import argparse
 import logging
-import json
 from copy import deepcopy
 from datetime import datetime, timezone
 
-import pandas as pd
+import optuna
 
-from backtest import MarketMakerBacktester, BacktestParams, to_ms, from_ms
+from backtest import BacktestParams, MarketMakerBacktester
 from config import Config
-from market_maker import MarketMaker # Import MarketMaker to ensure its methods are available
 
 logger = logging.getLogger("BotOptimizer")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
 
 def objective(trial: optuna.Trial) -> float:
     # Load base configuration
@@ -63,7 +63,9 @@ def objective(trial: optuna.Trial) -> float:
         symbol=cfg.SYMBOL,
         category=cfg.CATEGORY,
         interval=cfg.INTERVAL,
-        start=datetime.strptime(cfg.START_DATE, "%Y-%m-%d").replace(tzinfo=timezone.utc),
+        start=datetime.strptime(cfg.START_DATE, "%Y-%m-%d").replace(
+            tzinfo=timezone.utc
+        ),
         end=datetime.strptime(cfg.END_DATE, "%Y-%m-%d").replace(tzinfo=timezone.utc),
         testnet=cfg.TESTNET,
         maker_fee=maker_fee,
@@ -87,12 +89,33 @@ def objective(trial: optuna.Trial) -> float:
 
     return net_pnl
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Optimize Market Maker Bot parameters using Optuna.")
-    parser.add_argument("--trials", type=int, default=50, help="Number of optimization trials.")
-    parser.add_argument("--study-name", type=str, default="market_maker_optimization", help="Name of the Optuna study.")
-    parser.add_argument("--storage", type=str, default=None, help="Optuna storage URL (e.g., sqlite:///db.sqlite3).")
-    parser.add_argument("--direction", type=str, default="maximize", choices=["maximize", "minimize"], help="Optimization direction.")
+    parser = argparse.ArgumentParser(
+        description="Optimize Market Maker Bot parameters using Optuna."
+    )
+    parser.add_argument(
+        "--trials", type=int, default=50, help="Number of optimization trials."
+    )
+    parser.add_argument(
+        "--study-name",
+        type=str,
+        default="market_maker_optimization",
+        help="Name of the Optuna study.",
+    )
+    parser.add_argument(
+        "--storage",
+        type=str,
+        default=None,
+        help="Optuna storage URL (e.g., sqlite:///db.sqlite3).",
+    )
+    parser.add_argument(
+        "--direction",
+        type=str,
+        default="maximize",
+        choices=["maximize", "minimize"],
+        help="Optimization direction.",
+    )
 
     args = parser.parse_args()
 
@@ -101,7 +124,7 @@ def main():
         study_name=args.study_name,
         direction=args.direction,
         storage=args.storage,
-        load_if_exists=True
+        load_if_exists=True,
     )
 
     logger.info(f"Starting optimization with {args.trials} trials...")
@@ -117,6 +140,7 @@ def main():
     df_results = study.trials_dataframe()
     df_results.to_csv(f"{args.study_name}_results.csv", index=False)
     logger.info(f"Optimization results saved to {args.study_name}_results.csv")
+
 
 if __name__ == "__main__":
     main()

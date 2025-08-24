@@ -4,4 +4,7 @@ python-dotenv
 pybit
 google-generativeai
 pandas
+numpy
+matplotlib
+seaborn
 pandas-ta

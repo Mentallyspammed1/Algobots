@@ -1,8 +1,9 @@
 import asyncio
+from datetime import datetime, timezone
+
+from backtest import BacktestParams, MarketMakerBacktester  # Updated import
 from config import Config
 from market_maker import MarketMaker
-from backtest import MarketMakerBacktester, BacktestParams # Updated import
-from datetime import datetime, timezone
 
 
 async def main():

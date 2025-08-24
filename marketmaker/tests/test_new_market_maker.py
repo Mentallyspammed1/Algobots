@@ -1,14 +1,15 @@
-import unittest
-from unittest.mock import MagicMock, patch
-import sys
 import os
+import sys
+import unittest
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from market_maker import BybitRest, PublicWS, PrivateWS, Quoter, Protection, MarketMaker
 from config import Config
+from market_maker import BybitRest, MarketMaker, PrivateWS, Protection, PublicWS, Quoter
+
 
 class TestNewMarketMakerComponents(unittest.TestCase):
 
@@ -23,7 +24,7 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.mock_http.amend_batch_order.return_value = {"retCode": 0, "retMsg": "SUCCESS"}
         self.mock_http.cancel_batch_order.return_value = {"retCode": 0, "retMsg": "SUCCESS"}
         self.mock_http.set_trading_stop.return_value = {"retCode": 0, "retMsg": "SUCCESS"}
-        
+
         # Mock get_instruments_info directly on the mock_http instance
         self.mock_http.get_instruments_info.return_value = {
             "result": {"list": [{"priceFilter": {"tickSize": "0.5"}, "lotSizeFilter": {"qtyStep": "0.001", "minNotionalValue": "10"}}]}
@@ -32,10 +33,10 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         # Patch the HTTP and WebSocket classes in pybit.unified_trading
         patcher_http = patch('pybit.unified_trading.HTTP', return_value=self.mock_http)
         patcher_websocket = patch('pybit.unified_trading.WebSocket', return_value=self.mock_websocket)
-        
+
         self.mock_http_class = patcher_http.start()
         self.mock_websocket_class = patcher_websocket.start()
-        
+
         self.addCleanup(patcher_http.stop)
         self.addCleanup(patcher_websocket.stop)
 

@@ -1,8 +1,7 @@
-import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from backtest import run_backtest
-from market_maker import MarketMaker   # adjust import
+from market_maker import MarketMaker  # adjust import
 
 if __name__ == "__main__":
     bot = MarketMaker()  # Uses your Config; session set to None by backtester

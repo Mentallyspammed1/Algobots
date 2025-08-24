@@ -1,537 +1,529 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyrmethus's Neon Bybit Bot Grimoire</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Pyrmethus Neon Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        :root {
+            --bg-color: #0d0c0f;
+            --primary-color: #1a1625;
+            --secondary-color: #2a2438;
+            --text-color: #e0e0e0;
+            --accent-color: #00f7ff;
+            --green-color: #00ff7f;
+            --red-color: #ff0055;
+            --yellow-color: #faff00;
+            --font-family: 'Roboto Mono', monospace;
+            --header-font: 'Orbitron', sans-serif;
+        }
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #020617; /* slate-950 */
-            color: #E2E8F0; /* slate-200 */
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            background-image: 
+                linear-gradient(rgba(0, 247, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 247, 255, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+            color: var(--text-color);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
         }
-        .neon-border {
-            border: 2px solid;
-            border-image-slice: 1;
-            border-image-source: linear-gradient(to right, #a855f7, #ec4899, #6ee7b7);
-            border-radius: 12px;
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 15px;
         }
-        .neon-text-glow {
-            text-shadow: 0 0 5px #ec4899, 0 0 10px #ec4899, 0 0 15px #ec4899;
+        .card {
+            background-color: rgba(26, 22, 37, 0.85);
+            backdrop-filter: blur(5px);
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--accent-color);
+            box-shadow: 0 0 15px rgba(0, 247, 255, 0.2), inset 0 0 5px rgba(0, 247, 255, 0.1);
+            display: flex;
+            flex-direction: column;
         }
-        .bg-gradient-neon {
-            background-image: linear-gradient(to right, #a855f7, #ec4899);
+        .card h2, .card h3 {
+            font-family: var(--header-font);
+            margin-top: 0;
+            color: var(--accent-color);
+            text-shadow: 0 0 5px var(--accent-color), 0 0 10px var(--accent-color);
+            border-bottom: 1px solid var(--secondary-color);
+            padding-bottom: 10px;
         }
-        .scrollable-log {
-            overflow-y: auto;
-            max-height: 24rem; /* 96 tall */
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        .llm-button-glow {
-            box-shadow: 0 0 5px #a855f7, 0 0 10px #a855f7, 0 0 15px #a855f7;
-        }
-        /* Enhanced animations */
-        @keyframes pulse-neon {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-        .pulse-neon {
-            animation: pulse-neon 2s ease-in-out infinite;
-        }
-        .transition-all {
-            transition: all 0.3s ease;
-        }
-        /* Loading spinner */
-        .spinner {
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-left-color: #ec4899;
+        .status-indicator {
+            width: 15px;
+            height: 15px;
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-left: 8px;
-            vertical-align: middle;
+            background-color: var(--red-color);
+            box-shadow: 0 0 10px var(--red-color);
+            transition: background-color 0.5s, box-shadow 0.5s;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .status-indicator.running { 
+            background-color: var(--green-color);
+            box-shadow: 0 0 10px var(--green-color);
         }
-        /* Enhanced log styling */
+        .form-grid, .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .form-group { display: flex; flex-direction: column; }
+        label { font-size: 0.9em; color: var(--accent-color); margin-bottom: 5px; text-shadow: 0 0 3px var(--accent-color);}
+        input, select {
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            border: 1px solid var(--accent-color);
+            border-radius: 4px;
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: var(--font-family);
+        }
+        input:focus, select:focus {
+            outline: none;
+            box-shadow: 0 0 10px var(--accent-color);
+        }
+        button {
+            background-color: var(--accent-color);
+            color: var(--bg-color);
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: var(--header-font);
+            transition: all 0.3s;
+            text-shadow: 0 0 5px var(--bg-color);
+            box-shadow: 0 0 10px var(--accent-color);
+        }
+        button:hover { 
+            background-color: var(--bg-color);
+            color: var(--accent-color);
+            box-shadow: 0 0 15px var(--accent-color), inset 0 0 5px var(--accent-color);
+        }
+        #stop-bot-btn { 
+            background-color: var(--red-color); 
+            box-shadow: 0 0 10px var(--red-color);
+        }
+        #stop-bot-btn:hover { 
+            background-color: var(--bg-color);
+            color: var(--red-color);
+            box-shadow: 0 0 15px var(--red-color), inset 0 0 5px var(--red-color);
+        }
+        .data-point {
+            background-color: var(--secondary-color);
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 3px solid var(--accent-color);
+        }
+        .data-point .label { font-size: 0.8em; color: #aaa; }
+        .data-point .value { font-size: 1.2em; font-weight: bold; }
+        .prominent-price {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        .prominent-price .label {
+            font-size: 1em;
+            color: var(--accent-color);
+        }
+        .prominent-price .value {
+            font-family: var(--header-font);
+            font-size: 2.5em;
+            font-weight: bold;
+            text-shadow: 0 0 8px var(--text-color);
+        }
+        .value.up { 
+            color: var(--green-color); 
+            text-shadow: 0 0 5px var(--green-color);
+        }
+        .value.down { 
+            color: var(--red-color);
+            text-shadow: 0 0 5px var(--red-color);
+        }
+        #logs-container {
+            background-color: #111;
+            border-radius: 4px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-size: 0.9em;
+            border: 1px solid var(--secondary-color);
+        }
         .log-entry {
             padding: 2px 0;
-            border-left: 2px solid transparent;
-            padding-left: 8px;
-            margin: 2px 0;
-            transition: all 0.2s ease;
+            border-bottom: 1px solid #222;
         }
-        .log-entry:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            border-left-color: #ec4899;
+        .log-entry .timestamp { color: #888; }
+        .log-entry .level-info { color: #ccc; }
+        .log-entry .level-success { color: var(--green-color); }
+        .log-entry .level-warning { color: var(--yellow-color); }
+        .log-entry .level-error { color: var(--red-color); }
+        .log-entry .level-signal { color: var(--accent-color); font-weight: bold; text-shadow: 0 0 5px var(--accent-color); }
+        #gemini-insight-response {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: var(--secondary-color);
+            border-radius: 4px;
+            white-space: pre-wrap;
+            border: 1px solid var(--accent-color);
+            box-shadow: inset 0 0 8px rgba(0, 247, 255, 0.2);
         }
-        .log-entry.error { border-left-color: #F87171; } /* Red */
-        .log-entry.success { border-left-color: #86EFAC; } /* Green */
-        .log-entry.info { border-left-color: #67E8F9; } /* Cyan */
-        .log-entry.warning { border-left-color: #FACC15; } /* Yellow */
-        .log-entry.signal { border-left-color: #EC4899; } /* Pink */
-        .log-entry.llm { border-left-color: #A855F7; } /* Purple */
     </style>
 </head>
-<body class="bg-slate-950 text-slate-200 p-4 md:p-8">
+<body>
 
-    <div class="max-w-4xl mx-auto space-y-8">
-        <!-- Main Title and Subtitle -->
-        <header class="text-center space-y-2 mb-8">
-            <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-pink-500 to-green-300 neon-text-glow pulse-neon">
-                Pyrmethus's Neon Grimoire
-            </h1>
-            <p class="text-lg text-slate-400">Transcribing the Supertrend incantation to the digital ether.</p>
-        </header>
-
-        <!-- Configuration Section -->
-        <div class="bg-slate-800 p-6 rounded-xl shadow-lg border-2 border-slate-700 transition-all hover:border-purple-600">
-            <h2 class="text-2xl font-bold mb-4 text-purple-400">Configuration</h2>
-            <p class="text-sm text-slate-500 mb-4">
-                <strong class="text-red-400">WARNING:</strong> API keys are sent to the backend. Ensure your backend is secure.
-            </p>
-            <div class="grid md:grid-cols-2 gap-4">
-                
-                <div>
-                    <label for="symbol" class="block text-sm font-medium mb-1 text-slate-300">Trading Symbol</label>
-                    <select id="symbol" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                        <option value="BTCUSDT" selected>BTCUSDT</option>
-                        <option value="ETHUSDT">ETHUSDT</option>
-                        <option value="SOLUSDT">SOLUSDT</option>
-                        <option value="BNBUSDT">BNBUSDT</option>
-                        <option value="XRPUSDT">XRPUSDT</option>
+    <div class="card">
+        <div class="card-header">
+            <h2>Bot Controls</h2>
+            <div id="status-indicator" class="status-indicator" title="Bot Status"></div>
+        </div>
+        <form id="bot-config-form">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="symbol">Symbol</label>
+                    <select id="symbol" name="symbol"></select>
+                </div>
+                <div class="form-group">
+                    <label for="interval">Interval</label>
+                    <select id="interval" name="interval">
+                        <option value="1">1m</option>
+                        <option value="15">15m</option>
+                        <option value="30">30m</option>
+                        <option value="60" selected>1h</option>
+                        <option value="D">1D</option>
                     </select>
                 </div>
-                <div>
-                    <label for="interval" class="block text-sm font-medium mb-1 text-slate-300">Interval (in min)</label>
-                    <select id="interval" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                        <option value="1">1 min</option>
-                        <option value="5">5 min</option>
-                        <option value="15">15 min</option>
-                        <option value="30">30 min</option>
-                        <option value="60" selected>1 hour</option>
-                        <option value="240">4 hours</option>
-                        <option value="D">1 day</option>
-                    </select>
+                <div class="form-group">
+                    <label for="leverage">Leverage</label>
+                    <input type="number" id="leverage" name="leverage" value="10" min="1" max="100">
                 </div>
-                <div>
-                    <label for="leverage" class="block text-sm font-medium mb-1 text-slate-300">Leverage</label>
-                    <input type="number" id="leverage" value="10" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                <div class="form-group">
+                    <label for="riskPct">Risk %</label>
+                    <input type="number" id="riskPct" name="riskPct" value="1" step="0.1" min="0.1" max="5">
                 </div>
-                <div>
-                    <label for="riskPct" class="block text-sm font-medium mb-1 text-slate-300">Risk % per Trade</label>
-                    <input type="number" id="riskPct" value="1" step="0.1" min="0.1" max="10" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                <div class="form-group">
+                    <label for="stopLossPct">Stop Loss %</label>
+                    <input type="number" id="stopLossPct" name="stopLossPct" value="1.0" step="0.1">
                 </div>
-                <div>
-                    <label for="stopLossPct" class="block text-sm font-medium mb-1 text-slate-300">Stop Loss % (from Entry)</label>
-                    <input type="number" id="stopLossPct" value="2" step="0.1" min="0.1" max="10" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                <div class="form-group">
+                    <label for="takeProfitPct">Take Profit %</label>
+                    <input type="number" id="takeProfitPct" name="takeProfitPct" value="2.0" step="0.1">
                 </div>
-                <div>
-                    <label for="takeProfitPct" class="block text-sm font-medium mb-1 text-slate-300">Take Profit % (from Entry)</label>
-                    <input type="number" id="takeProfitPct" value="5" step="0.1" min="0.1" max="20" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                 <div class="form-group">
+                    <label for="trailingStopPct">Trailing SL %</label>
+                    <input type="number" id="trailingStopPct" name="trailingStopPct" value="0.5" step="0.1">
                 </div>
-                <div>
-                    <label for="efPeriod" class="block text-sm font-medium mb-1 text-slate-300">Ehlers-Fisher Period</label>
-                    <input type="number" id="efPeriod" value="10" min="1" max="50" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="macdFastPeriod" class="block text-sm font-medium mb-1 text-slate-300">MACD Fast Period</label>
-                    <input type="number" id="macdFastPeriod" value="12" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="macdSlowPeriod" class="block text-sm font-medium mb-1 text-slate-300">MACD Slow Period</label>
-                    <input type="number" id="macdSlowPeriod" value="26" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="macdSignalPeriod" class="block text-sm font-medium mb-1 text-slate-300">MACD Signal Period</label>
-                    <input type="number" id="macdSignalPeriod" value="9" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="bbPeriod" class="block text-sm font-medium mb-1 text-slate-300">Bollinger Bands Period</label>
-                    <input type="number" id="bbPeriod" value="20" min="1" max="100" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
-                </div>
-                <div>
-                    <label for="bbStdDev" class="block text-sm font-medium mb-1 text-slate-300">Bollinger Bands Std Dev</label>
-                    <input type="number" id="bbStdDev" value="2.0" step="0.1" min="0.1" max="5.0" class="w-full p-2 rounded bg-slate-700 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                <div class="form-group">
+                    <label for="testnet">Testnet</label>
+                    <input type="checkbox" id="testnet" name="testnet" checked>
                 </div>
             </div>
-            <button id="startBot" class="mt-6 w-full py-3 rounded-lg bg-gradient-neon text-white font-bold transition-transform transform hover:scale-105 shadow-md shadow-pink-500/50" aria-live="polite">
-                <span id="buttonText">Start the Bot</span>
-            </button>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" id="start-bot-btn">Start Bot</button>
+                <button type="button" id="stop-bot-btn">Stop Bot</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="grid-container">
+        <div class="card">
+            <h3 id="market-data-title">Market Data</h3>
+            <div class="prominent-price">
+                <div class="label">Current Price</div>
+                <div class="value" id="currentPrice">---</div>
+            </div>
+            <div class="data-grid">
+                <div class="data-point"><span class="label">Change (1m)</span><div class="value" id="priceChange">---</div></div>
+                <div class="data-point"><span class="label">Change (24h)</span><div class="value" id="priceChange24h">---</div></div>
+                <div class="data-point"><span class="label">Volume (24h)</span><div class="value" id="volume24h">---</div></div>
+                <div class="data-point"><span class="label">Market Condition</span><div class="value" id="marketCondition">---</div></div>
+                <div class="data-point"><span class="label">Next Candle</span><div class="value" id="nextCandle">---</div></div>
+            </div>
         </div>
 
-        <!-- Dashboard Section -->
-        <div class="bg-slate-800 p-6 rounded-xl shadow-lg border-2 border-slate-700 transition-all hover:border-green-600">
-            <h2 class="text-2xl font-bold mb-4 text-green-400">Live Dashboard</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-cyan-500">
-                    <p class="text-sm text-slate-400">Current Price</p>
-                    <p id="currentPrice" class="text-xl font-bold text-cyan-400 mt-1">---</p>
-                    <p id="priceChange" class="text-xs text-slate-500 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-fuchsia-500">
-                    <p class="text-sm text-slate-400">Supertrend Direction</p>
-                    <p id="stDirection" class="text-xl font-bold text-fuchsia-400 mt-1">---</p>
-                    <p id="stValue" class="text-xs text-slate-500 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-yellow-500">
-                    <p class="text-sm text-slate-400">RSI Value</p>
-                    <p id="rsiValue" class="text-xl font-bold text-yellow-400 mt-1">---</p>
-                    <p id="rsiStatus" class="text-xs text-slate-500 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-pink-500">
-                    <p class="text-sm text-slate-400">Current Position</p>
-                    <p id="currentPosition" class="text-xl font-bold text-pink-400 mt-1">None</p>
-                    <p id="positionPnL" class="text-xs text-slate-500 mt-1">---</p>
-                </div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mt-4">
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-blue-500">
-                    <p class="text-sm text-slate-400">Account Balance</p>
-                    <p id="accountBalance" class="text-xl font-bold text-blue-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-purple-500">
-                    <p class="text-sm text-slate-400">Ehlers-Fisher</p>
-                    <p id="fisherValue" class="text-xl font-bold text-purple-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-indigo-500">
-                    <p class="text-sm text-slate-400">MACD Line</p>
-                    <p id="macdLine" class="text-xl font-bold text-indigo-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-blue-500">
-                    <p class="text-sm text-slate-400">MACD Signal</p>
-                    <p id="macdSignal" class="text-xl font-bold text-blue-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-cyan-500">
-                    <p class="text-sm text-slate-400">MACD Histogram</p>
-                    <p id="macdHistogram" class="text-xl font-bold text-cyan-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-green-500">
-                    <p class="text-sm text-slate-400">BB Middle</p>
-                    <p id="bbMiddle" class="text-xl font-bold text-green-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-lime-500">
-                    <p class="text-sm text-slate-400">BB Upper</p>
-                    <p id="bbUpper" class="text-xl font-bold text-lime-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-teal-500">
-                    <p class="text-sm text-slate-400">BB Lower</p>
-                    <p id="bbLower" class="text-xl font-bold text-teal-400 mt-1">---</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-emerald-500">
-                    <p class="text-sm text-slate-400">Total Trades</p>
-                    <p id="totalTrades" class="text-xl font-bold text-emerald-400 mt-1">0</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-orange-500">
-                    <p class="text-sm text-slate-400">Win Rate</p>
-                    <p id="winRate" class="text-xl font-bold text-orange-400 mt-1">0%</p>
-                </div>
-                <div class="bg-slate-900 p-4 rounded-lg border-2 border-slate-600 transition-all hover:border-violet-500">
-                    <p class="text-sm text-slate-400">Bot Status</p>
-                    <p id="botStatus" class="text-xl font-bold text-violet-400 mt-1">Idle</p>
-                </div>
-            </div>
-            <div class="mt-6 flex gap-4">
-                <button id="askGemini" class="flex-1 py-3 rounded-lg bg-slate-700 text-purple-300 font-bold transition-transform transform hover:scale-105 llm-button-glow" aria-live="polite">
-                    ✨ Ask Gemini for Market Insight
-                </button>
-                <button id="exportLogs" class="flex-1 py-3 rounded-lg bg-slate-700 text-blue-300 font-bold transition-transform transform hover:scale-105 hover:shadow-lg hover:shadow-blue-500/50">
-                    📊 Export Trading Logs
-                </button>
+        <div class="card">
+            <h3>Indicator Matrix</h3>
+            <div class="data-grid">
+                <div class="data-point"><span class="label">Supertrend</span><div class="value" id="stDirection">---</div></div>
+                <div class="data-point"><span class="label">ST Value</span><div class="value" id="stValue">---</div></div>
+                <div class="data-point"><span class="label">RSI</span><div class="value" id="rsiValue">---</div></div>
+                <div class="data-point"><span class="label">Fisher Transform</span><div class="value" id="fisherValue">---</div></div>
+                <div class="data-point"><span class="label">MACD Line</span><div class="value" id="macdLine">---</div></div>
+                <div class="data-point"><span class="label">MACD Signal</span><div class="value" id="macdSignal">---</div></div>
+                <div class="data-point"><span class="label">MACD Hist</span><div class="value" id="macdHistogram">---</div></div>
+                <div class="data-point"><span class="label">BB Upper</span><div class="value" id="bbUpper">---</div></div>
+                <div class="data-point"><span class="label">BB Middle</span><div class="value" id="bbMiddle">---</div></div>
+                <div class="data-point"><span class="label">BB Lower</span><div class="value" id="bbLower">---</div></div>
             </div>
         </div>
-        
-        <!-- Log Section -->
-        <div class="bg-slate-800 p-6 rounded-xl shadow-lg border-2 border-slate-700 transition-all hover:border-blue-600">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-blue-400">Ritual Log</h2>
-                <button id="clearLogs" class="px-4 py-2 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-all text-sm">
-                    Clear Logs
-                </button>
+
+        <div class="card">
+            <h3>Position & Account</h3>
+            <div class="data-grid">
+                <div class="data-point"><span class="label">Current Position</span><div class="value" id="currentPosition">None</div></div>
+                <div class="data-point"><span class="label">Unrealized PnL</span><div class="value" id="positionPnL">---</div></div>
+                <div class="data-point"><span class="label">Unrealized PnL %</span><div class="value" id="positionPnLPct">---</div></div>
+                <div class="data-point"><span class="label">Account Balance</span><div class="value" id="accountBalance">---</div></div>
+                <div class="data-point"><span class="label">Available Balance</span><div class="value" id="availableBalance">---</div></div>
             </div>
-            <div id="logArea" class="bg-slate-900 p-4 rounded-lg scrollable-log text-xs text-slate-300 font-mono" aria-live="polite">
-                <div class="log-entry info">Awaiting your command, Master Pyrmethus...</div>
+        </div>
+
+        <div class="card">
+            <h3>Performance Analytics</h3>
+            <div class="data-grid">
+                <div class="data-point"><span class="label">Total Trades</span><div class="value" id="totalTrades">0</div></div>
+                <div class="data-point"><span class="label">Win Rate</span><div class="value" id="winRate">0%</div></div>
+                <div class="data-point"><span class="label">Profit Factor</span><div class="value" id="profitFactor">0.00</div></div>
+                <div class="data-point"><span class="label">Expectancy</span><div class="value" id="expectancy">0.00</div></div>
+                <div class="data-point"><span class="label">Health Status</span><div class="value" id="healthStatus">---</div></div>
             </div>
         </div>
     </div>
 
-    <script>
-        // --- Core JavaScript Grimoire --- 
-        // This frontend communicates with a Python Flask backend.
-        // API keys are sent to the backend and are NOT stored client-side.
+    <div class="card">
+        <h3>Logs</h3>
+        <div id="logs-container"></div>
+    </div>
+    
+    <div class="card">
+        <h3>Gemini AI Insight</h3>
+        <form id="gemini-form">
+            <div class="form-group">
+                <label for="gemini-prompt">Ask Gemini for market analysis:</label>
+                <input type="text" id="gemini-prompt" placeholder="e.g., 'Analyze the current trend for BTCUSDT on the 1h chart.'">
+            </div>
+            <button type="submit">Get Insight</button>
+        </form>
+        <div id="gemini-insight-response">AI response will appear here...</div>
+    </div>
 
-        const logArea = document.getElementById('logArea');
-        const currentPriceEl = document.getElementById('currentPrice');
-        const priceChangeEl = document.getElementById('priceChange');
-        const stDirectionEl = document.getElementById('stDirection');
-        const stValueEl = document.getElementById('stValue');
-        const rsiValueEl = document.getElementById('rsiValue');
-        const rsiStatusEl = document.getElementById('rsiStatus');
-        const currentPositionEl = document.getElementById('currentPosition');
-        const positionPnLEl = document.getElementById('positionPnL');
-        const accountBalanceEl = document.getElementById('accountBalance');
-        const totalTradesEl = document.getElementById('totalTrades');
-        const winRateEl = document.getElementById('winRate');
-        const botStatusEl = document.getElementById('botStatus');
-        const fisherValueEl = document.getElementById('fisherValue');
-        const macdLineEl = document.getElementById('macdLine');
-        const macdSignalEl = document.getElementById('macdSignal');
-        const macdHistogramEl = document.getElementById('macdHistogram');
-        const bbMiddleEl = document.getElementById('bbMiddle');
-        const bbUpperEl = document.getElementById('bbUpper');
-        const bbLowerEl = document.getElementById('bbLower');
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const API_URL = window.location.origin;
+    let statusInterval;
 
-        const startBotBtn = document.getElementById('startBot');
-        const buttonTextEl = document.getElementById('buttonText');
-        const symbolInput = document.getElementById('symbol');
-        const intervalInput = document.getElementById('interval');
-        const leverageInput = document.getElementById('leverage');
-        const riskPctInput = document.getElementById('riskPct');
-        const stopLossPctInput = document.getElementById('stopLossPct');
-        const takeProfitPctInput = document.getElementById('takeProfitPct');
-        const efPeriodInput = document.getElementById('efPeriod');
-        const macdFastPeriodInput = document.getElementById('macdFastPeriod');
-        const macdSlowPeriodInput = document.getElementById('macdSlowPeriod');
-        const macdSignalPeriodInput = document.getElementById('macdSignalPeriod');
-        const bbPeriodInput = document.getElementById('bbPeriod');
-        const bbStdDevInput = document.getElementById('bbStdDev');
+    const form = document.getElementById('bot-config-form');
+    const startBtn = document.getElementById('start-bot-btn');
+    const stopBtn = document.getElementById('stop-bot-btn');
+    const statusIndicator = document.getElementById('status-indicator');
+    const symbolSelect = document.getElementById('symbol');
+    const geminiForm = document.getElementById('gemini-form');
+    const geminiResponseEl = document.getElementById('gemini-insight-response');
+    const marketDataTitle = document.getElementById('market-data-title');
 
-        const askGeminiBtn = document.getElementById('askGemini');
-        const clearLogsBtn = document.getElementById('clearLogs');
-        const exportLogsBtn = document.getElementById('exportLogs');
+    const dashboardFields = {
+        currentPrice: 'currentPrice', priceChange: 'priceChange', priceChange24h: 'priceChange24h',
+        volume24h: 'volume24h', stDirection: 'stDirection', stValue: 'stValue', rsiValue: 'rsiValue',
+        fisherValue: 'fisherValue', macdLine: 'macdLine', macdSignal: 'macdSignal', macdHistogram: 'macdHistogram',
+        bbUpper: 'bbUpper', bbMiddle: 'bbMiddle', bbLower: 'bbLower', currentPosition: 'currentPosition', 
+        positionPnL: 'positionPnL', positionPnLPct: 'positionPnLPct', accountBalance: 'accountBalance', 
+        availableBalance: 'availableBalance', botStatus: 'botStatus', marketCondition: 'marketCondition', 
+        nextCandle: 'nextCandle', healthStatus: 'healthStatus'
+    };
+    
+    const analyticsFields = {
+        totalTrades: 'totalTrades', winRate: 'winRate', profitFactor: 'profitFactor', expectancy: 'expectancy'
+    };
 
-        let botRunning = false;
-        let updateIntervalId = null; // For fetching dashboard updates
-
-        const BACKEND_URL = 'http://127.0.0.1:5000'; // Assuming Flask backend runs on this address
-
-        // UI Log function with neon colors
-        function log(message, type = 'info') {
-            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-            let color = '#E2E8F0'; // slate-200 (default)
-            
-            switch (type) {
-                case 'success': color = '#86EFAC'; break; // green-300
-                case 'info':    color = '#67E8F9'; break; // cyan-300
-                case 'warning': color = '#FACC15'; break; // yellow-400
-                case 'error':   color = '#F87171'; break; // red-400
-                case 'signal':  color = '#EC4899'; break; // pink-400
-                case 'llm':     color = '#A855F7'; break; // purple-500
+    // --- API Functions ---
+    async function fetchApi(endpoint, options = {}) {
+        try {
+            const response = await fetch(`${API_URL}${endpoint}`, options);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
             }
+            return await response.json();
+        } catch (error) {
+            console.error(`Error fetching ${endpoint}:`, error);
+            alert(`API Error: ${error.message}`);
+            return null;
+        }
+    }
 
-            const logEntryDiv = document.createElement('div');
-            logEntryDiv.className = `log-entry ${type}`;
-            logEntryDiv.innerHTML = `<span style="color: #64748B;">[${timestamp}]</span> <span style="color: ${color};">${message}</span>`;
-            logArea.appendChild(logEntryDiv);
-            logArea.scrollTop = logArea.scrollHeight; // Auto-scroll
+    // --- UI Update Functions ---
+    function updateDashboard(data) {
+        if (!data) return;
+
+        if (data.config && data.config.symbol) {
+            marketDataTitle.textContent = `Market Data [${data.config.symbol}]`;
+        } else {
+            marketDataTitle.textContent = 'Market Data';
         }
 
-        function updateBotStatusUI(status, type = 'info') {
-            botStatusEl.innerText = status;
-            switch(type) {
-                case 'running': botStatusEl.className = 'text-xl font-bold text-green-400 mt-1'; break;
-                case 'idle': botStatusEl.className = 'text-xl font-bold text-violet-400 mt-1'; break;
-                case 'error': botStatusEl.className = 'text-xl font-bold text-red-400 mt-1'; break;
-                case 'scanning': botStatusEl.className = 'text-xl font-bold text-yellow-400 mt-1'; break;
-            }
-        }
-
-        async function fetchDashboardStatus() {
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/status`);
-                const data = await response.json();
-
-                if (data.running !== botRunning) {
-                    botRunning = data.running;
-                    if (botRunning) {
-                        buttonTextEl.innerText = 'Stop the Bot';
-                        startBotBtn.classList.remove('bg-gradient-neon', 'shadow-pink-500/50');
-                        startBotBtn.classList.add('bg-red-600', 'shadow-red-500/50');
-                    } else {
-                        buttonTextEl.innerText = 'Start the Bot';
-                        startBotBtn.classList.remove('bg-red-600', 'shadow-red-500/50');
-                        startBotBtn.classList.add('bg-gradient-neon', 'shadow-pink-500/50');
-                    }
+        // Update main dashboard
+        for (const [key, id] of Object.entries(dashboardFields)) {
+            const el = document.getElementById(id);
+            if (el && data.dashboard[key] !== undefined) {
+                const value = data.dashboard[key];
+                el.textContent = value;
+                
+                // Add color coding
+                el.classList.remove('up', 'down');
+                if (id === 'priceChange' || id === 'priceChange24h' || id === 'positionPnL' || id === 'positionPnLPct' || id === 'macdHistogram') {
+                    if (parseFloat(value) > 0) el.classList.add('up');
+                    if (parseFloat(value) < 0) el.classList.add('down');
                 }
-
-                const dashboard = data.dashboard;
-                currentPriceEl.innerText = dashboard.currentPrice;
-                priceChangeEl.innerText = dashboard.priceChange;
-                stDirectionEl.innerText = dashboard.stDirection;
-                stValueEl.innerText = `Value: ${dashboard.stValue}`;
-                rsiValueEl.innerText = dashboard.rsiValue;
-                rsiStatusEl.innerText = `Status: ${dashboard.rsiStatus}`;
-                currentPositionEl.innerText = dashboard.currentPosition;
-                positionPnLEl.innerText = `PnL: ${dashboard.positionPnL}`;
-                accountBalanceEl.innerText = dashboard.accountBalance;
-                totalTradesEl.innerText = dashboard.totalTrades;
-                winRateEl.innerText = dashboard.winRate;
-                fisherValueEl.innerText = dashboard.fisherValue;
-                macdLineEl.innerText = dashboard.macdLine;
-                macdSignalEl.innerText = dashboard.macdSignal;
-                macdHistogramEl.innerText = dashboard.macdHistogram;
-                bbMiddleEl.innerText = dashboard.bbMiddle;
-                bbUpperEl.innerText = dashboard.bbUpper;
-                bbLowerEl.innerText = dashboard.bbLower;
-                updateBotStatusUI(dashboard.botStatus, dashboard.botStatus.toLowerCase());
-
-                // Update logs
-                logArea.innerHTML = ''; // Clear existing logs
-                data.logs.forEach(entry => {
-                    log(entry.message, entry.level);
-                });
-
-            } catch (error) {
-                log(`Failed to fetch dashboard status: ${error.message}`, 'error');
-                updateBotStatusUI('Disconnected', 'error');
+                if (id === 'stDirection') {
+                    if (value === 'UP') el.classList.add('up');
+                    if (value === 'DOWN') el.classList.add('down');
+                }
             }
         }
         
-        async function _askGeminiForInsight() {
-            askGeminiBtn.disabled = true;
-            askGeminiBtn.innerHTML = 'Consulting the Oracle... <span class="spinner"></span>';
-            log('Consulting the Gemini Oracle for market insight...', 'llm');
-            
-            const currentPrice = currentPriceEl.innerText.replace('$', '');
-            const stDirection = stDirectionEl.innerText;
-            const rsiValue = rsiValueEl.innerText;
-
-            const prompt = `Analyze the current market conditions for ${symbolInput.value} based on the following:\n- Current Price: ${currentPrice}\n- Supertrend Direction: ${stDirection}\n- RSI Value: ${rsiValue}\n\nProvide a concise, neutral market analysis. Focus on interpreting these indicators and potential price implications. Avoid financial advice or predicting specific price targets. Max 100 words.`;
-            
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/gemini-insight`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: prompt })
-                });
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    log('--- Gemini Insight ---', 'llm');
-                    log(data.insight, 'llm');
-                    log('--------------------', 'llm');
-                } else {
-                    log(`Failed to get Gemini Insight: ${data.message}`, 'error');
-                }
-
-            } catch (e) {
-                log(`Network error getting Gemini Insight: ${e.message}`, 'error');
-            } finally {
-                askGeminiBtn.disabled = false;
-                askGeminiBtn.innerHTML = '✨ Ask Gemini for Market Insight';
-            }
-        }
-
-        function exportLogs() {
-            const allLogEntries = Array.from(logArea.children).map(div => div.innerText).join('\n');
-            const blob = new Blob([allLogEntries], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `pyrmethus_grimoire_logs_${new Date().toISOString().slice(0, 10)}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            log('Logs exported successfully.', 'info');
-        }
-
-        function clearLogs() {
-            logArea.innerHTML = '<div class="log-entry info">Logs cleared. Awaiting your command, Master Pyrmethus...</div>';
-            log('Log area cleared.', 'info');
-        }
-
-        // --- Main Ritual Activation ---
-        async function startBot() {
-            if (botRunning) {
-                // Stop the bot
-                try {
-                    const response = await fetch(`${BACKEND_URL}/api/stop`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    const data = await response.json();
-                    if (data.status === 'success') {
-                        log('The ritual is paused.', 'warning');
-                        botRunning = false;
-                        clearInterval(updateIntervalId);
-                        updateBotStatusUI('Idle', 'idle');
-                        buttonTextEl.innerText = 'Start the Bot';
-                        startBotBtn.classList.remove('bg-red-600', 'shadow-red-500/50');
-                        startBotBtn.classList.add('bg-gradient-neon', 'shadow-pink-500/50');
-                    } else {
-                        log(`Failed to stop bot: ${data.message}`, 'error');
+        // Update analytics
+        for (const [key, id] of Object.entries(analyticsFields)) {
+            const el = document.getElementById(id);
+            if (el && data.analytics[key] !== undefined) {
+                let value = data.analytics[key];
+                if (typeof value === 'number') {
+                    if (['winRate', 'profitFactor', 'expectancy'].includes(key)) {
+                        value = value.toFixed(2);
                     }
-                } catch (error) {
-                    log(`Network error stopping bot: ${error.message}`, 'error');
                 }
-                return;
-            }
-            
-            log('Credentials verified. Initiating the ritual...', 'success');
-
-            const config = {
-                symbol: symbolInput.value.toUpperCase(),
-                interval: intervalInput.value,
-                leverage: parseInt(leverageInput.value),
-                riskPct: parseFloat(riskPctInput.value),
-                stopLossPct: parseFloat(stopLossPctInput.value),
-                takeProfitPct: parseFloat(takeProfitPctInput.value),
-                efPeriod: parseInt(efPeriodInput.value),
-                macdFastPeriod: parseInt(macdFastPeriodInput.value),
-                macdSlowPeriod: parseInt(macdSlowPeriodInput.value),
-                macdSignalPeriod: parseInt(macdSignalPeriodInput.value),
-                bbPeriod: parseInt(bbPeriodInput.value),
-                bbStdDev: parseFloat(bbStdDevInput.value),
-                price_precision: 2, // Hardcoded for BTCUSDT, ideally fetched from exchange info
-                qty_precision: 4,   // Hardcoded for BTCUSDT
-                supertrend_length: 10,
-                supertrend_multiplier: 3.0,
-                rsi_length: 14,
-                rsi_overbought: 70,
-                rsi_oversold: 30,
-            };
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    log('The bot is now active. Its eyes are open to the market winds.', 'success');
-                    botRunning = true;
-                    buttonTextEl.innerText = 'Stop the Bot';
-                    startBotBtn.classList.remove('bg-gradient-neon', 'shadow-pink-500/50');
-                    startBotBtn.classList.add('bg-red-600', 'shadow-red-500/50');
-                    updateBotStatusUI('Running', 'running');
-                    // Start fetching dashboard updates every 5 seconds
-                    updateIntervalId = setInterval(fetchDashboardStatus, 5000);
-                } else {
-                    log(`Failed to start bot: ${data.message}`, 'error');
-                    updateBotStatusUI('Error', 'error');
-                }
-            } catch (error) {
-                log(`Network error starting bot: ${error.message}`, 'error');
-                updateBotStatusUI('Disconnected', 'error');
+                if (key === 'winRate') value += '%';
+                el.textContent = value;
             }
         }
 
-        // Event Listeners
-        startBotBtn.addEventListener('click', startBot);
-        askGeminiBtn.addEventListener('click', _askGeminiForInsight);
-        clearLogsBtn.addEventListener('click', clearLogs);
-        exportLogsBtn.addEventListener('click', exportLogs);
+        // Update status indicator
+        statusIndicator.classList.toggle('running', data.running);
+        statusIndicator.title = data.running ? 'Bot is Running' : 'Bot is Stopped';
+        
+        // Update logs
+        updateLogs(data.logs);
+    }
 
-        // Initial UI Update and Dashboard Fetch
-        updateBotStatusUI('Idle', 'idle');
-        fetchDashboardStatus(); // Fetch initial status
-    </script>
+    function updateLogs(logs) {
+        const logsContainer = document.getElementById('logs-container');
+        logsContainer.innerHTML = '';
+        if (logs && logs.length > 0) {
+            logs.slice().reverse().forEach(log => {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.innerHTML = `<span class="timestamp">[${log.timestamp}]</span> <span class="level-${log.level}">${log.message}</span>`;
+                logsContainer.appendChild(logEntry);
+            });
+        }
+    }
+    
+    async function populateSymbols() {
+        const data = await fetchApi('/api/symbols');
+        if (data && data.symbols) {
+            symbolSelect.innerHTML = '';
+            data.symbols.forEach(symbol => {
+                const option = document.createElement('option');
+                option.value = symbol;
+                option.textContent = symbol;
+                if (symbol === 'BTCUSDT') {
+                    option.selected = true;
+                }
+                symbolSelect.appendChild(option);
+            });
+        }
+    }
+
+    // --- Main Status Loop ---
+    async function checkStatus() {
+        const data = await fetchApi('/api/status');
+        if (data) {
+            updateDashboard(data);
+            if (data.running && !statusInterval) {
+                statusInterval = setInterval(checkStatus, 3000); // Poll faster when running
+            } else if (!data.running && statusInterval) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+            }
+        }
+    }
+
+    // --- Event Handlers ---
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const config = Object.fromEntries(formData.entries());
+        
+        // Convert numeric strings to numbers
+        Object.keys(config).forEach(key => {
+            if (!isNaN(config[key]) && config[key] !== '') {
+                config[key] = Number(config[key]);
+            }
+        });
+        config.testnet = document.getElementById('testnet').checked;
+        
+        // Add other required params from bb.py
+        config.rsi_overbought = 70;
+        config.rsi_oversold = 30;
+        config.api_error_retry_delay = 60;
+        config.indicator_wait_delay = 60;
+        
+        // Add indicator params from form or defaults
+        config.supertrend_length = 10;
+        config.supertrend_multiplier = 3;
+        config.rsi_length = 14;
+        config.ef_period = 10;
+        config.macd_fast_period = 12;
+        config.macd_slow_period = 26;
+        config.macd_signal_period = 9;
+        config.bb_period = 20;
+        config.bb_std_dev = 2;
+
+
+        const response = await fetchApi('/api/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        if (response) {
+            checkStatus(); // Immediately update status
+        }
+    });
+
+    stopBtn.addEventListener('click', async () => {
+        const response = await fetchApi('/api/stop', { method: 'POST' });
+        if (response) {
+            checkStatus(); // Immediately update status
+        }
+    });
+    
+    geminiForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const promptInput = document.getElementById('gemini-prompt');
+        const prompt = promptInput.value;
+        if (!prompt) return;
+        
+        geminiResponseEl.textContent = 'Thinking...';
+        const response = await fetchApi('/api/gemini-insight', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+        
+        if (response && response.insight) {
+            geminiResponseEl.textContent = response.insight;
+        } else {
+            geminiResponseEl.textContent = 'Failed to get insight. Check logs.';
+        }
+    });
+
+    // --- Initialization ---
+    populateSymbols();
+    checkStatus(); // Initial status check
+    setInterval(checkStatus, 10000); // Slow poll for when bot is stopped
+});
+</script>
 </body>
 </html>

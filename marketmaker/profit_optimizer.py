@@ -4,17 +4,17 @@ import json
 import logging
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Dict, Any
 
-import numpy as np
 import optuna
 import pandas as pd
 
+from backtest import BacktestParams, BybitHistoricalData, MarketMakerBacktester, from_ms
 from config import Config
-from backtest import BacktestParams, MarketMakerBacktester, BybitHistoricalData, from_ms
 
 logger = logging.getLogger("ProfitOptimizer")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 
 def parse_dt(s: str) -> datetime:
@@ -30,8 +30,10 @@ def clamp(x, lo, hi):
 def fetch_klines_once(params: BacktestParams) -> pd.DataFrame:
     logger.info("Fetching klines once for the entire optimization window...")
     df = BybitHistoricalData(params).get_klines()
-    logger.info(f"Fetched {len(df)} candles from {from_ms(int(df.start.iloc[0]))} "
-                f"to {from_ms(int(df.start.iloc[-1]))}")
+    logger.info(
+        f"Fetched {len(df)} candles from {from_ms(int(df.start.iloc[0]))} "
+        f"to {from_ms(int(df.start.iloc[-1]))}"
+    )
     return df
 
 
@@ -58,10 +60,17 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     # Order ladder - Adjust these ranges to fine-tune order ladder shape
     order_levels = tr.suggest_int("ORDER_LEVELS", 1, 8)
     min_order_size = tr.suggest_float("MIN_ORDER_SIZE", 0.001, 0.2, log=True)
-    order_size_increment = tr.suggest_float("ORDER_SIZE_INCREMENT", 0.0, min_order_size, log=False)
+    order_size_increment = tr.suggest_float(
+        "ORDER_SIZE_INCREMENT", 0.0, min_order_size, log=False
+    )
 
     # Inventory control - Adjust these ranges to fine-tune inventory management
-    max_position = tr.suggest_float("MAX_POSITION", min_order_size * order_levels, min_order_size * order_levels * 20, log=True)
+    max_position = tr.suggest_float(
+        "MAX_POSITION",
+        min_order_size * order_levels,
+        min_order_size * order_levels * 20,
+        log=True,
+    )
     inventory_extreme = tr.suggest_float("INVENTORY_EXTREME", 0.6, 1.0)
 
     # Volatility model - Adjust these ranges to fine-tune volatility parameters
@@ -96,7 +105,7 @@ def make_objective(
     metric: str,
     risk_penalty: float,
     max_dd_cap: float,
-    trials_verbose: bool
+    trials_verbose: bool,
 ):
     """
     Returns an Optuna objective callable.
@@ -107,7 +116,9 @@ def make_objective(
     def objective(trial: optuna.Trial) -> float:
         # Backtest params per-trial (can also be tuned)
         params = deepcopy(base_params)
-        params.maker_fee = trial.suggest_float("maker_fee", -0.00025, 0.0006)  # allow rebates or fees
+        params.maker_fee = trial.suggest_float(
+            "maker_fee", -0.00025, 0.0006
+        )  # allow rebates or fees
         params.volume_cap_ratio = trial.suggest_float("volume_cap_ratio", 0.05, 0.6)
         params.fill_on_touch = trial.suggest_categorical("fill_on_touch", [True, False])
         params.rng_seed = trial.suggest_int("rng_seed", 1, 10)
@@ -129,13 +140,12 @@ def make_objective(
             # Infeasible solution — penalize heavily
             score = -1e9
         else:
-            if metric == "net":
-                score = net - risk_penalty * dd
-            else:
-                score = sharpe_like
+            score = net - risk_penalty * dd if metric == "net" else sharpe_like
 
         if trials_verbose:
-            logger.info(f"Trial {trial.number}: net={net:.4f}, dd={dd:.4f}, sharpe={sharpe_like:.3f}, score={score:.5f}")
+            logger.info(
+                f"Trial {trial.number}: net={net:.4f}, dd={dd:.4f}, sharpe={sharpe_like:.3f}, score={score:.5f}"
+            )
 
         # Attach extras for inspection
         trial.set_user_attr("net_pnl", net)
@@ -147,23 +157,61 @@ def make_objective(
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Profit optimizer for MarketMaker using Optuna + Bybit historical data")
+    ap = argparse.ArgumentParser(
+        description="Profit optimizer for MarketMaker using Optuna + Bybit historical data"
+    )
     ap.add_argument("--symbol", type=str, default="BTCUSDT")
-    ap.add_argument("--category", type=str, default="linear", choices=["linear", "inverse", "spot"])
-    ap.add_argument("--interval", type=str, default="1", help="Bybit kline interval: 1,3,5,15,60,240,D,...")
-    ap.add_argument("--start", type=str, required=True, help="UTC start, e.g. 2024-06-01T00:00:00")
-    ap.add_argument("--end", type=str, required=True, help="UTC end, e.g. 2024-06-07T00:00:00")
+    ap.add_argument(
+        "--category", type=str, default="linear", choices=["linear", "inverse", "spot"]
+    )
+    ap.add_argument(
+        "--interval",
+        type=str,
+        default="1",
+        help="Bybit kline interval: 1,3,5,15,60,240,D,...",
+    )
+    ap.add_argument(
+        "--start", type=str, required=True, help="UTC start, e.g. 2024-06-01T00:00:00"
+    )
+    ap.add_argument(
+        "--end", type=str, required=True, help="UTC end, e.g. 2024-06-07T00:00:00"
+    )
     ap.add_argument("--testnet", action="store_true")
 
     ap.add_argument("--trials", type=int, default=60)
     ap.add_argument("--n-jobs", type=int, default=1, help="Parallel workers for Optuna")
-    ap.add_argument("--metric", type=str, default="net", choices=["net", "sharpe"], help="Optimization target")
-    ap.add_argument("--risk-penalty", type=float, default=0.25, help="Penalty lambda for drawdown when metric=net")
-    ap.add_argument("--max-dd-cap", type=float, default=None, help="Hard cap on max drawdown; infeasible if exceeded")
-    ap.add_argument("--storage", type=str, default=None, help="Optuna storage, e.g., sqlite:///profit_opt.db (enables parallel)")
+    ap.add_argument(
+        "--metric",
+        type=str,
+        default="net",
+        choices=["net", "sharpe"],
+        help="Optimization target",
+    )
+    ap.add_argument(
+        "--risk-penalty",
+        type=float,
+        default=0.25,
+        help="Penalty lambda for drawdown when metric=net",
+    )
+    ap.add_argument(
+        "--max-dd-cap",
+        type=float,
+        default=None,
+        help="Hard cap on max drawdown; infeasible if exceeded",
+    )
+    ap.add_argument(
+        "--storage",
+        type=str,
+        default=None,
+        help="Optuna storage, e.g., sqlite:///profit_opt.db (enables parallel)",
+    )
     ap.add_argument("--study-name", type=str, default="mm_profit_opt")
-    ap.add_argument("--sampler", type=str, default="tpe", choices=["tpe", "cmaes", "random"])
-    ap.add_argument("--pruner", type=str, default="median", choices=["none", "median", "hnp"])
+    ap.add_argument(
+        "--sampler", type=str, default="tpe", choices=["tpe", "cmaes", "random"]
+    )
+    ap.add_argument(
+        "--pruner", type=str, default="median", choices=["none", "median", "hnp"]
+    )
     ap.add_argument("--trials-verbose", action="store_true")
     ap.add_argument("--save-results", type=str, default="opt_results.csv")
 
@@ -221,20 +269,26 @@ def main():
         metric=args.metric,
         risk_penalty=args.risk_penalty,
         max_dd_cap=args.max_dd_cap,
-        trials_verbose=args.trials_verbose
+        trials_verbose=args.trials_verbose,
     )
 
-    logger.info(f"Starting optimization for {args.trials} trials (parallel n_jobs={args.n_jobs}) ...")
-    study.optimize(obj, n_trials=args.trials, n_jobs=args.n_jobs, show_progress_bar=True)
+    logger.info(
+        f"Starting optimization for {args.trials} trials (parallel n_jobs={args.n_jobs}) ..."
+    )
+    study.optimize(
+        obj, n_trials=args.trials, n_jobs=args.n_jobs, show_progress_bar=True
+    )
 
     # Results
     best = study.best_trial
     logger.info("Optimization complete.")
     logger.info(f"Best score: {best.value:.6f}")
     logger.info(f"Best params:n{json.dumps(best.params, indent=2)}")
-    logger.info(f"Best metrics: net={best.user_attrs.get('net_pnl'):.6f}, "
-                f"dd={best.user_attrs.get('max_drawdown'):.6f}, "
-                f"sharpe={best.user_attrs.get('sharpe_like'):.4f}")
+    logger.info(
+        f"Best metrics: net={best.user_attrs.get('net_pnl'):.6f}, "
+        f"dd={best.user_attrs.get('max_drawdown'):.6f}, "
+        f"sharpe={best.user_attrs.get('sharpe_like'):.4f}"
+    )
 
     # Save all trials to CSV
     records = []
@@ -269,6 +323,7 @@ def main():
     eq["timestamp"] = eq["timestamp_ms"].apply(lambda x: from_ms(x).isoformat())
     eq.to_csv("equity_curve_best.csv", index=False)
     logger.info("Saved equity_curve_best.csv")
+
 
 if __name__ == "__main__":
     main()
