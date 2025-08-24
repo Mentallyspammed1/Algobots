@@ -169,9 +169,13 @@ class Config:
             print("or update the corresponding .env file or default values in the Config class.")
             sys.exit(1)
 
-        # Validate positionIdx for hedge mode
-        if self.HEDGE_MODE and self.POSITION_IDX not in:
-            print(f"Configuration Error: Invalid POSITION_IDX '{self.POSITION_IDX}'. Must be 0, 1, or 2.")
+        # Validate positionIdx based on mode
+        if self.HEDGE_MODE:
+            if self.POSITION_IDX not in [1, 2]:
+                print(f"Configuration Error: Invalid POSITION_IDX '{self.POSITION_IDX}' for Hedge Mode. Must be 1 (Long) or 2 (Short).")
+                sys.exit(1)
+        elif self.POSITION_IDX != 0:
+            print(f"Configuration Error: Invalid POSITION_IDX '{self.POSITION_IDX}' for One-Way Mode. Must be 0.")
             sys.exit(1)
 
         # Force leverage to 1 for spot trading to avoid potential API errors or incorrect settings
@@ -573,7 +577,7 @@ class OrderSizingCalculator:
 # TRAILING STOP MANAGER
 # =====================================================================
 
-```python
+
 import logging
 from decimal import Decimal
 from typing import Dict, Optional
@@ -591,6 +595,12 @@ class TrailingStopManager:
         # 'current_stop': Decimal, 'highest_price': Decimal/None,
         # 'lowest_price': Decimal/None, 'is_activated': bool}}
         self.active_trailing_stops: Dict[str, dict] = {}
+
+    def remove_trailing_stop(self, symbol: str):
+        """Remove trailing stop data for a symbol."""
+        if symbol in self.active_trailing_stops:
+            del self.active_trailing_stops[symbol]
+            self.logger.info(f"Removed trailing stop tracking for {symbol}.")
 
     def initialize_trailing_stop(
         self,
@@ -610,11 +620,8 @@ class TrailingStopManager:
             self.logger.error(f"Cannot initialize trailing stop for {symbol}: Specs not found.")
             return None
 
-        # Trailing stops are typically not applicable or handled differently for spot.
-        # For Bybit, it's mainly for derivatives.
         if specs.category == 'spot':
-            self.logger.debug(f"Trailing stops may not be fully supported or applicable for spot category {symbol}. Skipping initialization logic.")
-            # Return None or a placeholder if spot does not support it.
+            self.logger.debug(f"Trailing stops are not applicable for spot category {symbol}.")
             return None
 
         trail_pct = Decimal(str(trail_percent / 100))
@@ -622,23 +629,21 @@ class TrailingStopManager:
 
         activation_price = Decimal('0')
         current_stop = Decimal('0')
-        highest_price = None # Track highest price reached for Buy orders
-        lowest_price = None  # Track lowest price reached for Sell orders
+        highest_price = None
+        lowest_price = None
         is_activated = False
 
         if position_side == "Buy":
             activation_price = entry_price * (Decimal('1') + activation_pct)
             is_activated = current_price >= activation_price
-            highest_price = current_price if is_activated else entry_price # Start tracking from current price if activated
+            highest_price = current_price if is_activated else entry_price
             if is_activated and highest_price > 0:
-                # Calculate initial stop based on highest price reached
                 current_stop = self.precision.round_price(symbol, highest_price * (Decimal('1') - trail_pct))
         else:  # Sell/Short
             activation_price = entry_price * (Decimal('1') - activation_pct)
             is_activated = current_price <= activation_price
-            lowest_price = current_price if is_activated else entry_price # Start tracking from current price if activated
+            lowest_price = current_price if is_activated else entry_price
             if is_activated and lowest_price > 0:
-                # Calculate initial stop based on lowest price reached
                 current_stop = self.precision.round_price(symbol, lowest_price * (Decimal('1') + trail_pct))
 
         trailing_stop_info = {
@@ -666,42 +671,80 @@ class TrailingStopManager:
         update_exchange: bool = True
     ) -> bool:
         """
-        Update trailing stop based on current price.
-        Returns True if the stop was potentially updated locally or needs exchange update.
+        Update trailing stop based on current price. If update_exchange is True,
+        it will attempt to update the stop loss on the exchange.
+        Returns True if the stop was updated locally.
         """
         if symbol not in self.active_trailing_stops:
-            return False # No active trailing stop for this symbol
+            return False
 
         ts_info = self.active_trailing_stops[symbol]
+        new_stop_price = None
         updated_locally = False
 
-        if ts_info['side'] == "Buy":
-            # If not activated and price crosses activation level
-            if not ts_info['is_activated'] and current_price >= ts_info['activation_price']:
+        # --- Activate Trailing Stop if needed ---
+        if not ts_info.get('is_activated', False):
+            if (ts_info['side'] == "Buy" and current_price >= ts_info['activation_price']) or \
+               (ts_info['side'] == "Sell" and current_price <= ts_info['activation_price']):
                 ts_info['is_activated'] = True
-                ts_info['highest_price'] = current_price # Start tracking from this price
-                self.logger.info(f"Trailing stop activated for {symbol} at {current_price}.")
+                ts_info['highest_price'] = current_price if ts_info['side'] == "Buy" else ts_info.get('highest_price')
+                ts_info['lowest_price'] = current_price if ts_info['side'] == "Sell" else ts_info.get('lowest_price')
+                self.logger.info(f"Trailing stop for {symbol} ({ts_info['side']}) activated at price {current_price}.")
+                if ts_info['side'] == "Buy":
+                    new_stop_price = ts_info['highest_price'] * (Decimal('1') - ts_info['trail_percent'])
+                else:
+                    new_stop_price = ts_info['lowest_price'] * (Decimal('1') + ts_info['trail_percent'])
 
-            # If activated, update highest price and stop if current price is higher
-            if ts_info['is_activated']:
-                if current_price > ts_info['highest_price']:
-                    ts_info['highest_price'] = current_price
-                    new_stop = current_price * (Decimal('1') - ts_info['trail_percent'])
+        # --- Update Stop Price if Activated ---
+        if ts_info.get('is_activated', False):
+            if ts_info['side'] == "Buy" and current_price > ts_info.get('highest_price', current_price):
+                ts_info['highest_price'] = current_price
+                new_stop_price = current_price * (Decimal('1') - ts_info['trail_percent'])
+            elif ts_info['side'] == "Sell" and current_price < ts_info.get('lowest_price', current_price):
+                ts_info['lowest_price'] = current_price
+                new_stop_price = current_price * (Decimal('1') + ts_info['trail_percent'])
 
-                    # Only update if the new stop is higher than the current stop
-                    if new_stop > ts_info['current_stop']:
-                        ts_info['current_stop'] = self.precision.round_price(symbol, new_stop)
-                        updated_locally = True
-                        self.logger.debug(f"Trailing stop updated for {symbol}: New Stop={ts_info['current_stop']}")
+        # --- Set New Stop Price if more favorable ---
+        if new_stop_price is not None:
+            rounded_new_stop = self.precision.round_price(symbol, new_stop_price)
+            
+            is_more_favorable = False
+            current_stop = ts_info.get('current_stop', Decimal('0'))
+            if ts_info['side'] == 'Buy' and rounded_new_stop > current_stop:
+                is_more_favorable = True
+            elif ts_info['side'] == 'Sell' and (rounded_new_stop < current_stop or current_stop == 0):
+                is_more_favorable = True
 
-        else:  # Sell/Short position
-            # If not activated and price crosses activation level
-            if not ts_info['is_activated'] and current_price <= ts_info['activation_price']:
-                ts_info['is_activated'] = True
-                ts_info['lowest_price'] = current_price # Start tracking from this price
-                self.logger.info(f"Trailing stop activated for {symbol} at {current_price}.")
+            if is_more_favorable:
+                ts_info['current_stop'] = rounded_new_stop
+                ts_info['last_update'] = datetime.now()
+                updated_locally = True
+                self.logger.debug(f"Trailing stop for {symbol} locally updated to: {ts_info['current_stop']}")
 
-            # If activated,
+                if update_exchange:
+                    self.logger.info(f"Attempting to update exchange stop loss for {symbol} to {ts_info['current_stop']}")
+                    try:
+                        specs = self.precision.get_specs(symbol)
+                        if not specs or specs.category == 'spot':
+                            self.logger.warning(f"Cannot set trading stop for {symbol} in category {specs.category if specs else 'N/A'}")
+                            return updated_locally
+
+                        response = self.session.set_trading_stop(
+                            category=specs.category,
+                            symbol=symbol,
+                            stopLoss=str(ts_info['current_stop']),
+                            slOrderType='Market'
+                        )
+                        if response and response['retCode'] == 0:
+                            self.logger.info(f"Successfully updated exchange stop loss for {symbol} to {ts_info['current_stop']}")
+                        else:
+                            error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
+                            self.logger.error(f"Failed to update exchange stop loss for {symbol}: {error_msg}")
+                    except Exception as e:
+                        self.logger.error(f"Exception updating exchange stop loss for {symbol}: {e}", exc_info=True)
+
+        return updated_locally
+
 class SupertrendBot:
     def __init__(self, config: Config):
         self.config = config
