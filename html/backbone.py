@@ -224,19 +224,14 @@ app = Flask(__name__)
 CORS(app)
 
 # --- Logging Configuration ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+class DequeHandler(logging.Handler):
+    def __init__(self, deque):
+        super().__init__()
+        self.deque = deque
 
-# --- API Key Configuration ---
-BYBIT_API_KEY = os.getenv("BYBIT_API_KEY")
-BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-if not BYBIT_API_KEY or not BYBIT_API_SECRET:
-    logging.error("CRITICAL: Bybit API Key or Secret not found. Please check your .env file.")
-if not GEMINI_API_KEY:
-    logging.warning("Gemini API Key not found. The insight feature will be disabled.")
-else:
-    genai.configure(api_key=GEMINI_API_KEY)
+    def emit(self, record):
+        log_entry = self.format(record)
+        self.deque.append(log_entry)
 
 # --- Global Bot State ---
 # This dictionary will hold the state of our trading bot.
@@ -263,23 +258,24 @@ BOT_STATE = {
         "botStatus": "Idle",
     },
     "last_supertrend": {"direction": 0, "value": 0},
-    "previous_close": 0,
     "current_position_info": {"order_id": None, "entry_price": None, "side": None, "peak_price": None}
 }
+STATE_LOCK = threading.Lock()
 
-# --- Logging ---
-def log_message(message, level='info'):
-    """Adds a message to the in-memory log."""
-    timestamp = time.strftime("%H:%M:%S")
-    BOT_STATE["logs"].append({"timestamp": timestamp, "level": level, "message": message})
-    
-    # Also log to console
-    if level == 'error':
-        logging.error(message)
-    elif level == 'warning':
-        logging.warning(message)
-    else:
-        logging.info(message)
+# Setup logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Console handler
+ch = logging.StreamHandler()
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+# Deque handler
+dh = DequeHandler(BOT_STATE["logs"])
+dh.setFormatter(formatter)
+logger.addHandler(dh)
 
 # --- Helper for API Calls with Retry and Specific Error Handling ---
 def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, initial_delay=1):
@@ -296,7 +292,7 @@ def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, ini
             elif method == 'amend': # For amend_order
                 response = getattr(api_client, endpoint)(**params)
             else:
-                log_message(f"Invalid method '{method}' for API call.", "error")
+                logging.error(f"Invalid method '{method}' for API call.")
                 return {"retCode": 1, "retMsg": "Invalid method"}
 
             if response.get('retCode') == 0:
@@ -307,13 +303,10 @@ def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, ini
                 log_message(f"Bybit API Error ({ret_code}): {ret_msg}. Retrying {endpoint} in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "warning")
                 time.sleep(initial_delay * (2**attempt)) # Exponential backoff
         except Exception as e: # Catch any Pybit-related exceptions or other unexpected errors
-            log_message(f"API call error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "error")
-            time.sleep(initial_delay * (2**attempt)) # Exponential backoff
-        except Exception as e:
-            log_message(f"Network/Client error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "error")
+            logging.error(f"API call error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})")
             time.sleep(initial_delay * (2**attempt)) # Exponential backoff
     
-    log_message(f"Failed to complete API call to {endpoint} after {max_retries} attempts.", "error")
+    logging.error(f"Failed to complete API call to {endpoint} after {max_retries} attempts.")
     return {"retCode": 1, "retMsg": f"Failed after {max_retries} attempts: {endpoint}"}
 
 # --- Trading Logic ---
@@ -323,16 +316,17 @@ def trading_bot_loop():
     
     while BOT_STATE.get("running"):
         try:
-            config = BOT_STATE["config"]
-            session = BOT_STATE["bybit_session"]
-            dashboard = BOT_STATE["dashboard"]
+            with STATE_LOCK:
+                config = BOT_STATE["config"]
+                session = BOT_STATE["bybit_session"]
+                dashboard = BOT_STATE["dashboard"]
 
             dashboard["botStatus"] = "Scanning"
             
             # 1. Fetch Kline Data
             klines_res = _make_api_call(session, 'get', 'get_kline', params={"category": config["category"], "symbol": config["symbol"], "interval": config["interval"], "limit": 200})
             if klines_res.get('retCode') != 0:
-                log_message(f"Failed to fetch klines: {klines_res.get('retMsg')}", "error")
+                logging.error(f"Failed to fetch klines: {klines_res.get('retMsg')}")
                 time.sleep(config.get('api_error_retry_delay', 60)) # Use configurable delay
                 continue
 
@@ -353,7 +347,7 @@ def trading_bot_loop():
 
             # 3. Fetch Position and Balance
             position_res = _make_api_call(session, 'get', 'get_positions', params={"category": config["category"], "symbol": config["symbol"]})
-            balance_res = _make_api_call(session, 'get', 'get_wallet_balance', params={"accountType": "UNIFIED", "coin": "USDT"})
+            balance_res = _make_api_call(session, 'get', 'get_wallet_balance', params={"accountType": config.get("accountType", "UNIFIED"), "coin": "USDT"})
 
             current_position = None
             if position_res.get('retCode') == 0:
@@ -361,86 +355,89 @@ def trading_bot_loop():
                 if pos_list:
                     current_position = pos_list[0]
             else:
-                log_message(f"Failed to fetch positions: {position_res.get('retMsg')}", "error")
+                logging.error(f"Failed to fetch positions: {position_res.get('retMsg')}")
             
             balance = 0
             if balance_res.get('retCode') == 0 and balance_res['result']['list']:
                 balance = float(balance_res['result']['list'][0]['totalWalletBalance'])
             else:
-                log_message(f"Failed to fetch balance: {balance_res.get('retMsg')}", "error")
+                logging.error(f"Failed to fetch balance: {balance_res.get('retMsg')}")
 
             # 4. Update Dashboard
-            dashboard['currentPrice'] = f"${current_price:.{config['price_precision']}f}"
-            st = indicators['supertrend']
-            dashboard['stDirection'] = "UPTREND" if st['direction'] == 1 else "DOWNTREND"
-            dashboard['stValue'] = f"{st['supertrend']:.{config['price_precision']}f}"
-            dashboard['rsiValue'] = f"{indicators['rsi']:.2f}"
-            dashboard['accountBalance'] = f"${balance:.2f}"
-            dashboard['fisherValue'] = f"{indicators['fisher']:.2f}"
-            dashboard['macdLine'] = f"{indicators['macd']['macd_line']:.2f}"
-            dashboard['macdSignal'] = f"{indicators['macd']['signal_line']:.2f}"
-            dashboard['macdHistogram'] = f"{indicators['macd']['histogram']:.2f}"
-            dashboard['bbMiddle'] = f"{indicators['bollinger_bands']['middle_band']:.2f}"
-            dashboard['bbUpper'] = f"{indicators['bollinger_bands']['upper_band']:.2f}"
-            dashboard['bbLower'] = f"{indicators['bollinger_bands']['lower_band']:.2f}"
-            if current_position:
-                dashboard['currentPosition'] = f"{current_position['side']} {current_position['size']}"
-                pnl = (current_price - float(current_position['avgPrice'])) * float(current_position['size']) if current_position['side'] == 'Buy' else (float(current_position['avgPrice']) - current_price) * float(current_position['size'])
-                dashboard['positionPnL'] = f"{pnl:.2f} USDT"
-            else:
-                dashboard['currentPosition'] = "None"
-                dashboard['positionPnL'] = "---"
+            with STATE_LOCK:
+                dashboard['currentPrice'] = f"${current_price:.{config['price_precision']}f}"
+                st = indicators['supertrend']
+                dashboard['stDirection'] = "UPTREND" if st['direction'] == 1 else "DOWNTREND"
+                dashboard['stValue'] = f"{st['supertrend']:.{config['price_precision']}f}"
+                dashboard['rsiValue'] = f"{indicators['rsi']:.2f}"
+                dashboard['accountBalance'] = f"${balance:.2f}"
+                dashboard['fisherValue'] = f"{indicators['fisher']:.2f}"
+                dashboard['macdLine'] = f"{indicators['macd']['macd_line']:.2f}"
+                dashboard['macdSignal'] = f"{indicators['macd']['signal_line']:.2f}"
+                dashboard['macdHistogram'] = f"{indicators['macd']['histogram']:.2f}"
+                dashboard['bbMiddle'] = f"{indicators['bollinger_bands']['middle_band']:.2f}"
+                dashboard['bbUpper'] = f"{indicators['bollinger_bands']['upper_band']:.2f}"
+                dashboard['bbLower'] = f"{indicators['bollinger_bands']['lower_band']:.2f}"
+                if current_position:
+                    dashboard['currentPosition'] = f"{current_position['side']} {current_position['size']}"
+                    pnl = (current_price - float(current_position['avgPrice'])) * float(current_position['size']) if current_position['side'] == 'Buy' else (float(current_position['avgPrice']) - current_price) * float(current_position['size'])
+                    dashboard['positionPnL'] = f"{pnl:.2f} USDT"
+                else:
+                    dashboard['currentPosition'] = "None"
+                    dashboard['positionPnL'] = "---"
 
             # 5. Trailing Stop Loss Logic
-            if BOT_STATE["current_position_info"]["order_id"] and current_position:
-                pos_info = BOT_STATE["current_position_info"]
-                
-                # Update peak price
-                if pos_info["side"] == "Buy":
-                    pos_info["peak_price"] = max(pos_info.get("peak_price", current_price), current_price)
-                else: # Sell
-                    pos_info["peak_price"] = min(pos_info.get("peak_price", current_price), current_price)
+            with STATE_LOCK:
+                if BOT_STATE["current_position_info"]["order_id"] and current_position:
+                    pos_info = BOT_STATE["current_position_info"]
+                    
+                    # Update peak price
+                    if pos_info["side"] == "Buy":
+                        pos_info["peak_price"] = max(pos_info.get("peak_price", current_price), current_price)
+                    else: # Sell
+                        pos_info["peak_price"] = min(pos_info.get("peak_price", current_price), current_price)
 
-                # Calculate new trailing stop price
-                trailing_stop_pct = config['trailingStopPct'] / 100
-                new_trailing_stop_price = 0
-                if pos_info["side"] == "Buy":
-                    new_trailing_stop_price = pos_info["peak_price"] * (1 - trailing_stop_pct)
-                else: # Sell
-                    new_trailing_stop_price = pos_info["peak_price"] * (1 + trailing_stop_pct)
-                
-                # Round the new trailing stop price
-                precision_mgr = BOT_STATE["precision_manager"]
-                new_trailing_stop_price = float(precision_mgr.round_price(config["symbol"], new_trailing_stop_price))
+                    # Calculate new trailing stop price
+                    trailing_stop_pct = config['trailingStopPct'] / 100
+                    new_trailing_stop_price = 0
+                    if pos_info["side"] == "Buy":
+                        new_trailing_stop_price = pos_info["peak_price"] * (1 - trailing_stop_pct)
+                    else: # Sell
+                        new_trailing_stop_price = pos_info["peak_price"] * (1 + trailing_stop_pct)
+                    
+                    # Round the new trailing stop price
+                    precision_mgr = BOT_STATE["precision_manager"]
+                    new_trailing_stop_price = float(precision_mgr.round_price(config["symbol"], new_trailing_stop_price))
 
-                # Get current stop loss from the actual position (if available)
-                # Ensure current_position.get('stopLoss') is a valid number before comparison
-                current_sl_on_exchange = float(current_position.get('stopLoss', 0)) if current_position.get('stopLoss') else 0.0
+                    # Get current stop loss from the actual position (if available)
+                    # Ensure current_position.get('stopLoss') is a valid number before comparison
+                    current_sl_on_exchange = float(current_position.get('stopLoss', 0)) if current_position.get('stopLoss') else 0.0
 
-                # Check if new trailing stop is more favorable and in profit
-                amend_sl = False
-                if pos_info["side"] == "Buy" and new_trailing_stop_price > current_sl_on_exchange and new_trailing_stop_price > pos_info["entry_price"]:
-                    amend_sl = True
-                elif pos_info["side"] == "Sell" and new_trailing_stop_price < current_sl_on_exchange and new_trailing_stop_price < pos_info["entry_price"]:
-                    amend_sl = True
-                
-                if amend_sl:
-                    log_message(f"Amending trailing stop for {pos_info['side']} position from {current_sl_on_exchange:.{config['price_precision']}f} to {new_trailing_stop_price:.{config['price_precision']}f}", "info")
-                    amend_res = _make_api_call(session, 'post', 'amend_order', params={
-                        "category": "linear",
-                        "symbol": config["symbol"],
-                        "orderId": pos_info["order_id"],
-                        "stopLoss": f"{new_trailing_stop_price:.{config['price_precision']}f}"
-                    })
-                    if amend_res.get('retCode') == 0:
-                        log_message("Trailing stop amended successfully.", "success")
-                    else:
-                        log_message(f"Failed to amend trailing stop: {amend_res.get('retMsg')}", "error")
+                    # Check if new trailing stop is more favorable and in profit
+                    amend_sl = False
+                    if pos_info["side"] == "Buy" and new_trailing_stop_price > current_sl_on_exchange and new_trailing_stop_price > pos_info["entry_price"]:
+                        amend_sl = True
+                    elif pos_info["side"] == "Sell" and new_trailing_stop_price < current_sl_on_exchange and new_trailing_stop_price < pos_info["entry_price"]:
+                        amend_sl = True
+                    
+                    if amend_sl:
+                        log_message(f"Amending trailing stop for {pos_info['side']} position from {current_sl_on_exchange:.{config['price_precision']}f} to {new_trailing_stop_price:.{config['price_precision']}f}", "info")
+                        amend_res = _make_api_call(session, 'post', 'amend_order', params={
+                            "category": "linear",
+                            "symbol": config["symbol"],
+                            "orderId": pos_info["order_id"],
+                            "stopLoss": f"{new_trailing_stop_price:.{config['price_precision']}f}"
+                        })
+                        if amend_res.get('retCode') == 0:
+                            log_message("Trailing stop amended successfully.", "success")
+                        else:
+                            logging.error(f"Failed to amend trailing stop: {amend_res.get('retMsg')}")
 
             # 6. Core Trading Logic
             fisher = indicators['fisher']
-            buy_signal = st['direction'] == 1 and BOT_STATE["last_supertrend"]['direction'] == -1 and indicators['rsi'] < config['rsi_overbought'] and fisher > 0 # Ehlers-Fisher confirmation
-            sell_signal = st['direction'] == -1 and BOT_STATE["last_supertrend"]['direction'] == 1 and indicators['rsi'] > config['rsi_oversold'] and fisher < 0 # Ehlers-Fisher confirmation
+            with STATE_LOCK:
+                buy_signal = st['direction'] == 1 and BOT_STATE["last_supertrend"]['direction'] == -1 and indicators['rsi'] < config['rsi_overbought'] and fisher > 0 # Ehlers-Fisher confirmation
+                sell_signal = st['direction'] == -1 and BOT_STATE["last_supertrend"]['direction'] == 1 and indicators['rsi'] > config['rsi_oversold'] and fisher < 0 # Ehlers-Fisher confirmation
 
             if buy_signal or sell_signal:
                 side = "Buy" if buy_signal else "Sell"
@@ -461,8 +458,9 @@ def trading_bot_loop():
                     if close_res.get('retCode') == 0:
                         log_message("Opposite position closed successfully.", "success")
                         time.sleep(2) # Give time for position to close
-                        BOT_STATE["current_position_info"] = {"order_id": None, "entry_price": None, "side": None, "peak_price": None} # Reset position info
-                        balance_res = _make_api_call(session, 'get', 'get_wallet_balance', params={"accountType": "UNIFIED", "coin": "USDT"}) # Refresh balance
+                        with STATE_LOCK:
+                            BOT_STATE["current_position_info"] = {"order_id": None, "entry_price": None, "side": None, "peak_price": None} # Reset position info
+                        balance_res = _make_api_call(session, 'get', 'get_wallet_balance', params={"accountType": config.get("accountType", "UNIFIED"), "coin": "USDT"}) # Refresh balance
                         if balance_res.get('retCode') == 0 and balance_res['result']['list']:
                             balance = float(balance_res['result']['list'][0]['totalWalletBalance'])
                         else:
@@ -473,7 +471,8 @@ def trading_bot_loop():
                         continue
 
                 # Place new order
-                precision_mgr = BOT_STATE["precision_manager"]
+                with STATE_LOCK:
+                    precision_mgr = BOT_STATE["precision_manager"]
                 sl_price = current_price * (1 - config['stopLossPct'] / 100) if side == 'Buy' else current_price * (1 + config['stopLossPct'] / 100)
                 tp_price = current_price * (1 + config['takeProfitPct'] / 100) if side == 'Buy' else current_price * (1 - config['takeProfitPct'] / 100)
                 
@@ -515,35 +514,24 @@ def trading_bot_loop():
                     if order_res.get('retCode') == 0:
                         log_message("Order placed successfully.", "success")
                         # Store position info for trailing stop
-                        BOT_STATE["current_position_info"] = {
-                            "order_id": order_res['result']['orderId'],
-                            "entry_price": current_price,
-                            "side": side,
-                            "peak_price": current_price # Initialize peak price
-                        }
+                        with STATE_LOCK:
+                            BOT_STATE["current_position_info"] = {
+                                "order_id": order_res['result']['orderId'],
+                                "entry_price": current_price,
+                                "side": side,
+                                "peak_price": current_price # Initialize peak price
+                            }
                     else:
                         log_message(f"Order failed: {order_res.get('retMsg')}", "error")
-
-            BOT_STATE["last_supertrend"] = indicators['supertrend']
+            with STATE_LOCK:
+                BOT_STATE["last_supertrend"] = indicators['supertrend']
             dashboard["botStatus"] = "Idle"
 
-        except Exception as e: # Catch any remaining unexpected errors
-            log_message(f"An unexpected error occurred in the trading loop: {e}", "error")
+        except (requests.exceptions.RequestException, Exception) as e:
+            log_message(f"An error occurred in the trading loop: {e}", "error")
             dashboard["botStatus"] = "Error"
         
         # --- Interval Sleep Logic ---
-        # Calculate sleep time to align with the start of the next candle.
-        now = time.time()
-        
-        # Get the timestamp of the most recent kline
-        # Ensure klines is not empty before accessing its last element
-        if klines:
-            last_kline_ts_ms = klines[-1]['timestamp']
-        else:
-            log_message("Kline data is empty, cannot determine next candle time. Sleeping for default interval.", "warning")
-            time.sleep(config.get('api_error_retry_delay', 60))
-            continue # Skip to next iteration
-
         # Determine interval in seconds
         interval_str = str(BOT_STATE["config"].get("interval", "60"))
         if interval_str.isdigit():
@@ -554,19 +542,8 @@ def trading_bot_loop():
             log_message(f"Invalid interval format: {interval_str}. Defaulting to 60s.", "warning")
             interval_seconds = 60 # Default to 1 minute if format is unexpected
 
-        # Calculate the timestamp of the next kline
-        next_kline_ts_sec = (last_kline_ts_ms / 1000) + interval_seconds
-        
-        # Calculate how long to sleep
-        sleep_duration = next_kline_ts_sec - now
-        
-        if sleep_duration > 0:
-            log_message(f"Waiting for {sleep_duration:.2f} seconds until next candle.", "info")
-            time.sleep(sleep_duration)
-        else:
-            # If we are already past the next candle's start time, log it and continue.
-            log_message(f"Processing took longer than interval ({abs(sleep_duration):.2f}s over). Continuing immediately.", "warning")
-            time.sleep(1) # Brief pause to prevent high-CPU loop on errors
+        log_message(f"Waiting for {interval_seconds} seconds until next iteration.", "info")
+        time.sleep(interval_seconds)
 
     log_message("Trading bot thread stopped.", "warning")
 
@@ -574,34 +551,35 @@ def trading_bot_loop():
 # --- Flask API Endpoints ---
 @app.route('/api/start', methods=['POST'])
 def start_bot():
-    if BOT_STATE["running"]:
-        return jsonify({"status": "error", "message": "Bot is already running."}), 400
+    with STATE_LOCK:
+        if BOT_STATE["running"]:
+            return jsonify({"status": "error", "message": "Bot is already running."}), 400
 
-    config = request.json
+        config = request.json
 
-    # API keys are loaded from .env file on the backend for security
-    # Directly use global BYBIT_API_KEY and BYBIT_API_SECRET
-    if not BYBIT_API_KEY or not BYBIT_API_SECRET:
-        return jsonify({"status": "error", "message": "Bybit API Key or Secret not found in backend .env file."}), 400
+        # API keys are loaded from .env file on the backend for security
+        # Directly use global BYBIT_API_KEY and BYBIT_API_SECRET
+        if not BYBIT_API_KEY or not BYBIT_API_SECRET:
+            return jsonify({"status": "error", "message": "Bybit API Key or Secret not found in backend .env file."}), 400
 
-    BOT_STATE["config"] = config
-    # Set default values for new config parameters if not provided by frontend
-    BOT_STATE["config"]['category'] = config.get('category', 'linear')
-    BOT_STATE["config"]['ef_period'] = config.get('ef_period', 10)
-    BOT_STATE["config"]['trailingStopPct'] = config.get('trailingStopPct', 0.5)
-    BOT_STATE["config"]['macd_fast_period'] = config.get('macd_fast_period', 12)
-    BOT_STATE["config"]['macd_slow_period'] = config.get('macd_slow_period', 26)
-    BOT_STATE["config"]['macd_signal_period'] = config.get('macd_signal_period', 9)
-    BOT_STATE["config"]['bb_period'] = config.get('bb_period', 20)
-    BOT_STATE["config"]['bb_std_dev'] = config.get('bb_std_dev', 2.0)
-    BOT_STATE["config"]['api_error_retry_delay'] = config.get('api_error_retry_delay', 60) # New configurable delay
-    BOT_STATE["config"]['indicator_wait_delay'] = config.get('indicator_wait_delay', 60) # New configurable delay
+        BOT_STATE["config"] = config
+        # Set default values for new config parameters if not provided by frontend
+        BOT_STATE["config"]['category'] = config.get('category', 'linear')
+        BOT_STATE["config"]['ef_period'] = config.get('ef_period', 10)
+        BOT_STATE["config"]['trailingStopPct'] = config.get('trailingStopPct', 0.5)
+        BOT_STATE["config"]['macd_fast_period'] = config.get('macd_fast_period', 12)
+        BOT_STATE["config"]['macd_slow_period'] = config.get('macd_slow_period', 26)
+        BOT_STATE["config"]['macd_signal_period'] = config.get('macd_signal_period', 9)
+        BOT_STATE["config"]['bb_period'] = config.get('bb_period', 20)
+        BOT_STATE["config"]['bb_std_dev'] = config.get('bb_std_dev', 2.0)
+        BOT_STATE["config"]['api_error_retry_delay'] = config.get('api_error_retry_delay', 60) # New configurable delay
+        BOT_STATE["config"]['indicator_wait_delay'] = config.get('indicator_wait_delay', 60) # New configurable delay
 
-    BOT_STATE["bybit_session"] = HTTP(testnet=False, api_key=BYBIT_API_KEY, api_secret=BYBIT_API_SECRET) # LIVE TRADING
-    BOT_STATE["precision_manager"] = PrecisionManager(BOT_STATE["bybit_session"], logging)
+        BOT_STATE["bybit_session"] = HTTP(testnet=False, api_key=BYBIT_API_KEY, api_secret=BYBIT_API_SECRET) # LIVE TRADING
+        BOT_STATE["precision_manager"] = PrecisionManager(BOT_STATE["bybit_session"], logging)
 
     # Verify API connection
-    balance_check = _make_api_call(BOT_STATE["bybit_session"], 'get', 'get_wallet_balance', params={"accountType": "UNIFIED", "coin": "USDT"})
+    balance_check = _make_api_call(BOT_STATE["bybit_session"], 'get', 'get_wallet_balance', params={"accountType": config.get("accountType", "UNIFIED"), "coin": "USDT"})
     if balance_check.get("retCode") != 0:
         log_message(f"API connection failed: {balance_check.get('retMsg')}", "error")
         return jsonify({"status": "error", "message": f"API connection failed: {balance_check.get('retMsg')}"}), 400
@@ -609,11 +587,13 @@ def start_bot():
     log_message("API connection successful.", "success")
 
     # Fetch instrument info for precision using PrecisionManager
-    precision_mgr = BOT_STATE["precision_manager"]
+    with STATE_LOCK:
+        precision_mgr = BOT_STATE["precision_manager"]
     price_precision, qty_precision = precision_mgr.get_decimal_places(config['symbol'])
 
-    BOT_STATE["config"]["price_precision"] = price_precision
-    BOT_STATE["config"]["qty_precision"] = qty_precision
+    with STATE_LOCK:
+        BOT_STATE["config"]["price_precision"] = price_precision
+        BOT_STATE["config"]["qty_precision"] = qty_precision
     log_message(f"Fetched instrument info: Price Precision={price_precision}, Quantity Precision={qty_precision}", "info")
 
     # Set leverage
@@ -641,37 +621,39 @@ def start_bot():
         else:
             log_message(f"Failed to set leverage: {lev_res.get('retMsg')}", "warning")
 
-
-    BOT_STATE["running"] = True
-    BOT_STATE["thread"] = threading.Thread(target=trading_bot_loop, daemon=True)
-    BOT_STATE["thread"].start()
+    with STATE_LOCK:
+        BOT_STATE["running"] = True
+        BOT_STATE["thread"] = threading.Thread(target=trading_bot_loop, daemon=True)
+        BOT_STATE["thread"].start()
 
     return jsonify({"status": "success", "message": "Bot started successfully."})
 
 @app.route('/api/stop', methods=['POST'])
 def stop_bot():
-    if not BOT_STATE["running"]:
-        return jsonify({"status": "error", "message": "Bot is not running."}), 400
+    with STATE_LOCK:
+        if not BOT_STATE["running"]:
+            return jsonify({"status": "error", "message": "Bot is not running."}), 400
 
-    BOT_STATE["running"] = False
-    if BOT_STATE["thread"] and BOT_STATE["thread"].is_alive():
-        BOT_STATE["thread"].join(timeout=5) # Wait for thread to finish
+        BOT_STATE["running"] = False
+        if BOT_STATE["thread"] and BOT_STATE["thread"].is_alive():
+            BOT_STATE["thread"].join(timeout=5) # Wait for thread to finish
 
-    BOT_STATE["thread"] = None
-    BOT_STATE["bybit_session"] = None
-    BOT_STATE["dashboard"]["botStatus"] = "Idle"
-    BOT_STATE["current_position_info"] = {"order_id": None, "entry_price": None, "side": None, "peak_price": None} # Reset position info on stop
+        BOT_STATE["thread"] = None
+        BOT_STATE["bybit_session"] = None
+        BOT_STATE["dashboard"]["botStatus"] = "Idle"
+        BOT_STATE["current_position_info"] = {"order_id": None, "entry_price": None, "side": None, "peak_price": None} # Reset position info on stop
     log_message("Bot has been stopped by user.", "warning")
     
     return jsonify({"status": "success", "message": "Bot stopped."})
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    return jsonify({
-        "running": BOT_STATE["running"],
-        "dashboard": BOT_STATE["dashboard"],
-        "logs": list(BOT_STATE["logs"])
-    })
+    with STATE_LOCK:
+        return jsonify({
+            "running": BOT_STATE["running"],
+            "dashboard": BOT_STATE["dashboard"],
+            "logs": list(BOT_STATE["logs"])
+        })
 
 @app.route('/api/gemini-insight', methods=['POST'])
 def get_gemini_insight():

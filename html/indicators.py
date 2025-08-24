@@ -79,9 +79,9 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
             else:
                 final_lower_band = prev_st_data['finalLowerBand']
 
-            if prev_st_data['direction'] in [0, 1] and kline['close'] <= final_lower_band: # Changed from final_upper_band to final_lower_band
+            if prev_st_data['direction'] in [0, 1] and kline['close'] <= final_lower_band:
                 direction = -1
-            elif prev_st_data['direction'] in [0, -1] and kline['close'] >= final_upper_band: # Changed from final_lower_band to final_upper_band
+            elif prev_st_data['direction'] in [0, -1] and kline['close'] >= final_upper_band:
                 direction = 1
             else:
                 direction = prev_st_data['direction']

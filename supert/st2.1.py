@@ -1,37 +1,18 @@
-"""Standalone Ehlers Supertrend Trading Bot for Bybit V5 API.
-
-This script implements a trading bot that uses the Supertrend indicator
-(based on Ehlers' methodology, commonly implemented with ATR) to generate
-trading signals and execute trades on Bybit via the pybit library.
-
-Features:
-- Configuration management via Config dataclass and environment variables.
-- Robust precision handling for Bybit instrument specifications.
-- Risk-based position sizing.
-- Stop-loss and take-profit order placement.
-- Basic trailing stop loss mechanism.
-- Logging for bot operations and errors.
-- Main trading loop with signal generation and order execution.
-- Displays current price and indicator values in the log.
-- Improved error handling for API initialization and rate limits.
-- Corrected leverage setting logic to use configured category directly.
-- Addressed potential `AttributeError` by ensuring manager initialization.
-"""
-
 import logging
 import os
 import sys
 import time
+import signal
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from enum import Enum
-
+from typing import Optional, Dict, Any, Tuple
 import pandas as pd
 import pandas_ta as ta
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
-from pybit.exceptions import FailedRequestError, InvalidRequestError # Import specific exceptions for handling API errors
+from pybit.exceptions import FailedRequestError, InvalidRequestError
 
 # Load environment variables from .env file
 load_dotenv()
@@ -49,10 +30,12 @@ class Signal(Enum):
     SELL = -1
     STRONG_SELL = -2
 
+
 class OrderType(Enum):
     """Supported order types"""
     MARKET = "Market"
     LIMIT = "Limit"
+
 
 class Category(Enum):
     """Bybit product categories"""
@@ -69,6 +52,7 @@ class Category(Enum):
         except KeyError:
             raise ValueError(f"Invalid Category value: {value}. Choose from {[c.name for c in cls]}")
 
+
 @dataclass
 class Config:
     """Bot configuration"""
@@ -79,8 +63,10 @@ class Config:
 
     # Trading Configuration
     SYMBOL: str = field(default="BTCUSDT")
-    CATEGORY: str = field(default="linear") # Store as string initially, convert to Enum later
+    CATEGORY: str = field(default="linear")  # Store as string initially, convert to Enum later
     LEVERAGE: int = field(default=5)
+    HEDGE_MODE: bool = field(default=False)
+    POSITION_IDX: int = field(default=0)  # 0=One-way mode, 1=Long, 2=Short in hedge mode
 
     # Position Sizing
     RISK_PER_TRADE_PCT: float = field(default=1.0)  # Risk % of account balance per trade
@@ -98,12 +84,12 @@ class Config:
     # Risk Management
     STOP_LOSS_PCT: float = field(default=0.015)  # 1.5% stop loss from entry
     TAKE_PROFIT_PCT: float = field(default=0.03)  # 3% take profit from entry
-    TRAILING_STOP_PCT: float = field(default=0.005) # 0.5% trailing stop from highest profit
-    MAX_DAILY_LOSS_PCT: float = field(default=0.05) # 5% max daily loss from start balance
-    MAX_OPEN_POSITIONS: int = field(default=1) # Not actively used in current logic, but good for future
+    TRAILING_STOP_PCT: float = field(default=0.005)  # 0.5% trailing stop from highest profit
+    MAX_DAILY_LOSS_PCT: float = field(default=0.05)  # 5% max daily loss from start balance
+    MAX_OPEN_POSITIONS: int = field(default=1)  # Not actively used in current logic, but good for future
 
     # Execution Settings
-    ORDER_TYPE: str = field(default="Market") # Store as string initially, convert to Enum later
+    ORDER_TYPE: str = field(default="Market")  # Store as string initially, convert to Enum later
     TIME_IN_FORCE: str = field(default="GTC")  # 'GTC', 'IOC', 'FOK', 'PostOnly'
     REDUCE_ONLY: bool = field(default=False)
 
@@ -111,6 +97,14 @@ class Config:
     LOOP_INTERVAL_SEC: int = field(default=60)  # Check interval in seconds
     LOG_LEVEL: str = field(default="INFO")
     LOG_FILE: str = field(default="supertrend_bot.log")
+    LOG_TO_STDOUT_ONLY: bool = field(default=False)
+
+    # API Retry Settings
+    MAX_API_RETRIES: int = field(default=3)
+    API_RETRY_DELAY_SEC: int = field(default=5)
+
+    # New setting for graceful shutdown
+    AUTO_CLOSE_ON_SHUTDOWN: bool = field(default=False)
 
     def __post_init__(self):
         """Load configuration from environment variables and validate."""
@@ -120,6 +114,8 @@ class Config:
         self.SYMBOL = os.getenv("BYBIT_SYMBOL", self.SYMBOL)
         self.CATEGORY = os.getenv("BYBIT_CATEGORY", self.CATEGORY)
         self.LEVERAGE = int(os.getenv("BYBIT_LEVERAGE", self.LEVERAGE))
+        self.HEDGE_MODE = os.getenv("BYBIT_HEDGE_MODE", str(self.HEDGE_MODE)).lower() in ['true', '1', 't']
+        self.POSITION_IDX = int(os.getenv("BYBIT_POSITION_IDX", self.POSITION_IDX))
 
         self.RISK_PER_TRADE_PCT = float(os.getenv("BYBIT_RISK_PER_TRADE_PCT", self.RISK_PER_TRADE_PCT))
         self.MAX_POSITION_SIZE_USD = float(os.getenv("BYBIT_MAX_POSITION_SIZE_USD", self.MAX_POSITION_SIZE_USD))
@@ -143,6 +139,14 @@ class Config:
         self.LOOP_INTERVAL_SEC = int(os.getenv("BYBIT_LOOP_INTERVAL_SEC", self.LOOP_INTERVAL_SEC))
         self.LOG_LEVEL = os.getenv("BYBIT_LOG_LEVEL", self.LOG_LEVEL)
         self.LOG_FILE = os.getenv("BYBIT_LOG_FILE", self.LOG_FILE)
+        self.LOG_TO_STDOUT_ONLY = os.getenv("BYBIT_LOG_TO_STDOUT_ONLY", str(self.LOG_TO_STDOUT_ONLY)).lower() in ['true', '1', 't']
+
+        self.MAX_API_RETRIES = int(os.getenv("BYBIT_MAX_API_RETRIES", self.MAX_API_RETRIES))
+        self.API_RETRY_DELAY_SEC = int(os.getenv("BYBIT_API_RETRY_DELAY_SEC", self.API_RETRY_DELAY_SEC))
+
+        # Load AUTO_CLOSE_ON_SHUTDOWN from environment variable or use default
+        self.AUTO_CLOSE_ON_SHUTDOWN = os.getenv("BYBIT_AUTO_CLOSE_ON_SHUTDOWN", str(self.AUTO_CLOSE_ON_SHUTDOWN)).lower() in ['true', '1', 't']
+
 
         # Validate Category
         try:
@@ -165,6 +169,18 @@ class Config:
             print("or update the corresponding .env file or default values in the Config class.")
             sys.exit(1)
 
+        # Validate positionIdx for hedge mode
+        if self.HEDGE_MODE and self.POSITION_IDX not in:
+            print(f"Configuration Error: Invalid POSITION_IDX '{self.POSITION_IDX}'. Must be 0, 1, or 2.")
+            sys.exit(1)
+
+        # Force leverage to 1 for spot trading to avoid potential API errors or incorrect settings
+        if self.CATEGORY_ENUM == Category.SPOT:
+            self.LEVERAGE = 1
+            # This log message will be handled by the logger, so no need to print directly here if logger is set up.
+            # self.logger.info("Leverage set to 1 for SPOT category as it's not applicable.")
+
+
 # =====================================================================
 # LOGGING SETUP
 # =====================================================================
@@ -172,32 +188,37 @@ class Config:
 def setup_logger(config: Config) -> logging.Logger:
     """Setup logging configuration"""
     logger = logging.getLogger('SupertrendBot')
-    # Set logger level from config, ensure it's a valid level
     log_level = getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
     logger.setLevel(log_level)
 
-    # Prevent duplicate handlers if called multiple times
-    if not logger.handlers:
-        # File handler
-        fh = logging.FileHandler(config.LOG_FILE)
-        # Set file handler level to DEBUG to capture all messages for log file, console handler to config level
-        fh.setLevel(logging.DEBUG)
+    # Clear existing handlers to prevent duplicate logs if this function is called multiple times
+    if logger.hasHandlers():
+        logger.handlers.clear()
 
-        # Console handler
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+    if config.LOG_TO_STDOUT_ONLY:
         ch = logging.StreamHandler()
-        ch.setLevel(log_level) # Set console level from config
-
-        # Formatter
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        fh.setFormatter(formatter)
+        ch.setLevel(log_level)
         ch.setFormatter(formatter)
-
+        logger.addHandler(ch)
+    else:
+        # File handler for all logs (DEBUG level)
+        fh = logging.FileHandler(config.LOG_FILE)
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(formatter)
         logger.addHandler(fh)
+
+        # Console handler for specified log level
+        ch = logging.StreamHandler()
+        ch.setLevel(log_level)
+        ch.setFormatter(formatter)
         logger.addHandler(ch)
 
     return logger
+
 
 # =====================================================================
 # PRECISION MANAGEMENT
@@ -227,11 +248,12 @@ class InstrumentSpecs:
     max_position_value: Decimal
     min_position_value: Decimal
 
-    contract_value: Decimal = Decimal('1') # For derivatives, typically the value of one contract
+    contract_value: Decimal = Decimal('1')  # For derivatives, typically the value of one contract
     is_inverse: bool = False
 
     maker_fee: Decimal = Decimal('0.0001')
     taker_fee: Decimal = Decimal('0.0006')
+
 
 class PrecisionManager:
     """Manage decimal precision for different trading pairs"""
@@ -239,16 +261,12 @@ class PrecisionManager:
     def __init__(self, session: HTTP, logger: logging.Logger):
         self.session = session
         self.logger = logger
-        self.instruments: dict[str, InstrumentSpecs] = {}
+        self.instruments: Dict[str, InstrumentSpecs] = {}
         self.load_all_instruments()
 
     def load_all_instruments(self):
         """Load all instrument specifications from Bybit"""
-        # Ensure we are checking the correct categories based on the config and general Bybit offerings
         categories_to_check = [cat.value for cat in Category]
-        if not categories_to_check: # Fallback if Category enum is empty
-            categories_to_check = ["spot", "linear", "inverse", "option"]
-
         self.logger.info(f"Loading instrument specifications for categories: {categories_to_check}")
 
         for category in categories_to_check:
@@ -269,7 +287,7 @@ class PrecisionManager:
 
                         try:
                             specs = self._parse_instrument_specs(inst, category)
-                            self.instruments[symbol] = specs
+                            self.instruments[symbol.upper()] = specs
                             self.logger.debug(f"Loaded specs for {symbol} ({category})")
                         except Exception as parse_e:
                             self.logger.error(f"Error parsing specs for {symbol} ({category}): {parse_e}")
@@ -282,46 +300,42 @@ class PrecisionManager:
                 self.logger.error(f"Exception during loading of {category} instruments: {e}", exc_info=True)
         self.logger.info(f"Finished loading instrument specifications. {len(self.instruments)} symbols loaded.")
 
-
     def _parse_instrument_specs(self, inst: dict, category: str) -> InstrumentSpecs:
         """Parse instrument specifications based on category and Bybit's API structure."""
         symbol = inst['symbol']
 
-        # Filters can be missing for some categories or symbols
         lot_size_filter = inst.get('lotSizeFilter', {})
         price_filter = inst.get('priceFilter', {})
         leverage_filter = inst.get('leverageFilter', {})
-        # For some spot instruments, maxOrderAmt/minOrderAmt might be relevant if lotSizeFilter keys are absent or insufficient
-        lot_size_alt = inst.get('unifiedLotSizeFilter', {}) # Check for unified specific keys
+        lot_size_alt = inst.get('unifiedLotSizeFilter', {}) # For potential unified account specifics
 
-        # Extract values, providing sensible defaults if filters are missing
-        # Price precision (tick_size)
-        tick_size = Decimal(price_filter.get('tickSize', '0.00000001')) # Default to high precision if missing
-        min_price = Decimal(price_filter.get('minPrice', '0'))
-        max_price = Decimal(price_filter.get('maxPrice', '1e9')) # Default to a large number
+        def safe_decimal(value: Any, default: str = '0') -> Decimal:
+            """Safely convert value to Decimal, returning default on error."""
+            try:
+                return Decimal(str(value))
+            except (InvalidOperation, TypeError, ValueError):
+                return Decimal(default)
 
-        # Quantity precision (qty_step)
-        qty_step = Decimal(lot_size_filter.get('qtyStep', lot_size_alt.get('qtyStep', '0.00000001'))) # Default to high precision
-        min_order_qty = Decimal(lot_size_filter.get('minOrderQty', lot_size_alt.get('minOrderQty', '0')))
-        max_order_qty = Decimal(lot_size_filter.get('maxOrderQty', lot_size_alt.get('maxOrderQty', '1e9')))
+        tick_size = safe_decimal(price_filter.get('tickSize', '0.00000001')) # Default to high precision if missing
+        min_price = safe_decimal(price_filter.get('minPrice', '0'))
+        max_price = safe_decimal(price_filter.get('maxPrice', '1e9')) # Default to a large number
 
-        # Leverage
-        min_leverage = Decimal(leverage_filter.get('minLeverage', '1'))
-        max_leverage = Decimal(leverage_filter.get('maxLeverage', '100')) # Default max leverage
-        leverage_step = Decimal(leverage_filter.get('leverageStep', '0.1'))
+        qty_step = safe_decimal(lot_size_filter.get('qtyStep', lot_size_alt.get('qtyStep', '0.00000001'))) # Default to high precision
+        min_order_qty = safe_decimal(lot_size_filter.get('minOrderQty', lot_size_alt.get('minOrderQty', '0')))
+        max_order_qty = safe_decimal(lot_size_filter.get('maxOrderQty', lot_size_alt.get('maxOrderQty', '1e9')))
 
-        # Max/Min Position Value - these can vary significantly by category
-        # For linear/inverse, maxOrderAmt/minOrderAmt in lotSizeFilter might be relevant for contract amounts.
-        # For spot, maxMktOrderQty might be used. It's best to rely on quantity limits if value limits are unclear.
-        max_position_value = Decimal(lot_size_filter.get('maxMktOrderQty', lot_size_filter.get('maxOrderAmt', '1e9')))
-        min_position_value = Decimal(lot_size_filter.get('minOrderAmt', lot_size_filter.get('minOrderQty', '1'))) # Default to a small value
+        min_leverage = safe_decimal(leverage_filter.get('minLeverage', '1'))
+        max_leverage = safe_decimal(leverage_filter.get('maxLeverage', '100')) # Default max leverage
+        leverage_step = safe_decimal(leverage_filter.get('leverageStep', '0.1'))
 
-        # Contract value for derivatives
-        contract_value = Decimal(inst.get('contractValue', '1')) # e.g., 1 for BTCUSDT perpetual
+        # Max/Min Position Value can be tricky, using lotSizeFilter's limits as a proxy
+        max_position_value = safe_decimal(lot_size_filter.get('maxMktOrderQty', lot_size_filter.get('maxOrderAmt', '1e9')))
+        min_position_value = safe_decimal(lot_size_filter.get('minOrderAmt', lot_size_filter.get('minOrderQty', '1'))) # Default to a small value
 
-        # Fees
-        maker_fee = Decimal(inst.get('makerFeeRate', '0.0001'))
-        taker_fee = Decimal(inst.get('takerFeeRate', '0.0006'))
+        contract_value = safe_decimal(inst.get('contractValue', '1')) # e.g., 1 for BTCUSDT perpetual
+
+        maker_fee = safe_decimal(inst.get('makerFeeRate', '0.0001'))
+        taker_fee = safe_decimal(inst.get('takerFeeRate', '0.0006'))
 
         return InstrumentSpecs(
             symbol=symbol,
@@ -346,27 +360,54 @@ class PrecisionManager:
             taker_fee=taker_fee
         )
 
-    def get_specs(self, symbol: str) -> InstrumentSpecs | None:
+    def get_specs(self, symbol: str) -> Optional[InstrumentSpecs]:
         """Get instrument specs for a symbol"""
-        return self.instruments.get(symbol.upper()) # Ensure symbol lookup is case-insensitive
+        return self.instruments.get(symbol.upper())
 
     def _round_decimal(self, value: Decimal, step: Decimal) -> Decimal:
         """Helper to round a Decimal to the nearest step, rounding down."""
-        if step == 0: return value # Avoid division by zero
-        # Use ROUND_DOWN to ensure we don't exceed precision limits by rounding up unexpectedly
-        return (value / step).quantize(Decimal('1'), rounding=ROUND_DOWN) * step
+        if step == 0:
+            return value
+        try:
+            # Use normalize() to get the decimal representation of the step (e.g., 0.01)
+            quantize_exp = step.normalize()
+
+            # Ensure value and step are positive for calculation, handle sign later if needed
+            sign = value.sign
+            value_abs = abs(value)
+            step_abs = abs(step)
+
+            # Calculate the number of steps
+            # Use floor division to round down
+            num_steps = (value_abs // step_abs)
+
+            # Reapply sign and step
+            rounded_value = sign * num_steps * step_abs
+
+            # If the step itself has decimal places, use quantize for precision
+            if quantize_exp.as_tuple().exponent < 0:
+                 rounded_value = rounded_value.quantize(quantize_exp, rounding=ROUND_DOWN)
+
+            return rounded_value
+
+        except Exception as e:
+            self.logger.error(f"Error rounding decimal value {value} with step {step}: {e}", exc_info=True)
+            return value # Return original value if rounding fails
 
     def round_price(self, symbol: str, price: float | Decimal) -> Decimal:
         """Round price to correct tick size, ensuring it's within min/max price bounds."""
         specs = self.get_specs(symbol)
         if not specs:
             self.logger.warning(f"Symbol {symbol} specs not found. Using default high precision rounding for price.")
-            return Decimal(str(price)).quantize(Decimal('0.00000001')) # Default high precision
+            try:
+                # Default to a high precision if specs are missing
+                return Decimal(str(price)).quantize(Decimal('0.00000001'))
+            except Exception:
+                return Decimal(str(price)) # Return original if even high precision fails
 
         price_decimal = Decimal(str(price))
         tick_size = specs.tick_size
 
-        # Round to nearest tick, ensuring it's within bounds
         rounded = self._round_decimal(price_decimal, tick_size)
         # Clamp to min/max price
         rounded = max(specs.min_price, min(rounded, specs.max_price))
@@ -379,12 +420,15 @@ class PrecisionManager:
         specs = self.get_specs(symbol)
         if not specs:
             self.logger.warning(f"Symbol {symbol} specs not found. Using default high precision rounding for quantity.")
-            return Decimal(str(quantity)).quantize(Decimal('0.00000001')) # Default high precision
+            try:
+                # Default to a high precision if specs are missing
+                return Decimal(str(quantity)).quantize(Decimal('0.00000001'))
+            except Exception:
+                return Decimal(str(quantity)) # Return original if even high precision fails
 
         qty_decimal = Decimal(str(quantity))
         qty_step = specs.qty_step
 
-        # Round down to nearest step
         rounded = self._round_decimal(qty_decimal, qty_step)
         # Clamp to min/max quantity
         rounded = max(specs.min_order_qty, min(rounded, specs.max_order_qty))
@@ -392,7 +436,7 @@ class PrecisionManager:
         self.logger.debug(f"Rounding quantity {qty_decimal} for {symbol} with step {qty_step} -> {rounded} (Min: {specs.min_order_qty}, Max: {specs.max_order_qty})")
         return rounded
 
-    def get_decimal_places(self, symbol: str) -> tuple[int, int]:
+    def get_decimal_places(self, symbol: str) -> Tuple[int, int]:
         """Get decimal places for price and quantity based on tick_size and qty_step."""
         specs = self.get_specs(symbol)
         if not specs:
@@ -407,6 +451,7 @@ class PrecisionManager:
         except Exception as e:
             self.logger.error(f"Error calculating decimal places for {symbol}: {e}", exc_info=True)
             return 2, 3 # Fallback
+
 
 # =====================================================================
 # ORDER SIZING CALCULATOR
@@ -427,10 +472,11 @@ class OrderSizingCalculator:
         entry_price: Decimal,
         stop_loss_price: Decimal,
         leverage: Decimal
-    ) -> Decimal | None:
+    ) -> Optional[Decimal]:
         """
         Calculate position size in base currency units based on fixed risk percentage, leverage,
         entry price, and stop loss price. Returns None if calculation is not possible.
+        Enhanced for category-specific handling.
         """
         specs = self.precision.get_specs(symbol)
         if not specs:
@@ -470,9 +516,7 @@ class OrderSizingCalculator:
             return None
 
         # Apply leverage to determine the maximum tradeable position value based on account balance
-        # effective_capital_usd = account_balance_usdt * leverage
         # For derivatives, max position value might also be limited by 'max_position_value' from specs
-        # For simplicity, we'll cap based on account balance and leverage.
         max_tradeable_value_usd = account_balance_usdt * leverage
 
         # Cap the needed position value by maximum tradeable value and Bybit's max position value limits
@@ -487,11 +531,8 @@ class OrderSizingCalculator:
             self.logger.warning(f"Calculated position value ({position_value_usd:.4f} USD) is below minimum ({specs.min_position_value:.4f} USD). Using minimum.")
             position_value_usd = specs.min_position_value
 
-        # Convert position value to quantity in base currency units
-        # For linear derivatives: Value (Quote) = Quantity (Base) * Price (Quote/Base)
-        # For inverse derivatives: Value (Base) = Quantity (Base) * Contract Value (Base) -> This needs careful handling, but typically quantity is in Base currency units
-        # For spot: Value (Quote) = Quantity (Base) * Price (Quote/Base)
-        # Generally, for pybit V5, qty is in base currency units.
+        # Convert position value to quantity in base currency units (category-specific)
+        # For linear and spot: Value (Quote) = Quantity (Base) * Price (Quote/Base)
         quantity_base = position_value_usd / entry_price
 
         # Round the quantity to the nearest valid step
@@ -513,7 +554,6 @@ class OrderSizingCalculator:
             return None
 
         # Recalculate actual risk based on final quantity and compare against allowed risk
-        # This is a good sanity check.
         actual_position_value_usd = final_quantity * entry_price
         actual_risk_amount_usdt = actual_position_value_usd * stop_distance_pct
         actual_risk_percent = (actual_risk_amount_usdt / account_balance_usdt) * 100 if account_balance_usdt > 0 else Decimal('0')
@@ -524,14 +564,20 @@ class OrderSizingCalculator:
 
         # Optional: Check if actual risk exceeds the allowed risk percentage
         if actual_risk_percent > risk_percent * Decimal('1.01'): # Allow for slight rounding discrepancies
-            self.logger.warning(f"Calculated risk ({actual_risk_percent:.4f}%) slightly exceeds allowed risk ({risk_percent:.4f}%). Clamping might be needed or review parameters.")
-            # For now, we allow it as the calculation is based on achieving the target risk.
+            self.logger.warning(f"Calculated risk ({actual_risk_percent:.4f}%) slightly exceeds allowed risk ({risk_percent:.4f}%). Review parameters.")
 
         return final_quantity
+
 
 # =====================================================================
 # TRAILING STOP MANAGER
 # =====================================================================
+
+```python
+import logging
+from decimal import Decimal
+from typing import Dict, Optional
+from datetime import datetime
 
 class TrailingStopManager:
     """Manage trailing stop losses for profitable positions by updating exchange SL."""
@@ -544,7 +590,7 @@ class TrailingStopManager:
         # 'activation_price': Decimal, 'trail_percent': Decimal,
         # 'current_stop': Decimal, 'highest_price': Decimal/None,
         # 'lowest_price': Decimal/None, 'is_activated': bool}}
-        self.active_trailing_stops: dict[str, dict] = {}
+        self.active_trailing_stops: Dict[str, dict] = {}
 
     def initialize_trailing_stop(
         self,
@@ -554,7 +600,7 @@ class TrailingStopManager:
         current_price: Decimal,
         trail_percent: float, # Pass as percentage
         activation_percent: float # Pass as percentage
-    ) -> dict | None:
+    ) -> Optional[dict]:
         """
         Initialize trailing stop for a position.
         Returns the initial trailing stop configuration if successful.
@@ -562,6 +608,13 @@ class TrailingStopManager:
         specs = self.precision.get_specs(symbol)
         if not specs:
             self.logger.error(f"Cannot initialize trailing stop for {symbol}: Specs not found.")
+            return None
+
+        # Trailing stops are typically not applicable or handled differently for spot.
+        # For Bybit, it's mainly for derivatives.
+        if specs.category == 'spot':
+            self.logger.debug(f"Trailing stops may not be fully supported or applicable for spot category {symbol}. Skipping initialization logic.")
+            # Return None or a placeholder if spot does not support it.
             return None
 
         trail_pct = Decimal(str(trail_percent / 100))
@@ -648,72 +701,7 @@ class TrailingStopManager:
                 ts_info['lowest_price'] = current_price # Start tracking from this price
                 self.logger.info(f"Trailing stop activated for {symbol} at {current_price}.")
 
-            # If activated, update lowest price and stop if current price is lower
-            if ts_info['is_activated']:
-                if current_price < ts_info['lowest_price']:
-                    ts_info['lowest_price'] = current_price
-                    new_stop = current_price * (Decimal('1') + ts_info['trail_percent'])
-
-                    # Only update if the new stop is lower than the current stop
-                    if new_stop < ts_info['current_stop']:
-                        ts_info['current_stop'] = self.precision.round_price(symbol, new_stop)
-                        updated_locally = True
-                        self.logger.debug(f"Trailing stop updated for {symbol}: New Stop={ts_info['current_stop']}")
-
-        ts_info['last_update'] = datetime.now()
-
-        # If locally updated and exchange update is requested, attempt to update exchange
-        if updated_locally and update_exchange and ts_info['current_stop'] > 0:
-            self.logger.info(f"Attempting to update stop loss on exchange for {symbol} to {ts_info['current_stop']}")
-            success = self._update_stop_loss_on_exchange(symbol, ts_info['current_stop'])
-            if success:
-                return True # Indicate that an exchange update was attempted and succeeded
-            else:
-                # Log failure but indicate local update might have occurred
-                self.logger.error(f"Failed to update trailing stop on exchange for {symbol}. Local state updated, but exchange state may be stale.")
-                return True # Still return True if local update happened
-        elif updated_locally: # Locally updated but not updated on exchange (e.g., update_exchange=False or stop_price=0)
-            return True
-        else: # Not updated locally
-            return False
-
-    def _update_stop_loss_on_exchange(self, symbol: str, stop_price: Decimal) -> bool:
-        """Update stop loss on exchange using set_trading_stop"""
-        specs = self.precision.get_specs(symbol)
-        if not specs:
-            self.logger.error(f"Failed to update stop loss for {symbol}: Specs not found.")
-            return False
-
-        try:
-            response = self.session.set_trading_stop(
-                category=specs.category,
-                symbol=symbol,
-                stopLoss=str(stop_price),
-                slOrderType='Market' # Typically Market order for stop loss
-            )
-
-            if response and response['retCode'] == 0:
-                self.logger.info(f"Successfully updated stop loss on exchange for {symbol} to {stop_price}")
-                return True
-            else:
-                error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
-                self.logger.error(f"Failed to update stop loss on exchange for {symbol}: {error_msg}")
-                return False
-
-        except Exception as e:
-            self.logger.error(f"Exception updating stop loss on exchange for {symbol}: {e}", exc_info=True)
-            return False
-
-    def remove_trailing_stop(self, symbol: str):
-        """Remove trailing stop for a symbol"""
-        if symbol in self.active_trailing_stops:
-            del self.active_trailing_stops[symbol]
-            self.logger.info(f"Removed trailing stop data for {symbol}")
-
-# =====================================================================
-# MAIN TRADING BOT CLASS
-# =====================================================================
-
+            # If activated,
 class SupertrendBot:
     def __init__(self, config: Config):
         self.config = config
@@ -722,27 +710,8 @@ class SupertrendBot:
         self.logger.info("Initializing Supertrend Trading Bot...")
 
         # --- API Session Initialization ---
-        try:
-            self.session = HTTP(
-                testnet=config.TESTNET,
-                api_key=config.API_KEY,
-                api_secret=config.API_SECRET
-            )
-            # Test connection by fetching instruments - ensures API keys are valid early on
-            # This is a simple check, a more robust connection test could be implemented
-            self.session.get_instruments_info(category=config.CATEGORY_ENUM.value)
-            self.logger.info(f"Successfully connected to Bybit API ({'Testnet' if config.TESTNET else 'Mainnet'}).")
-        except FailedRequestError as e:
-            # Handle specific Bybit API errors like rate limiting or IP blocks
-            self.logger.critical(f"Failed to initialize Bybit API session or validate keys: {e}", exc_info=True)
-            self.logger.critical("This error often indicates an issue with your API keys, network connectivity,")
-            self.logger.critical("or you might be experiencing Bybit's IP rate limits or geo-restrictions (e.g., from the USA).")
-            self.logger.critical("Please check your API key permissions, network, and Bybit's API documentation regarding IP access.")
-            sys.exit(1) # Exit the program as essential initialization failed
-        except Exception as e:
-            # Catch any other unexpected errors during initialization
-            self.logger.critical(f"An unexpected error occurred during Bybit API session initialization: {e}", exc_info=True)
-            sys.exit(1)
+        self.session = None
+        self._init_api_session() # Initialize and test API connection with retries
 
         # --- Managers Initialization ---
         self.precision_manager = PrecisionManager(self.session, self.logger)
@@ -752,9 +721,9 @@ class SupertrendBot:
         # --- Data Storage ---
         self.market_data = pd.DataFrame()
         # Stores active positions: {symbol: position_data} - might only track one symbol for this bot
-        self.current_positions: dict[str, dict] = {}
+        self.current_positions: Dict[str, dict] = {}
         # Stores open orders: {order_id: order_data}
-        self.open_orders: dict[str, dict] = {}
+        self.open_orders: Dict[str, dict] = {}
         self.account_balance_usdt: Decimal = Decimal('0.0')
         self.start_balance_usdt: Decimal = Decimal('0.0')
         self.daily_loss_amount: Decimal = Decimal('0.0')
@@ -762,27 +731,70 @@ class SupertrendBot:
         # --- Strategy State ---
         # Current active position details for the configured symbol
         self.position_active: bool = False
-        self.current_position_side: str | None = None # 'Buy' or 'Sell'
+        self.current_position_side: Optional[str] = None # 'Buy' or 'Sell'
         self.current_position_entry_price: Decimal = Decimal('0')
         self.current_position_size: Decimal = Decimal('0')
-        self.last_signal: Signal = Signal.NEUTRAL # To track signal changes
+        self.last_signal: Signal = Signal.NEUTRAL
 
         self.logger.info(f"Bot Configuration Loaded:")
         self.logger.info(f"  Mode: {'Testnet' if config.TESTNET else 'Mainnet'}")
         self.logger.info(f"  Symbol: {config.SYMBOL}, Category: {config.CATEGORY_ENUM.value}")
         self.logger.info(f"  Leverage: {config.LEVERAGE}x")
+        self.logger.info(f"  Hedge Mode: {config.HEDGE_MODE}, PositionIdx: {config.POSITION_IDX}")
         self.logger.info(f"  Timeframe: {config.TIMEFRAME}")
         self.logger.info(f"  Supertrend Params: Period={config.ST_PERIOD}, Multiplier={config.ST_MULTIPLIER}")
         self.logger.info(f"  Risk Params: Risk/Trade={config.RISK_PER_TRADE_PCT}%, SL={config.STOP_LOSS_PCT*100:.2f}%, TP={config.TAKE_PROFIT_PCT*100:.2f}%, Trail={config.TRAILING_STOP_PCT*100:.2f}%, Max Daily Loss={config.MAX_DAILY_LOSS_PCT*100:.2f}%")
-        self.logger.info(f"  Execution: OrderType={config.ORDER_TYPE_ENUM.value}, TimeInForce={config.TIME_IN_FORCE}")
+        self.logger.info(f"  Execution: OrderType={config.ORDER_TYPE_ENUM.value}, TimeInForce={config.TIME_IN_FORCE}, ReduceOnly={config.REDUCE_ONLY}")
         self.logger.info(f"  Loop Interval: {config.LOOP_INTERVAL_SEC} seconds")
+        self.logger.info(f"  API Retry: MaxRetries={config.MAX_API_RETRIES}, RetryDelay={config.API_RETRY_DELAY_SEC}s")
+        self.logger.info(f"  Auto Close on Shutdown: {config.AUTO_CLOSE_ON_SHUTDOWN}")
 
+
+        # Graceful shutdown handling
+        self._stop_requested = False
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
+    def _signal_handler(self, signum: int, frame: Any):
+        """Handler for termination signals to stop the bot gracefully."""
+        self.logger.info(f"Signal {signum} received, stopping bot gracefully...")
+        self._stop_requested = True
+
+    def _init_api_session(self):
+        """Initialize Bybit API session with retry logic."""
+        for attempt in range(1, self.config.MAX_API_RETRIES + 1):
+            try:
+                self.session = HTTP(
+                    testnet=self.config.TESTNET,
+                    api_key=self.config.API_KEY,
+                    api_secret=self.config.API_SECRET
+                )
+                # Test connection by fetching instruments info. This also validates API keys early on.
+                self.session.get_instruments_info(category=self.config.CATEGORY_ENUM.value)
+                self.logger.info(f"Successfully connected to Bybit API ({'Testnet' if self.config.TESTNET else 'Mainnet'}).")
+                return # Exit loop on success
+            except FailedRequestError as e:
+                self.logger.critical(f"Failed to initialize Bybit API session or validate keys (Attempt {attempt}/{self.config.MAX_API_RETRIES}): {e}", exc_info=True)
+                if attempt < self.config.MAX_API_RETRIES:
+                    self.logger.info(f"Retrying in {self.config.API_RETRY_DELAY_SEC} seconds...")
+                    time.sleep(self.config.API_RETRY_DELAY_SEC)
+                else:
+                    self.logger.critical("Max retries reached. Exiting.")
+                    sys.exit(1)
+            except Exception as e:
+                self.logger.critical(f"Unexpected error during API session initialization (Attempt {attempt}/{self.config.MAX_API_RETRIES}): {e}", exc_info=True)
+                if attempt < self.config.MAX_API_RETRIES:
+                    self.logger.info(f"Retrying in {self.config.API_RETRY_DELAY_SEC} seconds...")
+                    time.sleep(self.config.API_RETRY_DELAY_SEC)
+                else:
+                    self.logger.critical("Max retries reached. Exiting.")
+                    sys.exit(1)
 
     # =====================================================================
     # DATA FETCHING METHODS
     # =====================================================================
 
-    def fetch_klines(self, limit: int | None = None) -> pd.DataFrame:
+    def fetch_klines(self, limit: Optional[int] = None) -> pd.DataFrame:
         """Fetch historical kline data from Bybit."""
         try:
             fetch_limit = limit if limit else self.config.LOOKBACK_PERIODS
@@ -830,7 +842,7 @@ class SupertrendBot:
             self.logger.error(f"Exception fetching klines for {self.config.SYMBOL}: {e}", exc_info=True)
             return pd.DataFrame()
 
-    def get_ticker(self) -> dict | None:
+    def get_ticker(self) -> Optional[dict]:
         """Get current ticker data for the symbol."""
         try:
             response = self.session.get_tickers(
@@ -841,7 +853,7 @@ class SupertrendBot:
             if response and response['retCode'] == 0:
                 tickers = response['result'].get('list', [])
                 if tickers:
-                    return tickers[0] # Expecting a single ticker for the specified symbol
+                    return tickers # Expecting a single ticker for the specified symbol
                 else:
                     self.logger.warning(f"Ticker data list is empty for {self.config.SYMBOL}.")
                     return None
@@ -859,7 +871,7 @@ class SupertrendBot:
     # =====================================================================
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate Supertrend and ATR using pandas_ta."""
+        """Calculate Supertrend and ATR using pandas_ta. Enhanced with robust column handling and NaN removal."""
         if df.empty:
             self.logger.warning("DataFrame is empty, cannot calculate indicators.")
             return df
@@ -876,34 +888,60 @@ class SupertrendBot:
             df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=self.config.ST_PERIOD)
 
             # Calculate Supertrend
-            # pandas_ta's supertrend returns multiple columns: Supertrend, Supertrend_Direction,
-            # Supertrend_UpperBand, Supertrend_LowerBand
-            st = ta.supertrend(
+            # pandas_ta's supertrend returns multiple columns: Supertrend value, direction, lower band, upper band
+            # The column names are generated based on parameters. We'll infer them.
+            st_col_prefix = f'SUPERT_{self.config.ST_PERIOD}_{self.config.ST_MULTIPLIER}'
+            st_direction_col = f'{st_col_prefix}d' # Direction column suffix
+
+            # Calculate Supertrend. `fillna=0` is used here for immediate calculation,
+            # but rows with NaNs will be dropped later.
+            st_results = ta.supertrend(
                 high=df['high'],
                 low=df['low'],
                 close=df['close'],
                 length=self.config.ST_PERIOD,
-                multiplier=self.config.ST_MULTIPLIER
+                multiplier=self.config.ST_MULTIPLIER,
+                fillna=0
             )
 
-            # Rename columns for clarity and consistency
-            # Example: SUPERT_10_3.0, SUPERTd_10_3.0, SUPERTl_10_3.0, SUPERTu_10_3.0
-            st_col_prefix = f'SUPERT_{self.config.ST_PERIOD}_{self.config.ST_MULTIPLIER}'
-            df['supertrend'] = st[f'{st_col_prefix}']
-            df['supertrend_direction'] = st[f'{st_col_prefix}d']
-            # Bybit's Supertrend bands logic might differ; pandas_ta names these as Lower/Upper band based on direction.
-            # For V5 JSON structure compatibility, we use generic names.
-            # The 'supertrend' value itself should be the price line.
-            # The direction determines if it's an upper or lower band.
-            # The actual band values are often not directly needed if we use the 'supertrend' price and 'direction'.
-            # We will use the `supertrend` value and `supertrend_direction` for signals.
+            if st_results is not None and not st_results.empty:
+                # Check for expected column names based on pandas_ta version and input parameters
+                expected_st_col = None
+                expected_dir_col = None
+                for col in st_results.columns:
+                    if col.startswith(st_col_prefix) and 'd' not in col:
+                        expected_st_col = col
+                    elif col.startswith(st_col_prefix) and 'd' in col:
+                        expected_dir_col = col
 
-            # Fill NaNs created by indicator calculations (e.g., at the beginning of the series)
-            # ffill is generally suitable for time-series data indicators.
-            df = df.ffill()
-            # Any remaining NaNs (e.g., if the first few rows were all NaN) are filled with 0.
-            # This might need adjustment based on specific indicator behavior or if '0' is a problematic value.
-            df = df.fillna(0)
+                if expected_st_col and expected_dir_col:
+                    df['supertrend'] = st_results[expected_st_col]
+                    df['supertrend_direction'] = st_results[expected_dir_col]
+                    self.logger.debug(f"Supertrend columns joined: '{expected_st_col}' -> 'supertrend', '{expected_dir_col}' -> 'supertrend_direction'")
+                else:
+                    self.logger.warning("Could not find expected Supertrend columns. Setting neutral indicators.")
+                    df['supertrend'] = df['close']  # Fallback to close price
+                    df['supertrend_direction'] = 0
+            else:
+                self.logger.warning("Supertrend calculation returned empty DataFrame. Setting neutral indicators.")
+                df['supertrend'] = df['close']  # Fallback to close price
+                df['supertrend_direction'] = 0
+
+            # Ensure all necessary columns exist before dropna, adding them with default if missing
+            required_indicator_cols = ['supertrend', 'supertrend_direction', 'atr']
+            for col in required_indicator_cols:
+                if col not in df.columns:
+                    df[col] = 0 # Add missing columns with default if they didn't get created
+
+            # Drop rows where calculated indicators are NaN. This typically happens at the beginning of the series.
+            df.dropna(subset=required_indicator_cols, inplace=True)
+
+            if df.empty:
+                self.logger.warning("All rows dropped due to NaN indicators. Cannot proceed.")
+                return pd.DataFrame()
+
+            # Ensure direction is integer
+            df['supertrend_direction'] = df['supertrend_direction'].astype(int)
 
             self.logger.debug(f"Supertrend and ATR indicators calculated. DataFrame shape: {df.shape}")
             return df
@@ -932,9 +970,8 @@ class SupertrendBot:
 
             # Supertrend direction: 1 for uptrend, -1 for downtrend
             # Supertrend line: the price value of the Supertrend indicator
-
-            current_st_dir = latest.get('supertrend_direction', 0) # Default to 0 if missing
-            prev_st_dir = previous.get('supertrend_direction', 0) # Default to 0 if missing
+            current_st_dir = int(latest.get('supertrend_direction', 0)) # Ensure int
+            prev_st_dir = int(previous.get('supertrend_direction', 0)) # Ensure int
 
             current_close = latest.get('close', Decimal('0.0'))
             current_st_price = latest.get('supertrend', Decimal('0.0'))
@@ -974,7 +1011,7 @@ class SupertrendBot:
     # RISK MANAGEMENT
     # =====================================================================
 
-    def calculate_position_size_usd(self, entry_price: float, stop_loss_price: float) -> Decimal | None:
+    def calculate_position_size_usd(self, entry_price: float, stop_loss_price: float) -> Optional[Decimal]:
         """Calculate position size in USDT based on risk parameters."""
         try:
             # Convert inputs to Decimal for precision
@@ -1036,9 +1073,9 @@ class SupertrendBot:
     # =====================================================================
 
     def place_order(self, side: str, qty: Decimal, order_type: OrderType,
-                   entry_price: Decimal | None = None, stop_loss_price: Decimal | None = None,
-                   take_profit_price: Decimal | None = None) -> dict | None:
-        """Place an order on Bybit, handling precision and Bybit V5 API parameters."""
+                   entry_price: Optional[Decimal] = None, stop_loss_price: Optional[Decimal] = None,
+                   take_profit_price: Optional[Decimal] = None) -> Optional[dict]:
+        """Place an order on Bybit, handling precision and Bybit V5 API parameters. Enhanced for spot category."""
         specs = self.precision_manager.get_specs(self.config.SYMBOL) # Use precision_manager
         if not specs:
             self.logger.error(f"Cannot place order for {self.config.SYMBOL}: Specs not found.")
@@ -1054,7 +1091,7 @@ class SupertrendBot:
                 return None
 
             # Prepare base order parameters
-            params = {
+            params: Dict[str, Any] = {
                 "category": specs.category,
                 "symbol": self.config.SYMBOL,
                 "side": side,
@@ -1063,8 +1100,14 @@ class SupertrendBot:
                 "timeInForce": self.config.TIME_IN_FORCE,
                 "reduceOnly": self.config.REDUCE_ONLY,
                 "closeOnTrigger": False, # Typically false unless specific use case
-                "positionIdx": 0 # Default to one-way mode (0) for simplicity; adjust if hedge mode is used.
+                "positionIdx": self.config.POSITION_IDX if self.config.HEDGE_MODE else 0 # Use configured positionIdx if hedge mode is enabled
             }
+
+            # For spot, remove derivative-specific params that are not applicable
+            if specs.category == 'spot':
+                params.pop('reduceOnly', None)
+                # Note: positionIdx might still be relevant for Bybit's spot API in some contexts, but generally 0 for spot.
+                # We'll keep it as it is, Bybit's API should handle it.
 
             # Add price for limit orders
             if order_type == OrderType.LIMIT:
@@ -1149,8 +1192,7 @@ class SupertrendBot:
             if response and response['retCode'] == 0:
                 self.logger.info(f"Order {order_id} cancelled successfully for {self.config.SYMBOL}.")
                 # Remove from open orders tracking if it exists
-                if order_id in self.open_orders:
-                    del self.open_orders[order_id]
+                self.open_orders.pop(order_id, None)
                 return True
             else:
                 error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
@@ -1189,6 +1231,31 @@ class SupertrendBot:
             self.logger.error(f"Exception cancelling all orders for {self.config.SYMBOL}: {e}", exc_info=True)
             return False
 
+    def fetch_open_orders(self):
+        """Fetch open orders from exchange to sync local state."""
+        specs = self.precision_manager.get_specs(self.config.SYMBOL)
+        if not specs:
+            self.logger.error(f"Cannot fetch open orders for {self.config.SYMBOL}: Specs not found.")
+            return
+
+        try:
+            self.logger.debug(f"Fetching open orders for {self.config.SYMBOL}...")
+            response = self.session.get_open_orders(
+                category=specs.category,
+                symbol=self.config.SYMBOL
+            )
+            if response and response['retCode'] == 0:
+                orders = response['result'].get('list', [])
+                self.open_orders.clear()
+                for order in orders:
+                    self.open_orders[order['orderId']] = order
+                self.logger.debug(f"Fetched {len(orders)} open orders for {self.config.SYMBOL}.")
+            else:
+                error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
+                self.logger.error(f"Failed to fetch open orders for {self.config.SYMBOL}: {error_msg}")
+        except Exception as e:
+            self.logger.error(f"Exception fetching open orders for {self.config.SYMBOL}: {e}", exc_info=True)
+
     # =====================================================================
     # POSITION MANAGEMENT
     # =====================================================================
@@ -1198,6 +1265,17 @@ class SupertrendBot:
         specs = self.precision_manager.get_specs(self.config.SYMBOL) # Use precision_manager
         if not specs:
             self.logger.error(f"Cannot get positions for {self.config.SYMBOL}: Specs not found.")
+            return
+
+        # Spot trading doesn't have open positions in the same way derivatives do.
+        # We'll reset state if category is spot, as position management is different.
+        if specs.category == 'spot':
+            self.logger.debug("Position status reset for spot category.")
+            self.position_active = False
+            self.current_position_side = None
+            self.current_position_entry_price = Decimal('0')
+            self.current_position_size = Decimal('0')
+            self.trailing_stop_manager.remove_trailing_stop(self.config.SYMBOL)
             return
 
         try:
@@ -1242,7 +1320,7 @@ class SupertrendBot:
                                             entry_price=self.current_position_entry_price,
                                             current_price=current_mark_price, # Use mark price for TS init/update
                                             trail_percent=self.config.TRAILING_STOP_PCT * 100, # Pass as percentage
-                                            activation_percent=self.config.TRAILING_STOP_PCT * 100 # Simple activation for now
+                                            activation_percent=self.config.TRAILING_STOP_PCT * 100 # Simple activation for now (can be made configurable)
                                         )
                                 else:
                                     self.logger.warning(f"Mark price not available for {self.config.SYMBOL} position, cannot initialize trailing stop.")
@@ -1272,7 +1350,6 @@ class SupertrendBot:
                 self.current_position_size = Decimal('0')
                 self.trailing_stop_manager.remove_trailing_stop(self.config.SYMBOL)
 
-
         except Exception as e:
             self.logger.error(f"Exception getting positions for {self.config.SYMBOL}: {e}", exc_info=True)
             # If an exception occurs, assume no position for safety
@@ -1292,6 +1369,12 @@ class SupertrendBot:
         specs = self.precision_manager.get_specs(self.config.SYMBOL) # Use precision_manager
         if not specs:
             self.logger.error(f"Cannot close position for {self.config.SYMBOL}: Specs not found.")
+            return False
+
+        # Spot category is handled differently if closing positions is needed.
+        # For this bot's current logic (derivatives focus), we'll warn if trying to close on spot.
+        if specs.category == 'spot':
+            self.logger.warning(f"Attempting to close position for spot symbol {self.config.SYMBOL}. Spot position management is not explicitly handled here. Consider manual closing.")
             return False
 
         try:
@@ -1337,6 +1420,11 @@ class SupertrendBot:
             self.logger.error(f"Cannot update stop loss for {self.config.SYMBOL}: Specs not found.")
             return False
 
+        # Spot category does not support direct stop loss setting via set_trading_stop.
+        if specs.category == 'spot':
+            self.logger.warning("Stop loss updates via set_trading_stop not supported for spot category.")
+            return False
+
         try:
             # Round the stop loss price to the correct tick size
             rounded_sl = self.precision_manager.round_price(self.config.SYMBOL, stop_loss_price) # Use precision_manager
@@ -1355,7 +1443,6 @@ class SupertrendBot:
             if response and response['retCode'] == 0:
                 self.logger.info(f"Stop loss updated successfully on exchange for {self.config.SYMBOL} to {rounded_sl}")
                 # Update internal state if needed (though often not necessary if only exchange SL is changed)
-                # E.g., if we were tracking our own SL order ID, we'd update it here.
                 return True
             else:
                 error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
@@ -1371,9 +1458,10 @@ class SupertrendBot:
     # =====================================================================
 
     def get_account_balance_usdt(self) -> Decimal:
-        """Get current account balance in USDT and update internal state."""
-        account_type = "UNIFIED" if self.config.CATEGORY_ENUM.value in ["linear", "option"] else "CONTRACT" # Generally CONTRACT for derivatives, UNIFIED can also work for linear. SPOT is separate.
-        if self.config.CATEGORY_ENUM.value == "spot":
+        """Get current account balance in USDT and update internal state. Enhanced for unified accounts."""
+        # Determine the account type to query based on the configured category
+        account_type = "UNIFIED" # Default for derivatives (linear, inverse, option)
+        if self.config.CATEGORY_ENUM == Category.SPOT:
             account_type = "SPOT"
 
         try:
@@ -1391,9 +1479,8 @@ class SupertrendBot:
                         self.logger.debug(f"Successfully fetched account balance: {balance:.4f} USDT ({account_type})")
                         return balance
 
-                # If USDT is not found, check for other quote currencies if applicable, or return 0
-                self.logger.warning(f"USDT balance not found in response for account type {account_type}. Checking other quote currencies if applicable or returning 0.")
-                # This part might need adjustment if the bot trades with different quote currencies
+                # If USDT is not found, return 0
+                self.logger.warning(f"USDT balance not found in response for account type {account_type}. Returning 0.")
                 self.account_balance_usdt = Decimal('0.0')
                 return Decimal('0.0')
             else:
@@ -1446,12 +1533,9 @@ class SupertrendBot:
 
             # Bybit V5 set_leverage parameters: category, symbol, buyLeverage, sellLeverage
             # For one-way mode, buy and sell leverage should be the same.
-            # For hedge mode, they can potentially differ, but we'll use the same value for simplicity.
+            # For hedge mode, they can potentially differ, but we'll use the same value.
             response = self.session.set_leverage(
-                # FIX: Use the bot's configured category directly, as specs.category might be inconsistent or incorrect.
-                # The error "Illegal category (ErrCode: 10001)" indicates that "spot" was passed when it should have been "linear".
-                # By using config.CATEGORY_ENUM.value, we ensure the correct category is used.
-                category=self.config.CATEGORY_ENUM.value,
+                category=self.config.CATEGORY_ENUM.value, # Use the validated category enum value
                 symbol=self.config.SYMBOL,
                 buyLeverage=leverage_str,
                 sellLeverage=leverage_str
@@ -1462,14 +1546,30 @@ class SupertrendBot:
                 return True
             else:
                 error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
-                # Common error: Leverage already set to the same value (retCode 34036 in some contexts, might vary)
-                # Check if the error message indicates it's already set correctly.
+                # Common error: Leverage already set to the same value
                 if "leverage is already set" in error_msg.lower() or "same as the current" in error_msg.lower():
                     self.logger.info(f"Leverage for {self.config.SYMBOL} is already set to {leverage_str}x. No change needed.")
                     return True
-                self.logger.error(f"Failed to set leverage for {self.config.SYMBOL}: {error_msg}")
-                return False
+                # Handle errors indicating leverage might not be applicable or supported for the symbol/category
+                # Check for common error codes or messages associated with unsupported leverage.
+                elif "leverage not modified" in error_msg.lower() or "illegal category" in error_msg.lower() or "110043" in str(response.get('retCode')):
+                     self.logger.warning(f"Could not set leverage for {self.config.SYMBOL} ({self.config.CATEGORY_ENUM.value}): Leverage may not be supported, applicable for this symbol/category, or already set correctly. Error: {error_msg}")
+                     # Return True as the bot should not fail if leverage is not applicable, as long as it doesn't actively prevent trading.
+                     return True
+                else:
+                    self.logger.error(f"Failed to set leverage for {self.config.SYMBOL}: {error_msg}")
+                    return False
 
+        except InvalidRequestError as e:
+            # Catch specific Bybit API errors for invalid requests, which leverage setting might fall into.
+            # Specifically check for error code 110043 or related messages indicating it's not supported/modified.
+            error_msg_lower = str(e).lower()
+            if "leverage not modified" in error_msg_lower or "illegal category" in error_msg_lower or "110043" in error_msg_lower:
+                 self.logger.warning(f"Could not set leverage for {self.config.SYMBOL} ({self.config.CATEGORY_ENUM.value}): Leverage may not be supported, applicable for this symbol/category, or already set correctly. Error: {e}")
+                 return True # Return True to allow bot to continue
+            else:
+                self.logger.error(f"Invalid request error setting leverage for {self.config.SYMBOL}: {e}. This might indicate the symbol or category does not support leverage adjustments.", exc_info=True)
+                return False # Propagate failure for other InvalidRequestErrors
         except Exception as e:
             self.logger.error(f"Exception setting leverage for {self.config.SYMBOL}: {e}", exc_info=True)
             return False
@@ -1533,8 +1633,8 @@ class SupertrendBot:
                         qty=position_qty,
                         order_type=self.config.ORDER_TYPE_ENUM,
                         entry_price=current_price if self.config.ORDER_TYPE_ENUM == OrderType.LIMIT else None,
-                        stop_loss_price=stop_loss_price, # Pass as Decimal
-                        take_profit_price=take_profit_price # Pass as Decimal
+                        stop_loss_price=stop_loss_price, # SL/TP are handled in place_order to check category
+                        take_profit_price=take_profit_price
                     )
 
                     if order_result:
@@ -1597,16 +1697,15 @@ class SupertrendBot:
                     self.close_position() # Attempt to close the current position
 
                 # 3. Handle Trailing Stop Loss Updates
-                # Only update trailing stop if enabled and we are in a position
-                if self.config.TRAILING_STOP_PCT > 0:
+                # Only update trailing stop if enabled and we are in a position and the category supports it
+                if self.config.TRAILING_STOP_PCT > 0 and specs.category != 'spot':
                     # The TrailingStopManager handles the logic of activation and price updates
                     # We need to provide the current market price (or mark price if available)
                     # From get_positions(), we might have 'markPrice' if available. Otherwise, use lastPrice from ticker.
                     current_price_for_ts = current_price
-                    if self.current_position_side: # If we have position info, check for markPrice
-                        pos_data = self.current_positions.get(self.config.SYMBOL)
-                        if pos_data and pos_data.get('markPrice'):
-                            current_price_for_ts = Decimal(pos_data['markPrice'])
+                    pos_data = self.current_positions.get(self.config.SYMBOL) # Get current position data
+                    if pos_data and pos_data.get('markPrice'):
+                        current_price_for_ts = Decimal(pos_data['markPrice'])
 
                     # Update trailing stop. The manager will decide if exchange SL needs updating.
                     # The update_exchange=True flag tells the manager to try and push changes to Bybit.
@@ -1625,6 +1724,8 @@ class SupertrendBot:
         try:
             # Initial setup: Set leverage and fetch initial state
             if not self.set_leverage():
+                # The set_leverage method now handles SPOT category gracefully and potential errors like 110043.
+                # If it returns False for other reasons, it's a critical failure.
                 self.logger.critical("Failed to set initial leverage. Bot cannot proceed.")
                 return
 
@@ -1634,6 +1735,7 @@ class SupertrendBot:
                 self.logger.critical("Failed to get initial account balance or balance is zero. Bot cannot proceed.")
                 return
             self.start_balance_usdt = initial_balance
+            # Calculate daily loss amount based on start balance and percentage
             self.daily_loss_amount = self.start_balance_usdt * (Decimal(str(self.config.MAX_DAILY_LOSS_PCT)) / Decimal('100'))
             self.logger.info(f"Starting Balance: {self.start_balance_usdt:.4f} USDT. Daily Loss Limit: {self.daily_loss_amount:.4f} USDT.")
 
@@ -1642,7 +1744,7 @@ class SupertrendBot:
 
             # Main execution loop
             self.logger.info("Starting main trading loop...")
-            while True:
+            while not self._stop_requested: # Loop until shutdown signal is received
                 try:
                     # Fetch market data (klines)
                     self.market_data = self.fetch_klines()
@@ -1690,7 +1792,8 @@ class SupertrendBot:
                         f"Balance={current_balance:.4f} USDT | "
                         f"PnL={pnl:.4f} ({pnl_pct:.4f}%) | "
                         f"Pos Active={self.position_active} | "
-                        f"Side={self.current_position_side or 'None'}"
+                        f"Side={self.current_position_side or 'None'} | "
+                        f"Open Orders={len(self.open_orders)}"
                     )
 
                     # Wait for the next interval before the next iteration
@@ -1711,19 +1814,20 @@ class SupertrendBot:
             self.cleanup() # Ensure cleanup actions are performed
 
     def cleanup(self):
-        """Perform cleanup actions before exiting the bot."""
+        """Perform cleanup actions before exiting the bot. Enhanced with optional auto-close."""
         self.logger.info("Starting bot cleanup process...")
         try:
             # Cancel all open orders to prevent unintended trades upon restart or shutdown
             self.logger.info("Cancelling all open orders...")
             self.cancel_all_orders()
 
-            # Optional: Close any open positions if the bot is being shut down intentionally.
-            # This behavior might be configurable. For now, we assume positions might be managed manually or via other means.
-            # If a position is active and the bot is shutting down, it might be safer to close it.
-            # if self.position_active and self.current_position_size > 0:
-            #     self.logger.warning(f"Bot is shutting down with an open position ({self.current_position_side} {self.current_position_size} {self.config.SYMBOL}). Attempting to close...")
-            #     self.close_position()
+            # Optionally close any open positions if configured
+            if self.config.AUTO_CLOSE_ON_SHUTDOWN and self.position_active and self.current_position_size > 0:
+                self.logger.warning(f"Auto-close on shutdown enabled. Closing open position ({self.current_position_side} {self.current_position_size} {self.config.SYMBOL}).")
+                self.close_position()
+            else:
+                if self.position_active:
+                    self.logger.warning(f"Bot shutting down with open position ({self.current_position_side} {self.current_position_size} {self.config.SYMBOL}). Manual intervention may be required.")
 
             # Final summary of bot's performance
             final_balance = self.get_account_balance_usdt() # Fetch latest balance
@@ -1739,6 +1843,7 @@ class SupertrendBot:
         except Exception as e:
             self.logger.error(f"An error occurred during the cleanup process: {e}", exc_info=True)
 
+
 # =====================================================================
 # MAIN ENTRY POINT
 # =====================================================================
@@ -1748,9 +1853,6 @@ def main():
     try:
         # --- Load and Validate Configuration ---
         config = Config()
-
-        # Basic validation for API keys is already handled within Config.__post_init__
-        # If it returned without error, keys are likely present.
 
         # --- Initialize and Run Bot ---
         bot = SupertrendBot(config)
@@ -1771,6 +1873,7 @@ def main():
             print(f"Error occurred while trying to log fatal error: {log_e}")
 
         sys.exit(1) # Exit with a non-zero status code to indicate failure
+
 
 if __name__ == "__main__":
     main()
