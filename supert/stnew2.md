@@ -1609,16 +1609,17 @@ class EhlersSuperTrendBot:
                 self.bybit_client.switch_margin_mode,
                 category=self.config.CATEGORY_ENUM.value,
                 symbol=self.config.SYMBOL,
-                tradeMode=str(self.config.MARGIN_MODE)
+                tradeMode=str(self.config.MARGIN_MODE),
+                no_retry_codes=[100028]
             )
             self.logger.info(f"Margin mode set successfully to {margin_mode_str} for {self.config.SYMBOL}.")
-        except (InvalidRequestError, RuntimeError) as e:
+        except RuntimeError as e:
             if "100028" in str(e) or "unified account is forbidden" in str(e):
-                self.logger.warning(Fore.YELLOW + "A whisper from the ether (100028): Margin mode is immutable for Unified Accounts via API.")
-                self.logger.warning(Fore.YELLOW + f"Please ensure your account is manually set to your desired mode ({margin_mode_str}) in your Bybit settings.")
-                self.logger.info("The bot shall proceed, assuming the mode is correctly configured.")
+                self.logger.warning(Fore.YELLOW + "Could not switch margin mode via API (Error 100028). This is common for UTA accounts.")
+                self.logger.warning(Fore.YELLOW + f"Please ensure your account is set to your desired margin mode (Isolated/Cross) for the {self.config.CATEGORY} category in your Bybit settings.")
+                self.logger.info("The bot will continue assuming the margin mode is already correctly configured.")
             else:
-                self.logger.error(f"An unexpected error occurred while setting margin mode: {e}. The bot will continue.", exc_info=True)
+                self.logger.warning(f"An unexpected error occurred while setting margin mode: {e}. The bot will continue.")
         except Exception as e:
             self.logger.error(f"A critical error occurred during margin mode configuration: {e}", exc_info=True)
 
@@ -1630,13 +1631,15 @@ class EhlersSuperTrendBot:
 
         try:
             leverage_to_set_decimal = Decimal(str(self.config.LEVERAGE))
-            min_lev, max_lev, lev_step = specs.min_leverage, specs.max_leverage, specs.leverage_step
+            min_lev = specs.min_leverage
+            max_lev = specs.max_leverage
+            lev_step = specs.leverage_step
 
             if leverage_to_set_decimal < min_lev:
-                self.logger.warning(f"Requested leverage {leverage_to_set_decimal}x is below minimum {min_lev}x. Adjusting to minimum.")
+                self.logger.warning(f"Requested leverage {leverage_to_set_decimal} for {self.config.SYMBOL} is below minimum {min_lev}. Setting to minimum.")
                 leverage_to_set_decimal = min_lev
             elif leverage_to_set_decimal > max_lev:
-                self.logger.warning(f"Requested leverage {leverage_to_set_decimal}x exceeds maximum {max_lev}x. Adjusting to maximum.")
+                self.logger.warning(f"Requested leverage {leverage_to_set_decimal} for {self.config.SYMBOL} exceeds maximum {max_lev}. Setting to maximum.")
                 leverage_to_set_decimal = max_lev
 
             if lev_step > Decimal('0'):
@@ -1645,26 +1648,24 @@ class EhlersSuperTrendBot:
                 leverage_to_set_decimal = max(min_lev, min(leverage_to_set_decimal, max_lev))
 
             leverage_str = str(leverage_to_set_decimal)
-            self.logger.info(f"Attempting to set leverage to {leverage_str}x for {self.config.SYMBOL}...")
-            
-            self.api_call(
+
+            response_data = self.api_call(
                 self.bybit_client.set_leverage,
                 category=self.config.CATEGORY_ENUM.value,
                 symbol=self.config.SYMBOL,
                 buyLeverage=leverage_str,
                 sellLeverage=leverage_str
             )
-            self.logger.info(f"Leverage set successfully to {leverage_str}x for {self.config.SYMBOL}.")
-            return True
-        except (InvalidRequestError, RuntimeError) as e:
-            if "110043" in str(e): # leverage not modified
-                self.logger.info(Fore.GREEN + "Leverage is already set to the desired value. No modification needed." + Style.RESET_ALL)
+
+            if response_data is not None:
+                self.logger.info(f"Leverage set successfully to {leverage_str}x for {self.config.SYMBOL}.")
                 return True
             else:
-                self.logger.error(f"An API error occurred while setting leverage: {e}", exc_info=True)
+                self.logger.error(f"Failed to set leverage for {self.config.SYMBOL}: API call wrapper returned None.")
                 return False
+
         except Exception as e:
-            self.logger.error(f"A critical exception occurred setting leverage for {self.config.SYMBOL}: {e}", exc_info=True)
+            self.logger.error(f"Exception setting leverage for {self.config.SYMBOL}: {e}", exc_info=True)
             return False
 
     # =====================================================================
