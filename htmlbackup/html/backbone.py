@@ -1,15 +1,15 @@
-import os
-import time
-import json
-import logging
-import threading
 import collections
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
+import logging
+import os
+import threading
+import time
+
 import google.generativeai as genai
+from dotenv import load_dotenv
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 from indicators import calculate_indicators
+from pybit.unified_trading import HTTP
 
 # --- Basic Setup ---
 load_dotenv()
@@ -65,7 +65,7 @@ def log_message(message, level='info'):
     """Adds a message to the in-memory log."""
     timestamp = time.strftime("%H:%M:%S")
     BOT_STATE["logs"].append({"timestamp": timestamp, "level": level, "message": message})
-    
+
     # Also log to console
     if level == 'error':
         logging.error(message)
@@ -78,7 +78,7 @@ def log_message(message, level='info'):
 def trading_bot_loop():
     """The main loop for the trading bot, running in a separate thread."""
     log_message("Trading bot thread started.", "success")
-    
+
     while BOT_STATE.get("running"):
         try:
             config = BOT_STATE["config"]
@@ -86,7 +86,7 @@ def trading_bot_loop():
             dashboard = BOT_STATE["dashboard"]
 
             dashboard["botStatus"] = "Scanning"
-            
+
             # 1. Fetch Kline Data
             klines_res = session.get_kline(category="linear", symbol=config["symbol"], interval=config["interval"], limit=200)
             if klines_res.get('retCode') != 0:
@@ -95,12 +95,12 @@ def trading_bot_loop():
                 continue
 
             klines = sorted([{
-                "timestamp": int(k[0]), "open": float(k[1]), "high": float(k[2]), 
+                "timestamp": int(k[0]), "open": float(k[1]), "high": float(k[2]),
                 "low": float(k[3]), "close": float(k[4]), "volume": float(k[5])
             } for k in klines_res['result']['list']], key=lambda x: x['timestamp'])
 
             current_price = klines[-1]['close']
-            
+
             # 2. Calculate Indicators
             indicators = calculate_indicators(klines, config)
             if not indicators:
@@ -118,7 +118,7 @@ def trading_bot_loop():
                 pos_list = [p for p in position_res['result']['list'] if float(p.get('size', 0)) > 0]
                 if pos_list:
                     current_position = pos_list[0]
-            
+
             balance = 0
             if balance_res.get('retCode') == 0 and balance_res['result']['list']:
                 balance = float(balance_res['result']['list'][0]['totalWalletBalance'])
@@ -148,7 +148,7 @@ def trading_bot_loop():
             # 5. Trailing Stop Loss Logic
             if BOT_STATE["current_position_info"]["order_id"] and current_position:
                 pos_info = BOT_STATE["current_position_info"]
-                
+
                 # Update peak price
                 if pos_info["side"] == "Buy":
                     pos_info["peak_price"] = max(pos_info["peak_price"], current_price)
@@ -164,15 +164,13 @@ def trading_bot_loop():
                     new_trailing_stop_price = pos_info["peak_price"] * (1 + trailing_stop_pct)
 
                 # Get current stop loss from the actual position (if available)
-                current_sl_on_exchange = float(current_position['stopLoss']) if 'stopLoss' in current_position and current_position['stopLoss'] else 0
+                current_sl_on_exchange = float(current_position['stopLoss']) if current_position.get('stopLoss') else 0
 
                 # Check if new trailing stop is more favorable and in profit
                 amend_sl = False
-                if pos_info["side"] == "Buy" and new_trailing_stop_price > current_sl_on_exchange and new_trailing_stop_price > pos_info["entry_price"]:
+                if (pos_info["side"] == "Buy" and new_trailing_stop_price > current_sl_on_exchange and new_trailing_stop_price > pos_info["entry_price"]) or (pos_info["side"] == "Sell" and new_trailing_stop_price < current_sl_on_exchange and new_trailing_stop_price < pos_info["entry_price"]):
                     amend_sl = True
-                elif pos_info["side"] == "Sell" and new_trailing_stop_price < current_sl_on_exchange and new_trailing_stop_price < pos_info["entry_price"]:
-                    amend_sl = True
-                
+
                 if amend_sl:
                     log_message(f"Amending trailing stop for {pos_info['side']} position from {current_sl_on_exchange:.{config['price_precision']}f} to {new_trailing_stop_price:.{config['price_precision']}f}", "info")
                     amend_res = session.amend_order(
@@ -194,7 +192,7 @@ def trading_bot_loop():
             if buy_signal or sell_signal:
                 side = "Buy" if buy_signal else "Sell"
                 log_message(f"{side.upper()} SIGNAL DETECTED!", "signal")
-                
+
                 # Close existing position if it's opposite
                 if current_position and current_position['side'] != side:
                     log_message(f"Closing opposite {current_position['side']} position.", "warning")
@@ -209,7 +207,7 @@ def trading_bot_loop():
                 risk_amount = balance * (config['riskPct'] / 100)
                 sl_price = current_price * (1 - config['stopLossPct'] / 100) if side == 'Buy' else current_price * (1 + config['stopLossPct'] / 100)
                 tp_price = current_price * (1 + config['takeProfitPct'] / 100) if side == 'Buy' else current_price * (1 - config['takeProfitPct'] / 100)
-                
+
                 stop_distance = abs(current_price - sl_price)
                 if stop_distance > 0:
                     # Calculate position size based on risk percentage and stop loss percentage
@@ -220,7 +218,7 @@ def trading_bot_loop():
                     if qty < MIN_ORDER_VALUE:
                         log_message(f"Calculated quantity {qty:.{config['qty_precision']}f} is less than minimum order value {MIN_ORDER_VALUE}. Order not placed.", "warning")
                         continue # Skip order placement if qty is too small
-                    
+
                     log_message(f"Placing {side} order for {qty:.{config['qty_precision']}f} {config['symbol']}", "info")
                     order_res = session.place_order(
                         category="linear",
@@ -250,7 +248,7 @@ def trading_bot_loop():
         except Exception as e:
             log_message(f"An error occurred in the trading loop: {e}", "error")
             dashboard["botStatus"] = "Error"
-        
+
         # Wait for the next interval
         interval_seconds = 60
         try:
@@ -260,7 +258,7 @@ def trading_bot_loop():
                 interval_seconds = int(BOT_STATE["config"]["interval"]) * 60
         except:
             pass # Keep default
-        
+
         time.sleep(interval_seconds)
 
     log_message("Trading bot thread stopped.", "warning")
@@ -294,7 +292,7 @@ def start_bot():
     if balance_check.get("retCode") != 0:
         log_message(f"API connection failed: {balance_check.get('retMsg')}", "error")
         return jsonify({"status": "error", "message": f"API connection failed: {balance_check.get('retMsg')}"}), 400
-    
+
     log_message("API connection successful.", "success")
 
     # Fetch instrument info for precision
@@ -339,7 +337,7 @@ def stop_bot():
     BOT_STATE["dashboard"]["botStatus"] = "Idle"
     BOT_STATE["current_position_info"] = {"order_id": None, "entry_price": None, "side": None, "peak_price": None} # Reset position info on stop
     log_message("Bot has been stopped by user.", "warning")
-    
+
     return jsonify({"status": "success", "message": "Bot stopped."})
 
 @app.route('/api/status', methods=['GET'])
@@ -354,7 +352,7 @@ def get_status():
 def get_gemini_insight():
     if not GEMINI_API_KEY:
         return jsonify({"status": "error", "message": "Gemini API key not configured on server."}), 503
-    
+
     data = request.json
     prompt = data.get('prompt')
     if not prompt:

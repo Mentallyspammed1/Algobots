@@ -1,11 +1,12 @@
 # utils.py
+import datetime as dt  # Use dt alias for datetime module
 import logging
 import os
-import datetime as dt # Use dt alias for datetime module
-from decimal import Decimal, getcontext, InvalidOperation
-from typing import Any, Dict, Optional, Type
+from decimal import Decimal, InvalidOperation, getcontext
+from typing import Any
 
 from colorama import Fore, Style, init
+
 
 class OrderBook:
     def __init__(self, logger):
@@ -70,7 +71,7 @@ class OrderBook:
 _module_logger = logging.getLogger(__name__)
 
 # --- Timezone Handling ---
-_ActualZoneInfo: Type[dt.tzinfo] # This will hold the class to use for timezones (zoneinfo.ZoneInfo or FallbackZoneInfo)
+_ActualZoneInfo: type[dt.tzinfo] # This will hold the class to use for timezones (zoneinfo.ZoneInfo or FallbackZoneInfo)
 
 class FallbackZoneInfo(dt.tzinfo):
     """
@@ -109,17 +110,17 @@ class FallbackZoneInfo(dt.tzinfo):
         # dt_obj is already in UTC wall time, with tzinfo=self.
         return dt_obj.replace(tzinfo=self) # Ensure tzinfo is correctly self
 
-    def utcoffset(self, dt_obj: Optional[dt.datetime]) -> dt.timedelta:
+    def utcoffset(self, dt_obj: dt.datetime | None) -> dt.timedelta:
         """Returns the UTC offset for this timezone."""
         # dt_obj can be None as per tzinfo.utcoffset signature
         return self._offset
 
-    def dst(self, dt_obj: Optional[dt.datetime]) -> Optional[dt.timedelta]:
+    def dst(self, dt_obj: dt.datetime | None) -> dt.timedelta | None:
         """Returns the Daylight Saving Time offset (always 0 for UTC)."""
         # dt_obj can be None as per tzinfo.dst signature
         return dt.timedelta(0)
 
-    def tzname(self, dt_obj: Optional[dt.datetime]) -> Optional[str]:
+    def tzname(self, dt_obj: dt.datetime | None) -> str | None:
         """Returns the name of the timezone."""
         # dt_obj can be None as per tzinfo.tzname signature
         return self._name
@@ -142,7 +143,9 @@ class FallbackZoneInfo(dt.tzinfo):
         return hash((self._name, self._offset))
 
 try:
-    from zoneinfo import ZoneInfo as _ZoneInfo_FromModule # Import with a temporary name (Python 3.9+)
+    from zoneinfo import (
+        ZoneInfo as _ZoneInfo_FromModule,  # Import with a temporary name (Python 3.9+)
+    )
     _ActualZoneInfo = _ZoneInfo_FromModule # Assign to the variable with the correct type hint
 except ImportError:
     _module_logger.warning(
@@ -153,7 +156,7 @@ except ImportError:
     _ActualZoneInfo = FallbackZoneInfo # FallbackZoneInfo is Type[dt.tzinfo]
 
 # Global timezone object, lazily initialized
-TIMEZONE: Optional[dt.tzinfo] = None
+TIMEZONE: dt.tzinfo | None = None
 
 # --- Decimal Context ---
 getcontext().prec = 38 # Set precision for Decimal calculations
@@ -218,7 +221,7 @@ def set_timezone(tz_str: str) -> None:
     global TIMEZONE
     try:
         TIMEZONE = _ActualZoneInfo(tz_str)
-        _module_logger.info(f"Timezone successfully set to: {str(TIMEZONE)}")
+        _module_logger.info(f"Timezone successfully set to: {TIMEZONE!s}")
         # Warn if fallback is active (i.e., _ActualZoneInfo is FallbackZoneInfo)
         # and a non-UTC zone was requested, as FallbackZoneInfo will default to UTC.
         if _ActualZoneInfo is FallbackZoneInfo and tz_str.upper() != 'UTC':
@@ -287,11 +290,11 @@ class SensitiveFormatter(logging.Formatter):
     """
     # Store sensitive data as class attributes.
     # This assumes one set of credentials for the application instance using this formatter.
-    _api_key: Optional[str] = None
-    _api_secret: Optional[str] = None
+    _api_key: str | None = None
+    _api_secret: str | None = None
 
     @classmethod
-    def set_sensitive_data(cls, api_key: Optional[str], api_secret: Optional[str]) -> None:
+    def set_sensitive_data(cls, api_key: str | None, api_secret: str | None) -> None:
         """Sets the API key and secret to be redacted."""
         cls._api_key = api_key
         cls._api_secret = api_secret
@@ -328,7 +331,7 @@ class SensitiveFormatter(logging.Formatter):
 
         return cls(api_key, api_secret)
 
-def get_price_precision(market_info: Dict[str, Any], logger: logging.Logger) -> int:
+def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> int:
     """
     Determines the number of decimal places for price formatting for a given market.
 
@@ -422,7 +425,7 @@ def get_price_precision(market_info: Dict[str, Any], logger: logging.Logger) -> 
     )
     return default_precision
 
-def get_min_tick_size(market_info: Dict[str, Any], logger: logging.Logger) -> Decimal:
+def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> Decimal:
     """
     Determines the minimum tick size (price increment) for a given market.
 
@@ -510,7 +513,7 @@ def get_min_tick_size(market_info: Dict[str, Any], logger: logging.Logger) -> De
     )
     return fallback_tick_size
 
-def _format_signal(signal_payload: Any, *, success: bool = True, detail: Optional[str] = None) -> str:
+def _format_signal(signal_payload: Any, *, success: bool = True, detail: str | None = None) -> str:
     """
     Formats a trading signal or related message for display, potentially with color.
     This is a placeholder to resolve the import error and can be customized
@@ -540,6 +543,7 @@ def _format_signal(signal_payload: Any, *, success: bool = True, detail: Optiona
 
 
 from decimal import ROUND_HALF_UP
+
 
 def round_decimal(value: float, precision: int) -> Decimal:
     """

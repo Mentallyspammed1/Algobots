@@ -1,7 +1,8 @@
 # tests/test_trade_metrics.py
-import pytest
-from trade_metrics import TradeMetrics
 from decimal import Decimal
+
+from trade_metrics import TradeMetrics
+
 
 def test_calculate_fee():
     metrics = TradeMetrics()

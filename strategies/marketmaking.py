@@ -1,9 +1,10 @@
 import logging
-import time
 import random
+import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Literal
+from typing import Literal
+
 
 # --- Configuration ---
 @dataclass
@@ -64,19 +65,19 @@ class Order:
 class MockExchange:
     """A simulated exchange for testing the market making strategy."""
     def __init__(self, initial_balance_base: float, initial_balance_quote: float):
-        self._order_book: Dict[str, Dict[str, float]] = {
+        self._order_book: dict[str, dict[str, float]] = {
             "BTC/USD": {"bid": 30000.0, "ask": 30010.0}
         }
-        self._balances: Dict[str, float] = {
+        self._balances: dict[str, float] = {
             "BTC": initial_balance_base,
             "USD": initial_balance_quote,
         }
-        self._open_orders: Dict[str, Order] = {}
-        self._trade_history: List[Dict] = []
+        self._open_orders: dict[str, Order] = {}
+        self._trade_history: list[dict] = []
         self._last_price_update_time = time.time()
         logger.info(f"MockExchange initialized with balances: {self._balances}")
 
-    def get_order_book(self, symbol: str) -> Optional[Dict[str, float]]:
+    def get_order_book(self, symbol: str) -> dict[str, float] | None:
         """Returns the current bid and ask prices."""
         if symbol not in self._order_book:
             logger.warning(f"Order book for {symbol} not found.")
@@ -91,7 +92,7 @@ class MockExchange:
         """Returns the available balance for a given currency."""
         return self._balances.get(currency, 0.0)
 
-    def place_order(self, symbol: str, type: str, side: str, price: float, amount: float) -> Optional[Order]:
+    def place_order(self, symbol: str, type: str, side: str, price: float, amount: float) -> Order | None:
         """Simulates placing an order."""
         if type != 'limit':
             logger.error("MockExchange only supports 'limit' orders.")
@@ -119,7 +120,7 @@ class MockExchange:
         logger.warning(f"Order {order_id} not found for cancellation.")
         return False
 
-    def get_open_orders(self, symbol: str) -> List[Order]:
+    def get_open_orders(self, symbol: str) -> list[Order]:
         """Returns a list of currently open orders for a symbol."""
         return [order for order in self._open_orders.values() if order.symbol == symbol and order.status in ['open', 'partial_fill']]
 
@@ -202,14 +203,14 @@ class MarketMakingStrategy:
         self.exchange = exchange
         self.config = config
         self.running = False
-        self.last_mid_price: Optional[float] = None
+        self.last_mid_price: float | None = None
         self.current_position_base: float = 0.0
         self.daily_pnl_usd: float = 0.0 # Simplified, real PnL needs more tracking
         self.last_pnl_reset_day: int = time.gmtime().tm_yday
 
         logger.info(f"MarketMakingStrategy initialized for {config.symbol}")
 
-    def _get_market_data(self) -> Optional[Tuple[float, float]]:
+    def _get_market_data(self) -> tuple[float, float] | None:
         """Fetches bid and ask from the exchange."""
         try:
             order_book = self.exchange.get_order_book(self.config.symbol)
@@ -230,7 +231,7 @@ class MarketMakingStrategy:
         self.current_position_base = self.exchange.get_balance(self.config.base_currency)
         logger.debug(f"Current {self.config.base_currency} position: {self.current_position_base:.4f}")
 
-    def _calculate_target_prices(self, bid: float, ask: float) -> Tuple[float, float]:
+    def _calculate_target_prices(self, bid: float, ask: float) -> tuple[float, float]:
         """
         Calculates target buy and sell prices based on mid-price, spread,
         and inventory deviation.

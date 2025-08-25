@@ -1,7 +1,7 @@
 import csv
 import json
-from decimal import Decimal, getcontext
 import os
+from decimal import Decimal, getcontext
 
 # Set decimal precision
 getcontext().prec = 10
@@ -65,7 +65,7 @@ class Backtester:
             self.position_size -= qty_to_close if side == 'Sell' else -qty_to_close
             if self.position_size == 0:
                 self.avg_entry_price = Decimal('0')
-            
+
             return realized_pnl
 
     def run_simulation(self, historical_data):
@@ -85,7 +85,7 @@ class Backtester:
             high_price = Decimal(row['high'])
             low_price = Decimal(row['low'])
             close_price = Decimal(row['close'])
-            
+
             # Use close of previous candle as reference mid-price
             prev_close = Decimal(historical_data[i-1]['close'])
             mid_price = prev_close
@@ -93,7 +93,7 @@ class Backtester:
             # --- 1. Check for Stop-Loss or Profit-Take on existing position ---
             if self.position_size != 0:
                 unrealized_pnl_pct = (close_price - self.avg_entry_price) / self.avg_entry_price if self.position_size > 0 else (self.avg_entry_price - close_price) / self.avg_entry_price
-                
+
                 should_close = False
                 if unrealized_pnl_pct >= self.profit_take_pct:
                     side = 'Sell' if self.position_size > 0 else 'Buy'
@@ -103,7 +103,7 @@ class Backtester:
                     side = 'Sell' if self.position_size > 0 else 'Buy'
                     print(f"{timestamp}: Stop-loss triggered at {unrealized_pnl_pct:.2%}. Closing position.")
                     should_close = True
-                
+
                 if should_close:
                     fee = abs(self.position_size) * close_price * self.fee_rate
                     pnl = self._update_position(side, abs(self.position_size), close_price)
@@ -145,7 +145,7 @@ class Backtester:
         total_pnl = self.current_balance - self.initial_balance
         total_trades = len(self.trade_history)
         total_fees = sum(trade['fee'] for trade in self.trade_history)
-        
+
         if total_trades == 0:
             print("No trades were executed.")
             return
@@ -167,8 +167,8 @@ def load_historical_data(filepath='historical_data.csv'):
     if not os.path.exists(filepath):
         print(f"Error: Historical data file not found at '{filepath}'")
         return []
-    
-    with open(filepath, mode='r', encoding='utf-8') as f:
+
+    with open(filepath, encoding='utf-8') as f:
         reader = csv.DictReader(f)
         data = [row for row in reader]
         # Convert numeric strings to Decimals
@@ -183,8 +183,8 @@ def load_config(filepath='config.json'):
     if not os.path.exists(filepath):
         print(f"Error: Configuration file not found at '{filepath}'")
         return None
-    
-    with open(filepath, 'r') as f:
+
+    with open(filepath) as f:
         return json.load(f)
 
 if __name__ == '__main__':

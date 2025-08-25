@@ -1,18 +1,16 @@
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import time
-from pybit.unified_trading import HTTP
-import json
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-from itertools import product
 import multiprocessing as mp
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from functools import partial
+from itertools import product
+
 import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
+import pandas as pd
 import pandas_ta as ta
-from decimal import Decimal
+import seaborn as sns
+from pybit.unified_trading import HTTP
 
 
 class BybitHistoricalDataDownloader:
@@ -105,16 +103,16 @@ class BybitHistoricalDataDownloader:
 class Trade:
     """Store individual trade information"""
     entry_time: datetime
-    exit_time: Optional[datetime]
+    exit_time: datetime | None
     side: str  # 'Buy' or 'Sell'
     entry_price: float
-    exit_price: Optional[float]
+    exit_price: float | None
     quantity: float
     stop_loss: float
     take_profit: float
-    pnl: Optional[float] = None
-    pnl_pct: Optional[float] = None
-    exit_reason: Optional[str] = None  # 'SL', 'TP', 'Signal', 'Trailing'
+    pnl: float | None = None
+    pnl_pct: float | None = None
+    exit_reason: str | None = None  # 'SL', 'TP', 'Signal', 'Trailing'
 
 @dataclass
 class BacktestResults:
@@ -134,7 +132,7 @@ class BacktestResults:
     max_drawdown_pct: float
     sharpe_ratio: float
     sortino_ratio: float
-    trades: List[Trade] = field(default_factory=list)
+    trades: list[Trade] = field(default_factory=list)
     equity_curve: pd.Series = field(default_factory=pd.Series)
 
 class SupertrendBacktester:
@@ -438,7 +436,7 @@ class ParameterOptimizer:
 
             # Store results with parameters
             results.append({
-                'parameters': dict(zip(keys, combo)),
+                'parameters': dict(zip(keys, combo, strict=False)),
                 'total_return_pct': result.total_return_pct,
                 'sharpe_ratio': result.sharpe_ratio,
                 'max_drawdown_pct': result.max_drawdown_pct,
@@ -447,7 +445,7 @@ class ParameterOptimizer:
                 'num_trades': result.num_trades
             })
 
-            print(f"Tested: {dict(zip(keys, combo))} -> Return: {result.total_return_pct:.2f}%")
+            print(f"Tested: {dict(zip(keys, combo, strict=False))} -> Return: {result.total_return_pct:.2f}%")
 
         # Sort by return
         results.sort(key=lambda x: x['total_return_pct'], reverse=True)
@@ -483,7 +481,7 @@ class ParameterOptimizer:
         result = backtester.run_backtest(self.data)
 
         return {
-            'parameters': dict(zip(keys, combo)),
+            'parameters': dict(zip(keys, combo, strict=False)),
             'total_return_pct': result.total_return_pct,
             'sharpe_ratio': result.sharpe_ratio,
             'max_drawdown_pct': result.max_drawdown_pct,
@@ -675,7 +673,7 @@ def main():
     print(f"Optimized Max Drawdown: {results_optimized.max_drawdown_pct:.2f}%")
 
     # Export detailed trade log
-    trades_df = pd.DataFrame([{ 
+    trades_df = pd.DataFrame([{
         'entry_time': t.entry_time,
         'exit_time': t.exit_time,
         'side': t.side,

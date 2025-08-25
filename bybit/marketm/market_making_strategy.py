@@ -3,20 +3,21 @@
 import logging
 import time
 from datetime import datetime
-from typing import Dict, List, Any
-from pybit.unified_trading import HTTP
 from decimal import Decimal
+from typing import Any
+
 import numpy as np
+from pybit.unified_trading import HTTP
 
 logger = logging.getLogger(__name__)
 
 async def market_making_strategy(
-    market_data: Dict[str, Any],
-    account_info: Dict[str, Any],
+    market_data: dict[str, Any],
+    account_info: dict[str, Any],
     http_client: HTTP,
     bot_instance: Any,
-    symbols: List[str],
-    config: Dict[str, Any]
+    symbols: list[str],
+    config: dict[str, Any]
 ):
     logger.info("-" * 50)
     logger.info(f"Executing Market Making Strategy at {datetime.now()}")

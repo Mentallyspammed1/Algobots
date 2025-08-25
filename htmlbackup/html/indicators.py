@@ -1,5 +1,6 @@
 import math
 
+
 def calculate_indicators(klines: list, config: dict) -> dict | None:
     """
     Calculates Supertrend, RSI, Ehlers-Fisher Transform, MACD, and Bollinger Bands from a list of kline data.
@@ -23,7 +24,7 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
         if not data or len(data) < period: return [0] * len(data)
         ema_values = []
         smoothing_factor = 2 / (period + 1)
-        
+
         # Initial SMA for first EMA value
         initial_ema = sum(data[:period]) / period
         ema_values.append(initial_ema)
@@ -57,7 +58,7 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
         atr_values.append(tr)
 
         current_atr = sum(atr_values[-atr_period:]) / len(atr_values[-atr_period:])
-        
+
         basic_upper_band = (kline['high'] + kline['low']) / 2 + multiplier * current_atr
         basic_lower_band = (kline['high'] + kline['low']) / 2 - multiplier * current_atr
 
@@ -96,14 +97,14 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
             'supertrend': supertrend_val,
             'direction': direction
         })
-    
+
     final_supertrend = supertrend_data[-1]
 
     # --- RSI Calculation ---
     changes = [closes[i] - closes[i-1] for i in range(1, len(closes))]
     gains = [c if c > 0 else 0 for c in changes]
     losses = [-c if c < 0 else 0 for c in changes]
-    
+
     avg_gain = sum(gains[:config['rsi_length']]) / config['rsi_length']
     avg_loss = sum(losses[:config['rsi_length']]) / config['rsi_length']
 
@@ -117,10 +118,10 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
     # --- Ehlers-Fisher Transform Calculation ---
     ef_period = config['ef_period']
     fisher_data = []
-    
+
     for i in range(len(klines)):
         kline = klines[i]
-        
+
         if i < ef_period - 1:
             fisher_data.append({'value': 0, 'fisher': 0})
             continue
@@ -140,7 +141,7 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
         if value < -0.99: value = -0.99
 
         fisher = 0.5 * math.log((1 + value) / (1 - value)) + 0.5 * (fisher_data[-1]['fisher'] if i > 0 else 0)
-        
+
         fisher_data.append({'value': value, 'fisher': fisher})
 
     final_fisher = fisher_data[-1]['fisher']
@@ -153,11 +154,11 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
     fast_ema = calculate_ema(closes, macd_fast_period)
     slow_ema = calculate_ema(closes, macd_slow_period)
 
-    macd_line = [f - s for f, s in zip(fast_ema, slow_ema)]
+    macd_line = [f - s for f, s in zip(fast_ema, slow_ema, strict=False)]
     signal_line = calculate_ema(macd_line, macd_signal_period)
 
     # MACD Histogram
-    macd_histogram = [m - s for m, s in zip(macd_line, signal_line)]
+    macd_histogram = [m - s for m, s in zip(macd_line, signal_line, strict=False)]
 
     final_macd = {
         'macd_line': macd_line[-1],
@@ -178,12 +179,12 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
         mean = sum(window) / bb_period
         variance = sum([(x - mean) ** 2 for x in window]) / bb_period
         std_dev_values.append(math.sqrt(variance))
-    
+
     # Pad std_dev_values to match closes length
     std_dev_values = [0] * (bb_period - 1) + std_dev_values
 
-    upper_band = [s + (std * bb_std_dev) for s, std in zip(sma_bb, std_dev_values)]
-    lower_band = [s - (std * bb_std_dev) for s, std in zip(sma_bb, std_dev_values)]
+    upper_band = [s + (std * bb_std_dev) for s, std in zip(sma_bb, std_dev_values, strict=False)]
+    lower_band = [s - (std * bb_std_dev) for s, std in zip(sma_bb, std_dev_values, strict=False)]
 
     final_bollinger_bands = {
         'middle_band': sma_bb[-1],

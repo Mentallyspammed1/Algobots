@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # ██████╗ ██╗    ██╗███████╗███╗   ███╗███████╗████████╗██╗   ██╗██║   ██║███████╗
 # ██╔══██╗╚██╗ ██╔╝██╔════╝████╗ ████║██╔════╝╚══██╔══╝██║   ██║██║   ██║██╔════╝
@@ -47,24 +46,20 @@ import logging
 import logging.handlers
 import os
 import pickle
-import shutil
-import stat
 import sys
-import traceback
-from collections import deque, defaultdict
+from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone, timedelta
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, getcontext
+from datetime import datetime, timezone
+from decimal import Decimal, getcontext
 from enum import Enum
-from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 # Third-party Libraries
 try:
-    import numpy as np
     import aiosqlite
     import ccxt.async_support as ccxt_async
+    import numpy as np
     import pandas as pd
     import pandas_ta as ta
     from aioconsole import start_interactive_server
@@ -81,9 +76,9 @@ load_dotenv()
 getcontext().prec = 18
 
 # --- Type Aliases for Clarity ---
-OrderDict = Dict[str, Any]
-MarketInfo = Dict[str, Any]
-PositionInfo = Dict[str, Any]
+OrderDict = dict[str, Any]
+MarketInfo = dict[str, Any]
+PositionInfo = dict[str, Any]
 
 # --- Enumerations for Code Integrity ---
 class AlertPriority(Enum):
@@ -106,7 +101,7 @@ class TradeRecord:
     side: str
     entry_price: Decimal
     quantity: Decimal
-    exit_price: Optional[Decimal] = None
+    exit_price: Decimal | None = None
     pnl: Decimal = Decimal("0")
     pnl_percentage: Decimal = Decimal("0")
     fees: Decimal = Decimal("0")
@@ -115,9 +110,9 @@ class TradeRecord:
     max_favorable_excursion: Decimal = Decimal("0")
     duration_seconds: int = 0
     market_condition: str = ""
-    indicators_at_entry: Dict[str, Any] = field(default_factory=dict)
+    indicators_at_entry: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         for key, value in data.items():
             if isinstance(value, Decimal):
@@ -137,7 +132,7 @@ class PerformanceMetrics:
     peak_balance: Decimal = Decimal("0")
     consecutive_losses: int = 0
     max_consecutive_losses: int = 0
-    daily_pnl: Dict[str, Decimal] = field(default_factory=lambda: defaultdict(Decimal))
+    daily_pnl: dict[str, Decimal] = field(default_factory=lambda: defaultdict(Decimal))
     last_update: datetime = field(default_factory=datetime.now)
 
     @property
@@ -156,10 +151,10 @@ class PerformanceMetrics:
             self.losing_trades += 1
             self.consecutive_losses += 1
             self.max_consecutive_losses = max(self.max_consecutive_losses, self.consecutive_losses)
-        
+
         today = datetime.now(timezone.utc).date().isoformat()
         self.daily_pnl[today] += trade.pnl
-        
+
         current_balance = self.total_pnl # Simplified; should start from an initial balance
         if self.peak_balance < current_balance:
             self.peak_balance = current_balance
@@ -187,12 +182,12 @@ class AppContext:
     exchange: ccxt_async.bybit
     db_manager: 'DatabaseManager'
     performance: PerformanceMetrics
-    active_tasks: Dict[str, asyncio.Task] = field(default_factory=dict)
+    active_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
     alert_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     shutdown_event: asyncio.Event = field(default_factory=asyncio.Event)
     api_latency: deque = field(default_factory=lambda: deque(maxlen=100))
-    active_trade: Optional[TradeRecord] = None
-    current_position: Dict[str, Any] = field(default_factory=dict)
+    active_trade: TradeRecord | None = None
+    current_position: dict[str, Any] = field(default_factory=dict)
     unrealized_pnl: Decimal = Decimal("0")
 
 # --- Logger Setup ---
@@ -224,7 +219,7 @@ class Config:
         self.sleep_seconds: int = int(os.getenv("SLEEP_SECONDS", "10"))
         self.cli_port: int = int(os.getenv("CLI_PORT", "8888"))
         self.sms_recipient_number: str = os.getenv("SMS_RECIPIENT_NUMBER", "")
-        self.sms_alert_levels: List[str] = [p.value for p in [AlertPriority.CRITICAL, AlertPriority.TRADE]]
+        self.sms_alert_levels: list[str] = [p.value for p in [AlertPriority.CRITICAL, AlertPriority.TRADE]]
         self.database_path: str = os.getenv("DATABASE_PATH", f"trades_{self.symbol.replace('/', '_')}.db")
         # Add other config variables from v11 as needed...
 
@@ -232,7 +227,7 @@ class Config:
 class DatabaseManager:
     def __init__(self, db_path: str):
         self.db_path = db_path
-        self._conn: Optional[aiosqlite.Connection] = None
+        self._conn: aiosqlite.Connection | None = None
 
     async def connect(self):
         try:
@@ -286,7 +281,7 @@ async def alert_dispatcher(ctx: AppContext):
 
             if priority.value in ctx.config.sms_alert_levels:
                 asyncio.create_task(send_sms_alert(message, priority, ctx.config))
-            
+
             asyncio.create_task(send_termux_notification(message, priority))
             ctx.alert_queue.task_done()
         except asyncio.TimeoutError:
@@ -336,7 +331,7 @@ async def websocket_guardian(ctx: AppContext, ws_queue: asyncio.Queue):
 # --- Core Bot Logic ---
 class ScalpingWizard: # (Enchantment #15)
     def __init__(self):
-        self.ctx: Optional[AppContext] = None
+        self.ctx: AppContext | None = None
 
     async def initialize(self) -> bool:
         try:
@@ -363,7 +358,7 @@ class ScalpingWizard: # (Enchantment #15)
             logger.critical(f"Initialization failed: {e}", exc_info=True)
             return False
 
-    def load_performance_state(self, config: Config) -> Optional[PerformanceMetrics]:
+    def load_performance_state(self, config: Config) -> PerformanceMetrics | None:
         state_file = Path(f"logs/perf_state_{config.symbol.replace('/', '_')}.pkl")
         if state_file.exists():
             try:
@@ -417,7 +412,7 @@ class ScalpingWizard: # (Enchantment #15)
             except Exception as e:
                 logger.error(f"Main loop error: {e}", exc_info=True)
                 await asyncio.sleep(15)
-            
+
             # Latency Oracle (Enchantment #12)
             latency = (time.monotonic() - start_time) * 1000
             self.ctx.api_latency.append(latency)
@@ -440,7 +435,7 @@ class ScalpingWizard: # (Enchantment #15)
 
     async def start_cli(self): # (Enchantment #9)
         if not self.ctx: return
-        
+
         async def cli_callback(reader, writer):
             writer.write(b"> ")
             await writer.drain()
@@ -459,7 +454,7 @@ class ScalpingWizard: # (Enchantment #15)
                 elif command == "stop":
                     self.ctx.shutdown_event.set()
                     response = "Shutdown signal sent."
-                
+
                 writer.write((response + "\n").encode())
                 await writer.drain()
             except asyncio.TimeoutError:
@@ -480,7 +475,7 @@ class ScalpingWizard: # (Enchantment #15)
 
     async def shutdown(self):
         if not self.ctx or self.ctx.shutdown_event.is_set(): return
-        
+
         logger.warning(f"{Fore.YELLOW}--- INITIATING GRACEFUL SHUTDOWN ---{Style.RESET_ALL}")
         self.ctx.shutdown_event.set()
 
@@ -488,11 +483,11 @@ class ScalpingWizard: # (Enchantment #15)
         tasks = list(self.ctx.active_tasks.values())
         for task in tasks:
             task.cancel()
-        
+
         await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         self.save_performance_state()
-        
+
         await self.ctx.db_manager.close()
         await self.ctx.exchange.close()
         logger.success("All connections closed. Shutdown complete.")

@@ -1,12 +1,13 @@
-import pandas as pd
-import logging
-from typing import List, Dict, Any, Tuple
 from decimal import Decimal
+from typing import Any
 
+import pandas as pd
 from algobots_types import OrderBlock
+from color_codex import COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_RESET, COLOR_YELLOW
+from config import SMA_PERIOD  # Assuming SMA_PERIOD is defined in config.py
+
 from strategies.strategy_template import StrategyTemplate
-from config import SMA_PERIOD # Assuming SMA_PERIOD is defined in config.py
-from color_codex import COLOR_RED, COLOR_YELLOW, COLOR_GREEN, COLOR_CYAN, COLOR_RESET
+
 
 class SMA_Crossover_Strategy(StrategyTemplate):
     def __init__(self, logger):
@@ -21,13 +22,13 @@ class SMA_Crossover_Strategy(StrategyTemplate):
         sma = close_prices.rolling(window=length).mean()
         return sma
 
-    def generate_signals(self, 
-                         df: pd.DataFrame, 
-                         resistance_levels: List[Dict[str, Any]], 
-                         support_levels: List[Dict[str, Any]],
-                         active_bull_obs: List[OrderBlock], 
-                         active_bear_obs: List[OrderBlock],
-                         **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+    def generate_signals(self,
+                         df: pd.DataFrame,
+                         resistance_levels: list[dict[str, Any]],
+                         support_levels: list[dict[str, Any]],
+                         active_bull_obs: list[OrderBlock],
+                         active_bear_obs: list[OrderBlock],
+                         **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
         signals = []
 
         if df.empty or len(df) < SMA_PERIOD + 1: # Need at least SMA_PERIOD + 1 for crossover
@@ -60,12 +61,12 @@ class SMA_Crossover_Strategy(StrategyTemplate):
 
         return signals
 
-    def generate_exit_signals(self, 
-                              df: pd.DataFrame, 
+    def generate_exit_signals(self,
+                              df: pd.DataFrame,
                               current_position_side: str,
-                              active_bull_obs: List[OrderBlock], 
-                              active_bear_obs: List[OrderBlock],
-                              **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+                              active_bull_obs: list[OrderBlock],
+                              active_bear_obs: list[OrderBlock],
+                              **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
         exit_signals = []
 
         if df.empty or len(df) < SMA_PERIOD + 1:

@@ -1,16 +1,15 @@
-import time
-import json
 import logging
 import os
-from decimal import Decimal, getcontext, ROUND_DOWN, ROUND_UP # Import ROUND_UP
-import sys # For sys.exit
+import sys  # For sys.exit
+import time
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, getcontext  # Import ROUND_UP
 
 # Ensure Decimal precision for financial calculations
 getcontext().prec = 10 # Set precision for Decimal operations
 
 # Import pybit components
 try:
-    from pybit.unified_trading import WebSocket, HTTP
+    from pybit.unified_trading import HTTP, WebSocket
 except ImportError:
     logging.error("Please install pybit: pip install pybit")
     sys.exit(1)
@@ -221,7 +220,7 @@ class MarketMaker:
                 if position.get('symbol') == self.symbol:
                     pos_size = Decimal(position.get('size', '0'))
                     pos_side = position.get('side', '')
-                    
+
                     with self.data_lock:
                         if pos_side == "Buy":
                             self.current_inventory = pos_size
@@ -258,7 +257,7 @@ class MarketMaker:
                 side = order.get('side')
                 price = Decimal(order.get('price', '0'))
                 qty = Decimal(order.get('qty', '0'))
-                
+
                 if symbol != self.symbol or not order_link_id.startswith(self.config["ORDER_ID_PREFIX"]):
                     continue # Not our order or not for our symbol
 
@@ -305,7 +304,7 @@ class MarketMaker:
                     self.price_tick_size = Decimal(price_filter.get('tickSize', '0.01'))
                     self.qty_step_size = Decimal(lot_size_filter.get('qtyStep', '0.0001'))
                     self.min_order_qty = Decimal(lot_size_filter.get('minOrderQty', '0.001'))
-                    
+
                     logging.info(f"Instrument Info for {self.symbol}: Price Tick Size={self.price_tick_size}, Qty Step Size={self.qty_step_size}, Min Order Qty={self.min_order_qty}")
                     return True
                 else:
@@ -369,7 +368,7 @@ class MarketMaker:
                 # Fetch and filter by orderLinkId prefix for precision
                 response = self.session.get_open_orders(category=self.category, symbol=self.symbol, limit=50)
                 open_orders = self._handle_api_response(response, "Get Open Orders for Cancellation")
-                
+
                 if open_orders and open_orders.get('list'):
                     orders_to_cancel = [
                         order for order in open_orders['list']
@@ -390,7 +389,7 @@ class MarketMaker:
                         logging.info("No bot orders found to cancel.")
                 else:
                     logging.info("No open orders found to cancel.")
-                
+
                 with self.data_lock:
                     self.active_orders.clear() # Clear local tracking
             except Exception as e:
@@ -404,7 +403,7 @@ class MarketMaker:
 
         for i in range(self.order_levels):
             level_offset = self.level_price_offset_factor * i
-            
+
             # Bid side
             bid_price = mid_price * (Decimal("1") - self.spread_percent / Decimal("2") - level_offset) - skew_amount
             bid_qty = (self.order_size_usdt / bid_price)
@@ -429,7 +428,7 @@ class MarketMaker:
                     "qty": bid_qty,
                     "level": i
                 })
-            
+
             if ask_qty < self.min_order_qty:
                 logging.warning(f"Calculated ask qty {ask_qty} is below min {self.min_order_qty}. Skipping ask level {i}.")
             else:
@@ -439,7 +438,7 @@ class MarketMaker:
                     "qty": ask_qty,
                     "level": i
                 })
-        
+
         return desired_orders
 
     def manage_orders(self):
@@ -469,7 +468,7 @@ class MarketMaker:
 
         try:
             desired_orders = self._calculate_desired_orders(current_mid_price, current_inventory)
-            
+
             orders_to_cancel_ids = [] # List of orderIds to cancel
             orders_to_amend = []      # List of (orderId, new_price, new_qty)
             orders_to_place = []      # List of (side, price, qty, level)
@@ -625,7 +624,7 @@ class MarketMaker:
     def run(self):
         """Main loop for the market maker."""
         logging.info("Starting market maker bot...")
-        
+
         # Initial setup
         if not self.get_instrument_info(): # Get instrument info first for precision
             logging.critical("Failed to get instrument info. Exiting.")

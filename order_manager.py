@@ -1,10 +1,10 @@
 import asyncio
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 
 import config
-from bybit_api import BybitContractAPI, BybitAPIError
-from bot_logger import log_trade, log_exception
+from bot_logger import log_exception
+from bybit_api import BybitAPIError, BybitContractAPI
 from utils import calculate_order_quantity
 
 # --- Pyrmethus's Color Codex ---
@@ -36,7 +36,7 @@ class OrderManager:
         self.bot = bot_instance
         self.logger = bot_instance.bot_logger
 
-    async def _get_instrument_info(self, symbol: str) -> Optional[Dict[str, Decimal]]:
+    async def _get_instrument_info(self, symbol: str) -> dict[str, Decimal] | None:
         """Fetches and returns instrument details like min quantity and step size."""
         try:
             instrument_info_resp = await self.bybit_client.get_instruments_info(
@@ -89,7 +89,7 @@ class OrderManager:
             log_exception(self.logger, f"Failed to fetch current price for {symbol}: {e}", e)
             return Decimal('0')
 
-    async def execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: Dict[str, Any]) -> bool:
+    async def execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: dict[str, Any]) -> bool:
         """Handles the complete logic for executing an entry order."""
         self.logger.info(f"{PYRMETHUS_PURPLE}💡 OrderManager received {signal_type.upper()} signal at {signal_price:.4f}{COLOR_RESET}")
 
@@ -161,7 +161,7 @@ class OrderManager:
             log_exception(self.logger, "Exception during order placement", e)
             return False
 
-    async def execute_exit(self, inventory: Decimal, exit_type: str, exit_price: Decimal, exit_timestamp: Any, exit_info: Dict[str, Any]) -> bool:
+    async def execute_exit(self, inventory: Decimal, exit_type: str, exit_price: Decimal, exit_timestamp: Any, exit_info: dict[str, Any]) -> bool:
         """Handles the complete logic for executing a market exit order."""
         self.logger.info(f"{PYRMETHUS_PURPLE}💡 OrderManager received {exit_type.upper()} exit signal at {exit_price:.4f}{COLOR_RESET}")
 

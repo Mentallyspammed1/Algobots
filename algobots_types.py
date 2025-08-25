@@ -1,7 +1,8 @@
 # algobots_types.py - Defines shared data structures for Algobots
-from typing import TypedDict, Optional
-from decimal import Decimal
 import datetime
+from decimal import Decimal
+from typing import TypedDict
+
 
 class OrderBlock(TypedDict):
     """
@@ -14,5 +15,5 @@ class OrderBlock(TypedDict):
     bottom: Decimal # The lower boundary of the Order Block
     active: bool  # True if the OB is currently considered active (not violated or mitigated)
     violated: bool # True if the OB's boundary has been breached
-    violation_ts: Optional[datetime] # Timestamp when the OB was violated
+    violation_ts: datetime | None # Timestamp when the OB was violated
     extended_to_ts: datetime # The latest timestamp where the OB was still considered relevant/active

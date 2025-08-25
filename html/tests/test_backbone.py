@@ -1,9 +1,9 @@
-import unittest
-import sys
-import os
-from unittest.mock import patch, MagicMock
-import json
 import collections
+import json
+import os
+import sys
+import unittest
+from unittest.mock import MagicMock, patch
 
 # Add the parent directory to the sys.path to allow importing modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -14,7 +14,7 @@ with patch.dict(os.environ, {
     'BYBIT_API_SECRET': 'test_bybit_secret',
     'GEMINI_API_KEY': 'test_gemini_key'
 }):
-    from backbone import app, BOT_STATE, log_message, trading_bot_loop
+    from backbone import BOT_STATE, app, log_message
 
 class TestBackbone(unittest.TestCase):
 

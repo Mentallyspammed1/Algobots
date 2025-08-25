@@ -1,10 +1,11 @@
-import unittest
-import pandas as pd
-import numpy as np
-import os
 import json
-from unittest.mock import patch, MagicMock
+import os
+import unittest
 from decimal import Decimal, getcontext
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
 
 # Set Decimal precision for financial calculations
 getcontext().prec = 10
@@ -12,7 +13,8 @@ getcontext().prec = 10
 # Import functions and classes from whalebot.py
 # We need to adjust the import path if whalebot.py is not directly importable
 # For now, assume it's in the same directory or adjust sys.path
-from whalebot import load_config, TradingAnalyzer, interpret_indicator, CONFIG_FILE, LOG_DIRECTORY, setup_custom_logger
+from whalebot import CONFIG_FILE, TradingAnalyzer, interpret_indicator, load_config
+
 
 # Mock the logger to prevent actual log file creation during tests
 # and to capture log messages for assertions
@@ -44,7 +46,7 @@ class TestWhalebot(unittest.TestCase):
         # Clean up any existing config.json before each test
         if os.path.exists(CONFIG_FILE):
             os.remove(CONFIG_FILE)
-        
+
         # Create a dummy DataFrame for testing TradingAnalyzer
         self.sample_df = pd.DataFrame({
             'start_time': pd.to_datetime(pd.Series(range(100, 200)), unit='ms'),
@@ -128,7 +130,7 @@ class TestWhalebot(unittest.TestCase):
         custom_config = {"interval": "60", "new_setting": "test"}
         with open(CONFIG_FILE, "w") as f:
             json.dump(custom_config, f)
-        
+
         config = load_config(CONFIG_FILE)
         self.assertEqual(config["interval"], "60")
         self.assertEqual(config["new_setting"], "test")
@@ -138,7 +140,7 @@ class TestWhalebot(unittest.TestCase):
         # Test handling of invalid JSON
         with open(CONFIG_FILE, "w") as f:
             f.write("{invalid json")
-        
+
         config = load_config(CONFIG_FILE)
         self.assertIn("interval", config) # Should load defaults
         self.assertIn("Invalid JSON in config file", self.mock_logger.error_messages[0])
@@ -293,7 +295,7 @@ class TestWhalebot(unittest.TestCase):
 
     def test_interpret_indicator(self):
         mock_logger = MockLogger()
-        
+
         # Test RSI
         self.assertEqual(interpret_indicator(mock_logger, "rsi", 75.0), f"{Fore.RED}RSI:{Style.RESET_ALL} Overbought (75.00)")
         self.assertEqual(interpret_indicator(mock_logger, "rsi", 25.0), f"{Fore.GREEN}RSI:{Style.RESET_ALL} Oversold (25.00)")

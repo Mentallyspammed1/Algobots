@@ -5,6 +5,7 @@ This file stores API credentials, trading parameters, and other settings.
 It is recommended to use environment variables for sensitive data like API keys.
 """
 import os
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file

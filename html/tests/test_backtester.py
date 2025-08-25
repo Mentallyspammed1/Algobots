@@ -1,13 +1,18 @@
-import unittest
-import sys
 import os
-from unittest.mock import patch, MagicMock
+import sys
+import unittest
+from unittest.mock import patch
 
 # Add the parent directory to the sys.path to allow importing modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from backtester import fetch_historical_klines, run_backtest, optimize_strategy, DEFAULT_CONFIG
-from indicators import calculate_indicators # Import for mocking if needed
+from backtester import (
+    DEFAULT_CONFIG,
+    fetch_historical_klines,
+    optimize_strategy,
+    run_backtest,
+)
+
 
 class TestBacktester(unittest.TestCase):
 
@@ -60,7 +65,7 @@ class TestBacktester(unittest.TestCase):
                 ]
             }
         }
-        
+
         start_time = self.mock_klines[0]["timestamp"] / 1000
         end_time = self.mock_klines[-1]["timestamp"] / 1000
         klines = fetch_historical_klines("BTCUSDT", "60", start_time, end_time)
@@ -71,7 +76,7 @@ class TestBacktester(unittest.TestCase):
     @patch('backtester.calculate_indicators')
     def test_run_backtest_basic_trade(self, mock_calculate_indicators):
         num_warmup_klines = max(self.test_config['supertrend_length'], self.test_config['rsi_length'], self.test_config['ef_period']) + 1
-        
+
         mock_side_effects = [
             None for _ in range(num_warmup_klines) # Warmup period
         ] + [
@@ -104,7 +109,7 @@ class TestBacktester(unittest.TestCase):
             {"total_pnl": 10}, {"total_pnl": 5}, {"total_pnl": 15}, # Example PnLs for combinations
             {"total_pnl": 8}, {"total_pnl": 12}, {"total_pnl": 7},
         ]
-        
+
         param_ranges = {
             "supertrend_length": [10],
             "rsi_length": [14],

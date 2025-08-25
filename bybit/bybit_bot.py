@@ -1,13 +1,12 @@
-import os
-import time
-import logging
-import json
-from datetime import datetime
-from typing import Dict, List, Optional, Callable, Any
-from pybit.unified_trading import HTTP, WebSocket
-from decimal import Decimal, getcontext
 import asyncio
 import decimal
+import logging
+import os
+from collections.abc import Callable
+from decimal import Decimal, getcontext
+from typing import Any
+
+from pybit.unified_trading import HTTP, WebSocket
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -25,7 +24,7 @@ STOP_LOSS_PERCENT = decimal.Decimal("0.01")  # Set a 1% stop-loss from the entry
 PROFIT_LOCK_PERCENT = decimal.Decimal("0.015") # Lock in profit at 1.5%
 TRAILING_STOP_PERCENT = decimal.Decimal("0.005") # Trail the stop by 0.5%
 
-async def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trade: List[str]):
+async def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trade: list[str]):
     """
     Manages existing positions to lock in profits and trail stop losses.
     """
@@ -37,12 +36,12 @@ async def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trad
         position_size = decimal.Decimal(position_data['size'])
         entry_price = decimal.Decimal(position_data['avgPrice'])
         position_side = position_data['side']
-        
+
         ticker_data = bot_instance.ws_manager.market_data.get(symbol, {}).get("ticker")
         if not ticker_data or not ticker_data.get('lastPrice'):
             logger.warning(f"[{symbol}] No ticker data to manage position. Skipping.")
             continue
-            
+
         current_price = decimal.Decimal(ticker_data['lastPrice'])
         tick_size = bot_instance.symbol_info[symbol]["tickSize"]
 
@@ -55,7 +54,7 @@ async def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trad
         # Check if profit lock threshold is met
         if profit_percent >= PROFIT_LOCK_PERCENT:
             logger.info(f"[{symbol}] Profit lock threshold reached ({profit_percent:.4f}%). Adjusting stop-loss.")
-            
+
             new_stop_loss_price = decimal.Decimal('0')
             if position_side == "Buy":
                 # Move stop loss to entry price or trail it
@@ -79,7 +78,7 @@ async def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trad
             except Exception as e:
                 logger.error(f"Error adjusting stop-loss for {symbol}: {e}")
 
-async def market_making_strategy(market_data: Dict, account_info: Dict, http_client: HTTP, bot_instance: Any, symbols_to_trade: List[str]):
+async def market_making_strategy(market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any, symbols_to_trade: list[str]):
     """
     An enhanced market-making strategy with risk management and profit-locking.
     """
@@ -92,7 +91,7 @@ async def market_making_strategy(market_data: Dict, account_info: Dict, http_cli
             if wallet.get('coin') == 'USDT':
                 available_balance_usd = decimal.Decimal(wallet.get('walletBalance', '0'))
                 break
-    
+
     if available_balance_usd <= 0:
         logger.warning("No available USDT balance. Skipping strategy execution.")
         return
@@ -109,14 +108,14 @@ async def market_making_strategy(market_data: Dict, account_info: Dict, http_cli
         best_bid = decimal.Decimal(orderbook_data['b'][0][0])
         best_ask = decimal.Decimal(orderbook_data['a'][0][0])
         mid_price = (best_bid + best_ask) / 2
-        
+
         # --- 3. Smarter Spread Calculation ---
         # Use a blend of the current bid-ask spread and a minimum percentage
         live_spread_percent = (best_ask - best_bid) / mid_price
         min_spread_percent = decimal.Decimal("0.001") # Minimum 0.1% spread
         desired_spread_percentage = max(live_spread_percent, min_spread_percent)
         desired_spread = mid_price * desired_spread_percentage
-        
+
         logger.info(f"[{symbol}] Live Spread: {live_spread_percent:.4f}%, Desired Spread: {desired_spread_percentage:.4f}%")
 
         # --- 4. Determine Prices ---
@@ -173,15 +172,15 @@ async def market_making_strategy(market_data: Dict, account_info: Dict, http_cli
 # --- WebSocket Manager ---
 class BybitWebSocketManager:
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
-        self.ws_public: Optional[WebSocket] = None
-        self.ws_private: Optional[WebSocket] = None
+        self.ws_public: WebSocket | None = None
+        self.ws_private: WebSocket | None = None
         self.api_key = api_key
         self.api_secret = api_secret
         self.testnet = testnet
 
-        self.market_data: Dict[str, Any] = {}
-        self.positions: Dict[str, Any] = {}
-        self.orders: Dict[str, Any] = {}
+        self.market_data: dict[str, Any] = {}
+        self.positions: dict[str, Any] = {}
+        self.orders: dict[str, Any] = {}
 
     def _init_public_ws(self):
         if not self.ws_public:
@@ -202,7 +201,7 @@ class BybitWebSocketManager:
             )
             logger.info("Private WebSocket initialized.")
 
-    def handle_orderbook(self, message: Dict):
+    def handle_orderbook(self, message: dict):
         try:
             data = message.get("data", {})
             symbol = data.get("s")
@@ -212,7 +211,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling orderbook: {e}")
 
-    def handle_ticker(self, message: Dict):
+    def handle_ticker(self, message: dict):
         try:
             data = message.get("data", {})
             symbol = data.get("s")
@@ -222,7 +221,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling ticker: {e}")
 
-    def handle_position(self, message: Dict):
+    def handle_position(self, message: dict):
         try:
             data = message.get("data", [])
             for position in data:
@@ -232,7 +231,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling position: {e}")
 
-    async def subscribe_public_channels(self, symbols: List[str]):
+    async def subscribe_public_channels(self, symbols: list[str]):
         self._init_public_ws()
         if not self.ws_public:
             return
@@ -258,12 +257,12 @@ class BybitTradingBot:
             recv_window=10000
         )
         self.ws_manager = BybitWebSocketManager(api_key, api_secret, testnet)
-        self.strategy: Optional[Callable] = None
-        self.symbol_info: Dict[str, Any] = {}
+        self.strategy: Callable | None = None
+        self.symbol_info: dict[str, Any] = {}
 
         logger.info(f"Bybit Trading Bot initialized. Testnet: {testnet}")
 
-    async def fetch_symbol_info(self, symbols: List[str]):
+    async def fetch_symbol_info(self, symbols: list[str]):
         logger.info(f"Fetching instrument info for symbols: {symbols}")
         try:
             response = self.session.get_instruments_info(category="linear", symbol=",".join(symbols))
@@ -285,7 +284,7 @@ class BybitTradingBot:
         self.strategy = strategy_func
         logger.info("Trading strategy set.")
 
-    async def run(self, symbols: List[str], interval: int = 5):
+    async def run(self, symbols: list[str], interval: int = 5):
         if not self.strategy:
             logger.error("No trading strategy set.")
             return
@@ -302,7 +301,7 @@ class BybitTradingBot:
                     logger.warning("Skipping strategy due to missing account data.")
                     await asyncio.sleep(interval)
                     continue
-                
+
                 await self.strategy(account_info['result']['list'], self.session, self, symbols)
 
             except KeyboardInterrupt:

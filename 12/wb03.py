@@ -4,27 +4,28 @@
 # ─────────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
 
-import os
-import json
-import time
-import random
-import hmac
 import hashlib
+import hmac
+import json
 import logging
-from datetime import datetime, timedelta
+import os
+import random
+import time
+from collections.abc import MutableMapping
+from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, getcontext
 from pathlib import Path
 from typing import (
-    Any, Dict, List, Optional, Tuple, Union, Iterable, MutableMapping, TypedDict,
+    Any,
 )
+from zoneinfo import ZoneInfo
 
-import requests
 import numpy as np
 import pandas as pd
+import requests
 from colorama import Fore, Style, init as colorama_init
 from dotenv import load_dotenv
-from zoneinfo import ZoneInfo
-from dataclasses import dataclass, field
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  GLOBAL CONSTANTS + COLOUR PALETTE
@@ -81,7 +82,7 @@ CONFIG_FILE = BASE_DIR / "config.json"
 @dataclass(slots=True)
 class BotConfig:
     """Lightweight wrapper around the JSON config."""
-    raw: Dict[str, Any]
+    raw: dict[str, Any]
 
     @property
     def __getitem__(self):
@@ -92,7 +93,7 @@ class BotConfig:
 
 def load_config(fp: Path = CONFIG_FILE) -> BotConfig:
     """Load config file, create defaults if missing / broken."""
-    default_cfg: Dict[str, Any] = {
+    default_cfg: dict[str, Any] = {
         "interval": "15",
         "analysis_interval": 30,
         "retry_delay": 5,
@@ -146,10 +147,10 @@ def _sign(secret: str, params: MutableMapping[str, Any]) -> str:
 def _send_request(
     method: str,
     endpoint: str,
-    params: Optional[Dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
     retries: int = 5,
     logger: logging.Logger = LOGGER,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Generic HTTP wrapper with retry + jitter."""
     params = params or {}
     params["timestamp"] = str(int(time.time() * 1000))
@@ -199,7 +200,7 @@ def _log_api_error(resp: requests.Response, logger: logging.Logger):
         logger.error(f"{NEON_RED}API-ERR {resp.status_code}: {resp.text[:100]}…{RESET}")
 
 # Convenience wrappers
-def fetch_price(symbol: str, log: logging.Logger) -> Optional[Decimal]:
+def fetch_price(symbol: str, log: logging.Logger) -> Decimal | None:
     data = _send_request(
         "GET", "/v5/market/tickers",
         params={"category": "linear", "symbol": symbol},
@@ -295,7 +296,7 @@ class Indicators:
 # ─────────────────────────────────────────────────────────────────────────────
 @dataclass
 class TradeSignal:
-    signal: Optional[str]
+    signal: str | None
     confidence: float
     conditions: list[str]
     levels: dict[str, Decimal]
@@ -348,7 +349,7 @@ class TradingAnalyzer:
     # ─────────────────────────────────────────────────────────────────────
     # PUBLIC UTILS
     # ─────────────────────────────────────────────────────────────────────
-    def analyse(self, price: Decimal, ts: str, orderbook: Optional[Dict[str, Any]]):
+    def analyse(self, price: Decimal, ts: str, orderbook: dict[str, Any] | None):
         """Pretty print status – easier to skim in terminal."""
         rsi_val = Indicators.rsi(self.df.close, self.cfg["momentum_period"]).iloc[-1]
         ema_score = self.ema_alignment_score()
@@ -394,7 +395,7 @@ EMA-Align:{ema_score:+.1f} │ Vol-Spike:{self.volume_confirmation()}"""
 
         # Convert to float for comparison
         conf_f = float(score)
-        sig: Optional[str] = "buy" if conf_f >= self.cfg["signal_score_threshold"] else None
+        sig: str | None = "buy" if conf_f >= self.cfg["signal_score_threshold"] else None
         levels: dict[str, Decimal] = {}
         if sig and self.atr_val:
             atr_d = Decimal(str(self.atr_val))
@@ -427,7 +428,7 @@ def main() -> None:
     kline_cache: dict[str, tuple[datetime, pd.DataFrame]] = {}
     last_sig_t = 0.0
     last_ob_t  = 0.0
-    orderbook: Optional[Dict[str, Any]] = None
+    orderbook: dict[str, Any] | None = None
 
     try:
         while True:

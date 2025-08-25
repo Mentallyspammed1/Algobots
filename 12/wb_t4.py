@@ -5,26 +5,25 @@
 
 from __future__ import annotations
 
-import os
-import json
-import time
-import hmac
 import hashlib
+import hmac
+import inspect
+import json
 import logging
-from datetime import datetime, timezone
+import os
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal, getcontext
 from functools import wraps
-import inspect
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
+from zoneinfo import ZoneInfo
 
-import requests
-import numpy as np
 import pandas as pd
+import requests
 from colorama import Fore, Style, init as colorama_init
 from dotenv import load_dotenv
-from zoneinfo import ZoneInfo
-from dataclasses import dataclass, field
 
 # ----------------------------------------------------------------------------
 # 1. GLOBAL INITIALIZATION & CONSTANTS
@@ -100,7 +99,7 @@ def retry_api_call(max_attempts: int = 3, delay: int = 5):
 @dataclass(slots=True)
 class BotConfig:
     """A lightweight, type-safe wrapper around the JSON configuration."""
-    raw: Dict[str, Any]
+    raw: dict[str, Any]
 
     def __getitem__(self, key: str) -> Any:
         return self.raw[key]
@@ -108,7 +107,7 @@ class BotConfig:
     def get(self, key: str, default: Any = None) -> Any:
         return self.raw.get(key, default)
 
-def _get_default_config() -> Dict[str, Any]:
+def _get_default_config() -> dict[str, Any]:
     """Returns the default configuration dictionary with all 22 indicators."""
     return {
         "interval": "15", "analysis_interval": 30, "retry_delay": 5,
@@ -160,7 +159,7 @@ def load_config(fp: Path) -> BotConfig:
         LOGGER.warning(f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}")
         try:
             fp.write_text(json.dumps(defaults, indent=4))
-        except IOError as e:
+        except OSError as e:
             LOGGER.error(f"{NEON_RED}Failed to write default config: {e}{RESET}")
             return BotConfig(defaults)
         return BotConfig(defaults)
@@ -173,7 +172,7 @@ def load_config(fp: Path) -> BotConfig:
                 merged[key].update(value)
             else:
                 merged[key] = value
-    except (json.JSONDecodeError, IOError) as e:
+    except (OSError, json.JSONDecodeError) as e:
         LOGGER.error(f"{NEON_RED}Error with config file: {e}. Rebuilding default.{RESET}")
         backup_fp = fp.with_name(f"{fp.stem}.bak_{int(time.time())}{fp.suffix}")
         try:
@@ -201,7 +200,7 @@ class BybitClient:
         self.api_key = api_key
         self.api_secret = api_secret
         self.log = log
-        self.kline_cache: Dict[str, Any] = {}
+        self.kline_cache: dict[str, Any] = {}
 
     def _generate_signature(self, params: dict) -> str:
         """Generates the HMAC SHA256 signature for Bybit API requests."""
@@ -209,7 +208,7 @@ class BybitClient:
         return hmac.new(self.api_secret.encode(), param_str.encode(), hashlib.sha256).hexdigest()
 
     @retry_api_call()
-    def _bybit_request(self, method: str, endpoint: str, params: Dict[str, Any] = None) -> Union[dict, None]:
+    def _bybit_request(self, method: str, endpoint: str, params: dict[str, Any] = None) -> dict | None:
         """Sends a signed request to the Bybit API with retry logic."""
         params = params or {}
         params['timestamp'] = str(int(time.time() * 1000))
@@ -232,7 +231,7 @@ class BybitClient:
         return response.json()
 
     @retry_api_call()
-    def fetch_current_price(self, symbol: str) -> Optional[Decimal]:
+    def fetch_current_price(self, symbol: str) -> Decimal | None:
         """Fetches the latest price for a given symbol."""
         endpoint = "/v5/market/tickers"
         params = {"category": "linear", "symbol": symbol}
@@ -262,22 +261,22 @@ class BybitClient:
             data = response_data["result"]["list"]
             columns = ["start_time", "open", "high", "low", "close", "volume", "turnover"]
             df = pd.DataFrame(data, columns=columns)
-            
+
             df["start_time"] = pd.to_datetime(df["start_time"], unit="ms")
             for col in ["open", "high", "low", "close", "volume", "turnover"]:
                 df[col] = df[col].apply(Decimal)
-            
+
             df.dropna(subset=df.columns[1:], inplace=True)
             df = df.sort_values(by="start_time", ascending=True).reset_index(drop=True)
 
             self.kline_cache[kline_key] = {'data': df, 'timestamp': time.time()}
             return df
-            
+
         self.log.error(f"{NEON_RED}Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}")
         return pd.DataFrame()
 
     @retry_api_call()
-    def fetch_order_book(self, symbol: str, limit: int = 50) -> Optional[dict]:
+    def fetch_order_book(self, symbol: str, limit: int = 50) -> dict | None:
         """Fetches the order book for a given symbol."""
         endpoint = "/v5/market/orderbook"
         params = {"symbol": symbol, "limit": limit, "category": "linear"}
@@ -506,10 +505,10 @@ class Indicators:
 @dataclass(slots=True)
 class TradeSignal:
     """Structured object for a trading signal."""
-    signal: Optional[str]
+    signal: str | None
     confidence: float
-    conditions: List[str] = field(default_factory=list)
-    levels: Dict[str, Decimal] = field(default_factory=dict)
+    conditions: list[str] = field(default_factory=list)
+    levels: dict[str, Decimal] = field(default_factory=dict)
 
 class TradingAnalyzer:
     """Orchestrates technical analysis and signal generation."""
@@ -520,9 +519,9 @@ class TradingAnalyzer:
         self.symbol = symbol
         self.interval = interval
         self.atr_value: Decimal = Decimal('0')
-        self.indicator_values: Dict[str, Any] = {}
-        self.levels: Dict[str, Any] = {"Support": {}, "Resistance": {}}
-        self.fib_levels: Dict[str, Decimal] = {}
+        self.indicator_values: dict[str, Any] = {}
+        self.levels: dict[str, Any] = {"Support": {}, "Resistance": {}}
+        self.fib_levels: dict[str, Decimal] = {}
         self._pre_calculate_indicators()
         self.weights = self._select_weight_set()
 
@@ -534,7 +533,7 @@ class TradingAnalyzer:
             self.atr_value = atr_series.iloc[-1]
         self.indicator_values["atr"] = self.atr_value
 
-    def _select_weight_set(self) -> Dict[str, float]:
+    def _select_weight_set(self) -> dict[str, float]:
         """Selects indicator weights based on market volatility (ATR)."""
         vol_mode = "high_volatility" if self.atr_value > Decimal(str(self.cfg["atr_change_threshold"])) else "low_volatility"
         self.log.info(f"Market Volatility: {NEON_YELLOW}{vol_mode.upper()}{RESET} (ATR: {self.atr_value:.5f})")
@@ -563,7 +562,7 @@ class TradingAnalyzer:
         multiplier = Decimal(str(self.cfg["volume_confirmation_multiplier"]))
         return self.df.volume.iloc[-1] > vol_ma_value * multiplier
 
-    def _detect_macd_divergence(self) -> Optional[str]:
+    def _detect_macd_divergence(self) -> str | None:
         """Detects bullish or bearish MACD divergence (simplified logic)."""
         macd_df = Indicators.macd(self.df.close)
         if macd_df.empty or len(self.df) < 30: return None
@@ -575,7 +574,7 @@ class TradingAnalyzer:
         if prices.iloc[-1] > prices.iloc[-lookback] and macd_hist.iloc[-1] < macd_hist.iloc[-lookback]: return "bearish"
         return None
 
-    def _analyze_order_book_walls(self, order_book: Dict[str, Any]) -> Tuple[bool, bool, Dict[str, Decimal], Dict[str, Decimal]]:
+    def _analyze_order_book_walls(self, order_book: dict[str, Any]) -> tuple[bool, bool, dict[str, Decimal], dict[str, Decimal]]:
         """Detect bullish/bearish walls from bids/asks."""
         enabled = self.cfg.get("order_book_analysis", {}).get("enabled", False)
         if not enabled or not order_book: return False, False, {}, {}
@@ -621,7 +620,7 @@ class TradingAnalyzer:
         pivots = {"Pivot": pivot, "R1": r1, "S1": s1, "R2": r2, "S2": s2, "R3": r3, "S3": s3}
         self.levels.update({label: val.quantize(precision) for label, val in pivots.items()})
 
-    def find_nearest_levels(self, current_price: Decimal, num_levels: int = 5) -> Tuple[List[Tuple[str, Decimal]], List[Tuple[str, Decimal]]]:
+    def find_nearest_levels(self, current_price: Decimal, num_levels: int = 5) -> tuple[list[tuple[str, Decimal]], list[tuple[str, Decimal]]]:
         """Finds the nearest support and resistance levels from calculated Fibonacci and Pivot Points."""
         supports, resistances = [], []
         for label, value in self.levels.items():
@@ -662,10 +661,7 @@ class TradingAnalyzer:
             if self.df.close.iloc[-1] > value: color = NEON_GREEN
             elif self.df.close.iloc[-1] < value: color = NEON_RED
             line = f"  PSAR              : {color}{value:.5f}{RESET}"
-        elif name == "cmf":
-            if value > Decimal('0'): color = NEON_GREEN
-            elif value < Decimal('0'): color = NEON_RED
-        elif name == "ao":
+        elif name == "cmf" or name == "ao":
             if value > Decimal('0'): color = NEON_GREEN
             elif value < Decimal('0'): color = NEON_RED
         elif name == "vi":
@@ -678,10 +674,10 @@ class TradingAnalyzer:
             elif current_price < lower: color = NEON_GREEN; status="Oversold"
             else: color=NEON_BLUE; status="In Band"
             line = f"  Bollinger Bands   : Price {color}{status}{RESET}"
-        
+
         return line
 
-    def analyze(self, price: Decimal, ts: str, order_book: Optional[Dict[str, Any]]):
+    def analyze(self, price: Decimal, ts: str, order_book: dict[str, Any] | None):
         """Performs a full analysis and logs a detailed summary."""
         cfg_ind = self.cfg["indicators"]
         cfg_prd = self.cfg["indicator_periods"]
@@ -699,7 +695,7 @@ class TradingAnalyzer:
             'k_period': 0, 'd_period': 0, 'rsi_period': 0, 'short_period': 0, 'long_period': 0,
             'std_dev_mult': Decimal('2')
         }
-        
+
         # Populate period values from config
         for key, val in cfg_prd.items():
             if key in indicator_data:
@@ -787,7 +783,7 @@ class TradingAnalyzer:
         """
         raw_score = Decimal('0.0')
         conditions_met = []
-        
+
         # Calculate scores from main indicators
         for name, weight in self.weights.items():
             if not self.cfg["indicators"].get(name): continue
@@ -795,7 +791,7 @@ class TradingAnalyzer:
             if value is None: continue
 
             weight_dec = Decimal(str(weight))
-            
+
             if name == "ema_alignment":
                 if value == Decimal('1.0'): raw_score += weight_dec; conditions_met.append("EMA Alignment (Bullish)")
                 elif value == Decimal('-1.0'): raw_score -= weight_dec; conditions_met.append("EMA Alignment (Bearish)")
@@ -896,7 +892,7 @@ def main():
 
     last_signal_time = 0.0
     last_ob_fetch_time = 0.0
-    order_book: Optional[Dict[str, Any]] = None
+    order_book: dict[str, Any] | None = None
 
     try:
         while True:

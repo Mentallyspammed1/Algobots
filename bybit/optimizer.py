@@ -1,9 +1,10 @@
-import itertools
 import copy
+import itertools
 from decimal import Decimal
 
 # Import the necessary components from our backtester script
-from backtester import Backtester, load_historical_data, load_config
+from backtester import Backtester, load_config, load_historical_data
+
 
 def run_optimizer():
     """Runs the optimization process to find the best strategy parameters."""
@@ -28,8 +29,8 @@ def run_optimizer():
         return
 
     # Create all possible combinations of parameters
-    keys, values = zip(*param_grid.items())
-    parameter_combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+    keys, values = zip(*param_grid.items(), strict=False)
+    parameter_combinations = [dict(zip(keys, v, strict=False)) for v in itertools.product(*values)]
 
     total_combinations = len(parameter_combinations)
     print(f"Will test {total_combinations} parameter combinations...")
@@ -49,7 +50,7 @@ def run_optimizer():
         # Run the backtest with these parameters
         backtester = Backtester(temp_config)
         backtester.run_simulation(historical_data)
-        
+
         # We don't need the full report here, just the final PnL
         final_balance = backtester.current_balance
         initial_balance = backtester.initial_balance

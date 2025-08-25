@@ -9,22 +9,21 @@ Major enhancements, bug fixes, and performance improvements for v3.0.
 Author: Pyrmethus, Termux-Coding Wizard
 """
 
-import os
 import asyncio
+import json
 import logging
 import logging.handlers
-import time
-import json
+import os
 import signal
 import sys
-import select
+import time
 import uuid
-from decimal import Decimal, getcontext, ROUND_DOWN, ROUND_UP, DecimalException
-from typing import Any, Dict, Optional, List, Tuple
+from decimal import ROUND_DOWN, Decimal, DecimalException, getcontext
+from typing import Any
 
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
-from colorama import Fore, Style, init
 
 # Initialize colorama for cross-platform color support
 init(autoreset=True)
@@ -60,7 +59,7 @@ API_SECRET = os.getenv("BYBIT_API_SECRET")
 
 # Load runtime configuration
 try:
-    with open("config.json", "r") as f:
+    with open("config.json") as f:
         config = json.load(f)
 except FileNotFoundError:
     print(f"{RED}config.json not found. Please create it.{NC}")
@@ -156,7 +155,7 @@ _SHUTDOWN_REQUESTED = False
 def set_bot_state(state: str):
     """Sets the global bot state and logs the change."""
     global BOT_STATE
-    if BOT_STATE != state:
+    if state != BOT_STATE:
         logger.info(f"{Fore.CYAN}Bot State Change: {BOT_STATE} -> {state}{NC}")
         BOT_STATE = state
 
@@ -191,9 +190,9 @@ def format_metric(
     label: str,
     value: Any,
     label_color: str,
-    value_color: Optional[str] = None,
+    value_color: str | None = None,
     label_width: int = 25,
-    value_precision: Optional[int] = None,
+    value_precision: int | None = None,
     unit: str = "",
     is_pnl: bool = False,
 ) -> str:
@@ -216,7 +215,7 @@ def format_metric(
         else:
             formatted_value = f"{actual_value_color}{value:,}{unit}{NC}"
     else:
-        formatted_value = f"{actual_value_color}{str(value)}{unit}{NC}"
+        formatted_value = f"{actual_value_color}{value!s}{unit}{NC}"
     return f"{formatted_label}: {formatted_value}"
 
 def check_termux_toast() -> bool:
@@ -230,7 +229,7 @@ def send_toast(message: str, color: str = "#336699", text_color: str = "white") 
     else:
         logger.debug(f"Toast (unavailable): {message}")
 
-def get_paged_results(batch_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def get_paged_results(batch_results: list[dict[str, Any]]) -> dict[str, Any]:
     """Combines list results from multiple paginated API calls."""
     if not isinstance(batch_results, list) or not all('list' in r for r in batch_results):
         logger.error("Invalid batch_results format for get_paged_results.")
@@ -243,11 +242,11 @@ def get_paged_results(batch_results: List[Dict[str, Any]]) -> Dict[str, Any]:
 # WebSocket Callbacks
 # -----------------------------
 
-def on_public_ws_message(msg: Dict[str, Any]) -> None:
+def on_public_ws_message(msg: dict[str, Any]) -> None:
     """Handle public WebSocket messages (orderbook)."""
     try:
         topic = msg.get("topic")
-        if topic and topic.startswith(f"orderbook.1."):
+        if topic and topic.startswith("orderbook.1."):
             data = msg.get("data")
             if data and data.get("b") and data.get("a"):
                 bid_info = data["b"][0]
@@ -267,7 +266,7 @@ def on_public_ws_message(msg: Dict[str, Any]) -> None:
     except Exception as e:
         logger.error(f"Unexpected error in public WS handler: {type(e).__name__} - {e} | Message: {msg}")
 
-def on_private_ws_message(msg: Dict[str, Any]) -> None:
+def on_private_ws_message(msg: dict[str, Any]) -> None:
     """Handle private WebSocket messages (orders, positions)."""
     try:
         topic = msg.get("topic")
@@ -548,7 +547,7 @@ class BybitClient:
             return True
         return False
 
-    async def place_order(self, side: str, order_type: str, qty: Decimal, price: Optional[Decimal] = None):
+    async def place_order(self, side: str, order_type: str, qty: Decimal, price: Decimal | None = None):
         """Places a new order."""
         client_order_id = f"mmxcel-{uuid.uuid4()}"
         order_params = {
@@ -563,7 +562,7 @@ class BybitClient:
         }
         if order_type == "Limit":
             order_params["price"] = str(price.quantize(symbol_info["price_precision"]))
-        
+
         # Check if the order value meets the minimum requirement
         if order_type == "Limit":
             order_value = qty * price
@@ -637,7 +636,7 @@ class MakiwiStrategy:
         # Initiate WebSocket connections and wait for them to establish and receive data.
         logger.info("Initiating WebSocket connections and waiting for data...")
         self.client.start_websockets() # Start the WebSocket connections
-        
+
         start_time = time.time()
         while not (self.client.is_public_ws_connected and self.client.is_private_ws_connected and ws_state['mid_price'] > Decimal("0")):
             await asyncio.sleep(0.5)
@@ -686,17 +685,17 @@ class MakiwiStrategy:
                 print(format_metric("Best Ask", ws_state['best_ask'], label_color=WHITE, value_precision=_calculate_decimal_precision(symbol_info['price_precision'])))
                 print_neon_separator()
                 print(format_metric("Open Orders", len(ws_state['open_orders']), label_color=WHITE, value_color=CYAN))
-                
+
                 long_pos = ws_state['positions'].get('Long', {'size': Decimal('0'), 'unrealisedPnl': Decimal('0')})
                 short_pos = ws_state['positions'].get('Short', {'size': Decimal('0'), 'unrealisedPnl': Decimal('0')})
-                
+
                 print(format_metric("Long Position", long_pos['size'], label_color=WHITE, unit=f" {SYMBOL.split('USDT')[0]}", value_precision=_calculate_decimal_precision(symbol_info['qty_precision'])))
                 print(format_metric("Short Position", short_pos['size'], label_color=WHITE, unit=f" {SYMBOL.split('USDT')[0]}", value_precision=_calculate_decimal_precision(symbol_info['qty_precision'])))
-                
+
                 total_unrealized_pnl = long_pos['unrealisedPnl'] + short_pos['unrealisedPnl']
                 print(format_metric("Unrealized PnL", total_unrealized_pnl, label_color=WHITE, value_precision=2, is_pnl=True))
                 print_neon_separator()
-                
+
                 # Dynamic order status section
                 if ws_state['open_orders']:
                     print_neon_header("Open Orders Status", color=BOLD + WHITE)
@@ -705,7 +704,7 @@ class MakiwiStrategy:
                         age_color = RED if age > ORDER_LIFESPAN_SECONDS else GREEN
                         print(f"{Fore.WHITE}  - {order['side']:<5} {order['qty']:.{_calculate_decimal_precision(symbol_info['qty_precision'])}f} @ {order['price']:.{_calculate_decimal_precision(symbol_info['price_precision'])}f} {age_color}({age:.1f}s ago){NC}")
                     print_neon_separator()
-                
+
                 print_neon_header("Session Statistics", color=BOLD + WHITE)
                 uptime = time.time() - session_stats['start_time']
                 print(format_metric("Uptime", f"{int(uptime//3600)}h {int((uptime%3600)//60)}m {int(uptime%60)}s", label_color=WHITE, value_color=CYAN))
@@ -713,9 +712,9 @@ class MakiwiStrategy:
                 print(format_metric("Total Orders Filled", session_stats['orders_filled'], label_color=WHITE, value_color=CYAN))
                 print(format_metric("Total Realized PnL", session_stats['total_pnl'], label_color=WHITE, value_precision=2, is_pnl=True))
                 print_neon_separator(char="═")
-                
+
                 self.last_dashboard_update = time.time()
-            
+
             # Non-blocking sleep
             await asyncio.sleep(0.1)
 
@@ -743,7 +742,7 @@ class MakiwiStrategy:
                 long_size = ws_state['positions'].get('Long', {}).get('size', Decimal('0'))
                 short_size = ws_state['positions'].get('Short', {}).get('size', Decimal('0'))
                 position_imbalance = abs(long_size - short_size)
-                
+
                 if position_imbalance >= REBALANCE_THRESHOLD_QTY and not self.is_rebalancing:
                     self.is_rebalancing = True
                     set_bot_state("REBALANCING")
@@ -757,33 +756,33 @@ class MakiwiStrategy:
                     imbalance_side = "Buy" if long_size < short_size else "Sell"
                     qty_to_rebalance = position_imbalance
                     rebalance_price = None
-                    
+
                     if REBALANCE_ORDER_TYPE == "Limit":
                         rebalance_price = mid_price * (Decimal("1") + (REBALANCE_PRICE_OFFSET_PERCENTAGE * (Decimal("1") if imbalance_side == "Buy" else Decimal("-1"))))
                         await self.client.place_order(imbalance_side, "Limit", qty_to_rebalance, rebalance_price)
                     else: # Market order
                         await self.client.place_order(imbalance_side, "Market", qty_to_rebalance)
-                    
+
                     # Wait for a few seconds for the rebalance order to process
                     await asyncio.sleep(ORDER_REFRESH_INTERVAL)
                     self.is_rebalancing = False
                     set_bot_state("RUNNING")
-                    
+
                 # 3. Order Placement & Management
                 open_orders = ws_state['open_orders']
-                
+
                 # Check for and cancel old orders
                 orders_to_cancel = [oid for oid, order in open_orders.items() if time.time() - order['timestamp'] > ORDER_LIFESPAN_SECONDS]
                 if orders_to_cancel:
                     logger.info(f"{Fore.YELLOW}Cancelling {len(orders_to_cancel)} stale orders.{NC}")
                     for oid in orders_to_cancel:
                         await self.client.cancel_order(oid)
-                
+
                 # Place new orders if needed
                 if len(open_orders) < MAX_OPEN_ORDERS and not self.is_rebalancing:
                     num_orders_to_place = MAX_OPEN_ORDERS - len(open_orders)
                     logger.debug(f"Need to place {num_orders_to_place} new orders.")
-                    
+
                     # Place new buy and sell orders symmetrically
                     if num_orders_to_place >= 2:
                         buy_price = mid_price * (Decimal("1") - SPREAD_PERCENTAGE)
@@ -791,20 +790,20 @@ class MakiwiStrategy:
 
                         if 'Buy' not in [o['side'] for o in open_orders.values()]:
                             await self.client.place_order("Buy", "Limit", QUANTITY, buy_price)
-                        
+
                         if 'Sell' not in [o['side'] for o in open_orders.values()]:
                             await self.client.place_order("Sell", "Limit", QUANTITY, sell_price)
-                    
+
                     # Wait for orders to be processed
                     await asyncio.sleep(ORDER_REFRESH_INTERVAL)
                     await self.client.get_open_orders() # Refresh open orders list
-            
+
             except Exception as e:
                 logger.error(f"{Fore.RED}Exception in main loop: {type(e).__name__} - {e}{NC}", exc_info=True)
                 set_bot_state("ERROR")
                 # Add a longer sleep here to prevent rapid error looping
                 await asyncio.sleep(5)
-            
+
             await asyncio.sleep(0.5) # Main loop sleep to prevent high CPU usage
 
 async def shutdown(loop, signame):
@@ -817,14 +816,14 @@ async def shutdown(loop, signame):
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for task in tasks:
         task.cancel()
-    
+
     # Wait for tasks to finish
     await asyncio.gather(*tasks, return_exceptions=True)
 
     # Perform final cleanup actions
     await client.cancel_all_orders() # FIX: Await the coroutine
     logger.info(f"{Fore.MAGENTA}All open orders cancelled.{NC}")
-    
+
     # Wait for the client to close its connections
     if client.is_public_ws_connected:
         client.ws_public.exit()

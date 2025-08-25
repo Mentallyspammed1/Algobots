@@ -1,10 +1,12 @@
 # tests/test_bot_logger.py
-import pytest
 import logging
-from unittest.mock import patch, MagicMock
 import sys
+
+import pytest
+
 sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
-from bot_logger import setup_logging, log_trade, log_metrics, log_exception
+from bot_logger import log_exception, log_metrics, log_trade, setup_logging
+
 
 @pytest.fixture
 def caplog_for_test(caplog):

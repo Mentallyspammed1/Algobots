@@ -1,16 +1,30 @@
+import decimal  # Import the decimal module itself for exception handling
+from decimal import (  # Import Decimal and InvalidOperation for safety
+    Decimal,
+)
+from typing import Any
+
 import pandas as pd
-from typing import Any, Dict, List, Optional
-from decimal import Decimal, InvalidOperation # Import Decimal and InvalidOperation for safety
-import decimal # Import the decimal module itself for exception handling
 
 # --- Pyrmethus's Color Codex ---
 # Assuming color_codex.py provides these constants.
 # If not, define them here or ensure the file is accessible.
 try:
     from color_codex import (
-        COLOR_RESET, COLOR_BOLD, COLOR_DIM,
-        COLOR_RED, COLOR_GREEN, COLOR_YELLOW, COLOR_BLUE, COLOR_MAGENTA, COLOR_CYAN,
-        PYRMETHUS_GREEN, PYRMETHUS_BLUE, PYRMETHUS_PURPLE, PYRMETHUS_ORANGE, PYRMETHUS_GREY
+        COLOR_BLUE,
+        COLOR_BOLD,
+        COLOR_CYAN,
+        COLOR_DIM,
+        COLOR_GREEN,
+        COLOR_MAGENTA,
+        COLOR_RED,
+        COLOR_RESET,
+        COLOR_YELLOW,
+        PYRMETHUS_BLUE,
+        PYRMETHUS_GREEN,
+        PYRMETHUS_GREY,
+        PYRMETHUS_ORANGE,
+        PYRMETHUS_PURPLE,
     )
 except ImportError:
     # Define fallback colors if color_codex is not available
@@ -51,14 +65,14 @@ def _get_latest(df: pd.DataFrame, col: str, precision: int) -> str:
     return _format_indicator(df[col].iloc[-1], precision=precision)
 
 def display_market_info(
-    klines_df: Optional[pd.DataFrame],
+    klines_df: pd.DataFrame | None,
     current_price: Decimal,
     symbol: str,
-    pivot_resistance_levels: Dict[str, Decimal],
-    pivot_support_levels: Dict[str, Decimal],
+    pivot_resistance_levels: dict[str, Decimal],
+    pivot_support_levels: dict[str, Decimal],
     bot_logger: Any, # Assuming bot_logger is passed for warnings
-    order_book_imbalance: Optional[Decimal] = None,
-    last_signal: Optional[Dict[str, Any]] = None # New parameter for last signal
+    order_book_imbalance: Decimal | None = None,
+    last_signal: dict[str, Any] | None = None # New parameter for last signal
 ):
     """
     Prints current market information to the console with enhanced formatting and clarity.
@@ -100,7 +114,7 @@ def display_market_info(
 
         # header
         lines.append(f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {price_color}{current_price:.4f}{COLOR_RESET} @ {timestamp_str}")
-        
+
         # indicators
         lines.append(f"{COLOR_CYAN}--- Indicators ---{COLOR_RESET}")
         indicators_to_display = [
@@ -143,7 +157,7 @@ def display_market_info(
             signal_type = last_signal.get("type", "N/A")
             signal_price = _format_indicator(last_signal.get("price"), precision=4)
             signal_info = last_signal.get("info", {})
-            
+
             signal_color = PYRMETHUS_GREEN if "BUY" in signal_type.upper() else COLOR_RED
             lines.append(f"{signal_color}💡 {signal_type.upper()} @ {signal_price}{COLOR_RESET}")
             for key, value in signal_info.items():

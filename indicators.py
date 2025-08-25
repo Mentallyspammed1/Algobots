@@ -1,11 +1,11 @@
-import pandas as pd
 import logging
-from typing import List, Dict, Any, Tuple
-from decimal import Decimal, getcontext, ROUND_HALF_UP
 import math
-from colorama import init, Fore, Style
+from decimal import ROUND_HALF_UP, Decimal, getcontext
+from typing import Any
 
+import pandas as pd
 from bot_logger import setup_logging
+from colorama import Fore, Style, init
 
 # Initialize colorama for vibrant terminal output
 init()
@@ -38,13 +38,13 @@ def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
 
     # Use a custom apply for max because pandas max() can be tricky with Decimals
     tr = tr_df[['h_l', 'h_pc', 'l_pc']].apply(lambda row: max(row.dropna()), axis=1)
-    
+
     # Using EMA for ATR calculation for smoother, more stable results
     atr = tr.ewm(alpha=1/length, adjust=False).mean().fillna(Decimal('0')).apply(Decimal)
     indicators_logger.debug(Fore.CYAN + f"ATR calculated with length={length}." + Style.RESET_ALL)
     return atr
 
-def calculate_fibonacci_pivot_points(df: pd.DataFrame, fib_ratios: List[float] = [0.382, 0.618, 1.000], atr_length: int = 14) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def calculate_fibonacci_pivot_points(df: pd.DataFrame, fib_ratios: list[float] = [0.382, 0.618, 1.000], atr_length: int = 14) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Calculates Fibonacci Pivot Points with customizable ratios and ATR-based adjustments.
     Returns resistance and support levels as lists of dictionaries.
@@ -161,14 +161,14 @@ def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
     if 'close' not in df.columns:
         indicators_logger.error(Fore.RED + "DataFrame must contain a 'close' column for SMA calculation." + Style.RESET_ALL)
         return pd.Series(dtype='object')
-    
+
     # Ensure 'close' column is Decimal type
     close_prices = df['close'].apply(Decimal)
     sma = close_prices.rolling(window=length).mean().apply(Decimal)
     indicators_logger.debug(Fore.CYAN + f"SMA calculated with length={length}." + Style.RESET_ALL)
     return sma
 
-def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_length: int = 1) -> Tuple[pd.Series, pd.Series]:
+def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_length: int = 1) -> tuple[pd.Series, pd.Series]:
     """
     Calculates the Ehlers Fisher Transform and its signal line using Decimal precision.
     """
@@ -198,7 +198,7 @@ def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_
 
     # Fisher Transform formula using Decimal's ln()
     fisher_transform = x.apply(lambda val: Decimal('NaN') if pd.isna(val) else Decimal('0.5') * ((Decimal('1') + val) / (Decimal('1') - val)).ln())
-    
+
     # Calculate Fisher Signal
     fisher_signal = fisher_transform.rolling(window=signal_length).mean().apply(Decimal)
 
@@ -240,11 +240,11 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
         else:
             filt = c1 * (current_input + prev_input) / Decimal('2') + c2 * filtered_values.iloc[i-1] + c3 * filtered_values.iloc[i-2]
             filtered_values.iloc[i] = filt
-    
+
     indicators_logger.debug(Fore.CYAN + f"Super Smoother calculated with length={length}." + Style.RESET_ALL)
     return filtered_values
 
-def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> Tuple[pd.Series, pd.Series]:
+def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> tuple[pd.Series, pd.Series]:
     """
     Identifies Pivot Highs and Lows based on lookback periods.
     """
@@ -294,7 +294,7 @@ def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> Tup
     indicators_logger.debug(Fore.CYAN + f"Pivots identified with left={left}, right={right}, use_wicks={use_wicks}." + Style.RESET_ALL)
     return pivot_highs, pivot_lows
 
-def handle_websocket_kline_data(df: pd.DataFrame, message: Dict[str, Any]) -> pd.DataFrame:
+def handle_websocket_kline_data(df: pd.DataFrame, message: dict[str, Any]) -> pd.DataFrame:
     """
     Processes one or more kline data messages from a WebSocket stream, ensuring robustness.
     """
@@ -378,18 +378,18 @@ def calculate_vwap(df: pd.DataFrame) -> pd.Series:
 
     typical_price = (df['high'].apply(Decimal) + df['low'].apply(Decimal) + df['close'].apply(Decimal)) / Decimal('3')
     volume = df['volume'].apply(Decimal)
-    
+
     # Calculate cumulative typical price * volume and cumulative volume
     cumulative_tpv = (typical_price * volume).cumsum()
     cumulative_volume = volume.cumsum()
-    
+
     # Avoid division by zero
     vwap = cumulative_tpv / cumulative_volume.replace(Decimal('0'), Decimal('1e-38'))
-    
+
     indicators_logger.debug("VWAP calculated.")
     return vwap
 
-def calculate_order_book_imbalance(order_book: Dict[str, List[List[str]]]) -> Tuple[Decimal, Decimal]:
+def calculate_order_book_imbalance(order_book: dict[str, list[list[str]]]) -> tuple[Decimal, Decimal]:
     """
     Calculates the order book imbalance from the raw order book data.
     Returns the imbalance ratio and the total volume.
@@ -429,7 +429,7 @@ def calculate_ehlers_fisher_strategy(df: pd.DataFrame, length: int = 10) -> pd.D
 
     ehlers_value1 = [Decimal("0.0")] * len(df)
     ehlers_fisher = [Decimal("0.0")] * len(df)
-    
+
     prev_val1 = Decimal("0.0")
 
     for i in range(len(df)):
@@ -450,9 +450,9 @@ def calculate_ehlers_fisher_strategy(df: pd.DataFrame, length: int = 10) -> pd.D
                 raw_norm_price = (close_val - min_low_val) / range_val
             else:
                 raw_norm_price = Decimal("0.5")
-            
+
             current_val1 = Decimal('0.33') * (Decimal('2') * raw_norm_price - Decimal('1')) + Decimal('0.67') * prev_val1
-            
+
             # Clamp value to avoid math domain errors with ln()
             if current_val1 >= Decimal("1"):
                 current_val1 = Decimal("0.999999999999999999999999999")
@@ -465,11 +465,11 @@ def calculate_ehlers_fisher_strategy(df: pd.DataFrame, length: int = 10) -> pd.D
             # Use Decimal's ln() for the Fisher Transform
             fisher_val = Decimal("0.5") * ((Decimal("1") + current_val1) / (Decimal("1") - current_val1)).ln()
             ehlers_fisher[i] = fisher_val
-    
+
     df['ehlers_fisher'] = ehlers_fisher
     df['ehlers_signal'] = pd.Series(ehlers_fisher).shift(1).fillna(Decimal("0.0")).values
     df.drop(columns=['min_low_ehlers', 'max_high_ehlers'], inplace=True)
-    
+
     indicators_logger.debug(Fore.CYAN + f"Ehlers Fisher Strategy calculated with length={length}." + Style.RESET_ALL)
     return df
 
@@ -545,11 +545,11 @@ def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float =
 # --- Self-contained demonstration block ---
 if __name__ == "__main__":
     print(Fore.CYAN + "\n--- Indicators Demonstration ---" + Style.RESET_ALL)
-    
+
     # Create a sample DataFrame for demonstration
     data = {
         'timestamp': pd.to_datetime([
-            '2023-01-01 00:00:00', '2023-01-01 00:01:00', '2023-01-01 00:02:00', 
+            '2023-01-01 00:00:00', '2023-01-01 00:01:00', '2023-01-01 00:02:00',
             '2023-01-01 00:03:00', '2023-01-01 00:04:00', '2023-01-01 00:05:00',
             '2023-01-01 00:06:00', '2023-01-01 00:07:00', '2023-01-01 00:08:00',
             '2023-01-01 00:09:00', '2023-01-01 00:10:00', '2023-01-01 00:11:00',

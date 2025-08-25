@@ -1,12 +1,12 @@
-import unittest
-import sys
 import os
-import math
+import sys
+import unittest
 
 # Add the parent directory to the sys.path to allow importing indicators.py
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from indicators import calculate_indicators
+
 
 class TestIndicators(unittest.TestCase):
 

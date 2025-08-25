@@ -1,51 +1,79 @@
 # PSG.py - Pyrmethus's Ultra Scalper Bot (Upgraded)
-import os
 import asyncio
-import pandas as pd
-import logging
-from typing import Any, Dict, List, Tuple, Union, Optional, Callable
-from dotenv import load_dotenv
 from decimal import Decimal, getcontext
-from algobots_types import OrderBlock # Import OrderBlock from new types scroll
+from typing import Any
+
+import pandas as pd
+from algobots_types import OrderBlock  # Import OrderBlock from new types scroll
+from dotenv import load_dotenv
 
 # --- Set Decimal Precision ---
 # High precision is crucial for financial calculations.
 getcontext().prec = 38
 
 # --- Pyrmethus's Color Codex ---
+# --- Configure Logging ---
+from bot_logger import log_exception, log_metrics, log_trade, setup_logging
+from bot_ui import display_market_info
+from bybit_api import BybitContractAPI
 from color_codex import (
-    COLOR_RESET, COLOR_BOLD, COLOR_DIM,
-    COLOR_RED, COLOR_GREEN, COLOR_YELLOW, COLOR_BLUE, COLOR_MAGENTA, COLOR_CYAN,
-    PYRMETHUS_GREEN, PYRMETHUS_BLUE, PYRMETHUS_PURPLE, PYRMETHUS_ORANGE, PYRMETHUS_GREY
+    COLOR_BOLD,
+    COLOR_RED,
+    COLOR_RESET,
+    COLOR_YELLOW,
+    PYRMETHUS_BLUE,
+    PYRMETHUS_GREEN,
+    PYRMETHUS_GREY,
+    PYRMETHUS_ORANGE,
+    PYRMETHUS_PURPLE,
 )
 
 # --- Import Configuration and Indicator Logic ---
 # These imports define the bot's behavior and analytical tools.
 from config import (
-    SYMBOL, INTERVAL, USDT_AMOUNT_PER_TRADE, PIVOT_LEFT_BARS, PIVOT_RIGHT_BARS, PIVOT_TOLERANCE_PCT,
-    STOCHRSI_K_PERIOD, STOCHRSI_D_PERIOD, STOCHRSI_OVERBOUGHT_LEVEL,
-    STOCHRSI_OVERSOLD_LEVEL, USE_STOCHRSI_CROSSOVER, STOP_LOSS_PCT,
-    TAKE_PROFIT_PCT, BYBIT_API_ENDPOINT, BYBIT_CATEGORY, CANDLE_FETCH_LIMIT,
-    POLLING_INTERVAL_SECONDS, API_REQUEST_RETRIES, API_BACKOFF_FACTOR, ATR_PERIOD,
-    ENABLE_FIB_PIVOT_ACTIONS, PIVOT_TIMEFRAME, FIB_LEVELS_TO_CALC, FIB_NEAREST_COUNT,
-    FIB_ENTRY_CONFIRM_PERCENT, FIB_EXIT_WARN_PERCENT, FIB_EXIT_ACTION,
-    ATR_MULTIPLIER_SL, ATR_MULTIPLIER_TP,
-    SMA_LENGTH, EHLERS_FISHER_LENGTH, EHLERS_SUPERSMOOTHER_LENGTH,
-    MAX_ACTIVE_OBS
+    ATR_MULTIPLIER_SL,
+    ATR_MULTIPLIER_TP,
+    ATR_PERIOD,
+    BYBIT_API_ENDPOINT,
+    BYBIT_CATEGORY,
+    CANDLE_FETCH_LIMIT,
+    EHLERS_FISHER_LENGTH,
+    EHLERS_SUPERSMOOTHER_LENGTH,
+    ENABLE_FIB_PIVOT_ACTIONS,
+    FIB_ENTRY_CONFIRM_PERCENT,
+    FIB_EXIT_ACTION,
+    FIB_EXIT_WARN_PERCENT,
+    INTERVAL,
+    MAX_ACTIVE_OBS,
+    PIVOT_LEFT_BARS,
+    PIVOT_RIGHT_BARS,
+    PIVOT_TIMEFRAME,
+    POLLING_INTERVAL_SECONDS,
+    SMA_LENGTH,
+    STOCHRSI_D_PERIOD,
+    STOCHRSI_K_PERIOD,
+    STOCHRSI_OVERBOUGHT_LEVEL,
+    STOCHRSI_OVERSOLD_LEVEL,
+    STOP_LOSS_PCT,
+    SYMBOL,
+    TAKE_PROFIT_PCT,
+    USDT_AMOUNT_PER_TRADE,
+    USE_STOCHRSI_CROSSOVER,
 )
 from indicators import (
-    calculate_fibonacci_pivot_points, calculate_stochrsi, calculate_atr,
-    calculate_sma, calculate_ehlers_fisher_transform, calculate_ehlers_super_smoother,
-    find_pivots, handle_websocket_kline_data
+    calculate_atr,
+    calculate_ehlers_fisher_transform,
+    calculate_ehlers_super_smoother,
+    calculate_fibonacci_pivot_points,
+    calculate_sma,
+    calculate_stochrsi,
+    find_pivots,
+    handle_websocket_kline_data,
 )
-from strategy import generate_signals, generate_exit_signals
-from bybit_api import BybitContractAPI
-from bot_ui import display_market_info
-
-# --- Configure Logging ---
-from bot_logger import setup_logging, log_trade, log_metrics, log_exception
+from strategy import generate_exit_signals, generate_signals
 from trade_metrics import TradeMetrics
 from utils import calculate_order_quantity
+
 
 class PyrmethusBot:
     """
@@ -56,7 +84,7 @@ class PyrmethusBot:
     def __init__(self):
         self.bot_logger = setup_logging()
         self.trade_metrics = TradeMetrics()
-        self.bybit_client: Optional[BybitContractAPI] = None
+        self.bybit_client: BybitContractAPI | None = None
 
         # --- Bot State Variables (using Decimal for precision) ---
         # `inventory` is the single source of truth for the bot's position.
@@ -64,19 +92,19 @@ class PyrmethusBot:
         self.inventory: Decimal = Decimal('0')
         self.entry_price: Decimal = Decimal('0') # Average entry price of the current open position
         self.unrealized_pnl: Decimal = Decimal('0') # Current unrealized PnL of the open position
-        
+
         # Trade-specific metrics for logging a completed trade accurately
         self.entry_price_for_trade_metrics: Decimal = Decimal('0')
         self.entry_fee_for_trade_metrics: Decimal = Decimal('0')
-        
+
         self.current_price: Decimal = Decimal('0') # Last known current market price
-        self.klines_df: Optional[pd.DataFrame] = None # DataFrame storing historical kline data and indicators
-        self.cached_atr: Optional[Decimal] = None # Last calculated ATR value
+        self.klines_df: pd.DataFrame | None = None # DataFrame storing historical kline data and indicators
+        self.cached_atr: Decimal | None = None # Last calculated ATR value
 
         # --- Order Block Tracking ---
         # Lists to store active bullish (demand) and bearish (supply) order blocks.
-        self.active_bull_obs: List[OrderBlock] = []
-        self.active_bear_obs: List[OrderBlock] = []
+        self.active_bull_obs: list[OrderBlock] = []
+        self.active_bear_obs: list[OrderBlock] = []
 
     @property
     def has_open_position(self) -> bool:
@@ -84,7 +112,7 @@ class PyrmethusBot:
         return abs(self.inventory) > Decimal('0')
 
     @property
-    def current_position_side(self) -> Optional[str]:
+    def current_position_side(self) -> str | None:
         """Returns the side of the current open position ('Buy', 'Sell', or None)."""
         if self.inventory > Decimal('0'):
             return 'Buy'
@@ -174,7 +202,7 @@ class PyrmethusBot:
 
         # Manage existing Order Blocks (violation and extension)
         current_price = self.current_price
-        
+
         # Filter out inactive/violated OBs first for efficiency
         self.active_bull_obs = [ob for ob in self.active_bull_obs if ob['active']]
         self.active_bear_obs = [ob for ob in self.active_bear_obs if ob['active']]
@@ -210,7 +238,7 @@ class PyrmethusBot:
 
         self.bot_logger.debug(f"Active OBs after management: Bull={len(self.active_bull_obs)}, Bear={len(self.active_bear_obs)}")
 
-    async def _handle_position_update(self, message: Dict[str, Any]):
+    async def _handle_position_update(self, message: dict[str, Any]):
         """
         Asynchronous handler for WebSocket position updates.
         This is the single source of truth for the bot's open position state,
@@ -231,7 +259,7 @@ class PyrmethusBot:
                 exit_price = self.current_price # Use last known price for metrics
                 # Ensure inventory is not zero before calculating fee
                 exit_fee = self.trade_metrics.calculate_fee(abs(self.inventory), exit_price, is_maker=False)
-                
+
                 # Record the completed trade for performance analysis
                 self.trade_metrics.record_trade(
                     self.entry_price_for_trade_metrics, exit_price,
@@ -275,7 +303,7 @@ class PyrmethusBot:
         self.inventory = signed_inventory
         self.entry_price = new_entry_price
         self.unrealized_pnl = new_unrealized_pnl
-        
+
         if self.has_open_position:
             self.bot_logger.info(
                 f"{PYRMETHUS_BLUE}💼 Open Position (WS): {self.current_position_side} {abs(self.inventory):.4f} {symbol} "
@@ -346,7 +374,7 @@ class PyrmethusBot:
             except Exception as e:
                 log_exception(self.bot_logger, f"Failed to set TP/SL for {SYMBOL}: {e}", e)
 
-    async def _handle_kline_update(self, message: Dict[str, Any]):
+    async def _handle_kline_update(self, message: dict[str, Any]):
         """
         Asynchronous handler for WebSocket kline updates.
         Updates the internal `klines_df` and derived indicators in real-time.
@@ -359,7 +387,7 @@ class PyrmethusBot:
         updated_df = handle_websocket_kline_data(self.klines_df, message)
         if updated_df is not None and not updated_df.empty:
             self.klines_df = updated_df
-            
+
             # Recalculate all necessary indicators on the updated DataFrame
             # Ensure enough data points are available before calculating
             min_data_needed_for_indicators = max(STOCHRSI_K_PERIOD, ATR_PERIOD, SMA_LENGTH, EHLERS_FISHER_LENGTH, EHLERS_SUPERSMOOTHER_LENGTH)
@@ -373,7 +401,7 @@ class PyrmethusBot:
                 # Update cached values from the latest complete candle (or current for price)
                 self.cached_atr = self.klines_df['atr'].iloc[-1] if 'atr' in self.klines_df.columns and not self.klines_df['atr'].empty else Decimal('0')
                 self.current_price = self.klines_df['close'].iloc[-1] # The last 'close' is the current price for an incomplete candle
-                
+
                 # Identify and manage Order Blocks *after* indicators are updated
                 self._identify_and_manage_order_blocks()
                 self.bot_logger.debug(f"{PYRMETHUS_CYAN}Kline updated via WebSocket. Current price: {self.current_price:.4f}{COLOR_RESET}")
@@ -437,7 +465,7 @@ class PyrmethusBot:
             log_exception(self.bot_logger, f"Error during initial kline fetch: {e}", e)
             return False
 
-    async def _execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: Dict[str, Any]):
+    async def _execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: dict[str, Any]):
         """Executes an entry trade based on a signal."""
         self.bot_logger.info(f"{PYRMETHUS_PURPLE}💡 Detected {signal_type.upper()} signal at {signal_price:.4f} (Info: {signal_info.get('stoch_type', 'N/A')}){COLOR_RESET}")
 
@@ -481,7 +509,7 @@ class PyrmethusBot:
             return True
         return False
 
-    async def _execute_exit(self, exit_type: str, exit_price: Decimal, exit_timestamp: Any, exit_info: Dict[str, Any]):
+    async def _execute_exit(self, exit_type: str, exit_price: Decimal, exit_timestamp: Any, exit_info: dict[str, Any]):
         """Executes an exit trade based on a signal."""
         self.bot_logger.info(f"{PYRMETHUS_PURPLE}💡 Detected {exit_type.upper()} exit signal at {exit_price:.4f} (Info: {exit_info.get('stoch_type', 'N/A')}){COLOR_RESET}")
 
@@ -574,8 +602,8 @@ class PyrmethusBot:
                         continue
 
                     # --- Calculate Fibonacci Pivot Levels (if enabled) ---
-                    pivot_support_levels: Dict[str, Decimal] = {}
-                    pivot_resistance_levels: Dict[str, Decimal] = {}
+                    pivot_support_levels: dict[str, Decimal] = {}
+                    pivot_resistance_levels: dict[str, Decimal] = {}
 
                     if ENABLE_FIB_PIVOT_ACTIONS:
                         self.bot_logger.debug(f"Calculating Fibonacci Pivots based on {PIVOT_TIMEFRAME} timeframe...")
@@ -619,7 +647,7 @@ class PyrmethusBot:
                                 self.bot_logger.warning(f"{COLOR_YELLOW}Failed to fetch pivot data for {PIVOT_TIMEFRAME}. Response: {pivot_ohlcv_response}{COLOR_RESET}")
                         except Exception as pivot_e:
                             log_exception(self.bot_logger, f"Error during Fibonacci Pivot calculation: {pivot_e}", pivot_e)
-                    
+
                     # Display current market information (from bot_ui)
                     display_market_info(self.klines_df, self.current_price, SYMBOL, pivot_resistance_levels, pivot_support_levels, self.bot_logger)
 
@@ -631,12 +659,12 @@ class PyrmethusBot:
                                                    use_crossover=USE_STOCHRSI_CROSSOVER,
                                                    enable_fib_pivot_actions=ENABLE_FIB_PIVOT_ACTIONS,
                                                    fib_entry_confirm_percent=FIB_ENTRY_CONFIRM_PERCENT)
-                        
+
                         for signal in signals:
                             signal_type, signal_price, signal_timestamp, signal_info = signal
                             if await self._execute_entry(signal_type, signal_price, signal_timestamp, signal_info):
                                 # If an entry order is successfully placed, break to avoid placing multiple orders in one loop cycle
-                                break 
+                                break
                     else:
                         self.bot_logger.info(f"{PYRMETHUS_BLUE}🚫 Position already open: {self.current_position_side} {SYMBOL}. Checking for exit signals...{COLOR_RESET}")
                         exit_signals = generate_exit_signals(self.klines_df, self.current_position_side,
@@ -662,7 +690,7 @@ class PyrmethusBot:
             except KeyboardInterrupt:
                 self.bot_logger.info(f"{COLOR_YELLOW}Bot stopped by user (KeyboardInterrupt).{COLOR_RESET}")
             except Exception as e:
-                log_exception(self.bot_logger, f"Critical error in main loop: {str(e)}", e)
+                log_exception(self.bot_logger, f"Critical error in main loop: {e!s}", e)
                 self.bot_logger.info(f"{COLOR_YELLOW}🔄 Attempting to recover and restart main loop after 10 seconds...{COLOR_RESET}")
                 await asyncio.sleep(10)
             finally:
@@ -671,7 +699,7 @@ class PyrmethusBot:
                 for task in listener_tasks:
                     task.cancel()
                 # Use return_exceptions=True to ensure all tasks are gathered even if one fails during cancellation
-                await asyncio.gather(*listener_tasks, return_exceptions=True) 
+                await asyncio.gather(*listener_tasks, return_exceptions=True)
                 self.bot_logger.info(f"{COLOR_YELLOW}All listener tasks cancelled and awaited. Bot shutdown complete.{COLOR_RESET}")
 
 async def main():

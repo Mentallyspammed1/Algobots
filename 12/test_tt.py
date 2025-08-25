@@ -1,14 +1,16 @@
-import unittest
-import pandas as pd
-import numpy as np
 import json
 import os
-from unittest.mock import patch, MagicMock
+import unittest
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pandas as pd
 
 # Import the functions and classes from the script to be tested
 # Assuming the script is named tt.py
 import tt
+
 
 class TestConfigLoading(unittest.TestCase):
     """Tests for the load_config function."""
@@ -48,14 +50,14 @@ class TestConfigLoading(unittest.TestCase):
             json.dump(user_config, f)
 
         config = tt.load_config(self.test_config_file)
-        
+
         # Test that user values override defaults
         self.assertEqual(config['interval'], '60')
         self.assertEqual(config['analysis_interval'], 15)
-        
+
         # Test that default values are preserved
-        self.assertEqual(config['momentum_period'], 10) 
-        
+        self.assertEqual(config['momentum_period'], 10)
+
         # Test that nested dictionaries are merged
         self.assertFalse(config['indicators']['rsi'])
         self.assertTrue(config['indicators']['ehlers_fisher_transform'])
@@ -69,7 +71,7 @@ class TestConfigLoading(unittest.TestCase):
         # Suppress error logging during this test
         with patch('tt.logger.error'), patch('tt.logger.info'):
             config = tt.load_config(self.test_config_file)
-        
+
         # Should load default config and back up the corrupt one
         self.assertEqual(config['interval'], '15')
         self.assertTrue(any('.bak_' in f for f in os.listdir('.')))
@@ -90,7 +92,7 @@ class TestTradingAnalyzer(unittest.TestCase):
             'volume': np.linspace(1000, 2000, 50)
         }
         self.df = pd.DataFrame(data)
-        
+
         # Create a mock logger
         self.mock_logger = MagicMock()
 
@@ -146,9 +148,9 @@ class TestTradingAnalyzer(unittest.TestCase):
         buy_data['close'] = pd.Series(close_prices * num_repeats).head(len(self.df))
 
         buy_analyzer = tt.TradingAnalyzer(buy_data, self.config, self.mock_logger, "BTCUSDT", "15")
-        
+
         buy_analyzer._calculate_all_indicators()
-        
+
         # Force Stoch RSI to be in an oversold crossover state for a clear signal
         stoch_rsi_vals = buy_analyzer.indicator_values['stoch_rsi_vals']
         stoch_rsi_vals.iloc[-1, stoch_rsi_vals.columns.get_loc('k')] = 15
@@ -156,7 +158,7 @@ class TestTradingAnalyzer(unittest.TestCase):
         buy_analyzer.indicator_values['stoch_rsi_vals'] = stoch_rsi_vals
 
         signal, score, conditions, _ = buy_analyzer.generate_trading_signal(Decimal('82.0'))
-        
+
         self.assertEqual(signal, 'buy')
         self.assertGreater(score, self.config['signal_score_threshold'])
         self.assertIn("Stoch RSI Oversold Crossover", conditions)
@@ -167,15 +169,15 @@ class TestTradingAnalyzer(unittest.TestCase):
         sell_data = self.df.copy()
         sell_data['close'] = pd.Series(np.linspace(100, 200, 50)) # Strong uptrend to create overbought
         sell_analyzer = tt.TradingAnalyzer(sell_data, self.config, self.mock_logger, "BTCUSDT", "15")
-        
+
         sell_analyzer._calculate_all_indicators()
-        
+
         # Force Stoch RSI to be in an overbought crossover state
         stoch_rsi_vals = sell_analyzer.indicator_values['stoch_rsi_vals']
         stoch_rsi_vals.iloc[-1, stoch_rsi_vals.columns.get_loc('k')] = 85
         stoch_rsi_vals.iloc[-1, stoch_rsi_vals.columns.get_loc('d')] = 90
         sell_analyzer.indicator_values['stoch_rsi_vals'] = stoch_rsi_vals
-        
+
         signal, score, conditions, _ = sell_analyzer.generate_trading_signal(Decimal('200.0'))
 
         self.assertEqual(signal, 'sell')
@@ -188,7 +190,7 @@ class TestTradingAnalyzer(unittest.TestCase):
         sideways_data = self.df.copy()
         sideways_data['close'] = pd.Series(100 + np.sin(np.linspace(0, 5 * np.pi, 50)) * 2)
         sideways_analyzer = tt.TradingAnalyzer(sideways_data, self.config, self.mock_logger, "BTCUSDT", "15")
-        
+
         sideways_analyzer._calculate_all_indicators()
         signal, score, _, _ = sideways_analyzer.generate_trading_signal(Decimal('100.0'))
 

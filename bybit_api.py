@@ -2,21 +2,16 @@ import asyncio
 import hashlib
 import hmac
 import json
-import time
-import urllib.parse
 import logging
 import os
-import random
-from typing import Dict, Any, Optional, Set, Callable
-
-import httpx
-import websockets
+import time
+import urllib.parse
 from dataclasses import dataclass, field
-from dotenv import load_dotenv
-from decimal import Decimal, InvalidOperation
-import traceback
 
 import config
+import httpx
+import websockets
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv(override=True)
@@ -43,7 +38,7 @@ class Color:
 
 # --- Custom Exceptions ---
 class BybitAPIError(Exception):
-    def __init__(self, ret_code: int, ret_msg: str, original_response: Dict):
+    def __init__(self, ret_code: int, ret_msg: str, original_response: dict):
         self.ret_code = ret_code
         self.ret_msg = ret_msg
         self.original_response = original_response
@@ -80,8 +75,8 @@ class ConnectionState:
     is_connected: bool = False
     is_authenticated: bool = False
     is_active: bool = True
-    websocket_instance: Optional[websockets.WebSocketClientProtocol] = None
-    listener_task: Optional[asyncio.Task] = None
+    websocket_instance: websockets.WebSocketClientProtocol | None = None
+    listener_task: asyncio.Task | None = None
     auth_event: asyncio.Event = field(default_factory=asyncio.Event)
 
 # --- Exponential Backoff ---

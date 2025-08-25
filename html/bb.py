@@ -1,19 +1,19 @@
-import os
-import time
-import json
-import logging
-import threading
 import collections
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Union, Tuple, Optional, Any, List
-from datetime import datetime, timedelta
-import numpy as np
+import logging
+import os
+import threading
+import time
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from decimal import ROUND_DOWN, Decimal
 from enum import Enum
+from typing import Any, Optional
+
+import numpy as np
+from dotenv import load_dotenv
+from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
+from pybit.unified_trading import HTTP
 
 # Optional system metrics
 try:
@@ -76,10 +76,10 @@ class TradeAnalytics:
     max_drawdown: float = 0.0
     max_drawdown_pct: float = 0.0
     recovery_factor: float = 0.0
-    trade_returns: List[float] = field(default_factory=list)
-    equity_curve: List[float] = field(default_factory=list)
-    
-    def update_metrics(self, trade_result: Dict[str, Any]):
+    trade_returns: list[float] = field(default_factory=list)
+    equity_curve: list[float] = field(default_factory=list)
+
+    def update_metrics(self, trade_result: dict[str, Any]):
         """Update analytics with new trade result"""
         pnl = float(trade_result.get('pnl', 0.0))
         fees = float(trade_result.get('fees', 0.0))
@@ -164,7 +164,7 @@ class PerformanceMonitor:
     start_time: datetime = field(default_factory=datetime.now)
     api_calls_count: int = 0
     api_errors_count: int = 0
-    last_api_error: Optional[str] = None
+    last_api_error: str | None = None
     signal_count: int = 0
     false_signals: int = 0
     memory_usage_mb: float = 0.0
@@ -173,7 +173,7 @@ class PerformanceMonitor:
     last_health_check: datetime = field(default_factory=datetime.now)
     avg_api_response_ms: float = 0.0
     _response_times: collections.deque = field(default_factory=lambda: collections.deque(maxlen=200))
-    
+
     def update_uptime(self):
         self.uptime_hours = (datetime.now() - self.start_time).total_seconds() / 3600.0
 
@@ -181,7 +181,7 @@ class PerformanceMonitor:
         self._response_times.append(ms)
         if self._response_times:
             self.avg_api_response_ms = sum(self._response_times) / len(self._response_times)
-    
+
     def update_system_metrics(self):
         if PSUTIL_AVAILABLE:
             try:
@@ -191,7 +191,7 @@ class PerformanceMonitor:
             except Exception:
                 pass
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health_status(self) -> dict[str, Any]:
         self.update_uptime()
         self.update_system_metrics()
         error_rate = (self.api_errors_count / self.api_calls_count * 100.0) if self.api_calls_count else 0.0
@@ -228,11 +228,11 @@ class RiskManager:
     daily_trades: int = 0
     daily_reset_time: datetime = field(default_factory=datetime.now)
     weekly_reset_time: datetime = field(default_factory=datetime.now)
-    positions_opened_today: List[Dict] = field(default_factory=list)
+    positions_opened_today: list[dict] = field(default_factory=list)
     consecutive_losses: int = 0
     risk_multiplier: float = 1.0
 
-    def check_daily_limits(self, account_balance: float) -> Tuple[bool, str]:
+    def check_daily_limits(self, account_balance: float) -> tuple[bool, str]:
         """Check if daily/weekly trading limits are exceeded"""
         # Reset daily counters if new day
         if datetime.now().date() > self.daily_reset_time.date():
@@ -245,10 +245,10 @@ class RiskManager:
         if datetime.now().isocalendar()[1] != self.weekly_reset_time.isocalendar()[1]:
             self.weekly_loss = 0.0
             self.weekly_reset_time = datetime.now()
-        
+
         daily_loss_pct = abs(self.daily_loss / account_balance * 100) if account_balance > 0 else 0
         weekly_loss_pct = abs(self.weekly_loss / account_balance * 100) if account_balance > 0 else 0
-        
+
         if daily_loss_pct >= self.max_daily_loss_pct:
             return False, f"Daily loss limit reached: {daily_loss_pct:.2f}%"
         if weekly_loss_pct >= self.max_weekly_loss_pct:
@@ -256,11 +256,11 @@ class RiskManager:
         if self.daily_trades >= self.max_daily_trades:
             return False, f"Daily trade limit reached: {self.daily_trades}/{self.max_daily_trades}"
         return True, "Within limits"
-    
+
     def check_position_timeout(self, entry_time: datetime) -> bool:
         hours_open = (datetime.now() - entry_time).total_seconds() / 3600.0
         return hours_open > self.position_timeout_hours
-    
+
     def calculate_position_size(self, account_balance: float, risk_pct: float, stop_distance_pct: float, volatility_pct: float = 1.0) -> float:
         """Calculate safe position size with volatility and max cap"""
         # Dynamic risk: reduce if volatility is high
@@ -269,7 +269,7 @@ class RiskManager:
         base_position_size = (account_balance * adjusted_risk_pct / 100.0) / (max(1e-9, stop_distance_pct) / 100.0)
         max_position_size = account_balance * self.max_position_size_pct / 100.0
         return min(base_position_size, max_position_size)
-    
+
     def update_trade_result(self, pnl: float):
         """Update risk stats after a trade closes"""
         self.daily_trades += 1
@@ -288,7 +288,7 @@ class RiskManager:
 class MarketAnalyzer:
     """Lightweight market analysis for volatility and condition detection"""
     @staticmethod
-    def atr_volatility_pct(klines: List[Dict], period: int = 14) -> float:
+    def atr_volatility_pct(klines: list[dict], period: int = 14) -> float:
         if len(klines) < period + 1:
             return 1.0
         trs = []
@@ -301,9 +301,9 @@ class MarketAnalyzer:
         atr = sum(trs[-period:]) / float(period)
         last_close = klines[-1]['close']
         return (atr / last_close) * 100.0 if last_close > 0 else 1.0
-    
+
     @staticmethod
-    def detect_condition(klines: List[Dict], rsi: float) -> MarketCondition:
+    def detect_condition(klines: list[dict], rsi: float) -> MarketCondition:
         if len(klines) < 50:
             return MarketCondition.RANGING
         change_pct = (klines[-1]['close'] - klines[-50]['close']) / klines[-50]['close'] * 100.0
@@ -325,13 +325,13 @@ class MarketAnalyzer:
 class BotState:
     """Centralized state for the trading bot with enhanced features."""
     running: bool = False
-    thread: Optional[threading.Thread] = None
-    config: Dict[str, Any] = field(default_factory=dict)
-    bybit_session: Optional[HTTP] = None
+    thread: threading.Thread | None = None
+    config: dict[str, Any] = field(default_factory=dict)
+    bybit_session: HTTP | None = None
     precision_manager: Optional['PrecisionManager'] = None
     logs: collections.deque = field(default_factory=lambda: collections.deque(maxlen=500))
-    trade_history: Dict[str, Union[int, list]] = field(default_factory=lambda: {"wins": 0, "losses": 0, "history": []})
-    dashboard: Dict[str, Any] = field(default_factory=lambda: {
+    trade_history: dict[str, int | list] = field(default_factory=lambda: {"wins": 0, "losses": 0, "history": []})
+    dashboard: dict[str, Any] = field(default_factory=lambda: {
         "currentPrice": "---",
         "priceChange": "---",
         "priceChange24h": "---",
@@ -362,17 +362,17 @@ class BotState:
         "nextCandle": "---",
         "healthStatus": "---"
     })
-    last_supertrend: Dict[str, Union[int, float]] = field(default_factory=lambda: {"direction": 0, "value": 0})
-    current_position_info: Dict[str, Optional[Union[str, float, int]]] = field(default_factory=lambda: {
-        "order_id": None, 
-        "entry_price": None, 
-        "side": None, 
+    last_supertrend: dict[str, int | float] = field(default_factory=lambda: {"direction": 0, "value": 0})
+    current_position_info: dict[str, str | float | int | None] = field(default_factory=lambda: {
+        "order_id": None,
+        "entry_price": None,
+        "side": None,
         "peak_price": None,
         "entry_time": None,
         "trailing_activated": False,
         "size": None
     })
-    
+
     # Enhanced components
     trade_analytics: TradeAnalytics = field(default_factory=TradeAnalytics)
     performance_monitor: PerformanceMonitor = field(default_factory=PerformanceMonitor)
@@ -416,37 +416,37 @@ class InstrumentSpecs:
     base_currency: str
     quote_currency: str
     status: str
-    
+
     min_price: Decimal
     max_price: Decimal
     tick_size: Decimal  # Price precision
-    
+
     min_order_qty: Decimal
     max_order_qty: Decimal
     qty_step: Decimal  # Quantity precision
-    
+
     min_leverage: Decimal
     max_leverage: Decimal
     leverage_step: Decimal
-    
+
     max_position_value: Decimal
     min_position_value: Decimal
-    
+
     contract_value: Decimal = Decimal('1')
     is_inverse: bool = False
-    
+
     maker_fee: Decimal = Decimal('0.0001')
     taker_fee: Decimal = Decimal('0.0006')
 
 class PrecisionManager:
     """Manage decimal precision for different trading pairs"""
-    
+
     def __init__(self, session: HTTP, logger: logging.Logger):
         self.session = session
         self.logger = logger
-        self.instruments: Dict[str, InstrumentSpecs] = {}
+        self.instruments: dict[str, InstrumentSpecs] = {}
         self.load_all_instruments()
-    
+
     def load_all_instruments(self):
         """Load all instrument specifications from Bybit"""
         categories = ['linear', 'inverse', 'spot', 'option']
@@ -468,8 +468,8 @@ class PrecisionManager:
                             self.logger.warning(f"Could not parse specs for {symbol} ({category}): {parse_e}")
             except Exception as e:
                 self.logger.error(f"Error loading {category} instruments: {e}")
-    
-    def _make_api_call(self, method: str, endpoint: str, params: Optional[Dict] = None, max_retries: int = 3, initial_delay: int = 1) -> Optional[Dict]:
+
+    def _make_api_call(self, method: str, endpoint: str, params: dict | None = None, max_retries: int = 3, initial_delay: int = 1) -> dict | None:
         """Internal helper for API calls with retry logic."""
         BOT_STATE.performance_monitor.api_calls_count += 1
         start = time.time()
@@ -477,9 +477,7 @@ class PrecisionManager:
             try:
                 if method == 'get':
                     response = getattr(self.session, endpoint)(**params) if params else getattr(self.session, endpoint)()
-                elif method == 'post':
-                    response = getattr(self.session, endpoint)(**params)
-                elif method == 'amend':
+                elif method == 'post' or method == 'amend':
                     response = getattr(self.session, endpoint)(**params)
                 else:
                     self.logger.error(f"Invalid method '{method}' for API call.")
@@ -505,7 +503,7 @@ class PrecisionManager:
         self.logger.error(f"Failed to complete API call to {endpoint} after {max_retries} attempts.")
         return None
 
-    def _parse_derivatives_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+    def _parse_derivatives_specs(self, inst: dict, category: str) -> InstrumentSpecs:
         """Parse derivatives instrument specifications"""
         lot_size = inst.get('lotSizeFilter', {})
         price_filter = inst.get('priceFilter', {})
@@ -530,8 +528,8 @@ class PrecisionManager:
             contract_value=Decimal(inst.get('contractValue', '1')),
             is_inverse=(category == 'inverse')
         )
-    
-    def _parse_spot_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+
+    def _parse_spot_specs(self, inst: dict, category: str) -> InstrumentSpecs:
         """Parse spot instrument specifications"""
         lot_size = inst.get('lotSizeFilter', {})
         price_filter = inst.get('priceFilter', {})
@@ -555,8 +553,8 @@ class PrecisionManager:
             contract_value=Decimal('1'),
             is_inverse=False
         )
-    
-    def _parse_option_specs(self, inst: Dict, category: str) -> InstrumentSpecs:
+
+    def _parse_option_specs(self, inst: dict, category: str) -> InstrumentSpecs:
         """Parse option instrument specifications"""
         lot_size = inst.get('lotSizeFilter', {})
         price_filter = inst.get('priceFilter', {})
@@ -580,8 +578,8 @@ class PrecisionManager:
             contract_value=Decimal('1'),
             is_inverse=False
         )
-    
-    def round_price(self, symbol: str, price: Union[float, Decimal]) -> Decimal:
+
+    def round_price(self, symbol: str, price: float | Decimal) -> Decimal:
         """Round price to correct tick size and within bounds."""
         if symbol not in self.instruments:
             self.logger.warning(f"Symbol {symbol} not found, using default price precision (0.01).")
@@ -592,8 +590,8 @@ class PrecisionManager:
         rounded = (price_decimal / tick_size).quantize(Decimal('1'), rounding=ROUND_DOWN) * tick_size
         rounded = max(specs.min_price, min(rounded, specs.max_price))
         return rounded
-    
-    def round_quantity(self, symbol: str, quantity: Union[float, Decimal]) -> Decimal:
+
+    def round_quantity(self, symbol: str, quantity: float | Decimal) -> Decimal:
         """Round quantity to correct step size and within bounds."""
         if symbol not in self.instruments:
             self.logger.warning(f"Symbol {symbol} not found, using default quantity precision (0.001).")
@@ -604,8 +602,8 @@ class PrecisionManager:
         rounded = (qty_decimal / qty_step).quantize(Decimal('1'), rounding=ROUND_DOWN) * qty_step
         rounded = max(specs.min_order_qty, min(rounded, specs.max_order_qty))
         return rounded
-    
-    def get_decimal_places(self, symbol: str) -> Tuple[int, int]:
+
+    def get_decimal_places(self, symbol: str) -> tuple[int, int]:
         """Get decimal places for price and quantity."""
         if symbol not in self.instruments:
             self.logger.warning(f"Symbol {symbol} not found for decimal places, returning defaults (2, 3).")
@@ -638,7 +636,7 @@ def trading_bot_loop():
     """The main loop for the trading bot, running in a separate thread."""
     log_message("Trading bot thread started.", "success")
     market_analyzer = MarketAnalyzer()
-    
+
     while BOT_STATE.running:
         try:
             config = BOT_STATE.config
@@ -652,15 +650,15 @@ def trading_bot_loop():
                 break
 
             dashboard["botStatus"] = "Scanning"
-            
+
             # 1. Fetch Kline Data
             interval = config["interval"]
             symbol = config["symbol"]
             kline_limit = max(200, config.get("kline_limit", 200))
             klines_res = _make_api_call(session, 'get', 'get_kline', params={
-                "category": "linear", 
-                "symbol": symbol, 
-                "interval": interval, 
+                "category": "linear",
+                "symbol": symbol,
+                "interval": interval,
                 "limit": kline_limit
             })
             if not klines_res or klines_res.get('retCode') != 0:
@@ -672,7 +670,7 @@ def trading_bot_loop():
 
             # Normalize klines
             klines = sorted([{
-                "timestamp": int(k[0]), "open": float(k[1]), "high": float(k[2]), 
+                "timestamp": int(k[0]), "open": float(k[1]), "high": float(k[2]),
                 "low": float(k[3]), "close": float(k[4]), "volume": float(k[5])
             } for k in klines_res['result']['list']], key=lambda x: x['timestamp'])
 
@@ -719,7 +717,7 @@ def trading_bot_loop():
             else:
                 msg = position_res.get('retMsg', 'Unknown API error') if position_res else 'No response'
                 log_message(f"Failed to fetch positions: {msg}", "error")
-            
+
             account_balance = 0.0
             available_balance = 0.0
             if balance_res and balance_res.get('retCode') == 0 and balance_res.get('result', {}).get('list'):
@@ -793,9 +791,7 @@ def trading_bot_loop():
                 current_sl_on_exchange = float(current_position.get('stopLoss', 0) or 0.0)
 
                 amend_sl = False
-                if pos_info["side"] == "Buy" and new_sl > current_sl_on_exchange and new_sl > pos_info["entry_price"]:
-                    amend_sl = True
-                elif pos_info["side"] == "Sell" and (current_sl_on_exchange == 0.0 or new_sl < current_sl_on_exchange) and new_sl < pos_info["entry_price"]:
+                if (pos_info["side"] == "Buy" and new_sl > current_sl_on_exchange and new_sl > pos_info["entry_price"]) or (pos_info["side"] == "Sell" and (current_sl_on_exchange == 0.0 or new_sl < current_sl_on_exchange) and new_sl < pos_info["entry_price"]):
                     amend_sl = True
 
                 # Position timeout handling (convert to market close)
@@ -851,7 +847,7 @@ def trading_bot_loop():
                 if buy_signal or sell_signal:
                     side = "Buy" if buy_signal else "Sell"
                     log_message(f"{side.upper()} SIGNAL DETECTED!", "signal")
-                    
+
                     # Close existing opposite position first
                     if current_position and pos_side != side:
                         log_message(f"Closing opposite {pos_side} position.", "warning")
@@ -884,13 +880,13 @@ def trading_bot_loop():
                     # --- Place New Order ---
                     sl_pct = float(config.get('stopLossPct', 1.0)) / 100.0
                     tp_pct = float(config.get('takeProfitPct', 2.0)) / 100.0
-                    
+
                     sl_price = current_price * (1 - sl_pct) if side == 'Buy' else current_price * (1 + sl_pct)
                     tp_price = current_price * (1 + tp_pct) if side == 'Buy' else current_price * (1 - tp_pct)
-                    
+
                     sl_price = float(precision_mgr.round_price(symbol, sl_price))
                     tp_price = float(precision_mgr.round_price(symbol, tp_price))
-                    
+
                     stop_distance = abs(current_price - sl_price)
                     if stop_distance <= 0:
                         log_message("Stop loss distance is zero or negative. Cannot place order.", "error")
@@ -912,7 +908,7 @@ def trading_bot_loop():
                         continue
 
                     log_message(f"Calculated position: {position_value_usdt:.2f} USDT -> {rounded_qty:.{config['qty_precision']}f} {symbol}", "info")
-                    
+
                     order_res = _make_api_call(session, 'post', 'place_order', params={
                         "category": "linear",
                         "symbol": symbol,
@@ -923,7 +919,7 @@ def trading_bot_loop():
                         "stopLoss": f"{sl_price:.{price_prec}f}",
                         "tpslMode": "Full"
                     })
-                    
+
                     if order_res and order_res.get('retCode') == 0:
                         log_message("Order placed successfully.", "success")
                         # Store position info for trailing stop
@@ -954,12 +950,12 @@ def trading_bot_loop():
 
             dashboard["botStatus"] = "Idle"
 
-        except Exception as e: 
+        except Exception as e:
             log_message(f"An unexpected error occurred in the trading loop: {e}", "error")
             dashboard = BOT_STATE.dashboard
             dashboard["botStatus"] = "Error"
             time.sleep(30)
-        
+
         # --- Interval Sleep Logic ---
         # Align sleep to next candle start
         now = time.time()
@@ -1000,17 +996,13 @@ def trading_bot_loop():
 
 
 # --- Helper for API Calls (used by endpoints) ---
-def _make_api_call(api_client: HTTP, method: str, endpoint: str, params: Optional[Dict] = None, max_retries: int = 3, initial_delay: int = 1) -> Optional[Dict]:
+def _make_api_call(api_client: HTTP, method: str, endpoint: str, params: dict | None = None, max_retries: int = 3, initial_delay: int = 1) -> dict | None:
     """Generic function to make Bybit API calls with retry logic and error handling."""
     BOT_STATE.performance_monitor.api_calls_count += 1
     start = time.time()
     for attempt in range(max_retries):
         try:
-            if method == 'get':
-                response = getattr(api_client, endpoint)(**(params or {}))
-            elif method == 'post':
-                response = getattr(api_client, endpoint)(**(params or {}))
-            elif method == 'amend':
+            if method == 'get' or method == 'post' or method == 'amend':
                 response = getattr(api_client, endpoint)(**(params or {}))
             else:
                 log_message(f"Invalid method '{method}' for API call.", "error")
@@ -1094,7 +1086,7 @@ def start_bot():
             log_message(f"API connection failed: {balance_check.get('retMsg', 'Unknown API error') if balance_check else 'No response'}", "error")
             BOT_STATE.bybit_session = None
             return jsonify({"status": "error", "message": f"API connection failed: {balance_check.get('retMsg', 'Unknown API error') if balance_check else 'No response'}"}), 400
-        
+
         log_message("API connection successful.", "success")
 
         # Fetch instrument info for precision
@@ -1136,7 +1128,7 @@ def start_bot():
         log_message(f"Error starting bot: {e}", "error")
         BOT_STATE.bybit_session = None
         BOT_STATE.precision_manager = None
-        return jsonify({"status": "error", "message": f"Failed to start bot: {str(e)}"}), 500
+        return jsonify({"status": "error", "message": f"Failed to start bot: {e!s}"}), 500
 
 
 @app.route('/api/stop', methods=['POST'])
@@ -1155,7 +1147,7 @@ def stop_bot():
     BOT_STATE.dashboard["botStatus"] = "Idle"
     BOT_STATE.current_position_info = {"order_id": None, "entry_price": None, "side": None, "peak_price": None, "entry_time": None, "trailing_activated": False, "size": None}
     log_message("Bot has been stopped by user.", "warning")
-    
+
     return jsonify({"status": "success", "message": "Bot stopped."})
 
 @app.route('/api/status', methods=['GET'])
@@ -1183,7 +1175,7 @@ def get_gemini_insight():
     if not GEMINI_API_KEY:
         log_message("Gemini API key not configured on server.", "error")
         return jsonify({"status": "error", "message": "Gemini API key not configured on server."}), 503
-    
+
     data = request.json or {}
     prompt = data.get('prompt')
     if not prompt:
@@ -1210,12 +1202,12 @@ def get_symbols():
                  return jsonify({"status": "error", "message": "Bybit API Key/Secret not configured. Cannot fetch symbols."}), 500
             session = HTTP(testnet=False, api_key=BYBIT_API_KEY, api_secret=BYBIT_API_SECRET)
             BOT_STATE.precision_manager = PrecisionManager(session, logger)
-            
+
         precision_mgr = BOT_STATE.precision_manager
-        
+
         # Filter for linear category and 'trading' status
         linear_symbols = sorted([
-            s for s, specs in precision_mgr.instruments.items() 
+            s for s, specs in precision_mgr.instruments.items()
             if specs.category == 'linear' and specs.status == 'trading'
         ])
         return jsonify({"status": "success", "symbols": linear_symbols})

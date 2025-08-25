@@ -1,11 +1,12 @@
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any
+
 from pybit.unified_trading import HTTP
 
 logger = logging.getLogger(__name__)
 
 # --- Technical Indicator Functions ---
-def calculate_ema(prices: List[float], period: int) -> List[float]:
+def calculate_ema(prices: list[float], period: int) -> list[float]:
     """
     Calculates Exponential Moving Average (EMA).
     This is a standard EMA, used as an "Ehlers-like" MA for this strategy.
@@ -26,15 +27,15 @@ def calculate_ema(prices: List[float], period: int) -> List[float]:
     # Calculate subsequent EMA values
     for i in range(period, len(prices)):
         ema_values[i] = (prices[i] * smoothing_factor) + (ema_values[i-1] * (1 - smoothing_factor))
-    
+
     return ema_values
 
 # --- Ehlers MA Cross Strategy ---
 # Global state to track last signal and position
-_last_signal: Dict[str, Optional[str]] = {}
-_current_position: Dict[str, Optional[str]] = {}
+_last_signal: dict[str, str | None] = {}
+_current_position: dict[str, str | None] = {}
 
-async def ehlers_ma_cross_strategy(market_data: Dict, account_info: Dict, http_client: HTTP, bot_instance: Any, symbols_to_trade: List[str]):
+async def ehlers_ma_cross_strategy(market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any, symbols_to_trade: list[str]):
     """
     Ehlers Moving Average Cross Strategy.
     This strategy uses two standard EMAs (fast and slow) as "Ehlers-like" MAs.
@@ -69,7 +70,7 @@ async def ehlers_ma_cross_strategy(market_data: Dict, account_info: Dict, http_c
         # Extract closing prices
         # klines_data_response['result']['list'] contains [timestamp, open, high, low, close, volume]
         closing_prices = [float(kline[4]) for kline in klines_data_response['result']['list']]
-        
+
         if len(closing_prices) < max(fast_ema_period, slow_ema_period):
             logger.warning(f"Not enough historical data for {symbol} to calculate EMAs. Need at least {max(fast_ema_period, slow_ema_period)} periods.")
             continue
@@ -91,16 +92,16 @@ async def ehlers_ma_cross_strategy(market_data: Dict, account_info: Dict, http_c
 
         current_price = float(market_data.get(symbol, {}).get("ticker", [{}])[0].get("lastPrice", 0))
         logger.info(f"Current price for {symbol}: {current_price}")
-        
+
         # Get current position from bot_instance's ws_manager.positions
         # The bot_instance.ws_manager.positions will be updated by the WebSocket stream
         # It's a dictionary: {symbol: {side: "Long" or "Short", size: Decimal, ...}}
         current_symbol_position_data = bot_instance.ws_manager.positions.get(symbol, {})
-        
+
         # Determine if we have an open position for the symbol
         has_long_position = False
         has_short_position = False
-        
+
         if current_symbol_position_data:
             # Check if the position size is greater than 0
             if float(current_symbol_position_data.get('size', 0)) > 0:

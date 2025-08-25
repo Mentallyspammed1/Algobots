@@ -1,19 +1,19 @@
-import os
-import logging
-import requests
-import pandas as pd
-import numpy as np
-from datetime import datetime
-import hmac
 import hashlib
-import time
-from dotenv import load_dotenv
-from typing import Dict, Tuple, List, Union
-from colorama import init, Fore, Style
-from zoneinfo import ZoneInfo
-from logger_config import setup_custom_logger  # Assuming logger_config.py exists
-from decimal import Decimal, getcontext
+import hmac
 import json
+import logging
+import os
+import time
+from datetime import datetime
+from decimal import Decimal, getcontext
+from zoneinfo import ZoneInfo
+
+import numpy as np
+import pandas as pd
+import requests
+from colorama import Fore, Style, init
+from dotenv import load_dotenv
+from logger_config import setup_custom_logger  # Assuming logger_config.py exists
 
 getcontext().prec = 10
 logger = setup_custom_logger('whalebot')
@@ -131,7 +131,7 @@ def load_config(filepath: str) -> dict:
         "volume_confirmation_multiplier": 1.5, # New: Configurable volume confirmation multiplier
     }
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             config = json.load(f)
             # Merge loaded config with defaults, prioritizing loaded values
             merged_config = {**default_config, **config}
@@ -184,7 +184,7 @@ def handle_api_error(response: requests.Response, logger: logging.Logger) -> Non
         except json.JSONDecodeError:
             logger.error(f"{NEON_RED}Response text: {response.text}{RESET}")
 
-def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, params: dict = None, logger: logging.Logger = None) -> Union[dict, None]:
+def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, params: dict = None, logger: logging.Logger = None) -> dict | None:
     params = params or {}
     params['timestamp'] = str(int(time.time() * 1000))
     signature = generate_signature(api_secret, params)
@@ -216,7 +216,7 @@ def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, par
         logger.error(f"{NEON_RED}Max retries reached for {method} {endpoint}{RESET}")
     return None
 
-def fetch_current_price(symbol: str, api_key: str, api_secret: str, logger: logging.Logger) -> Union[Decimal, None]:
+def fetch_current_price(symbol: str, api_key: str, api_secret: str, logger: logging.Logger) -> Decimal | None:
     endpoint = "/v5/market/tickers"
     params = {"category": "linear", "symbol": symbol}
     response_data = bybit_request("GET", endpoint, api_key, api_secret, params, logger)
@@ -242,7 +242,7 @@ def fetch_klines(symbol: str, interval: str, api_key: str, api_secret: str, logg
         return df
     return pd.DataFrame()
 
-def fetch_order_book(symbol: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 50) -> Union[dict, None]: # Function to fetch order book
+def fetch_order_book(symbol: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 50) -> dict | None: # Function to fetch order book
     endpoint = "/v5/market/orderbook"
     params = {"symbol": symbol, "limit": limit, "category": "linear"}
     response_data = bybit_request("GET", endpoint, api_key, api_secret, params, logger)
@@ -330,14 +330,14 @@ class TradingAnalyzer:
                 return pd.Series(dtype=float)
         typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
         raw_money_flow = typical_price * self.df["volume"]
-        positive_flow = pd.Series([mf if tp > tp_prev else 0 for tp, tp_prev, mf in zip(typical_price[1:], typical_price[:-1], raw_money_flow[1:])])
-        negative_flow = pd.Series([mf if tp < tp_prev else 0 for tp, tp_prev, mf in zip(typical_price[1:], typical_price[:-1], raw_money_flow[1:])])
+        positive_flow = pd.Series([mf if tp > tp_prev else 0 for tp, tp_prev, mf in zip(typical_price[1:], typical_price[:-1], raw_money_flow[1:], strict=False)])
+        negative_flow = pd.Series([mf if tp < tp_prev else 0 for tp, tp_prev, mf in zip(typical_price[1:], typical_price[:-1], raw_money_flow[1:], strict=False)])
         positive_mf = positive_flow.rolling(window=window).sum()
         negative_mf = negative_flow.rolling(window=window).sum()
         money_ratio = positive_mf / negative_mf
         return 100 - (100 / (1 + money_ratio))
 
-    def calculate_fibonacci_retracement(self, high: float, low: float, current_price: float) -> Dict[str, float]:
+    def calculate_fibonacci_retracement(self, high: float, low: float, current_price: float) -> dict[str, float]:
         diff = high - low
         if diff == 0:
             return {}
@@ -377,7 +377,7 @@ class TradingAnalyzer:
             "s3": s3,
         }
 
-    def find_nearest_levels(self, current_price: float, num_levels: int = 5) -> Tuple[List[Tuple[str, float]], List[Tuple[str, float]]]:
+    def find_nearest_levels(self, current_price: float, num_levels: int = 5) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
         support_levels = []
         resistance_levels = []
 
@@ -699,7 +699,7 @@ class TradingAnalyzer:
         self.logger.info(output)
 
 
-    def generate_trading_signal(self, indicator_values: dict, current_price: Decimal) -> Tuple[Union[str, None], float, List[str]]: # Return conditions met
+    def generate_trading_signal(self, indicator_values: dict, current_price: Decimal) -> tuple[str | None, float, list[str]]: # Return conditions met
         signal_score = 0
         signal = None
         conditions_met = [] # List to store conditions met
@@ -804,7 +804,7 @@ class TradingAnalyzer:
         return None, 0, []# Return empty list for conditions_met if no signal
 
 
-def interpret_indicator(logger: logging.Logger, indicator_name: str, values: List[float]) -> Union[str, None]:
+def interpret_indicator(logger: logging.Logger, indicator_name: str, values: list[float]) -> str | None:
     if not values:
         return f"{indicator_name.upper()}: No data available."
     try:

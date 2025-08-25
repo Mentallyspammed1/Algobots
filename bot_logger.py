@@ -5,7 +5,9 @@ This module provides a centralized logging configuration.
 """
 import logging
 import sys
-from config import LOG_LEVEL, LOG_FILE
+
+from config import LOG_FILE, LOG_LEVEL
+
 
 def setup_logger():
     """Configures and returns a logger instance."""

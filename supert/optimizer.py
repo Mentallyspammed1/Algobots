@@ -1,14 +1,16 @@
 
-import optuna
-import pandas as pd
-from datetime import datetime
 import logging
-import numpy as np
+from datetime import datetime
 from decimal import Decimal
 
-# Assuming stupdated2.py and backtester.py are in the same directory
-from stupdated2 import EhlersSuperTrendBot, Config, OrderType
+import numpy as np
+import optuna
+import pandas as pd
+
 from backtester import BybitHistoricalDataDownloader
+
+# Assuming stupdated2.py and backtester.py are in the same directory
+from stupdated2 import Config, EhlersSuperTrendBot
 
 # --- Basic Logger Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -23,7 +25,7 @@ class BotBacktester:
         self.config = config
         self.historical_data = historical_data
         self.bot = EhlersSuperTrendBot(config)
-        
+
         # Backtest state
         self.initial_capital = Decimal('10000.0')
         self.capital = self.initial_capital
@@ -38,7 +40,7 @@ class BotBacktester:
         # 1. Prepare data with indicators
         self.bot.market_data = self.historical_data
         self.bot.market_data = self.bot.calculate_indicators(self.bot.market_data)
-        
+
         if self.bot.market_data.empty:
             logger.error("Indicator calculation resulted in empty dataframe. Aborting backtest.")
             return 0.0
@@ -54,7 +56,7 @@ class BotBacktester:
             # Simulate checking for entries
             if not self.position:
                 self._check_entry_conditions(i)
-            
+
             self.equity_curve.append(self.capital)
 
         # 3. Calculate final performance
@@ -83,7 +85,7 @@ class BotBacktester:
             elif candle['low'] <= self.position['take_profit']:
                 exit_price = self.position['take_profit']
                 exit_reason = 'TP'
-        
+
         # Check for signal reversal
         if not exit_price:
             latest_st_direction = candle['supertrend_direction']
@@ -104,13 +106,13 @@ class BotBacktester:
         if signal in ['BUY', 'SELL']:
             entry_price = df_slice['close'].iloc[-1]
             trade_side = 'Buy' if signal == 'BUY' else 'Sell'
-            
+
             sl_price, tp_price = self.bot.calculate_trade_sl_tp(trade_side, Decimal(str(entry_price)), df_slice)
-            
+
             # Use a simplified position sizer for backtesting
             risk_per_trade = self.capital * Decimal(str(self.config.RISK_PER_TRADE_PCT / 100.0))
             stop_distance = abs(Decimal(str(entry_price)) - sl_price)
-            
+
             if stop_distance > 0:
                 quantity = (risk_per_trade / stop_distance)
             else:
@@ -135,19 +137,19 @@ class BotBacktester:
         """Simulates closing the current position and records the trade."""
         entry_price = self.position['entry_price']
         quantity = self.position['quantity']
-        
+
         pnl = Decimal('0')
         if self.position['side'] == 'Buy':
             pnl = (Decimal(str(exit_price)) - entry_price) * quantity
         else: # Sell
             pnl = (entry_price - Decimal(str(exit_price))) * quantity
-        
+
         # Apply fees
         pnl -= (entry_price * quantity) * Decimal('0.0006') # Taker fee on entry
         pnl -= (Decimal(str(exit_price)) * quantity) * Decimal('0.0006') # Taker fee on exit
 
         self.capital += pnl
-        
+
         self.trades.append({
             'entry_time': self.position['entry_time'],
             'exit_time': time,
@@ -162,7 +164,7 @@ class BotBacktester:
         if self.initial_capital == 0:
             return 0.0
         total_return_pct = (self.capital - self.initial_capital) / self.initial_capital
-        
+
         # For Optuna, we want a single metric to optimize.
         # A simple metric is total return, but Sharpe ratio is often better.
         returns = pd.Series(self.equity_curve).pct_change().dropna()
@@ -170,7 +172,7 @@ class BotBacktester:
             sharpe_ratio = returns.mean() / returns.std() * np.sqrt(365 * 24 * 4) # For 15min data
         else:
             sharpe_ratio = 0.0
-            
+
         # We will optimize for total return for simplicity now.
         logger.info(f"Backtest finished. Total Return: {total_return_pct:.2%}")
         return float(total_return_pct)
@@ -189,7 +191,7 @@ def objective(trial: optuna.trial.Trial, historical_data: pd.DataFrame):
     config.TAKE_PROFIT_PCT = trial.suggest_float('TAKE_PROFIT_PCT', 0.015, 0.08)
     config.RSI_WINDOW = trial.suggest_int('RSI_WINDOW', 8, 21)
     config.ADX_MIN_THRESHOLD = trial.suggest_int('ADX_MIN_THRESHOLD', 20, 30)
-    
+
     # --- Set static config for backtesting ---
     config.DRY_RUN = True
     config.TESTNET = True
@@ -213,7 +215,7 @@ def main():
     timeframe = "15"
     start_date = datetime(2024, 1, 1)
     end_date = datetime(2024, 7, 1)
-    
+
     data_filename = f"{symbol}_{timeframe}_data.csv"
     try:
         historical_data = pd.read_csv(data_filename, index_col='timestamp', parse_dates=True)
@@ -230,7 +232,7 @@ def main():
     # --- 2. Run Optuna Optimization ---
     study_name = "ehlers_supertrend_optimization_v2"
     storage = "sqlite:///ehlers_supertrend_v2.db"
-    
+
     study = optuna.create_study(
         study_name=study_name,
         storage=storage,

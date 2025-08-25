@@ -6,8 +6,10 @@ Duplicate this file, rename it, and implement your logic in the
 `generate_signals` method.
 """
 import pandas as pd
-from strategies.base_strategy import BaseStrategy
 import talib
+
+from strategies.base_strategy import BaseStrategy
+
 
 class MyAwesomeStrategy(BaseStrategy):
     """
@@ -33,7 +35,7 @@ class MyAwesomeStrategy(BaseStrategy):
             raise ValueError("DataFrame must have a 'close' column.")
 
         df = dataframe.copy()
-        
+
         # Calculate RSI
         df['rsi'] = talib.RSI(df['close'], timeperiod=self.rsi_period)
 
@@ -43,7 +45,7 @@ class MyAwesomeStrategy(BaseStrategy):
         # Generate signals
         # Buy when RSI crosses above the oversold threshold
         df.loc[df['rsi'] > self.rsi_oversold, 'signal'] = 'buy'
-        
+
         # Sell when RSI crosses below the overbought threshold
         df.loc[df['rsi'] < self.rsi_overbought, 'signal'] = 'sell'
 

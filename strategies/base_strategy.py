@@ -4,7 +4,9 @@ Base class for all trading strategies.
 This abstract class defines the interface that all strategy classes must implement.
 """
 from abc import ABC, abstractmethod
+
 import pandas as pd
+
 
 class BaseStrategy(ABC):
     """
@@ -25,7 +27,6 @@ class BaseStrategy(ABC):
             pd.DataFrame: A DataFrame with an added 'signal' column.
                           Signal values can be 'buy', 'sell', or 'hold'.
         """
-        pass
 
     def __str__(self):
         return self.name

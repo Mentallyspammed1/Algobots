@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -16,7 +17,7 @@ session = HTTP(testnet=False, api_key=BYBIT_API_KEY, api_secret=BYBIT_API_SECRET
 try:
     print("Attempting to fetch wallet balance...")
     balance_res = session.get_wallet_balance(accountType="UNIFIED", coin="USDT")
-    
+
     if balance_res.get("retCode") == 0:
         print("API Keys are VALID. Wallet Balance Check Successful.")
         if balance_res.get('result') and balance_res['result'].get('list'):

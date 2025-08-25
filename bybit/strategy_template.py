@@ -1,10 +1,11 @@
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any
+
 from pybit.unified_trading import HTTP
 
 logger = logging.getLogger(__name__)
 
-async def my_custom_strategy(market_data: Dict, account_info: Dict, http_client: HTTP, bot_instance: Any):
+async def my_custom_strategy(market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any):
     """
     This is a template for a custom trading strategy.
     
@@ -81,7 +82,7 @@ async def my_custom_strategy(market_data: Dict, account_info: Dict, http_client:
     # --- Trading Logic Placeholder ---
     # Implement your buy/sell conditions here.
     # Example: If BTC price is below a certain value, place a buy order.
-    
+
     # IMPORTANT: Ensure your strategy manages its state (e.g., last traded price,
     # indicator values) if needed across multiple runs of this function.
     # You can use global variables within your strategy file for this,

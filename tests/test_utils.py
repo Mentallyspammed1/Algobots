@@ -1,9 +1,9 @@
+import logging
+import os  # Import os module
+import sys
 import unittest
 from decimal import Decimal, getcontext
 from unittest.mock import MagicMock, patch
-import logging
-import sys
-import os # Import os module
 
 # Ensure the root directory is in the Python path for imports
 sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
@@ -11,14 +11,16 @@ sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
 # Mock setup_logging to prevent actual log file creation during tests
 with patch('bot_logger.setup_logging'):
     from utils import (
-        OrderBook, calculate_order_quantity, round_decimal,
-        get_price_precision, get_min_tick_size, set_timezone, get_timezone,
-        FallbackZoneInfo, TIMEZONE # Import TIMEZONE
-    )
-    from utils import (
-        NEON_GREEN, NEON_RED, NEON_YELLOW, NEON_BLUE, RESET_ALL_STYLE
-    ) # Import color constants
-    from utils import _module_logger as utils_logger # Access the module-level logger
+        FallbackZoneInfo,  # Import TIMEZONE
+        OrderBook,
+        _module_logger as utils_logger,  # Access the module-level logger
+        calculate_order_quantity,
+        get_min_tick_size,
+        get_price_precision,
+        get_timezone,
+        round_decimal,
+        set_timezone,
+    )  # Import color constants
 
 # Set Decimal precision for tests
 getcontext().prec = 38
@@ -90,7 +92,7 @@ class TestOrderBook(unittest.TestCase):
         delta_data = {'b': [], 'a': [], 'seq': 99}
         self.order_book.apply_delta(delta_data)
         self.assertEqual(self.order_book.last_seq, 100) # Should not update
-        self.mock_logger.debug.assert_called_with(f"Stale or out-of-order order book update (current seq: 99, last seq: 100). Skipping.")
+        self.mock_logger.debug.assert_called_with("Stale or out-of-order order book update (current seq: 99, last seq: 100). Skipping.")
 
     def test_get_imbalance(self):
         self.order_book.bids = {Decimal('100'): Decimal('10'), Decimal('99'): Decimal('5')}
@@ -273,13 +275,13 @@ class TestTimezoneFunctions(unittest.TestCase):
             # Clear TIMEZONE global to force re-initialization from env
             if hasattr(sys.modules['utils'], 'TIMEZONE'):
                 del sys.modules['utils'].TIMEZONE
-            
+
             # Mock ZoneInfo to avoid actual import issues if tzdata is not installed
             with patch('utils._ActualZoneInfo') as MockZoneInfo:
                 mock_london_tz = MagicMock()
                 mock_london_tz.__str__.return_value = "Europe/London"
                 MockZoneInfo.return_value = mock_london_tz
-                
+
                 tz = get_timezone()
                 self.assertIsNotNone(tz)
                 self.assertEqual(str(tz), "Europe/London")
@@ -291,13 +293,13 @@ class TestTimezoneFunctions(unittest.TestCase):
             # Clear TIMEZONE global to force re-initialization from default
             if hasattr(sys.modules['utils'], 'TIMEZONE'):
                 del sys.modules['utils'].TIMEZONE
-            
+
             # Mock ZoneInfo to avoid actual import issues if tzdata is not installed
             with patch('utils._ActualZoneInfo') as MockZoneInfo:
                 mock_chicago_tz = MagicMock()
                 mock_chicago_tz.__str__.return_value = "America/Chicago"
                 MockZoneInfo.return_value = mock_chicago_tz
-                
+
                 tz = get_timezone()
                 self.assertIsNotNone(tz)
                 self.assertEqual(str(tz), "America/Chicago")

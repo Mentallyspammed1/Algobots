@@ -1,7 +1,9 @@
 
 import time
-from strategy import Strategy
+
 from simulated_exchange import SimulatedExchange
+from strategy import Strategy
+
 
 class MarketMakingBot:
     def __init__(self, exchange, strategy, symbol, initial_balance):
@@ -53,7 +55,7 @@ class MarketMakingBot:
             )
 
     def print_status(self):
-        print(f"\n----- Bot Status -----")
+        print("\n----- Bot Status -----")
         print(f"Timestamp: {time.ctime()}")
         print(f"Balance: {self.balance}")
         open_orders = self.exchange.get_open_orders(self.symbol)

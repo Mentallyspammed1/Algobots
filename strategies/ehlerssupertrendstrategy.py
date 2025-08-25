@@ -1,22 +1,28 @@
-from typing import List, Dict, Any, Tuple
 from decimal import Decimal
+from typing import Any
+
 import pandas as pd
 from algobots_types import OrderBlock
-from indicators import calculate_sma, calculate_ehlers_fisher_strategy, calculate_supertrend
+from indicators import (
+    calculate_ehlers_fisher_strategy,
+    calculate_sma,
+    calculate_supertrend,
+)
+
 
 class EhlersSupertrendStrategy:
     """
     Ehlers Supertrend Strategy for generating entry and exit signals.
     This version is updated to use centralized indicator functions for consistency and robustness.
     """
-    def __init__(self, logger, 
+    def __init__(self, logger,
                  ehlers_period: int = 10,
-                 supertrend_period: int = 10, 
+                 supertrend_period: int = 10,
                  supertrend_multiplier: float = 3.0,
                  stop_loss_percentage: float = 0.02,
                  take_profit_percentage: float = 0.04,
                  sma_period: int = 20):
-        
+
         self.logger = logger
         self.ehlers_period = ehlers_period
         self.supertrend_period = supertrend_period
@@ -34,13 +40,13 @@ class EhlersSupertrendStrategy:
         df['sma'] = calculate_sma(df, length=self.sma_period)
         return df
 
-    def generate_signals(self, 
-                         df: pd.DataFrame, 
-                         resistance_levels: List[Dict[str, Any]], 
-                         support_levels: List[Dict[str, Any]],
-                         active_bull_obs: List[OrderBlock], 
-                         active_bear_obs: List[OrderBlock],
-                         **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+    def generate_signals(self,
+                         df: pd.DataFrame,
+                         resistance_levels: list[dict[str, Any]],
+                         support_levels: list[dict[str, Any]],
+                         active_bull_obs: list[OrderBlock],
+                         active_bear_obs: list[OrderBlock],
+                         **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
         """
         Generates entry signals based on the Ehlers Supertrend strategy.
         """
@@ -58,7 +64,7 @@ class EhlersSupertrendStrategy:
 
         last_bar = df_copy.iloc[-1]
         prev_bar = df_copy.iloc[-2]
-        
+
         # --- Ensure all required data is present ---
         required_cols = ['supertrend_direction', 'ehlers_fisher', 'ehlers_signal', 'sma', 'close']
         if any(col not in last_bar or pd.isna(last_bar[col]) for col in required_cols) or \
@@ -99,12 +105,12 @@ class EhlersSupertrendStrategy:
 
         return signals
 
-    def generate_exit_signals(self, 
-                              df: pd.DataFrame, 
+    def generate_exit_signals(self,
+                              df: pd.DataFrame,
                               current_position_side: str,
-                              active_bull_obs: List[OrderBlock], 
-                              active_bear_obs: List[OrderBlock],
-                              **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+                              active_bull_obs: list[OrderBlock],
+                              active_bear_obs: list[OrderBlock],
+                              **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
         """
         Generates exit signals based on a change in the Supertrend direction or a Fisher Transform cross.
         """
@@ -118,7 +124,7 @@ class EhlersSupertrendStrategy:
             return []
 
         df_copy = self._calculate_indicators(df.copy())
-        
+
         last_bar = df_copy.iloc[-1]
         prev_bar = df_copy.iloc[-2]
 
@@ -136,7 +142,7 @@ class EhlersSupertrendStrategy:
                 exit_reason = 'Supertrend turned bearish'
             elif last_bar['ehlers_fisher'] < last_bar['ehlers_signal'] and prev_bar['ehlers_fisher'] >= prev_bar['ehlers_signal']:
                 exit_reason = 'Ehlers Fisher crossed below signal'
-            
+
             if exit_reason:
                 exit_info = {'indicator': 'Ehlers Supertrend', 'reason': exit_reason}
                 self.logger.info(f"Generated SELL_TO_CLOSE signal at {current_price:.4f}. Reason: {exit_reason}")
@@ -152,7 +158,7 @@ class EhlersSupertrendStrategy:
                 exit_info = {'indicator': 'Ehlers Supertrend', 'reason': exit_reason}
                 self.logger.info(f"Generated BUY_TO_CLOSE signal at {current_price:.4f}. Reason: {exit_reason}")
                 exit_signals.append(("BUY_TO_CLOSE", current_price, pd.Timestamp(last_bar.name), exit_info))
-        
+
         return exit_signals
 
 

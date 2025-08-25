@@ -1,5 +1,6 @@
 import math
 
+
 def calculate_indicators(klines: list, config: dict) -> dict | None:
     """
     Calculates Supertrend, RSI, and Ehlers-Fisher Transform from a list of kline data.
@@ -24,7 +25,7 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
         atr_values.append(tr)
 
         current_atr = sum(atr_values[-atr_period:]) / len(atr_values[-atr_period:])
-        
+
         basic_upper_band = (kline['high'] + kline['low']) / 2 + multiplier * current_atr
         basic_lower_band = (kline['high'] + kline['low']) / 2 - multiplier * current_atr
 
@@ -63,14 +64,14 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
             'supertrend': supertrend_val,
             'direction': direction
         })
-    
+
     final_supertrend = supertrend_data[-1]
 
     # RSI Calculation
     changes = [klines[i]['close'] - klines[i-1]['close'] for i in range(1, len(klines))]
     gains = [c if c > 0 else 0 for c in changes]
     losses = [-c if c < 0 else 0 for c in changes]
-    
+
     avg_gain = sum(gains[:config['rsi_length']]) / config['rsi_length']
     avg_loss = sum(losses[:config['rsi_length']]) / config['rsi_length']
 
@@ -84,10 +85,10 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
     # Ehlers-Fisher Transform Calculation
     ef_period = config['ef_period']
     fisher_data = []
-    
+
     for i in range(len(klines)):
         kline = klines[i]
-        
+
         if i < ef_period - 1:
             fisher_data.append({'value': 0, 'fisher': 0})
             continue
@@ -107,7 +108,7 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
         if value < -0.99: value = -0.99
 
         fisher = 0.5 * math.log((1 + value) / (1 - value)) + 0.5 * (fisher_data[-1]['fisher'] if i > 0 else 0)
-        
+
         fisher_data.append({'value': value, 'fisher': fisher})
 
     final_fisher = fisher_data[-1]['fisher']

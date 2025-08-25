@@ -11,37 +11,38 @@
 # aiofiles
 # ==============================================================================
 
-import os
-import time
-import logging
-import json
-import hashlib
-import hmac
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Callable, Any, Union, Tuple, Set
-from decimal import Decimal, getcontext, InvalidOperation, ROUND_DOWN, ROUND_HALF_UP
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, asdict
-from enum import Enum, auto
+import hashlib
+import json
+import logging
+import os
+import queue
 import signal
 import sys
 import threading
-import queue
-from pathlib import Path
+import time
 from collections import deque
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
-import aiofiles
-import uvloop
-from pybit.unified_trading import HTTP, WebSocket
-import numpy as np
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
+from enum import Enum, auto
 from functools import lru_cache, wraps
-import redis
-import prometheus_client
-from cryptography.fernet import Fernet
-from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
-from pythonjsonlogger import jsonlogger
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
+from pathlib import Path
+from typing import Any
 from uuid import uuid4
+
+import aiofiles
+import numpy as np
+import prometheus_client
+import redis
+import uvloop
+from cryptography.fernet import Fernet
+from pybit.unified_trading import HTTP, WebSocket
+from pythonjsonlogger import jsonlogger
 
 # --- High-Performance Event Loop ---
 # Set uvloop policy early for maximum async performance.
@@ -94,7 +95,7 @@ def _parse_env_int(var_name: str, default: int = 0) -> int:
 # --- Thread-Safe Singleton Pattern ---
 class SingletonMeta(type):
     """Thread-safe Singleton metaclass."""
-    _instances: Dict[type, Any] = {}
+    _instances: dict[type, Any] = {}
     _lock: threading.Lock = threading.Lock()
 
     def __call__(cls, *args, **kwargs):
@@ -115,13 +116,13 @@ def advanced_retry(
     initial_delay: float = 1.0,
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL,
     max_delay: float = 60.0,
-    exceptions: Tuple[type[Exception], ...] = (Exception,)
+    exceptions: tuple[type[Exception], ...] = (Exception,)
 ):
     """Advanced retry decorator with multiple strategies."""
     def decorator(func):
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
-            delays: List[float] = []
+            delays: list[float] = []
             if strategy == RetryStrategy.LINEAR:
                 delays = [initial_delay] * max_retries
             elif strategy == RetryStrategy.EXPONENTIAL:
@@ -131,7 +132,7 @@ def advanced_retry(
                 for _ in range(max_retries):
                     delays.append(min(a, max_delay))
                     a, b = b, a + b
-            
+
             for attempt, delay in enumerate(delays):
                 try:
                     return await func(*args, **kwargs)
@@ -146,7 +147,7 @@ def advanced_retry(
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             raise NotImplementedError("Sync wrapper for advanced_retry is not implemented for this context.")
-        
+
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
     return decorator
 
@@ -190,7 +191,7 @@ class BotConfiguration:
     api_call_timeout: float = 10.0
     shutdown_cancel_orders: bool = True
     shutdown_close_positions: bool = False
-    
+
     def __post_init__(self):
         if not self.paper_trading and (not self.api_key or not self.api_secret):
             raise ValueError("API credentials are required for live trading.")
@@ -267,7 +268,7 @@ logger = logging.getLogger(__name__)
 logger.info("Logging initialized.")
 
 # --- Prometheus Metrics ---
-metrics: Dict[str, Any] = {}
+metrics: dict[str, Any] = {}
 if config.enable_metrics:
     metrics = {
         'total_trades': prometheus_client.Counter('bot_total_trades', 'Total number of trades (fills)', ['mode']),
@@ -283,10 +284,24 @@ if config.enable_metrics:
 # --- Performance Metrics Dataclass ---
 @dataclass
 class EnhancedPerformanceMetrics:
-    __slots__ = ('total_trades', 'successful_trades', 'failed_trades', 'total_volume', 'realized_pnl', 
-                 'unrealized_pnl', 'max_drawdown', 'sharpe_ratio', 'win_rate', 'avg_win', 'avg_loss', 
-                 'trade_history', 'daily_pnl', 'start_time', 'last_update')
-    
+    __slots__ = (
+        'avg_loss',
+        'avg_win',
+        'daily_pnl',
+        'failed_trades',
+        'last_update',
+        'max_drawdown',
+        'realized_pnl',
+        'sharpe_ratio',
+        'start_time',
+        'successful_trades',
+        'total_trades',
+        'total_volume',
+        'trade_history',
+        'unrealized_pnl',
+        'win_rate',
+    )
+
     total_trades: int = 0
     successful_trades: int = 0
     failed_trades: int = 0
@@ -298,15 +313,15 @@ class EnhancedPerformanceMetrics:
     win_rate: float = 0.0
     avg_win: Decimal = field(default_factory=Decimal)
     avg_loss: Decimal = field(default_factory=Decimal)
-    trade_history: List[Dict] = field(default_factory=list)
-    daily_pnl: Dict[str, Decimal] = field(default_factory=dict)
+    trade_history: list[dict] = field(default_factory=list)
+    daily_pnl: dict[str, Decimal] = field(default_factory=dict)
     start_time: datetime = field(default_factory=datetime.utcnow)
     last_update: datetime = field(default_factory=datetime.utcnow)
-    
+
     def update(self):
         self.last_update = datetime.utcnow()
         self._calculate_statistics()
-    
+
     def _calculate_statistics(self):
         if self.total_trades > 0:
             self.win_rate = (self.successful_trades / self.total_trades) * 100
@@ -319,11 +334,11 @@ class EnhancedPerformanceMetrics:
                     if std_return > 0:
                         self.sharpe_ratio = (avg_return / std_return) * np.sqrt(252)
 
-    def add_trade(self, trade: Dict):
+    def add_trade(self, trade: dict):
         """Call this on fills only."""
         self.trade_history.append(trade)
         self.total_trades += 1
-        
+
         pnl = _dec(trade.get('pnl', Decimal(0)))
         trading_mode = 'paper' if config.paper_trading else 'live'
 
@@ -333,18 +348,18 @@ class EnhancedPerformanceMetrics:
         else:
             self.failed_trades += 1
             self.avg_loss = (self.avg_loss * (self.failed_trades - 1) + abs(pnl)) / self.failed_trades
-        
+
         self.realized_pnl += pnl
         self.total_volume += _dec(trade.get('volume', Decimal(0)))
-        
+
         today = datetime.utcnow().date().isoformat()
         self.daily_pnl[today] = self.daily_pnl.get(today, Decimal(0)) + pnl
-        
+
         if self.realized_pnl < self.max_drawdown:
             self.max_drawdown = self.realized_pnl
-        
+
         self.update()
-        
+
         if config.enable_metrics:
             metrics['total_trades'].labels(mode=trading_mode).inc()
             if pnl > 0:
@@ -352,8 +367,8 @@ class EnhancedPerformanceMetrics:
             else:
                 metrics['failed_trades'].labels(mode=trading_mode).inc()
             metrics['pnl'].set(float(self.realized_pnl))
-    
-    def get_statistics(self) -> Dict:
+
+    def get_statistics(self) -> dict:
         return {
             'total_trades': self.total_trades,
             'win_rate': f"{self.win_rate:.2f}%",
@@ -382,22 +397,22 @@ class Order:
     side: OrderSide
     order_type: OrderType
     qty: Decimal
-    price: Optional[Decimal] = None
+    price: Decimal | None = None
     time_in_force: str = "GTC"
     reduce_only: bool = False
-    order_id: Optional[str] = None
-    client_order_id: Optional[str] = field(default_factory=lambda: f"bot-{int(time.time() * 1000)}_{os.getpid()}_{uuid4().hex[:6]}")
+    order_id: str | None = None
+    client_order_id: str | None = field(default_factory=lambda: f"bot-{int(time.time() * 1000)}_{os.getpid()}_{uuid4().hex[:6]}")
     created_at: datetime = field(default_factory=datetime.utcnow)
-    strategy_name: Optional[str] = None  # Helps route fills back to strategy
-    
+    strategy_name: str | None = None  # Helps route fills back to strategy
+
     def __post_init__(self):
         if self.qty <= 0:
             raise ValueError("Order quantity must be positive.")
         if self.order_type == OrderType.LIMIT and self.price is None:
             raise ValueError(f"{self.order_type.value} order requires a price.")
 
-    def to_dict(self) -> Dict[str, Any]:
-        params: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        params: dict[str, Any] = {
             'symbol': self.symbol,
             'side': self.side.value,
             'orderType': self.order_type.value,
@@ -413,8 +428,18 @@ class Order:
 
 @dataclass
 class Position:
-    __slots__ = ('symbol', 'side', 'size', 'entry_price', 'mark_price', 'unrealized_pnl', 
-                 'realized_pnl', 'margin', 'leverage', 'last_update')
+    __slots__ = (
+        'entry_price',
+        'last_update',
+        'leverage',
+        'margin',
+        'mark_price',
+        'realized_pnl',
+        'side',
+        'size',
+        'symbol',
+        'unrealized_pnl',
+    )
     symbol: str
     side: str  # "Buy" or "Sell"
     size: Decimal
@@ -425,7 +450,7 @@ class Position:
     margin: Decimal
     leverage: int
     last_update: datetime = field(default_factory=datetime.utcnow)
-    
+
     def get_pnl_percentage(self) -> float:
         if self.entry_price == 0 or self.size == 0:
             return 0.0
@@ -434,7 +459,7 @@ class Position:
         pnl_usd = (current_value - entry_value) if self.side == "Buy" else (entry_value - current_value)
         return float(pnl_usd / entry_value) * 100
 
-    def should_close(self, take_profit_pct: float = 2.0, stop_loss_pct: float = 1.0) -> Optional[str]:
+    def should_close(self, take_profit_pct: float = 2.0, stop_loss_pct: float = 1.0) -> str | None:
         pnl_pct = self.get_pnl_percentage()
         if pnl_pct >= take_profit_pct:
             return "TAKE_PROFIT"
@@ -450,9 +475,9 @@ class RiskManager:
         self.max_leverage = max_leverage
         self.max_drawdown = max_drawdown
         self.current_exposure: Decimal = Decimal(0)
-        self.position_limits: Dict[str, Decimal] = {}
+        self.position_limits: dict[str, Decimal] = {}
 
-    def check_order_risk(self, order: Order, account_info: Dict, symbol_info: Dict[str, Any], market_data: Dict[str, Any]) -> Tuple[bool, str]:
+    def check_order_risk(self, order: Order, account_info: dict, symbol_info: dict[str, Any], market_data: dict[str, Any]) -> tuple[bool, str]:
         """Check if an order meets risk requirements using available balance and symbol info."""
         available_balance = _dec(account_info.get("totalAvailableBalance", 0))
         info = symbol_info.get(order.symbol)
@@ -468,7 +493,7 @@ class RiskManager:
 
         if order.qty > self.max_position_size:
             return False, f"Order quantity {order.qty} exceeds general max position size {self.max_position_size}."
-        
+
         symbol_limit = self.position_limits.get(order.symbol, self.max_position_size)
         if order.qty > symbol_limit:
             return False, f"Order quantity {order.qty} exceeds symbol-specific limit for {order.symbol}: {symbol_limit}."
@@ -489,10 +514,10 @@ class RiskManager:
                 logger.warning("Available balance is zero or missing in account info. Risk checks limited.")
             elif required_margin > available_balance * Decimal("0.8"):
                 return False, f"Order would use too much margin. Required: {required_margin:.2f}, Available: {available_balance:.2f}."
-        
+
         return True, "Order approved"
-    
-    def update_exposure(self, positions: List[Position]):
+
+    def update_exposure(self, positions: list[Position]):
         self.current_exposure = sum(pos.size * pos.mark_price for pos in positions if pos.size)
 
     def get_position_size(self, account_balance: Decimal, risk_per_trade: Decimal = Decimal("0.02")) -> Decimal:
@@ -502,11 +527,11 @@ class RiskManager:
 class CacheManager(metaclass=SingletonMeta):
     """Distributed cache manager using Redis, with fallback to in-memory."""
     def __init__(self):
-        self.redis_client: Optional[redis.Redis] = None
+        self.redis_client: redis.Redis | None = None
         self.enabled = False
-        self.memory_cache: Dict[str, Any] = {}
-        self.cache_timestamps: Dict[str, datetime] = {}
-        
+        self.memory_cache: dict[str, Any] = {}
+        self.cache_timestamps: dict[str, datetime] = {}
+
         if config.redis_host and config.redis_port:
             try:
                 self.redis_client = redis.Redis(
@@ -540,7 +565,7 @@ class CacheManager(metaclass=SingletonMeta):
                     return default
             return self.memory_cache.get(key, default)
         return default
-    
+
     async def set(self, key: str, value: Any, expire: int = 300):
         if self.enabled and self.redis_client:
             try:
@@ -550,7 +575,7 @@ class CacheManager(metaclass=SingletonMeta):
         else:
             self.memory_cache[key] = value
             self.cache_timestamps[key] = datetime.utcnow()
-    
+
     async def delete(self, key: str):
         if self.enabled and self.redis_client:
             try:
@@ -589,7 +614,7 @@ class CacheManager(metaclass=SingletonMeta):
 class SecurityManager(metaclass=SingletonMeta):
     """Handles encryption and security."""
     def __init__(self):
-        self.fernet: Optional[Fernet] = None
+        self.fernet: Fernet | None = None
         if config.enable_encryption:
             key_str = os.getenv("ENCRYPTION_KEY")
             try:
@@ -605,12 +630,12 @@ class SecurityManager(metaclass=SingletonMeta):
                 self.fernet = None
         else:
             logger.info("Encryption disabled by configuration.")
-    
+
     def encrypt(self, data: str) -> str:
         if self.fernet:
             return self.fernet.encrypt(data.encode()).decode()
         return data
-    
+
     def decrypt(self, data: str) -> str:
         if self.fernet:
             try:
@@ -619,7 +644,7 @@ class SecurityManager(metaclass=SingletonMeta):
                 logger.error(f"Failed to decrypt data: {e}. Returning original.", exc_info=True)
                 return data
         return data
-    
+
     def hash_api_key(self, api_key: str) -> str:
         return hashlib.sha256(api_key.encode()).hexdigest()[:8]
 
@@ -649,7 +674,7 @@ class AsyncRateLimiter:
         self._tokens = capacity
         self._last = time.monotonic()
         self._lock = asyncio.Lock()
-    
+
     async def acquire(self, tokens: float = 1.0):
         async with self._lock:
             now = time.monotonic()
@@ -674,16 +699,16 @@ class EnhancedWebSocketManager:
         self._api_secret = api_secret
         self._paper_trading = paper_trading
 
-        self.ws_public: Optional[WebSocket] = None
-        self.ws_private: Optional[WebSocket] = None
-        
-        self.market_data: Dict[str, Any] = {}
-        self.positions: Dict[str, Position] = {}
-        self.orders: Dict[str, dict] = {}
-        
+        self.ws_public: WebSocket | None = None
+        self.ws_private: WebSocket | None = None
+
+        self.market_data: dict[str, Any] = {}
+        self.positions: dict[str, Position] = {}
+        self.orders: dict[str, dict] = {}
+
         self._last_message_time = time.monotonic()
         self._reconnect_lock = asyncio.Lock()
-        self._subscriptions: Set[str] = set()
+        self._subscriptions: set[str] = set()
         self._stop_event = asyncio.Event()
 
         self._message_latency: deque = deque(maxlen=100)
@@ -740,26 +765,26 @@ class EnhancedWebSocketManager:
             self.ws_public = WebSocket(testnet=self._testnet, channel_type="linear")
             if not self._paper_trading:
                 self.ws_private = WebSocket(testnet=self._testnet, channel_type="private", api_key=self._api_key, api_secret=self._api_secret)
-            
+
             current_subscriptions = list(self._subscriptions)
             self._subscriptions.clear()
             for sub_key in current_subscriptions:
                 channel, symbol_str = sub_key.split(":", 1)
                 symbol = symbol_str if symbol_str != 'None' else None
                 await self.subscribe(channel, symbol)
-            
+
             self._last_message_time = time.monotonic()
             logger.info("WebSocket reconnected and subscriptions restored.")
 
-    async def subscribe(self, channel: str, symbol: Optional[str] = None):
+    async def subscribe(self, channel: str, symbol: str | None = None):
         subscription_key = f"{channel}:{symbol}"
         if subscription_key in self._subscriptions:
             logger.debug(f"Already subscribed to {subscription_key}.")
             return
-        
+
         callback = self._create_callback(channel, symbol)
-        
-        ws_instance: Optional[WebSocket] = self.ws_private if channel in ["position", "order", "execution"] else self.ws_public
+
+        ws_instance: WebSocket | None = self.ws_private if channel in ["position", "order", "execution"] else self.ws_public
         if not ws_instance:
             logger.warning(f"Cannot subscribe to channel '{channel}' (no {'private' if channel in ['position', 'order', 'execution'] else 'public'} WebSocket client available).")
             return
@@ -785,13 +810,13 @@ class EnhancedWebSocketManager:
 
             self._subscriptions.add(subscription_key)
             logger.info(f"Subscribed to {subscription_key}.")
-            
+
         except Exception as e:
             logger.error(f"Subscription failed for {subscription_key}: {e}", exc_info=True)
             raise
 
-    def _create_callback(self, channel: str, symbol: Optional[str]):
-        def callback(message: Dict):
+    def _create_callback(self, channel: str, symbol: str | None):
+        def callback(message: dict):
             self._last_message_time = time.monotonic()
             try:
                 receive_time = datetime.utcnow()
@@ -799,11 +824,11 @@ class EnhancedWebSocketManager:
                     send_time = datetime.utcfromtimestamp(message["ts"] / 1000)
                     latency = (receive_time - send_time).total_seconds()
                     self._message_latency.append(latency)
-                
+
                 self._message_count += 1
                 if config.enable_metrics:
                     metrics['ws_messages'].labels(channel=channel).inc()
-                
+
                 if channel == "orderbook":
                     self._handle_orderbook(message, symbol)
                 elif channel == "trade":
@@ -816,24 +841,24 @@ class EnhancedWebSocketManager:
                     self._handle_order(message)
                 elif channel == "execution":
                     self._handle_execution(message)
-                
+
             except Exception as e:
                 self._error_count += 1
                 logger.error(f"Error processing {channel} message for symbol {symbol}: {e}", exc_info=True)
         return callback
-    
-    def _handle_orderbook(self, message: Dict, symbol: Optional[str]):
+
+    def _handle_orderbook(self, message: dict, symbol: str | None):
         data = message.get("data", {})
         if not data or not symbol:
             logger.debug(f"Received empty/invalid orderbook data: {message}")
             return
-        
+
         current_update_id = _dec(data.get("u", 0))
         last_update_id = self.market_data.get(symbol, {}).get("orderbook", {}).get("update_id", 0)
 
         if "U" in data and _dec(data["U"]) > last_update_id:
             logger.warning(f"Orderbook update for {symbol} out of sequence. Last: {last_update_id}, Prev: {data.get('U')}, Current: {current_update_id}.")
-        
+
         self.market_data.setdefault(symbol, {})["orderbook"] = {
             "bids": [[_dec(p), _dec(q)] for p, q in data.get("b", [])],
             "asks": [[_dec(p), _dec(q)] for p, q in data.get("a", [])],
@@ -844,8 +869,8 @@ class EnhancedWebSocketManager:
         asyncio.create_task(
             CacheManager().set(f"orderbook:{symbol}", self.market_data[symbol]["orderbook"], expire=60)
         )
-    
-    def _handle_trade(self, message: Dict, symbol: Optional[str]):
+
+    def _handle_trade(self, message: dict, symbol: str | None):
         if not symbol:
             return
         for trade in message.get("data", []):
@@ -860,8 +885,8 @@ class EnhancedWebSocketManager:
             })
             market_data["last_trade"] = trade
             market_data["last_update"] = datetime.utcnow()
-    
-    def _handle_ticker(self, message: Dict, symbol: Optional[str]):
+
+    def _handle_ticker(self, message: dict, symbol: str | None):
         data = message.get("data", {})
         if not data or not symbol:
             return
@@ -876,8 +901,8 @@ class EnhancedWebSocketManager:
             "prev_close": _dec(data.get("prevPrice24h"))
         }
         self.market_data[symbol]["last_update"] = datetime.utcnow()
-    
-    def _handle_position(self, message: Dict):
+
+    def _handle_position(self, message: dict):
         for pos_data in message.get("data", []):
             symbol = pos_data.get("symbol")
             if symbol:
@@ -893,20 +918,20 @@ class EnhancedWebSocketManager:
                     leverage=int(pos_data.get("leverage", 1))
                 )
                 self.positions[symbol] = position
-                
+
                 if config.enable_metrics:
                     metrics['open_positions'].set(len([p for p in self.positions.values() if p.size > 0]))
-                
+
                 logger.debug(f"Position update for {symbol}: Size={position.size}, PnL={position.unrealized_pnl:.2f}")
-    
-    def _handle_order(self, message: Dict):
+
+    def _handle_order(self, message: dict):
         for order_data in message.get("data", []):
             order_id = order_data.get("orderId")
             if order_id:
                 self.orders[order_id] = order_data
                 logger.info(f"Order update: {order_id} - Symbol: {order_data.get('symbol')}, Status: {order_data.get('orderStatus')}, Qty: {order_data.get('qty')}, Filled: {order_data.get('cumExecQty')}")
-    
-    def _handle_execution(self, message: Dict):
+
+    def _handle_execution(self, message: dict):
         for exec_data in message.get("data", []):
             try:
                 symbol = exec_data.get('symbol')
@@ -923,8 +948,8 @@ class EnhancedWebSocketManager:
                     metrics['order_latency'].observe(latency)
             except Exception as e:
                 logger.error(f"Error handling execution message: {e}", exc_info=True)
-    
-    def get_statistics(self) -> Dict:
+
+    def get_statistics(self) -> dict:
         avg_latency_ms = (sum(self._message_latency) / len(self._message_latency) * 1000) if self._message_latency else 0
         return {
             "message_count": self._message_count,
@@ -933,7 +958,7 @@ class EnhancedWebSocketManager:
             "active_subscriptions": len(self._subscriptions),
             "cached_symbols": len(self.market_data)
         }
-    
+
     async def cleanup(self):
         self._stop_event.set()
         await asyncio.sleep(0.1)
@@ -948,17 +973,17 @@ class StrategyInterface:
     def __init__(self, name: str, bot_instance: 'AdvancedBybitTradingBot'):
         self.name = name
         self.bot = bot_instance
-        self.parameters: Dict[str, Any] = {}
-    
+        self.parameters: dict[str, Any] = {}
+
     def set_parameters(self, **kwargs):
         self.parameters.update(kwargs)
 
-    async def analyze(self, market_data: Dict[str, Any], account_info: Dict[str, Any]) -> List[Order]:
+    async def analyze(self, market_data: dict[str, Any], account_info: dict[str, Any]) -> list[Order]:
         raise NotImplementedError
-    
+
     async def on_order_filled(self, order: Order, execution_price: Decimal, filled_qty: Decimal, pnl: Decimal):
         logger.info(f"Strategy '{self.name}': Order {order.order_id} filled for {order.symbol} at {execution_price} (Qty: {filled_qty}). PnL: {pnl}")
-    
+
     async def on_position_update(self, position: Position):
         logger.debug(f"Strategy '{self.name}': Position update for {position.symbol}. Size: {position.size}, Unrealized PnL: {position.unrealized_pnl:.2f}")
 
@@ -969,7 +994,7 @@ class AdvancedBybitTradingBot:
         self._api_executor = ThreadPoolExecutor(max_workers=max(2, config.rate_limit_per_second * 2))
         self._rate_limiter = AsyncRateLimiter(rate=config.rate_limit_per_second, capacity=config.rate_limit_per_second)
 
-        self.session: Optional[HTTP] = None
+        self.session: HTTP | None = None
         if not config.paper_trading:
             self.session = HTTP(
                 testnet=config.use_testnet,
@@ -977,29 +1002,29 @@ class AdvancedBybitTradingBot:
                 api_secret=config.api_secret,
                 recv_window=10000
             )
-        
+
         self.ws_manager = EnhancedWebSocketManager(
             config.api_key, config.api_secret, config.use_testnet, config.paper_trading
         )
-        
-        self.strategies: Dict[str, StrategyInterface] = {}
+
+        self.strategies: dict[str, StrategyInterface] = {}
         self.risk_manager = RiskManager(
             max_position_size=Decimal("100"),
             max_leverage=10,
             max_drawdown=Decimal("-5000")
         )
-        
-        self.symbol_info: Dict[str, Any] = {}
+
+        self.symbol_info: dict[str, Any] = {}
         self.performance = EnhancedPerformanceMetrics()
         self.cache = CacheManager()
-        
+
         self._emergency_stop = threading.Event()
         self._setup_signal_handlers()
 
         # Paper trading state
-        self._paper_balance: Dict[str, Dict[str, Decimal]] = {"USDT": {"walletBalance": Decimal("100000"), "availableToWithdraw": Decimal("100000")}}
-        self._paper_positions: Dict[str, Position] = {}
-        self._paper_orders: Dict[str, Order] = {}
+        self._paper_balance: dict[str, dict[str, Decimal]] = {"USDT": {"walletBalance": Decimal("100000"), "availableToWithdraw": Decimal("100000")}}
+        self._paper_positions: dict[str, Position] = {}
+        self._paper_orders: dict[str, Order] = {}
 
         self._metrics_mode = 'paper' if config.paper_trading else 'live'
 
@@ -1007,7 +1032,7 @@ class AdvancedBybitTradingBot:
         def signal_handler(sig, frame):
             logger.warning(f"Signal {sig} received. Initiating graceful shutdown...")
             self._emergency_stop.set()
-            asyncio.create_task(self.cleanup()) 
+            asyncio.create_task(self.cleanup())
 
         try:
             signal.signal(signal.SIGINT, signal_handler)
@@ -1015,13 +1040,13 @@ class AdvancedBybitTradingBot:
         except Exception:
             # Some environments (Windows, some notebooks) don't allow signal override
             pass
-    
+
     def add_strategy(self, strategy: StrategyInterface):
         self.strategies[strategy.name] = strategy
         try:
             strategy_params_path = Path(self.config.strategy_params_file)
             if strategy_params_path.exists():
-                with open(strategy_params_path, 'r') as f:
+                with open(strategy_params_path) as f:
                     all_params = json.load(f)
                     if strategy.name in all_params:
                         strategy.set_parameters(**all_params[strategy.name])
@@ -1032,7 +1057,7 @@ class AdvancedBybitTradingBot:
             logger.error(f"Error loading parameters for strategy '{strategy.name}': {e}", exc_info=True)
             logger.warning(f"Strategy '{strategy.name}' will use its default parameters.")
         logger.info(f"Added strategy: {strategy.name}")
-    
+
     @advanced_retry(max_retries=3, exceptions=(ConnectionError, TimeoutError))
     async def _api_call(self, func: Callable, *args, **kwargs):
         """Run blocking API call in a thread with rate limiting and timeout."""
@@ -1044,7 +1069,7 @@ class AdvancedBybitTradingBot:
 
         if config.enable_metrics:
             metrics['api_calls'].labels(endpoint=func.__name__).inc()
-        
+
         try:
             loop = asyncio.get_running_loop()
             result = await asyncio.wait_for(
@@ -1063,14 +1088,14 @@ class AdvancedBybitTradingBot:
             logger.error(f"Unexpected error during API call {func.__name__}: {e}", exc_info=True)
             raise
 
-    async def fetch_symbol_info(self, symbols: List[str], category: str = "linear"):
+    async def fetch_symbol_info(self, symbols: list[str], category: str = "linear"):
         """Fetch and cache symbol information."""
         cache_key = f"symbol_info:{','.join(sorted(symbols))}"
         cached_info = await self.cache.get(cache_key)
         if cached_info:
             self.symbol_info.update(cached_info)
             logger.debug(f"Loaded symbol info from cache for {', '.join(symbols)}.")
-        
+
         try:
             result = await self._api_call(
                 self.session.get_instruments_info if self.session else (lambda category: {"retCode":0, "result":{"list":[]}}),
@@ -1105,7 +1130,7 @@ class AdvancedBybitTradingBot:
                 logger.critical("Failed to get ANY symbol info. Bot might not function correctly.")
             raise
 
-    async def place_order(self, order: Order) -> Optional[Order]:
+    async def place_order(self, order: Order) -> Order | None:
         """Place an order with validation, risk checks, and paper trading simulation."""
         try:
             if order.qty <= 0:
@@ -1121,11 +1146,11 @@ class AdvancedBybitTradingBot:
         if not approved:
             logger.warning(f"Order rejected by risk manager ({order.symbol} {order.side.value} {order.qty}): {reason}")
             return None
-        
+
         if self.config.paper_trading:
             logger.info(f"PAPER TRADING: Simulating order placement for {order.symbol} {order.side.value} {order.qty} @ {order.price or 'MARKET'}")
             order.order_id = f"PAPER_{order.client_order_id}"
-            
+
             if order.order_type == OrderType.MARKET:
                 try:
                     ticker = self.ws_manager.market_data.get(order.symbol, {}).get('ticker', {})
@@ -1150,7 +1175,7 @@ class AdvancedBybitTradingBot:
                         self._paper_balance["USDT"]["availableToWithdraw"] += cost
 
                     pos = self._paper_positions.get(order.symbol, Position(order.symbol, order.side.value, Decimal(0), Decimal(0), Decimal(0), Decimal(0), Decimal(0), Decimal(0), 1))
-                    
+
                     pnl = Decimal(0)
                     if pos.size == 0:
                         pos.side = order.side.value
@@ -1180,12 +1205,12 @@ class AdvancedBybitTradingBot:
                                 pos.realized_pnl += pnl
                                 self._paper_balance["USDT"]["walletBalance"] += pnl
                                 pos.size -= order.qty
-                    
+
                     pos.mark_price = fill_price
                     pos.last_update = datetime.utcnow()
                     self._paper_positions[order.symbol] = pos
                     self.ws_manager.positions[order.symbol] = pos
-                    
+
                     self.performance.add_trade({
                         'symbol': order.symbol,
                         'side': order.side.value,
@@ -1221,7 +1246,7 @@ class AdvancedBybitTradingBot:
         except Exception as e:
             logger.error(f"Order placement failed for {order.symbol}: {e}", exc_info=True)
             return None
-    
+
     async def cancel_order(self, order_id: str, symbol: str) -> bool:
         if self.config.paper_trading:
             if order_id in self._paper_orders:
@@ -1243,8 +1268,8 @@ class AdvancedBybitTradingBot:
         except Exception as e:
             logger.error(f"Order cancellation failed for {order_id}: {e}", exc_info=True)
             return False
-    
-    async def cancel_all_orders(self, symbol: Optional[str] = None):
+
+    async def cancel_all_orders(self, symbol: str | None = None):
         if self.config.paper_trading:
             if symbol:
                 keys_to_cancel = [k for k, v in self._paper_orders.items() if v.symbol == symbol]
@@ -1263,7 +1288,7 @@ class AdvancedBybitTradingBot:
             logger.info(f"All orders cancelled{f' for {symbol}' if symbol else ''}.")
         except Exception as e:
             logger.error(f"Failed to cancel all orders: {e}", exc_info=True)
-    
+
     async def close_position(self, symbol: str) -> bool:
         if self.config.paper_trading:
             position = self._paper_positions.get(symbol)
@@ -1297,7 +1322,7 @@ class AdvancedBybitTradingBot:
         except Exception as e:
             logger.error(f"Failed to close position {symbol}: {e}", exc_info=True)
             return False
-    
+
     async def close_all_positions(self):
         if self.config.paper_trading:
             logger.info("PAPER TRADING: Closing all simulated positions...")
@@ -1316,17 +1341,17 @@ class AdvancedBybitTradingBot:
             logger.info(f"Closed {success_count}/{len(tasks)} positions.")
         else:
             logger.info("No open positions to close.")
-    
-    async def get_account_info(self, account_type: str = "UNIFIED") -> Dict[str, Any]:
+
+    async def get_account_info(self, account_type: str = "UNIFIED") -> dict[str, Any]:
         if self.config.paper_trading:
             # Map to unified structure for consistency
             return {"totalAvailableBalance": self._paper_balance["USDT"]["availableToWithdraw"]}
-        
+
         cache_key = f"account_info:{account_type}"
         cached = await self.cache.get(cache_key)
         if cached:
             return cached
-        
+
         try:
             result = await self._api_call(
                 self.session.get_wallet_balance,
@@ -1346,8 +1371,8 @@ class AdvancedBybitTradingBot:
         except Exception as e:
             logger.error(f"Failed to get account info: {e}", exc_info=True)
             return {}
-    
-    async def execute_strategies(self, symbols: List[str]):
+
+    async def execute_strategies(self, symbols: list[str]):
         if self._emergency_stop.is_set():
             logger.debug("Emergency stop triggered, skipping strategy execution.")
             return
@@ -1359,7 +1384,7 @@ class AdvancedBybitTradingBot:
         if not filtered_market_data:
             logger.warning("No complete market data available for strategy execution.")
             return
-        
+
         account_info = await self.get_account_info()
         if not account_info:
             logger.warning("No account info available for strategy execution.")
@@ -1370,7 +1395,7 @@ class AdvancedBybitTradingBot:
             logger.critical("Max drawdown reached. Stopping trading.")
             self._emergency_stop.set()
             return
-        
+
         for name, strategy in self.strategies.items():
             if self._emergency_stop.is_set():
                 break
@@ -1388,17 +1413,17 @@ class AdvancedBybitTradingBot:
                     await self.place_order(order)
             except Exception as e:
                 logger.error(f"Strategy '{name}' execution error: {e}", exc_info=True)
-    
+
     async def monitor_positions(self):
         if self._emergency_stop.is_set():
             logger.debug("Emergency stop triggered, skipping position monitoring.")
             return
-            
+
         positions_to_close = []
         for symbol, position in list(self.ws_manager.positions.items()):
             if position.size == Decimal(0):
                 continue
-            
+
             ticker_data = self.ws_manager.market_data.get(symbol, {}).get('ticker')
             if ticker_data:
                 current_mark_price = _dec(ticker_data.get('last_price'))
@@ -1413,18 +1438,18 @@ class AdvancedBybitTradingBot:
             if close_reason:
                 logger.info(f"Initiating close for {symbol} position ({position.side} {position.size}) due to: {close_reason}")
                 positions_to_close.append(symbol)
-            
+
             for strategy in self.strategies.values():
                 await strategy.on_position_update(position)
 
         for symbol in positions_to_close:
             await self.close_position(symbol)
-            
+
         self.performance.unrealized_pnl = sum(
             p.unrealized_pnl for p in self.ws_manager.positions.values()
             if p.size != Decimal(0)
         )
-    
+
     async def _periodic_task(self, period_seconds: int, task_func: Callable, *args: Any):
         task_name = task_func.__name__
         logger.debug(f"Starting periodic task: {task_name}, interval: {period_seconds}s")
@@ -1439,22 +1464,22 @@ class AdvancedBybitTradingBot:
             await sleep_until_stop(self._emergency_stop, period_seconds)
         logger.debug(f"Periodic task {task_name} stopped.")
 
-    async def run(self, symbols: List[str], interval: int = 5):
+    async def run(self, symbols: list[str], interval: int = 5):
         logger.info(f"Starting bot for symbols: {symbols} with interval: {interval}s (Mode: {self._metrics_mode})")
-        
+
         await self.ws_manager.initialize()
         await self.fetch_symbol_info(symbols)
-        
+
         for symbol in symbols:
             await self.ws_manager.subscribe("ticker", symbol)
             await self.ws_manager.subscribe("orderbook", symbol)
             await self.ws_manager.subscribe("trade", symbol)
-        
+
         if not self.config.paper_trading:
             await self.ws_manager.subscribe("position")
             await self.ws_manager.subscribe("order")
             await self.ws_manager.subscribe("execution")
-        
+
         if config.enable_metrics:
             try:
                 prometheus_client.start_http_server(8000)
@@ -1471,13 +1496,13 @@ class AdvancedBybitTradingBot:
                 loop_start = time.monotonic()
                 await self.execute_strategies(symbols)
                 await self.monitor_positions()
-                
+
                 if self.performance.total_trades % 5 == 0:
                     stats = self.performance.get_statistics()
                     ws_stats = self.ws_manager.get_statistics()
                     logger.info(f"Bot Performance: {stats}")
                     logger.info(f"WS Statistics: {ws_stats}")
-                
+
                 elapsed = time.monotonic() - loop_start
                 sleep_time = max(0, interval - elapsed)
                 await sleep_until_stop(self._emergency_stop, sleep_time)
@@ -1487,7 +1512,7 @@ class AdvancedBybitTradingBot:
             logger.critical(f"Bot main loop fatal error: {e}", exc_info=True)
         finally:
             await self.cleanup()
-    
+
     async def cleanup(self):
         if self._emergency_stop.is_set():
             logger.info("Initiating cleanup sequence...")
@@ -1497,13 +1522,13 @@ class AdvancedBybitTradingBot:
 
         if self.config.shutdown_cancel_orders:
             await self.cancel_all_orders()
-        
+
         if self.config.shutdown_close_positions:
             await self.close_all_positions()
 
         await self.ws_manager.cleanup()
         await self.save_performance_data()
-        
+
         if self._api_executor:
             logger.info("Shutting down API ThreadPoolExecutor...")
             self._api_executor.shutdown(wait=True)
@@ -1520,7 +1545,7 @@ class AdvancedBybitTradingBot:
             await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=5)
         logger.info("Remaining asyncio tasks cancelled/finished.")
         logger.info("Bot cleanup complete.")
-    
+
     async def save_performance_data(self):
         try:
             data = {
@@ -1541,16 +1566,16 @@ class MarketMakerStrategy(StrategyInterface):
     """Stateful market-making strategy that manages its own orders."""
     def __init__(self, bot_instance: 'AdvancedBybitTradingBot'):
         super().__init__("MarketMaker", bot_instance)
-        self.pending_orders: Dict[str, Order] = {}
+        self.pending_orders: dict[str, Order] = {}
         self.set_parameters(
             spread_percentage=Decimal("0.001"),   # 0.1%
             order_qty=Decimal("0.001"),
             order_timeout_seconds=10,
             requote_bps=5,                        # cancel/repost if drift > 5 bps from target
         )
-    
-    async def analyze(self, market_data: Dict[str, Any], account_info: Dict[str, Any]) -> List[Order]:
-        orders_to_cancel: List[Tuple[str, str]] = []
+
+    async def analyze(self, market_data: dict[str, Any], account_info: dict[str, Any]) -> list[Order]:
+        orders_to_cancel: list[tuple[str, str]] = []
         current_time = datetime.utcnow()
         # 1) Cancel timed-out orders
         for order_id, order in list(self.pending_orders.items()):
@@ -1572,13 +1597,13 @@ class MarketMakerStrategy(StrategyInterface):
             if not ob or not ob["bids"] or not ob["asks"] or not ticker:
                 logger.debug(f"MarketMaker: Skipping {symbol}, insufficient market data.")
                 continue
-            
+
             best_bid = _dec(ob["bids"][0][0])
             best_ask = _dec(ob["asks"][0][0])
             if best_bid == 0 or best_ask == 0 or best_ask <= best_bid:
                 logger.warning(f"MarketMaker: Invalid bid/ask for {symbol}. Bid: {best_bid}, Ask: {best_ask}.")
                 continue
-            
+
             mid_price = (best_bid + best_ask) / 2
             spread = _dec(self.parameters["spread_percentage"])
             buy_price = mid_price * (1 - spread)
@@ -1618,7 +1643,7 @@ class MarketMakerStrategy(StrategyInterface):
             # Re-check after cancellations
             has_buy_order = any(o for o in self.pending_orders.values() if o.symbol == symbol and o.side == OrderSide.BUY)
             has_sell_order = any(o for o in self.pending_orders.values() if o.symbol == symbol and o.side == OrderSide.SELL)
-            
+
             if not has_buy_order:
                 buy_order = Order(
                     symbol=symbol,
@@ -1632,7 +1657,7 @@ class MarketMakerStrategy(StrategyInterface):
                 placed = await self.bot.place_order(buy_order)
                 if placed and placed.order_id:
                     self.pending_orders[placed.order_id] = placed
-            
+
             if not has_sell_order:
                 sell_order = Order(
                     symbol=symbol,
@@ -1656,11 +1681,11 @@ async def main():
         bot = AdvancedBybitTradingBot(config)
         mm_strategy = MarketMakerStrategy(bot)
         bot.add_strategy(mm_strategy)
-        
+
         symbols_str = os.getenv("TRADING_SYMBOLS", "BTCUSDT,ETHUSDT")
         symbols = [s.strip() for s in symbols_str.split(',') if s.strip()]
         interval = _parse_env_int("BOT_INTERVAL", 5)
-        
+
         logger.info(f"Bot Configuration: Testnet={config.use_testnet}, Paper_Trading={config.paper_trading}, Symbols={symbols}, Interval={interval}s")
         await bot.run(symbols, interval)
     except KeyboardInterrupt:

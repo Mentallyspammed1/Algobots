@@ -1,12 +1,12 @@
-import unittest
-import sys
 import os
-import math
+import sys
+import unittest
 
 # Add the parent directory to the sys.path to allow importing indicators.py
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from indicators import calculate_indicators
+
 
 class TestIndicators(unittest.TestCase):
 
@@ -104,7 +104,7 @@ class TestIndicators(unittest.TestCase):
         config = self.default_config.copy()
         result = calculate_indicators(self.klines_for_macd_bb, config)
         self.assertIsNotNone(result)
-        
+
         # Expected values for the LAST kline (close=39)
         # These values are approximate and depend on exact EMA calculation method
         # Using a calculator/TradingView for verification:

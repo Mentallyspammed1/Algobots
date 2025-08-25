@@ -1,10 +1,12 @@
-from typing import List, Dict, Any, Tuple
+from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Any
+
 import pandas as pd
 from algobots_types import OrderBlock  # Assuming this is available
+from colorama import Fore, Style, init
+
 from .strategy_template import StrategyTemplate
-from colorama import init, Fore, Style
-from datetime import datetime, timedelta
 
 init()  # Initialize Colorama for vibrant terminal output
 
@@ -119,7 +121,7 @@ class MarketMakingStrategy(StrategyTemplate):
         normalized_atr = latest_atr / current_price
         # Dampen volatility effect with smoother scaling
         size_multiplier = Decimal('1') / (Decimal('1') + normalized_atr * self.volatility_sensitivity)
-        
+
         # Apply min/max caps
         adjusted_size = self.base_order_quantity * size_multiplier
         adjusted_size = max(self.min_order_quantity, adjusted_size)
@@ -134,17 +136,17 @@ class MarketMakingStrategy(StrategyTemplate):
         if hedge_size < self.min_order_quantity:
             self.logger.debug(Fore.YELLOW + f"Calculated hedge size {hedge_size:.4f} is below min_order_quantity {self.min_order_quantity:.4f}. Not hedging." + Style.RESET_ALL)
             return Decimal('0') # Don't hedge if size is too small
-            
+
         self.logger.debug(Fore.CYAN + f"Hedging {hedge_size:.4f} of position {current_position_size}." + Style.RESET_ALL)
         return min(hedge_size, self.max_position_size)
 
     def generate_signals(self,
                          df: pd.DataFrame,
-                         resistance_levels: List[Dict[str, Any]],
-                         support_levels: List[Dict[str, Any]],
-                         active_bull_obs: List[OrderBlock],
-                         active_bear_obs: List[OrderBlock],
-                         **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+                         resistance_levels: list[dict[str, Any]],
+                         support_levels: list[dict[str, Any]],
+                         active_bull_obs: list[OrderBlock],
+                         active_bear_obs: list[OrderBlock],
+                         **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
         """Generate market making signals with dynamic spreads and hedging."""
         signals = []
         signals_generated_this_cycle = 0
@@ -156,7 +158,7 @@ class MarketMakingStrategy(StrategyTemplate):
 
         # --- Extract Data ---
         latest_candle = df.iloc[-1]
-        
+
         current_price_val = latest_candle['close']
         latest_atr_val = latest_candle['atr']
         ehlers_supersmoother_val = latest_candle['ehlers_supersmoother']
@@ -188,12 +190,12 @@ class MarketMakingStrategy(StrategyTemplate):
         if order_quantity <= 0: # Ensure order quantity is valid
             self.logger.warning(Fore.RED + "Calculated order quantity is zero or less. Skipping signal generation." + Style.RESET_ALL)
             return []
-        
+
         # --- Dynamic Spread with Cap ---
         dynamic_spread_bps = self.spread_bps # Start with base spread
         if self.use_dynamic_spread and current_price > 0:
             # atr_spread_adj is calculated in BPS (latest_atr / current_price is a percentage)
-            atr_spread_adj = (latest_atr / current_price) * self.atr_spread_multiplier * Decimal('10000') 
+            atr_spread_adj = (latest_atr / current_price) * self.atr_spread_multiplier * Decimal('10000')
             dynamic_spread_bps = min(self.max_spread_bps, self.spread_bps + atr_spread_adj)
             # Upgrade 2: Improved Logging for Dynamic Spread
             self.logger.debug(Fore.BLUE + f"Dynamic spread adjusted from {self.spread_bps} to {dynamic_spread_bps:.2f} bps due to ATR." + Style.RESET_ALL)
@@ -204,7 +206,7 @@ class MarketMakingStrategy(StrategyTemplate):
         if self.use_trend_filter:
             trend_ma = Decimal(str(latest_candle['ehlers_supersmoother']))
             trend_direction = "Uptrend" if current_price > trend_ma else "Downtrend" if current_price < trend_ma else "Neutral"
-            
+
             # Using inventory_skew_intensity for trend skew as per original code, can be separated later
             trend_skew_factor = self.inventory_skew_intensity / Decimal('10000') # This is still a percentage
             if trend_direction == "Uptrend":
@@ -217,7 +219,7 @@ class MarketMakingStrategy(StrategyTemplate):
         # --- Inventory Skew ---
         if self.max_position_size > 0:
             # inventory_ratio: positive if long, negative if short
-            inventory_ratio = signed_inventory / self.max_position_size 
+            inventory_ratio = signed_inventory / self.max_position_size
             # Inventory skew: positive if we are too long, negative if too short
             # If long, reduce bid price (to discourage more buys), increase ask price (to encourage sells)
             # If short, increase bid price (to encourage buys), reduce ask price (to discourage more sells)
@@ -228,7 +230,7 @@ class MarketMakingStrategy(StrategyTemplate):
 
         # --- Calculate Bid/Ask from skewed mid price ---
         # Spread factor is dynamic_spread_bps / 20000 (bps / 2 for half spread / 10000 for percentage)
-        spread_factor = dynamic_spread_bps / Decimal('20000') 
+        spread_factor = dynamic_spread_bps / Decimal('20000')
         bid_price = skewed_mid_price * (Decimal('1') - spread_factor)
         ask_price = skewed_mid_price * (Decimal('1') + spread_factor)
 
@@ -334,15 +336,15 @@ class MarketMakingStrategy(StrategyTemplate):
     def generate_exit_signals(self,
                               df: pd.DataFrame,
                               current_position_side: str,
-                              active_bull_obs: List[OrderBlock], # Not used in exit, but kept for compatibility
-                              active_bear_obs: List[OrderBlock], # Not used in exit, but kept for compatibility
-                              **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+                              active_bull_obs: list[OrderBlock], # Not used in exit, but kept for compatibility
+                              active_bear_obs: list[OrderBlock], # Not used in exit, but kept for compatibility
+                              **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
         """Generate exit signals with dynamic stop-loss and rebalancing."""
         exit_signals = []
         signals_generated_this_cycle = 0
 
         if df.empty or current_position_side == 'NONE':
-            self.logger.warning(Fore.RED + f"No position or empty DataFrame. Skipping exit signals." + Style.RESET_ALL)
+            self.logger.warning(Fore.RED + "No position or empty DataFrame. Skipping exit signals." + Style.RESET_ALL)
             return []
 
         latest_candle = df.iloc[-1]
@@ -413,7 +415,7 @@ class MarketMakingStrategy(StrategyTemplate):
         if current_position_size > self.rebalance_threshold: # Use > to trigger slightly above threshold
             self.logger.info(Fore.YELLOW + f"Rebalancing: Position size ({current_position_size}) >= threshold ({self.rebalance_threshold})." + Style.RESET_ALL)
             exit_side = 'SELL' if current_position_side == 'LONG' else 'BUY'
-            
+
             # Upgrade 4: Partial rebalances
             rebalance_quantity = current_position_size * self.rebalance_fraction # Close entire position for rebalance
             if rebalance_quantity < self.min_order_quantity:

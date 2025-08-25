@@ -1,19 +1,17 @@
-import os
 import asyncio
-import logging.handlers # Import handlers module
-import time
 import json
+import logging.handlers  # Import handlers module
+import os
 import signal
-from decimal import Decimal, getcontext, ROUND_DOWN, ROUND_UP, ROUND_HALF_UP
+import time
+from datetime import datetime
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, getcontext
+from typing import Any
+
+import psutil  # The eye that sees the system's soul
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
-from colorama import Fore, Style, init
-from typing import Optional, Dict, Any, List, Tuple
-import math
-import platform
-import sys
-from datetime import datetime
-import psutil # The eye that sees the system's soul
 
 # Initialize Colorama for beautiful terminal output
 init(autoreset=True)
@@ -41,7 +39,7 @@ API_SECRET = os.getenv("BYBIT_API_SECRET")
 
 # Casting the config.json into existence to draw trading parameters
 try:
-    with open('config.json', 'r') as f:
+    with open('config.json') as f:
         config = json.load(f)
 except FileNotFoundError:
     print(f"{RED}config.json not found in the current realm. Please forge it with your trading parameters.{NC}")
@@ -142,9 +140,9 @@ def format_metric(
     label: str,
     value: Any,
     label_color: str,
-    value_color: Optional[str] = None,
+    value_color: str | None = None,
     label_width: int = 25,
-    value_precision: Optional[int] = None, # Make optional, use _calculate_decimal_precision if None
+    value_precision: int | None = None, # Make optional, use _calculate_decimal_precision if None
     unit: str = "",
     is_pnl: bool = False,
 ) -> str:
@@ -174,16 +172,16 @@ def format_metric(
         else:
             formatted_value = f"{actual_value_color}{value:,}{unit}{NC}"
     else:
-        formatted_value = f"{actual_value_color}{str(value)}{unit}{NC}"
+        formatted_value = f"{actual_value_color}{value!s}{unit}{NC}"
     return f"{formatted_label}: {formatted_value}"
 
-def format_order(order: Dict[str, Any], price_precision: int, qty_precision: int) -> str:
+def format_order(order: dict[str, Any], price_precision: int, qty_precision: int) -> str:
     """Formats an order for display in the UI."""
     side_color = GREEN if order['side'] == 'Buy' else RED
     client_id = order.get('client_order_id', 'N/A')
     return f"  [{side_color}{order['side']}{NC}] @ {order['price']:.{price_precision}f} Qty: {order['qty']:.{qty_precision}f} (Client ID: {client_id})"
 
-def format_position(position: Dict[str, Any], side: str, price_precision: int, qty_precision: int) -> str:
+def format_position(position: dict[str, Any], side: str, price_precision: int, qty_precision: int) -> str:
     """Formats a position for display in the UI."""
     side_color = GREEN if side == 'Long' else RED
     return f"  {side_color}{side}{NC} Position: {position['size']:.{qty_precision}f} @ {position['avg_price']:.{price_precision}f} | Unrealized PnL: {position['unrealisedPnl']:.2f} USDT"
@@ -204,7 +202,7 @@ ws_state = {
     }
 }
 
-def on_public_ws_message(message: Dict[str, Any]):
+def on_public_ws_message(message: dict[str, Any]):
     """Callback for public websocket messages (orderbook), whispering market depth."""
     try:
         data = message.get('data', {})
@@ -221,7 +219,7 @@ def on_public_ws_message(message: Dict[str, Any]):
     except (KeyError, IndexError, ValueError, TypeError, json.JSONDecodeError) as e:
         logger.error(f"Error processing public WS message: {type(e).__name__} - {e} | Message: {message}")
 
-def on_private_ws_message(message: Dict[str, Any]):
+def on_private_ws_message(message: dict[str, Any]):
     """Callback for private websocket messages (orders, positions), revealing personal arcane dealings."""
     try:
         topic = message.get('topic')
@@ -398,7 +396,7 @@ class BybitClient:
             logger.error(f"Failed to get balance: {response.get('retMsg', 'No error message') if response else 'No response'}")
             return Decimal("0")
 
-    async def get_open_orders_rest(self) -> Dict[str, Any]:
+    async def get_open_orders_rest(self) -> dict[str, Any]:
         """Fetches open orders via REST API to sync state, aligning the bot's perception with reality."""
         response = await self._make_api_call(
             self.http_session.get_open_orders,
@@ -423,7 +421,7 @@ class BybitClient:
             logger.error(f"Failed to get open orders via REST: {response.get('retMsg', 'No error message') if response else 'No response'}")
             return {}
 
-    async def get_positions_rest(self) -> Dict[str, Any]:
+    async def get_positions_rest(self) -> dict[str, Any]:
         """Fetches current positions via REST API to sync state, revealing the bot's current holdings."""
         response = await self._make_api_call(
             self.http_session.get_positions,
@@ -447,7 +445,7 @@ class BybitClient:
             logger.error(f"Failed to get positions via REST: {response.get('retMsg', 'No error message') if response else 'No response'}")
             return {}
 
-    async def place_order(self, side: str, qty: Decimal, price: Optional[Decimal] = None, client_order_id: Optional[str] = None, order_type: str = "Limit") -> Optional[Dict[str, Any]]:
+    async def place_order(self, side: str, qty: Decimal, price: Decimal | None = None, client_order_id: str | None = None, order_type: str = "Limit") -> dict[str, Any] | None:
         """Places a single order on the exchange, manifesting a new trade intention."""
         if order_type == "Limit" and price is None:
             logger.error("Price must be specified for a Limit order.")
@@ -531,7 +529,7 @@ class BybitClient:
         else:
             logger.error(f"Failed to cancel all orders: {response.get('retMsg', 'No error message') if response else 'No response'}")
 
-    async def place_batch_orders(self, orders: list[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    async def place_batch_orders(self, orders: list[dict[str, Any]]) -> dict[str, Any] | None:
         """Places multiple orders in a single batch request, a powerful conjuration."""
         if not orders:
             logger.warning("No orders provided for batch placement.")
@@ -581,7 +579,7 @@ class BybitClient:
             logger.error(f"Failed to place batch orders: {response.get('retMsg', 'No error message') if response else 'No response'}")
             return None
 
-    async def get_orderbook_snapshot(self) -> Optional[Dict[str, Any]]:
+    async def get_orderbook_snapshot(self) -> dict[str, Any] | None:
         """Fetches a snapshot of the orderbook for more reliable market data."""
         response = await self._make_api_call(
             self.http_session.get_orderbook,
@@ -1090,7 +1088,7 @@ async def main():
         )
         # Bybit API returns retCode 0 even if the mode is already set, so we just check for success.
         if response and response.get('retCode') == 0:
-            logger.info(f"Successfully set position mode to Hedge Mode for the USDT category.")
+            logger.info("Successfully set position mode to Hedge Mode for the USDT category.")
             send_termux_toast('Hedge Mode set successfully!', 'green', 'black')
         else:
             # This will catch API-level errors returned in a valid response (e.g., permission denied)

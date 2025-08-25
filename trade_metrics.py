@@ -1,7 +1,7 @@
 # trade_metrics.py
-from decimal import Decimal, ROUND_HALF_UP
 import logging
-from typing import Dict, Any
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 # Initialize logging for trade_metrics
 trade_metrics_logger = logging.getLogger('trade_metrics')
@@ -37,7 +37,7 @@ class TradeMetrics:
 
         Returns:
             Decimal: The calculated fee.
-        """ 
+        """
         trade_value = quantity * price
         fee_rate = self.maker_fee if is_maker else self.taker_fee
         fee = trade_value * fee_rate
@@ -63,7 +63,7 @@ class TradeMetrics:
             pnl = (exit_price - entry_price) * quantity
         elif side.upper() == 'SELL':
             pnl = (entry_price - exit_price) * quantity
-        
+
         net_pnl = pnl - entry_fee - exit_fee
         self.total_realized_pnl += net_pnl
         self.total_trades += 1
@@ -101,7 +101,7 @@ class TradeMetrics:
         """
         return self.total_realized_pnl
 
-    def get_trade_statistics(self) -> Dict[str, Any]:
+    def get_trade_statistics(self) -> dict[str, Any]:
         """
         Returns a dictionary of overall trade statistics.
         """

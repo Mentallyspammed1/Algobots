@@ -1,18 +1,19 @@
-import unittest
-import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock
-import pandas as pd
-from decimal import Decimal
-import time
-from datetime import datetime, timezone
 
 # Ensure the root directory is in the Python path for imports
 import sys
+import time
+import unittest
+from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pandas as pd
+
 sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
 
 # Import the module and classes to be tested
-from PSG import PyrmethusBot
 import config
+from PSG import PyrmethusBot
+
 
 # --- Helper function to create sample DataFrame ---
 def create_sample_df(rows=100):
@@ -152,7 +153,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
                 "size": "0",
             }]
         }
-        
+
         with patch.object(self.bot, '_reset_position_state') as mock_reset:
             await self.bot._handle_position_update(close_message)
             mock_reset.assert_called_once()
@@ -176,7 +177,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
     async def test_initial_kline_fetch_api_failure(self):
         """Test the retry logic on a failed initial kline fetch."""
         self.mock_bybit_client.get_kline_rest_fallback.side_effect = Exception("API is down")
-        
+
         result = await self.bot._initial_kline_fetch()
 
         self.assertFalse(result)
@@ -191,11 +192,11 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         mock_df = create_sample_df(rows=100) # Use a fixed number of rows
         mock_df['atr'] = [Decimal('1.2')] * len(mock_df)
         mock_handle_ws_data.return_value = mock_df
-        
+
         with patch.object(self.bot, '_identify_and_manage_order_blocks') as mock_manage_ob:
             # Act
             await self.bot._handle_kline_update(kline_message)
-            
+
             # Assert
             mock_handle_ws_data.assert_called_once_with(self.bot.klines_df, kline_message)
             self.assertIsNotNone(self.bot.klines_df)

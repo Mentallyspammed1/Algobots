@@ -1,18 +1,17 @@
-import os
 import asyncio
-import logging.handlers # For RotatingFileHandler
-import time
 import json
+import logging.handlers  # For RotatingFileHandler
+import os
 import signal
-from decimal import Decimal, getcontext, ROUND_DOWN, ROUND_UP, ROUND_HALF_UP
+import sys
+import time
+from datetime import datetime
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, getcontext
+from typing import Any
+
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
-from colorama import Fore, Style, init
-from typing import Optional, Dict, Any, List, Tuple
-import math
-import platform
-import sys
-from datetime import datetime
 
 # Initialize Colorama for beautiful terminal output
 init(autoreset=True)
@@ -40,16 +39,16 @@ API_SECRET = os.getenv("BYBIT_API_SECRET")
 
 # Casting the config.json into existence to draw trading parameters
 try:
-    with open('config.json', 'r') as f:
+    with open('config.json') as f:
         config = json.load(f)
 except FileNotFoundError:
     print(f"{RED}config.json not found in the current realm. Please forge it with your trading parameters.{NC}")
     # Use a generic toast if termux-api isn't guaranteed to be installed yet
-    os.system(f"termux-toast -b red -c white 'MMXCEL Error: config.json missing!'")
+    os.system("termux-toast -b red -c white 'MMXCEL Error: config.json missing!'")
     exit()
 except json.JSONDecodeError:
     print(f"{RED}A distortion detected in config.json. Please verify its crystalline structure (JSON format).{NC}")
-    os.system(f"termux-toast -b red -c white 'MMXCEL Error: config.json corrupt!'")
+    os.system("termux-toast -b red -c white 'MMXCEL Error: config.json corrupt!'")
     exit()
 
 # Set up logging with rotation to prevent log files from growing too large
@@ -145,9 +144,9 @@ def format_metric(
     label: str,
     value: Any,
     label_color: str,
-    value_color: Optional[str] = None,
+    value_color: str | None = None,
     label_width: int = 25,
-    value_precision: Optional[int] = None, # Make optional, use _calculate_decimal_precision if None
+    value_precision: int | None = None, # Make optional, use _calculate_decimal_precision if None
     unit: str = "",
     is_pnl: bool = False,
 ) -> str:
@@ -174,10 +173,10 @@ def format_metric(
         else:
             formatted_value = f"{actual_value_color}{value:,}{unit}{NC}"
     else:
-        formatted_value = f"{actual_value_color}{str(value)}{unit}{NC}"
+        formatted_value = f"{actual_value_color}{value!s}{unit}{NC}"
     return f"{formatted_label}: {formatted_value}"
 
-def format_order(order: Dict[str, Any], price_precision: int, qty_precision: int) -> str:
+def format_order(order: dict[str, Any], price_precision: int, qty_precision: int) -> str:
     """Formats an order for display in the UI."""
     side_color = GREEN if order['side'] == 'Buy' else RED
     client_id = order.get('client_order_id', 'N/A')
@@ -186,7 +185,7 @@ def format_order(order: Dict[str, Any], price_precision: int, qty_precision: int
     formatted_qty = f"{order['qty']:.{qty_precision}f}" if qty_precision is not None else str(order['qty'])
     return f"  [{side_color}{order['side']}{NC}] @ {formatted_price} Qty: {formatted_qty} (Client ID: {client_id})"
 
-def format_position(position: Dict[str, Any], side: str, price_precision: int, qty_precision: int) -> str:
+def format_position(position: dict[str, Any], side: str, price_precision: int, qty_precision: int) -> str:
     """Formats a position for display in the UI."""
     side_color = GREEN if side == 'Long' else RED
     # Use f-string formatting with dynamic precision
@@ -205,7 +204,7 @@ ws_state = {
     "last_update_time": 0
 }
 
-def on_public_ws_message(message: Dict[str, Any]):
+def on_public_ws_message(message: dict[str, Any]):
     """Callback for public websocket messages (orderbook), whispering market depth."""
     try:
         data = message.get('data', {})
@@ -222,7 +221,7 @@ def on_public_ws_message(message: Dict[str, Any]):
     except (KeyError, IndexError, ValueError, TypeError, json.JSONDecodeError) as e:
         logger.error(f"Error processing public WS message: {type(e).__name__} - {e} | Message: {message}", exc_info=True)
 
-def on_private_ws_message(message: Dict[str, Any]):
+def on_private_ws_message(message: dict[str, Any]):
     """Callback for private websocket messages (orders, positions), revealing personal arcane dealings."""
     try:
         topic = message.get('topic')
@@ -434,7 +433,7 @@ class BybitClient:
             logger.error(f"Failed to get balance for {coin}: {response.get('retMsg', 'No error message') if response else 'No response'}")
             return Decimal("0")
 
-    async def get_open_orders_rest(self) -> Dict[str, Any]:
+    async def get_open_orders_rest(self) -> dict[str, Any]:
         """Fetches open orders via REST API to sync state, aligning the bot's perception with reality."""
         response = await self._make_api_call(
             self.http_session.get_open_orders,
@@ -459,7 +458,7 @@ class BybitClient:
             logger.error(f"Failed to get open orders via REST for {SYMBOL}: {response.get('retMsg', 'No error message') if response else 'No response'}")
             return {}
 
-    async def get_positions_rest(self) -> Dict[str, Any]:
+    async def get_positions_rest(self) -> dict[str, Any]:
         """Fetches current positions via REST API to sync state, revealing the bot's current holdings."""
         response = await self._make_api_call(
             self.http_session.get_positions,
@@ -483,7 +482,7 @@ class BybitClient:
             logger.error(f"Failed to get positions via REST for {SYMBOL}: {response.get('retMsg', 'No error message') if response else 'No response'}")
             return {}
 
-    async def place_order(self, side: str, qty: Decimal, price: Optional[Decimal] = None, client_order_id: Optional[str] = None, order_type: str = "Limit") -> Optional[Dict[str, Any]]:
+    async def place_order(self, side: str, qty: Decimal, price: Decimal | None = None, client_order_id: str | None = None, order_type: str = "Limit") -> dict[str, Any] | None:
         """Places a single order on the exchange, manifesting a new trade intention."""
         if order_type == "Limit" and price is None:
             logger.error("Price must be specified for a Limit order.")
@@ -566,7 +565,7 @@ class BybitClient:
         else:
             logger.error(f"Failed to cancel all orders for {SYMBOL}: {response.get('retMsg', 'No error message') if response else 'No response'}")
 
-    async def place_batch_orders(self, orders: list[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    async def place_batch_orders(self, orders: list[dict[str, Any]]) -> dict[str, Any] | None:
         """Places multiple orders in a single batch request, a powerful conjuration."""
         if not orders:
             logger.warning("No orders provided for batch placement.")
@@ -616,7 +615,7 @@ class BybitClient:
             logger.error(f"Failed to place batch orders for {SYMBOL}: {response.get('retMsg', 'No error message') if response else 'No response'}")
             return None
 
-    async def get_orderbook_snapshot(self) -> Optional[Dict[str, Any]]:
+    async def get_orderbook_snapshot(self) -> dict[str, Any] | None:
         """Fetches a snapshot of the orderbook for more reliable market data."""
         response = await self._make_api_call(
             self.http_session.get_orderbook,
@@ -701,7 +700,7 @@ class MarketMakingStrategy:
                            "This might lead to trades that barely cover fees or are unprofitable.{NC}")
 
         # Warning for QUANTITY being too small relative to symbol's qty_precision
-        if QUANTITY < symbol_info["qty_precision"] * 2: # Check if QUANTITY is very close to minimum step
+        if symbol_info["qty_precision"] * 2 > QUANTITY: # Check if QUANTITY is very close to minimum step
              logger.warning(f"{YELLOW}Warning: Configured QUANTITY ({QUANTITY}) is very small compared to the exchange's minimum quantity step ({symbol_info['qty_precision']}). "
                             "This might lead to issues if exchange minimums are higher, or if positions become too small to rebalance/close effectively.{NC}")
 
@@ -1098,7 +1097,7 @@ async def main():
     if not API_KEY or not API_SECRET:
         print(f"{RED}BYBIT_API_KEY or BYBIT_API_SECRET not found in .env file. "
               f"Please ensure your magical credentials are in place.{NC}")
-        send_toast(f"MMXCEL Error: API credentials missing!", 'red', 'white')
+        send_toast("MMXCEL Error: API credentials missing!", 'red', 'white')
         return
 
     print(f"{BOLD}{CYAN}MMXCEL Bybit Market Making Bot is being summoned...{NC}")

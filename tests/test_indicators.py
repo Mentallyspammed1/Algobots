@@ -1,9 +1,9 @@
-import unittest
-import pandas as pd
-from decimal import Decimal, getcontext
-from unittest.mock import MagicMock, patch
-import math
 import sys
+import unittest
+from decimal import Decimal, getcontext
+from unittest.mock import patch
+
+import pandas as pd
 
 # Ensure the root directory is in the Python path for imports
 sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
@@ -11,10 +11,18 @@ sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
 # Mock setup_logging to prevent actual log file creation during tests
 with patch('bot_logger.setup_logging'):
     from indicators import (
-        calculate_atr, calculate_fibonacci_pivot_points, calculate_stochrsi,
-        calculate_sma, calculate_ehlers_fisher_transform, calculate_ehlers_super_smoother,
-        find_pivots, handle_websocket_kline_data, calculate_vwap,
-        calculate_order_book_imbalance, calculate_ehlers_fisher_strategy, calculate_supertrend
+        calculate_atr,
+        calculate_ehlers_fisher_strategy,
+        calculate_ehlers_fisher_transform,
+        calculate_ehlers_super_smoother,
+        calculate_fibonacci_pivot_points,
+        calculate_order_book_imbalance,
+        calculate_sma,
+        calculate_stochrsi,
+        calculate_supertrend,
+        calculate_vwap,
+        find_pivots,
+        handle_websocket_kline_data,
     )
 
 # Set Decimal precision for tests

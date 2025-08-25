@@ -1,9 +1,9 @@
-import unittest
-from unittest.mock import patch
-from decimal import Decimal, getcontext
-import sys
-import os
 import importlib
+import os
+import sys
+import unittest
+from decimal import Decimal
+from unittest.mock import patch
 
 # Add the parent directory to the sys.path to allow importing makiwi
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
 # We need to be careful with imports due to global state in makiwi.py
 # For testing, we'll mock external dependencies and global state where necessary.
 import makiwi
+
 importlib.reload(makiwi) # Force reload the module
 
 class TestHelperFunctions(unittest.TestCase):
@@ -67,7 +68,7 @@ class TestHelperFunctions(unittest.TestCase):
         makiwi.set_bot_state("SHUTTING_DOWN")
         self.assertEqual(makiwi.BOT_STATE, "SHUTTING_DOWN")
         mock_logger.info.assert_called_with(f"{makiwi.Fore.CYAN}Bot State Change: ACTIVE -> SHUTTING_DOWN{makiwi.NC}")
-        
+
         makiwi.BOT_STATE = original_bot_state # Restore original state
 
 if __name__ == '__main__':

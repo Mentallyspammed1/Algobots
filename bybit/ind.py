@@ -1,47 +1,28 @@
-# -*- coding: utf-8 -*-
 
 # indicators.py
 # Pyrmethus, Weaver of Termux Runes, presents the arcane arts of technical analysis.
 
-from typing import (
-    Dict,
-    Optional as Ah, # Renamed Optional to Ah for p.md context if needed, but standard 'Optional' is fine.
-    List,
-    Callable,
-    Any,
-    Tuple,
-    Union,
-    Final,
-)
-import threading # CK was threading
-import websocket # D0 was websocket
-from colorama import Fore, Style, init
-import requests # BL was requests
-import pandas as L # L is pandas
-import numpy as M # M is numpy
-import ccxt as X # X is ccxt
-import subprocess # D1 was subprocess
-from functools import wraps
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from logging.handlers import RotatingFileHandler
+import logging as Bl  # Renamed to avoid conflict with standard logging if this file is imported elsewhere
+import os
+import sys  # B0 was sys
+import threading  # CK was threading
+from datetime import datetime, timedelta, timezone
 from decimal import (
     Decimal,
-    ROUND_DOWN,
-    ROUND_UP,
-    ROUND_HALF_EVEN,
-    getcontext,
     InvalidOperation,
+    getcontext,
 )
-from datetime import datetime, timezone, timedelta
-from dateutil.relativedelta import relativedelta
-import hashlib # D2 was hashlib
-import hmac
-import time # b was time
-import json # l was json
-import logging as Bl # Renamed to avoid conflict with standard logging if this file is imported elsewhere
-import os
-import sys # B0 was sys
+from functools import wraps
+from typing import (
+    Any,
+    Final,
+)
+
+import ccxt as X  # X is ccxt
+import numpy as M  # M is numpy
+import pandas as L  # L is pandas
+import requests  # BL was requests
+from colorama import Fore, Style, init
 
 # Initialize Colorama for vibrant terminal output
 init(autoreset=True)
@@ -63,7 +44,7 @@ try:
     from zoneinfo import ZoneInfo
 except ImportError:
     try:
-        from tzdata import ZoneInfo # type: ignore
+        from tzdata import ZoneInfo  # type: ignore
     except ImportError:
         class ZoneInfo: # type: ignore
             _warning_printed = False
@@ -89,7 +70,7 @@ except Exception as _tz_err:
 
 
 # Default Indicator Parameters (DIP) - from pscalper.py, ensures consistency
-DIP: Final[Dict[str, Union[int, Decimal]]] = {
+DIP: Final[dict[str, int | Decimal]] = {
     "atr_period": 14, "cci_window": 20, "williams_r_window": 14, "mfi_window": 14,
     "stoch_rsi_window": 14, "stoch_window": 12, "k_window": 3, "d_window": 3,
     "rsi_window": 14, "bollinger_bands_period": 20, "bollinger_bands_std_dev": Decimal("2.0"),
@@ -106,7 +87,7 @@ DIP: Final[Dict[str, Union[int, Decimal]]] = {
     "order_block_min_candles": 5, "order_block_volume_threshold": Decimal("1.5"),
     "volumetric_ma_period": 20,
 }
-FL: Final[List[Decimal]] = [
+FL: Final[list[Decimal]] = [
     Decimal("0.0"), Decimal("0.236"), Decimal("0.382"), Decimal("0.5"),
     Decimal("0.618"), Decimal("0.786"), Decimal("1.0"),
 ]
@@ -145,25 +126,25 @@ def handle_exceptions(default_return: Any = None, message: str = "An error occur
     return decorator
 
 class IndicatorResult:
-    def __init__(self, name: str, values: Union[L.Series, L.DataFrame, M.ndarray], timestamp: datetime):
+    def __init__(self, name: str, values: L.Series | L.DataFrame | M.ndarray, timestamp: datetime):
         self.name = name
         self.values = values
         self.timestamp = timestamp
 
 class RuneWeaver:
-    def __init__(self, logger: Bl.Logger, params: Dict[str, Any] = None):
+    def __init__(self, logger: Bl.Logger, params: dict[str, Any] = None):
         self.logger = logger
         self.params = params if params else DIP.copy()
         self.data: Optional[L.DataFrame] = None # Ah was Optional
-        self.indicators: Dict[str, IndicatorResult] = {}
+        self.indicators: dict[str, IndicatorResult] = {}
         self._lock = threading.Lock() # CK was threading
-        self.iv: Dict[str, Decimal] = {}
+        self.iv: dict[str, Decimal] = {}
         self.s: str = "UNKNOWN_SYMBOL" # Bu was UNKNOWN_SYMBOL
-        self.cfg: Dict[str, Any] = {}
-        self.mi: Dict[str, Any] = {}
+        self.cfg: dict[str, Any] = {}
+        self.mi: dict[str, Any] = {}
         self.default_confidence: Decimal = Decimal('0.75')
-        self.indicator_thresholds: Dict[str, Any] = {}
-        self.previous_orderbook_state: Dict[str, Any] = {}
+        self.indicator_thresholds: dict[str, Any] = {}
+        self.previous_orderbook_state: dict[str, Any] = {}
         # Type hints for external classes if they are defined elsewhere
         self.ws_client: Optional[Any] = None # Was Ah[DD_hint]
         self.ex: Optional[X.Exchange] = None # Was Ah[X.Exchange]
@@ -205,7 +186,7 @@ class RuneWeaver:
         # ... (Full PSAR logic from p/custom_ta/overlap.py or a robust library should be here)
         # This is a complex indicator, for now, returning NaNs as a placeholder
         self.logger.warning("PSAR calculation is a placeholder in RuneWeaver._psar_custom")
-        psar_val.iloc[:] = M.nan 
+        psar_val.iloc[:] = M.nan
         psar_trend = L.Series(M.nan, index=close.index)
         af_str = f"{af:.2f}".rstrip('0').rstrip('.')
         max_af_str = f"{max_af:.1f}" if str(max_af).endswith('.0') else f"{max_af:.2f}"
@@ -272,7 +253,7 @@ class RuneWeaver:
         if range_val.empty or range_val.iloc[-1] == 0:
             self.logger.warning(f"{NY}Fisher Transform: Range is zero or empty. Returning NaN.{RST}")
             return L.DataFrame({'fisher': L.Series(M.nan, index=high.index), 'signal': L.Series(M.nan, index=high.index)})
-        
+
         v_series = L.Series(0.0, index=median_price.index)
         for i in range(len(median_price)):
             if range_val.iloc[i] != 0:
@@ -280,7 +261,7 @@ class RuneWeaver:
                 v_unclamped = 2 * ((current_median - current_min) / current_range - Decimal("0.5"))
                 v_series.iloc[i] = float(max(Decimal("-0.999"), min(Decimal("0.999"), v_unclamped)))
             else: v_series.iloc[i] = 0.0
-        
+
         fisher = L.Series(index=median_price.index, dtype=float)
         for i in range(len(v_series)):
              if (1 - v_series.iloc[i]) != 0: fisher.iloc[i] = 0.5 * M.log((1 + v_series.iloc[i]) / (1 - v_series.iloc[i]))
@@ -306,68 +287,68 @@ class RuneWeaver:
     # (All public indicator methods like sma, ema, rsi, etc. follow, calling their _custom versions)
     # ... This part is long and repetitive, I will assume it's correctly implemented as per previous file content ...
     # --- START OF PUBLIC METHODS (Copied from previous version of ind.py, ensure they call instance _custom methods) ---
-    def sma(self, period: Ah[int] = None, series: Ah[L.Series] = None) -> Ah[IndicatorResult]:
+    def sma(self, period: int | None = None, series: L.Series | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("sma_10_window", DIP["sma_10_window"])
         data_series = series if series is not None else self.data['close']
         result = self._sma_custom(data_series, period) # Call instance method
         return IndicatorResult("sma", result, datetime.now(TZ))
 
-    def volume_sma(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def volume_sma(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("volume_ma_period", DIP["volume_ma_period"])
         result = self._sma_custom(self.data['volume'], period) # Call instance method
         return IndicatorResult("volume_sma", result, datetime.now(TZ))
 
-    def ema(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def ema(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("ema_short_period", DIP["ema_short_period"])
         result = self._ema_custom(self.data['close'], period) # Call instance method
         return IndicatorResult("ema", result, datetime.now(TZ))
 
-    def vwap(self) -> Ah[IndicatorResult]:
+    def vwap(self) -> IndicatorResult | None:
         if not self._validate_data(): return None
         result = self._vwap_custom(self.data['high'], self.data['low'], self.data['close'], self.data['volume']) # Call instance method
         return IndicatorResult("vwap", result, datetime.now(TZ))
 
-    def psar(self, af: Ah[Decimal] = None, max_af: Ah[Decimal] = None) -> Ah[IndicatorResult]:
+    def psar(self, af: Decimal | None = None, max_af: Decimal | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         af = af or self.params.get("psar_af", DIP["psar_af"])
         max_af = max_af or self.params.get("psar_max_af", DIP["psar_max_af"])
         result_df = self._psar_custom(self.data['high'], self.data['low'], self.data['close'], af, max_af) # Call instance method
         return IndicatorResult("psar", result_df, datetime.now(TZ))
 
-    def rsi(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def rsi(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("rsi_window", DIP["rsi_window"])
         result = self._rsi_custom(self.data['close'], period) # Call instance method
         return IndicatorResult("rsi", result, datetime.now(TZ))
 
-    def mom(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def mom(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("momentum_period", DIP["momentum_period"])
         result = self._mom_custom(self.data['close'], period) # Call instance method
         return IndicatorResult("mom", result, datetime.now(TZ))
 
-    def cci(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def cci(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("cci_window", DIP["cci_window"])
         result = self._cci_custom(self.data['high'], self.data['low'], self.data['close'], period) # Call instance method
         return IndicatorResult("cci", result, datetime.now(TZ))
 
-    def willr(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def willr(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("williams_r_window", DIP["williams_r_window"])
         result = self._willr_custom(self.data['high'], self.data['low'], self.data['close'], period) # Call instance method
         return IndicatorResult("willr", result, datetime.now(TZ))
 
-    def mfi(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def mfi(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("mfi_window", DIP["mfi_window"])
         result = self._mfi_custom(self.data['high'], self.data['low'], self.data['close'], self.data['volume'], period) # Call instance method
         return IndicatorResult("mfi", result, datetime.now(TZ))
 
-    def stochrsi(self, period: Ah[int] = None, k: Ah[int] = None, d: Ah[int] = None) -> Ah[IndicatorResult]:
+    def stochrsi(self, period: int | None = None, k: int | None = None, d: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("stoch_rsi_window", DIP["stoch_rsi_window"])
         k = k or self.params.get("k_window", DIP["k_window"])
@@ -375,26 +356,26 @@ class RuneWeaver:
         result_df = self._stochrsi_custom(self.data['close'], period, k, d) # Call instance method
         return IndicatorResult("stochrsi", result_df, datetime.now(TZ))
 
-    def fisher(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def fisher(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("ehlers_fisher_length", DIP["ehlers_fisher_length"])
         result = self._fisher_custom(self.data['high'], self.data['low'], period) # Call instance method
         return IndicatorResult("fisher", result, datetime.now(TZ))
 
-    def atr(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def atr(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("atr_period", DIP["atr_period"])
         result = self._atr_custom(self.data['high'], self.data['low'], self.data['close'], period) # Call instance method
         return IndicatorResult("atr", result, datetime.now(TZ))
 
-    def bollinger_bands(self, period: Ah[int] = None, std_dev: Ah[Decimal] = None) -> Ah[IndicatorResult]:
+    def bollinger_bands(self, period: int | None = None, std_dev: Decimal | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("bollinger_bands_period", DIP["bollinger_bands_period"])
         std_dev = std_dev or self.params.get("bollinger_bands_std_dev", DIP["bollinger_bands_std_dev"])
         result_df = self._bollinger_bands_custom(self.data['close'], period, std_dev) # Call instance method
         return IndicatorResult("bollinger_bands", result_df, datetime.now(TZ))
 
-    def macd(self, fast: Ah[int] = None, slow: Ah[int] = None, signal: Ah[int] = None) -> Ah[IndicatorResult]:
+    def macd(self, fast: int | None = None, slow: int | None = None, signal: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         fast = fast or self.params.get("macd_fast", DIP["macd_fast"])
         slow = slow or self.params.get("macd_slow", DIP["macd_slow"])
@@ -407,7 +388,7 @@ class RuneWeaver:
         result = L.DataFrame({'macd': macd_line, 'signal': signal_line, 'histogram': histogram})
         return IndicatorResult("macd", result, datetime.now(TZ))
 
-    def adx(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def adx(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("adx_period", DIP["adx_period"])
         high, low, close = self.data['high'], self.data['low'], self.data['close']
@@ -422,19 +403,19 @@ class RuneWeaver:
         result = L.DataFrame({'adx': adx_series, 'plus_di': plus_di, 'minus_di': minus_di})
         return IndicatorResult("adx", result, datetime.now(TZ))
 
-    def roc(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def roc(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("roc_period", DIP["roc_period"])
         result = self.data['close'].pct_change(periods=period) * 100
         return IndicatorResult("roc", result, datetime.now(TZ))
 
-    def obv(self) -> Ah[IndicatorResult]:
+    def obv(self) -> IndicatorResult | None:
         if not self._validate_data(): return None
         direction = M.where(self.data['close'].diff() > 0, 1, M.where(self.data['close'].diff() < 0, -1, 0))
         result = (self.data['volume'] * direction).cumsum()
         return IndicatorResult("obv", result, datetime.now(TZ))
 
-    def ichimoku(self, tenkan: Ah[int] = None, kijun: Ah[int] = None, senkou: Ah[int] = None) -> Ah[IndicatorResult]:
+    def ichimoku(self, tenkan: int | None = None, kijun: int | None = None, senkou: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         tenkan = tenkan or self.params.get("ichimoku_tenkan", DIP["ichimoku_tenkan"])
         kijun = kijun or self.params.get("ichimoku_kijun", DIP["ichimoku_kijun"])
@@ -447,7 +428,7 @@ class RuneWeaver:
         result = L.DataFrame({'tenkan_sen': tenkan_sen, 'kijun_sen': kijun_sen, 'senkou_span_a': senkou_span_a, 'senkou_span_b': senkou_span_b, 'chikou_span': chikou_span})
         return IndicatorResult("ichimoku", result, datetime.now(TZ))
 
-    def ehlers_cg(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def ehlers_cg(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("ehlers_cg_period", DIP["ehlers_cg_period"])
         prices = self.data['close']
@@ -458,7 +439,7 @@ class RuneWeaver:
         cg = -num_series / denom.replace(0, M.nan) + (period + 1) / 2
         return IndicatorResult("ehlers_cg", cg, datetime.now(TZ))
 
-    def ehlers_decycler(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def ehlers_decycler(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("ehlers_decycler_period", DIP["ehlers_decycler_period"])
         prices = self.data['close']
@@ -470,7 +451,7 @@ class RuneWeaver:
             decycler.iloc[i] = (1 - alpha_val / 2)**2 * (prices.iloc[i] - 2*prices.iloc[i-1] + prices.iloc[i-2]) + 2*(1 - alpha_val)*decycler.iloc[i-1] - (1 - alpha_val)**2 * decycler.iloc[i-2]
         return IndicatorResult("ehlers_decycler", decycler, datetime.now(TZ))
 
-    def ehlers_smi(self, period: Ah[int] = None, smooth: Ah[int] = None) -> Ah[IndicatorResult]: # smooth param not used in current impl
+    def ehlers_smi(self, period: int | None = None, smooth: int | None = None) -> IndicatorResult | None: # smooth param not used in current impl
         if not self._validate_data(): return None
         period = period or self.params.get("ehlers_smi_period", DIP["ehlers_smi_period"])
         prices = self.data['close']
@@ -482,8 +463,8 @@ class RuneWeaver:
         if len(prices) > 1: filt.iloc[1] = prices.iloc[1]
         for i in range(2, len(prices)): filt.iloc[i] = c1_filter*prices.iloc[i] + c2_filter*filt.iloc[i-1] + c3_filter*filt.iloc[i-2]
         return IndicatorResult("ehlers_super_smoother", filt, datetime.now(TZ))
-        
-    def ehlers_rvi(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+
+    def ehlers_rvi(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("ehlers_rvi_period", DIP["ehlers_rvi_period"])
         val1 = (self.data['close']-self.data['open']) + 2*(self.data['close'].shift(1)-self.data['open'].shift(1)) + 2*(self.data['close'].shift(2)-self.data['open'].shift(2)) + (self.data['close'].shift(3)-self.data['open'].shift(3))
@@ -494,7 +475,7 @@ class RuneWeaver:
         result = L.DataFrame({'rvi': rvi, 'signal': rvi_signal})
         return IndicatorResult("ehlers_rvi", result, datetime.now(TZ))
 
-    def ehlers_mama(self, fast_limit_dec: Ah[Decimal] = None, slow_limit_dec: Ah[Decimal] = None) -> Ah[IndicatorResult]: # Renamed params
+    def ehlers_mama(self, fast_limit_dec: Decimal | None = None, slow_limit_dec: Decimal | None = None) -> IndicatorResult | None: # Renamed params
         if not self._validate_data(): return None
         fast_limit = float(fast_limit_dec or self.params.get("ehlers_mama_fastlimit", DIP["ehlers_mama_fastlimit"]))
         slow_limit = float(slow_limit_dec or self.params.get("ehlers_mama_slowlimit", DIP["ehlers_mama_slowlimit"]))
@@ -537,7 +518,7 @@ class RuneWeaver:
         result = L.DataFrame({'mama':mama,'fama':fama})
         return IndicatorResult("ehlers_mama",result,datetime.now(TZ))
 
-    def dmi(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def dmi(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("dmi_period", DIP["dmi_period"])
         high, low, close = self.data['high'], self.data['low'], self.data['close']
@@ -553,7 +534,7 @@ class RuneWeaver:
         result = L.DataFrame({'adx':adx_series, 'plus_di':plus_di, 'minus_di':minus_di})
         return IndicatorResult("dmi",result,datetime.now(TZ))
 
-    def keltner_channels(self, period: Ah[int] = None, mult: Ah[Decimal] = None) -> Ah[IndicatorResult]:
+    def keltner_channels(self, period: int | None = None, mult: Decimal | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("keltner_period", DIP["keltner_period"])
         mult_float = float(mult or self.params.get("keltner_mult", DIP["keltner_mult"]))
@@ -563,7 +544,7 @@ class RuneWeaver:
         result = L.DataFrame({'upper':upper,'middle':ema_val,'lower':lower})
         return IndicatorResult("keltner_channels",result,datetime.now(TZ))
 
-    def supertrend(self, period: Ah[int] = None, mult: Ah[Decimal] = None) -> Ah[IndicatorResult]:
+    def supertrend(self, period: int | None = None, mult: Decimal | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("supertrend_period",DIP["supertrend_period"])
         mult_float = float(mult or self.params.get("supertrend_mult",DIP["supertrend_mult"]))
@@ -589,7 +570,7 @@ class RuneWeaver:
         result = L.DataFrame({'supertrend':supertrend_series,'trend':trend,'upper':final_upperband,'lower':final_lowerband})
         return IndicatorResult("supertrend",result,datetime.now(TZ))
 
-    def trix(self, length: Ah[int] = None, signal: Ah[int] = None) -> Ah[IndicatorResult]:
+    def trix(self, length: int | None = None, signal: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         length = length or self.params.get("trix_length",DIP["trix_length"])
         signal_len = signal or self.params.get("trix_signal",DIP["trix_signal"])
@@ -599,7 +580,7 @@ class RuneWeaver:
         result = L.DataFrame({'trix':trix_val,'signal':signal_line})
         return IndicatorResult("trix",result,datetime.now(TZ))
 
-    def cmf(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def cmf(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("cmf_period",DIP["cmf_period"])
         high,low,close,volume = self.data['high'],self.data['low'],self.data['close'],self.data['volume']
@@ -608,7 +589,7 @@ class RuneWeaver:
         cmf_val=mfv.rolling(window=period).sum()/volume.rolling(window=period).sum().replace(0,M.nan)
         return IndicatorResult("cmf",cmf_val,datetime.now(TZ))
 
-    def fibonacci_pivots(self, window: Ah[int] = None) -> Ah[IndicatorResult]:
+    def fibonacci_pivots(self, window: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         window = window or self.params.get("pivot_window",DIP["pivot_window"])
         high_roll=self.data['high'].rolling(window=window).max();low_roll=self.data['low'].rolling(window=window).min()
@@ -622,7 +603,7 @@ class RuneWeaver:
         result = L.DataFrame(levels)
         return IndicatorResult("fibonacci_pivots",result,datetime.now(TZ))
 
-    def order_blocks(self, min_candles: Ah[int] = None, volume_threshold: Ah[Decimal] = None) -> Ah[IndicatorResult]:
+    def order_blocks(self, min_candles: int | None = None, volume_threshold: Decimal | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         min_candles = min_candles or self.params.get("order_block_min_candles",DIP["order_block_min_candles"])
         volume_multiplier = float(volume_threshold or self.params.get("order_block_volume_threshold",DIP["order_block_volume_threshold"]))
@@ -635,7 +616,7 @@ class RuneWeaver:
         result = L.DataFrame({'bullish_ob_candidate':bullish_ob_candidate,'bearish_ob_candidate':bearish_ob_candidate})
         return IndicatorResult("order_blocks",result,datetime.now(TZ))
 
-    def volumetric_ma(self, period: Ah[int] = None) -> Ah[IndicatorResult]:
+    def volumetric_ma(self, period: int | None = None) -> IndicatorResult | None:
         if not self._validate_data(): return None
         period = period or self.params.get("volumetric_ma_period",DIP["volumetric_ma_period"])
         typical_price=(self.data['high']+self.data['low']+self.data['close'])/3
@@ -647,7 +628,7 @@ class RuneWeaver:
 
     # --- END OF PUBLIC METHODS ---
 
-    def compute_all(self) -> Dict[str, IndicatorResult]:
+    def compute_all(self) -> dict[str, IndicatorResult]:
         with self._lock:
             self.indicators.clear()
             computed_indicators = {}
@@ -655,10 +636,10 @@ class RuneWeaver:
                 indicator_methods = [
                     self.sma, self.volume_sma, self.ema, self.vwap, self.psar,
                     self.rsi, self.mom, self.cci, self.willr, self.mfi, self.stochrsi, self.fisher,
-                    self.atr, self.bollinger_bands, self.macd, self.adx, self.roc, self.obv, 
-                    self.ichimoku, self.ehlers_cg, self.ehlers_decycler, self.ehlers_smi, 
-                    self.ehlers_rvi, self.ehlers_mama, self.dmi, self.keltner_channels, 
-                    self.supertrend, self.trix, self.cmf, self.fibonacci_pivots, 
+                    self.atr, self.bollinger_bands, self.macd, self.adx, self.roc, self.obv,
+                    self.ichimoku, self.ehlers_cg, self.ehlers_decycler, self.ehlers_smi,
+                    self.ehlers_rvi, self.ehlers_mama, self.dmi, self.keltner_channels,
+                    self.supertrend, self.trix, self.cmf, self.fibonacci_pivots,
                     self.order_blocks, self.volumetric_ma
                 ]
                 for indicator_method in indicator_methods:
@@ -678,12 +659,17 @@ class RuneWeaver:
             self.logger.info(f"{NG}Computed {len(self.indicators)} indicators{RST}")
             return self.indicators
 
-    def get_indicator(self, name: str) -> Ah[IndicatorResult]:
+    def get_indicator(self, name: str) -> IndicatorResult | None:
         with self._lock:
             return self.indicators.get(name)
 
     def print_indicators(self) -> None:
-        from p.scalper import print_neon_header, print_table_header, print_table_row, print_neon_separator # Local import for pscalper UI functions
+        from p.scalper import (  # Local import for pscalper UI functions
+            print_neon_header,
+            print_neon_separator,
+            print_table_header,
+            print_table_row,
+        )
         if not self.indicators:
             self.logger.warning(f"{NY}No indicators computed{RST}")
             return
@@ -711,12 +697,12 @@ class RuneWeaver:
         print("")
 
     @staticmethod
-    def gpp(market_info: Dict[str, Any], logger: Bl.Logger) -> int:
+    def gpp(market_info: dict[str, Any], logger: Bl.Logger) -> int:
         try: return int(market_info.get("precision", {}).get("price", 2))
         except (TypeError, ValueError): logger.warning(f"{NY}Invalid price precision for {market_info.get('symbol', 'UNKNOWN')}. Defaulting to 2.{RST}"); return 2
 
     @staticmethod
-    def gmts(market_info: Dict[str, Any], logger: Bl.Logger) -> Decimal:
+    def gmts(market_info: dict[str, Any], logger: Bl.Logger) -> Decimal:
         try:
             qty_step_raw = market_info.get("info", {}).get('lotSizeFilter', {}).get("qtyStep")
             if qty_step_raw is None: qty_step_raw = market_info.get("precision", {}).get("amount")
@@ -724,7 +710,7 @@ class RuneWeaver:
             return Decimal(str(qty_step_raw))
         except (TypeError, ValueError, InvalidOperation): logger.warning(f"{NY}Invalid qtyStep for {market_info.get('symbol', 'UNKNOWN')}. Default 0.0001.{RST}"); return Decimal('0.0001')
 
-    def _get_latest_indicator_value(self, indicator_key: str, field_name: str = None) -> Ah[Decimal]:
+    def _get_latest_indicator_value(self, indicator_key: str, field_name: str = None) -> Decimal | None:
         indicator_result = self.indicators.get(indicator_key.lower())
         if indicator_result and indicator_result.values is not None:
             val_to_convert = None
@@ -735,7 +721,7 @@ class RuneWeaver:
                 if not indicator_result.values.empty: val_to_convert = indicator_result.values.iloc[-1]
             elif isinstance(indicator_result.values, M.ndarray):
                 if len(indicator_result.values) > 0: val_to_convert = indicator_result.values[-1]
-            
+
             if val_to_convert is None or (isinstance(val_to_convert, float) and M.isnan(val_to_convert)) or L.isna(val_to_convert):
                 self.logger.debug(f"Indicator '{indicator_key}' (field: {field_name}) value is NaN for {self.s}.")
                 return None
@@ -743,19 +729,19 @@ class RuneWeaver:
             except InvalidOperation: self.logger.warning(f"Could not convert '{indicator_key}' value '{val_to_convert}' to Decimal."); return None
         self.logger.debug(f"Indicator '{indicator_key}' (field: {field_name}) not found or values are None for {self.s}.")
         return None
-    
+
     # Scoring methods need to be fully defined here, using self._get_latest_indicator_value
     # and referring to self.cfg and self.indicator_thresholds
     # Example:
-    def _cea(self) -> Tuple[Decimal, Decimal]: # Renamed from _score_ema_alignment
+    def _cea(self) -> tuple[Decimal, Decimal]: # Renamed from _score_ema_alignment
         ema_short_val = self._get_latest_indicator_value("ema_short") # Assuming EMA_Short is a key after compute_all
         ema_long_val = self._get_latest_indicator_value("ema_long")   # Assuming EMA_Long is a key
         close_price_val = self._get_latest_indicator_value("close") # Assuming Close is a key
-        
+
         if ema_short_val is None or ema_long_val is None or close_price_val is None:
             self.logger.debug(f"EMA Alignment check for {self.s} skipped: Missing values.")
             return Decimal(M.nan), self.default_confidence
-        
+
         score = Decimal("0.0")
         confidence = self.default_confidence
         bullish_alignment = close_price_val > ema_short_val > ema_long_val
@@ -777,41 +763,41 @@ class RuneWeaver:
 
     # Implement all other _score_... methods similarly, using self._get_latest_indicator_value
     # For brevity, I will copy the stubs from the previous full ind.py and assume they will be filled.
-    def _score_ema_alignment(self) -> Tuple[Decimal, Decimal]: return self._cea()
-    def _score_momentum(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence # Placeholder
-    def _score_rsi(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence # Placeholder
-    def _score_stoch_rsi(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_cci(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_willr(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_mfi(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_psar(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_sma10(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_vwap(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_bollinger_bands(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_ehlers_fisher(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_macd(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_adx_dmi(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_roc(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_obv(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_ichimoku(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_keltner_channels(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_supertrend(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_trix(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_cmf(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_fibonacci_pivots(self) -> Tuple[Decimal, Decimal]: return Decimal("0.0"), self.default_confidence # Neutral
-    def _score_order_blocks(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_volumetric_ma(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_volume_confirmation(self) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
-    def _score_orderbook(self, orderbook_data: Ah[Dict[str, Any]], current_price: Decimal) -> Tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence # Placeholder
+    def _score_ema_alignment(self) -> tuple[Decimal, Decimal]: return self._cea()
+    def _score_momentum(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence # Placeholder
+    def _score_rsi(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence # Placeholder
+    def _score_stoch_rsi(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_cci(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_willr(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_mfi(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_psar(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_sma10(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_vwap(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_bollinger_bands(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_ehlers_fisher(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_macd(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_adx_dmi(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_roc(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_obv(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_ichimoku(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_keltner_channels(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_supertrend(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_trix(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_cmf(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_fibonacci_pivots(self) -> tuple[Decimal, Decimal]: return Decimal("0.0"), self.default_confidence # Neutral
+    def _score_order_blocks(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_volumetric_ma(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_volume_confirmation(self) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence
+    def _score_orderbook(self, orderbook_data: dict[str, Any] | None, current_price: Decimal) -> tuple[Decimal, Decimal]: return Decimal(M.nan), self.default_confidence # Placeholder
 
-    def gts(self, current_price: Decimal, orderbook_data: Ah[Dict[str, Any]]) -> str:
+    def gts(self, current_price: Decimal, orderbook_data: dict[str, Any] | None) -> str:
         # ... (Full gts logic as in previous ind.py, calling the _score_... methods)
         # This method is complex and relies on all _score_ methods being implemented.
         # For now, returning HOLD to allow script to proceed further for other errors.
         self.logger.info(f"{NB}RuneWeaver.gts called for {self.s}, returning HOLD (scoring logic placeholders).{RST}")
         return "HOLD"
 
-    def cets(self, entry_price_estimate: Decimal, signal: str) -> Tuple[Decimal, Ah[Decimal], Ah[Decimal]]:
+    def cets(self, entry_price_estimate: Decimal, signal: str) -> tuple[Decimal, Decimal | None, Decimal | None]:
         # ... (Full cets logic as in previous ind.py)
         # For now, returning basic pass-through to allow script to proceed.
         self.logger.info(f"{NB}RuneWeaver.cets called for {self.s}, returning basic TP/SL (logic placeholders).{RST}")
@@ -820,8 +806,8 @@ class RuneWeaver:
         sl_price = entry_price_estimate - sl_offset if signal == "BUY" else entry_price_estimate + sl_offset
         tp_price = entry_price_estimate + tp_offset if signal == "BUY" else entry_price_estimate - tp_offset
         return entry_price_estimate, tp_price, sl_price
-    
-    def gnfl(self, current_price: Decimal, num_levels: int = 5) -> List[Tuple[str, Decimal]]: # Added from previous ind.py
+
+    def gnfl(self, current_price: Decimal, num_levels: int = 5) -> list[tuple[str, Decimal]]: # Added from previous ind.py
         if not self.fld: return []
         if not isinstance(current_price, Decimal) or current_price <= 0: return []
         levels_with_distance = []
@@ -831,7 +817,7 @@ class RuneWeaver:
         levels_with_distance.sort(key=lambda x: x["distance"])
         return [(item["name"], item["level"]) for item in levels_with_distance[:num_levels]]
 
-    def cfl(self, window: Ah[int] = None) -> Dict[str, Decimal]: # Added from previous ind.py
+    def cfl(self, window: int | None = None) -> dict[str, Decimal]: # Added from previous ind.py
         if not self._validate_data(): self.fld = {}; return {}
         window = window or self.cfg.get("fibonacci_window", DIP.get("fib_window", 50))
         if len(self.data) < window: self.fld = {}; return {}
@@ -852,7 +838,7 @@ class RuneWeaver:
             self.fld = levels
             return levels
         except Exception: self.fld = {}; return {}
-        
+
     def _uliv(self): # Added from previous ind.py (simplified)
         if self.data is None or self.data.empty: self.iv = {}; return
         latest_row = self.data.iloc[-1]
@@ -888,7 +874,7 @@ if __name__ == "__main__":
 
     mock_cfg = DIP.copy()
     mock_cfg['sma_10_window'] = 3
-    mock_cfg['indicators'] = {k: True for k in DIP.keys()}
+    mock_cfg['indicators'] = dict.fromkeys(DIP.keys(), True)
     mock_cfg['weight_sets'] = {'default': {k: Decimal("0.1") for k in DIP.keys()}}
     mock_cfg['active_weight_set'] = 'default'
     mock_cfg['baseline_signal_score_threshold'] = "0.5"

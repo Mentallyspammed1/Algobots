@@ -1,16 +1,15 @@
-import os
-import platform
-import subprocess
-import time
-from dotenv import load_dotenv
-import requests
-import pandas as pd
 import hashlib
 import hmac
+import os
+import subprocess
+import time
 import urllib.parse
-import json
+
+import pandas as pd
 import pandas_ta as ta
-from colorama import Fore, Style, init
+import requests
+from colorama import Fore, init
+from dotenv import load_dotenv
 
 # Initialize colorama
 init(autoreset=True)
@@ -31,7 +30,7 @@ def synchronize_time():
             return True
         return False
     except Exception as e:
-        print(Fore.RED + f"❌ Time sync failed: {str(e)}")
+        print(Fore.RED + f"❌ Time sync failed: {e!s}")
         return False
 
 # --- Enhanced Configuration Setup ---
@@ -93,7 +92,7 @@ def bybit_request(method, endpoint, params=None, data=None):
         return response.json()
 
     except Exception as e:
-        print(Fore.RED + f"🚨 Request failed: {str(e)}")
+        print(Fore.RED + f"🚨 Request failed: {e!s}")
         return None
 
 # --- Data Fetching ---
@@ -105,7 +104,7 @@ def fetch_klines(symbol, interval, limit=200):
         "limit": limit,
         "category": "linear"
     }
-    
+
     response = bybit_request("GET", "/v5/market/kline", params)
     if response and response['retCode'] == 0:
         df = pd.DataFrame(response['result']['list'], columns=[
@@ -121,48 +120,48 @@ def fetch_klines(symbol, interval, limit=200):
 def detect_pivot_points(df, pivot_left=2, pivot_right=1):
     """Detect pivot points for scalping strategy"""
     resistance, support = [], []
-    
+
     pivot_highs = ta.pivothigh(df['high'], pivot_left, pivot_right)
     pivot_lows = ta.pivotlow(df['low'], pivot_left, pivot_right)
-    
+
     for i in range(len(df)):
         if not pd.isna(pivot_highs[i]):
             resistance.append({'price': pivot_highs[i], 'index': df.index[i]})
         if not pd.isna(pivot_lows[i]):
             support.append({'price': pivot_lows[i], 'index': df.index[i]})
-    
+
     return resistance, support
 
 # --- Signal Generation ---
 def generate_signals(df, resistance, support, stoch_k=14, stoch_d=3):
     """Generate trading signals with StochRSI confirmation"""
     signals = []
-    
+
     # Calculate StochRSI
     stoch = ta.stochrsi(df['close'], length=stoch_k, smooth_k=stoch_d)
     df['stoch_k'] = stoch['STOCHRSI_K']
     df['stoch_d'] = stoch['STOCHRSI_D']
-    
+
     # Check resistance breaks
     for level in resistance:
         idx = df.index.get_loc(level['index'])
         if idx >= len(df) - 1: continue
-        
+
         if df['high'].iloc[idx+1] > level['price'] and \
            df['stoch_k'].iloc[idx] > 80 and \
            df['stoch_k'].iloc[idx] > df['stoch_d'].iloc[idx]:
             signals.append(('BUY', level['price'], df.index[idx+1]))
-    
+
     # Check support breaks
     for level in support:
         idx = df.index.get_loc(level['index'])
         if idx >= len(df) - 1: continue
-        
+
         if df['low'].iloc[idx+1] < level['price'] and \
            df['stoch_k'].iloc[idx] < 20 and \
            df['stoch_k'].iloc[idx] < df['stoch_d'].iloc[idx]:
             signals.append(('SELL', level['price'], df.index[idx+1]))
-    
+
     return signals
 
 # --- Order Management ---
@@ -171,7 +170,7 @@ def execute_trade(signal, symbol, quantity):
     try:
         side = signal[0]
         price = signal[1]
-        
+
         # Place market order
         order = bybit_request("POST", "/v5/order/create", data={
             "symbol": symbol,
@@ -181,24 +180,24 @@ def execute_trade(signal, symbol, quantity):
             "category": "linear",
             "timeInForce": "IOC"
         })
-        
+
         if order and order['retCode'] == 0:
             print(Fore.GREEN + f"✅ {side} order executed at {price}")
             return True
         return False
-        
+
     except Exception as e:
-        print(Fore.RED + f"❌ Trade execution failed: {str(e)}")
+        print(Fore.RED + f"❌ Trade execution failed: {e!s}")
         return False
 
 # --- Main Execution Flow ---
 if __name__ == "__main__":
     if not synchronize_time():
         print(Fore.YELLOW + "⚠️ Proceeding without time sync")
-    
+
     print(Fore.CYAN + "\n🚀 Ultra Scalper Bot")
     print(Fore.CYAN + "====================")
-    
+
     # Get user inputs
     symbol = input(Fore.WHITE + "Enter trading pair (e.g. BTCUSDT): ").upper()
     interval = get_user_input("Chart interval (1m, 5m)", "1m", str)
@@ -209,9 +208,9 @@ if __name__ == "__main__":
     stoch_d = get_user_input("StochRSI D period", 3, int)
     sl_pct = get_user_input("Stop-loss (%)", 0.3, float) / 100
     tp_pct = get_user_input("Take-profit (%)", 0.6, float) / 100
-    
+
     print(Fore.YELLOW + "\n⚡ Starting scalping engine...")
-    
+
     while True:
         try:
             # Fetch latest market data
@@ -219,25 +218,25 @@ if __name__ == "__main__":
             if df is None:
                 time.sleep(2)
                 continue
-                
+
             # Detect pivot points
             resistance, support = detect_pivot_points(df, pivot_left, pivot_right)
-            
+
             # Generate signals
             signals = generate_signals(df, resistance, support, stoch_k, stoch_d)
-            
+
             # Execute trades
             for signal in signals:
                 if execute_trade(signal, symbol, quantity):
                     # Implement immediate SL/TP logic here
                     pass
-                
+
             # Throttle requests to avoid rate limits
             time.sleep(5)
-            
+
         except KeyboardInterrupt:
             print(Fore.RED + "\n🛑 Bot stopped by user")
             break
         except Exception as e:
-            print(Fore.RED + f"🚨 Critical error: {str(e)}")
+            print(Fore.RED + f"🚨 Critical error: {e!s}")
             time.sleep(10)

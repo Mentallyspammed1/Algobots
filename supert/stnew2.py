@@ -1,33 +1,29 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import os
-import time
-import pandas as pd
-import numpy as np
-from decimal import Decimal, ROUND_DOWN, InvalidOperation
+import json
 import logging
-import colorlog
-import threading
+import os
+import random
+import signal
 import subprocess
-from dotenv import load_dotenv
-from pybit.unified_trading import HTTP, WebSocket
-from pybit.exceptions import FailedRequestError, InvalidRequestError
-import ta
-from datetime import datetime, timedelta
-from colorama import init, Fore, Style
+import sys
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from enum import Enum
+from typing import Any
+
+import colorlog
 import dateutil.parser
 import dateutil.tz
-import signal
-import json
-import random
-from types import SimpleNamespace
-from typing import Optional, Dict, Any, List, Tuple
-import sys
-from dataclasses import dataclass, field
-from enum import Enum
-import hmac
-import hashlib
-import requests
+import numpy as np
+import pandas as pd
+import ta
+from colorama import Fore, Style, init
+from dotenv import load_dotenv
+from pybit.exceptions import FailedRequestError, InvalidRequestError
+from pybit.unified_trading import HTTP, WebSocket
 
 # Initialize Colorama for brilliant terminal outputs
 init(autoreset=True)
@@ -50,7 +46,7 @@ tz_mapping = {
     "AEDT": dateutil.tz.gettz("Australia/Sydney"),
 }
 
-def parse_to_utc(dt_str: str) -> Optional[datetime]:
+def parse_to_utc(dt_str: str) -> datetime | None:
     """
     An incantation to transmute a date/time string from any known locale
     or timezone into a pure, naive UTC datetime object.
@@ -169,7 +165,7 @@ class Config:
     API_RETRY_DELAY_SEC: int = field(default=5)
 
     # Termux SMS Notification
-    TERMUX_SMS_RECIPIENT_NUMBER: Optional[str] = field(default=None)
+    TERMUX_SMS_RECIPIENT_NUMBER: str | None = field(default=None)
 
     # New setting for graceful shutdown
     AUTO_CLOSE_ON_SHUTDOWN: bool = field(default=False)
@@ -269,7 +265,7 @@ class Config:
         if self.HEDGE_MODE and self.POSITION_IDX not in [0, 1, 2]:
             print(f"Configuration Error: Invalid POSITION_IDX '{self.POSITION_IDX}'. Must be 0, 1, or 2.")
             sys.exit(1)
-        
+
         # Force leverage to 1 for spot trading to avoid potential API errors or incorrect settings
         if self.CATEGORY_ENUM == Category.SPOT:
             if self.LEVERAGE != 1:
@@ -321,7 +317,7 @@ class PrecisionManager:
     def __init__(self, bybit_session: HTTP, logger: logging.Logger):
         self.session = bybit_session
         self.logger = logger
-        self.instruments: Dict[str, InstrumentSpecs] = {}
+        self.instruments: dict[str, InstrumentSpecs] = {}
         self.load_all_instruments()
 
     def load_all_instruments(self):
@@ -400,7 +396,7 @@ class PrecisionManager:
         min_leverage = safe_decimal(leverage_filter.get('minLeverage'), '1')
         max_leverage = safe_decimal(leverage_filter.get('maxLeverage'), '100') # Default max leverage
         leverage_step = safe_decimal(leverage_filter.get('leverageStep'), '0.1')
-        
+
         contract_value = safe_decimal(inst.get('contractValue'), '1') # e.g., 1 for BTCUSDT perpetual
 
         maker_fee = safe_decimal(inst.get('makerFeeRate'), '0.0001')
@@ -429,7 +425,7 @@ class PrecisionManager:
             taker_fee=taker_fee
         )
 
-    def get_specs(self, symbol: str) -> Optional[InstrumentSpecs]:
+    def get_specs(self, symbol: str) -> InstrumentSpecs | None:
         """Get instrument specs for a symbol"""
         return self.instruments.get(symbol.upper())
 
@@ -448,11 +444,11 @@ class PrecisionManager:
 
             # Round value to the nearest multiple of step, then quantize to step's precision
             rounded_value = (value / step).quantize(Decimal('1'), rounding=ROUND_DOWN) * step
-            
+
             # Final quantization to ensure correct decimal places based on the step's precision
             # E.g., if step is 0.001, we want 3 decimal places.
             rounded_value = rounded_value.quantize(Decimal(precision_str), rounding=ROUND_DOWN)
-            
+
             return rounded_value
         except Exception as e:
             self.logger.error(f"Error rounding decimal value {value} with step {step}: {e}", exc_info=True)
@@ -486,7 +482,7 @@ class PrecisionManager:
         self.logger.debug(f"Rounding quantity {qty_decimal} for {symbol} with step {qty_step} -> {rounded} (Min: {specs.min_order_qty}, Max: {specs.max_order_qty})")
         return rounded
 
-    def get_decimal_places(self, symbol: str) -> Tuple[int, int]:
+    def get_decimal_places(self, symbol: str) -> tuple[int, int]:
         """Get decimal places for price and quantity based on tick_size and qty_step."""
         specs = self.get_specs(symbol)
         if not specs:
@@ -522,7 +518,7 @@ class OrderSizingCalculator:
         entry_price: Decimal,
         stop_loss_price: Decimal,
         leverage: Decimal
-    ) -> Optional[Decimal]:
+    ) -> Decimal | None:
         """
         Calculate position size in base currency units based on fixed risk percentage, leverage,
         entry price, and stop loss price. Returns None if calculation is not possible.
@@ -582,7 +578,7 @@ class OrderSizingCalculator:
         if position_value_usd < specs.min_position_value:
             self.logger.warning(f"Calculated position value ({position_value_usd:.{self.precision.get_decimal_places(symbol)[0]}f} USD) is below minimum ({specs.min_position_value:.{self.precision.get_decimal_places(symbol)[0]}f} USD). Using minimum.")
             position_value_usd = specs.min_position_value
-        
+
         # Convert position value to quantity in base currency units (category-specific)
         # For linear and spot: Value (Quote) = Quantity (Base) * Price (Quote/Base)
         if entry_price > Decimal('0'):
@@ -642,7 +638,7 @@ class TrailingStopManager:
         self.logger = logger
         self.api_call = api_call_wrapper # Reference to the bot's api_call method
         # Stores active trailing stop info: {symbol: {'side': 'Buy'/'Sell', 'trail_percent': Decimal}}
-        self.active_trailing_stops: Dict[str, dict] = {}
+        self.active_trailing_stops: dict[str, dict] = {}
 
     def initialize_trailing_stop(
         self,
@@ -762,23 +758,23 @@ class TermuxSMSNotifier:
     A digital carrier pigeon to send urgent messages via Termux SMS,
     alerting the wizard directly on their Android device.
     """
-    def __init__(self, recipient_number: Optional[str], logger: logging.Logger, price_precision: int):
+    def __init__(self, recipient_number: str | None, logger: logging.Logger, price_precision: int):
         self.recipient_number = recipient_number
         self.logger = logger
         self.price_precision = price_precision
-        
+
         if not self.recipient_number:
             self.logger.warning(Fore.YELLOW + "TERMUX_SMS_RECIPIENT_NUMBER not set. SMS notifications will be disabled." + Style.RESET_ALL)
             self.is_enabled = False
         else:
             self.logger.info(Fore.CYAN + f"Termux SMS Notifier initialized for {self.recipient_number}." + Style.RESET_ALL)
             self.is_enabled = True
-    
+
     def send_sms(self, message: str):
         """Send message via Termux SMS."""
         if not self.is_enabled:
             return
-        
+
         try:
             # check=True will raise CalledProcessError if command returns non-zero exit code
             # capture_output=True prevents output from being printed to console directly
@@ -790,12 +786,12 @@ class TermuxSMSNotifier:
             self.logger.error(Fore.RED + f"Termux SMS command failed with error: {e.stderr.decode().strip()}" + Style.RESET_ALL)
         except Exception as e:
             self.logger.error(Fore.RED + f"Failed to send Termux SMS: {e}" + Style.RESET_ALL)
-            
+
     def send_trade_alert(self, side: str, symbol: str, price: float, sl: float, tp: float, reason: str):
         emoji = "🟢" if side == "Buy" else "🔴"
         message = f"{emoji} {side} {symbol}\nEntry: ${price:.{self.price_precision}f}\nSL: ${sl:.{self.price_precision}f}\nTP: ${tp:.{self.price_precision}f}\nReason: {reason}\nTime: {datetime.now().strftime('%H:%M:%S')}"
         self.send_sms(message)
-        
+
     def send_pnl_update(self, pnl: float, balance: float):
         emoji = "✅" if pnl >= 0 else "❌" # Use >= 0 for green for break-even or profit
         message = f"{emoji} Position Closed\nP&L: ${pnl:.2f}\nBalance: ${balance:.2f}\nTime: {datetime.now().strftime('%H:%M:%S')}"
@@ -823,29 +819,29 @@ class BybitClient:
     # The _generate_signature and get_wallet_balance via requests.get were removed.
     # All methods should ideally use self.session (pybit.HTTP) for consistency.
 
-    def get_server_time(self) -> Dict[str, Any]:
+    def get_server_time(self) -> dict[str, Any]:
         """Fetches server time (used for credential validation)."""
         return self.session.get_server_time()
 
-    def get_instruments_info(self, symbol: Optional[str] = None, category: Optional[str] = None) -> Dict[str, Any]:
+    def get_instruments_info(self, symbol: str | None = None, category: str | None = None) -> dict[str, Any]:
         """List active trading symbols and product info."""
         params = {'category': category or self._default_category}
         if symbol:
             params['symbol'] = symbol
         return self.session.get_instruments_info(**params)
 
-    def get_wallet_balance(self, accountType: str = 'UNIFIED', coin: Optional[str] = None) -> Dict[str, Any]:
+    def get_wallet_balance(self, accountType: str = 'UNIFIED', coin: str | None = None) -> dict[str, Any]:
         """Fetch wallet balance from Bybit V5 API using pybit."""
         params = {'accountType': accountType}
         if coin:
             params['coin'] = coin
         return self.session.get_wallet_balance(**params)
 
-    def get_kline(self, symbol: str, interval: str, limit: int = 200, category: Optional[str] = None) -> Dict[str, Any]:
+    def get_kline(self, symbol: str, interval: str, limit: int = 200, category: str | None = None) -> dict[str, Any]:
         """Fetches historical candlestick data."""
         return self.session.get_kline(category=category or self._default_category, symbol=symbol, interval=interval, limit=limit)
 
-    def get_positions(self, symbol: Optional[str] = None, category: Optional[str] = None) -> Dict[str, Any]:
+    def get_positions(self, symbol: str | None = None, category: str | None = None) -> dict[str, Any]:
         """Lists active positions."""
         params = {'category': category or self._default_category}
         if symbol:
@@ -853,12 +849,12 @@ class BybitClient:
         return self.session.get_positions(**params)
 
     def place_order(self, symbol: str, side: str, orderType: str, qty: str,
-                    price: Optional[str] = None, stopLoss: Optional[str] = None,
-                    takeProfit: Optional[str] = None, reduceOnly: bool = False,
-                    category: Optional[str] = None, timeInForce: str = "GTC",
+                    price: str | None = None, stopLoss: str | None = None,
+                    takeProfit: str | None = None, reduceOnly: bool = False,
+                    category: str | None = None, timeInForce: str = "GTC",
                     closeOnTrigger: bool = False, positionIdx: int = 0,
-                    slOrderType: Optional[str] = None, tpOrderType: Optional[str] = None,
-                    tpslMode: Optional[str] = None) -> Dict[str, Any]:
+                    slOrderType: str | None = None, tpOrderType: str | None = None,
+                    tpslMode: str | None = None) -> dict[str, Any]:
         """Places a new order."""
         params = {
             'category': category or self._default_category,
@@ -882,10 +878,10 @@ class BybitClient:
 
         return self.session.place_order(**params)
 
-    def set_trading_stop(self, symbol: str, side: str, callbackRate: Optional[str] = None,
-                         stopLoss: Optional[str] = None, takeProfit: Optional[str] = None,
-                         category: Optional[str] = None, slOrderType: Optional[str] = None,
-                         tpOrderType: Optional[str] = None) -> Dict[str, Any]:
+    def set_trading_stop(self, symbol: str, side: str, callbackRate: str | None = None,
+                         stopLoss: str | None = None, takeProfit: str | None = None,
+                         category: str | None = None, slOrderType: str | None = None,
+                         tpOrderType: str | None = None) -> dict[str, Any]:
         """Manages TP/SL/Trailing Stops."""
         params = {
             'category': category or self._default_category,
@@ -901,37 +897,37 @@ class BybitClient:
             if tpOrderType: params['tpOrderType'] = tpOrderType
         return self.session.set_trading_stop(**params)
 
-    def get_order_history(self, symbol: str, orderId: Optional[str] = None, limit: int = 50,
-                          category: Optional[str] = None) -> Dict[str, Any]:
+    def get_order_history(self, symbol: str, orderId: str | None = None, limit: int = 50,
+                          category: str | None = None) -> dict[str, Any]:
         """Fetches order history."""
         params = {'category': category or self._default_category, 'symbol': symbol, 'limit': limit}
         if orderId: params['orderId'] = orderId
         return self.session.get_order_history(**params)
 
-    def get_open_orders(self, symbol: str, orderId: Optional[str] = None, limit: int = 50,
-                        category: Optional[str] = None) -> Dict[str, Any]:
+    def get_open_orders(self, symbol: str, orderId: str | None = None, limit: int = 50,
+                        category: str | None = None) -> dict[str, Any]:
         """Fetches currently open orders."""
         params = {'category': category or self._default_category, 'symbol': symbol, 'limit': limit}
         if orderId: params['orderId'] = orderId
         return self.session.get_open_orders(**params)
 
-    def cancel_order(self, category: str, symbol: str, orderId: str) -> Dict[str, Any]:
+    def cancel_order(self, category: str, symbol: str, orderId: str) -> dict[str, Any]:
         """Cancels a specific order."""
         return self.session.cancel_order(category=category, symbol=symbol, orderId=orderId)
 
-    def cancel_all_orders(self, category: str, symbol: str) -> Dict[str, Any]:
+    def cancel_all_orders(self, category: str, symbol: str) -> dict[str, Any]:
         """Cancels all open orders for a symbol."""
         return self.session.cancel_all_orders(category=category, symbol=symbol)
 
-    def switch_margin_mode(self, category: str, symbol: str, tradeMode: str) -> Dict[str, Any]:
+    def switch_margin_mode(self, category: str, symbol: str, tradeMode: str) -> dict[str, Any]:
         """Switches margin mode for a symbol."""
         return self.session.switch_margin_mode(category=category, symbol=symbol, tradeMode=tradeMode)
 
-    def set_leverage(self, category: str, symbol: str, buyLeverage: str, sellLeverage: str) -> Dict[str, Any]:
+    def set_leverage(self, category: str, symbol: str, buyLeverage: str, sellLeverage: str) -> dict[str, Any]:
         """Sets leverage for a symbol."""
         return self.session.set_leverage(category=category, symbol=symbol, buyLeverage=buyLeverage, sellLeverage=sellLeverage)
 
-    def get_tickers(self, category: str, symbol: str) -> Dict[str, Any]:
+    def get_tickers(self, category: str, symbol: str) -> dict[str, Any]:
         """Fetches ticker information."""
         return self.session.get_tickers(category=category, symbol=symbol)
 
@@ -1017,20 +1013,20 @@ class BotState:
     ensuring that all modules, especially the UI, can read consistent data.
     """
     lock: threading.Lock = field(default_factory=threading.Lock) # Guards against simultaneous writes from different threads
-    
+
     current_price: Decimal = field(default=Decimal('0.0'))
     bid_price: Decimal = field(default=Decimal('0.0'))
     ask_price: Decimal = field(default=Decimal('0.0'))
-    
+
     ehlers_supertrend_value: Decimal = field(default=Decimal('0.0')) # The actual ST line value
     ehlers_supertrend_direction: str = field(default="NONE") # e.g., "UP", "DOWN"
     ehlers_filter_value: Decimal = field(default=Decimal('0.0')) # From Ehlers Adaptive Trend custom filter
-    
+
     adx_value: Decimal = field(default=Decimal('0.0'))
     adx_plus_di: Decimal = field(default=Decimal('0.0'))
     adx_minus_di: Decimal = field(default=Decimal('0.0'))
     adx_trend_strength: str = field(default="N/A") # e.g., "Weak", "Developing", "Strong"
-    
+
     rsi_value: Decimal = field(default=Decimal('0.0'))
     rsi_state: str = field(default="N/A") # e.g., "Overbought", "Oversold", "Neutral"
 
@@ -1046,12 +1042,12 @@ class BotState:
     unrealized_pnl: Decimal = field(default=Decimal('0.0'))
     unrealized_pnl_pct: Decimal = field(default=Decimal('0.0'))
     realized_pnl_total: Decimal = field(default=Decimal('0.0')) # Cumulative PnL from closed trades
-    
+
     last_updated_time: datetime = field(default_factory=datetime.now)
     bot_status: str = field(default="Initializing")
     symbol: str = field(default="")
     timeframe: str = field(default="")
-    price_precision: int = field(default=3) 
+    price_precision: int = field(default=3)
     qty_precision: int = field(default=1)
     dry_run: bool = field(default=False)
     testnet: bool = field(default=True) # Added testnet status for UI
@@ -1088,11 +1084,11 @@ class BotUI(threading.Thread):
     def _render_ui(self):
         """Renders the entire UI to the console."""
         self._clear_screen()
-        
+
         with self.bot_state.lock:
             # Create a local copy of the state for consistent display during rendering
-            state = self.bot_state 
-            
+            state = self.bot_state
+
             # Formatting and Coloring Logic
             pnl_color_realized = Fore.GREEN if state.realized_pnl_total >= Decimal('0') else Fore.RED
             pnl_color_unrealized = Fore.GREEN if state.unrealized_pnl >= Decimal('0') else Fore.RED
@@ -1110,13 +1106,13 @@ class BotUI(threading.Thread):
                 rsi_color = Fore.RED
             elif state.rsi_state == "Oversold":
                 rsi_color = Fore.GREEN
-            
+
             ehlers_color = Fore.WHITE
             if state.ehlers_supertrend_direction == "UP":
                 ehlers_color = Fore.LIGHTGREEN_EX
             elif state.ehlers_supertrend_direction == "DOWN":
                 ehlers_color = Fore.LIGHTRED_EX
-            
+
             # --- UI Layout ---
             # Main Header
             print(f"{Fore.CYAN}╔═══════════════════════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
@@ -1127,13 +1123,13 @@ class BotUI(threading.Thread):
             print(f"{Fore.CYAN}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
             status_text_display = f"Status: {Fore.GREEN}{state.bot_status} ({'TESTNET' if state.testnet else 'MAINNET'}){Fore.CYAN}"
             last_update_text = f"Last Updated: {state.last_updated_time.strftime('%H:%M:%S')}"
-            
+
             # Calculate padding dynamically, accounting for color codes
             # Estimate length without color codes for status_text_display
             status_len_no_color = len(state.bot_status) + len(f" ({'TESTNET' if state.testnet else 'MAINNET'})")
             # Total content length: "Status: " + status_len_no_color + "Last Updated: " + len(last_update_text)
             padding_len = 73 - (len("Status: ") + status_len_no_color + len("Last Updated: ") + len(last_update_text))
-            
+
             print(f"{Fore.CYAN}║ {status_text_display}{' ' * padding_len}{last_update_text} {Fore.CYAN}║{Style.RESET_ALL}")
             print(f"{Fore.CYAN}╚═══════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}\n")
 
@@ -1141,15 +1137,15 @@ class BotUI(threading.Thread):
             print(f"{Fore.BLUE}╔═══════════════════════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
             print(f"{Fore.BLUE}║ MARKET DATA                                                               {Fore.BLUE}║{Style.RESET_ALL}")
             print(f"{Fore.BLUE}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
-            
+
             # Current Price string, with dynamic precision
             current_price_str = f"${state.current_price:.{state.price_precision}f}"
             print(f"{Fore.BLUE}║ Current Price:          {Fore.YELLOW}{current_price_str}{Fore.BLUE:<{73 - len('Current Price:          ') - len(current_price_str)}}║{Style.RESET_ALL}")
-            
+
             # Bid Price string, with dynamic precision
             bid_price_str = f"${state.bid_price:.{state.price_precision}f}"
             print(f"{Fore.BLUE}║ Bid:                    {Fore.YELLOW}{bid_price_str}{Fore.BLUE:<{73 - len('Bid:                    ') - len(bid_price_str)}}║{Style.RESET_ALL}")
-            
+
             # Ask Price string, with dynamic precision
             ask_price_str = f"${state.ask_price:.{state.price_precision}f}"
             print(f"{Fore.BLUE}║ Ask:                    {Fore.YELLOW}{ask_price_str}{Fore.BLUE:<{73 - len('Ask:                    ') - len(ask_price_str)}}║{Style.RESET_ALL}")
@@ -1159,16 +1155,16 @@ class BotUI(threading.Thread):
             print(f"{Fore.MAGENTA}╔═══════════════════════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
             print(f"{Fore.MAGENTA}║ INDICATOR VALUES                                                          {Fore.MAGENTA}║{Style.RESET_ALL}")
             print(f"{Fore.MAGENTA}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
-            
+
             ehlers_st_val_str = f"${state.ehlers_supertrend_value:.{state.price_precision}f}"
             ehlers_st_display_str = f"{ehlers_st_val_str} ({state.ehlers_supertrend_direction})"
             # Calculate padding based on actual string length including color codes
             ehlers_st_display_len_no_color = len(ehlers_st_display_str)
             print(f"{Fore.MAGENTA}║ Ehlers SuperTrend:      {ehlers_color}{ehlers_st_display_str}{Fore.MAGENTA:<{73 - len('Ehlers SuperTrend:      ') - ehlers_st_display_len_no_color}}{Fore.CYAN}║{Style.RESET_ALL}")
-            
+
             ehlers_filter_str = f"{state.ehlers_filter_value:.2f}"
             print(f"{Fore.MAGENTA}║ Ehlers Filter:          {Fore.WHITE}{ehlers_filter_str}{Fore.MAGENTA:<{73 - len('Ehlers Filter:          ') - len(ehlers_filter_str)}}║{Style.RESET_ALL}")
-            
+
             adx_str = f"{state.adx_value:.1f} (Trend: {state.adx_trend_strength})"
             adx_str_len_no_color = len(adx_str)
             print(f"{Fore.MAGENTA}║ ADX:                    {adx_color}{adx_str}{Fore.MAGENTA:<{73 - len('ADX:                    ') - adx_str_len_no_color}}{Fore.CYAN}║{Style.RESET_ALL}")
@@ -1190,10 +1186,10 @@ class BotUI(threading.Thread):
             print(f"{Fore.GREEN}╔═══════════════════════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
             print(f"{Fore.GREEN}║ PORTFOLIO & PNL                                                           {Fore.GREEN}║{Style.RESET_ALL}")
             print(f"{Fore.GREEN}╠═══════════════════════════════════════════════════════════════════════════╣{Style.RESET_ALL}")
-            
+
             initial_equity_str = f"${state.initial_equity:.2f}"
             print(f"{Fore.GREEN}║ Initial Equity:         {Fore.WHITE}{initial_equity_str}{Fore.GREEN:<{73 - len('Initial Equity:         ') - len(initial_equity_str)}}║{Style.RESET_ALL}")
-            
+
             current_equity_str = f"${state.current_equity:.2f}"
             equity_change_pct_val = Decimal('0.0')
             if state.initial_equity > Decimal('0'): # Avoid division by zero
@@ -1210,7 +1206,7 @@ class BotUI(threading.Thread):
                 entry_price_str = f"${state.open_position_entry_price:.{state.price_precision}f}"
                 unrealized_pnl_str = f"${state.unrealized_pnl:.2f} ({state.unrealized_pnl_pct:+.2f}%)" # PNL to 2 decimals, PCT to 2 decimals
                 unrealized_pnl_len_no_color = len(unrealized_pnl_str)
-                
+
                 print(f"{Fore.GREEN}║ Open Position:          {Fore.WHITE}{pos_info}{Fore.GREEN:<{73 - len('Open Position:          ') - len(pos_info)}}║{Style.RESET_ALL}")
                 print(f"{Fore.GREEN}║ Avg Entry Price:        {Fore.WHITE}{entry_price_str}{Fore.GREEN:<{73 - len('Avg Entry Price:        ') - len(entry_price_str)}}║{Style.RESET_ALL}")
                 print(f"{Fore.GREEN}║ Unrealized PNL:         {pnl_color_unrealized}{unrealized_pnl_str}{Fore.GREEN:<{73 - len('Unrealized PNL:         ') - unrealized_pnl_len_no_color}}{Fore.CYAN}║{Style.RESET_ALL}")
@@ -1244,16 +1240,16 @@ class BotUI(threading.Thread):
 class EhlersSuperTrendBot:
     def __init__(self, config: Config):
         self.config = config
-        
+
         # --- Logger Setup ---
         global logger # Use the global logger instance
         logger = setup_logger(config) # Reconfigure it with the bot's config
         self.logger = logger
         self.logger.info("Initializing Ehlers SuperTrend Trading Bot...")
-        
+
         # --- BotState Initialization (for UI) ---
         self.bot_state = BotState()
-        
+
         # --- API Session Initialization (using BybitClient) ---
         self.bybit_client = BybitClient(
             api_key=self.config.API_KEY,
@@ -1261,7 +1257,7 @@ class EhlersSuperTrendBot:
             testnet=self.config.TESTNET,
             default_category=self.config.CATEGORY_ENUM.value
         )
-        self.ws: Optional[WebSocket] = None # WebSocket instance
+        self.ws: WebSocket | None = None # WebSocket instance
         self.stop_event = threading.Event() # Event to signal threads to stop
 
         # --- Managers Initialization ---
@@ -1269,7 +1265,7 @@ class EhlersSuperTrendBot:
         self.order_sizer = OrderSizingCalculator(self.precision_manager, self.logger)
         # TrailingStopManager needs the bot's api_call wrapper
         self.trailing_stop_manager = TrailingStopManager(self.bybit_client.session, self.precision_manager, self.logger, self.api_call)
-        
+
         # --- Termux SMS Notifier ---
         # Get initial precision for SMS notifier
         price_prec, _ = self.precision_manager.get_decimal_places(self.config.SYMBOL)
@@ -1278,20 +1274,20 @@ class EhlersSuperTrendBot:
             logger=self.logger,
             price_precision=price_prec
         )
-        
+
         # --- Data Storage ---
         self.market_data: pd.DataFrame = pd.DataFrame() # Stores historical klines with indicators
-        self.current_positions: Dict[str, dict] = {} # {symbol: position_data}
-        self.open_orders: Dict[str, dict] = {} # {order_id: order_data}
+        self.current_positions: dict[str, dict] = {} # {symbol: position_data}
+        self.open_orders: dict[str, dict] = {} # {order_id: order_data}
         self.account_balance_usdt: Decimal = Decimal('0.0')
-        self.initial_equity: Decimal = Decimal('0.0') 
-        
+        self.initial_equity: Decimal = Decimal('0.0')
+
         # --- Strategy State ---
         self.position_active: bool = False
-        self.current_position_side: Optional[str] = None # 'Buy' or 'Sell'
+        self.current_position_side: str | None = None # 'Buy' or 'Sell'
         self.current_position_entry_price: Decimal = Decimal('0')
         self.current_position_size: Decimal = Decimal('0')
-        self.last_signal: Optional[str] = None # Stores the last signal acted upon
+        self.last_signal: str | None = None # Stores the last signal acted upon
         self.last_kline_ts: int = 0 # Unix timestamp of the last processed confirmed candle
         self.last_trade_time: float = 0.0 # For trade cooldown
         self.cumulative_pnl: Decimal = Decimal('0.0') # Total realized PnL for cumulative loss guard
@@ -1309,13 +1305,13 @@ class EhlersSuperTrendBot:
         self._validate_api_credentials() # Test API connection and keys
         self._validate_symbol_timeframe() # Validate symbol and timeframe
         self._capture_initial_equity() # Capture initial equity for cumulative loss protection
-        
+
         if self.config.CATEGORY_ENUM != Category.SPOT:
             self._configure_trading_parameters() # Set margin mode and leverage for derivatives
         else:
-            self.logger.info(f"Leverage set to 1 for SPOT category as it's not applicable.")
+            self.logger.info("Leverage set to 1 for SPOT category as it's not applicable.")
 
-        self.logger.info(f"Bot Configuration Loaded:")
+        self.logger.info("Bot Configuration Loaded:")
         self.logger.info(f"  Mode: {'Testnet' if config.TESTNET else 'Mainnet'}")
         self.logger.info(f"  Dry Run: {config.DRY_RUN}")
         self.logger.info(f"  Symbol: {config.SYMBOL}, Category: {config.CATEGORY_ENUM.value}")
@@ -1344,7 +1340,7 @@ class EhlersSuperTrendBot:
         self.logger.info(f"Signal {signum} received, stopping bot gracefully...")
         self.stop_event.set() # Signal all threads to stop
 
-    def _handle_bybit_response(self, response: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _handle_bybit_response(self, response: dict[str, Any]) -> dict[str, Any] | None:
         """
         Parses Bybit API JSON response, enforcing success checks and raising
         specific exceptions for known error codes. Returns the 'result' data on success.
@@ -1352,14 +1348,14 @@ class EhlersSuperTrendBot:
         if not isinstance(response, dict):
             self.logger.error(Fore.RED + f"Unexpected API response format: {type(response).__name__}, expected a dict." + Style.RESET_ALL)
             raise ValueError("Unexpected API response format, expected a dict")
-        
+
         ret_code = response.get('retCode')
         ret_msg = response.get('retMsg', 'No message provided')
         result = response.get('result')
-        
+
         if ret_code != 0:
             # Common authentication / permission errors
-            if ret_code in {10001, 10002, 10003, 10004, 10005, 130006}: 
+            if ret_code in {10001, 10002, 10003, 10004, 10005, 130006}:
                 self.logger.critical(Fore.RED + f"Fatal Bybit API authentication error {ret_code}: {ret_msg}." + Style.RESET_ALL)
                 subprocess.run(["termux-toast", f"Ehlers Bot: Fatal API Auth Error {ret_code}"])
                 if self.sms_notifier.is_enabled:
@@ -1376,15 +1372,15 @@ class EhlersSuperTrendBot:
             # if self.sms_notifier.is_enabled:
             #     self.sms_notifier.send_sms(f"ERROR: Bybit API error {ret_code} for {self.config.SYMBOL}: {ret_msg}")
             raise RuntimeError(f"Bybit API returned error {ret_code}: {ret_msg}")
-        
+
         # Even if retCode is 0, ensure 'result' field is present for data calls
         if result is None:
             self.logger.warning(Fore.YELLOW + "Bybit API response missing 'result' field despite success code. Returning empty dict." + Style.RESET_ALL)
             return {}
-        
+
         return result
 
-    def api_call(self, api_method: Any, no_retry_codes: Optional[List[int]] = None, **kwargs) -> Optional[Dict[str, Any]]:
+    def api_call(self, api_method: Any, no_retry_codes: list[int] | None = None, **kwargs) -> dict[str, Any] | None:
         """
         A resilient incantation to invoke pybit HTTP methods,
         equipped with retries, exponential backoff (with jitter), and wise error handling.
@@ -1397,11 +1393,11 @@ class EhlersSuperTrendBot:
                 raw_resp = api_method(**kwargs)
                 result_data = self._handle_bybit_response(raw_resp)
                 return result_data # Success, return the extracted result
-            
+
             except PermissionError as e:
                 self.logger.critical(Fore.RED + Style.BRIGHT + f"Fatal API error: {e}. Exiting bot." + Style.RESET_ALL)
                 sys.exit(1) # Halt the bot immediately
-            
+
             except (ConnectionRefusedError, RuntimeError, FailedRequestError, InvalidRequestError) as e:
                 # Check for specific non-retriable error codes from the original Bybit response (if available)
                 if isinstance(e, (FailedRequestError, InvalidRequestError)):
@@ -1413,7 +1409,7 @@ class EhlersSuperTrendBot:
                         raise e # Re-raise immediately if it's a non-retriable pybit error
 
                 if self.stop_event.is_set(): # Check if shutdown is requested during retry loop
-                    self.logger.warning(f"Shutdown requested during API retry. Aborting retries.")
+                    self.logger.warning("Shutdown requested during API retry. Aborting retries.")
                     return None
 
                 if attempt == self.config.MAX_API_RETRIES:
@@ -1422,15 +1418,15 @@ class EhlersSuperTrendBot:
                     if self.sms_notifier.is_enabled:
                         self.sms_notifier.send_sms(f"CRITICAL: API call failed after {self.config.MAX_API_RETRIES} retries for {self.config.SYMBOL}: {e}")
                     return None
-                
+
                 sleep_time = min(60.0, self.config.API_RETRY_DELAY_SEC * (2 ** (attempt - 1)))
                 sleep_time *= (1.0 + random.uniform(-0.2, 0.2)) # Add jitter for backoff
                 self.logger.warning(Fore.YELLOW + f"API transient error: {e} | Retrying {attempt}/{self.config.MAX_API_RETRIES} in {sleep_time:.1f}s" + Style.RESET_ALL)
                 time.sleep(sleep_time)
-            
+
             except Exception as e:
                 if self.stop_event.is_set(): # Check if shutdown is requested during retry loop
-                    self.logger.warning(f"Shutdown requested during API retry. Aborting retries.")
+                    self.logger.warning("Shutdown requested during API retry. Aborting retries.")
                     return None
 
                 if attempt == self.config.MAX_API_RETRIES:
@@ -1439,12 +1435,12 @@ class EhlersSuperTrendBot:
                     if self.sms_notifier.is_enabled:
                         self.sms_notifier.send_sms(f"CRITICAL: API call failed unexpectedly after {self.config.MAX_API_RETRIES} retries for {self.config.SYMBOL}: {e}")
                     return None
-                
+
                 sleep_time = min(60.0, self.config.API_RETRY_DELAY_SEC * (2 ** (attempt - 1)))
                 sleep_time *= (1.0 + random.uniform(-0.2, 0.2)) # Add jitter for backoff
                 self.logger.warning(Fore.YELLOW + f"API unexpected exception: {e} | Retrying {attempt}/{self.config.MAX_API_RETRIES} in {sleep_time:.1f}s" + Style.RESET_ALL)
                 time.sleep(sleep_time)
-        
+
         self.logger.error(Fore.RED + "API call exhausted retries and did not return success." + Style.RESET_ALL)
         return None
 
@@ -1525,7 +1521,7 @@ class EhlersSuperTrendBot:
         exceeds the predefined maximum loss threshold from the initial equity.
         """
         current_equity = self.get_account_balance_usdt() # This also updates bot_state.current_equity
-        
+
         if self.initial_equity <= Decimal('0') or current_equity <= Decimal('0'): # Ensure valid initial and current equity
             self.logger.warning(Fore.YELLOW + "Could not fetch valid initial or current equity for cumulative loss guard. Proceeding cautiously." + Style.RESET_ALL)
             # Fallback to cumulative PnL-based logic if initial equity wasn't captured or current is zero
@@ -1546,7 +1542,7 @@ class EhlersSuperTrendBot:
             subprocess.run(["termux-toast", f"Cumulative Loss Limit Reached! Drawdown: {drop_pct:.2f}%"])
             if self.sms_notifier.is_enabled:
                 self.sms_notifier.send_sms(f"CRITICAL: Cumulative equity drawdown {drop_pct:.2f}% exceeded limit for {self.config.SYMBOL}. Trading halted!")
-            
+
             # Optional: close open position if loss limit is hit
             if self.position_active: # Check bot's internal state
                 self.logger.warning(Fore.YELLOW + "Closing open position due to cumulative loss limit enchantment." + Style.RESET_ALL)
@@ -1558,7 +1554,7 @@ class EhlersSuperTrendBot:
     # DATA FETCHING METHODS
     # =====================================================================
 
-    def fetch_klines(self, limit: Optional[int] = None) -> pd.DataFrame:
+    def fetch_klines(self, limit: int | None = None) -> pd.DataFrame:
         """Fetch historical kline data from Bybit."""
         try:
             fetch_limit = limit if limit else self.config.LOOKBACK_PERIODS
@@ -1616,7 +1612,7 @@ class EhlersSuperTrendBot:
             self.logger.error(f"Exception fetching klines for {self.config.SYMBOL}: {e}", exc_info=True)
             return pd.DataFrame()
 
-    def _get_current_orderbook(self) -> Tuple[Decimal, Decimal]:
+    def _get_current_orderbook(self) -> tuple[Decimal, Decimal]:
         """Fetches the top bid and ask prices from the ticker for UI."""
         try:
             response_data = self.api_call(
@@ -1654,7 +1650,7 @@ class EhlersSuperTrendBot:
                                     self.bot_state.current_equity = balance
                                 self.logger.debug(f"Successfully fetched account balance: {balance:.4f} USDT ({account_type})")
                                 return balance
-                
+
                 self.logger.warning(f"USDT balance not found in response for account type {account_type}. Returning 0.")
                 self.account_balance_usdt = Decimal('0.0')
                 with self.bot_state.lock:
@@ -1785,7 +1781,7 @@ class EhlersSuperTrendBot:
         a1 = np.exp(-np.pi * np.sqrt(2) / float(self.config.SMOOTHING_LENGTH))
         b1 = 2 * a1 * np.cos(np.sqrt(2) * np.pi / float(self.config.SMOOTHING_LENGTH))
         c2, c3, c1 = b1, -a1 * a1, 1 - b1 + a1 * a1
-        
+
         filt = np.zeros(len(close), dtype=float)
         # Handle initial values for filt to avoid index errors or NaN propagation
         if len(close) > 0:
@@ -1799,7 +1795,7 @@ class EhlersSuperTrendBot:
         vol_series = pd.Series(high - low, index=df.index)
         # Use min_periods to allow calculation with less than full window at start
         volatility = vol_series.rolling(self.config.EHLERS_LENGTH, min_periods=max(1, self.config.EHLERS_LENGTH//2)).std().ewm(span=self.config.SMOOTHING_LENGTH, adjust=False).mean()
-        
+
         raw_trend = np.where(df['close'] > (filt + (volatility * self.config.SENSITIVITY)), 1,\
                              np.where(df['close'] < (filt - (volatility * self.config.SENSITIVITY)), -1, np.nan))
         df['ehlers_trend'] = pd.Series(raw_trend, index=df.index).ffill() # Fill NaNs forward
@@ -1859,7 +1855,7 @@ class EhlersSuperTrendBot:
                     else: # Price stays below lower band
                         supertrend_line.iloc[i] = final_upper.iloc[i]
                         supertrend_direction.iloc[i] = -1 # Stay bearish
-        
+
         df['supertrend_line_value'] = supertrend_line
         df['supertrend_direction'] = supertrend_direction
 
@@ -1872,13 +1868,13 @@ class EhlersSuperTrendBot:
         df['macd'] = macd.macd()
         df['macd_signal'] = macd.macd_signal()
         df['macd_diff'] = macd.macd_diff()
-        
+
         # ADX: Trend Strength and Direction
         adx_indicator = ta.trend.ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=self.config.ADX_WINDOW, fillna=True)
         df['adx'] = adx_indicator.adx()
         df['adx_plus_di'] = adx_indicator.adx_pos()
         df['adx_minus_di'] = adx_indicator.adx_neg()
-        
+
         # Drop rows where indicators are NaN (remove initial NaN rows, after fillna)
         required_indicator_cols = ['ehlers_trend', 'ehlers_filter', 'supertrend_direction', 'supertrend_line_value', 'rsi', 'macd', 'macd_signal', 'macd_diff', 'adx', 'adx_plus_di', 'adx_minus_di']
         df.dropna(subset=required_indicator_cols, inplace=True)
@@ -1894,7 +1890,7 @@ class EhlersSuperTrendBot:
     # STRATEGY LOGIC
     # =====================================================================
 
-    def generate_signal(self, df: pd.DataFrame) -> Tuple[Optional[str], str]:
+    def generate_signal(self, df: pd.DataFrame) -> tuple[str | None, str]:
         """
         Generates a potent trading signal by harmonizing the whispers of multiple indicators,
         seeking confluence for optimal entry and exit points, with optional bar confirmation.
@@ -1956,7 +1952,7 @@ class EhlersSuperTrendBot:
         if macd_cross_up: buy_conditions_met.append(f"MACD Diff ({latest['macd_diff']:.4f}) crossed UP")
         if adx_strong_trend and adx_bullish: buy_conditions_met.append(f"ADX ({latest['adx']:.1f}) shows STRONG BULLISH trend")
         elif adx_strong_trend: buy_conditions_met.append(f"ADX ({latest['adx']:.1f}) shows STRONG trend")
-        elif adx_bullish: buy_conditions_met.append(f"ADX +DI > -DI (Bullish bias)")
+        elif adx_bullish: buy_conditions_met.append("ADX +DI > -DI (Bullish bias)")
 
         sell_conditions_met = []
         if ehlers_flip_down: sell_conditions_met.append(f"Ehlers Trend flipped DOWN (Current: {int(latest['ehlers_trend'])})")
@@ -1965,7 +1961,7 @@ class EhlersSuperTrendBot:
         if macd_cross_down: sell_conditions_met.append(f"MACD Diff ({latest['macd_diff']:.4f}) crossed DOWN")
         if adx_strong_trend and adx_bearish: sell_conditions_met.append(f"ADX ({latest['adx']:.1f}) shows STRONG BEARISH trend")
         elif adx_strong_trend: sell_conditions_met.append(f"ADX ({latest['adx']:.1f}) shows STRONG trend")
-        elif adx_bearish: sell_conditions_met.append(f"ADX -DI > +DI (Bearish bias)")
+        elif adx_bearish: sell_conditions_met.append("ADX -DI > +DI (Bearish bias)")
 
 
         # Combined signal with all filters: The true incantation
@@ -1982,14 +1978,14 @@ class EhlersSuperTrendBot:
     # RISK MANAGEMENT
     # =====================================================================
 
-    def calculate_trade_sl_tp(self, side: str, entry_price: Decimal) -> Tuple[Decimal, Decimal]:
+    def calculate_trade_sl_tp(self, side: str, entry_price: Decimal) -> tuple[Decimal, Decimal]:
         """
         Calculates Stop Loss and Take Profit levels based on fixed percentages.
         Returns (stop_loss_price, take_profit_price).
         """
         sl_pct_decimal = Decimal(str(self.config.STOP_LOSS_PCT))
         tp_pct_decimal = Decimal(str(self.config.TAKE_PROFIT_PCT))
-        
+
         if side == 'Buy':
             stop_loss = entry_price * (Decimal('1') - sl_pct_decimal)
             take_profit = entry_price * (Decimal('1') + tp_pct_decimal)
@@ -2010,8 +2006,8 @@ class EhlersSuperTrendBot:
     # =====================================================================
 
     def place_order(self, side: str, qty: Decimal, order_type: OrderType,
-                   entry_price: Optional[Decimal] = None, stopLoss: Optional[Decimal] = None,
-                   takeProfit: Optional[Decimal] = None, reduce_only: bool = False) -> Optional[dict]:
+                   entry_price: Decimal | None = None, stopLoss: Decimal | None = None,
+                   takeProfit: Decimal | None = None, reduce_only: bool = False) -> dict | None:
         """
         Place an order on Bybit, handling precision and Bybit V5 API parameters.
         Includes verification if the order was actually filled.
@@ -2035,7 +2031,7 @@ class EhlersSuperTrendBot:
 
         self.logger.info(f"Placing order for {self.config.SYMBOL}: Side={side}, Qty={str_qty}, Type={order_type.value}, "
                          f"Price={str_price}, SL={str_stopLoss}, TP={str_takeProfit}, ReduceOnly={reduce_only}")
-        
+
         if self.config.DRY_RUN:
             self.logger.info(Fore.YELLOW + f"[DRY RUN] Would place {side} order of {str_qty} {self.config.SYMBOL} ({order_type.value})" + Style.RESET_ALL)
             # Simulate a successful order placement for dry run
@@ -2064,12 +2060,12 @@ class EhlersSuperTrendBot:
                 tpOrderType='Limit', # Usually limit for TP
                 tpslMode=tpsl_mode
             )
-            
+
             if order_response and order_response.get('orderId'):
                 order_id = order_response['orderId']
                 self.logger.info(Fore.GREEN + f"Order submitted with ID: {order_id}. Verifying execution..." + Style.RESET_ALL)
-                
-                # --- VERIFY ORDER EXECUTION --- 
+
+                # --- VERIFY ORDER EXECUTION ---
                 # Poll for order status to confirm fill
                 max_retries = 10 # Increased retries for order verification
                 retry_delay = 1 # seconds
@@ -2080,17 +2076,17 @@ class EhlersSuperTrendBot:
 
                     time.sleep(retry_delay)
                     order_details = self.api_call(self.bybit_client.get_order_history, symbol=self.config.SYMBOL, orderId=order_id, category=specs.category)
-                    
+
                     if order_details and order_details.get('list') and order_details['list']:
                         filled_order = order_details['list'][0]
                         order_status = filled_order.get('orderStatus')
-                        
+
                         # Bybit can return 'Filled', 'PartiallyFilled', 'New', 'Created', 'Cancelled', 'Rejected', etc.
                         if order_status == 'Filled':
                             avg_price_str = filled_order.get('avgPrice')
                             filled_price = Decimal(avg_price_str) if avg_price_str and Decimal(avg_price_str) > Decimal('0') else (entry_price or Decimal(str(self.market_data['close'].iloc[-1]))) # Fallback
                             filled_qty = Decimal(filled_order.get('cumExecQty', '0'))
-                            
+
                             self.logger.info(Fore.GREEN + f"✅ Order FILLED: {side} {filled_qty:.{self.bot_state.qty_precision}f} {self.config.SYMBOL} at avg ${filled_price:.{self.bot_state.price_precision}f} (Order ID: {order_id})" + Style.RESET_ALL)
                             subprocess.run(["termux-toast", f"Order FILLED: {side} {self.config.SYMBOL} at {filled_price:.{self.bot_state.price_precision}f}"])
                             if self.sms_notifier.is_enabled:
@@ -2112,7 +2108,7 @@ class EhlersSuperTrendBot:
                             return None
                     else:
                         self.logger.debug(f"No order history for {order_id} yet. Retrying...")
-                
+
                 self.logger.error(Fore.RED + f"Order {order_id} not confirmed filled after {max_retries} retries. Manual check needed." + Style.RESET_ALL)
                 subprocess.run(["termux-toast", f"Order NOT FILLED: {self.config.SYMBOL} (ID: {order_id})"])
                 if self.sms_notifier.is_enabled:
@@ -2223,7 +2219,7 @@ class EhlersSuperTrendBot:
     # POSITION MANAGEMENT
     # =====================================================================
 
-    def get_positions(self) -> Optional[Dict[str, Any]]:
+    def get_positions(self) -> dict[str, Any] | None:
         """
         Fetch and update current positions for the configured symbol.
         Also updates BotState with position details.
@@ -2279,7 +2275,7 @@ class EhlersSuperTrendBot:
                                 self.bot_state.open_position_side = pos['side']
                                 self.bot_state.open_position_entry_price = Decimal(pos['avgPrice'])
                                 # Unrealized PnL from position data is for last mark price, can be used for UI
-                                self.bot_state.unrealized_pnl = Decimal(pos.get('unrealisedPnl', '0.0')) 
+                                self.bot_state.unrealized_pnl = Decimal(pos.get('unrealisedPnl', '0.0'))
                                 pos_value = Decimal(pos['size']) * Decimal(pos.get('markPrice', '0'))
                                 if pos_value > Decimal('0'):
                                     self.bot_state.unrealized_pnl_pct = (self.bot_state.unrealized_pnl / pos_value) * Decimal('100')
@@ -2360,17 +2356,17 @@ class EhlersSuperTrendBot:
         if not current_pos or Decimal(current_pos['size']) == Decimal('0'):
             self.logger.warning(Fore.YELLOW + "No active position to close." + Style.RESET_ALL)
             return False
-        
+
         side_to_close = 'Sell' if current_pos['side'] == 'Buy' else 'Buy'
         qty_to_close = self.precision_manager.round_quantity(self.config.SYMBOL, Decimal(current_pos['size'])) # Ensure Decimal and rounded
-        
+
         if self.config.DRY_RUN:
             # For dry run, simulate PnL based on unrealized PnL from the current position
             pnl_realized = Decimal(current_pos.get('unrealisedPnl', '0.0'))
             self.cumulative_pnl += pnl_realized
             self.logger.info(Fore.YELLOW + f"[DRY RUN] Would close {current_pos['side']} position of {qty_to_close:.{self.bot_state.qty_precision}f} {self.config.SYMBOL}. Simulated PnL: ${pnl_realized:.2f}" + Style.RESET_ALL)
             self.sms_notifier.send_sms(f"DRY RUN: Close {current_pos['side']} {self.config.SYMBOL}. Simulated PnL: ${pnl_realized:.2f}")
-            
+
             # Simulate clearing internal position state and updating BotState
             self.position_active = False
             self.current_position_side = None
@@ -2389,30 +2385,30 @@ class EhlersSuperTrendBot:
 
         try:
             self.logger.info(f"Attempting to close {current_pos['side']} position of {qty_to_close} {self.config.SYMBOL}...")
-            
+
             close_order_data = self.place_order( # Use place_order for closing to leverage its verification logic
                 side=side_to_close,
                 qty=qty_to_close,
                 order_type=OrderType.MARKET,
                 reduce_only=True
             )
-            
+
             if close_order_data: # place_order returns filled order data on success
                 # For realized PnL, Bybit's get_positions gives unrealisedPnl.
                 # When a position is closed, this becomes realized.
                 # For simplicity, we can use the last known unrealized PnL from the position
                 # before it was closed, or fetch the trade history for exact realized PnL.
                 # Here, we use the unrealized PnL from `current_pos` as a proxy for realized PnL upon closure.
-                pnl_realized = Decimal(current_pos.get('unrealisedPnl', '0.0')) 
-                self.cumulative_pnl += pnl_realized 
-                
+                pnl_realized = Decimal(current_pos.get('unrealisedPnl', '0.0'))
+                self.cumulative_pnl += pnl_realized
+
                 self.logger.info(Fore.MAGENTA + f"✅ Position Closed: {side_to_close} {qty_to_close:.{self.bot_state.qty_precision}f} {self.config.SYMBOL} | PnL: ${pnl_realized:.{self.bot_state.price_precision}f}" + Style.RESET_ALL)
                 subprocess.run(["termux-toast", f"Position Closed: {self.config.SYMBOL}. PnL: {pnl_realized:.{self.bot_state.price_precision}f}"])
-                
+
                 current_equity = self.get_account_balance_usdt() # Refresh equity for notification
                 if self.sms_notifier.is_enabled:
                     self.sms_notifier.send_pnl_update(float(pnl_realized), float(current_equity))
-                
+
                 # Clear internal position state
                 self.position_active = False
                 self.current_position_side = None
@@ -2444,7 +2440,7 @@ class EhlersSuperTrendBot:
     # MAIN EXECUTION LOGIC
     # =====================================================================
 
-    def execute_trade_based_on_signal(self, signal_type: Optional[str], reason: str):
+    def execute_trade_based_on_signal(self, signal_type: str | None, reason: str):
         """
         Execute trades based on the generated signal and current position state.
         Manages opening new positions, closing existing ones based on signal reversal,
@@ -2518,7 +2514,7 @@ class EhlersSuperTrendBot:
                     self.last_trade_time = now_ts
                     self.last_signal = trade_side
                     self.logger.info(f"{trade_side} order placed and confirmed filled. Entry: {filled_price}, Qty: {filled_qty}.")
-                    
+
                     # Update BotState with new position
                     with self.bot_state.lock:
                         self.bot_state.open_position_qty = filled_qty
@@ -2585,7 +2581,7 @@ class EhlersSuperTrendBot:
 
                 self.ws = WebSocket(testnet=self.config.TESTNET, channel_type=self.config.CATEGORY_ENUM.value)
                 self.ws.kline_stream(interval=self.config.TIMEFRAME, symbol=self.config.SYMBOL, callback=self._process_websocket_message)
-                
+
                 with self.bot_state.lock:
                     self.bot_state.bot_status = "Running" # Update UI status
                 self.logger.info(Fore.GREEN + "WebSocket connected and streaming." + Style.RESET_ALL)
@@ -2633,7 +2629,7 @@ class EhlersSuperTrendBot:
             self.bot_state.current_price = current_price_dec
             self.bot_state.bid_price = bid_price_dec
             self.bot_state.ask_price = ask_price_dec
-            
+
             latest_indicator_row = self.market_data.iloc[-1]
 
             # Ehlers SuperTrend
@@ -2642,7 +2638,7 @@ class EhlersSuperTrendBot:
             if direction_val == 1: self.bot_state.ehlers_supertrend_direction = "UP"
             elif direction_val == -1: self.bot_state.ehlers_supertrend_direction = "DOWN"
             else: self.bot_state.ehlers_supertrend_direction = "NONE"
-            
+
             self.bot_state.ehlers_filter_value = Decimal(str(latest_indicator_row.get('ehlers_filter', '0.0')))
 
             # ADX
@@ -2653,7 +2649,7 @@ class EhlersSuperTrendBot:
             else: self.bot_state.adx_trend_strength = "Weak"
             self.bot_state.adx_plus_di = Decimal(str(latest_indicator_row.get('adx_plus_di', '0.0')))
             self.bot_state.adx_minus_di = Decimal(str(latest_indicator_row.get('adx_minus_di', '0.0')))
-            
+
             # RSI
             rsi_val = Decimal(str(latest_indicator_row.get('rsi', '0.0')))
             self.bot_state.rsi_value = rsi_val
@@ -2684,7 +2680,7 @@ class EhlersSuperTrendBot:
 
         self.logger.info("Market data and bot state updated successfully.")
 
-    def _process_websocket_message(self, msg: Dict[str, Any]):
+    def _process_websocket_message(self, msg: dict[str, Any]):
         """
         The core incantation, triggered by each new confirmed k-line,
         where market data is transformed into signals and actions.
@@ -2756,7 +2752,7 @@ class EhlersSuperTrendBot:
             self.cancel_all_orders()
 
             # Ensure position status is up-to-date before deciding to close
-            self.get_positions() 
+            self.get_positions()
 
             # Optionally close any open positions if configured
             if self.config.AUTO_CLOSE_ON_SHUTDOWN and self.position_active and self.current_position_size > Decimal('0'):
@@ -2815,7 +2811,7 @@ def main():
 
 if __name__ == "__main__":
     print(Fore.LIGHTYELLOW_EX + Style.BRIGHT + "\nPyrmethus, the Termux Coding Wizard, at your service! Let the arcane trading begin!" + Style.RESET_ALL)
-    
+
     # --- DEMONSTRATION OF parse_to_utc ---
     print(Fore.CYAN + "\n# Demonstrating the temporal conversion incantation:" + Style.RESET_ALL)
     example_local_times = [
@@ -2826,12 +2822,12 @@ if __name__ == "__main__":
         "2025-08-24 02:00:00 JST",
         "2025-08-24 01:00:00 AM PDT",
     ]
-    
+
     # Temporarily set up a basic logger for parse_to_utc if it's called before main()
     # This will be overridden by the bot's logger later.
     if not logger.handlers:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-        
+
     for local_time_str in example_local_times:
         utc_time = parse_to_utc(local_time_str)
         if utc_time:
@@ -2841,7 +2837,7 @@ if __name__ == "__main__":
     # ------------------------------------
 
     main()
-    
+
     print(Fore.MAGENTA + "\n# May your digital journey be ever enlightened." + Style.RESET_ALL)
 
 

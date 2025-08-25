@@ -3,21 +3,15 @@ This module contains the BybitWebSocket class, which manages the WebSocket
 connection to the Bybit exchange. It handles subscribing to topics,
 receiving messages, and processing real-time data.
 """
-import hashlib
-import hmac
 import json
 import logging
 import threading
-import time
+from collections.abc import Callable
+from decimal import Decimal
+from typing import Any
+
 import websocket
-
-from typing import Any, Callable, Dict, List, Optional
-from decimal import Decimal, InvalidOperation
-
-from colorama import Fore, Style
-
-from scalper_core.constants import NR, NY, NG, NB, RST
-from ind import RuneWeaver as IndicatorCalculator # Adjusted import
+from scalper_core.constants import NB, NG, NR, NY, RST
 
 
 class BybitWebSocket:
@@ -28,10 +22,10 @@ class BybitWebSocket:
     def __init__(
         self,
         logger: logging.Logger,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         trade_tracker: "TradeManager",
-        market_infos: Dict[str, Dict],
-        message_handler: Callable[[Dict], None],
+        market_infos: dict[str, dict],
+        message_handler: Callable[[dict], None],
     ):
         self.lg = logger
         self.cfg = config
@@ -40,7 +34,7 @@ class BybitWebSocket:
         self.ws = None
         self.wst = None
         self.message_handler = message_handler
-        self.current_prices: Dict[str, Optional[Decimal]] = {}
+        self.current_prices: dict[str, Decimal | None] = {}
         self.is_connected = False
 
     def connect(self) -> None:

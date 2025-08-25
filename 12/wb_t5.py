@@ -3,26 +3,28 @@
 # enhanced error handling, and improved performance.
 # Fully compatible with the original config.json and behavior.
 from __future__ import annotations
-import os
-import json
-import time
-import hmac
+
 import hashlib
+import hmac
+import inspect
+import json
 import logging
-from datetime import datetime, timezone
+import os
+import time
+import warnings
+from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal, getcontext
 from functools import wraps
-import inspect
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
-import requests
-import numpy as np
+from typing import Any
+from zoneinfo import ZoneInfo
+
 import pandas as pd
+import requests
 from colorama import Fore, Style, init as colorama_init
 from dotenv import load_dotenv
-from zoneinfo import ZoneInfo
-from dataclasses import dataclass, field
-import warnings
+
 # ----------------------------------------------------------------------------
 # 1. GLOBAL INITIALIZATION & CONSTANTS
 # ----------------------------------------------------------------------------
@@ -91,12 +93,12 @@ def retry_api_call(max_attempts: int = 3, delay: int = 5):
 @dataclass(slots=True)
 class BotConfig:
     """A lightweight, type-safe wrapper around the JSON configuration."""
-    raw: Dict[str, Any]
+    raw: dict[str, Any]
     def __getitem__(self, key: str) -> Any:
         return self.raw[key]
     def get(self, key: str, default: Any = None) -> Any:
         return self.raw.get(key, default)
-def _get_default_config() -> Dict[str, Any]:
+def _get_default_config() -> dict[str, Any]:
     """Returns the default configuration dictionary with all 22 indicators."""
     return {
         "interval": "15", "analysis_interval": 30, "retry_delay": 5,
@@ -147,7 +149,7 @@ def load_config(fp: Path) -> BotConfig:
         LOGGER.warning(f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}")
         try:
             fp.write_text(json.dumps(defaults, indent=4))
-        except IOError as e:
+        except OSError as e:
             LOGGER.error(f"{NEON_RED}Failed to write default config: {e}{RESET}")
             return BotConfig(defaults)
         return BotConfig(defaults)
@@ -160,7 +162,7 @@ def load_config(fp: Path) -> BotConfig:
                 merged[key].update(value)
             else:
                 merged[key] = value
-    except (json.JSONDecodeError, IOError) as e:
+    except (OSError, json.JSONDecodeError) as e:
         LOGGER.error(f"{NEON_RED}Error with config file: {e}. Rebuilding default.{RESET}")
         backup_fp = fp.with_name(f"{fp.stem}.bak_{int(time.time())}{fp.suffix}")
         try:
@@ -184,13 +186,13 @@ class BybitClient:
         self.api_key = api_key
         self.api_secret = api_secret
         self.log = log
-        self.kline_cache: Dict[str, Any] = {}
+        self.kline_cache: dict[str, Any] = {}
     def _generate_signature(self, params: dict) -> str:
         """Generates the HMAC SHA256 signature for Bybit API requests."""
         param_str = "&".join([f"{key}={value}" for key, value in sorted(params.items())])
         return hmac.new(self.api_secret.encode(), param_str.encode(), hashlib.sha256).hexdigest()
     @retry_api_call()
-    def _bybit_request(self, method: str, endpoint: str, params: Dict[str, Any] = None) -> Union[dict, None]:
+    def _bybit_request(self, method: str, endpoint: str, params: dict[str, Any] = None) -> dict | None:
         """Sends a signed request to the Bybit API with retry logic."""
         params = params or {}
         params['timestamp'] = str(int(time.time() * 1000))
@@ -211,7 +213,7 @@ class BybitClient:
         response.raise_for_status()
         return response.json()
     @retry_api_call()
-    def fetch_current_price(self, symbol: str) -> Optional[Decimal]:
+    def fetch_current_price(self, symbol: str) -> Decimal | None:
         """Fetches the latest price for a given symbol."""
         endpoint = "/v5/market/tickers"
         params = {"category": "linear", "symbol": symbol}
@@ -239,21 +241,21 @@ class BybitClient:
             data = response_data["result"]["list"]
             columns = ["start_time", "open", "high", "low", "close", "volume", "turnover"]
             df = pd.DataFrame(data, columns=columns)
-            
+
             # Convert timestamp to datetime with explicit numeric conversion
             df["start_time"] = pd.to_datetime(pd.to_numeric(df["start_time"], errors='coerce'), unit="ms")
             for col in ["open", "high", "low", "close", "volume", "turnover"]:
                 df[col] = df[col].apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
-            
+
             df.dropna(subset=df.columns[1:], inplace=True)
             df = df.sort_values(by="start_time", ascending=True).reset_index(drop=True)
             self.kline_cache[kline_key] = {'data': df, 'timestamp': time.time()}
             return df
-            
+
         self.log.error(f"{NEON_RED}Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}")
         return pd.DataFrame()
     @retry_api_call()
-    def fetch_order_book(self, symbol: str, limit: int = 50) -> Optional[dict]:
+    def fetch_order_book(self, symbol: str, limit: int = 50) -> dict | None:
         """Fetches the order book for a given symbol."""
         endpoint = "/v5/market/orderbook"
         params = {"symbol": symbol, "limit": limit, "category": "linear"}
@@ -271,17 +273,17 @@ class Indicators:
     def _to_decimal(series: pd.Series) -> pd.Series:
         """Helper to convert series to Decimal type safely."""
         return series.apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
-    
+
     @staticmethod
     def sma(series: pd.Series, window: int) -> pd.Series:
         """Decimal-safe Simple Moving Average."""
         return series.rolling(window=window, min_periods=1).mean().apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
-    
+
     @staticmethod
     def ema(series: pd.Series, span: int) -> pd.Series:
         """Decimal-safe Exponential Moving Average."""
         return series.ewm(span=span, adjust=False).mean().apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
-    
+
     @staticmethod
     def atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
         """Decimal-safe Average True Range."""
@@ -290,7 +292,7 @@ class Indicators:
         tr3 = (low - close.shift()).abs()
         tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
         return Indicators.ema(tr, span=window)
-    
+
     @staticmethod
     def rsi(close: pd.Series, window: int) -> pd.Series:
         """Decimal-safe Relative Strength Index."""
@@ -301,7 +303,7 @@ class Indicators:
         avg_loss = Indicators.ema(loss, span=window)
         rs = avg_gain / avg_loss.replace(Decimal('0'), Decimal('NaN'))
         return (Decimal('100') - (Decimal('100') / (Decimal('1') + rs))).fillna(Decimal('50'))
-    
+
     @staticmethod
     def macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
         """Decimal-safe Moving Average Convergence Divergence."""
@@ -311,7 +313,7 @@ class Indicators:
         signal_line = Indicators.ema(macd_line, span=signal)
         histogram = macd_line - signal_line
         return pd.DataFrame({"macd": macd_line, "signal": signal_line, "histogram": histogram})
-    
+
     @staticmethod
     def adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.DataFrame:
         """Decimal-safe Average Directional Index."""
@@ -326,7 +328,7 @@ class Indicators:
         dx = Decimal('100') * (abs(plus_di - minus_di) / dx_denom).fillna(Decimal('0'))
         adx_series = Indicators.ema(dx, span=window)
         return pd.DataFrame({"+DI": plus_di, "-DI": minus_di, "ADX": adx_series})
-    
+
     @staticmethod
     def stochastic_oscillator(close: pd.Series, high: pd.Series, low: pd.Series, k_period: int = 14, d_period: int = 3) -> pd.DataFrame:
         """Decimal-safe Stochastic Oscillator."""
@@ -336,7 +338,7 @@ class Indicators:
         k_line = ((close - lowest_low) / denominator * Decimal('100')).fillna(Decimal('0'))
         d_line = Indicators.sma(k_line, window=d_period)
         return pd.DataFrame({"k": k_line, "d": d_line})
-    
+
     @staticmethod
     def stoch_rsi(close: pd.Series, rsi_period: int = 14, k_period: int = 3, d_period: int = 3) -> pd.DataFrame:
         """Decimal-safe Stochastic RSI."""
@@ -348,7 +350,7 @@ class Indicators:
         k_line = Indicators.sma(stoch_rsi_val, window=k_period)
         d_line = Indicators.sma(k_line, window=d_period)
         return pd.DataFrame({"rsi": rsi_vals, "stoch_rsi_k": k_line, "stoch_rsi_d": d_line})
-    
+
     @staticmethod
     def psar(high: pd.Series, low: pd.Series, close: pd.Series, acceleration: Decimal = Decimal('0.02'), max_acceleration: Decimal = Decimal('0.2')) -> pd.Series:
         """Decimal-safe Parabolic SAR."""
@@ -374,7 +376,7 @@ class Indicators:
                 if curr_l < ep: ep, af = curr_l, min(af + acceleration, max_acceleration)
                 if curr_h > psar.iloc[i]: trend, psar.iloc[i], ep, af = 1, ep, curr_h, acceleration
         return psar.ffill()
-    
+
     @staticmethod
     def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
         """Decimal-safe On-Balance Volume."""
@@ -385,7 +387,7 @@ class Indicators:
             elif close.iloc[i] < close.iloc[i-1]: obv.iloc[i] = obv.iloc[i-1] - volume.iloc[i]
             else: obv.iloc[i] = obv.iloc[i-1]
         return obv
-    
+
     @staticmethod
     def adi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> pd.Series:
         """Decimal-safe Accumulation/Distribution Index."""
@@ -393,13 +395,13 @@ class Indicators:
         mfm = (((close - low) - (high - close)) / mfm_denom).fillna(Decimal('0'))
         mfv = mfm * volume
         return mfv.cumsum()
-    
+
     @staticmethod
     def cci(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 20, constant: Decimal = Decimal('0.015')) -> pd.Series:
         """Decimal-safe Commodity Channel Index."""
         typical_price = (high + low + close) / Decimal('3')
         sma_tp = Indicators.sma(typical_price, window=window)
-        
+
         # Calculate mean deviation using pure Python to avoid numpy issues
         def mean_dev(x):
             if len(x) == 0 or pd.isna(x).all():
@@ -410,12 +412,12 @@ class Indicators:
                 return Decimal('NaN')
             mean = sum(x_dec) / Decimal(str(len(x_dec)))
             return sum(abs(val - mean) for val in x_dec) / Decimal(str(len(x_dec)))
-        
+
         mean_dev = typical_price.rolling(window=window).apply(mean_dev, raw=True).apply(
             lambda x: Decimal(str(x)) if pd.notna(x) else Decimal('NaN'))
-        
+
         return ((typical_price - sma_tp) / (constant * mean_dev.replace(Decimal('0'), Decimal('NaN')))).fillna(Decimal('0'))
-    
+
     @staticmethod
     def williams_r(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
         """Decimal-safe Williams %R."""
@@ -423,7 +425,7 @@ class Indicators:
         lowest_low = low.rolling(window=window).min()
         denom = (highest_high - lowest_low).replace(Decimal('0'), Decimal('NaN'))
         return (((highest_high - close) / denom) * Decimal('-100')).fillna(Decimal('0'))
-    
+
     @staticmethod
     def mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, window: int = 14) -> pd.Series:
         """Decimal-safe Money Flow Index."""
@@ -436,12 +438,12 @@ class Indicators:
         neg_sum = neg_mf.rolling(window=window, min_periods=1).sum().apply(lambda x: Decimal(str(x)))
         mf_ratio = pos_sum / neg_sum.replace(Decimal('0'), Decimal('NaN'))
         return (Decimal('100') - (Decimal('100') / (Decimal('1') + mf_ratio))).fillna(Decimal('0'))
-    
+
     @staticmethod
     def momentum(close: pd.Series, period: int = 10) -> pd.Series:
         """Decimal-safe Momentum."""
         return ((close.diff(period) / close.shift(period)) * Decimal('100')).fillna(Decimal('0'))
-    
+
     @staticmethod
     def vwap(close: pd.Series, volume: pd.Series, window: int) -> pd.Series:
         """Decimal-safe Volume Weighted Average Price."""
@@ -450,7 +452,7 @@ class Indicators:
         cum_pv = price_vol.rolling(window=window, min_periods=1).sum().apply(lambda x: Decimal(str(x)))
         cum_vol = volume.rolling(window=window, min_periods=1).sum().apply(lambda x: Decimal(str(x)))
         return (cum_pv / cum_vol.replace(Decimal('0'), Decimal('NaN'))).fillna(close)
-    
+
     @staticmethod
     def cmf(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, window: int = 20) -> pd.Series:
         """Decimal-safe Chaikin Money Flow (CMF)."""
@@ -458,7 +460,7 @@ class Indicators:
         mfm = (((close - low) - (high - close)) / mfm_denom).fillna(Decimal('0'))
         mfv = mfm * volume
         return mfv.rolling(window=window).sum() / volume.rolling(window=window).sum().replace(Decimal('0'), Decimal('NaN'))
-    
+
     @staticmethod
     def ao(close: pd.Series, short_period: int = 5, long_period: int = 34) -> pd.Series:
         """Decimal-safe Awesome Oscillator (AO)."""
@@ -466,7 +468,7 @@ class Indicators:
         sma_short = Indicators.sma(median_price, window=short_period)
         sma_long = Indicators.sma(median_price, window=long_period)
         return sma_short - sma_long
-    
+
     @staticmethod
     def vi(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.DataFrame:
         """Decimal-safe Vortex Indicator (VI)."""
@@ -474,7 +476,7 @@ class Indicators:
         plus_vi = (high.diff().abs() + low.diff().abs()).rolling(window=window).sum() / tr
         minus_vi = (high.diff(-1).abs() + low.diff(-1).abs()).shift(-1).rolling(window=window).sum() / tr
         return pd.DataFrame({"+VI": plus_vi, "-VI": minus_vi})
-    
+
     @staticmethod
     def bb(close: pd.Series, window: int = 20, std_dev_mult: Decimal = Decimal('2')) -> pd.DataFrame:
         """Decimal-safe Bollinger Bands (BB)."""
@@ -483,7 +485,7 @@ class Indicators:
         upper = sma + (rolling_std * std_dev_mult)
         lower = sma - (rolling_std * std_dev_mult)
         return pd.DataFrame({"upper": upper, "middle": sma, "lower": lower})
-    
+
     @staticmethod
     def fve(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, window: int = 10) -> pd.Series:
         """A composite indicator based on price and volume relationship."""
@@ -498,10 +500,10 @@ class Indicators:
 @dataclass(slots=True)
 class TradeSignal:
     """Structured object for a trading signal."""
-    signal: Optional[str]
+    signal: str | None
     confidence: float
-    conditions: List[str] = field(default_factory=list)
-    levels: Dict[str, Decimal] = field(default_factory=dict)
+    conditions: list[str] = field(default_factory=list)
+    levels: dict[str, Decimal] = field(default_factory=dict)
 class TradingAnalyzer:
     """Orchestrates technical analysis and signal generation."""
     def __init__(self, df: pd.DataFrame, cfg: BotConfig, log: logging.Logger, symbol: str, interval: str):
@@ -511,9 +513,9 @@ class TradingAnalyzer:
         self.symbol = symbol
         self.interval = interval
         self.atr_value: Decimal = Decimal('0')
-        self.indicator_values: Dict[str, Any] = {}
-        self.levels: Dict[str, Any] = {"Support": {}, "Resistance": {}}
-        self.fib_levels: Dict[str, Decimal] = {}
+        self.indicator_values: dict[str, Any] = {}
+        self.levels: dict[str, Any] = {"Support": {}, "Resistance": {}}
+        self.fib_levels: dict[str, Decimal] = {}
         self._pre_calculate_indicators()
         self.weights = self._select_weight_set()
     def _pre_calculate_indicators(self):
@@ -523,7 +525,7 @@ class TradingAnalyzer:
         if not atr_series.empty and pd.notna(atr_series.iloc[-1]):
             self.atr_value = atr_series.iloc[-1]
         self.indicator_values["atr"] = self.atr_value
-    def _select_weight_set(self) -> Dict[str, float]:
+    def _select_weight_set(self) -> dict[str, float]:
         """Selects indicator weights based on market volatility (ATR)."""
         vol_mode = "high_volatility" if self.atr_value > Decimal(str(self.cfg["atr_change_threshold"])) else "low_volatility"
         self.log.info(f"Market Volatility: {NEON_YELLOW}{vol_mode.upper()}{RESET} (ATR: {self.atr_value:.5f})")
@@ -548,7 +550,7 @@ class TradingAnalyzer:
         vol_ma_value = vol_ma_series.iloc[-1]
         multiplier = Decimal(str(self.cfg["volume_confirmation_multiplier"]))
         return self.df.volume.iloc[-1] > vol_ma_value * multiplier
-    def _detect_macd_divergence(self) -> Optional[str]:
+    def _detect_macd_divergence(self) -> str | None:
         """Detects bullish or bearish MACD divergence (simplified logic)."""
         macd_df = Indicators.macd(self.df.close)
         if macd_df.empty or len(self.df) < 30: return None
@@ -559,7 +561,7 @@ class TradingAnalyzer:
         if prices.iloc[-1] < prices.iloc[-lookback] and macd_hist.iloc[-1] > macd_hist.iloc[-lookback]: return "bullish"
         if prices.iloc[-1] > prices.iloc[-lookback] and macd_hist.iloc[-1] < macd_hist.iloc[-lookback]: return "bearish"
         return None
-    def _analyze_order_book_walls(self, order_book: Dict[str, Any]) -> Tuple[bool, bool, Dict[str, Decimal], Dict[str, Decimal]]:
+    def _analyze_order_book_walls(self, order_book: dict[str, Any]) -> tuple[bool, bool, dict[str, Decimal], dict[str, Decimal]]:
         """Detect bullish/bearish walls from bids/asks."""
         enabled = self.cfg.get("order_book_analysis", {}).get("enabled", False)
         if not enabled or not order_book: return False, False, {}, {}
@@ -602,7 +604,7 @@ class TradingAnalyzer:
         precision = Decimal('0.00001')
         pivots = {"Pivot": pivot, "R1": r1, "S1": s1, "R2": r2, "S2": s2, "R3": r3, "S3": s3}
         self.levels.update({label: val.quantize(precision) for label, val in pivots.items()})
-    def find_nearest_levels(self, current_price: Decimal, num_levels: int = 5) -> Tuple[List[Tuple[str, Decimal]], List[Tuple[str, Decimal]]]:
+    def find_nearest_levels(self, current_price: Decimal, num_levels: int = 5) -> tuple[list[tuple[str, Decimal]], list[tuple[str, Decimal]]]:
         """Finds the nearest support and resistance levels from calculated Fibonacci and Pivot Points."""
         supports, resistances = [], []
         for label, value in self.levels.items():
@@ -641,10 +643,7 @@ class TradingAnalyzer:
             if self.df.close.iloc[-1] > value: color = NEON_GREEN
             elif self.df.close.iloc[-1] < value: color = NEON_RED
             line = f"  PSAR              : {color}{value:.5f}{RESET}"
-        elif name == "cmf":
-            if value > Decimal('0'): color = NEON_GREEN
-            elif value < Decimal('0'): color = NEON_RED
-        elif name == "ao":
+        elif name == "cmf" or name == "ao":
             if value > Decimal('0'): color = NEON_GREEN
             elif value < Decimal('0'): color = NEON_RED
         elif name == "vi":
@@ -657,9 +656,9 @@ class TradingAnalyzer:
             elif current_price < lower: color = NEON_GREEN; status="Oversold"
             else: color=NEON_BLUE; status="In Band"
             line = f"  Bollinger Bands   : Price {color}{status}{RESET}"
-        
+
         return line
-    def analyze(self, price: Decimal, ts: str, order_book: Optional[Dict[str, Any]]):
+    def analyze(self, price: Decimal, ts: str, order_book: dict[str, Any] | None):
         """Performs a full analysis and logs a detailed summary."""
         cfg_ind = self.cfg["indicators"]
         cfg_prd = self.cfg["indicator_periods"]
@@ -675,7 +674,7 @@ class TradingAnalyzer:
             'k_period': 0, 'd_period': 0, 'rsi_period': 0, 'short_period': 0, 'long_period': 0,
             'std_dev_mult': Decimal('2')
         }
-        
+
         # Populate period values from config
         for key, val in cfg_prd.items():
             if key in indicator_data:
@@ -753,14 +752,14 @@ class TradingAnalyzer:
         """
         raw_score = Decimal('0.0')
         conditions_met = []
-        
+
         # Calculate scores from main indicators
         for name, weight in self.weights.items():
             if not self.cfg["indicators"].get(name): continue
             value = self.indicator_values.get(name)
             if value is None: continue
             weight_dec = Decimal(str(weight))
-            
+
             if name == "ema_alignment":
                 if value == Decimal('1.0'): raw_score += weight_dec; conditions_met.append("EMA Alignment (Bullish)")
                 elif value == Decimal('-1.0'): raw_score -= weight_dec; conditions_met.append("EMA Alignment (Bearish)")
@@ -851,7 +850,7 @@ def main():
     symbol_logger.info(f"🚀 WhaleBot Enhanced starting for {NEON_PURPLE}{symbol}{RESET} on interval {NEON_PURPLE}{interval}{RESET}")
     last_signal_time = 0.0
     last_ob_fetch_time = 0.0
-    order_book: Optional[Dict[str, Any]] = None
+    order_book: dict[str, Any] | None = None
     try:
         while True:
             price = bybit_client.fetch_current_price(symbol)

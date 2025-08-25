@@ -7,16 +7,24 @@ This module contains the main BybitTrader class that handles:
 - Order and position management
 - Real-time data handling
 """
-import time
 import importlib.util
-from typing import Optional
+import time
 
-from pybit.unified_trading import HTTP, WebSocket
 import pandas as pd
-
 from bot_logger import logger
-from config import API_KEY, API_SECRET, TESTNET, SYMBOL, CATEGORY, TRADE_QTY_USD, WS_HEARTBEAT
+from config import (
+    API_KEY,
+    API_SECRET,
+    CATEGORY,
+    SYMBOL,
+    TESTNET,
+    TRADE_QTY_USD,
+    WS_HEARTBEAT,
+)
+from pybit.unified_trading import HTTP, WebSocket
+
 from strategies.base_strategy import BaseStrategy
+
 
 class BybitTrader:
     """
@@ -28,7 +36,7 @@ class BybitTrader:
 
         self.session = HTTP(testnet=TESTNET, api_key=API_KEY, api_secret=API_SECRET)
         self.ws = WebSocket(testnet=TESTNET, channel_type="private", api_key=API_KEY, api_secret=API_SECRET)
-        
+
         self.kline_data = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume', 'turnover'])
         self.is_long = False
         self.is_short = False
@@ -66,9 +74,9 @@ class BybitTrader:
                 'turnover': float(kline['turnover']),
             }
             self.kline_data.loc[timestamp] = new_row
-        
+
         self.kline_data.sort_index(inplace=True)
-        
+
         # Keep only the last 200 candles to avoid memory issues
         if len(self.kline_data) > 200:
             self.kline_data = self.kline_data.iloc[-200:]
@@ -154,7 +162,7 @@ class BybitTrader:
     def start(self):
         """Starts the WebSocket connection and the bot's main loop."""
         logger.info("Starting Bybit Trader...")
-        
+
         # Fetch initial kline data
         self.get_historical_klines(SYMBOL)
 

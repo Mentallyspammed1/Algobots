@@ -1,33 +1,34 @@
-import unittest
-from unittest.mock import MagicMock, patch, Mock
-import pandas as pd
-from decimal import Decimal
 import os
 import sys
+import unittest
 from datetime import datetime, timedelta
+from decimal import Decimal
+from unittest.mock import MagicMock, Mock, patch
+
 import dateutil.tz
+import pandas as pd
 
 # Add the script's directory to the Python path to allow imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Now import the classes and functions from the script
 from stupdated2_1 import (
-    Config,
-    Signal,
-    OrderType,
-    Category,
-    InstrumentSpecs,
-    PrecisionManager,
-    OrderSizingCalculator,
-    TrailingStopManager,
-    TermuxSMSNotifier,
-    BybitClient,
     BotState,
-    NewsCalendarManager,
+    BybitClient,
     CandlestickPatternDetector,
+    Category,
+    Config,
     EhlersSuperTrendBot,
+    InstrumentSpecs,
+    NewsCalendarManager,
+    OrderSizingCalculator,
+    OrderType,
+    PrecisionManager,
+    Signal,
+    TermuxSMSNotifier,
+    TrailingStopManager,
     parse_to_utc,
-    setup_logger
+    setup_logger,
 )
 
 # A basic logger for testing purposes
@@ -329,14 +330,14 @@ class TestEhlersSuperTrendBotCleanup(unittest.TestCase):
              patch('stupdated2_1.NewsCalendarManager'), \
              patch('stupdated2_1.CandlestickPatternDetector'), \
              patch('stupdated2_1.setup_logger') as mock_setup_logger:
-            
+
             # Ensure the logger is a mock that we can inspect
             self.mock_logger = MagicMock()
             mock_setup_logger.return_value = self.mock_logger
-            
+
             # We need to initialize the bot to have all attributes
             self.bot = EhlersSuperTrendBot(self.config)
-            
+
             # Now, replace the logger and notifier on the actual instance with mocks
             self.bot.logger = self.mock_logger
             self.bot.sms_notifier = MagicMock()
@@ -357,7 +358,7 @@ class TestEhlersSuperTrendBotCleanup(unittest.TestCase):
             side='Buy',
             reason="Graceful shutdown with auto-close enabled."
         )
-        
+
         # Verify final log messages and notifications
         self.mock_logger.info.assert_any_call("Closing active position due to auto-close on shutdown setting...")
         self.mock_subprocess_run.assert_called_with(["termux-toast", f"Ehlers SuperTrend Bot for {self.bot.config.SYMBOL} has ceased operations."])
@@ -373,7 +374,7 @@ class TestEhlersSuperTrendBotCleanup(unittest.TestCase):
 
         # Verify that close_position was NOT called
         self.bot.close_position.assert_not_called()
-        
+
         # Verify final log messages and notifications
         self.mock_logger.info.assert_any_call("Auto-close on shutdown is disabled or no active position. Not closing positions.")
         self.mock_subprocess_run.assert_called_with(["termux-toast", f"Ehlers SuperTrend Bot for {self.bot.config.SYMBOL} has ceased operations."])
@@ -388,7 +389,7 @@ class TestEhlersSuperTrendBotCleanup(unittest.TestCase):
 
         # Verify that close_position was NOT called
         self.bot.close_position.assert_not_called()
-        
+
         # Verify final log messages and notifications
         self.mock_logger.info.assert_any_call("Auto-close on shutdown is disabled or no active position. Not closing positions.")
         self.mock_subprocess_run.assert_called_with(["termux-toast", f"Ehlers SuperTrend Bot for {self.bot.config.SYMBOL} has ceased operations."])

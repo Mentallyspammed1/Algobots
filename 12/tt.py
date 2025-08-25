@@ -1,18 +1,20 @@
-import os
-import logging
-import requests
-import pandas as pd
-import numpy as np
-from datetime import datetime
-import hmac
 import hashlib
-import time
-from dotenv import load_dotenv
-from typing import Dict, Tuple, List, Union, Any
-from colorama import init, Fore, Style
-from zoneinfo import ZoneInfo
-from decimal import Decimal, getcontext, InvalidOperation
+import hmac
 import json
+import logging
+import os
+import time
+from datetime import datetime
+from decimal import Decimal, getcontext
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import numpy as np
+import pandas as pd
+import requests
+from colorama import Fore, Style, init
+from dotenv import load_dotenv
+
 
 # --- Logger Configuration (Minimal, for self-containment) ---
 def setup_custom_logger(name):
@@ -214,7 +216,7 @@ def load_config(filepath: str) -> dict:
         }
     }
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             config = json.load(f)
             # Merge loaded config with defaults. Prioritize loaded values, but ensure all default keys exist.
             merged_config = {**default_config, **config}
@@ -270,7 +272,7 @@ def handle_api_error(response: requests.Response, logger: logging.Logger) -> Non
     except json.JSONDecodeError:
         logger.error(f"{NEON_RED} Response text: {response.text}{RESET}")
 
-def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, params: Dict[str, Any] = None, logger: logging.Logger = None) -> Union[dict, None]:
+def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, params: dict[str, Any] = None, logger: logging.Logger = None) -> dict | None:
     """
     Sends a signed request to the Bybit API with retry logic.
 
@@ -337,7 +339,7 @@ def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, par
     return None
 
 
-def fetch_current_price(symbol: str, api_key: str, api_secret: str, logger: logging.Logger) -> Union[Decimal, None]:
+def fetch_current_price(symbol: str, api_key: str, api_secret: str, logger: logging.Logger) -> Decimal | None:
     """Fetches the current last traded price for a given symbol."""
     endpoint = "/v5/market/tickers"
     params = {"category": "linear", "symbol": symbol}
@@ -372,7 +374,7 @@ def fetch_klines(symbol: str, interval: str, api_key: str, api_secret: str, logg
     logger.error(f"{NEON_RED} Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}")
     return pd.DataFrame()
 
-def fetch_order_book(symbol: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 50) -> Union[dict, None]:
+def fetch_order_book(symbol: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 50) -> dict | None:
     """Fetches the order book (bids and asks) for a given symbol."""
     endpoint = "/v5/market/orderbook"
     params = {"symbol": symbol, "limit": limit, "category": "linear"}
@@ -393,12 +395,12 @@ class TradingAnalyzer:
         self.logger = symbol_logger
         self.symbol = symbol
         self.interval = interval
-        self.levels: Dict[str, Any] = {}  # Stores support/resistance levels (fib, pivot)
-        self.fib_levels: Dict[str, float] = {}  # Stores calculated Fibonacci levels
+        self.levels: dict[str, Any] = {}  # Stores support/resistance levels (fib, pivot)
+        self.fib_levels: dict[str, float] = {}  # Stores calculated Fibonacci levels
         self.weight_sets = config["weight_sets"]
-        self.indicator_values: Dict[str, Any] = {}  # Stores calculated indicator values
+        self.indicator_values: dict[str, Any] = {}  # Stores calculated indicator values
         self.atr_value: float = 0.0  # Stores the latest ATR value
-        self.user_defined_weights: Dict[str, float] = {} # To be selected dynamically
+        self.user_defined_weights: dict[str, float] = {} # To be selected dynamically
 
     def _safe_series_operation(self, column: str, operation: str, window: int = None, series: pd.Series = None) -> pd.Series:
         """Helper to safely perform operations on DataFrame columns or provided series."""
@@ -542,7 +544,7 @@ class TradingAnalyzer:
         mfi = 100 - (100 / (1 + money_ratio))
         return mfi.replace([np.inf, -np.inf], np.nan).fillna(0)  # Fill NaN from division by zero with 0 or a sensible value
 
-    def calculate_fibonacci_retracement(self, high: Decimal, low: Decimal, current_price: Decimal) -> Dict[str, Decimal]:
+    def calculate_fibonacci_retracement(self, high: Decimal, low: Decimal, current_price: Decimal) -> dict[str, Decimal]:
         """Calculates Fibonacci retracement levels based on a given high and low."""
         diff = high - low
         if diff <= 0:  # Handle cases where high <= low
@@ -557,7 +559,7 @@ class TradingAnalyzer:
             "61.8%": Decimal('0.618'), "78.6%": Decimal('0.786'), "88.6%": Decimal('0.886'),
             "94.1%": Decimal('0.941')
         }
-        fib_levels_calculated: Dict[str, Decimal] = {}
+        fib_levels_calculated: dict[str, Decimal] = {}
 
         # Assuming an uptrend (retracement from high to low)
         # Levels are calculated from the high, moving down
@@ -596,12 +598,12 @@ class TradingAnalyzer:
             "R3": r3.quantize(precision), "S3": s3.quantize(precision),
         })
 
-    def find_nearest_levels(self, current_price: Decimal, num_levels: int = 5) -> Tuple[List[Tuple[str, Decimal]], List[Tuple[str, Decimal]]]:
+    def find_nearest_levels(self, current_price: Decimal, num_levels: int = 5) -> tuple[list[tuple[str, Decimal]], list[tuple[str, Decimal]]]:
         """
         Finds the nearest support and resistance levels from calculated Fibonacci and Pivot Points.
         """
-        all_support_levels: List[Tuple[str, Decimal]] = []
-        all_resistance_levels: List[Tuple[str, Decimal]] = []
+        all_support_levels: list[tuple[str, Decimal]] = []
+        all_resistance_levels: list[tuple[str, Decimal]] = []
 
         def process_level(label: str, value: Decimal):
             if value < current_price:
@@ -720,7 +722,7 @@ class TradingAnalyzer:
         histogram = macd - signal
         return pd.DataFrame({'macd': macd, 'signal': signal, 'histogram': histogram})
 
-    def detect_macd_divergence(self) -> Union[str, None]:
+    def detect_macd_divergence(self) -> str | None:
         """Detects bullish or bearish MACD divergence."""
         macd_df = self._calculate_macd()
         if macd_df.empty or len(self.df) < 30:  # Need sufficient data for reliable divergence
@@ -738,7 +740,7 @@ class TradingAnalyzer:
             return "bearish"
         return None
 
-    def determine_trend_momentum(self) -> Dict[str, Union[str, float]]:
+    def determine_trend_momentum(self) -> dict[str, str | float]:
         """Determines the current trend and its strength based on momentum MAs and ATR."""
         if self.df.empty or len(self.df) < max(self.config["momentum_ma_long"], self.config["atr_period"]):
             return {"trend": "Insufficient Data", "strength": 0.0}
@@ -968,15 +970,15 @@ class TradingAnalyzer:
 
         return current_volume > average_volume * self.config["volume_confirmation_multiplier"]
 
-    def analyze_order_book_walls(self, order_book: Dict[str, Any]) -> Tuple[bool, bool, Dict[str, Decimal], Dict[str, Decimal]]:
+    def analyze_order_book_walls(self, order_book: dict[str, Any]) -> tuple[bool, bool, dict[str, Decimal], dict[str, Decimal]]:
         """
         Analyzes order book for significant bid (support) and ask (resistance) walls.
         Returns whether bullish/bearish walls are found and the wall details.
         """
         has_bullish_wall = False
         has_bearish_wall = False
-        bullish_wall_details: Dict[str, Decimal] = {}
-        bearish_wall_details: Dict[str, Decimal] = {}
+        bullish_wall_details: dict[str, Decimal] = {}
+        bearish_wall_details: dict[str, Decimal] = {}
 
         if not self.config["order_book_analysis"]["enabled"]:
             return False, False, {}, {}
@@ -1089,7 +1091,7 @@ class TradingAnalyzer:
             self.indicator_values["stoch_osc_vals"] = stoch_osc_vals # Store DataFrame
             # For logging, we'll extract specific values later
 
-    def _select_weight_set(self) -> Dict[str, float]:
+    def _select_weight_set(self) -> dict[str, float]:
         """
         Selects a weight set (e.g., low_volatility, high_volatility) based on current ATR.
         """
@@ -1100,7 +1102,7 @@ class TradingAnalyzer:
         self.logger.info(f"{NEON_BLUE} Market detected as LOW VOLATILITY (ATR: {self.atr_value:.4f}). Using 'low_volatility' weights.{RESET}")
         return self.weight_sets["low_volatility"]
 
-    def analyze(self, current_price: Decimal, timestamp: str, order_book: Dict[str, Any]):
+    def analyze(self, current_price: Decimal, timestamp: str, order_book: dict[str, Any]):
         """
         Performs comprehensive analysis, calculates indicators, and logs the findings.
         This method populates `self.indicator_values` and generates the output string.
@@ -1186,15 +1188,15 @@ class TradingAnalyzer:
 
         self.logger.info(output)
 
-    def generate_trading_signal(self, current_price: Decimal) -> Tuple[Union[str, None], float, List[str], Dict[str, Decimal]]:
+    def generate_trading_signal(self, current_price: Decimal) -> tuple[str | None, float, list[str], dict[str, Decimal]]:
         """
         Generates a trading signal (buy/sell) based on indicator values and configuration.
         Returns the signal, its confidence score, conditions met, and suggested SL/TP levels.
         """
         signal_score = Decimal('0.0')
         signal = None
-        conditions_met: List[str] = []
-        trade_levels: Dict[str, Decimal] = {}
+        conditions_met: list[str] = []
+        trade_levels: dict[str, Decimal] = {}
 
         # --- Bullish Signal Logic ---
         # Sum weights of bullish conditions met
@@ -1252,7 +1254,7 @@ class TradingAnalyzer:
 
         # --- Bearish Signal Logic (similar structure) ---
         bearish_score = Decimal('0.0')
-        bearish_conditions: List[str] = []
+        bearish_conditions: list[str] = []
 
         if self.config["indicators"].get("stoch_rsi") and not self.indicator_values["stoch_rsi_vals"].empty:
             stoch_rsi_k = Decimal(str(self.indicator_values["stoch_rsi_vals"]['k'].iloc[-1]))
@@ -1307,7 +1309,7 @@ class TradingAnalyzer:
         return signal, float(signal_score), conditions_met, trade_levels
 
 
-def interpret_indicator(logger: logging.Logger, indicator_name: str, values: Union[List[float], float, Dict[str, Any]]) -> Union[str, None]:
+def interpret_indicator(logger: logging.Logger, indicator_name: str, values: list[float] | float | dict[str, Any]) -> str | None:
     """
     Provides a human-readable interpretation of indicator values.
     """

@@ -1,7 +1,7 @@
-import os
-import sys
 import argparse
-from colorama import init, Fore, Style
+import sys
+
+from colorama import Fore, Style, init
 from transformers import pipeline
 
 # Initialize colorama for cross-platform colored terminal output
@@ -33,10 +33,10 @@ def main():
             model_name = "gpt2"
 
         print(f"{NEON_CYAN}Loading model: {NEON_MAGENTA}{model_name}{RESET}...")
-        
+
         # Load the text-generation pipeline
         pipe = pipeline("text-generation", model=model_name)
-        
+
         print(f"{NEON_GREEN}Model loaded successfully!{RESET}")
 
     except ImportError:
@@ -57,7 +57,7 @@ def main():
             if user_input.lower() == 'exit':
                 print(f"{NEON_CYAN}Exiting... Goodbye!{RESET}")
                 break
-            
+
             if not user_input.strip():
                 print(f"{NEON_YELLOW}Input cannot be empty. Please try again.{RESET}")
                 continue
@@ -67,10 +67,10 @@ def main():
 
             # Generate response from the pipeline
             response_data = pipe(user_input, max_length=150, num_return_sequences=1, truncation=True)
-            
+
             # Extract and clean the generated text
             generated_text = response_data[0]["generated_text"].strip()
-            
+
             print(f"{NEON_CYAN}--- {NEON_MAGENTA}Generated Text{NEON_CYAN} ---{RESET}")
             print(f"{NEON_CYAN}{generated_text}{RESET}")
             print(f"{NEON_CYAN}-------------------{RESET}")

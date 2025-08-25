@@ -3,19 +3,22 @@
 # This file will contain the unit tests for the MarketMakingStrategy.
 # The tests will verify the strategy's logic under various simulated
 # market conditions and bot states.
-import pytest
-import pandas as pd
-from decimal import Decimal
 import logging
-from typing import List, Dict, Any
+import os
 
 # Adjust path to import from the root of the project
 import sys
-import os
+from decimal import Decimal
+from typing import Any
+
+import pandas as pd
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from strategies.marketmakingstrategy import MarketMakingStrategy
 from algobots_types import OrderBlock
+
+from strategies.marketmakingstrategy import MarketMakingStrategy
 
 # A mock logger that can be used in tests
 strategy_logger = logging.getLogger('test_market_making_strategy')
@@ -34,10 +37,10 @@ def market_scenario_factory():
         current_position_side: str = 'NONE',
         current_position_size: str = '0.0',
         entry_price: str = '0.0',
-        support_levels: List[Dict[str, Any]] = None,
-        resistance_levels: List[Dict[str, Any]] = None,
-        active_bull_obs: List[OrderBlock] = None,
-        active_bear_obs: List[OrderBlock] = None
+        support_levels: list[dict[str, Any]] = None,
+        resistance_levels: list[dict[str, Any]] = None,
+        active_bull_obs: list[OrderBlock] = None,
+        active_bear_obs: list[OrderBlock] = None
     ):
         """
         Creates a market scenario dictionary for a test.

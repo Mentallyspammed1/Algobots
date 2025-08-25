@@ -37,20 +37,20 @@ Features:
 
 import logging
 import os
+import signal
 import sys
 import time
-import signal
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from enum import Enum
-from typing import Optional, Dict, Any, Tuple
+from typing import Any
 
 import pandas as pd
 import pandas_ta as ta
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
 from pybit.exceptions import FailedRequestError, InvalidRequestError
+from pybit.unified_trading import HTTP
 
 # Load environment variables from .env file
 load_dotenv()
@@ -291,7 +291,7 @@ class PrecisionManager:
     def __init__(self, session: HTTP, logger: logging.Logger):
         self.session = session
         self.logger = logger
-        self.instruments: Dict[str, InstrumentSpecs] = {}
+        self.instruments: dict[str, InstrumentSpecs] = {}
         self.load_all_instruments()
 
     def load_all_instruments(self):
@@ -390,7 +390,7 @@ class PrecisionManager:
             taker_fee=taker_fee
         )
 
-    def get_specs(self, symbol: str) -> Optional[InstrumentSpecs]:
+    def get_specs(self, symbol: str) -> InstrumentSpecs | None:
         """Get instrument specs for a symbol"""
         return self.instruments.get(symbol.upper())
 
@@ -466,7 +466,7 @@ class PrecisionManager:
         self.logger.debug(f"Rounding quantity {qty_decimal} for {symbol} with step {qty_step} -> {rounded} (Min: {specs.min_order_qty}, Max: {specs.max_order_qty})")
         return rounded
 
-    def get_decimal_places(self, symbol: str) -> Tuple[int, int]:
+    def get_decimal_places(self, symbol: str) -> tuple[int, int]:
         """Get decimal places for price and quantity based on tick_size and qty_step."""
         specs = self.get_specs(symbol)
         if not specs:
@@ -502,7 +502,7 @@ class OrderSizingCalculator:
         entry_price: Decimal,
         stop_loss_price: Decimal,
         leverage: Decimal
-    ) -> Optional[Decimal]:
+    ) -> Decimal | None:
         """
         Calculate position size in base currency units based on fixed risk percentage, leverage,
         entry price, and stop loss price. Returns None if calculation is not possible.
@@ -614,7 +614,7 @@ class TrailingStopManager:
         # 'activation_price': Decimal, 'trail_percent': Decimal,
         # 'current_stop': Decimal, 'highest_price': Decimal/None,
         # 'lowest_price': Decimal/None, 'is_activated': bool}}
-        self.active_trailing_stops: Dict[str, dict] = {}
+        self.active_trailing_stops: dict[str, dict] = {}
 
     def initialize_trailing_stop(
         self,
@@ -624,7 +624,7 @@ class TrailingStopManager:
         current_price: Decimal,
         trail_percent: float, # Pass as percentage
         activation_percent: float # Pass as percentage
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """
         Initialize trailing stop for a position.
         Returns the initial trailing stop configuration if successful.
@@ -818,9 +818,9 @@ class SupertrendBot:
         # --- Data Storage ---
         self.market_data = pd.DataFrame()
         # Stores active positions: {symbol: position_data} - might only track one symbol for this bot
-        self.current_positions: Dict[str, dict] = {}
+        self.current_positions: dict[str, dict] = {}
         # Stores open orders: {order_id: order_data}
-        self.open_orders: Dict[str, dict] = {}
+        self.open_orders: dict[str, dict] = {}
         self.account_balance_usdt: Decimal = Decimal('0.0')
         self.start_balance_usdt: Decimal = Decimal('0.0')
         self.daily_loss_amount: Decimal = Decimal('0.0')
@@ -828,12 +828,12 @@ class SupertrendBot:
         # --- Strategy State ---
         # Current active position details for the configured symbol
         self.position_active: bool = False
-        self.current_position_side: Optional[str] = None # 'Buy' or 'Sell'
+        self.current_position_side: str | None = None # 'Buy' or 'Sell'
         self.current_position_entry_price: Decimal = Decimal('0')
         self.current_position_size: Decimal = Decimal('0')
         self.last_signal: Signal = Signal.NEUTRAL
 
-        self.logger.info(f"Bot Configuration Loaded:")
+        self.logger.info("Bot Configuration Loaded:")
         self.logger.info(f"  Mode: {'Testnet' if config.TESTNET else 'Mainnet'}")
         self.logger.info(f"  Symbol: {config.SYMBOL}, Category: {config.CATEGORY_ENUM.value}")
         self.logger.info(f"  Leverage: {config.LEVERAGE}x")
@@ -889,7 +889,7 @@ class SupertrendBot:
     # DATA FETCHING METHODS
     # =====================================================================
 
-    def fetch_klines(self, limit: Optional[int] = None) -> pd.DataFrame:
+    def fetch_klines(self, limit: int | None = None) -> pd.DataFrame:
         """Fetch historical kline data from Bybit."""
         try:
             fetch_limit = limit if limit else self.config.LOOKBACK_PERIODS
@@ -937,7 +937,7 @@ class SupertrendBot:
             self.logger.error(f"Exception fetching klines for {self.config.SYMBOL}: {e}", exc_info=True)
             return pd.DataFrame()
 
-    def get_ticker(self) -> Optional[dict]:
+    def get_ticker(self) -> dict | None:
         """Get current ticker data for the symbol."""
         try:
             response = self.session.get_tickers(
@@ -1106,7 +1106,7 @@ class SupertrendBot:
     # RISK MANAGEMENT
     # =====================================================================
 
-    def calculate_position_size_usd(self, entry_price: float, stop_loss_price: float) -> Optional[Decimal]:
+    def calculate_position_size_usd(self, entry_price: float, stop_loss_price: float) -> Decimal | None:
         """Calculate position size in USDT based on risk parameters."""
         try:
             # Convert inputs to Decimal for precision
@@ -1168,8 +1168,8 @@ class SupertrendBot:
     # =====================================================================
 
     def place_order(self, side: str, qty: Decimal, order_type: OrderType,
-                   entry_price: Optional[Decimal] = None, stop_loss_price: Optional[Decimal] = None,
-                   take_profit_price: Optional[Decimal] = None) -> Optional[dict]:
+                   entry_price: Decimal | None = None, stop_loss_price: Decimal | None = None,
+                   take_profit_price: Decimal | None = None) -> dict | None:
         """Place an order on Bybit, handling precision and Bybit V5 API parameters. Enhanced for spot category."""
         specs = self.precision_manager.get_specs(self.config.SYMBOL) # Use precision_manager
         if not specs:
@@ -1186,7 +1186,7 @@ class SupertrendBot:
                 return None
 
             # Prepare base order parameters
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "category": specs.category,
                 "symbol": self.config.SYMBOL,
                 "side": side,
@@ -1731,7 +1731,7 @@ class SupertrendBot:
                         self.current_position_side = "Buy"
                         self.current_position_entry_price = current_price
                         self.current_position_size = position_qty
-                        self.logger.info(f"BUY order placed successfully. Waiting for position confirmation.")
+                        self.logger.info("BUY order placed successfully. Waiting for position confirmation.")
                     else:
                         self.logger.error("Failed to place BUY order.")
                 else:
@@ -1767,7 +1767,7 @@ class SupertrendBot:
                         self.current_position_side = "Sell"
                         self.current_position_entry_price = current_price
                         self.current_position_size = position_qty
-                        self.logger.info(f"SELL order placed successfully. Waiting for position confirmation.")
+                        self.logger.info("SELL order placed successfully. Waiting for position confirmation.")
                     else:
                         self.logger.error("Failed to place SELL order.")
                 else:

@@ -1,10 +1,11 @@
 import unittest
-import pandas as pd
+
 import numpy as np
-from decimal import Decimal
+import pandas as pd
 
 # We need to import the class we want to test
 from tt import TradingAnalyzer, load_config
+
 
 class TestTradingAnalyzerIndicators(unittest.TestCase):
 
@@ -23,12 +24,12 @@ class TestTradingAnalyzerIndicators(unittest.TestCase):
         # Ensure high is always >= close and low is always <= close
         data['high'] = data['close'] + np.random.uniform(0, 5, 100)
         data['low'] = data['close'] - np.random.uniform(0, 5, 100)
-        
+
         cls.df = pd.DataFrame(data)
-        
+
         # Load the default config from the file to ensure tests run with valid settings
         cls.config = load_config("config.json")
-        
+
         # Instantiate the analyzer once for all tests to use
         cls.analyzer = TradingAnalyzer(cls.df, cls.config, symbol_logger=None, symbol="TESTUSDT", interval="1H")
 

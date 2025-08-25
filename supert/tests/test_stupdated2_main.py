@@ -1,14 +1,15 @@
-import unittest
-from unittest.mock import patch, MagicMock, call
-import sys
 import os
+import sys
+import unittest
 from decimal import Decimal
+from unittest.mock import MagicMock, call, patch
 
 # Add the script's directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import the bot and its components
-from stupdated2_1 import EhlersSuperTrendBot, Config
+from stupdated2_1 import Config, EhlersSuperTrendBot
+
 
 class TestEhlersSuperTrendBotMain(unittest.TestCase):
 

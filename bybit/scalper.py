@@ -32,8 +32,8 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from decimal import (
     ROUND_DOWN,
     ROUND_HALF_EVEN,
@@ -45,7 +45,7 @@ from decimal import (
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Callable, Dict, Final, List, Optional, Tuple, Union
+from typing import Any, Final
 
 # --- System Path Setup ---
 # Add project root and 'p' directory to the system path for module resolution.
@@ -60,22 +60,18 @@ if project_root not in sys.path:
 
 # --- Core Dependencies ---
 import ccxt
-import numpy as np
 import pandas as pd
 import requests
-import websocket
-from colorama import Fore, Style, init
-from dataclasses import dataclass, asdict, field
 
 # --- Project-Specific Imports ---
 from bybit_v5_plugin import BybitV5Plugin
+from colorama import Fore, Style, init
+from ind import RuneWeaver as IndicatorCalculator  # Adjusted import
+
 # from websocket_manager import BybitWebSocket # Removed to use local class definition
 from scalper_core.constants import (
     CFP,
-    CIM,
-    DDTZ,
     DIP,
-    FL,
     LD,
     LDS,
     MAR,
@@ -87,12 +83,10 @@ from scalper_core.constants import (
     NY,
     PCDS,
     RDS,
-    REC,
     RST,
     TRP,
     VI,
 )
-from ind import RuneWeaver as IndicatorCalculator # Adjusted import
 from scalper_core.models import TradeRecord
 
 # Ensure python-dotenv is installed for load_dotenv
@@ -110,7 +104,7 @@ except ImportError:
 
     def load_dotenv():
         """Dummy function if python-dotenv is not installed."""
-        pass  # Dummy function if not installed
+        # Dummy function if not installed
 
 
 # Initialize Colorama for beautiful terminal output, resetting colors
@@ -142,8 +136,7 @@ def handle_exceptions(default_return: Any = None, message: str = "An error occur
     return decorator
 
 
-from time_utils import TZ, DDTZ, ZoneInfo
-
+from time_utils import TZ
 
 # Set global precision for Decimal operations.
 getcontext().prec = 38
@@ -156,7 +149,7 @@ load_dotenv()
 
 
 @handle_exceptions(default_return=(None, None), message="Error validating API keys")
-def _validate_api_keys(logger: logging.Logger) -> Tuple[Optional[str], Optional[str]]:
+def _validate_api_keys(logger: logging.Logger) -> tuple[str | None, str | None]:
     """
     Validates that BYBIT_API_KEY and BYBIT_API_SECRET environment variables are set.
     Logs a critical error and exits if they are not.
@@ -189,8 +182,8 @@ if not _temp_logger.handlers:
     _handler.setFormatter(_formatter)
     _temp_logger.addHandler(_handler)
 
-AK: Final[Optional[str]]
-AS: Final[Optional[str]]
+AK: Final[str | None]
+AS: Final[str | None]
 AK, AS = _validate_api_keys(_temp_logger)
 
 # Create log directory if it doesn't exist.
@@ -228,7 +221,7 @@ def format_metric(
     label: str,
     value: Any,
     label_color: str,
-    value_color: Optional[str] = None,  # If None, uses label_color
+    value_color: str | None = None,  # If None, uses label_color
     label_width: int = 22,
     value_precision: int = 2,
     unit: str = "",
@@ -257,12 +250,12 @@ def format_metric(
         else:
             formatted_value = f"{actual_value_color}{value:,}{unit}{RST}"
     else:
-        formatted_value = f"{actual_value_color}{str(value)}{unit}{RST}"
+        formatted_value = f"{actual_value_color}{value!s}{unit}{RST}"
 
     return f"{formatted_label}: {formatted_value}"
 
 
-def print_table_header(columns: List[Tuple[str, int]], header_color: str = NB) -> None:
+def print_table_header(columns: list[tuple[str, int]], header_color: str = NB) -> None:
     """Prints a formatted table header. columns is a list of (name, width) tuples."""
     header_parts = []
     for name, width in columns:
@@ -281,12 +274,12 @@ def print_table_header(columns: List[Tuple[str, int]], header_color: str = NB) -
 
 
 def print_table_row(
-    row_data: List[Any],
-    column_widths: List[int],
-    cell_colors: Optional[List[str]] = None,
+    row_data: list[Any],
+    column_widths: list[int],
+    cell_colors: list[str] | None = None,
     default_color: str = NC,
     decimal_precision: int = 2,
-    pnl_columns: Optional[List[int]] = None,
+    pnl_columns: list[int] | None = None,
 ) -> None:
     """Prints a formatted table row."""
     if pnl_columns is None:
@@ -332,12 +325,12 @@ def print_table_row(
 def _bybit_v5_request(
     method: str,
     path: str,
-    params: Dict,
+    params: dict,
     api_key: str,
     api_secret: str,
     base_url: str,
     logger: logging.Logger,
-) -> Optional[Dict]:
+) -> dict | None:
     """Helper function to make authenticated requests to Bybit V5 API."""
     if not api_key or not api_secret:
         logger.error(
@@ -384,7 +377,7 @@ def _bybit_v5_request(
         f"_bybit_v5_request: Payload: " f"{json_payload_str if params else 'No body'}"
     )
 
-    response_json: Optional[Dict] = None
+    response_json: dict | None = None
     _response_obj = None
     try:
         if method.upper() == "POST":
@@ -446,9 +439,9 @@ def clear_screen() -> None:
 
 
 def display_open_positions(
-    open_trades: Dict[str, "Tr"],
-    market_infos: Dict[str, Dict],
-    current_prices: Dict[str, Optional[Decimal]],
+    open_trades: dict[str, "Tr"],
+    market_infos: dict[str, dict],
+    current_prices: dict[str, Decimal | None],
     quote_currency: str,
     logger: logging.Logger,
 ) -> None:
@@ -613,8 +606,8 @@ def display_open_positions(
 
 
 def display_recent_closed_trades(
-    closed_trades: List["Tr"],
-    market_infos: Dict[str, Dict],
+    closed_trades: list["Tr"],
+    market_infos: dict[str, dict],
     quote_currency: str,
     logger: logging.Logger,
     num_to_display: int = 5,
@@ -710,7 +703,7 @@ def display_recent_closed_trades(
 # --- SMS Alert Function ---
 @handle_exceptions(default_return=False, message="Error sending SMS alert")
 def send_sms_alert(
-    message: str, recipient_number: str, logger: logging.Logger, config: Dict[str, Any]
+    message: str, recipient_number: str, logger: logging.Logger, config: dict[str, Any]
 ) -> bool:
     """
     Sends an SMS alert using Termux API if enabled in config.
@@ -792,8 +785,8 @@ class SF(logging.Formatter):
 
 @handle_exceptions(default_return={}, message="Error extending config")
 def _extend_config_keys(
-    current_config: Dict[str, Any], default_config: Dict[str, Any]
-) -> Dict[str, Any]:
+    current_config: dict[str, Any], default_config: dict[str, Any]
+) -> dict[str, Any]:
     """Extend Current Config: Recursively adds missing keys."""
     updated_config = current_config.copy()
     for key, def_val in default_config.items():
@@ -835,11 +828,11 @@ def _convert_data_recursively(obj: Any, default_obj: Any) -> Any:
     default_return=False, message="Error validating numeric config value"
 )
 def _validate_numeric_config_value(
-    config_data: Dict[str, Any],
+    config_data: dict[str, Any],
     key: str,
-    default_value: Union[int, float, Decimal, None],
-    min_val: Optional[Union[int, float, Decimal]] = None,
-    max_val: Optional[Union[int, float, Decimal]] = None,
+    default_value: int | float | Decimal | None,
+    min_val: int | float | Decimal | None = None,
+    max_val: int | float | Decimal | None = None,
     is_int: bool = False,
     allow_none: bool = False,
     logger: logging.Logger = logging.getLogger(__name__),
@@ -909,13 +902,13 @@ def _validate_numeric_config_value(
     return False
 
 
-def load_config(file_path: Path) -> Dict[str, Any]:
+def load_config(file_path: Path) -> dict[str, Any]:
     """
     Load Config: Loads and validates the configuration from `config.json`.
     If the file doesn't exist or is invalid, it creates a default one.
     """
     # Default configuration values
-    default_config: Final[Dict[str, Any]] = {
+    default_config: Final[dict[str, Any]] = {
         "symbols_to_trade": ["BTC/USDT:USDT"],
         "exchange_id": "bybit",
         "interval": "5",
@@ -1119,7 +1112,7 @@ def load_config(file_path: Path) -> Dict[str, Any]:
             )
             logger.info(log_msg)
             return default_config
-        except IOError as e:
+        except OSError as e:
             logger.error(
                 f"{NR}Error creating default config file "
                 f"{file_path}: {e}. The quill broke!{RST}"
@@ -1524,7 +1517,7 @@ def load_config(file_path: Path) -> Dict[str, Any]:
                     f"config file: {file_path}. Runes aligned!{RST}"
                 )
                 logger.info(log_msg)
-            except IOError as e:
+            except OSError as e:
                 logger.error(
                     f"{NR}Error writing corrected config file "
                     f"{file_path}: {e}. Quill broke!{RST}"
@@ -1543,7 +1536,7 @@ def load_config(file_path: Path) -> Dict[str, Any]:
                 f"New scroll forged!{RST}"
             )
             logger.info(log_msg)
-        except IOError as e_create:
+        except OSError as e_create:
             logger.error(
                 f"{NR}Error creating default config file after load error: "
                 f"{e_create}. Forge cold!{RST}"
@@ -1607,7 +1600,7 @@ def slg(name_suffix: str) -> logging.Logger:
 def retry_api_call(
     max_retries: int = MAR,
     retry_delay_s: int = RDS,  # Renamed for clarity
-    catch_exceptions: Tuple = (
+    catch_exceptions: tuple = (
         ccxt.NetworkError,
         ccxt.RequestTimeout,
         requests.exceptions.ConnectionError,
@@ -1673,12 +1666,12 @@ class TradeManager:
         if self._initialized:
             return
         self.logger = slg("TradeManager")
-        self.open_trades: Dict[str, TradeRecord] = {}
-        self.closed_trades: List[TradeRecord] = []
+        self.open_trades: dict[str, TradeRecord] = {}
+        self.closed_trades: list[TradeRecord] = []
         self.total_pnl: Decimal = Decimal("0")
         self.current_balance: Decimal = Decimal("0")
-        self.exchange_ref: Optional[ccxt.Exchange] = None
-        self.market_info_cache: Dict[str, Dict] = {} # Cache for market info
+        self.exchange_ref: ccxt.Exchange | None = None
+        self.market_info_cache: dict[str, dict] = {} # Cache for market info
         self._initialized = True
 
     def set_exchange_reference(self, exchange: ccxt.Exchange):
@@ -1690,7 +1683,7 @@ class TradeManager:
         if TRP.exists():
             self.logger.info(f"DEBUG: _load_trades: {TRP} exists. Attempting to load.")
             try:
-                with open(TRP, "r", encoding="utf-8") as f:
+                with open(TRP, encoding="utf-8") as f:
                     content = f.read()
                     self.logger.info(f"DEBUG: _load_trades: Content of {TRP}: {content[:500]}") # Log first 500 chars
                     data = json.loads(content) # Use content to ensure full read before parse
@@ -1744,7 +1737,7 @@ class TradeManager:
             with open(TRP, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
             self.logger.debug(f"{NB}Trade records saved to {TRP}. Ledger updated!{RST}")
-        except IOError as e:
+        except OSError as e:
             self.logger.error(f"{NR}Error saving trade records to {TRP}: {e}. Ledger not updated!{RST}")
 
     def add_open_trade(self, trade: TradeRecord):
@@ -1824,15 +1817,15 @@ class TradeManager:
         else:
             self.logger.warning(f"{NY}Attempted to close non-existent trade for {symbol}. The trade was already a phantom.{RST}")
 
-    def get_open_trade(self, symbol: str) -> Optional[TradeRecord]:
+    def get_open_trade(self, symbol: str) -> TradeRecord | None:
         """Retrieves an open trade record by symbol."""
         return self.open_trades.get(symbol)
 
-    def get_all_open_trades(self) -> Dict[str, TradeRecord]:
+    def get_all_open_trades(self) -> dict[str, TradeRecord]:
         """Returns all open trade records."""
         return self.open_trades
 
-    def get_all_closed_trades(self) -> List[TradeRecord]:
+    def get_all_closed_trades(self) -> list[TradeRecord]:
         """Returns all closed trade records."""
         return self.closed_trades
 
@@ -1884,10 +1877,10 @@ TradeTracker = TradeManager()
 # --- Exchange Initialization ---
 @retry_api_call()
 @handle_exceptions(default_return=None, message='Error initializing exchange')
-def initialize_exchange(config: Dict[str, Any], logger: logging.Logger) -> Optional[ccxt.Exchange]:
+def initialize_exchange(config: dict[str, Any], logger: logging.Logger) -> ccxt.Exchange | None:
     """Initializes the CCXT exchange client based on configuration."""
     exchange_id = config.get('exchange_id', 'bybit').lower()
-    
+
     # Common CCXT options
     exchange_options = {
         'apiKey': AK,
@@ -2011,12 +2004,12 @@ def initialize_exchange(config: Dict[str, Any], logger: logging.Logger) -> Optio
 # --- Data Fetching ---
 @retry_api_call()
 @handle_exceptions(default_return=None, message='Error fetching current price')
-def fetch_current_price(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> Optional[Decimal]:
+def fetch_current_price(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> Decimal | None:
     """Fetches the current ticker price for a given symbol."""
     logger.debug(f"Fetching ticker for {symbol}. Probing market pulse.")
     ticker = exchange.fetch_ticker(symbol)
     logger.debug(f"Raw ticker for {symbol}: {ticker}. Market heartbeat.")
-    
+
     price = None
     # Prefer 'last' price, then midpoint of bid/ask, then 'ask', then 'bid'
     if ticker.get('last') is not None and Decimal(str(ticker['last'])) > 0:
@@ -2033,7 +2026,7 @@ def fetch_current_price(exchange: ccxt.Exchange, symbol: str, logger: logging.Lo
     elif ticker.get('bid') is not None and Decimal(str(ticker['bid'])) > 0:
         price = Decimal(str(ticker['bid']))
         logger.warning(f"{NY}Using 'bid' price: {price}. Buyer's plea.{RST}")
-    
+
     if price is not None and price > 0:
         return price
     else:
@@ -2043,7 +2036,7 @@ def fetch_current_price(exchange: ccxt.Exchange, symbol: str, logger: logging.Lo
 
 @retry_api_call()
 @handle_exceptions(default_return=pd.DataFrame(), message='Error fetching OHLCV data')
-def fetch_ohlcv_data(exchange: ccxt.Exchange, symbol: str, timeframe: str, limit: int = 250, logger: Optional[logging.Logger] = None) -> pd.DataFrame:
+def fetch_ohlcv_data(exchange: ccxt.Exchange, symbol: str, timeframe: str, limit: int = 250, logger: logging.Logger | None = None) -> pd.DataFrame:
     """Fetches historical OHLCV data and returns it as a pandas DataFrame."""
     logger = logger or slg(__name__)
     if not exchange.has['fetchOHLCV']:
@@ -2064,7 +2057,7 @@ def fetch_ohlcv_data(exchange: ccxt.Exchange, symbol: str, timeframe: str, limit
     # Convert numeric columns, coercing errors to NaN
     for col in ['open', 'high', 'low', 'close', 'volume']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-    
+
     original_rows = len(df)
     df.dropna(subset=['open', 'high', 'low', 'close'], inplace=True) # Drop rows with NaN in critical price columns
     df = df[df['volume'] > 0] # Filter out rows with zero or negative volume
@@ -2075,7 +2068,7 @@ def fetch_ohlcv_data(exchange: ccxt.Exchange, symbol: str, timeframe: str, limit
 
     if df.empty:
         raise ccxt.ExchangeError(f"Kline data for {symbol} {timeframe} empty after cleaning. Cleansed tapestry bare.")
-    
+
     df.sort_index(inplace=True) # Ensure chronological order
 
     logger.info(f"{NB}Successfully fetched {len(df)} klines for {symbol} {timeframe}. Market history revealed!{RST}")
@@ -2084,7 +2077,7 @@ def fetch_ohlcv_data(exchange: ccxt.Exchange, symbol: str, timeframe: str, limit
 
 @retry_api_call()
 @handle_exceptions(default_return=None, message='Error fetching order book')
-def fetch_order_book(exchange: ccxt.Exchange, symbol: str, limit: int, logger: logging.Logger) -> Optional[Dict[str, Any]]:
+def fetch_order_book(exchange: ccxt.Exchange, symbol: str, limit: int, logger: logging.Logger) -> dict[str, Any] | None:
     """Fetches the order book for a given symbol."""
     if not exchange.has['fetchOrderBook']:
         logger.error(f"{NR}Exchange {exchange.id} does not support fetchOrderBook. No glimpse into desires!{RST}")
@@ -2095,7 +2088,7 @@ def fetch_order_book(exchange: ccxt.Exchange, symbol: str, limit: int, logger: l
 
     if not orderbook:
         raise ccxt.ExchangeError(f"fetch_order_book returned None/empty for {symbol}. Whispers silent.")
-    
+
     if not isinstance(orderbook, dict):
         error_msg = f"Invalid orderbook type for {symbol}. Expected dict, got {type(orderbook).__name__}. Message garbled."
         raise ccxt.ExchangeError(error_msg)
@@ -2103,7 +2096,7 @@ def fetch_order_book(exchange: ccxt.Exchange, symbol: str, limit: int, logger: l
     if 'bids' not in orderbook or 'asks' not in orderbook:
         error_msg = f"Invalid orderbook structure for {symbol}: missing 'bids' or 'asks'. Keys: {list(orderbook.keys())}. Intentions unclear."
         raise ccxt.ExchangeError(error_msg)
-    
+
     if not isinstance(orderbook['bids'], list) or not isinstance(orderbook['asks'], list):
         error_msg = f"Invalid orderbook structure for {symbol}: 'bids' or 'asks' not lists. bids: {type(orderbook['bids']).__name__}, asks: {type(orderbook['asks']).__name__}. Desires broken."
         raise ccxt.ExchangeError(error_msg)
@@ -2114,7 +2107,7 @@ def fetch_order_book(exchange: ccxt.Exchange, symbol: str, limit: int, logger: l
 
 # --- Contract Info and Leverage ---
 @handle_exceptions(default_return=None, message='Error fetching contract info')
-def get_market_info(symbol: str, exchange: ccxt.Exchange, logger: logging.Logger) -> Optional[Dict[str, Any]]:
+def get_market_info(symbol: str, exchange: ccxt.Exchange, logger: logging.Logger) -> dict[str, Any] | None:
     """Fetches and returns market info for a symbol, handling potential errors and reloading."""
     if not exchange.markets or symbol not in exchange.markets:
         logger.info(f"{NB}Market info for {symbol} not loaded or symbol not found, reloading markets... Unfurling the market scrolls anew.{RST}")
@@ -2152,7 +2145,7 @@ def get_market_info(symbol: str, exchange: ccxt.Exchange, logger: logging.Logger
                 contract_type = 'Inverse'
             else:
                 contract_type = 'Unknown Contract'
-            
+
             contract_size = market_info.get('contractSize')
             if contract_size is None:
                 # Try to get from info dict if direct key is missing (common in Bybit V5)
@@ -2187,7 +2180,7 @@ def get_market_info(symbol: str, exchange: ccxt.Exchange, logger: logging.Logger
 
 
 @handle_exceptions(default_return=False, message='Error setting leverage')
-def set_leverage(exchange: ccxt.Exchange, symbol: str, leverage: int, market_info: Dict[str, Any], logger: logging.Logger) -> bool:
+def set_leverage(exchange: ccxt.Exchange, symbol: str, leverage: int, market_info: dict[str, Any], logger: logging.Logger) -> bool:
     """Sets the leverage for a given symbol, handling Bybit's specific requirements."""
     retmsg_prefix = '"retmsg":"' # For parsing Bybit error messages
 
@@ -2211,7 +2204,7 @@ def set_leverage(exchange: ccxt.Exchange, symbol: str, leverage: int, market_inf
             if not refreshed_market:
                 logger.error(f"{NR}set_leverage: Critical - Failed to refresh market_info for {symbol}. Cannot safely determine category for leverage setting.{RST}")
                 return False
-            
+
             is_linear = isinstance(refreshed_market.get('linear'), bool)
             is_inverse = isinstance(refreshed_market.get('inverse'), bool)
             if not (is_linear or is_inverse):
@@ -2276,7 +2269,7 @@ def set_leverage(exchange: ccxt.Exchange, symbol: str, leverage: int, market_inf
                 leverage_raw = position_info.get('leverage')
                 if leverage_raw is None and isinstance(position_info.get('info'), dict):
                     leverage_raw = position_info['info'].get('leverage')
-                
+
                 if leverage_raw is not None and str(leverage_raw).strip():
                     active_leverage_str = str(leverage_raw)
                 else:
@@ -2298,7 +2291,7 @@ def set_leverage(exchange: ccxt.Exchange, symbol: str, leverage: int, market_inf
 
 
 @handle_exceptions(default_return=None, message='Error fetching position info')
-def fetch_position_info(exchange: ccxt.Exchange, symbol: str, market_info: Dict[str, Any], logger: logging.Logger) -> Optional[Dict[str, Any]]:
+def fetch_position_info(exchange: ccxt.Exchange, symbol: str, market_info: dict[str, Any], logger: logging.Logger) -> dict[str, Any] | None:
     """Fetches current position information for a symbol."""
     if not exchange.has['fetchPosition'] and not exchange.has['fetchPositions']:
         logger.error(f"{NR}Exchange {exchange.id} does not support fetching positions. Cannot manage positions!{RST}")
@@ -2310,13 +2303,13 @@ def fetch_position_info(exchange: ccxt.Exchange, symbol: str, market_info: Dict[
         if exchange.id == 'bybit':
             category = 'linear' if market_info.get('linear') else 'inverse'
             params = {'category': category, 'symbol': market_info.get('id')} # Use Bybit's internal symbol ID
-            
+
         positions = exchange.fetch_positions(symbols=[symbol], params=params)
-        
+
         if not positions:
             logger.debug(f"No open position found for {symbol}.")
             return None
-        
+
         # Filter for the specific symbol and ensure it's an open position
         for pos in positions:
             if pos.get('symbol') == symbol and pos.get('contracts', 0) != 0:
@@ -2329,16 +2322,16 @@ def fetch_position_info(exchange: ccxt.Exchange, symbol: str, market_info: Dict[
                 pos['takeProfitDecimal'] = Decimal(str(pos.get('takeProfit', '0'))) if pos.get('takeProfit') is not None else None
                 pos['trailingStopDecimal'] = Decimal(str(pos.get('trailingStop', '0'))) if pos.get('trailingStop') is not None else None
                 pos['positionSide'] = pos.get('side') # 'long' or 'short'
-                
+
                 # For Bybit V5, trailingStop and tslActivationPrice are in 'info'
                 if exchange.id == 'bybit' and isinstance(pos.get('info'), dict):
                     info = pos['info']
                     pos['trailingStopDecimal'] = Decimal(str(info.get('trailingStop', '0'))) if info.get('trailingStop') is not None else pos['trailingStopDecimal']
                     pos['tslActivationPriceDecimal'] = Decimal(str(info.get('tpslTriggerPrice', '0'))) if info.get('tpslTriggerPrice') is not None else None # Bybit V5 uses tpslTriggerPrice for TSL activation
-                
+
                 logger.debug(f"Found open position for {symbol}: {pos}")
                 return pos
-        
+
         logger.debug(f"No open position found for {symbol} after filtering.")
         return None
 
@@ -2354,12 +2347,12 @@ def fetch_position_info(exchange: ccxt.Exchange, symbol: str, market_info: Dict[
 def set_trade_stop_loss_take_profit(
     exchange: ccxt.Exchange,
     symbol: str,
-    market_info: Dict[str, Any],
-    position_info: Dict[str, Any],
-    config: Dict[str, Any],
+    market_info: dict[str, Any],
+    position_info: dict[str, Any],
+    config: dict[str, Any],
     logger: logging.Logger,
-    fixed_stop_loss_price: Optional[Decimal] = None,
-    take_profit_price_target: Optional[Decimal] = None,
+    fixed_stop_loss_price: Decimal | None = None,
+    take_profit_price_target: Decimal | None = None,
     attempt_tsl: bool = True
 ) -> bool:
     """Manages stop loss, take profit, and trailing stop loss protections for a position."""
@@ -2372,7 +2365,7 @@ def set_trade_stop_loss_take_profit(
     if not trade_record:
         logger.error(f"{NR}set_trade_stop_loss_take_profit: No open trade record found for {symbol}. Cannot set protections.{RST}")
         return False
-    
+
     # Get position size from position_info, fallback to trade_record if needed
     position_size_raw = position_info.get('contractsDecimal')
     position_size_dec = None
@@ -2387,11 +2380,11 @@ def set_trade_stop_loss_take_profit(
             return False
     else:
         position_size_dec = trade_record.size # Fallback to size from trade record
-    
+
     if position_size_dec is None or position_size_dec.is_zero():
         logger.error(f"{NR}set_trade_stop_loss_take_profit: Valid non-zero position size could not be determined for {symbol}. Cannot set protections.{RST}")
         return False
-    
+
     qty_str = str(position_size_dec) # Quantity as string for API call
 
     use_sandbox = config.get('use_sandbox', True)
@@ -2410,18 +2403,18 @@ def set_trade_stop_loss_take_profit(
         except ValueError:
             logger.error(f"{NR}set_trade_stop_loss_take_profit: Invalid positionIdx '{position_idx_raw}' for symbol {symbol}. Cannot set protections.{RST}")
             return False
-    
+
     price_precision = IndicatorCalculator.gpp(market_info, logger)
     min_trade_size = IndicatorCalculator.gmts(market_info, logger) # qtyStep
 
     tp_price = None
     if take_profit_price_target and take_profit_price_target > 0:
         tp_price = take_profit_price_target.quantize(min_trade_size if min_trade_size > 0 else Decimal(f"1e-{price_precision}"), rounding=ROUND_HALF_EVEN)
-    
+
     sl_price = None
     if fixed_stop_loss_price and fixed_stop_loss_price > 0:
         sl_price = fixed_stop_loss_price.quantize(min_trade_size if min_trade_size > 0 else Decimal(f"1e-{price_precision}"), rounding=ROUND_HALF_EVEN)
-    
+
     tsl_distance = None
     tsl_activation_price = None
     attempt_tsl_calc = False # Flag to indicate if TSL calculation should proceed
@@ -2430,19 +2423,19 @@ def set_trade_stop_loss_take_profit(
     tsl_activation_pct_cfg_raw = na_cfg_raw
     tsl_rate_dec = Decimal(0)
     tsl_activation_pct_dec = Decimal(0)
-    
+
     if attempt_tsl and config.get('enable_trailing_stop', False):
         tsl_rate_cfg = config.get('trailing_stop_callback_rate', DIP['trailing_stop_callback_rate'])
         tsl_activation_pct_cfg = config.get('trailing_stop_activation_percentage', DIP['trailing_stop_activation_percentage'])
-        
+
         tsl_rate_cfg_raw = str(tsl_rate_cfg)
         tsl_activation_pct_cfg_raw = str(tsl_activation_pct_cfg)
-        
+
         try:
             tsl_rate_dec = Decimal(tsl_rate_cfg_raw)
             tsl_activation_pct_dec = Decimal(tsl_activation_pct_cfg_raw)
             logger.debug(f"set_trade_stop_loss_take_profit: TSL Configs for {symbol} - RateRaw='{tsl_rate_cfg_raw}', ActivRaw='{tsl_activation_pct_cfg_raw}' -> RateDec={tsl_rate_dec}, ActivDec={tsl_activation_pct_dec}")
-            
+
             if not (isinstance(tsl_rate_dec, Decimal) and isinstance(tsl_activation_pct_dec, Decimal) and tsl_rate_dec > 0 and tsl_activation_pct_dec >= 0):
                 logger.error(f"{NR}set_trade_stop_loss_take_profit: Invalid TSL config types/values for {symbol}. RateRaw='{tsl_rate_cfg_raw}', ActivRaw='{tsl_activation_pct_cfg_raw}' -> RateDec={tsl_rate_dec}, ActivDec={tsl_activation_pct_dec}.{RST}")
             else:
@@ -2456,7 +2449,7 @@ def set_trade_stop_loss_take_profit(
             entry_price_for_tsl = position_info.get('entryPriceDecimal', trade_record.entry_price)
             position_side = position_info.get('positionSide', trade_record.side)
             position_side_lower = str(position_side).lower() if position_side else None
-            
+
             if not entry_price_for_tsl or entry_price_for_tsl <= 0 or not position_side_lower:
                 logger.error(f"{NR}set_trade_stop_loss_take_profit: Missing entry price/side for TSL calc. Entry: {entry_price_for_tsl}, Side: {position_side_lower}.{RST}")
                 attempt_tsl_calc = False
@@ -2464,10 +2457,10 @@ def set_trade_stop_loss_take_profit(
                 # Calculate TSL activation price and distance
                 activation_price_raw = entry_price_for_tsl * (Decimal("1") + (tsl_activation_pct_dec if position_side_lower == "long" else -tsl_activation_pct_dec))
                 activation_price_quantized = activation_price_raw.quantize(min_trade_size if min_trade_size > 0 else Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN)
-                
+
                 tsl_distance_raw = entry_price_for_tsl * tsl_rate_dec
                 tsl_distance_quantized = tsl_distance_raw.quantize(min_trade_size if min_trade_size > 0 else Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN)
-                
+
                 # Ensure TSL distance is not too small (e.g., less than one tick size)
                 if tsl_distance_quantized <= (
                     min_trade_size if min_trade_size > 0 else Decimal(f"1e-{price_precision}")
@@ -2480,9 +2473,9 @@ def set_trade_stop_loss_take_profit(
                     )
                 else:
                     tsl_distance = tsl_distance_quantized
-                
+
                 tsl_activation_price = activation_price_quantized
-                
+
                 if tsl_distance > 0 and tsl_activation_price > 0:
                     attempt_tsl_calc = True # Final confirmation to proceed
                 else:
@@ -2491,7 +2484,7 @@ def set_trade_stop_loss_take_profit(
 
     has_tp = isinstance(tp_price, Decimal) and tp_price > 0
     has_sl = isinstance(sl_price, Decimal) and sl_price > 0
-    
+
     # Construct payload for Bybit V5 trading-stop endpoint
     payload = {
         'category': 'linear' if market_info.get('linear', True) else 'inverse', # Category (linear/inverse)
@@ -2501,7 +2494,7 @@ def set_trade_stop_loss_take_profit(
         'tpTriggerBy': config.get('tp_trigger_by', last_price_key), # TP Trigger By
         'tpslMode': 'Partial' # Always use Partial mode for flexibility
     }
-    
+
     tsl_applied_in_payload = False
     if attempt_tsl_calc:
         # Calculate the actual SL price that the TSL implies at activation
@@ -2519,7 +2512,7 @@ def set_trade_stop_loss_take_profit(
             # Ensure SL is strictly above activation price for short
             if sl_for_tsl <= tsl_activation_price:
                 sl_for_tsl = tsl_activation_price + (min_trade_size if min_trade_size > 0 else Decimal(f"1e-{price_precision}"))
-        
+
         if sl_for_tsl and sl_for_tsl > 0:
             payload['stopLoss'] = str(sl_for_tsl)
             payload['slSize'] = qty_str # Apply SL to full position size
@@ -2531,21 +2524,21 @@ def set_trade_stop_loss_take_profit(
             logger.error(f"{NR}set_trade_stop_loss_take_profit: Final TSL distance ({tsl_distance}) or activation price ({tsl_activation_price}) is invalid.{RST}")
             # If TSL calculation failed, do not apply TSL, proceed to fixed SL/TP logic
             attempt_tsl_calc = False
-    
+
     if not tsl_applied_in_payload: # If TSL is not being applied, manage fixed SL
         if has_sl:
             payload['stopLoss'] = str(sl_price)
             payload['slSize'] = qty_str # Apply SL to full position size
             payload['trailingStop'] = "" # Clear TSL if fixed SL is set
-            if 'tpslTriggerPrice' in payload: del payload['tpslTriggerPrice'] # Clear TSL activation price
+            payload.pop('tpslTriggerPrice', None) # Clear TSL activation price
             logger.info(f"{NB}set_trade_stop_loss_take_profit: Planning to set Fixed SL (Partial mode) for {symbol} to {sl_price}. TSL not applied.{RST}")
         else: # No fixed SL, no TSL -> clear all SL protections
             payload['stopLoss'] = ""
             payload['slSize'] = ""
             payload['trailingStop'] = ""
-            if 'tpslTriggerPrice' in payload: del payload['tpslTriggerPrice']
+            payload.pop('tpslTriggerPrice', None)
             logger.info(f"{NB}set_trade_stop_loss_take_profit: Planning to clear SL protections (Partial mode) for {symbol}.{RST}")
-    
+
     # Always manage TP if a target is provided
     if has_tp:
         payload['takeProfit'] = str(tp_price)
@@ -2553,27 +2546,27 @@ def set_trade_stop_loss_take_profit(
     else: # Clear TP if no target is provided
         payload['takeProfit'] = ""
         payload['tpSize'] = ""
-    
+
     # Check if any actual changes are being made to avoid unnecessary API calls
     # This would require fetching current trading stop settings from the exchange first
     # For simplicity, we'll assume the API call is always needed if any TP/SL/TSL is set or cleared.
-    
+
     logger.debug(f"set_trade_stop_loss_take_profit: Preparing to call Bybit API. URL: {base_url}{path}, Payload: {json.dumps(payload, default=str)}")
     logger.info(f"{NB}set_trade_stop_loss_take_profit: Attempting to set protections for {symbol} via direct API call. Params Summary: TP={payload.get('takeProfit')}, SL={payload.get('stopLoss')}, TSL={payload.get('trailingStop')}{RST}")
     logger.info(f"{NB}set_trade_stop_loss_take_profit: Sending payload to Bybit API /v5/position/trading-stop: {json.dumps(payload, default=str)}{RST}")
-    
+
     api_response = _bybit_v5_request(method="POST", path=path, params=payload, api_key=AK, api_secret=AS, base_url=base_url, logger=logger)
-    
+
     if api_response is None:
         logger.error(f"{NR}set_trade_stop_loss_take_profit: _bybit_v5_request returned None for {symbol}. Protection setup failed critically before/during request.{RST}")
         return False
-    
+
     logger.info(f"{NB}set_trade_stop_loss_take_profit: Raw response from Bybit {path} for {symbol}: {json.dumps(api_response, default=str)}{RST}")
-    
+
     if api_response.get('retCode') == 0:
         logger.info(f"{NG}set_trade_stop_loss_take_profit: Successfully set protections for {symbol} via direct API. Msg: {api_response.get('retMsg')}{RST}")
         logger.debug(f"set_trade_stop_loss_take_profit: Successful protection set for {symbol}. Original params sent: {json.dumps(payload, default=str)}")
-        
+
         # Update trade record with the new protection settings
         if tsl_applied_in_payload and tsl_distance and tsl_activation_price:
             trade_record.trailing_stop_active = True
@@ -2588,12 +2581,12 @@ def set_trade_stop_loss_take_profit(
                 trade_record.stop_loss_price = Decimal(payload['stopLoss'])
             else:
                 trade_record.stop_loss_price = None
-        
+
         if payload.get('takeProfit') and payload['takeProfit'] != "":
             trade_record.take_profit_price = Decimal(payload['takeProfit'])
         else:
             trade_record.take_profit_price = None
-        
+
         TradeTracker._save_trades()
         logger.info(f"{NG}set_trade_stop_loss_take_profit: TradeRecord for {symbol} updated. SL: {trade_record.stop_loss_price}, TP: {trade_record.take_profit_price}, TSL Active: {trade_record.trailing_stop_active}, TSL Dist: {trade_record.trailing_stop_distance}, TSL Act: {trade_record.tsl_activation_price}.{RST}")
         return True
@@ -2601,7 +2594,7 @@ def set_trade_stop_loss_take_profit(
         error_msg = api_response.get('retMsg', 'Unknown error')
         error_code = api_response.get('retCode', -1)
         logger.debug(f"set_trade_stop_loss_take_profit: Failed protection set for {symbol}. Original params sent: {json.dumps(payload, default=str)}")
-        
+
         if error_code == 110061: # Bybit specific error for SL/TP order limit exceeded
             logger.error(f"{NR}set_trade_stop_loss_take_profit: Failed to set protections for {symbol} due to SL/TP order limit exceeded (Error 110061). Msg: {error_msg}. Attempting to cancel existing StopOrders for the symbol as a corrective measure.{RST}")
             try:
@@ -2609,9 +2602,9 @@ def set_trade_stop_loss_take_profit(
                 cancel_params = {'category': payload['category'], 'symbol': payload['symbol'], 'orderFilter': 'StopOrder'}
                 cancel_path = '/v5/order/cancel-all' # Corrected path for cancelling all orders
                 logger.info(f"{NB}set_trade_stop_loss_take_profit: Attempting to cancel all StopOrders for {symbol} with params: {json.dumps(cancel_params, default=str)} via {cancel_path}{RST}")
-                
+
                 cancel_response = _bybit_v5_request(method="POST", path=cancel_path, params=cancel_params, api_key=AK, api_secret=AS, base_url=base_url, logger=logger)
-                
+
                 if cancel_response and cancel_response.get('retCode') == 0:
                     cancelled_count = 0
                     if isinstance(cancel_response.get(result_key, {}).get('list'), list):
@@ -2634,21 +2627,21 @@ def set_trade_stop_loss_take_profit(
 class PerSymbolBot:
     symbol: str
     exchange: ccxt.Exchange
-    config: Dict[str, Any]
+    config: dict[str, Any]
     logger: logging.Logger
     ws_client: "BybitWebSocket" # Use string literal for forward reference
-    market_info: Dict[str, Any] = field(init=False)
+    market_info: dict[str, Any] = field(init=False)
     ta_analyzer: IndicatorCalculator = field(init=False)
     exit_signal_manager: "ExitSignalManager" = field(init=False)
     last_signal: str = "HOLD"
-    last_signal_time: Optional[datetime] = None
+    last_signal_time: datetime | None = None
     bybit_symbol_id: str = field(init=False)
 
     def __post_init__(self):
         self.market_info = get_market_info(self.symbol, self.exchange, self.logger)
         if not self.market_info:
             raise ValueError(f"Could not retrieve market info for {self.symbol}. Aborting bot initialization for this symbol.")
-        
+
         self.bybit_symbol_id = self.market_info.get('id')
         if not self.bybit_symbol_id:
             raise ValueError(f"Could not retrieve Bybit symbol ID for {self.symbol}. Aborting bot initialization for this symbol.")
@@ -2660,7 +2653,7 @@ class PerSymbolBot:
         self.ta_analyzer.indicator_thresholds = self.config.get("indicator_thresholds", {}) # Pass thresholds
 
         self.exit_signal_manager = ExitSignalManager(self.logger, self.config, self.ta_analyzer, TradeTracker)
-        
+
         # Set leverage once per symbol bot initialization
         if self.market_info.get('is_contract', False):
             leverage_setting = self.config.get('leverage', 1)
@@ -2679,7 +2672,7 @@ class PerSymbolBot:
         if ohlcv_df.empty:
             self.logger.warning(f"{NY}No OHLCV data for {self.symbol}. Skipping signal generation.{RST}")
             return False
-        
+
         self.ta_analyzer.set_data(ohlcv_df)
         self.ta_analyzer.compute_all() # Compute all indicators
 
@@ -2691,7 +2684,7 @@ class PerSymbolBot:
             if current_price is None:
                 self.logger.error(f"{NR}Could not get current price for {self.symbol}. Skipping.{RST}")
                 return False
-        
+
         # Update TradeTracker's market info cache
         TradeTracker.market_info_cache[self.symbol] = self.market_info
 
@@ -2718,7 +2711,7 @@ class PerSymbolBot:
             # Assuming interval is in minutes for simplicity, adjust if other timeframes are used
             interval_minutes = int(self.config.get('interval', '5'))
             cooldown_duration = timedelta(minutes=cooldown_candles * interval_minutes)
-            
+
             if datetime.now(TZ) - self.last_signal_time < cooldown_duration:
                 self.logger.info(f"{NB}Signal cooldown active for {self.symbol}. Skipping new signal generation. "
                                  f"Last signal at {self.last_signal_time.strftime('%H:%M:%S')}, cooldown ends in "
@@ -2747,7 +2740,7 @@ class PerSymbolBot:
             self.logger.info(f"{NY}Trading is disabled. Signal '{signal}' for {self.symbol} will not be executed.{RST}")
         else:
             self.logger.info(f"{NB}No trade signal for {self.symbol} (Signal: {signal}). Holding position.{RST}")
-        
+
         return True
 
     @handle_exceptions(default_return=False, message="Error executing trade")
@@ -2766,7 +2759,7 @@ class PerSymbolBot:
         # Calculate position size based on risk per trade
         risk_per_trade_pct = Decimal(str(self.config.get('risk_per_trade', '0.01')))
         leverage = Decimal(str(self.config.get('leverage', '1')))
-        
+
         if TradeTracker.current_balance <= 0:
             self.logger.error(f"{NR}Current balance is zero or negative ({TradeTracker.current_balance}). Cannot calculate position size.{RST}")
             return False
@@ -2779,13 +2772,13 @@ class PerSymbolBot:
         if sl_price is None:
             self.logger.warning(f"{NY}Stop Loss price could not be determined for {self.symbol}. Cannot calculate risk-based position size. Aborting trade.{RST}")
             return False
-        
+
         # Risk amount in quote currency
         risk_amount_quote = TradeTracker.current_balance * risk_per_trade_pct
-        
+
         # Price difference between entry and stop loss
         price_diff_to_sl = abs(entry_price_estimate - sl_price)
-        
+
         if price_diff_to_sl.is_zero():
             self.logger.error(f"{NR}Calculated SL price is too close to entry price ({entry_price_estimate} vs {sl_price}). Risk is zero, cannot determine position size. Aborting trade.{RST}")
             return False
@@ -2794,7 +2787,7 @@ class PerSymbolBot:
         # For linear contracts, size is in base currency, value is size * price
         # risk_amount_quote = (entry_price - sl_price) * size * contract_size
         # size = risk_amount_quote / ((entry_price - sl_price) * contract_size)
-        
+
         contract_size = self.market_info.get("contractSizeDecimal", Decimal("1"))
         if not isinstance(contract_size, Decimal) or contract_size <= 0:
             self.logger.error(f"{NR}Invalid contractSizeDecimal for {self.symbol}: {contract_size}. Cannot calculate position size.{RST}")
@@ -2803,19 +2796,19 @@ class PerSymbolBot:
         # Calculate desired position size (contracts)
         # This formula is for linear contracts where PnL is in quote currency
         position_size_contracts = (risk_amount_quote / (price_diff_to_sl * contract_size)).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
-        
+
         # Ensure position size meets minimum requirements
         min_qty = Decimal(str(self.market_info.get('limits', {}).get('amount', {}).get('min', '0')))
         qty_step = Decimal(str(self.market_info.get('limits', {}).get('amount', {}).get('step', '0.0001'))) # Smallest increment
-        
+
         if position_size_contracts < min_qty:
             self.logger.warning(f"{NY}Calculated position size ({position_size_contracts}) is less than minimum allowed ({min_qty}). Adjusting to minimum.{RST}")
             position_size_contracts = min_qty
-        
+
         # Quantize to the nearest qty_step
         if qty_step > 0:
             position_size_contracts = (position_size_contracts / qty_step).quantize(Decimal("1"), rounding=ROUND_DOWN) * qty_step
-        
+
         if position_size_contracts.is_zero():
             self.logger.error(f"{NR}Calculated position size is zero after quantization. Aborting trade.{RST}")
             return False
@@ -2824,7 +2817,7 @@ class PerSymbolBot:
         # Estimated margin required: (position_size_contracts * entry_price_estimate * contract_size) / leverage
         estimated_cost = position_size_contracts * entry_price_estimate * contract_size
         margin_required = estimated_cost / leverage
-        
+
         if TradeTracker.current_balance < margin_required:
             self.logger.error(f"{NR}Insufficient balance for trade. Required: {margin_required:.2f} {QC}, Available: {TradeTracker.current_balance:.2f} {QC}. Aborting trade.{RST}")
             return False
@@ -2875,10 +2868,10 @@ class PerSymbolBot:
                     price=Decimal(str(order_params['price'])),
                     category='linear' if self.market_info.get('linear') else 'inverse'
                 )
-            
+
             if order and order.get('orderId'):
                 self.logger.info(f"{NG}Order placed successfully for {self.symbol}. Order ID: {order['orderId']}. Status: {order.get('orderStatus', 'UNKNOWN')}. The spell is cast!{RST}")
-                
+
                 # Create a new TradeRecord
                 new_trade = TradeRecord(
                     symbol=self.symbol,
@@ -2900,13 +2893,13 @@ class PerSymbolBot:
                 confirm_delay = self.config.get('position_confirm_delay_seconds', PCDS)
                 self.logger.info(f"{NB}Waiting {confirm_delay} seconds to confirm position for {self.symbol}.{RST}")
                 time.sleep(confirm_delay)
-                
+
                 # Fetch actual position info to update trade record
                 position_info = fetch_position_info(self.exchange, self.symbol, self.market_info, self.logger)
                 if position_info and position_info.get('contractsDecimal', Decimal('0')) > 0:
                     actual_entry_price = position_info.get('entryPriceDecimal', new_trade.entry_price)
                     actual_size = position_info.get('contractsDecimal', new_trade.size)
-                    
+
                     # Update the trade record with actual filled details
                     updated_trade = TradeTracker.get_open_trade(self.symbol)
                     if updated_trade:
@@ -2922,7 +2915,7 @@ class PerSymbolBot:
                         updated_trade.tsl_activation_price = position_info.get('tslActivationPriceDecimal')
                         TradeTracker._save_trades()
                         self.logger.info(f"{NG}Position for {self.symbol} confirmed and trade record updated with actual entry {actual_entry_price} and size {actual_size}.{RST}")
-                        
+
                         # Set SL/TP/TSL after position is confirmed
                         self.logger.info(f"{NB}Attempting to set SL/TP/TSL for confirmed position {self.symbol}.{RST}")
                         set_trade_stop_loss_take_profit(
@@ -2966,7 +2959,7 @@ class PerSymbolBot:
 
         # 1. Fetch latest position info from exchange (more reliable than WS for critical checks)
         position_info = fetch_position_info(self.exchange, self.symbol, self.market_info, self.logger)
-        
+
         # If position is no longer open on exchange, close it in tracker
         if not position_info or position_info.get('contractsDecimal', Decimal('0')).is_zero():
             if self.symbol in TradeTracker.open_trades:
@@ -2974,7 +2967,7 @@ class PerSymbolBot:
                 current_balance = fetch_balance(self.exchange, QC, self.logger) or TradeTracker.current_balance
                 TradeTracker.close_trade(self.symbol, exit_price=current_price, exit_time=datetime.now(TZ), current_balance=current_balance, exit_reason="EXCHANGE_CLOSED")
             return False # Position is closed, no further management needed
-        
+
         # Update trade record with latest info from exchange
         open_trade.stop_loss_price = position_info.get('stopLossDecimal', open_trade.stop_loss_price)
         open_trade.take_profit_price = position_info.get('takeProfitDecimal', open_trade.take_profit_price)
@@ -2986,7 +2979,7 @@ class PerSymbolBot:
         # Recalculate percentage PnL based on updated quote PnL
         if open_trade.initial_capital and open_trade.initial_capital > 0 and open_trade.unrealized_pnl_quote is not None:
             open_trade.unrealized_pnl_percentage = (open_trade.unrealized_pnl_quote / open_trade.initial_capital) * 100
-        
+
         # 2. Check for exit signals from ExitSignalManager
         if self.exit_signal_manager:
             # Ensure TA analyzer has the latest data for exit conditions
@@ -3000,7 +2993,7 @@ class PerSymbolBot:
                 self.logger.info(f"{NY}Exit signal triggered for {self.symbol} by ExitSignalManager (Reason: {exit_reason}). Closing trade.{RST}")
                 if self._close_trade_execution(exit_reason.lower(), current_price):
                     return False # Position closed
-        
+
         # 3. Check for time-based exit
         if self.config.get('time_based_exit_minutes') is not None and self.config.get('time_based_exit_minutes') > 0:
             if self._check_time_based_exit(open_trade):
@@ -3020,7 +3013,7 @@ class PerSymbolBot:
                         current_balance = fetch_balance(self.exchange, QC, self.logger) or TradeTracker.current_balance
                         TradeTracker.close_trade(self.symbol, exit_price=current_price, exit_time=datetime.now(TZ), current_balance=current_balance, exit_reason="BREAK_EVEN_CLOSED")
                     return False # Position closed
-        
+
         # Re-fetch the trade record as it might have been updated by break-even logic
         open_trade = TradeTracker.get_open_trade(self.symbol)
         if not open_trade:
@@ -3055,25 +3048,25 @@ class PerSymbolBot:
                 self.logger.warning(f"{NY}_manage_position: set_trade_stop_loss_take_profit call (for TSL management) for {self.symbol} failed. Position may not have desired protections.{RST}")
         else: # Trailing Stop is DISABLED in config
             self.logger.info(f"{NB}_manage_position: Trailing Stop is DISABLED for {self.symbol}. Calling set_trade_stop_loss_take_profit to manage fixed SL and TP. Desired SL: {desired_sl}, Desired TP: {desired_tp}. TSL active on exchange: {tsl_active_on_exchange}. Position Info being passed to set_trade_stop_loss_take_profit: SL={position_info.get('stopLossDecimal')}, TP={position_info.get('takeProfitDecimal')}, TSL_Dist={position_info.get('trailingStopDecimal')}{RST}")
-            
+
             # Check if an update is actually needed to avoid unnecessary API calls
             current_sl_exchange_raw = position_info.get('stopLossDecimal')
             current_tp_exchange_raw = position_info.get('takeProfitDecimal')
-            
+
             sl_update_needed = False
             if desired_sl is not None:
                 if current_sl_exchange_raw is None or abs(current_sl_exchange_raw - desired_sl) > min_trade_size:
                     sl_update_needed = True
             elif current_sl_exchange_raw is not None and current_sl_exchange_raw > 0: # If desired SL is None but exchange has one
                 sl_update_needed = True
-            
+
             tp_update_needed = False
             if desired_tp is not None:
                 if current_tp_exchange_raw is None or abs(current_tp_exchange_raw - desired_tp) > min_trade_size:
                     tp_update_needed = True
             elif current_tp_exchange_raw is not None and current_tp_exchange_raw > 0: # If desired TP is None but exchange has one
                 tp_update_needed = True
-            
+
             if tsl_active_on_exchange or sl_update_needed or tp_update_needed:
                 self.logger.info(f"{NB}_manage_position: Conditions for updating fixed protections met for {self.symbol} (TSL active on ex: {tsl_active_on_exchange}, SL update needed: {sl_update_needed}, TP update needed: {tp_update_needed}). Calling set_trade_stop_loss_take_profit with fixed SL: {desired_sl}, fixed TP: {desired_tp}.{RST}")
                 stsl_success = set_trade_stop_loss_take_profit(
@@ -3091,7 +3084,7 @@ class PerSymbolBot:
                     self.logger.warning(f"{NY}_manage_position: set_trade_stop_loss_take_profit call (for fixed SL/TP management) for {self.symbol} failed. Position may not have desired protections.{RST}")
             else:
                 self.logger.debug(f"{NB}_manage_position: No mismatch in fixed SL/TP for {self.symbol}, and TSL is disabled and not active on exchange. No protection update needed via set_trade_stop_loss_take_profit.{RST}")
-        
+
         # Final check for trade closure by SL/TP hit (based on trade record's stored values)
         # The trade record's SL/TP values should have been updated by set_trade_stop_loss_take_profit
         open_trade = TradeTracker.get_open_trade(self.symbol)
@@ -3101,7 +3094,7 @@ class PerSymbolBot:
 
         sl_from_record = open_trade.stop_loss_price
         tp_from_record = open_trade.take_profit_price
-        
+
         if open_trade and open_trade.status == "OPEN":
             if open_trade.side == "long":
                 if tp_from_record and current_price >= tp_from_record:
@@ -3121,7 +3114,7 @@ class PerSymbolBot:
                     self.logger.info(f"{NR}Stop Loss hit for {self.symbol} (Short)! Current: {current_price:.4f}, SL: {sl_from_record:.4f}{RST}")
                     if self._close_trade_execution('SL', current_price):
                         return False # Position closed
-        
+
         return True # Position managed successfully for this cycle
 
     @handle_exceptions(default_return=False, message="Error closing trade execution")
@@ -3136,10 +3129,10 @@ class PerSymbolBot:
 
         # Use BybitV5Plugin for order placement
         bybit_plugin = BybitV5Plugin() # Assuming plugin is initialized elsewhere or can be here
-        
+
         # Determine side for closing order
         close_side = "SELL" if open_trade.side == "long" else "BUY"
-        
+
         # Place a market order to close the position
         order = bybit_plugin.place_market_order(
             symbol=self.bybit_symbol_id,
@@ -3177,7 +3170,7 @@ class PerSymbolBot:
             return False
 
     @handle_exceptions(default_return=False, message="Error checking break-even")
-    def _check_break_even(self, current_price: Decimal, position_info: Dict[str, Any]) -> bool:
+    def _check_break_even(self, current_price: Decimal, position_info: dict[str, Any]) -> bool:
         """Manages break-even stop loss adjustments."""
         if not self.config.get('enable_break_even', False):
             self.logger.debug(f"Break-Even feature is disabled for {self.symbol}. Skipping check.{RST}")
@@ -3187,7 +3180,7 @@ class PerSymbolBot:
         if atr_value is None or atr_value.values is None or atr_value.values.empty:
             self.logger.warning(f"{NY}Break-Even check skipped for {self.symbol}: Invalid or missing ATR. Cannot calculate break-even trigger.{RST}")
             return False
-        
+
         latest_atr_val = atr_value.values.iloc[-1]
         if pd.isna(latest_atr_val) or Decimal(str(latest_atr_val)) <= 0:
             self.logger.warning(f"{NY}Break-Even check skipped for {self.symbol}: Invalid or missing ATR ({latest_atr_val}). Cannot calculate break-even trigger.{RST}")
@@ -3196,14 +3189,14 @@ class PerSymbolBot:
 
         entry_price = position_info.get('entryPriceDecimal')
         position_side = position_info.get('positionSide')
-        
+
         if not isinstance(entry_price, Decimal) or entry_price <= 0:
             self.logger.warning(f"{NY}Break-Even check skipped for {self.symbol}: Invalid entry price ({entry_price}).{RST}")
             return False
         if position_side not in ["long", "short"]:
             self.logger.warning(f"{NY}Break-Even check skipped for {self.symbol}: Invalid position side ('{position_side}').{RST}")
             return False
-        
+
         current_sl_raw = position_info.get('stopLossDecimal')
         current_sl_dec = None
         if current_sl_raw is not None and str(current_sl_raw).strip() != "":
@@ -3237,10 +3230,10 @@ class PerSymbolBot:
                     new_sl_price = (new_sl_price / min_trade_size).quantize(Decimal("1"), rounding=ROUND_UP) * min_trade_size
                 else:
                     new_sl_price = new_sl_price.quantize(Decimal("1e-" + str(price_precision)), rounding=ROUND_UP)
-                
+
                 if current_sl_dec is None or new_sl_price > current_sl_dec:
                     self.logger.info(f"{NG}Break-Even triggered for {self.symbol} (Long). Current Price: {current_price:.{price_precision}f} >= Trigger: {trigger_price:.{price_precision}f}. Preparing to set SL to {new_sl_price:.{price_precision}f}. Securing the gains!{RST}")
-                    
+
                     # Get current TP from position_info to maintain it
                     current_tp_raw = position_info.get('takeProfitDecimal')
                     current_tp_dec = None
@@ -3278,10 +3271,10 @@ class PerSymbolBot:
                     new_sl_price = (new_sl_price / min_trade_size).quantize(Decimal("1"), rounding=ROUND_DOWN) * min_trade_size
                 else:
                     new_sl_price = new_sl_price.quantize(Decimal("1e-" + str(price_precision)), rounding=ROUND_DOWN)
-                
+
                 if current_sl_dec is None or new_sl_price < current_sl_dec:
                     self.logger.info(f"{NG}Break-Even triggered for {self.symbol} (Short). Current Price: {current_price:.{price_precision}f} <= Trigger: {trigger_price:.{price_precision}f}. Preparing to set SL to {new_sl_price:.{price_precision}f}. Securing the gains!{RST}")
-                    
+
                     # Get current TP from position_info to maintain it
                     current_tp_raw = position_info.get('takeProfitDecimal')
                     current_tp_dec = None
@@ -3310,7 +3303,7 @@ class PerSymbolBot:
                         self.logger.warning(f"{NY}_check_break_even: Break-Even SL setting failed for {self.symbol} (Short) via set_trade_stop_loss_take_profit.{RST}")
                 else:
                     self.logger.debug(f"Break-Even for {self.symbol} (Short) triggered, but new SL {new_sl_price:.{price_precision}f} is not lower than current SL {current_sl_dec:.{price_precision}f}. No update needed. The shield is already advanced.{RST}")
-        
+
         self.logger.debug(f"Break-Even not triggered for {self.symbol}. Current Price: {current_price:.{price_precision}f}, Trigger: {trigger_price:.{price_precision}f}. Still awaiting the threshold.{RST}")
         return False
 
@@ -3321,11 +3314,11 @@ class PerSymbolBot:
         if time_based_exit_minutes is None or time_based_exit_minutes <= 0:
             self.logger.debug(f"Time-based exit is disabled or configured for 0 minutes for {self.symbol}. Skipping check.{RST}")
             return False
-        
+
         if not open_trade:
             self.logger.debug(f"No open trade for {self.symbol} to check for time-based exit. The position is already clear.{RST}")
             return False
-        
+
         trade_duration = datetime.now(TZ) - open_trade.entry_time
         if trade_duration.total_seconds() / 60 >= time_based_exit_minutes:
             self.logger.info(f"Time-based exit triggered for {self.symbol}. Trade open for {trade_duration.total_seconds() / 60:.2f} minutes (Threshold: {time_based_exit_minutes} minutes). The temporal limit has been reached!{RST}")
@@ -3354,12 +3347,12 @@ class PerSymbolBot:
 # --- Main Bot Class ---
 class ScalperBot:
     """The Orchestrator: Manages the overall bot lifecycle, including initialization, running, and stopping."""
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.logger = slg('main')
         self.config = config
-        self.exchange: Optional[ccxt.Exchange] = None
-        self.per_symbol_bots: Dict[str, PerSymbolBot] = {}
-        self.websocket_client: Optional[BybitWebSocket] = None
+        self.exchange: ccxt.Exchange | None = None
+        self.per_symbol_bots: dict[str, PerSymbolBot] = {}
+        self.websocket_client: BybitWebSocket | None = None
         self.is_running = False
         self.last_sms_report_time = 0.0
 
@@ -3370,12 +3363,12 @@ class ScalperBot:
         if not self.exchange:
             self.logger.critical(f"{NR}Exchange initialization failed. Exiting. The trading realm remains inaccessible!{RST}")
             sys.exit(1)
-        
+
         TradeTracker.set_exchange_reference(self.exchange)
         TradeTracker._load_trades() # Load trade history after exchange is set
-        
+
         self.websocket_client = BybitWebSocket(api_key=AK, api_secret=AS, use_testnet=self.config.get('use_sandbox', True), logger=slg('websocket'))
-        
+
         public_topics = []
         for symbol in self.config.get('symbols_to_trade', []):
             try:
@@ -3392,11 +3385,11 @@ class ScalperBot:
                 self.logger.error(f"{NR}Failed to initialize bot for symbol {symbol}: {err}. Skipping this symbol. A specific enchantment failed!{RST}")
             except Exception as err:
                 self.logger.error(f"{NR}Unexpected error initializing bot for symbol {symbol}: {err}. Skipping this symbol. A cosmic interference!{RST}", exc_info=True)
-        
+
         if not self.per_symbol_bots:
             self.logger.critical(f"{NR}No symbols successfully initialized. Exiting. The bot has no markets to observe!{RST}")
             sys.exit(1)
-        
+
         self.websocket_client.start_streams(public_topics=list(set(public_topics)))
         self.logger.info(f"{NG}XR Scalper Bot initialized successfully with WebSocket client. Public topics: {self.websocket_client.public_subscriptions}. The trading journey is ready to begin!{RST}")
         self.is_running = True
@@ -3404,15 +3397,15 @@ class ScalperBot:
     def run(self) -> None:
         """The main execution loop of the bot."""
         self.logger.info(f"{NB}--- Starting XR Scalper Bot Main Loop ---{RST}")
-        last_run_times: Dict[str, float] = {}
+        last_run_times: dict[str, float] = {}
         interval_seconds = int(self.config.get('interval', '5')) * 60
-        
+
         while self.is_running:
             try:
                 enable_sms = self.config.get('enable_sms_alerts', False)
                 sms_recipient = self.config.get('sms_recipient_number')
                 sms_interval_minutes = self.config.get('sms_report_interval_minutes')
-                
+
                 if enable_sms and sms_recipient and sms_interval_minutes and sms_interval_minutes > 0:
                     current_time = time.time()
                     if current_time - self.last_sms_report_time >= sms_interval_minutes * 60:
@@ -3420,7 +3413,7 @@ class ScalperBot:
                         try:
                             current_balance = fetch_balance(self.exchange, QC, self.logger)
                             formatted_balance = f"{current_balance:.2f} {QC}" if current_balance is not None else "N/A"
-                            
+
                             open_pos_summary = []
                             if TradeTracker.open_trades:
                                 for symbol, trade in TradeTracker.open_trades.items():
@@ -3429,21 +3422,21 @@ class ScalperBot:
                             open_pos_str = ", ".join(open_pos_summary) if open_pos_summary else "None"
                             if len(open_pos_str) > 100:
                                 open_pos_str = open_pos_str[:97] + "..."
-                            
+
                             closed_trade_summary = []
                             if TradeTracker.closed_trades:
                                 last_closed = TradeTracker.closed_trades[-1]
                                 pnl_str = f"{last_closed.realized_pnl_quote:.2f}" if last_closed.realized_pnl_quote is not None else "N/A"
                                 closed_trade_summary.append(f"Last Closed: {last_closed.symbol.split('/')[0]} PnL:{pnl_str}")
                             closed_str = ", ".join(closed_trade_summary) if closed_trade_summary else "None"
-                            
+
                             total_pnl_str = f"{TradeTracker.total_pnl:.2f} {QC}" if TradeTracker.total_pnl is not None else "N/A"
                             sms_message = f"XR Scalper Update:\nBalance: {formatted_balance}\nTotal PnL: {total_pnl_str}\nOpen Pos: {open_pos_str}\n{closed_str}"
                             send_sms_alert(sms_message, sms_recipient, self.logger, self.config)
                             self.last_sms_report_time = current_time
                         except Exception as err:
                             self.logger.error(f"{NR}Error generating periodic SMS summary: {err}{RST}", exc_info=True)
-                
+
                 loop_start_time = time.time()
                 for symbol, bot_instance in self.per_symbol_bots.items():
                     if symbol not in last_run_times or loop_start_time - last_run_times[symbol] >= interval_seconds:
@@ -3451,16 +3444,16 @@ class ScalperBot:
                         last_run_times[symbol] = loop_start_time
                     else:
                         self.logger.debug(f"Waiting for next interval for {symbol}. Next run in {interval_seconds - (loop_start_time - last_run_times[symbol]):.1f}s.{RST}")
-                
+
                 clear_screen()
                 TradeTracker.display_metrics()
-                
+
                 if self.websocket_client:
                     display_open_positions(open_trades=TradeTracker.open_trades, market_infos=TradeTracker.market_info_cache, current_prices=self.websocket_client.prices, quote_currency=QC, logger=self.logger)
                     display_recent_closed_trades(closed_trades=TradeTracker.closed_trades, market_infos=TradeTracker.market_info_cache, quote_currency=QC, logger=self.logger, num_to_display=5)
                 else:
                     self.logger.warning(f"{NY}WebSocket client not available, cannot display open positions or current prices.{RST}")
-                
+
                 time.sleep(self.config.get('main_loop_sleep_seconds', RDS))
             except KeyboardInterrupt:
                 self.logger.info(f"{NY}KeyboardInterrupt detected. Stopping bot... The user has commanded a halt!{RST}")
@@ -3486,7 +3479,7 @@ class ScalperBot:
 if __name__ == "__main__":
     # Initialize TradeTracker globally
     TradeTracker = TradeManager()
-    
+
     bot = ScalperBot(config=_initial_config_from_file)
     try:
         bot.initialize()

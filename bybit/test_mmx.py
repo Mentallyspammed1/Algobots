@@ -1,22 +1,34 @@
-import pytest
-from decimal import Decimal
-import sys
-import os
 import asyncio
+import os
+import sys
 import time
-from unittest.mock import MagicMock, patch
+from decimal import Decimal
+from unittest.mock import patch
+
+import pytest
 
 # Add the directory containing mmx.py to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__name__), '.')))
 
 # Import the functions and classes to be tested
-from mmx import calculate_decimal_precision, BotConfig, BotHealth, AdaptiveRateLimiter, SymbolInfo, MarketState, SessionStats, CIRCUIT_BREAKER_STATE, _SHUTDOWN_REQUESTED, set_bot_state, BOT_STATE
-
 # Mock global instances for testing purposes where necessary
 # For BotConfig tests, we don't need to mock these as BotConfig is self-contained.
 # For other tests, we might need to mock or reset these.
 # For now, let's ensure they are accessible for tests that need them.
-from mmx import config, market_state, session_stats, symbol_info, rate_limiter
+from mmx import (
+    AdaptiveRateLimiter,
+    BotConfig,
+    BotHealth,
+    MarketState,
+    SessionStats,
+    SymbolInfo,
+    calculate_decimal_precision,
+    market_state,
+    session_stats,
+    set_bot_state,
+    symbol_info,
+)
+
 
 # Reset global state for each test to ensure isolation
 @pytest.fixture(autouse=True)
@@ -64,7 +76,7 @@ class TestBotConfig:
         # Test with default valid configuration
         cfg = BotConfig()
         assert cfg.SYMBOL == "BTCUSDT"
-        assert cfg.QUANTITY == Decimal("0.001")
+        assert Decimal("0.001") == cfg.QUANTITY
         # No ValueError should be raised
 
     def test_invalid_spread_percentage(self):
@@ -212,13 +224,13 @@ class TestBotConfig:
     def test_initial_state(self):
         health = BotHealth()
         assert health.overall_score == 1.0
-        
+
         assert health.get_status_message() == "EXCELLENT"
 
     def test_update_component(self):
         health = BotHealth()
         health.components = {} # Change to a regular dict to prevent defaultdict behavior
-        
+
         # Manually set weights and initial values for the components used in this test
         health.components["api_performance"] = {'score': 1.0, 'last_check': time.time(), 'message': 'OK', 'weight': 1.2}
         health.components["ws_overall_connection"] = {'score': 1.0, 'last_check': time.time(), 'message': 'OK', 'weight': 2.0}
@@ -226,7 +238,7 @@ class TestBotConfig:
         health.update_component("api_performance", 0.8, "API calls slightly slow")
         assert health.components["api_performance"]["score"] == 0.8
         assert health.components["api_performance"]["message"] == "API calls slightly slow"
-        
+
 
         health.update_component("ws_overall_connection", 0.3, "WS disconnected")
         assert health.components["ws_overall_connection"]["score"] == 0.3
@@ -311,7 +323,7 @@ class TestAdaptiveRateLimiter:
     async def test_acquire_tokens(self):
         config = BotConfig(RATE_LIMIT_REQUESTS_PER_SECOND=1, RATE_LIMIT_BURST_LIMIT=1)
         limiter = AdaptiveRateLimiter(config)
-        
+
         # First acquire should be immediate
         start_time = time.time()
         await limiter.acquire()
@@ -328,7 +340,7 @@ class TestAdaptiveRateLimiter:
     async def test_burst_limit(self):
         config = BotConfig(RATE_LIMIT_REQUESTS_PER_SECOND=10, RATE_LIMIT_BURST_LIMIT=5)
         limiter = AdaptiveRateLimiter(config)
-        
+
         # First 5 acquires should be immediate
         start_time = time.time()
         for _ in range(5):
@@ -346,14 +358,14 @@ class TestAdaptiveRateLimiter:
     async def test_adaptive_scaling_increase(self):
         config = BotConfig(RATE_LIMIT_REQUESTS_PER_SECOND=10, RATE_LIMIT_BURST_LIMIT=10, RATE_LIMIT_ADAPTIVE_SCALING=True)
         limiter = AdaptiveRateLimiter(config)
-        
+
         # Simulate high success rate
         for _ in range(100):
             limiter.record_success(True)
-        
+
         # Allow time for tokens to accumulate and rate to adapt
-        await asyncio.sleep(1) 
-        
+        await asyncio.sleep(1)
+
         # Acquire multiple tokens and check if rate increased
         # The exact rate is hard to assert due to time.time() and Decimal precision,
         # but we can check if it's faster than the base rate.
@@ -368,14 +380,14 @@ class TestAdaptiveRateLimiter:
     async def test_adaptive_scaling_decrease(self):
         config = BotConfig(RATE_LIMIT_REQUESTS_PER_SECOND=10, RATE_LIMIT_BURST_LIMIT=10, RATE_LIMIT_ADAPTIVE_SCALING=True)
         limiter = AdaptiveRateLimiter(config)
-    
+
         # Simulate low success rate
         for _ in range(100):
             limiter.record_success(False)
-    
+
         # Trigger adaptive adjustment by acquiring a token
         await limiter.acquire()
-        
+
         # Check if rate decreased and backoff increased
         assert limiter.current_rate < Decimal(str(config.RATE_LIMIT_REQUESTS_PER_SECOND))
         assert limiter.backoff_factor > Decimal("1.0")
@@ -393,24 +405,24 @@ class TestSymbolInfo:
         info = SymbolInfo()
         bids = [["100.5", "10"], ["100.4", "5"]]
         asks = [["100.6", "8"], ["100.7", "12"]]
-        
+
         info.update_orderbook_depth(bids, asks)
-        
+
         assert info.bid_levels == [(Decimal("100.5"), Decimal("10")), (Decimal("100.4"), Decimal("5"))]
         assert info.ask_levels == [(Decimal("100.6"), Decimal("8")), (Decimal("100.7"), Decimal("12"))]
         assert info.total_bid_volume == Decimal("15")
         assert info.total_ask_volume == Decimal("20")
-        
+
 
     def test_update_orderbook_depth_invalid_data(self):
         info = SymbolInfo()
         bids = [["invalid", "10"], ["100.4", "5"]]
         asks = [["100.6", "invalid"], ["100.7", "12"]]
-        
+
         # Expecting InvalidOperation to be raised, as the method does not handle it
         with pytest.raises(Exception): # Catching generic Exception for now
             info.update_orderbook_depth(bids, asks)
-        
+
         # After an exception, the lists should remain empty or partially updated depending on implementation
         # Given the current implementation, it will raise an error on the first invalid conversion.
         # So, the lists should remain empty.
@@ -442,7 +454,7 @@ class TestSymbolInfo:
         info = SymbolInfo()
         info.bid_levels = [(Decimal("100"), Decimal("10"))]
         info.ask_levels = [(Decimal("101"), Decimal("5")), (Decimal("102"), Decimal("5"))]
-        
+
         # Buy 3 units, all from 101
         slippage = info.estimate_slippage("Buy", Decimal("3"))
         assert slippage == Decimal("0") # No slippage if filled at best ask
@@ -458,7 +470,7 @@ class TestSymbolInfo:
         info = SymbolInfo()
         info.bid_levels = [(Decimal("100"), Decimal("5")), (Decimal("99"), Decimal("5"))]
         info.ask_levels = [(Decimal("101"), Decimal("10"))]
-        
+
         # Sell 3 units, all from 100
         slippage = info.estimate_slippage("Sell", Decimal("3"))
         assert slippage == Decimal("0") # No slippage if filled at best bid
@@ -505,7 +517,7 @@ class TestMarketState:
         state.mid_price = Decimal("100")
         state.best_bid = Decimal("99")
         state.best_ask = Decimal("101")
-        
+
         # Provide enough time values for all calls within is_data_fresh
         mock_time.side_effect = [100, # state.last_update_time = mock_time()
                                  105, # current_time in is_data_fresh (first call)
@@ -514,7 +526,7 @@ class TestMarketState:
                                  135] # current_time in is_data_fresh (third call, for mid_price=0)
 
         state.last_update_time = mock_time() # 100
-        
+
         # Within timeout_seconds
         assert state.is_data_fresh(10) == True # 105 - 100 = 5s, fresh
         # The data_quality_score is updated by bot_health.update_component, which is mocked.
@@ -561,7 +573,7 @@ class TestMarketState:
     def test_update_price_history(self, mock_time):
         state = MarketState()
         state.mid_price = Decimal("100")
-        
+
         mock_time.side_effect = [100, 105] # Provide enough time values
 
         state.update_price_history()

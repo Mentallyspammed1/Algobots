@@ -4,25 +4,25 @@
 
 from __future__ import annotations
 
-import os
-import json
-import time
-import random
-import hmac
 import hashlib
+import hmac
+import json
 import logging
-from datetime import datetime, timezone, timedelta
+import os
+import random
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal, getcontext
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
+from zoneinfo import ZoneInfo
 
-import requests
 import numpy as np
 import pandas as pd
+import requests
 from colorama import Fore, Style, init as colorama_init
 from dotenv import load_dotenv
-from zoneinfo import ZoneInfo
-from dataclasses import dataclass, field
 
 # Initialize color output
 colorama_init(autoreset=True)
@@ -73,7 +73,7 @@ LOGGER = setup_logger("whalebot")
 # -----------------------------
 @dataclass
 class BotConfig:
-    raw: Dict[str, Any]
+    raw: dict[str, Any]
 
     def get(self, key: str, default: Any = None):
         return self.raw.get(key, default)
@@ -81,7 +81,7 @@ class BotConfig:
     def __getitem__(self, key: str):
         return self.raw[key]
 
-def _default_config() -> Dict[str, Any]:
+def _default_config() -> dict[str, Any]:
     return {
         "interval": "15",
         "analysis_interval": 30,
@@ -203,7 +203,7 @@ def load_config(fp: Path) -> BotConfig:
         return BotConfig(defaults)
 
     try:
-        with open(fp, "r", encoding="utf-8") as f:
+        with open(fp, encoding="utf-8") as f:
             user_cfg = json.load(f)
         merged = {**defaults, **user_cfg}
         return BotConfig(merged)
@@ -219,11 +219,11 @@ CFG = load_config(CONFIG_FILE)
 # -----------------------------
 # 3) Bybit API helpers
 # -----------------------------
-def _sign(api_secret: str, params: Dict[str, Any]) -> str:
+def _sign(api_secret: str, params: dict[str, Any]) -> str:
     qs = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     return hmac.new(api_secret.encode(), qs.encode(), hashlib.sha256).hexdigest()
 
-def _log_api_error(resp: requests.Response, logger: Optional[logging.Logger] = None) -> None:
+def _log_api_error(resp: requests.Response, logger: logging.Logger | None = None) -> None:
     try:
         data = resp.json()
         if logger:
@@ -237,10 +237,10 @@ def _send_request(
     endpoint: str,
     api_key: str,
     api_secret: str,
-    params: Optional[Dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
     retries: int = 5,
-    logger: Optional[logging.Logger] = None,
-) -> Optional[Dict[str, Any]]:
+    logger: logging.Logger | None = None,
+) -> dict[str, Any] | None:
     """Signed Bybit API request with retry/backoff & jitter."""
     params = params or {}
     params["timestamp"] = str(int(time.time() * 1000))
@@ -289,7 +289,7 @@ def _send_request(
     return None
 
 # Convenience wrappers
-def fetch_current_price(symbol: str, api_key: str, api_secret: str, logger: logging.Logger) -> Optional[Decimal]:
+def fetch_current_price(symbol: str, api_key: str, api_secret: str, logger: logging.Logger) -> Decimal | None:
     endpoint = "/v5/market/tickers"
     data = _send_request("GET", endpoint, api_key, api_secret, {"category": "linear", "symbol": symbol}, logger=logger)
     if not data or data.get("retCode") != 0:
@@ -309,7 +309,7 @@ def fetch_klines(
     api_secret: str,
     logger: logging.Logger,
     limit: int = 200,
-    cache: Optional[Dict[str, Tuple[datetime, pd.DataFrame]]] = None,
+    cache: dict[str, tuple[datetime, pd.DataFrame]] | None = None,
 ) -> pd.DataFrame:
     """Fetch K-line data with a tiny 30s in-memory cache per symbol/interval."""
     cache = cache or {}
@@ -341,7 +341,7 @@ def fetch_klines(
     cache[key] = (now, df.copy())
     return df
 
-def fetch_order_book(symbol: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 50) -> Optional[Dict[str, Any]]:
+def fetch_order_book(symbol: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 50) -> dict[str, Any] | None:
     endpoint = "/v5/market/orderbook"
     data = _send_request("GET", endpoint, api_key, api_secret, {"symbol": symbol, "limit": limit, "category": "linear"}, logger=logger)
     if data and data.get("retCode") == 0:
@@ -437,10 +437,10 @@ class Indicators:
 # -----------------------------
 @dataclass
 class TradeSignal:
-    signal: Optional[str]
+    signal: str | None
     confidence: float
-    conditions: List[str] = field(default_factory=list)
-    levels: Dict[str, Decimal] = field(default_factory=dict)
+    conditions: list[str] = field(default_factory=list)
+    levels: dict[str, Decimal] = field(default_factory=dict)
 
 # -----------------------------
 # 6) Core analyzer
@@ -462,10 +462,10 @@ class TradingAnalyzer:
         self.symbol = symbol
         self.interval = interval
 
-        self.indicator_values: Dict[str, Any] = {}
+        self.indicator_values: dict[str, Any] = {}
         self.atr_value: float = 0.0
-        self.levels: Dict[str, Any] = {"Support": {}, "Resistance": {}}
-        self.fib_levels: Dict[str, Decimal] = {}
+        self.levels: dict[str, Any] = {"Support": {}, "Resistance": {}}
+        self.fib_levels: dict[str, Decimal] = {}
 
         self.weight_sets = cfg.get("weight_sets", {})
         self.user_defined_weights = self._select_weight_set()
@@ -489,7 +489,7 @@ class TradingAnalyzer:
             self.indicator_values["atr"] = self.atr_value
         self._calculate_momentum_ma()
 
-    def _select_weight_set(self) -> Dict[str, float]:
+    def _select_weight_set(self) -> dict[str, float]:
         atr = self.atr_value
         thresh = self.cfg.get("atr_change_threshold", 0.005)
         if atr > thresh:
@@ -498,7 +498,7 @@ class TradingAnalyzer:
         self.log.info(f"{NEON_BLUE}Low volatility detected (ATR={atr:.4f}). Using 'low_volatility' weights.{RESET}")
         return self.weight_sets["low_volatility"]
 
-    def _safe_series_operation(self, series: Optional[pd.Series], operation: str, window: int) -> pd.Series:
+    def _safe_series_operation(self, series: pd.Series | None, operation: str, window: int) -> pd.Series:
         data_series = series if series is not None else self.df["close"]
         if data_series is None or data_series.empty:
             return pd.Series(dtype=float)
@@ -737,7 +737,7 @@ class TradingAnalyzer:
     def _calculate_ema(self, series: pd.Series, span: int) -> pd.Series:
         return Indicators.ema(series, span)
 
-    def _calculate_sma(self, window: int, series: Optional[pd.Series] = None) -> pd.Series:
+    def _calculate_sma(self, window: int, series: pd.Series | None = None) -> pd.Series:
         return self._safe_series_operation(series, "sma", window)
 
     def _calculate_ada(self) -> None:
@@ -789,7 +789,7 @@ class TradingAnalyzer:
         return adx_value
 
     # ------------- analysis orchestration -------------
-    def calculate_fibonacci_retracement(self, high: Decimal, low: Decimal, current_price: Decimal) -> Dict[str, Decimal]:
+    def calculate_fibonacci_retracement(self, high: Decimal, low: Decimal, current_price: Decimal) -> dict[str, Decimal]:
         diff = high - low
         if diff <= 0:
             self.log.warning(f"{NEON_YELLOW}Cannot calculate Fibonacci retracement: High <= Low.{RESET}")
@@ -829,10 +829,10 @@ class TradingAnalyzer:
             "R3": r3.quantize(precision), "S3": s3.quantize(precision),
         })
 
-    def find_nearest_levels(self, current_price: Decimal, num_levels: int = 5) -> Tuple[List[Tuple[str, Decimal]], List[Tuple[str, Decimal]]]:
+    def find_nearest_levels(self, current_price: Decimal, num_levels: int = 5) -> tuple[list[tuple[str, Decimal]], list[tuple[str, Decimal]]]:
         """Return nearest supports and resistances based on Fibonacci/Pivot data."""
-        supports: List[Tuple[str, Decimal]] = [(lab, val) for lab, val in self.levels.get("Support", {}).items()]
-        resistances: List[Tuple[str, Decimal]] = [(lab, val) for lab, val in self.levels.get("Resistance", {}).items()]
+        supports: list[tuple[str, Decimal]] = [(lab, val) for lab, val in self.levels.get("Support", {}).items()]
+        resistances: list[tuple[str, Decimal]] = [(lab, val) for lab, val in self.levels.get("Resistance", {}).items()]
 
         supports = sorted(supports, key=lambda t: current_price - t[1])
         resistances = sorted(resistances, key=lambda t: t[1] - current_price)
@@ -840,7 +840,7 @@ class TradingAnalyzer:
         return supports[:num_levels], resistances[:num_levels]
 
     # ------------- order-book walls -------------
-    def analyze_order_book_walls(self, order_book: Dict[str, Any]) -> Tuple[bool, bool, Dict[str, Decimal], Dict[str, Decimal]]:
+    def analyze_order_book_walls(self, order_book: dict[str, Any]) -> tuple[bool, bool, dict[str, Decimal], dict[str, Decimal]]:
         """Detect bullish/bearish walls from bids/asks."""
         enabled = self.cfg.get("order_book_analysis", {}).get("enabled", False)
         if not enabled or not order_book:
@@ -874,7 +874,7 @@ class TradingAnalyzer:
         return bool(bullish), bool(bearish), bullish, bearish
 
     # ------------- analysis orchestration -------------
-    def analyze(self, current_price: Decimal, timestamp: str, order_book: Optional[Dict[str, Any]]) -> None:
+    def analyze(self, current_price: Decimal, timestamp: str, order_book: dict[str, Any] | None) -> None:
         """Compute indicators, levels, and log a summary."""
         cur = Decimal(str(current_price))
         high = Decimal(str(self.df["high"].max()))
@@ -974,7 +974,7 @@ class TradingAnalyzer:
 
         self.log.info(output)
 
-    def determine_trend_momentum(self) -> Dict[str, Union[str, float]]:
+    def determine_trend_momentum(self) -> dict[str, str | float]:
         """Trend based on momentum MAs, normalized by ATR."""
         if self.df.empty or len(self.df) < max(self.cfg.get("momentum_ma_long", 26), self.cfg.get("atr_period", 14)):
             return {"trend": "Insufficient Data", "strength": 0.0}
@@ -1059,9 +1059,9 @@ class TradingAnalyzer:
     def generate_trading_signal(self, current_price: Decimal) -> TradeSignal:
         """Return a bull/bear signal with a score and SL/TP if available."""
         signal_score = Decimal("0.0")
-        signal: Optional[str] = None
-        conditions: List[str] = []
-        trade_levels: Dict[str, Decimal] = {}
+        signal: str | None = None
+        conditions: list[str] = []
+        trade_levels: dict[str, Decimal] = {}
 
         # Bullish checks (simplified but extensible)
         if self.cfg.get("indicators", {}).get("stoch_rsi") and self.indicator_values.get("stoch_rsi_vals"):
@@ -1113,7 +1113,7 @@ class TradingAnalyzer:
 
         # Bearish side
         bearish_score = Decimal("0.0")
-        bearish_conditions: List[str] = []
+        bearish_conditions: list[str] = []
 
         if self.cfg.get("indicators", {}).get("stochastic_oscillator") and self.indicator_values.get("stoch_osc_vals"):
             stoch = self.indicator_values["stoch_osc_vals"]
@@ -1175,7 +1175,7 @@ class TradingAnalyzer:
 # -----------------------------
 # 7) Indicator interpreter
 # -----------------------------
-def interpret_indicator(logger: logging.Logger, indicator_name: str, values: Any) -> Optional[str]:
+def interpret_indicator(logger: logging.Logger, indicator_name: str, values: Any) -> str | None:
     """Human-friendly interpretation for logged indicators."""
     if values is None:
         return None
@@ -1291,10 +1291,10 @@ def main() -> None:
     symbol_logger = setup_logger(symbol)
     symbol_logger.info(f"{NEON_BLUE}Starting WhaleBot for {symbol} @ {interval}{RESET}")
 
-    klines_cache: Dict[str, Tuple[datetime, pd.DataFrame]] = {}
+    klines_cache: dict[str, tuple[datetime, pd.DataFrame]] = {}
     last_signal_ts = 0.0
     last_ob_ts = 0.0
-    order_book_cached: Optional[Dict[str, Any]] = None
+    order_book_cached: dict[str, Any] | None = None
 
     try:
         while True:

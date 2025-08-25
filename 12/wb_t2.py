@@ -5,25 +5,25 @@
 
 from __future__ import annotations
 
-import os
-import json
-import time
-import random
-import hmac
 import hashlib
+import hmac
+import json
 import logging
+import os
+import random
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal, getcontext
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
+from zoneinfo import ZoneInfo
 
-import requests
 import numpy as np
 import pandas as pd
+import requests
 from colorama import Fore, Style, init as colorama_init
 from dotenv import load_dotenv
-from zoneinfo import ZoneInfo
-from dataclasses import dataclass, field
 
 # ----------------------------------------------------------------------------
 # 1. GLOBAL INITIALIZATION & CONSTANTS
@@ -79,7 +79,7 @@ LOGGER = setup_logger("whalebot_main")
 @dataclass(slots=True)
 class BotConfig:
     """A lightweight, type-safe wrapper around the JSON configuration."""
-    raw: Dict[str, Any]
+    raw: dict[str, Any]
 
     def __getitem__(self, key: str) -> Any:
         return self.raw[key]
@@ -87,7 +87,7 @@ class BotConfig:
     def get(self, key: str, default: Any = None) -> Any:
         return self.raw.get(key, default)
 
-def _get_default_config() -> Dict[str, Any]:
+def _get_default_config() -> dict[str, Any]:
     """Returns the default configuration dictionary."""
     return {
         "interval": "15", "analysis_interval": 30, "retry_delay": 5,
@@ -147,7 +147,7 @@ def load_config(fp: Path) -> BotConfig:
         LOGGER.warning(f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}")
         try:
             fp.write_text(json.dumps(defaults, indent=4))
-        except IOError as e:
+        except OSError as e:
             LOGGER.error(f"{NEON_RED}Failed to write default config: {e}{RESET}")
             return BotConfig(defaults) # Return in-memory default
         return BotConfig(defaults)
@@ -171,7 +171,7 @@ def load_config(fp: Path) -> BotConfig:
         except OSError as backup_err:
             LOGGER.error(f"{NEON_RED}Could not back up corrupt config: {backup_err}{RESET}")
         merged = defaults
-    except IOError as e:
+    except OSError as e:
         LOGGER.error(f"{NEON_RED}Could not read config file: {e}. Using default config.{RESET}")
         merged = defaults
 
@@ -188,7 +188,7 @@ CFG = load_config(CONFIG_FILE)
 # ----------------------------------------------------------------------------
 # 4. BYBIT API INTERACTION
 # ----------------------------------------------------------------------------
-def _sign(secret: str, params: Dict[str, Any]) -> str:
+def _sign(secret: str, params: dict[str, Any]) -> str:
     """Generates the required HMAC-SHA256 signature for Bybit API."""
     qs = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     return hmac.new(secret.encode(), qs.encode(), hashlib.sha256).hexdigest()
@@ -196,10 +196,10 @@ def _sign(secret: str, params: Dict[str, Any]) -> str:
 def _send_request(
     method: str,
     endpoint: str,
-    params: Optional[Dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
     retries: int = 3,
     logger: logging.Logger = LOGGER,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Generic, robust HTTP request wrapper with exponential backoff and jitter."""
     if not API_KEY or not API_SECRET:
         logger.critical(f"{NEON_RED}API_KEY or API_SECRET is not set. Cannot send request.{RESET}")
@@ -238,14 +238,14 @@ def _send_request(
             sleep_s = (2 ** attempt) + random.uniform(0, 1) # Exponential backoff with jitter
             logger.warning(f"{NEON_YELLOW}Request failed ({e}). Retrying in {sleep_s:.2f}s... ({attempt + 1}/{retries}){RESET}")
             time.sleep(sleep_s)
-        except IOError as e: # Catch potential issues with response reading
+        except OSError as e: # Catch potential issues with response reading
             logger.error(f"{NEON_RED}IO error during request processing: {e}{RESET}")
             # Decide if this warrants a retry or immediate failure
 
     logger.error(f"{NEON_RED}Max retries exceeded for {method} {endpoint}.{RESET}")
     return None
 
-def fetch_current_price(symbol: str, log: logging.Logger) -> Optional[Decimal]:
+def fetch_current_price(symbol: str, log: logging.Logger) -> Decimal | None:
     """Fetches the latest price for a symbol."""
     data = _send_request("GET", "/v5/market/tickers", {"category": "linear", "symbol": symbol}, logger=log)
     if not data: return None
@@ -262,11 +262,11 @@ def fetch_current_price(symbol: str, log: logging.Logger) -> Optional[Decimal]:
         log.error(f"{NEON_RED}Could not parse price from API response: {e}. Data: {data}{RESET}")
         return None
 
-kline_cache: Dict[str, Tuple[datetime, pd.DataFrame]] = {} # Global cache for klines
+kline_cache: dict[str, tuple[datetime, pd.DataFrame]] = {} # Global cache for klines
 
 def fetch_klines(
     symbol: str, interval: str, limit: int, log: logging.Logger,
-    cache: Dict[str, Tuple[datetime, pd.DataFrame]]
+    cache: dict[str, tuple[datetime, pd.DataFrame]]
 ) -> pd.DataFrame:
     """Fetches K-line data with a 30-second in-memory cache."""
     now_utc = datetime.now(timezone.utc)
@@ -292,7 +292,7 @@ def fetch_klines(
     cache[cache_key] = (now_utc, df)
     return df.copy()
 
-def fetch_order_book(symbol: str, depth: int, log: logging.Logger) -> Optional[Dict[str, Any]]:
+def fetch_order_book(symbol: str, depth: int, log: logging.Logger) -> dict[str, Any] | None:
     """Fetches the order book for a symbol."""
     params = {"symbol": symbol, "limit": depth, "category": "linear"}
     data = _send_request("GET", "/v5/market/orderbook", params, logger=log)
@@ -552,10 +552,10 @@ class Indicators:
 @dataclass(slots=True)
 class TradeSignal:
     """Structured object for a trading signal."""
-    signal: Optional[str]
+    signal: str | None
     confidence: float
-    conditions: List[str] = field(default_factory=list)
-    levels: Dict[str, Decimal] = field(default_factory=dict)
+    conditions: list[str] = field(default_factory=list)
+    levels: dict[str, Decimal] = field(default_factory=dict)
 
 # ----------------------------------------------------------------------------
 # 7. CORE TRADING ANALYZER
@@ -569,8 +569,8 @@ class TradingAnalyzer:
         self.symbol = symbol
         self.interval = interval
         self.atr_value: float = 0.0
-        self.indicator_values: Dict[str, Any] = {}
-        self.levels: Dict[str, Any] = {"Support": {}, "Resistance": {}}
+        self.indicator_values: dict[str, Any] = {}
+        self.levels: dict[str, Any] = {"Support": {}, "Resistance": {}}
         self._pre_calculate_indicators()
         self.weights = self._select_weight_set()
 
@@ -583,7 +583,7 @@ class TradingAnalyzer:
         self.indicator_values["atr"] = self.atr_value
 
 
-    def _select_weight_set(self) -> Dict[str, float]:
+    def _select_weight_set(self) -> dict[str, float]:
         """Selects indicator weights based on market volatility (ATR)."""
         vol_mode = "high_volatility" if self.atr_value > self.cfg["atr_change_threshold"] else "low_volatility"
         self.log.info(f"Market Volatility: {NEON_YELLOW}{vol_mode.upper()}{RESET} (ATR: {self.atr_value:.5f})")
@@ -617,7 +617,7 @@ class TradingAnalyzer:
             return False
         return self.df.volume.iloc[-1] > vol_ma.iloc[-1] * self.cfg["volume_confirmation_multiplier"]
 
-    def _detect_macd_divergence(self) -> Optional[str]:
+    def _detect_macd_divergence(self) -> str | None:
         """Detects bullish or bearish MACD divergence (simplified logic)."""
         macd_df = Indicators.macd(self.df.close)
         if macd_df.empty or len(self.df) < 30: # Need sufficient data
@@ -646,7 +646,7 @@ class TradingAnalyzer:
         return None
 
 
-    def analyze(self, price: Decimal, ts: str, order_book: Optional[Dict[str, Any]]):
+    def analyze(self, price: Decimal, ts: str, order_book: dict[str, Any] | None):
         """Performs a full analysis and logs a detailed summary."""
         # Calculate and store indicators based on config
         indicators_cfg = self.cfg["indicators"]
@@ -761,7 +761,7 @@ class TradingAnalyzer:
 
         self.log.info("─" * (42 + len(self.symbol) + len(self.interval)))
 
-    def _analyze_order_book_walls(self, order_book: Dict[str, Any]) -> Tuple[bool, bool, Dict[str, Decimal], Dict[str, Decimal]]:
+    def _analyze_order_book_walls(self, order_book: dict[str, Any]) -> tuple[bool, bool, dict[str, Decimal], dict[str, Decimal]]:
         """Detect bullish/bearish walls from bids/asks."""
         enabled = self.cfg.get("order_book_analysis", {}).get("enabled", False)
         if not enabled or not order_book:
@@ -798,9 +798,9 @@ class TradingAnalyzer:
     def generate_trading_signal(self, price: Decimal) -> TradeSignal:
         """Generates a trading signal based on a weighted scoring system."""
         bull_score = Decimal("0.0")
-        bull_conditions: List[str] = []
+        bull_conditions: list[str] = []
         bear_score = Decimal("0.0")
-        bear_conditions: List[str] = []
+        bear_conditions: list[str] = []
 
         indicators_to_check = self.cfg["indicators"] # Get which indicators are enabled
 
@@ -970,9 +970,9 @@ class TradingAnalyzer:
             bear_conditions.append("Bearish Order Book Wall")
 
         # Final Signal Decision
-        signal: Optional[str] = None
+        signal: str | None = None
         final_score = 0.0
-        final_conditions: List[str] = []
+        final_conditions: list[str] = []
 
         if bull_score >= Decimal(str(self.cfg["signal_score_threshold"])):
             signal = "buy"
@@ -984,7 +984,7 @@ class TradingAnalyzer:
             final_conditions = bear_conditions
 
         # Calculate SL/TP levels if a signal is generated
-        levels: Dict[str, Decimal] = {}
+        levels: dict[str, Decimal] = {}
         if signal and self.atr_value > 0:
             atr_d = Decimal(str(self.atr_value))
             sl_mult = Decimal(str(self.cfg["stop_loss_multiple"]))
@@ -1003,7 +1003,7 @@ class TradingAnalyzer:
 # ----------------------------------------------------------------------------
 # 8. INDICATOR INTERPRETER FOR LOGGING
 # ----------------------------------------------------------------------------
-def interpret_indicator(logger: logging.Logger, indicator_name: str, value: Any) -> Optional[str]:
+def interpret_indicator(logger: logging.Logger, indicator_name: str, value: Any) -> str | None:
     """Provides a human-readable interpretation of indicator values for logging."""
     if value is None or (isinstance(value, (float, int)) and np.isnan(value)):
         return f"{NEON_YELLOW}{indicator_name.upper()}:{RESET} N/A"
@@ -1085,7 +1085,7 @@ def main():
 
     last_signal_time = 0.0
     last_ob_fetch_time = 0.0
-    order_book: Optional[Dict[str, Any]] = None
+    order_book: dict[str, Any] | None = None
 
     try:
         while True:

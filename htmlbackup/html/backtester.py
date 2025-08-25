@@ -1,10 +1,11 @@
-import os
-import time
 import datetime
 import logging
-from pybit.unified_trading import HTTP
+import os
+import time
+
 from dotenv import load_dotenv
 from indicators import calculate_indicators
+from pybit.unified_trading import HTTP
 
 # --- Configuration ---
 load_dotenv()
@@ -60,16 +61,16 @@ def fetch_historical_klines(symbol: str, interval: str, start_time: int, end_tim
             end=int(current_time * 1000),
             limit=limit
         )
-        
+
         if res and res['retCode'] == 0 and res['result']['list']:
             fetched_klines = sorted([{
-                "timestamp": int(k[0]), "open": float(k[1]), "high": float(k[2]), 
+                "timestamp": int(k[0]), "open": float(k[1]), "high": float(k[2]),
                 "low": float(k[3]), "close": float(k[4]), "volume": float(k[5])
             } for k in res['result']['list']], key=lambda x: x['timestamp'], reverse=True)
-            
+
             # Filter out klines older than start_time
             fetched_klines = [k for k in fetched_klines if k['timestamp'] / 1000 >= start_time]
-            
+
             klines.extend(fetched_klines)
             current_time = klines[-1]['timestamp'] / 1000 # Move current_time to the oldest fetched kline
             logging.info(f"Fetched {len(fetched_klines)} klines. Total: {len(klines)}. Oldest timestamp: {datetime.datetime.fromtimestamp(current_time)}")
@@ -77,7 +78,7 @@ def fetch_historical_klines(symbol: str, interval: str, start_time: int, end_tim
         else:
             logging.error(f"Failed to fetch klines: {res}")
             break
-    
+
     # Sort by timestamp ascending
     klines = sorted(klines, key=lambda x: x['timestamp'])
     logging.info(f"Finished fetching. Total klines: {len(klines)}")
@@ -130,12 +131,12 @@ def run_backtest(klines: list, config: dict) -> dict:
                 logging.debug(f"Closed short at {current_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}")
                 position_size = 0
                 current_position_side = None
-            
+
             # Open new long position
             risk_amount = balance * (config['riskPct'] / 100)
             sl_price = current_price * (1 - config['stopLossPct'] / 100)
             stop_distance = abs(current_price - sl_price)
-            
+
             if stop_distance > 0:
                 # Calculate position size based on risk percentage and stop loss percentage
                 # qty for USDT perpetuals is the USDT value of the order
@@ -203,7 +204,7 @@ def run_backtest(klines: list, config: dict) -> dict:
         if current_position_side == "Buy" and position_size > 0:
             # Update peak price for trailing stop
             peak_price = max(peak_price, current_price)
-            
+
             # Calculate new trailing stop price
             trailing_stop_pct = config['trailingStopPct'] / 100
             new_trailing_stop_price = peak_price * (1 - trailing_stop_pct)
@@ -301,12 +302,12 @@ def optimize_strategy(klines: list, param_ranges: dict) -> dict:
 
     total_combinations = len(list(itertools.product(*param_ranges.values())))
     logging.info(f"Starting optimization for {total_combinations} combinations...")
-    
+
     for i, combo in enumerate(param_combinations):
         current_config = DEFAULT_CONFIG.copy()
         for j, key in enumerate(keys):
             current_config[key] = combo[j]
-        
+
         logging.info(f"Testing combination {i+1}/{total_combinations}: {current_config}")
         result = run_backtest(klines, current_config)
 
@@ -314,7 +315,7 @@ def optimize_strategy(klines: list, param_ranges: dict) -> dict:
             best_pnl = result["total_pnl"]
             best_config = current_config
             logging.info(f"New best PnL: {best_pnl:.2f} with config: {best_config}")
-    
+
     logging.info(f"Optimization complete. Best PnL: {best_pnl:.2f} with config: {best_config}")
     return best_config
 

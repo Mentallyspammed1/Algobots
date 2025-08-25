@@ -1,16 +1,16 @@
 # bybit_bot.py
 
-import os
-import time
-import logging
-import json
-from datetime import datetime
-from typing import Dict, List, Optional, Callable, Any
-from pybit.unified_trading import HTTP, WebSocket
-from decimal import Decimal, getcontext, ROUND_DOWN, InvalidOperation
 import asyncio
+import logging
+import os
 import random
 import threading
+import time
+from collections.abc import Callable
+from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
+from typing import Any
+
+from pybit.unified_trading import HTTP, WebSocket
 
 # Set decimal precision for financial calculations
 getcontext().prec = 18  # Increased precision for safer financial math
@@ -52,18 +52,18 @@ class BybitWebSocketManager:
     Stores real-time market data, positions, and orders.
     """
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
-        self.ws_public: Optional[WebSocket] = None
-        self.ws_private: Optional[WebSocket] = None
+        self.ws_public: WebSocket | None = None
+        self.ws_private: WebSocket | None = None
         self.api_key = api_key
         self.api_secret = api_secret
         self.testnet = testnet
 
-        self.market_data: Dict[str, Any] = {} # Stores orderbook, ticker, last_trade
-        self.positions: Dict[str, Any] = {}   # Stores open positions
-        self.orders: Dict[str, Any] = {}      # Stores open/recent orders
+        self.market_data: dict[str, Any] = {} # Stores orderbook, ticker, last_trade
+        self.positions: dict[str, Any] = {}   # Stores open positions
+        self.orders: dict[str, Any] = {}      # Stores open/recent orders
 
-        self._public_subscriptions: List[str] = []
-        self._private_subscriptions: List[str] = []
+        self._public_subscriptions: list[str] = []
+        self._private_subscriptions: list[str] = []
         self._lock = threading.Lock()  # Thread-safety for WS callbacks
 
     def _init_public_ws(self):
@@ -93,7 +93,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error initializing private WebSocket: {e}", exc_info=True)
 
-    def handle_orderbook(self, message: Dict):
+    def handle_orderbook(self, message: dict):
         """Processes orderbook updates and stores the data."""
         try:
             data = message.get("data", {})
@@ -115,7 +115,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling orderbook: {e}", exc_info=True)
 
-    def handle_trades(self, message: Dict):
+    def handle_trades(self, message: dict):
         """Processes trade updates and stores the latest trade."""
         try:
             data = message.get("data", [])
@@ -127,7 +127,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling trades: {e}", exc_info=True)
 
-    def handle_ticker(self, message: Dict):
+    def handle_ticker(self, message: dict):
         """Processes ticker updates and stores the data."""
         try:
             data = message.get("data", {})
@@ -138,7 +138,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling ticker: {e}", exc_info=True)
 
-    def handle_position(self, message: Dict):
+    def handle_position(self, message: dict):
         """Processes position updates and stores them by symbol."""
         try:
             data = message.get("data", [])
@@ -150,7 +150,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling position: {e}", exc_info=True)
 
-    def handle_order(self, message: Dict):
+    def handle_order(self, message: dict):
         """Processes order updates and stores them by orderId."""
         try:
             data = message.get("data", [])
@@ -162,7 +162,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling order: {e}", exc_info=True)
 
-    def handle_execution(self, message: Dict):
+    def handle_execution(self, message: dict):
         """Processes execution/fill updates."""
         try:
             data = message.get("data", [])
@@ -173,7 +173,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling execution: {e}", exc_info=True)
 
-    def handle_wallet(self, message: Dict):
+    def handle_wallet(self, message: dict):
         """Processes wallet updates."""
         try:
             data = message.get("data", [])
@@ -184,7 +184,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error handling wallet: {e}", exc_info=True)
 
-    async def subscribe_public_channels(self, symbols: List[str], channels: List[str] = ["orderbook", "publicTrade", "tickers"]):
+    async def subscribe_public_channels(self, symbols: list[str], channels: list[str] = ["orderbook", "publicTrade", "tickers"]):
         """Subscribes to public market data channels for specified symbols."""
         self._init_public_ws()
         if not self.ws_public:
@@ -227,7 +227,7 @@ class BybitWebSocketManager:
                 except Exception as e:
                     logger.error(f"Error subscribing to tickers for {symbol}: {e}", exc_info=True)
 
-    async def subscribe_private_channels(self, channels: List[str] = ["position", "order", "execution", "wallet"]):
+    async def subscribe_private_channels(self, channels: list[str] = ["position", "order", "execution", "wallet"]):
         """Subscribes to private account channels."""
         self._init_private_ws()
         if not self.ws_private:
@@ -319,15 +319,15 @@ class BybitTradingBot:
             recv_window=10000
         )
         self.ws_manager = BybitWebSocketManager(api_key, api_secret, testnet)
-        self.strategy: Optional[Callable[[Dict, Dict, HTTP, Any, List[str]], None]] = None # Strategy now accepts bot_instance and symbols
-        self.symbol_info: Dict[str, Any] = {} # Stores instrument details for position sizing and precision
+        self.strategy: Callable[[dict, dict, HTTP, Any, list[str]], None] | None = None # Strategy now accepts bot_instance and symbols
+        self.symbol_info: dict[str, Any] = {} # Stores instrument details for position sizing and precision
         self.max_open_positions: int = int(os.getenv("BOT_MAX_OPEN_POSITIONS", "5")) # Max number of open positions for risk management
         self.category: str = os.getenv("BYBIT_CATEGORY", "linear") # Default trading category
         self.data_freshness_ms: int = int(os.getenv("BYBIT_MD_FRESH_MS", "5000"))
 
         logger.info(f"Bybit Trading Bot initialized. Testnet: {testnet}, Category: {self.category}")
 
-    async def _http_call(self, method: Callable, max_retries: int = 3, initial_delay: float = 0.5, **kwargs) -> Optional[Dict]:
+    async def _http_call(self, method: Callable, max_retries: int = 3, initial_delay: float = 0.5, **kwargs) -> dict | None:
         """
         Runs a blocking pybit HTTP call in a thread and retries on failure.
         """
@@ -345,7 +345,7 @@ class BybitTradingBot:
                 logger.warning(f"HTTP call {getattr(method, '__name__', str(method))} failed (attempt {attempt}/{max_retries}): {e}. Retrying in {backoff:.2f}s")
                 await asyncio.sleep(backoff)
 
-    async def fetch_symbol_info(self, symbols: List[str]):
+    async def fetch_symbol_info(self, symbols: list[str]):
         """Fetches and stores instrument details for given symbols."""
         logger.info(f"Fetching instrument info for symbols: {symbols}")
         try:
@@ -371,7 +371,7 @@ class BybitTradingBot:
         except Exception as e:
             logger.error(f"Error fetching instrument info: {e}", exc_info=True)
 
-    def set_strategy(self, strategy_func: Callable[[Dict, Dict, HTTP, Any, List[str]], None]):
+    def set_strategy(self, strategy_func: Callable[[dict, dict, HTTP, Any, list[str]], None]):
         """
         Sets the trading strategy function.
         The strategy function should accept (market_data, account_info, http_client, bot_instance, symbols) as arguments.
@@ -401,7 +401,7 @@ class BybitTradingBot:
         # Use quantize with tick size exponent; safe for decimals like 0.5, 0.01, etc.
         return (price / tick_size).to_integral_value(rounding=ROUND_DOWN) * tick_size
 
-    async def get_market_data(self, symbol: str) -> Optional[Dict]:
+    async def get_market_data(self, symbol: str) -> dict | None:
         """
         Retrieve current market data for a symbol.
         Prioritizes WebSocket data if available and fresh, falls back to REST API.
@@ -417,9 +417,9 @@ class BybitTradingBot:
             except Exception:
                 # If timestamp parsing fails, still fall back to REST
                 pass
-        
+
         logger.warning(f"WebSocket data for {symbol} not fresh or complete. Falling back to REST API.")
-        
+
         # Fallback to REST API (normalize shapes to match WS for strategy compatibility)
         try:
             orderbook_resp, ticker_resp = await asyncio.gather(
@@ -429,7 +429,7 @@ class BybitTradingBot:
 
             if (orderbook_resp and orderbook_resp.get('retCode') == 0 and
                 ticker_resp and ticker_resp.get('retCode') == 0):
-                
+
                 ob_list = (orderbook_resp.get('result', {}) or {}).get('list', []) or []
                 ob = ob_list[0] if ob_list else {}
                 normalized_ob = {
@@ -455,7 +455,7 @@ class BybitTradingBot:
             logger.error(f"Error fetching market data for {symbol} via REST: {e}", exc_info=True)
             return None
 
-    async def get_account_info(self, account_type: str = "UNIFIED") -> Optional[Dict]:
+    async def get_account_info(self, account_type: str = "UNIFIED") -> dict | None:
         """
         Retrieve account balance information.
         Prioritizes WebSocket data if available, falls back to REST API.
@@ -471,7 +471,7 @@ class BybitTradingBot:
             logger.error(f"Error fetching account balance: {e}", exc_info=True)
             return None
 
-    async def calculate_position_size(self, symbol: str, capital_percentage: float, price: Decimal, account_info: Dict) -> Decimal:
+    async def calculate_position_size(self, symbol: str, capital_percentage: float, price: Decimal, account_info: dict) -> Decimal:
         """
         Calculates the position size based on a percentage of available capital.
         Returns the quantity as a Decimal, rounded to the symbol's qtyStep.
@@ -521,7 +521,7 @@ class BybitTradingBot:
             logger.error(f"Error calculating position size for {symbol}: {e}", exc_info=True)
             return Decimal(0)
 
-    async def get_historical_klines(self, symbol: str, interval: str, limit: int = 200) -> Optional[Dict]:
+    async def get_historical_klines(self, symbol: str, interval: str, limit: int = 200) -> dict | None:
         """Retrieve historical candlestick data (Klines)."""
         try:
             klines = await self._http_call(
@@ -549,7 +549,7 @@ class BybitTradingBot:
                 count += 1
         return count
 
-    async def place_order(self, symbol: str, side: str, order_type: str, qty: Decimal, price: Optional[Decimal] = None, stop_loss_price: Optional[Decimal] = None, take_profit_price: Optional[Decimal] = None, trigger_by: str = "LastPrice", time_in_force: str = "GTC", **kwargs) -> Optional[Dict]:
+    async def place_order(self, symbol: str, side: str, order_type: str, qty: Decimal, price: Decimal | None = None, stop_loss_price: Decimal | None = None, take_profit_price: Decimal | None = None, trigger_by: str = "LastPrice", time_in_force: str = "GTC", **kwargs) -> dict | None:
         """
         Place an order on Bybit.
         Args:
@@ -578,7 +578,7 @@ class BybitTradingBot:
         if current_position == Decimal('0') and self.get_open_positions_count() >= self.max_open_positions:
             logger.warning(f"Max open positions ({self.max_open_positions}) reached. Not placing new entry order for {symbol}.")
             return None
-        
+
         # Round quantity and price to symbol's precision
         qty = self._round_to_qty_step(symbol, to_decimal(qty))
         if price is not None:
@@ -633,7 +633,7 @@ class BybitTradingBot:
             logger.error(f"Error placing order for {symbol}: {e}", exc_info=True)
             return None
 
-    async def cancel_order(self, symbol: str, order_id: Optional[str] = None, order_link_id: Optional[str] = None) -> bool:
+    async def cancel_order(self, symbol: str, order_id: str | None = None, order_link_id: str | None = None) -> bool:
         """Cancel an order by orderId or orderLinkId."""
         try:
             params = {"category": self.category, "symbol": symbol}
@@ -669,7 +669,7 @@ class BybitTradingBot:
         if has_pnl:
             logger.info(f"Total Unrealized PnL: {total_unrealized_pnl}")
 
-    async def _check_ws_connection(self, symbols: List[str]):
+    async def _check_ws_connection(self, symbols: list[str]):
         """Periodically checks WebSocket connection status and attempts re-subscription."""
         if not self.ws_manager.is_public_connected():
             logger.warning("Public WebSocket disconnected. Attempting re-subscription...")
@@ -678,14 +678,14 @@ class BybitTradingBot:
             logger.warning("Private WebSocket disconnected. Attempting re-subscription...")
             await self.ws_manager.subscribe_private_channels()
 
-    async def run(self, symbols: List[str], interval: int = 5):
+    async def run(self, symbols: list[str], interval: int = 5):
         """Main bot execution loop."""
         if not self.strategy:
             logger.error("No trading strategy set. Please call set_strategy() before running the bot.")
             return
 
         self.ws_manager.start()
-        
+
         # Subscribe to WebSocket streams
         await self.ws_manager.subscribe_public_channels(symbols)
         await self.ws_manager.subscribe_private_channels()
@@ -699,7 +699,7 @@ class BybitTradingBot:
                 await self._check_ws_connection(symbols) # Ensure WS connections are alive
 
                 # Fetch latest market data and account info
-                current_market_data: Dict[str, Any] = {}
+                current_market_data: dict[str, Any] = {}
                 for symbol in symbols:
                     ws_md = self.ws_manager.market_data.get(symbol)
                     if ws_md and ws_md.get("orderbook") and ws_md.get("ticker"):
@@ -749,7 +749,7 @@ async def main():
         return
 
     bot = BybitTradingBot(api_key=API_KEY, api_secret=API_SECRET, testnet=USE_TESTNET)
-    
+
     # Define symbols to trade
     # IMPORTANT: Ensure these symbols are available on Bybit for the 'linear' category
     symbols_to_trade = ["BTCUSDT", "ETHUSDT"] # Example symbols

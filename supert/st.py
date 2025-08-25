@@ -30,8 +30,10 @@ from enum import Enum
 import pandas as pd
 import pandas_ta as ta
 from dotenv import load_dotenv
+from pybit.exceptions import (  # Import specific exceptions for handling API errors
+    FailedRequestError,
+)
 from pybit.unified_trading import HTTP
-from pybit.exceptions import FailedRequestError, InvalidRequestError # Import specific exceptions for handling API errors
 
 # Load environment variables from .env file
 load_dotenv()
@@ -767,7 +769,7 @@ class SupertrendBot:
         self.current_position_size: Decimal = Decimal('0')
         self.last_signal: Signal = Signal.NEUTRAL # To track signal changes
 
-        self.logger.info(f"Bot Configuration Loaded:")
+        self.logger.info("Bot Configuration Loaded:")
         self.logger.info(f"  Mode: {'Testnet' if config.TESTNET else 'Mainnet'}")
         self.logger.info(f"  Symbol: {config.SYMBOL}, Category: {config.CATEGORY_ENUM.value}")
         self.logger.info(f"  Leverage: {config.LEVERAGE}x")
@@ -1543,7 +1545,7 @@ class SupertrendBot:
                         self.current_position_side = "Buy"
                         self.current_position_entry_price = current_price
                         self.current_position_size = position_qty
-                        self.logger.info(f"BUY order placed successfully. Waiting for position confirmation.")
+                        self.logger.info("BUY order placed successfully. Waiting for position confirmation.")
                     else:
                         self.logger.error("Failed to place BUY order.")
                 else:
@@ -1579,7 +1581,7 @@ class SupertrendBot:
                         self.current_position_side = "Sell"
                         self.current_position_entry_price = current_price
                         self.current_position_size = position_qty
-                        self.logger.info(f"SELL order placed successfully. Waiting for position confirmation.")
+                        self.logger.info("SELL order placed successfully. Waiting for position confirmation.")
                     else:
                         self.logger.error("Failed to place SELL order.")
                 else:

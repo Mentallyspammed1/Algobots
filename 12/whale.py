@@ -8,18 +8,22 @@ Fully-refactored Bybit “WhaleBot” – leaner, faster, clearer
 """
 
 # ───────────────────────────── Imports ──────────────────────────────
-import os, json, time, hmac, hashlib, logging
-from decimal import Decimal, getcontext
+import hashlib
+import hmac
+import json
+import logging
+import os
+import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
-
-import requests
-import numpy as np
-import pandas as pd
-from colorama import init, Fore, Style
-from dotenv import load_dotenv
+from decimal import Decimal, getcontext
+from typing import Any
 from zoneinfo import ZoneInfo
 
+import numpy as np
+import pandas as pd
+import requests
+from colorama import Fore, Style, init
+from dotenv import load_dotenv
 from logger_config import setup_custom_logger
 
 # ───────────────────── Environment / Globals ────────────────────────
@@ -58,7 +62,7 @@ VALID_INTERVALS      = ["1","3","5","15","30","60","120","240","D","W","M"]
 class ConfigManager:
     """Load / validate / auto-heal JSON configuration."""
 
-    DEFAULT: Dict[str, Any] = {
+    DEFAULT: dict[str, Any] = {
         "interval": "15",
         "analysis_interval": 30,
         "retry_delay": 5,
@@ -106,9 +110,9 @@ class ConfigManager:
         self.cfg  = self.load()
 
     # ── helpers
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         try:
-            with open(self.path, "r", encoding="utf-8") as f:
+            with open(self.path, encoding="utf-8") as f:
                 data = json.load(f)
             merged = {**self.DEFAULT, **data}
             self.validate(merged)
@@ -126,12 +130,12 @@ class ConfigManager:
         self.save(self.DEFAULT)
         return self.DEFAULT
 
-    def save(self, cfg: Dict[str, Any]) -> None:
+    def save(self, cfg: dict[str, Any]) -> None:
         with open(self.path, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=4)
 
     @staticmethod
-    def validate(cfg: Dict[str, Any]) -> None:
+    def validate(cfg: dict[str, Any]) -> None:
         if cfg["interval"] not in VALID_INTERVALS:
             raise ValueError("interval invalid")
         if cfg["analysis_interval"] <= 0:
@@ -142,11 +146,11 @@ class BybitAPI:
     def __init__(self, key: str, secret: str, base: str, log: logging.Logger):
         self.key, self.secret, self.base, self.log = key, secret, base, log
 
-    def _sign(self, params: Dict[str, Any]) -> str:
+    def _sign(self, params: dict[str, Any]) -> str:
         q = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
         return hmac.new(self.secret.encode(), q.encode(), hashlib.sha256).hexdigest()
 
-    def req(self, method: str, ep: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict]:
+    def req(self, method: str, ep: str, params: dict[str, Any] | None = None) -> dict | None:
         params = params or {}
         params["timestamp"] = str(int(time.time()*1000))
         headers = {
@@ -185,7 +189,7 @@ class BybitAPI:
             self.log.error(f"{C['R']}API err {resp.status_code}: {resp.text}{C['X']}")
 
     # Convenience wrappers
-    def price(self, symbol: str) -> Optional[Decimal]:
+    def price(self, symbol: str) -> Decimal | None:
         d = self.req("GET", "/v5/market/tickers", {"category":"linear","symbol":symbol})
         try:
             return Decimal(next(i["lastPrice"] for i in d["result"]["list"] if i["symbol"]==symbol))
@@ -221,9 +225,9 @@ def atr(df: pd.DataFrame, window: int) -> pd.Series:
 
 # ───────────────────────── Trading Analyzer ─────────────────────────
 class TradingAnalyzer:
-    def __init__(self, df: pd.DataFrame, cfg: Dict[str,Any], log: logging.Logger):
+    def __init__(self, df: pd.DataFrame, cfg: dict[str,Any], log: logging.Logger):
         self.df, self.cfg, self.log = df, cfg, log
-        self.ind: Dict[str, Any] = {}
+        self.ind: dict[str, Any] = {}
         self._prep()
 
     def _prep(self):
@@ -242,7 +246,7 @@ class TradingAnalyzer:
     def volume_confirm(self) -> bool:
         return self.df["vol"].iloc[-1] > self.df["vol_ma"].iloc[-1]*1.5
 
-    def stoch_rsi(self, k_win=3, d_win=3, rsi_win=14, stoch_win=14) -> Tuple[float,float]:
+    def stoch_rsi(self, k_win=3, d_win=3, rsi_win=14, stoch_win=14) -> tuple[float,float]:
         rsi = self._rsi(rsi_win)
         if rsi.isna().all(): return 0.0,0.0
         min_rsi = rsi.rolling(stoch_win).min()
@@ -260,7 +264,7 @@ class TradingAnalyzer:
         return 100 - 100/(1+rs)
 
     # ── signal
-    def signal(self) -> Tuple[Optional[str], float, List[str], Dict[str,Decimal]]:
+    def signal(self) -> tuple[str | None, float, list[str], dict[str,Decimal]]:
         score = 0.0
         reasons=[]
         weights = self._weights()
@@ -309,7 +313,7 @@ class TradingAnalyzer:
                 "stop_loss":sl.quantize(Decimal('0.0001'))}
         return side, score, reasons, levels
 
-    def _weights(self) -> Dict[str,float]:
+    def _weights(self) -> dict[str,float]:
         vol=self.ind["atr"].iloc[-1]
         set_name = "high_volatility" if vol>self.cfg["atr_change_threshold"] else "low_volatility"
         return self.cfg["weight_sets"][set_name]

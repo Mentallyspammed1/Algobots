@@ -1,10 +1,12 @@
-import os
 import logging
-from typing import Dict, Any, Optional, Callable
+import os
+from collections.abc import Callable
 from datetime import datetime, timezone
-import pandas as pd
+from typing import Any
 
+import pandas as pd
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from pybit.unified_trading import HTTP, WebSocket
@@ -13,7 +15,7 @@ from utils import round_decimal
 # --- Initialize Logging for Bybit API ---
 bybit_logger = logging.getLogger('bybit_api')
 bybit_logger.setLevel(logging.INFO)
-bybit_logger.propagate = False 
+bybit_logger.propagate = False
 if not bybit_logger.handlers:
     file_handler = logging.FileHandler('bybit_api.log')
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -28,7 +30,7 @@ class BybitClient:
 
     def __init__(self, api_endpoint: str, category: str,
                  retries: int = 5, backoff_factor: float = 0.5,
-                 use_websocket: bool = False, ws_callbacks: Optional[Dict[str, Callable]] = None, recv_window: int = 10000):
+                 use_websocket: bool = False, ws_callbacks: dict[str, Callable] | None = None, recv_window: int = 10000):
         """
         Initializes the BybitClient.
         API Key and Secret are loaded from environment variables for security.
@@ -55,7 +57,7 @@ class BybitClient:
                 "BYBIT_API_KEY and BYBIT_API_SECRET must be set as environment variables."
                 " Create a .env file or set them in your shell."
             )
-        
+
         # Initialize pybit HTTP client
         self.session = HTTP(
             api_key=self.api_key,
@@ -110,9 +112,9 @@ class BybitClient:
         else:
             bybit_logger.warning("WebSocket client not initialized. Cannot subscribe to topics.")
 
-    
 
-    
+
+
 
     def fetch_klines(self, symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
         """
@@ -155,7 +157,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching klines with pybit: {e}")
             return pd.DataFrame()
 
-    def get_positions(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_positions(self, symbol: str) -> dict[str, Any] | None:
         """
         Retrieves the open position for a given symbol using pybit.
 
@@ -184,7 +186,7 @@ class BybitClient:
             bybit_logger.error(f"Error getting open positions with pybit: {e}")
             return None
 
-    def get_wallet_balance(self, account_type: str = "UNIFIED", coin: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_wallet_balance(self, account_type: str = "UNIFIED", coin: str | None = None) -> dict[str, Any] | None:
         """
         Retrieves wallet balance for a given account type and optional coin using pybit.
 
@@ -209,7 +211,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching wallet balance with pybit: {e}")
             return None
 
-    def get_account_info(self) -> Optional[Dict[str, Any]]:
+    def get_account_info(self) -> dict[str, Any] | None:
         """
         Fetches account details using pybit.
 
@@ -227,7 +229,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching account info with pybit: {e}")
             return None
 
-    def get_transaction_log(self, coin: Optional[str] = None, limit: int = 50) -> Optional[Dict[str, Any]]:
+    def get_transaction_log(self, coin: str | None = None, limit: int = 50) -> dict[str, Any] | None:
         """
         Queries transaction history for a Contract account using pybit.
 
@@ -280,7 +282,7 @@ class BybitClient:
             bybit_logger.error(f"Error setting leverage with pybit: {e}")
             return False
 
-    def cancel_order(self, symbol: str, order_id: Optional[str] = None, order_link_id: Optional[str] = None) -> bool:
+    def cancel_order(self, symbol: str, order_id: str | None = None, order_link_id: str | None = None) -> bool:
         """
         Cancels a specific order by order ID or orderLinkId using pybit.
 
@@ -311,7 +313,7 @@ class BybitClient:
             bybit_logger.error(f"Error canceling order with pybit: {e}")
             return False
 
-    def cancel_all_orders(self, symbol: Optional[str] = None, settle_coin: Optional[str] = None) -> bool:
+    def cancel_all_orders(self, symbol: str | None = None, settle_coin: str | None = None) -> bool:
         """
         Cancels all open orders for a specific contract type or symbol using pybit.
 
@@ -337,7 +339,7 @@ class BybitClient:
             bybit_logger.error(f"Error canceling all orders with pybit: {e}")
             return False
 
-    def get_tickers(self, symbol: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_tickers(self, symbol: str | None = None) -> dict[str, Any] | None:
         """
         Fetches the latest price, bid/ask, and 24h volume for a Contract using pybit.
 
@@ -361,7 +363,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching tickers with pybit: {e}")
             return None
 
-    def get_orderbook(self, symbol: str, limit: int = 25) -> Optional[Dict[str, Any]]:
+    def get_orderbook(self, symbol: str, limit: int = 25) -> dict[str, Any] | None:
         """
         Fetches the current order book depth for a specific contract symbol using pybit.
 
@@ -387,7 +389,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching orderbook with pybit: {e}")
             return None
 
-    def get_active_orders(self, symbol: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_active_orders(self, symbol: str | None = None) -> dict[str, Any] | None:
         """
         Queries open or untriggered orders for a contract using pybit.
 
@@ -411,7 +413,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching active orders with pybit: {e}")
             return None
 
-    def get_recent_trade(self, symbol: str, limit: int = 50) -> Optional[Dict[str, Any]]:
+    def get_recent_trade(self, symbol: str, limit: int = 50) -> dict[str, Any] | None:
         """
         Retrieves recent trade execution data for a contract using pybit.
 
@@ -437,7 +439,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching recent trades with pybit: {e}")
             return None
 
-    def get_fee_rate(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_fee_rate(self, symbol: str) -> dict[str, Any] | None:
         """
         Retrieves your current trading fee rates for a symbol using pybit.
 
@@ -461,7 +463,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching fee rate with pybit: {e}")
             return None
 
-    def get_transfer_query_account_coins_balance(self, account_type: str, coin: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_transfer_query_account_coins_balance(self, account_type: str, coin: str | None = None) -> dict[str, Any] | None:
         """
         Checks coin balances across accounts using pybit.
 
@@ -486,7 +488,7 @@ class BybitClient:
             bybit_logger.error(f"Error fetching account coin balance with pybit: {e}")
             return None
 
-    def get_instrument_info(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_instrument_info(self, symbol: str) -> dict[str, Any] | None:
         """
         Fetches instrument information for a given symbol.
         """
@@ -505,8 +507,8 @@ class BybitClient:
             return None
 
     def place_order(self, symbol: str, side: str, usdt_amount: float,
-                    order_type: str = "Market", price: Optional[float] = None,
-                    stop_loss_pct: Optional[float] = None, take_profit_pct: Optional[float] = None) -> bool:
+                    order_type: str = "Market", price: float | None = None,
+                    stop_loss_pct: float | None = None, take_profit_pct: float | None = None) -> bool:
         """
         Places an order with Stop Loss and Take Profit using pybit, with proper order sizing.
 
@@ -528,7 +530,7 @@ class BybitClient:
             if not instrument_info:
                 bybit_logger.error(f"Could not fetch instrument info for {symbol}. Cannot place order.")
                 return False
-            
+
             min_qty = float(instrument_info.get('lotSizeFilter', {}).get('minOrderQty', 0))
             qty_step = float(instrument_info.get('lotSizeFilter', {}).get('qtyStep', 0))
 
@@ -559,7 +561,7 @@ class BybitClient:
                     bybit_logger.error("Price must be provided for Limit orders.")
                     return False
                 order_params["price"] = str(price)
-            
+
             # Calculate SL/TP prices if percentages are provided
             calculated_stop_loss_price = None
             calculated_take_profit_price = None
