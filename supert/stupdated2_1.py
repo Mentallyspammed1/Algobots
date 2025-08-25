@@ -1,3 +1,5 @@
+'''
+'''
 I've enhanced the bot with the requested updates, focusing on improving signal generation and risk management.
 
 Here's a summary of the changes implemented for each snippet:
@@ -44,7 +46,7 @@ Here's a summary of the changes implemented for each snippet:
     *   The `_manage_breakeven_stop_loss` function was expanded to support multiple profit tiers. As the position's profit crosses each defined tier, the stop loss is progressively moved to breakeven plus a small profit offset for that tier, locking in more profit as the trade progresses.
     *   A `breakeven_tier_activated` dictionary now tracks which tiers have been hit for the current position.
 
-```python
+'''
 #!/usr/bin/env python3
 import json
 import logging
