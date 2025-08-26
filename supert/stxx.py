@@ -182,7 +182,7 @@ def calculate_indicators(df):
     # supertrend_direction: 1 for uptrend, 0 for downtrend.
 
     # Volume MA
-    df['volume_ma'] = ta.volume.volume_sma(df['volume'], window=VOLUME_MA_PERIOD)
+    df['volume_ma'] = df['volume'].rolling(window=VOLUME_MA_PERIOD).mean()
 
     # RSI
     df['rsi'] = ta.momentum.rsi(df['close'], window=RSI_PERIOD)
