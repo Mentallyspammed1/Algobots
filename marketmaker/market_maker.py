@@ -1,173 +1,238 @@
+import os
+import sys
+import time
 import uuid
+import logging
 from decimal import ROUND_DOWN, Decimal
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
+from dotenv import load_dotenv
 
-from pybit.unified_trading import HTTP, WebSocket  # pip install pybit
+from pybit.unified_trading import HTTP, WebSocket
 
-from config import Config  # Import project's Config
+# Load environment variables from .env file
+load_dotenv()
 
+# --- Logging Setup ---
+def setup_logging():
+    """Configure logging with file and console handlers."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s | %(levelname)s | %(module)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler('marketmaker.log', mode='a')
+        ]
+    )
+    return logging.getLogger(__name__)
 
-# ========= Helpers =========
+logger = setup_logging()
+
+# --- Configuration ---
+class Config:
+    def __init__(self):
+        # Load required environment variables
+        self.API_KEY = self._get_env_var("BYBIT_API_KEY")
+        self.API_SECRET = self._get_env_var("BYBIT_API_SECRET")
+        self.TESTNET = os.getenv("BYBIT_TESTNET", "False").lower() in ("true", "1", "t")
+        self.SYMBOL = os.getenv("SYMBOL", "BTCUSDT")
+        self.CATEGORY = os.getenv("CATEGORY", "linear")
+
+        # Load optional parameters with defaults
+        self.BASE_SPREAD_BPS = Decimal(os.getenv("BASE_SPREAD_BPS", "50"))  # 0.5%
+        self.MIN_SPREAD_TICKS = Decimal(os.getenv("MIN_SPREAD_TICKS", "1"))
+        self.RISK_PER_TRADE_PCT = Decimal(os.getenv("RISK_PER_TRADE_PCT", "1"))  # 1%
+        self.LEVERAGE = Decimal(os.getenv("LEVERAGE", "1"))
+        self.ACCOUNT_BALANCE = Decimal(os.getenv("ACCOUNT_BALANCE", "10000"))
+        self.POST_ONLY = os.getenv("POST_ONLY", "True").lower() in ("true", "1", "t")
+        self.REPLACE_THRESHOLD_TICKS = Decimal(os.getenv("REPLACE_THRESHOLD_TICKS", "5"))
+        self.PROTECT_MODE = os.getenv("PROTECT_MODE", "off")  # "off", "trailing", "breakeven"
+        self.TRAILING_DISTANCE = Decimal(os.getenv("TRAILING_DISTANCE", "10"))
+        self.TRAILING_ACTIVATE_PROFIT_BPS = Decimal(os.getenv("TRAILING_ACTIVATE_PROFIT_BPS", "100"))  # 1%
+        self.BE_TRIGGER_BPS = Decimal(os.getenv("BE_TRIGGER_BPS", "200"))  # 2%
+        self.BE_OFFSET_TICKS = Decimal(os.getenv("BE_OFFSET_TICKS", "2"))
+
+        # Validate required environment variables
+        self._validate_required_vars()
+
+    def _get_env_var(self, var_name: str) -> str:
+        """Get environment variable with error handling."""
+        value = os.getenv(var_name)
+        if value is None:
+            logger.critical(f"Missing required environment variable: {var_name}")
+            sys.exit(1)
+        return value
+
+    def _validate_required_vars(self):
+        """Validate that all required environment variables are set."""
+        required_vars = ["BYBIT_API_KEY", "BYBIT_API_SECRET", "SYMBOL", "CATEGORY"]
+        for var in required_vars:
+            if not getattr(self, var.replace("BYBIT_", "").replace("_", "").upper()):
+                logger.critical(f"Missing required environment variable: {var}")
+                sys.exit(1)
+
+# --- Helpers ---
 def q_round(v: Decimal, step: Decimal) -> Decimal:
+    """Round a Decimal value to the nearest step."""
     n = (v / step).to_integral_value(rounding=ROUND_DOWN)
     return (n * step).normalize()
 
-
-# ========= REST wrapper =========
+# --- REST API Wrapper ---
 class BybitRest:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.http = HTTP(
-            testnet=cfg.TESTNET, api_key=cfg.API_KEY, api_secret=cfg.API_SECRET
+        self.client = HTTP(
+            testnet=cfg.TESTNET,
+            api_key=cfg.API_KEY,
+            api_secret=cfg.API_SECRET
         )
-        self.tick: Decimal = Decimal("0.5")
-        self.qty_step: Decimal = Decimal("0.001")
-        self.min_notional: Decimal = Decimal("0")
-        self.min_qty: Decimal = Decimal("0")
-        self.max_qty: Decimal = Decimal(
-            "999999999"
-        )  # Placeholder for a very large number
-        self.position_idx = 0  # 0 one-way; use 1/2 for hedge-mode
         self.load_instrument()
 
     def load_instrument(self):
-        info = self.http.get_instruments_info(
-            category=self.cfg.CATEGORY, symbol=self.cfg.SYMBOL
-        )
-        item = info["result"]["list"][0]
-        self.tick = Decimal(item["priceFilter"]["tickSize"])
-        lot = item["lotSizeFilter"]
-        self.qty_step = Decimal(
-            lot.get("qtyStep", lot.get("basePrecision", "0.000001"))
-        )
-        self.min_notional = Decimal(
-            lot.get("minNotionalValue", lot.get("minOrderAmt", "0"))
-        )
-        self.min_qty = Decimal(lot.get("minOrderQty", "0"))
-        self.max_qty = Decimal(lot.get("maxOrderQty", "999999999"))
+        """Load instrument details from the exchange."""
+        try:
+            response = self.client.get_instruments_info(
+                category=self.cfg.CATEGORY,
+                symbol=self.cfg.SYMBOL
+            )
+            if response["retCode"] != 0:
+                logger.error(f"API Error: {response.get('retMsg', 'Unknown error')}")
+                sys.exit(1)
 
-    # ---------- Batch trading ----------
-    def place_batch(self, reqs: list[dict[str, Any]]):
-        return self.http.place_batch_order(
-            category=self.cfg.CATEGORY, request=reqs
-        )  # /v5/order/create-batch
+            item = response["result"]["list"][0]
+            self.tick_size = Decimal(item["priceFilter"]["tickSize"])
+            lot = item["lotSizeFilter"]
+            self.lot_size = Decimal(lot.get("qtyStep", "0.001"))
+            self.min_notional = Decimal(lot.get("minOrderAmt", "0"))
+            self.min_qty = Decimal(lot.get("minOrderQty", "0"))
+            self.max_qty = Decimal(lot.get("maxOrderQty", "999999999"))
+            logger.info(f"Instrument details loaded for {self.cfg.SYMBOL}")
+        except Exception as e:
+            logger.critical(f"Failed to load instrument details: {e}")
+            sys.exit(1)
 
-    def amend_batch(self, reqs: list[dict[str, Any]]):
-        return self.http.amend_batch_order(
-            category=self.cfg.CATEGORY, request=reqs
-        )  # /v5/order/amend-batch
+    def place_batch_order(self, orders: List[Dict[str, Any]]) -> Dict:
+        """Place batch orders."""
+        try:
+            response = self.client.place_batch_order(
+                category=self.cfg.CATEGORY,
+                request=orders
+            )
+            if response["retCode"] != 0:
+                logger.error(f"Failed to place batch order: {response.get('retMsg', 'Unknown error')}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to place batch order: {e}")
+            raise
 
-    def cancel_batch(self, reqs: list[dict[str, Any]]):
-        return self.http.cancel_batch_order(
-            category=self.cfg.CATEGORY, request=reqs
-        )  # /v5/order/cancel-batch
+    def amend_batch_order(self, orders: List[Dict[str, Any]]) -> Dict:
+        """Amend batch orders."""
+        try:
+            response = self.client.amend_batch_order(
+                category=self.cfg.CATEGORY,
+                request=orders
+            )
+            if response["retCode"] != 0:
+                logger.error(f"Failed to amend batch order: {response.get('retMsg', 'Unknown error')}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to amend batch order: {e}")
+            raise
 
-    # ---------- Position protection (TP/SL/Trailing) ----------
-    def set_trailing(self, trailing_dist: Decimal, active_price: Decimal | None):
-        payload = {
-            "category": self.cfg.CATEGORY,
-            "symbol": self.cfg.SYMBOL,
-            "tpslMode": "Full",
-            "trailingStop": str(trailing_dist),
-            "positionIdx": self.position_idx,
-        }
-        if active_price is not None:
-            payload["activePrice"] = str(active_price)
-        return self.http.set_trading_stop(payload)  # /v5/position/trading-stop
+    def cancel_batch_order(self, orders: List[Dict[str, Any]]) -> Dict:
+        """Cancel batch orders."""
+        try:
+            response = self.client.cancel_batch_order(
+                category=self.cfg.CATEGORY,
+                request=orders
+            )
+            if response["retCode"] != 0:
+                logger.error(f"Failed to cancel batch order: {response.get('retMsg', 'Unknown error')}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to cancel batch order: {e}")
+            raise
 
-    def set_stop_loss(self, stop_price: Decimal):
-        payload = {
-            "category": self.cfg.CATEGORY,
-            "symbol": self.cfg.SYMBOL,
-            "tpslMode": "Full",
-            "stopLoss": str(stop_price),
-            "positionIdx": self.position_idx,
-        }
-        return self.http.set_trading_stop(payload)
+    def set_trading_stop(self, params: Dict[str, Any]) -> Dict:
+        """Set trading stop (TP/SL/Trailing)."""
+        try:
+            response = self.client.set_trading_stop(params)
+            if response["retCode"] != 0:
+                logger.error(f"Failed to set trading stop: {response.get('retMsg', 'Unknown error')}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to set trading stop: {e}")
+            raise
 
-
-# ========= Position Sizer =========
+# --- Position Sizer ---
 class PositionSizer:
     def __init__(self, cfg: Config, rest: BybitRest):
         self.cfg = cfg
         self.rest = rest
 
     def calculate_quote_size(self, entry_price: Decimal) -> Decimal:
-        # This is a simplified example. In a real bot, stop_loss_price
-        # would come from strategy logic or a fixed percentage.
-        # For market making, we can use a fraction of the spread as implied risk.
-        # Let's use a fixed percentage from config for now.
-        risk_per_trade_pct = Decimal(
-            str(self.cfg.RISK_PER_TRADE_PCT)
-        )  # Assuming a new config param
-        account_balance = Decimal(
-            "10000"
-        )  # Placeholder: needs to be fetched from exchange
+        """Calculate position size based on risk management."""
+        try:
+            risk_per_trade = self.cfg.ACCOUNT_BALANCE * (self.cfg.RISK_PER_TRADE_PCT / 100)
+            stop_loss_distance = entry_price * (self.cfg.RISK_PER_TRADE_PCT / 100)
+            position_size = risk_per_trade / stop_loss_distance
 
-        # Calculate an implied stop loss price based on a percentage of entry price
-        # This is a simplification for quoting, not actual SL for a position.
-        implied_stop_loss_price = entry_price * (Decimal("1") - risk_per_trade_pct)
-        stop_loss_distance = abs(entry_price - implied_stop_loss_price)
+            # Apply leverage
+            position_size *= self.cfg.LEVERAGE
 
-        if stop_loss_distance == Decimal("0"):
-            return self.rest.min_qty  # Avoid division by zero
+            # Round to valid quantity step
+            qty = q_round(position_size, self.rest.lot_size)
 
-        risk_amount = account_balance * risk_per_trade_pct
-        position_size_raw = risk_amount / stop_loss_distance
+            # Validate against instrument limits
+            qty = max(qty, self.rest.min_qty)
+            qty = min(qty, self.rest.max_qty)
 
-        # Apply leverage if applicable (for linear/inverse)
-        leverage = Decimal(str(self.cfg.LEVERAGE))
-        position_size_leveraged = position_size_raw * leverage
+            # Validate against min notional
+            notional = qty * entry_price
+            if notional < self.rest.min_notional:
+                qty = q_round(self.rest.min_notional / entry_price, self.rest.lot_size)
+                qty = max(qty, self.rest.min_qty)
 
-        # Round to valid quantity step
-        q = q_round(position_size_leveraged, self.rest.qty_step)
+            return qty
+        except Exception as e:
+            logger.error(f"Error calculating quote size: {e}")
+            return self.rest.min_qty
 
-        # Validate against instrument min/max quantity
-        q = max(q, self.rest.min_qty)
-        q = min(q, self.rest.max_qty)
-
-        # Validate against min notional
-        notional = q * entry_price
-        if notional < self.rest.min_notional:
-            q = q_round(self.rest.min_notional / entry_price, self.rest.qty_step)
-            q = max(q, self.rest.min_qty)  # Re-validate after min_notional adjustment
-
-        return q
-
-# ========= WS: public =========
+# --- WebSocket Handlers ---
 class PublicWS:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.ws = WebSocket(testnet=cfg.TESTNET, channel_type=cfg.CATEGORY)
-        self.best_bid = self.best_ask = None
-        self.bid_sz = self.ask_sz = None
-        self.ws.orderbook_stream(depth=50, symbol=cfg.SYMBOL, callback=self.on_book)
+        self.ws = WebSocket(
+            testnet=cfg.TESTNET,
+            channel_type=cfg.CATEGORY
+        )
+        self.best_bid = Decimal("0")
+        self.best_ask = Decimal("0")
+        self.ws.orderbook_stream(
+            symbol=cfg.SYMBOL,
+            callback=self.on_orderbook
+        )
+        logger.info("Public WebSocket initialized")
 
-    def on_book(self, msg):
-        d = msg.get("data") or {}
-        b, a = d.get("b"), d.get("a")
-        if b:
-            self.best_bid, self.bid_sz = Decimal(b[0][0]), Decimal(b[0][1])
-        if a:
-            self.best_ask, self.ask_sz = Decimal(a[0][0]), Decimal(a[0][1])
+    def on_orderbook(self, message: Dict):
+        """Handle order book updates."""
+        try:
+            data = message.get("data", [])
+            if data:
+                bids = data[0].get("b", [])
+                asks = data[0].get("a", [])
+                if bids:
+                    self.best_bid = Decimal(bids[0][0])
+                if asks:
+                    self.best_ask = Decimal(asks[0][0])
+                logger.debug(f"Order book updated: Bid={self.best_bid}, Ask={self.best_ask}")
+        except Exception as e:
+            logger.error(f"Error processing order book: {e}")
 
-    def mid(self) -> Decimal | None:
-        if self.best_bid is None or self.best_ask is None:
-            return None
+    def mid_price(self) -> Decimal:
+        """Calculate mid price."""
         return (self.best_bid + self.best_ask) / 2
 
-    def microprice(self) -> Decimal | None:
-        if None in (self.best_bid, self.best_ask, self.bid_sz, self.ask_sz):
-            return None
-        tot = self.bid_sz + self.ask_sz
-        return (
-            (self.best_ask * self.bid_sz + self.best_bid * self.ask_sz) / tot
-            if tot
-            else self.mid()
-        )
-
-
-# ========= WS: private =========
 class PrivateWS:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -175,205 +240,274 @@ class PrivateWS:
             testnet=cfg.TESTNET,
             channel_type="private",
             api_key=cfg.API_KEY,
-            api_secret=cfg.API_SECRET,
+            api_secret=cfg.API_SECRET
         )
-        self.position_qty = Decimal("0")
-        self.entry_price = None
-        self.mark_price = None
-        self.stop_loss = None
-        self.trailing_stop = None
+        self.position = Decimal("0")
+        self.entry_price = Decimal("0")
         self.ws.position_stream(callback=self.on_position)
-        self.orders: dict[str, dict] = {}
+        self.orders: Dict[str, Dict] = {}
         self.ws.order_stream(callback=self.on_order)
-        self.ws.execution_stream(callback=self.on_exec)
+        logger.info("Private WebSocket initialized")
 
-    def on_position(self, msg):
-        for p in msg.get("data", []):
-            if p.get("symbol") != self.cfg.SYMBOL:
-                continue
-            side = p.get("side", "")
-            size = Decimal(p.get("size", "0"))
-            self.position_qty = (
-                size if side == "Buy" else (-size if side == "Sell" else Decimal("0"))
-            )
-            self.entry_price = (
-                Decimal(p.get("entryPrice", p.get("avgPrice", "0") or "0")) or None
-            )
-            self.mark_price = Decimal(p.get("markPrice", "0") or "0") or None
-            self.stop_loss = Decimal(p.get("stopLoss", "0") or "0") or None
-            self.trailing_stop = Decimal(p.get("trailingStop", "0") or "0") or None
+    def on_position(self, message: Dict):
+        """Handle position updates."""
+        try:
+            data = message.get("data", [])
+            if data:
+                position = data[0]
+                if position["symbol"] == self.cfg.SYMBOL:
+                    self.position = Decimal(position["size"])
+                    self.entry_price = Decimal(position["entryPrice"])
+                    logger.debug(f"Position updated: Size={self.position}, Entry={self.entry_price}")
+        except Exception as e:
+            logger.error(f"Error processing position update: {e}")
 
-    def on_order(self, msg):
-        for o in msg.get("data", []):
-            link = o.get("orderLinkId") or o.get("orderId")
-            if link:
-                self.orders[link] = o
+    def on_order(self, message: Dict):
+        """Handle order updates."""
+        try:
+            data = message.get("data", [])
+            if data:
+                order = data[0]
+                order_id = order["orderId"]
+                self.orders[order_id] = order
+                logger.debug(f"Order updated: ID={order_id}, Status={order.get('orderStatus')}")
+        except Exception as e:
+            logger.error(f"Error processing order update: {e}")
 
-    def on_exec(self, msg):
-        pass  # hook if you want PnL calc per fill
-
-
-# ========= Quoter using batch endpoints =========
-class Quoter:
+# --- Market Maker ---
+class MarketMaker:
     def __init__(
         self,
         cfg: Config,
         rest: BybitRest,
-        pub: PublicWS,
-        prv: PrivateWS,
-        position_sizer: PositionSizer,
+        public_ws: PublicWS,
+        private_ws: PrivateWS,
+        position_sizer: PositionSizer
     ):
-        self.cfg, self.rest, self.pub, self.prv, self.position_sizer = (
-            cfg,
-            rest,
-            pub,
-            prv,
-            position_sizer,
-        )
-        base = uuid.uuid4().hex[:8].upper()
-        self.bid_link = f"MM_BID_{base}"
-        self.ask_link = f"MM_ASK_{base}"
-        self.working_bid: Decimal | None = None
-        self.working_ask: Decimal | None | None = None
+        self.cfg = cfg
+        self.rest = rest
+        self.public_ws = public_ws
+        self.private_ws = private_ws
+        self.position_sizer = position_sizer
+        self.bid_id = str(uuid.uuid4())
+        self.ask_id = str(uuid.uuid4())
+        self.working_bid = None
+        self.working_ask = None
+        logger.info("Market Maker initialized")
 
-    def compute_quotes(self):
-        anchor = self.pub.microprice() or self.pub.mid()
-        if anchor is None:
-            return None, None
-        half = max(
-            (Decimal(self.cfg.BASE_SPREAD_BPS) / Decimal("1e4")) * anchor,
-            Decimal(self.cfg.MIN_SPREAD_TICKS) * self.rest.tick,
-        )
-        bid = q_round(anchor - half, self.rest.tick)
-        ask = q_round(anchor + half, self.rest.tick)
-        if self.pub.best_bid and bid > self.pub.best_bid:
-            bid = self.pub.best_bid
-        if self.pub.best_ask and ask < self.pub.best_ask:
-            ask = self.pub.best_ask
-        return bid, ask
+    def compute_quotes(self) -> Tuple[Decimal, Decimal]:
+        """Compute bid and ask prices."""
+        try:
+            mid = self.public_ws.mid_price()
+            if mid is None:
+                logger.warning("Mid price is None, cannot compute quotes")
+                return Decimal("0"), Decimal("0")
 
-    def _ok_qty(self, qty: Decimal) -> Decimal | None:
-        q = q_round(qty, self.rest.qty_step)
-        # Validate against instrument min/max quantity
-        if q < self.rest.min_qty or q > self.rest.max_qty:
-            return None
-        mid = self.pub.mid() or Decimal("0")
-        notional = q * mid
-        if (self.rest.min_notional and notional < self.rest.min_notional) or (
-            self.cfg.MAX_POSITION and notional > self.cfg.MAX_POSITION
-        ):
-            return None
-        return q
+            half_spread = max(
+                (self.cfg.BASE_SPREAD_BPS / 10000) * mid,
+                self.cfg.MIN_SPREAD_TICKS * self.rest.tick_size
+            )
+            bid = q_round(mid - half_spread, self.rest.tick_size)
+            ask = q_round(mid + half_spread, self.rest.tick_size)
 
-    def upsert_both(self):
-        bid, ask = self.compute_quotes()
-        if (bid is None) or (ask is None) or (bid >= ask):
-            return
-        q = self.position_sizer.calculate_quote_size(
-            bid
-        )  # Use bid as anchor for quote size
-        if not q:
-            return
+            # Ensure bid is below market bid and ask is above market ask
+            if self.public_ws.best_bid and bid > self.public_ws.best_bid:
+                bid = self.public_ws.best_bid
+            if self.public_ws.best_ask and ask < self.public_ws.best_ask:
+                ask = self.public_ws.best_ask
 
-        to_place, to_amend = [], []
-        # Decide if each side needs place vs amend
-        for side, px, link in [
-            ("Buy", bid, self.bid_link),
-            ("Sell", ask, self.ask_link),
-        ]:
-            wk = self.working_bid if side == "Buy" else self.working_ask
-            if wk is None:
-                to_place.append(
-                    {
-                        "symbol": self.cfg.SYMBOL,
-                        "side": side,
-                        "orderType": "Limit",
-                        "qty": str(q),
-                        "price": str(px),
-                        "timeInForce": "PostOnly" if self.cfg.POST_ONLY else "GTC",
-                        "orderLinkId": link,
-                        "positionIdx": self.rest.position_idx,
-                    }
-                )
-                if side == "Buy":
-                    self.working_bid = px
+            # Ensure bid < ask
+            if bid >= ask:
+                spread = (ask - bid) if (ask - bid) > 0 else self.rest.tick_size
+                bid = mid - (spread / 2)
+                ask = mid + (spread / 2)
+                bid = q_round(bid, self.rest.tick_size)
+                ask = q_round(ask, self.rest.tick_size)
+
+            logger.debug(f"Computed quotes: Bid={bid}, Ask={ask}")
+            return bid, ask
+        except Exception as e:
+            logger.error(f"Error computing quotes: {e}")
+            return Decimal("0"), Decimal("0")
+
+    def place_or_amend_orders(self):
+        """Place or amend bid and ask orders."""
+        try:
+            bid, ask = self.compute_quotes()
+            if bid == Decimal("0") or ask == Decimal("0"):
+                return
+
+            qty = self.position_sizer.calculate_quote_size(bid)
+            if qty == Decimal("0"):
+                logger.warning("Quote size is zero, not placing orders")
+                return
+
+            orders = []
+            # Check and update bid order
+            if self.working_bid is None or abs(self.working_bid - bid) >= self.cfg.REPLACE_THRESHOLD_TICKS * self.rest.tick_size:
+                orders.append({
+                    "symbol": self.cfg.SYMBOL,
+                    "side": "Buy",
+                    "orderType": "Limit",
+                    "qty": str(qty),
+                    "price": str(bid),
+                    "timeInForce": "PostOnly" if self.cfg.POST_ONLY else "GTC",
+                    "orderLinkId": self.bid_id
+                })
+                self.working_bid = bid
+
+            # Check and update ask order
+            if self.working_ask is None or abs(self.working_ask - ask) >= self.cfg.REPLACE_THRESHOLD_TICKS * self.rest.tick_size:
+                orders.append({
+                    "symbol": self.cfg.SYMBOL,
+                    "side": "Sell",
+                    "orderType": "Limit",
+                    "qty": str(qty),
+                    "price": str(ask),
+                    "timeInForce": "PostOnly" if self.cfg.POST_ONLY else "GTC",
+                    "orderLinkId": self.ask_id
+                })
+                self.working_ask = ask
+
+            if orders:
+                if self.working_bid and self.working_ask:
+                    logger.info("Amending existing orders")
+                    self.rest.amend_batch_order(orders)
                 else:
-                    self.working_ask = px
-            else:
-                moved_ticks = abs((px - wk) / self.rest.tick)
-                if moved_ticks >= self.cfg.REPLACE_THRESHOLD_TICKS:
-                    to_amend.append(
-                        {
-                            "symbol": self.cfg.SYMBOL,
-                            "orderLinkId": link,
-                            "price": str(px),
-                            "qty": str(q),
-                        }
-                    )
-                    if side == "Buy":
-                        self.working_bid = px
-                    else:
-                        self.working_ask = px
+                    logger.info("Placing new orders")
+                    self.rest.place_batch_order(orders)
+        except Exception as e:
+            logger.error(f"Error placing/amending orders: {e}")
 
-        if to_place:
-            self.rest.place_batch(to_place)  # batch create both sides together
-        if to_amend:
-            self.rest.amend_batch(to_amend)  # batch amend both sides together
+    def cancel_orders(self):
+        """Cancel all active orders."""
+        try:
+            orders = [
+                {"symbol": self.cfg.SYMBOL, "orderLinkId": self.bid_id},
+                {"symbol": self.cfg.SYMBOL, "orderLinkId": self.ask_id}
+            ]
+            logger.info("Cancelling all active orders")
+            self.rest.cancel_batch_order(orders)
+            self.working_bid = None
+            self.working_ask = None
+        except Exception as e:
+            logger.error(f"Error cancelling orders: {e}")
 
-    def cancel_all_quotes(self):
-        to_cancel = []
-        for link in [self.bid_link, self.ask_link]:
-            to_cancel.append({"symbol": self.cfg.SYMBOL, "orderLinkId": link})
-        if to_cancel:
-            self.rest.cancel_batch(to_cancel)
-
-
-# ========= Protection manager =========
-class Protection:
-    def __init__(self, cfg: Config, rest: BybitRest, prv: PrivateWS):
-        self.cfg, self.rest, self.prv = cfg, rest, prv
+# --- Protection Manager ---
+class ProtectionManager:
+    def __init__(self, cfg: Config, rest: BybitRest, private_ws: PrivateWS, public_ws: PublicWS):
+        self.cfg = cfg
+        self.rest = rest
+        self.private_ws = private_ws
+        self.public_ws = public_ws
         self._be_applied = False
         self._trail_applied = False
 
-    def step(self):
-        if self.cfg.PROTECT_MODE == "off":
-            return
-        sz = self.prv.position_qty
-        entry = self.prv.entry_price
-        mark = self.prv.mark_price
-        if not sz or not entry or not mark:
-            self._be_applied = self._trail_applied = False
-            return
+    def apply_protection(self):
+        """Apply protection strategies."""
+        try:
+            if self.cfg.PROTECT_MODE == "off":
+                return
 
-        long = sz > 0
-        pnl_bps = (
-            (mark / entry - 1) * Decimal("1e4")
-            if long
-            else (1 - mark / entry) * Decimal("1e4")
-        )
+            position = self.private_ws.position
+            entry_price = self.private_ws.entry_price
+            mark_price = self.public_ws.mid_price()
 
-        if self.cfg.PROTECT_MODE == "trailing":
-            # Optional profit activation via activePrice
-            active_px = None
-            if self.cfg.TRAILING_ACTIVATE_PROFIT_BPS > 0:
-                mul = (
-                    (Decimal(1) + self.cfg.TRAILING_ACTIVATE_PROFIT_BPS / Decimal("1e4"))
-                    if long
-                    else (
-                        Decimal(1)
-                        - self.cfg.TRAILING_ACTIVATE_PROFIT_BPS / Decimal("1e4")
-                    )
-                )
-                active_px = q_round(entry * mul, self.rest.tick)
-            if not self._trail_applied:
-                self.rest.set_trailing(self.cfg.TRAILING_DISTANCE, active_px)
-                self._trail_applied = True
+            if abs(position) == 0 or entry_price == 0 or mark_price == 0:
+                return
 
-        elif self.cfg.PROTECT_MODE == "breakeven":
-            if (not self._be_applied) and (pnl_bps >= self.cfg.BE_TRIGGER_BPS):
-                offset = self.cfg.BE_OFFSET_TICKS * self.rest.tick
-                be_px = entry + offset if long else entry - offset
-                self.rest.set_stop_loss(be_px)
+            if self.cfg.PROTECT_MODE == "trailing":
+                self.apply_trailing_stop(position, entry_price, mark_price)
+            elif self.cfg.PROTECT_MODE == "breakeven":
+                self.apply_breakeven(position, entry_price, mark_price)
+        except Exception as e:
+            logger.error(f"Error applying protection: {e}")
+
+    def apply_trailing_stop(self, position: Decimal, entry_price: Decimal, mark_price: Decimal):
+        """Apply trailing stop loss."""
+        try:
+            long = position > 0
+            distance = self.cfg.TRAILING_DISTANCE * self.rest.tick_size
+            activate_profit = (self.cfg.TRAILING_ACTIVATE_PROFIT_BPS / 10000) * entry_price
+
+            if long:
+                if mark_price >= entry_price + activate_profit:
+                    self.rest.set_trading_stop({
+                        "category": self.cfg.CATEGORY,
+                        "symbol": self.cfg.SYMBOL,
+                        "trailingStop": str(distance),
+                        "activePrice": str(entry_price + activate_profit),
+                        "positionIdx": 0
+                    })
+                    logger.info(f"Trailing stop set for long position at distance {distance}")
+                    self._trail_applied = True
+            else:
+                if mark_price <= entry_price - activate_profit:
+                    self.rest.set_trading_stop({
+                        "category": self.cfg.CATEGORY,
+                        "symbol": self.cfg.SYMBOL,
+                        "trailingStop": str(distance),
+                        "activePrice": str(entry_price - activate_profit),
+                        "positionIdx": 0
+                    })
+                    logger.info(f"Trailing stop set for short position at distance {distance}")
+                    self._trail_applied = True
+        except Exception as e:
+            logger.error(f"Error applying trailing stop: {e}")
+
+    def apply_breakeven(self, position: Decimal, entry_price: Decimal, mark_price: Decimal):
+        """Apply breakeven stop loss."""
+        try:
+            long = position > 0
+            profit_bps = (mark_price / entry_price - 1) * 100 if long else (1 - mark_price / entry_price) * 100
+
+            if profit_bps >= self.cfg.BE_TRIGGER_BPS:
+                offset = self.cfg.BE_OFFSET_TICKS * self.rest.tick_size
+                stop_price = entry_price + offset if long else entry_price - offset
+                self.rest.set_trading_stop({
+                    "category": self.cfg.CATEGORY,
+                    "symbol": self.cfg.SYMBOL,
+                    "stopLoss": str(stop_price),
+                    "positionIdx": 0
+                })
+                logger.info(f"Breakeven stop set at {stop_price}")
                 self._be_applied = True
+        except Exception as e:
+            logger.error(f"Error applying breakeven stop: {e}")
 
+# --- Main Execution ---
+def main():
+    try:
+        # Load configuration
+        cfg = Config()
 
+        # Initialize components
+        rest = BybitRest(cfg)
+        public_ws = PublicWS(cfg)
+        private_ws = PrivateWS(cfg)
+        position_sizer = PositionSizer(cfg, rest)
+        market_maker = MarketMaker(cfg, rest, public_ws, private_ws, position_sizer)
+        protection_manager = ProtectionManager(cfg, rest, private_ws, public_ws)
+
+        logger.info("Market maker started. Press Ctrl+C to stop.")
+
+        # Main loop
+        while True:
+            try:
+                market_maker.place_or_amend_orders()
+                protection_manager.apply_protection()
+                time.sleep(1)  # Adjust sleep duration as needed
+            except KeyboardInterrupt:
+                logger.info("Shutdown initiated by user.")
+                market_maker.cancel_orders()
+                break
+            except Exception as e:
+                logger.error(f"Error in main loop: {e}")
+                time.sleep(5)  # Wait before retrying
+
+    except Exception as e:
+        logger.critical(f"Fatal error in main execution: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

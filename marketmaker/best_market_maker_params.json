@@ -1,0 +1,12 @@
+{
+    "base_spread_pct": 0.0027797575729041285,
+    "base_order_size_pct_of_balance": 0.006,
+    "max_outstanding_orders": 3,
+    "min_profit_spread_after_fees_pct": 0.00035300631182244954,
+    "dynamic_spread_enabled": true,
+    "volatility_multiplier": 4.001625807622517,
+    "price_change_smoothing_factor": 0.8,
+    "inventory_enabled": true,
+    "skew_intensity": 1.9666311123046691,
+    "max_inventory_ratio": 0.25
+}
