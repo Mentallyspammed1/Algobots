@@ -1,6 +1,6 @@
 [
     {
-        "symbol": "XLM/USDT:USDT",
+        "symbol": "XLMUSDT",
         "trade_enabled": true,
         "base_spread": 0.001,
         "order_amount": 0.001,

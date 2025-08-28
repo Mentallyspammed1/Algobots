@@ -1,6 +1,6 @@
 [
     {
-        "symbol": "XLM/USDT:USDT",
+        "symbol": "XLMUSDT",
         "trade_enabled": true,
         "base_spread": 0.001,
         "order_amount": 0.001,
@@ -29,7 +29,7 @@
         "kline_interval": "1m"
     },
     {
-        "symbol": "ETH/USDT:USDT",
+        "symbol": "ETHUSDT",
         "trade_enabled": false,
         "base_spread": 0.0015,
         "order_amount": 0.005,

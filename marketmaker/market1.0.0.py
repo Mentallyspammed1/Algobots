@@ -1,3 +1,85 @@
+The provided code is a concatenation of a few iterations of a Bybit market maker bot. The last and most feature-rich code block is a `BybitMarketMaker` class that incorporates some advanced concepts, including dynamic spread, inventory skew, and a circuit breaker.
+
+I will analyze this final provided code block, highlighting its strengths and weaknesses, then provide an **enhanced and upgraded version** that integrates best practices and more robust features, drawing inspiration from the `PyrmethusBot`'s structure (from your intermediate code blocks) and addressing the identified shortcomings.
+
+---
+
+## 1. Analysis of the Provided Code (Final Block)
+
+**Strengths:**
+
+1.  **Asynchronous Design:** Uses `asyncio` for non-blocking operations, crucial for real-time trading. `asyncio.to_thread` correctly handles synchronous `pybit` HTTP calls.
+2.  **Robust API Interaction:** Employs `tenacity` for API call retries with exponential backoff and jitter, significantly improving resilience against transient network issues or rate limits. Custom exceptions (`BybitAPIError`, `BybitRateLimitError`, `BybitInsufficientBalanceError`) are well-defined.
+3.  **Modular Structure:** Clear separation into `Config`, `TradeMetrics`, `TradingState`, `MarketInfo`, `StateManager`, `DBManager`, `TradingClient`, and `BybitMarketMaker`.
+4.  **State Persistence & Logging:** Uses `pickle` for state serialization and `aiosqlite` for logging trade events, fills, balance updates, and bot metrics.
+5.  **Risk Management:**
+    *   **Circuit Breaker:** Pauses trading during high price volatility.
+    *   **Daily Loss Circuit Breaker:** A new, excellent addition that stops trading if a predefined daily loss percentage is hit.
+6.  **Market Making Strategies:** Implements dynamic spread adjustment (based on price history), and inventory skew to manage position risk.
+7.  **Dry Run / Simulation Mode:** Provides basic simulation of price movement (Geometric Brownian Motion) and order fills, which is invaluable for testing.
+8.  **Configuration:** Uses `dataclasses` for structured configuration.
+
+**Weaknesses / Areas for Improvement:**
+
+1.  **Configuration Management:**
+    *   A single `Config` dataclass for all settings (global and symbol-specific) can become unwieldy. For future multi-symbol support, separating `GlobalConfig` and `SymbolConfig` (as seen in your `PyrmethusBot` example) is better.
+    *   `dataclasses` lack runtime validation; `Pydantic` offers more robust and explicit validation.
+2.  **WebSocket Handling:**
+    *   The `TradingClient` directly manages `pybit`'s synchronous `WebSocket` instances. While `_schedule_coro` with `asyncio.run_coroutine_threadsafe` works, a dedicated `WebSocketClient` class that centralizes message processing, reconnection logic, and dispatching for multiple streams/symbols (like in your `PyrmethusBot`) is more robust and scalable.
+    *   The current private WS handler only subscribes to `order` and `position` streams. **Crucially, it's missing the `execution` stream**, which provides granular trade fill data (like `execType`, `execId`, `execQty`, `execPrice`, `execFee`). The current `_process_fill` logic is designed to use this, but it's only called by `_simulate_dry_run_fills`. For live trading, this is a critical gap for accurate PnL tracking and order reconciliation.
+3.  **PnL Tracking & Reconciliation:**
+    *   The `current_asset_holdings` and `average_entry_price` in `TradeMetrics` are only updated by the bot's *own fills*. If the bot starts with an existing position, or if manual trades occur, these metrics will be inaccurate. Initializing `current_asset_holdings` for spot markets from `get_wallet_balance` (for the base currency) is necessary.
+    *   The absence of the `execution` stream means live PnL tracking for fills won't occur correctly.
+4.  **Dynamic Spread Calculation:**
+    *   The `_calculate_dynamic_spread` attempts to derive volatility from `price_candlestick_history` (which is populated from orderbook mid-price changes). The ATR calculation is a basic mean of true ranges. A more standard and robust ATR calculation typically uses historical OHLCV (kline) data over a longer period, usually fetched from a dedicated API endpoint or kline WebSocket stream.
+5.  **Persistence Method:** `pickle` is generally discouraged for long-term or cross-version persistence due to security concerns and potential compatibility issues across Python versions. JSON or a more structured database approach is preferred.
+6.  **Order Management Detail:**
+    *   The `_reconcile_and_place_orders` logic could be simplified or made more explicit for multi-layer order placement.
+    *   No automatic Take-Profit/Stop-Loss placement for positions.
+7.  **Logging:** Basic `logging` setup. Could benefit from `RotatingFileHandler` and more visually distinct console output (e.g., colored logs).
+8.  **Market Data Freshness:** No explicit check to ensure that the received orderbook data is not stale before making trading decisions.
+
+---
+
+## 2. Enhanced and Upgraded Version
+
+The upgraded version addresses the weaknesses by integrating best practices from the `PyrmethusBot` example, improving PnL tracking, enhancing robustness, and leveraging modern Python features.
+
+**Key Upgrades Implemented:**
+
+1.  **Pydantic for Configuration:** Replaced `dataclass` with `Pydantic` models (`GlobalConfig`, `SymbolConfig`, `StrategyConfig`, etc.) for robust runtime validation, better structure, and easier extensibility.
+2.  **Centralized WebSocket Management (`BybitWebSocketClient`):**
+    *   A new dedicated class handles all WebSocket connections (public and private).
+    *   Manages reconnection attempts with exponential backoff.
+    *   Processes all WS messages (`orderbook`, `publicTrade`, `order`, `position`, `execution`, `wallet`) and dispatches them to the relevant `AsyncSymbolBot` instances.
+    *   Tracks market data freshness to prevent trading on stale data.
+3.  **Robust PnL Tracking and Reconciliation:**
+    *   The `BybitWebSocketClient` now correctly subscribes to and processes the `execution` stream, ensuring `_process_execution_update` is called for every fill.
+    *   `_process_execution_update` (renamed from `_process_fill`) now precisely updates `TradeMetrics` based on granular trade data.
+    *   `_update_balance_and_position` and `_update_balance_from_wallet_ws` ensure `current_balance` and `available_balance` are always in sync.
+    *   Initial `current_asset_holdings` for spot are reconciled with `get_wallet_balance` for the base currency.
+4.  **Dynamic Spread with ATR from Kline Data:**
+    *   Added `get_kline` API call to `BybitAPIClient`.
+    *   `_calculate_atr_from_kline` now fetches actual historical OHLCV data to compute ATR, providing a more reliable volatility measure for dynamic spread.
+    *   `price_candlestick_history` is used to store recent OHLCV data for ATR.
+5.  **JSON for State Persistence:** `StateManager` now uses `json` with a custom `Decimal` encoder/decoder, improving compatibility and readability over `pickle`.
+6.  **Enhanced Logging:**
+    *   Uses `RotatingFileHandler` for log file rotation.
+    *   Integrates `colorama` for colored console output, improving readability.
+    *   Adds `JsonFormatter` option for structured logging.
+7.  **Daily PnL Limits:** The `_check_daily_pnl_limits` method (renamed from `_check_daily_loss_circuit_breaker`) is correctly implemented and integrated.
+8.  **Order Management Refinements:**
+    *   `_reconcile_and_place_orders` logic is clearer, explicitly handling partial fills and only placing new orders if necessary.
+    *   Added `_check_and_handle_stale_orders` to cancel orders that have been open for too long, preventing ghost orders.
+    *   Introduced `OrderLayer` in `SymbolConfig` to allow for more sophisticated multi-level order placement (though the `_reconcile_and_place_orders` in this version still focuses on a single bid/ask pair for simplicity, the structure is ready).
+9.  **Automated TP/SL:** Added `enable_auto_sl_tp` and `_update_take_profit_stop_loss` to automatically set Take-Profit and Stop-Loss for derivatives positions.
+10. **Improved Dry Run Simulation:** Price movement uses Geometric Brownian Motion with configurable drift and volatility. Fill simulation is more detailed, accounting for partial fills.
+11. **Multi-Symbol Ready Structure:** The overall architecture (Global/Symbol Configs, separate `AsyncSymbolBot` class) is designed for easy extension to multiple trading symbols, even though this specific upgraded example still runs a single symbol bot.
+12. **Termux Notifications:** Added optional `termux_notify` for critical alerts on mobile.
+
+---
+
+```python
 import asyncio
 import json
 import logging
@@ -19,7 +101,7 @@ import aiofiles
 import aiosqlite
 import numpy as np
 import pandas as pd
-import requests
+import requests # Used for Termux notify, if installed
 import websocket # For WebSocket._exceptions.WebSocketConnectionClosedException
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
@@ -192,7 +274,7 @@ class StrategyConfig(BaseModel):
     dynamic_spread: DynamicSpreadConfig = Field(default_factory=DynamicSpreadConfig)
     inventory_skew: InventorySkewConfig = Field(default_factory=InventorySkewConfig)
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
-    order_layers: List[OrderLayer] = Field(default_factory=lambda: [OrderLayer()])
+    order_layers: List[OrderLayer] = Field(default_factory=lambda: [OrderLayer()]) # Default to one layer
 
 class SystemConfig(BaseModel):
     loop_interval_sec: PositiveFloat = 0.5
@@ -230,55 +312,18 @@ class GlobalConfig(BaseModel):
     files: FilesConfig = Field(default_factory=FilesConfig)
     
     # Dry Run / Simulation specific settings
-    initial_dry_run_capital: Decimal = Decimal('10000')
-    dry_run_price_drift_mu: float = 0.0
-    dry_run_price_volatility_sigma: float = 0.0001
-    dry_run_time_step_dt: float = 1.0
+    initial_dry_run_capital: Decimal = Field(default_factory=lambda: Decimal(os.getenv("INITIAL_DRY_RUN_CAPITAL", "10000")))
+    dry_run_price_drift_mu: float = Field(default_factory=lambda: float(os.getenv("DRY_RUN_PRICE_DRIFT_MU", "0.0")))
+    dry_run_price_volatility_sigma: float = Field(default_factory=lambda: float(os.getenv("DRY_RUN_PRICE_VOLATILITY_SIGMA", "0.0001")))
+    dry_run_time_step_dt: float = Field(default_factory=lambda: float(os.getenv("DRY_RUN_TIME_STEP_DT", "1.0")))
 
     model_config = ConfigDict(json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder), json_loads=json_loads_decimal, validate_assignment=True)
 
     @classmethod
     def load_from_env(cls) -> 'GlobalConfig':
         """Loads global configuration from environment variables."""
-        env_data = {
-            "api_key": os.getenv("BYBIT_API_KEY"),
-            "api_secret": os.getenv("BYBIT_API_SECRET"),
-            "testnet": os.getenv("BYBIT_TESTNET", "false").lower() == "true",
-            "trading_mode": os.getenv("TRADING_MODE", "DRY_RUN").upper(),
-            "category": os.getenv("BYBIT_CATEGORY", "linear").lower(),
-            "main_quote_currency": os.getenv("MAIN_QUOTE_CURRENCY", "USDT"),
-            "system": {
-                "loop_interval_sec": float(os.getenv("LOOP_INTERVAL_SEC", "0.5")),
-                "order_refresh_interval_sec": float(os.getenv("ORDER_REFRESH_INTERVAL_SEC", "5.0")),
-                "ws_heartbeat_sec": int(os.getenv("WS_HEARTBEAT_SEC", "30")),
-                "cancellation_rate_limit_sec": float(os.getenv("CANCELLATION_RATE_LIMIT_SEC", "0.2")),
-                "status_report_interval_sec": int(os.getenv("STATUS_REPORT_INTERVAL_SEC", "30")),
-                "ws_reconnect_attempts": int(os.getenv("WS_RECONNECT_ATTEMPTS", "5")),
-                "ws_reconnect_initial_delay_sec": int(os.getenv("WS_RECONNECT_INITIAL_DELAY_SEC", "5")),
-                "ws_reconnect_max_delay_sec": int(os.getenv("WS_RECONNECT_MAX_DELAY_SEC", "60")),
-                "api_retry_attempts": int(os.getenv("API_RETRY_ATTEMPTS", "5")),
-                "api_retry_initial_delay_sec": float(os.getenv("API_RETRY_INITIAL_DELAY_SEC", "0.5")),
-                "api_retry_max_delay_sec": float(os.getenv("API_RETRY_MAX_DELAY_SEC", "10.0")),
-                "health_check_interval_sec": int(os.getenv("HEALTH_CHECK_INTERVAL_SEC", "10")),
-                "config_refresh_interval_sec": int(os.getenv("CONFIG_REFRESH_INTERVAL_SEC", "60")),
-            },
-            "files": {
-                "log_level": os.getenv("LOG_LEVEL", "INFO"),
-                "log_file": os.getenv("LOG_FILE", "market_maker.log"),
-                "state_file": os.getenv("STATE_FILE", "market_maker_state.json"),
-                "db_file": os.getenv("DB_FILE", "market_maker.db"),
-                "symbol_config_file": os.getenv("SYMBOL_CONFIG_FILE", "symbols.json"),
-                "log_format": os.getenv("LOG_FORMAT", "plain"),
-                "pybit_log_level": os.getenv("PYBIT_LOG_LEVEL", "WARNING"),
-            },
-            "initial_dry_run_capital": os.getenv("INITIAL_DRY_RUN_CAPITAL", "10000"),
-            "dry_run_price_drift_mu": float(os.getenv("DRY_RUN_PRICE_DRIFT_MU", "0.0")),
-            "dry_run_price_volatility_sigma": float(os.getenv("DRY_RUN_PRICE_VOLATILITY_SIGMA", "0.0001")),
-            "dry_run_time_step_dt": float(os.getenv("DRY_RUN_TIME_STEP_DT", "1.0")),
-        }
-        # Filter out None values before passing to Pydantic to allow default_factory to work
-        filtered_env_data = {k: v for k, v in env_data.items() if v is not None}
-        return cls(**filtered_env_data)
+        # Pydantic's Field(default_factory) handles missing env vars, so direct instantiation is fine.
+        return cls()
 
     def __post_init__(self):
         if self.trading_mode == "TESTNET":
@@ -330,15 +375,35 @@ class SymbolConfig(BaseModel):
             self.quote_currency = "UNKNOWN"
             logging.getLogger('BybitMarketMaker').warning(f"Cannot parse base/quote currency from symbol: {self.symbol}. Using UNKNOWN.")
 
+        if self.strategy.inventory_skew.enabled and self.max_net_exposure_usd <= 0:
+             raise ConfigurationError(f"[{self.symbol}] max_net_exposure_usd must be positive when inventory strategy is enabled.")
+        if not (0 < self.max_order_size_pct <= 1):
+            raise ConfigurationError(f"[{self.symbol}] max_order_size_pct must be between 0 and 1 (exclusive).")
+        if self.min_order_value_usd <= 0:
+            raise ConfigurationError(f"[{self.symbol}] min_order_value_usd must be positive.")
+        if self.max_net_exposure_usd < 0:
+            raise ConfigurationError(f"[{self.symbol}] max_net_exposure_usd cannot be negative.")
+        if self.strategy.base_spread_pct <= 0:
+            raise ConfigurationError(f"[{self.symbol}] base_spread_pct must be positive.")
+        if self.strategy.max_outstanding_orders < 0:
+            raise ConfigurationError(f"[{self.symbol}] max_outstanding_orders cannot be negative.")
+        if self.strategy.dynamic_spread.enabled:
+            if not (0 <= self.strategy.dynamic_spread.min_spread_pct <= self.strategy.dynamic_spread.max_spread_pct):
+                raise ConfigurationError(f"[{self.symbol}] Dynamic spread min/max percentages are invalid.")
+            if not (0 < self.strategy.dynamic_spread.price_change_smoothing_factor < 1):
+                raise ConfigurationError(f"[{self.symbol}] Price change smoothing factor must be between 0 and 1 (exclusive).")
+        if self.strategy.circuit_breaker.max_daily_loss_pct is not None and not (0 <= self.strategy.circuit_breaker.max_daily_loss_pct < 1):
+            raise ConfigurationError(f"[{self.symbol}] max_daily_loss_pct must be between 0 and 1 (exclusive) if set.")
+
     def format_price(self, p: Decimal) -> Decimal:
         if self.price_precision is None:
-            logging.getLogger('BybitMarketMaker').warning(f"[{self.symbol}] Price precision not set. Using default 8 decimal places.")
+            # Fallback for when market info isn't loaded yet
             return p.quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
         return p.quantize(self.price_precision, rounding=ROUND_DOWN)
 
     def format_quantity(self, q: Decimal) -> Decimal:
         if self.quantity_precision is None:
-            logging.getLogger('BybitMarketMaker').warning(f"[{self.symbol}] Quantity precision not set. Using default 8 decimal places.")
+            # Fallback for when market info isn't loaded yet
             return q.quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
         return q.quantize(self.quantity_precision, rounding=ROUND_DOWN)
 
@@ -377,7 +442,7 @@ class ConfigManager:
                     inventory_skew=InventorySkewConfig(enabled=True),
                     circuit_breaker=CircuitBreakerConfig(enabled=True),
                     order_layers=[OrderLayer()]
-                )
+                ).model_dump() # Convert to dict for Pydantic
             }
             try:
                 cfg = SymbolConfig(**default_symbol_data)
@@ -399,10 +464,22 @@ class ConfigManager:
                     try:
                         # Merge default strategy settings if not provided in symbol config
                         s_cfg_data.setdefault('strategy', {})
-                        for strat_field, default_value in StrategyConfig().model_dump().items():
+                        # Ensure nested configs like dynamic_spread are also dicts if they exist
+                        for sub_field in ['dynamic_spread', 'inventory_skew', 'circuit_breaker']:
+                            if sub_field in s_cfg_data['strategy'] and not isinstance(s_cfg_data['strategy'][sub_field], dict):
+                                s_cfg_data['strategy'][sub_field] = s_cfg_data['strategy'][sub_field].model_dump() if isinstance(s_cfg_data['strategy'][sub_field], BaseModel) else {}
+                        
+                        # Apply defaults for StrategyConfig fields if missing
+                        default_strategy_config = StrategyConfig().model_dump()
+                        for strat_field, default_value in default_strategy_config.items():
                             if strat_field not in s_cfg_data['strategy']:
                                 s_cfg_data['strategy'][strat_field] = default_value
-
+                            # Also apply defaults for nested strategy configs
+                            elif isinstance(default_value, dict) and isinstance(s_cfg_data['strategy'][strat_field], dict):
+                                for nested_field, nested_default_value in default_value.items():
+                                    if nested_field not in s_cfg_data['strategy'][strat_field]:
+                                        s_cfg_data['strategy'][strat_field][nested_field] = nested_default_value
+                        
                         cfg = SymbolConfig(**s_cfg_data)
                         cls._symbol_configs[cfg.symbol] = cfg
                     except ValidationError as e:
@@ -789,17 +866,6 @@ class BybitAPIClient:
         if not isinstance(exception, BybitAPIError):
             return False
         # Do not retry on auth, bad params, or insufficient balance, or explicit rate limit
-        # Common Bybit non-retryable error codes:
-        # 10001: Parameters error
-        # 10002: Unknown error (sometimes transient, but often means bad request)
-        # 10003: Recv window error (often a client-side clock sync issue or bad timestamp)
-        # 10004: Authentication failed
-        # 10006, 10007, 10016, 120004, 120005: Rate limit (handled by BybitRateLimitError)
-        # 110001, 110003, 12130, 12131: Insufficient balance (handled by BybitInsufficientBalanceError)
-        # 30001-30005: Order related errors (e.g., invalid price, qty)
-        # 30042: Order price cannot be higher/lower than X times of current market price
-        # 30070: Cross/isolated margin mode not switched
-        # 30071: Leverage not modified (often means it's already set)
         non_retryable_codes = {10001, 10002, 10003, 10004, 30001, 30002, 30003, 30004, 30005, 30042, 30070, 30071}
         if exception.ret_code in non_retryable_codes:
             return False
@@ -985,7 +1051,7 @@ class BybitWebSocketClient:
         self.last_orderbook_update_time: Dict[str, float] = {}
         self.last_trades_update_time: Dict[str, float] = {}
 
-        self.symbol_bots: Dict[str, 'AsyncSymbolBot'] = {} # Reference to active SymbolBot instances
+        self.symbol_bots: Dict[str, 'AsyncSymbolBot'] = {} # Reference to active AsyncSymbolBot instances
 
         self.message_queue: asyncio.Queue = asyncio.Queue()
         self._stop_event = asyncio.Event()
@@ -1107,12 +1173,8 @@ class BybitWebSocketClient:
                 elif topic == 'position':
                     await bot._process_position_update(item_data)
                 elif topic == 'execution':
-                    await bot._process_execution_update(item_data)
+                    await bot._process_execution_update(item_data) # This is key for PnL tracking
                 elif topic == 'wallet':
-                    # Wallet updates are global, but we can pass them to a specific bot (e.g., the first one)
-                    # or handle them centrally if needed. For now, let's pass to all active bots.
-                    # Or, more realistically, let the main bot update its global balance and then distribute.
-                    # For simplicity, we'll let each bot update its balance based on its main_quote_currency.
                     await bot._update_balance_from_wallet_ws(item_data)
             else:
                 self.logger.debug(f"Received {topic} update for unmanaged symbol: {symbol}")
@@ -1192,10 +1254,9 @@ class BybitWebSocketClient:
 
             current_ws_instance = self._ws_private_instance if is_private else self._ws_public_instance
             if current_ws_instance is not None:
-                # Check if pybit's internal connection is still alive (no direct way, infer from last message)
-                # This is a weak check, as pybit's WS client doesn't expose connection status directly.
-                # A better approach would be to subclass pybit's WS or use a different library.
-                # For now, rely on individual bots reporting stale data, which might trigger a full reconnect.
+                # pybit's WS client doesn't expose connection status directly.
+                # We rely on individual bots reporting stale data, which might trigger a full reconnect.
+                # For now, just wait and assume it's alive if instance exists.
                 await asyncio.sleep(self.config.system.ws_heartbeat_sec)
                 continue
 
@@ -1327,7 +1388,7 @@ class AsyncSymbolBot:
            (self.state.daily_pnl_reset_date is not None and self.state.daily_pnl_reset_date.date() < current_utc_date):
             self.state.daily_initial_capital = self.state.current_balance
             self.state.daily_pnl_reset_date = datetime.now(timezone.utc)
-            self.logger.info(f"[{self.config.symbol}] Daily initial capital set to: {self.state.daily_initial_capital} {self.config.quote_currency}")
+            self.logger.info(f"[{self.config.symbol}] Daily initial capital set to: {self.state.daily_initial_capital} {self.global_config.main_quote_currency}")
 
         if self.global_config.trading_mode not in ["DRY_RUN", "SIMULATION"]:
             if self.global_config.category in ['linear', 'inverse'] and not await self._set_margin_mode_and_leverage():
@@ -1534,9 +1595,12 @@ class AsyncSymbolBot:
             self.state.circuit_breaker_price_points.append((current_time, self.state.mid_price))
 
             # Update candlestick history (timestamp, high, low, close)
+            # This is a simple way to derive OHLCV from mid-price for ATR calculation.
+            # A more robust approach would use actual kline data or aggregate trades.
             if self.state.price_candlestick_history:
                 last_ts, last_high, last_low, _ = self.state.price_candlestick_history[-1]
                 # If within a short interval, update the last candle's high/low
+                # This logic assumes a "candle" is roughly the loop interval.
                 if (current_time - last_ts) < self.global_config.system.loop_interval_sec * 2:
                     self.state.price_candlestick_history[-1] = (current_time, max(last_high, new_mid_price), min(last_low, new_mid_price), new_mid_price)
                 else:
@@ -1655,8 +1719,26 @@ class AsyncSymbolBot:
             else:
                 self.state.current_position_qty = DECIMAL_ZERO
                 self.state.unrealized_pnl_derivatives = DECIMAL_ZERO
-        else: # For spot, position is managed by TradeMetrics
-            self.state.current_position_qty = self.state.metrics.current_asset_holdings
+        else: # For spot, position is managed by TradeMetrics AND fetched from wallet for reconciliation
+            # For spot, fetch the base currency balance directly to reconcile holdings
+            base_currency_balance_data = None
+            for coin in balance_data.get('coin', []):
+                if coin['coin'] == self.config.base_currency:
+                    base_currency_balance_data = coin
+                    break
+            
+            if base_currency_balance_data:
+                exchange_base_holdings = Decimal(base_currency_balance_data.get('walletBalance', DECIMAL_ZERO))
+                # Reconcile bot's internal holdings with exchange's actual holdings
+                if self.state.metrics.current_asset_holdings != exchange_base_holdings:
+                    self.logger.warning(f"[{self.config.symbol}] Spot holdings discrepancy: Bot has {self.state.metrics.current_asset_holdings}, Exchange has {exchange_base_holdings}. Updating bot holdings.")
+                    self.state.metrics.current_asset_holdings = exchange_base_holdings
+                self.state.current_position_qty = self.state.metrics.current_asset_holdings # For spot, current_position_qty mirrors metrics holdings
+            else:
+                self.logger.warning(f"[{self.config.symbol}] Could not find balance for {self.config.base_currency} (spot). Assuming zero holdings.")
+                self.state.metrics.current_asset_holdings = DECIMAL_ZERO
+                self.state.current_position_qty = DECIMAL_ZERO
+
             self.state.unrealized_pnl_derivatives = DECIMAL_ZERO # Spot doesn't have exchange-reported UPNL
 
         self.logger.info(f"[{self.config.symbol}] Updated Balance: {self.state.current_balance} {self.global_config.main_quote_currency}, Position: {self.state.current_position_qty} {self.config.base_currency}, UPNL (Deriv): {self.state.unrealized_pnl_derivatives:+.4f}")
@@ -1751,17 +1833,12 @@ class AsyncSymbolBot:
             await self._update_take_profit_stop_loss()
 
     async def _process_execution_update(self, trade_data: Dict[str, Any]):
-        """Handles individual trade executions (fills)."""
+        """Handles individual trade executions (fills) from the execution stream."""
         exec_type = trade_data.get('execType')
-        if exec_type not in ['Trade', 'AdlTrade', 'BustTrade', 'Funding']: # Filter out non-trade related executions
+        if exec_type not in ['Trade', 'AdlTrade', 'BustTrade']: # Filter out non-trade related executions like Funding
             self.logger.debug(f"[{self.config.symbol}] Skipping non-trade execution type: {exec_type}")
             return
         
-        # if exec_type == 'Funding': # Funding PnL is not a trade, but affects overall PnL
-        #     self.state.metrics.realized_pnl += Decimal(trade_data.get('pnl', DECIMAL_ZERO))
-        #     self.logger.info(f"[{self.config.symbol}] Funding PnL: {Decimal(trade_data.get('pnl', DECIMAL_ZERO)):+.4f}")
-        #     return
-
         side = trade_data.get('side', 'Unknown')
         exec_qty = Decimal(trade_data.get('execQty', DECIMAL_ZERO))
         exec_price = Decimal(trade_data.get('execPrice', DECIMAL_ZERO))
@@ -1773,7 +1850,7 @@ class AsyncSymbolBot:
             return
 
         metrics = self.state.metrics
-        realized_pnl_impact = Decimal('0') # PnL directly from this specific trade (used for gross profit/loss)
+        realized_pnl_impact = DECIMAL_ZERO # PnL directly from this specific trade (used for gross profit/loss)
 
         if side == 'Buy':
             metrics.update_pnl_on_buy(exec_qty, exec_price)
@@ -1813,7 +1890,7 @@ class AsyncSymbolBot:
     # --- Trading Logic & Order Management ---
     async def _manage_orders(self):
         """Calculates target prices and manages open orders."""
-        if self.state.smoothed_mid_price == DECIMAL_ZERO or not self.config.price_precision:
+        if self.state.smoothed_mid_price == DECIMAL_ZERO or self.config.price_precision is None:
             self.logger.warning(f"[{self.config.symbol}] Smoothed mid-price or market info not available, skipping order management.")
             return
 
@@ -1862,9 +1939,11 @@ class AsyncSymbolBot:
     async def _calculate_atr_from_kline(self, current_mid_price: Decimal) -> Decimal:
         """Fetches kline data and calculates ATR."""
         try:
+            # Fetch more data than ATR length to ensure full calculation
+            kline_limit = max(20, self.config.strategy.dynamic_spread.volatility_window_sec // 60 * 2) # e.g. for 1m interval, 120 mins of data
             ohlcv_data = await self.api_client.get_kline(
                 self.global_config.category, self.config.symbol,
-                self.config.strategy.kline_interval, 20 # Need enough data for ATR (e.g., 14 periods)
+                self.config.strategy.kline_interval, kline_limit
             )
             if not ohlcv_data or len(ohlcv_data) < 15: # Ensure enough data points for 14-period ATR
                 self.logger.warning(f"[{self.config.symbol}] Not enough OHLCV data for ATR calculation ({len(ohlcv_data)}). Using cached ATR or zero.")
@@ -1913,7 +1992,7 @@ class AsyncSymbolBot:
 
     def _enforce_min_profit_spread(self, mid_price: Decimal, bid_p: Decimal, ask_p: Decimal) -> Tuple[Decimal, Decimal]:
         """Ensures the spread is wide enough to cover fees and desired profit."""
-        if not self.config.maker_fee_rate or not self.config.taker_fee_rate:
+        if self.config.maker_fee_rate is None or self.config.taker_fee_rate is None:
             self.logger.warning(f"[{self.config.symbol}] Fee rates not set. Cannot enforce minimum profit spread.")
             return bid_p, ask_p
             
@@ -1945,17 +2024,16 @@ class AsyncSymbolBot:
                 orders_to_cancel.append((order_id, order_data.get('orderLinkId')))
                 continue
 
-            if order_data['status'] in ['Filled', 'PartiallyFilled', 'Cancelled', 'Rejected', 'Deactivated', 'Expired']:
-                if order_data['qty'] == order_data.get('cumExecQty', DECIMAL_ZERO): # Fully filled
-                    self.logger.debug(f"[{self.config.symbol}] Removing fully processed order {order_id} from active orders.")
-                    del self.state.active_orders[order_id]
-                else: # Partially filled but inactive or needs re-evaluation
-                    if order_data['status'] in ['Cancelled', 'Rejected', 'Deactivated', 'Expired']:
-                         self.logger.debug(f"[{self.config.symbol}] Removing partially filled but inactive order {order_id} from active orders.")
-                         del self.state.active_orders[order_id]
-                    else: # Still partially filled and active, keep for now but don't count towards new placement.
-                        current_active_orders_by_side[order_data['side']].append((order_id, order_data))
+            if order_data['status'] in ['Filled', 'Cancelled', 'Rejected', 'Deactivated', 'Expired']:
+                # If an order is marked as terminal, remove it from active orders
+                self.logger.debug(f"[{self.config.symbol}] Removing terminal order {order_id} (Status: {order_data['status']}) from active orders.")
+                del self.state.active_orders[order_id]
                 continue
+            
+            # For partially filled orders that are still active, keep them but they might be replaced
+            if order_data['status'] == 'PartiallyFilled':
+                current_active_orders_by_side[order_data['side']].append((order_id, order_data))
+                continue # Do not mark as stale for now, let new logic decide to replace or not
 
             # Check for price staleness based on order layer's cancel_threshold_pct
             is_stale = False
@@ -1985,37 +2063,42 @@ class AsyncSymbolBot:
         # Place new orders if needed, considering layers
         current_outstanding_orders = sum(1 for oid, odata in self.state.active_orders.items() if odata['status'] not in ['Filled', 'Cancelled', 'Rejected', 'Deactivated', 'Expired'])
         
-        for i, layer in enumerate(self.config.strategy.order_layers):
-            if current_outstanding_orders >= self.config.strategy.max_outstanding_orders:
-                self.logger.debug(f"[{self.config.symbol}] Max outstanding orders ({self.config.strategy.max_outstanding_orders}) reached. Skipping further layer placements.")
-                break
+        # For this version, we'll simplify and only place one bid/ask pair,
+        # using the first layer's settings or base settings if no layers are defined.
+        layer = self.config.strategy.order_layers[0] if self.config.strategy.order_layers else OrderLayer()
+        
+        # Calculate layered prices (if layers are used, they offset from base_target_bid/ask)
+        layer_bid_price = base_target_bid * (Decimal('1') - Decimal(str(layer.spread_offset_pct)))
+        layer_ask_price = base_target_ask * (Decimal('1') + Decimal(str(layer.spread_offset_pct)))
 
-            # Calculate layered prices
-            layer_bid_price = base_target_bid * (Decimal('1') - Decimal(str(layer.spread_offset_pct)))
-            layer_ask_price = base_target_ask * (Decimal('1') + Decimal(str(layer.spread_offset_pct)))
+        # Ensure layered orders don't cross
+        if layer_bid_price >= layer_ask_price:
+            self.logger.warning(f"[{self.config.symbol}] Layer prices crossed ({layer_bid_price} >= {layer_ask_price}). Skipping this layer.")
+            return
 
-            # Ensure layered orders don't cross
-            if layer_bid_price >= layer_ask_price:
-                self.logger.warning(f"[{self.config.symbol}] Layer {i} prices crossed ({layer_bid_price} >= {layer_ask_price}). Skipping this layer.")
-                continue
+        # Check existing active bids/asks again after cancellations
+        has_active_bid = any(o['side'] == 'Buy' and o['status'] not in ['Filled', 'Cancelled', 'Rejected', 'Deactivated', 'Expired'] for o in self.state.active_orders.values())
+        has_active_ask = any(o['side'] == 'Sell' and o['status'] not in ['Filled', 'Cancelled', 'Rejected', 'Deactivated', 'Expired'] for o in self.state.active_orders.values())
 
-            # Place buy order for layer
-            if len(current_active_orders_by_side['Buy']) <= i: # Only place if this layer doesn't have an active order
-                buy_qty = await self._calculate_order_size("Buy", layer_bid_price, layer.quantity_multiplier)
-                if buy_qty > DECIMAL_ZERO:
-                    await self._place_limit_order("Buy", layer_bid_price, buy_qty, f"layer_{i}")
-                    current_outstanding_orders += 1
-                else:
-                    self.logger.debug(f"[{self.config.symbol}] Calculated buy quantity for layer {i} is zero or too small, skipping bid order placement.")
 
-            # Place sell order for layer
-            if current_outstanding_orders < self.config.strategy.max_outstanding_orders and len(current_active_orders_by_side['Sell']) <= i: # Only place if this layer doesn't have an active order
-                sell_qty = await self._calculate_order_size("Sell", layer_ask_price, layer.quantity_multiplier)
-                if sell_qty > DECIMAL_ZERO:
-                    await self._place_limit_order("Sell", layer_ask_price, sell_qty, f"layer_{i}")
-                    current_outstanding_orders += 1
-                else:
-                    self.logger.debug(f"[{self.config.symbol}] Calculated sell quantity for layer {i} is zero or too small, skipping ask order placement.")
+        # Place buy order for layer
+        if not has_active_bid and current_outstanding_orders < self.config.strategy.max_outstanding_orders:
+            buy_qty = await self._calculate_order_size("Buy", layer_bid_price, layer.quantity_multiplier)
+            if buy_qty > DECIMAL_ZERO:
+                await self._place_limit_order("Buy", layer_bid_price, buy_qty, f"layer_0")
+                current_outstanding_orders += 1
+            else:
+                self.logger.debug(f"[{self.config.symbol}] Calculated buy quantity for layer 0 is zero or too small, skipping bid order placement.")
+
+        # Place sell order for layer
+        if not has_active_ask and current_outstanding_orders < self.config.strategy.max_outstanding_orders:
+            sell_qty = await self._calculate_order_size("Sell", layer_ask_price, layer.quantity_multiplier)
+            if sell_qty > DECIMAL_ZERO:
+                await self._place_limit_order("Sell", layer_ask_price, sell_qty, f"layer_0")
+            else:
+                self.logger.debug(f"[{self.config.symbol}] Calculated sell quantity for layer 0 is zero or too small, skipping ask order placement.")
+        elif not has_active_ask:
+            self.logger.warning(f"[{self.config.symbol}] Skipping ask order placement: Max outstanding orders ({self.config.strategy.max_outstanding_orders}) reached or will be exceeded.")
 
     async def _calculate_order_size(self, side: str, price: Decimal, quantity_multiplier: float = 1.0) -> Decimal:
         """Calculates the optimal order quantity based on balance, exposure, and min/max limits."""
@@ -2213,7 +2296,7 @@ class AsyncSymbolBot:
         local_ids = set(self.state.active_orders.keys())
         exchange_ids = set(exchange_orders.keys())
 
-        for oid in local_ids - exchange_ids:
+        for oid in list(local_ids - exchange_ids): # Iterate over a copy as we modify
             self.logger.warning(f"[{self.config.symbol}] Local order {oid} not found on exchange. Removing from local state.")
             del self.state.active_orders[oid]
 
@@ -2289,6 +2372,11 @@ class AsyncSymbolBot:
         sl_price = self.config.format_price(sl_price)
 
         try:
+            # Check if TP/SL are already set to these values to avoid redundant API calls
+            # (Requires fetching current TP/SL which is not directly available via pybit get_positions for Unified Trading)
+            # For simplicity, we'll just set it every time for now, or fetch positions and parse.
+            # A more advanced approach would involve checking current position's TP/SL.
+
             if await self.api_client.set_trading_stop(self.global_config.category, self.config.symbol, sl_price, tp_price):
                 self.logger.info(
                     f"{Colors.NEON_GREEN}[{self.config.symbol}] Set TP: {tp_price:.{self.config.price_precision if self.config.price_precision else 8}f}, "
@@ -2369,7 +2457,7 @@ class AsyncSymbolBot:
 
     # --- Dry Run / Simulation Specifics ---
     async def _simulate_dry_run_price_movement(self, current_time: float):
-        """Simulates price movement for DRY_RUN mode."""
+        """Simulates price movement for DRY_RUN mode using Geometric Brownian Motion."""
         dt = self.global_config.dry_run_time_step_dt
         if (current_time - self.state.last_dry_run_price_update_time) < dt:
             return
@@ -2378,17 +2466,14 @@ class AsyncSymbolBot:
         sigma = self.global_config.dry_run_price_volatility_sigma
         
         price_float = float(self.state.mid_price)
-        if price_float <= 0: price_float = 1e-10
+        if price_float <= 0: price_float = 1e-10 # Avoid log(0)
 
         new_price_float = price_float * np.exp(
             (mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * np.random.normal()
         )
-        if new_price_float < 1e-8: new_price_float = 1e-8
+        if new_price_float < 1e-8: new_price_float = 1e-8 # Prevent price from going too low
 
         new_mid_price = Decimal(str(new_price_float))
-        
-        old_mid_price = self.state.mid_price
-        self.state.mid_price = new_mid_price
         
         # Update candlestick history for ATR calculation
         if self.state.price_candlestick_history:
@@ -2410,6 +2495,7 @@ class AsyncSymbolBot:
         else:
             self.state.smoothed_mid_price = (alpha * new_mid_price) + ((Decimal('1') - alpha) * self.state.smoothed_mid_price)
 
+        self.state.mid_price = new_mid_price # Update actual mid_price
         self.state.last_dry_run_price_update_time = current_time
         self.logger.debug(f"[{self.config.symbol}] DRY_RUN Price Movement: Mid: {self.state.mid_price}, Smoothed: {self.state.smoothed_mid_price}")
 
@@ -2701,11 +2787,11 @@ class PyrmethusBot:
                 selected_mode = input(
                     f"{Colors.CYAN}Choose mode:\n"
                     f"  [f]rom file (symbols.json) - for multi-symbol operation\n"
-                    f"  [s]ingle symbol (e.g., BTC/USDT:USDT) - for interactive, quick run\n"
+                    f"  [s]ingle symbol (e.g., BTCUSDT) - for interactive, quick run\n"
                     f"Enter choice (f/s): {Colors.RESET}"
                 ).lower().strip()
                 if selected_mode == 's':
-                    input_symbol = input(f"{Colors.CYAN}Enter single symbol (e.g., BTC/USDT:USDT): {Colors.RESET}").upper().strip()
+                    input_symbol = input(f"{Colors.CYAN}Enter single symbol (e.g., BTCUSDT): {Colors.RESET}").upper().strip()
                     if not input_symbol:
                         raise ConfigurationError("No symbol entered for single symbol mode.")
             else:
@@ -2780,3 +2866,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"An error occurred before main() could fully handle it: {e}")
         sys.exit(1)
+```

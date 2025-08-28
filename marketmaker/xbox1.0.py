@@ -34,13 +34,9 @@ from pydantic import (
     PositiveInt,
     ValidationError,
 )
-from tenacity import (
-    before_sleep_log,
-    retry,
-    retry_if_exception,
-    stop_after_attempt,
-    wait_exponential_jitter,
-)
+
+
+        
 
 # Initialize Colorama for cross-platform colored terminal output
 init(autoreset=True)
@@ -363,7 +359,7 @@ class ConfigManager:
         if single_symbol:
             # Generate a default SymbolConfig for the single symbol
             default_symbol_data = {
-                "symbol": single_symbol,
+                "symbol": single_symbol.replace("/", "").replace(":", ""),
                 "trade_enabled": True,
                 "leverage": 10,
                 "min_order_value_usd": 10.0,
@@ -789,23 +785,21 @@ class BybitAPIClient:
         if not isinstance(exception, BybitAPIError):
             return False
         # Do not retry on auth, bad params, or insufficient balance, or explicit rate limit
-        # Common Bybit non-retryable error codes:
-        # 10001: Parameters error
-        # 10002: Unknown error (sometimes transient, but often means bad request)
-        # 10003: Recv window error (often a client-side clock sync issue or bad timestamp)
-        # 10004: Authentication failed
-        # 10006, 10007, 10016, 120004, 120005: Rate limit (handled by BybitRateLimitError)
-        # 110001, 110003, 12130, 12131: Insufficient balance (handled by BybitInsufficientBalanceError)
-        # 30001-30005: Order related errors (e.g., invalid price, qty)
-        # 30042: Order price cannot be higher/lower than X times of current market price
-        # 30070: Cross/isolated margin mode not switched
-        # 30071: Leverage not modified (often means it's already set)
-        non_retryable_codes = {10001, 10002, 10003, 10004, 30001, 30002, 30003, 30004, 30005, 30042, 30070, 30071}
-        if exception.ret_code in non_retryable_codes:
-            return False
         if isinstance(exception, (APIAuthError, ValueError, BybitRateLimitError, BybitInsufficientBalanceError)):
             return False
-        return True # Default to retry for other API errors (e.g., network issues, temporary server errors)
+        # Bybit retCode 10001 (Parameters error), 10002 (Unknown error), 10003 (Recv window error)
+        # 10006 (Rate limit), 10007 (Rate limit), 10016 (Rate limit)
+        # 110001 (Insufficient balance), 110003 (Insufficient balance)
+        # 12130 (Insufficient balance), 12131 (Insufficient balance)
+        # 30001-30005 (Order related errors, often means invalid parameters or market conditions)
+        # 30034 (Order not found) - maybe retry?
+        # 30042 (Order price cannot be higher than 1.05 times of current market price or lower than 0.95 times) - not retryable
+        # 30070 (Cross/isolated margin mode not switched) - not retryable
+        # 30071 (Leverage not modified) - not retryable
+        non_retryable_codes = {10001, 10002, 10003, 10004, 10006, 10007, 10016, 110001, 110003, 12130, 12131, 30042, 30070, 30071}
+        if exception.ret_code in non_retryable_codes:
+            return False
+        return True # Default to retry for other API errors
 
     def _get_api_retry_decorator(self):
         return retry(
@@ -969,16 +963,13 @@ class BybitWebSocketClient:
     """
     Manages WebSocket connections for multiple symbols using pybit's WebSocket client.
     Handles public orderbook/trades and private order/position/execution updates.
-    Includes reconnection logic.
     """
     def __init__(self, global_config: GlobalConfig, logger: logging.Logger):
         self.config = global_config
         self.logger = logger
 
-        self._ws_public_instance: Optional[WebSocket] = None
-        self._ws_private_instance: Optional[WebSocket] = None
-        self._ws_public_task: Optional[asyncio.Task] = None
-        self._ws_private_task: Optional[asyncio.Task] = None
+        self.ws_public: Optional[WebSocket] = None
+        self.ws_private: Optional[WebSocket] = None
 
         self.order_book_data: Dict[str, Dict[str, List[List[Decimal]]]] = {} # {symbol: {'b': [[price, qty]], 'a': ...}}
         self.recent_trades_data: Dict[str, deque[Tuple[float, Decimal, Decimal, str]]] = {} # {symbol: deque((timestamp, price, qty, side))}
@@ -989,8 +980,6 @@ class BybitWebSocketClient:
 
         self.message_queue: asyncio.Queue = asyncio.Queue()
         self._stop_event = asyncio.Event()
-        self._public_topics: List[str] = []
-        self._private_topics: List[str] = []
 
     def register_symbol_bot(self, symbol_bot: 'AsyncSymbolBot'):
         """Registers an AsyncSymbolBot instance to receive WS updates."""
@@ -1125,157 +1114,81 @@ class BybitWebSocketClient:
         """Retrieves recent trades for a symbol."""
         return self.recent_trades_data.get(symbol, deque(maxlen=limit))
 
-    async def _connect_and_subscribe(self, is_private: bool, topics: List[str]):
-        """Internal helper to establish connection and subscribe."""
-        ws_instance: Optional[WebSocket] = None
-        channel_type = self.config.category if not is_private else "private"
-        
-        try:
-            if is_private:
-                if not self.config.api_key or not self.config.api_secret:
-                    self.logger.warning(f"{Colors.YELLOW}Skipping private WebSocket connection: API keys not provided.{Colors.RESET}")
-                    return None
-                ws_instance = WebSocket(
-                    testnet=self.config.testnet, api_key=self.config.api_key,
-                    api_secret=self.config.api_secret, channel_type=channel_type
-                )
-            else:
-                ws_instance = WebSocket(testnet=self.config.testnet, channel_type=channel_type)
+    async def start_streams(self, public_topics: List[str], private_topics: List[str]):
+        """Starts public and private WebSocket streams."""
+        self._stop_event.clear()
 
-            for topic in topics:
+        # Public stream
+        if public_topics:
+            self.logger.info(f"Initializing PUBLIC WS stream for topics: {public_topics}")
+            # pybit's WebSocket client is initialized per channel_type.
+            # Assuming 'linear' for simplicity based on global_config.category, adjust if needed.
+            self.ws_public = WebSocket(testnet=self.config.testnet, channel_type=self.config.category) 
+            
+            for topic in public_topics:
                 if topic.startswith("orderbook."):
                     parts = topic.split('.')
-                    depth = int(parts[1])
-                    symbol_ws = parts[2]
-                    ws_instance.orderbook_stream(symbol=symbol_ws, depth=depth, callback=self._ws_message_handler)
-                    self.logger.info(f"Subscribed to orderbook.{depth}.{symbol_ws}")
+                    if len(parts) >= 3:
+                        depth = int(parts[1])
+                        symbol_ws = parts[2]
+                        self.ws_public.orderbook_stream(symbol=symbol_ws, depth=depth, callback=self._ws_message_handler)
+                        self.logger.info(f"Subscribed to orderbook.{depth}.{symbol_ws}")
+                    else:
+                        self.logger.warning(f"Unrecognized orderbook topic format: {topic}")
                 elif topic.startswith("publicTrade."):
                     parts = topic.split('.')
-                    symbol_ws = parts[1]
-                    ws_instance.public_trade_stream(symbol=symbol_ws, callback=self._ws_message_handler)
-                    self.logger.info(f"Subscribed to publicTrade.{symbol_ws}")
-                elif topic == "wallet":
-                    ws_instance.wallet_stream(callback=self._ws_message_handler)
-                    self.logger.info("Subscribed to private wallet stream.")
-                elif topic == "order":
-                    ws_instance.order_stream(callback=self._ws_message_handler)
-                    self.logger.info("Subscribed to private order stream.")
-                elif topic == "position":
-                    ws_instance.position_stream(callback=self._ws_message_handler)
-                    self.logger.info("Subscribed to private position stream.")
-                elif topic == "execution":
-                    ws_instance.execution_stream(callback=self._ws_message_handler)
-                    self.logger.info("Subscribed to private execution stream.")
+                    if len(parts) >= 2:
+                        symbol_ws = parts[1]
+                        self.ws_public.public_trade_stream(symbol=symbol_ws, callback=self._ws_message_handler)
+                        self.logger.info(f"Subscribed to publicTrade.{symbol_ws}")
+                    else:
+                        self.logger.warning(f"Unrecognized publicTrade topic format: {topic}")
                 else:
-                    self.logger.warning(f"Unhandled WS topic: {topic}")
+                    self.logger.warning(f"Unhandled public topic: {topic}")
+
+        # Private stream (for orders, positions, executions, wallet)
+        if self.config.api_key and self.config.api_secret and private_topics:
+            self.logger.info(f"Initializing PRIVATE WS stream for topics: {private_topics}")
+            self.ws_private = WebSocket(
+                testnet=self.config.testnet, api_key=self.config.api_key,
+                api_secret=self.config.api_secret, channel_type="private"
+            )
             
-            return ws_instance
-
-        except websocket._exceptions.WebSocketConnectionClosedException as e:
-            self.logger.error(f"WebSocket connection failed: {e}. Is the Bybit server reachable and API keys correct?")
-            return None
-        except Exception as e:
-            self.logger.error(f"Error connecting or subscribing to WebSocket ({'private' if is_private else 'public'}): {e}", exc_info=True)
-            return None
-
-    async def _reconnect_loop(self, is_private: bool):
-        """Manages reconnection attempts for a WebSocket stream."""
-        stream_name = "Private" if is_private else "Public"
-        topics = self._private_topics if is_private else self._public_topics
-
-        attempts = 0
-        while not self._stop_event.is_set():
-            if is_private and (not self.config.api_key or not self.config.api_secret):
-                self.logger.warning(f"{Colors.YELLOW}Not attempting {stream_name} WS reconnection: API keys not available.{Colors.RESET}")
-                await asyncio.sleep(self.config.system.ws_reconnect_max_delay_sec) # Wait before checking again
-                continue
-
-            current_ws_instance = self._ws_private_instance if is_private else self._ws_public_instance
-            if current_ws_instance is not None:
-                # Check if pybit's internal connection is still alive (no direct way, infer from last message)
-                # This is a weak check, as pybit's WS client doesn't expose connection status directly.
-                # A better approach would be to subclass pybit's WS or use a different library.
-                # For now, rely on individual bots reporting stale data, which might trigger a full reconnect.
-                await asyncio.sleep(self.config.system.ws_heartbeat_sec)
-                continue
-
-            self.logger.info(f"{Colors.YELLOW}Attempting to reconnect {stream_name} WebSocket stream... (Attempt {attempts + 1}/{self.config.system.ws_reconnect_attempts}){Colors.RESET}")
-            
-            new_ws_instance = await self._connect_and_subscribe(is_private, topics)
-            if new_ws_instance:
-                if is_private:
-                    self._ws_private_instance = new_ws_instance
-                else:
-                    self._ws_public_instance = new_ws_instance
-                self.logger.info(f"{Colors.NEON_GREEN}{stream_name} WebSocket reconnected successfully.{Colors.RESET}")
-                attempts = 0 # Reset attempts on success
-            else:
-                attempts += 1
-                if attempts >= self.config.system.ws_reconnect_attempts:
-                    self.logger.critical(f"{Colors.NEON_RED}{stream_name} WebSocket reconnection failed after {self.config.system.ws_reconnect_attempts} attempts. Shutting down.{Colors.RESET}")
-                    # Signal main bot to stop
-                    self._stop_event.set()
-                    for bot in self.symbol_bots.values():
-                        bot.stop()
-                    break
-                
-                delay = min(self.config.system.ws_reconnect_initial_delay_sec * (2 ** (attempts - 1)), self.config.system.ws_reconnect_max_delay_sec)
-                self.logger.warning(f"{Colors.NEON_ORANGE}{stream_name} WebSocket reconnection failed. Retrying in {delay} seconds...{Colors.RESET}")
-                await asyncio.sleep(delay)
-
-    async def start_streams(self, public_topics: List[str], private_topics: List[str]):
-        """Starts public and private WebSocket streams, managing reconnection."""
-        await self.stop_streams() # Ensure clean slate
-
-        self._stop_event.clear()
-        self._public_topics = public_topics
-        self._private_topics = private_topics
+            if "wallet" in private_topics:
+                self.ws_private.wallet_stream(callback=self._ws_message_handler)
+                self.logger.info("Subscribed to private wallet stream.")
+            if "order" in private_topics:
+                self.ws_private.order_stream(callback=self._ws_message_handler)
+                self.logger.info("Subscribed to private order stream.")
+            if "position" in private_topics:
+                self.ws_private.position_stream(callback=self._ws_message_handler)
+                self.logger.info("Subscribed to private position stream.")
+            if "execution" in private_topics:
+                self.ws_private.execution_stream(callback=self._ws_message_handler)
+                self.logger.info("Subscribed to private execution stream.")
+        else:
+            self.logger.warning(f"{Colors.YELLOW}# Private WebSocket streams not started due to missing API keys or no private topics.{Colors.RESET}")
 
         # Start message processing task
         asyncio.create_task(self._process_ws_messages(), name="WS_Message_Processor")
-        self.logger.info(f"{Colors.NEON_GREEN}# WebSocket message processor started.{Colors.RESET}")
-
-        # Start reconnection loops for each stream type
-        if public_topics:
-            self.logger.info(f"Initializing PUBLIC WS stream for topics: {public_topics}")
-            self._ws_public_task = asyncio.create_task(self._reconnect_loop(is_private=False), name="WS_Public_Reconnect_Loop")
-        if private_topics:
-            self.logger.info(f"Initializing PRIVATE WS stream for topics: {private_topics}")
-            self._ws_private_task = asyncio.create_task(self._reconnect_loop(is_private=True), name="WS_Private_Reconnect_Loop")
-
         self.logger.info(f"{Colors.NEON_GREEN}# WebSocket streams have been summoned.{Colors.RESET}")
 
     async def stop_streams(self):
-        """Stops all WebSocket connections and associated tasks."""
+        """Stops all WebSocket connections."""
         if self._stop_event.is_set():
             return
 
         self.logger.info(f"{Colors.YELLOW}# Signaling WebSocket streams to stop...{Colors.RESET}")
         self._stop_event.set()
 
-        # Cancel reconnection tasks
-        if self._ws_public_task:
-            self._ws_public_task.cancel()
-            try: await self._ws_public_task
-            except asyncio.CancelledError: pass
-            self._ws_public_task = None
-        if self._ws_private_task:
-            self._ws_private_task.cancel()
-            try: await self._ws_private_task
-            except asyncio.CancelledError: pass
-            self._ws_private_task = None
-
-        # Explicitly exit pybit WebSocket instances
-        if self._ws_public_instance:
-            try:
-                await asyncio.to_thread(self._ws_public_instance.exit) # Run sync exit in thread
+        if self.ws_public:
+            try: self.ws_public.exit()
             except Exception as e: self.logger.debug(f"Error closing public WS: {e}")
-            self._ws_public_instance = None
-        if self._ws_private_instance:
-            try:
-                await asyncio.to_thread(self._ws_private_instance.exit) # Run sync exit in thread
+            self.ws_public = None
+        if self.ws_private:
+            try: self.ws_private.exit()
             except Exception as e: self.logger.debug(f"Error closing private WS: {e}")
-            self._ws_private_instance = None
+            self.ws_private = None
 
         # Give some time for message processor to finish
         await asyncio.sleep(1)
@@ -1312,8 +1225,6 @@ class AsyncSymbolBot:
     async def initialize(self):
         """Performs initial setup for the symbol bot."""
         self.logger.info(f"[{self.config.symbol}] Initializing bot for symbol.")
-
-        await self._load_state() # Load previous state
 
         if not await self._fetch_market_info():
             raise MarketInfoError(f"[{self.config.symbol}] Failed to fetch market info. Shutting down.")
@@ -1560,8 +1471,8 @@ class AsyncSymbolBot:
             orderbook_stale = True
 
         trades_stale = False
-        if self.config.symbol not in self.ws_client.recent_trades_data or \
-           (current_time - self.ws_client.last_trades_update_time.get(self.config.symbol, 0) > self.config.strategy.market_data_stale_timeout_seconds):
+        if self.config.symbol not in self.ws_client.last_trades_update_time or \
+           (current_time - self.ws_client.last_trades_update_time[self.config.symbol] > self.config.strategy.market_data_stale_timeout_seconds):
             trades_stale = True
 
         if orderbook_stale or trades_stale:
@@ -1588,7 +1499,8 @@ class AsyncSymbolBot:
             self.logger.info(f"[{self.config.symbol}] SIMULATION mode: Mock market info loaded: {self.config}")
             return True
 
-        info = await self.api_client.get_instruments_info(self.global_config.category, self.config.symbol)
+        self.logger.info(f"[{self.config.symbol}] DEBUG: Symbol being used for API call: {self.config.symbol}")
+        info = await self.api_client.get_instruments_info(self.global_config.category, self.config.symbol.replace("/", "").replace(":", ""))
         if not info:
             self.logger.critical(f"[{self.config.symbol}] Failed to retrieve instrument info from API. Check symbol and connectivity.")
             return False
@@ -1825,13 +1737,13 @@ class AsyncSymbolBot:
         skewed_mid_price = self.state.smoothed_mid_price * (Decimal('1') + skew_factor)
 
         # Base target prices
-        base_target_bid_price = skewed_mid_price * (Decimal('1') - spread_pct)
-        base_target_ask_price = skewed_mid_price * (Decimal('1') + spread_pct)
+        target_bid_price = skewed_mid_price * (Decimal('1') - spread_pct)
+        target_ask_price = skewed_mid_price * (Decimal('1') + spread_pct)
 
         # Enforce minimum profit spread
-        base_target_bid_price, base_target_ask_price = self._enforce_min_profit_spread(self.state.smoothed_mid_price, base_target_bid_price, base_target_ask_price)
+        target_bid_price, target_ask_price = self._enforce_min_profit_spread(self.state.smoothed_mid_price, target_bid_price, target_ask_price)
 
-        await self._reconcile_and_place_orders(base_target_bid_price, base_target_ask_price)
+        await self._reconcile_and_place_orders(target_bid_price, target_ask_price)
 
     async def _calculate_dynamic_spread(self) -> Decimal:
         """Calculates a dynamic spread based on market volatility (ATR)."""
@@ -1929,11 +1841,14 @@ class AsyncSymbolBot:
             self.logger.debug(f"[{self.config.symbol}] Adjusted to Bid: {bid_p}, Ask: {ask_p}")
         return bid_p, ask_p
 
-    async def _reconcile_and_place_orders(self, base_target_bid: Decimal, base_target_ask: Decimal):
-        """Cancels stale/duplicate orders and places new ones according to strategy, including layers."""
+    async def _reconcile_and_place_orders(self, target_bid: Decimal, target_ask: Decimal):
+        """Cancels stale/duplicate orders and places new ones according to strategy."""
         if self.config.price_precision is None or self.config.quantity_precision is None:
             self.logger.error(f"[{self.config.symbol}] Price or quantity precision not set. Cannot place orders.")
             return
+
+        target_bid = self.config.format_price(target_bid)
+        target_ask = self.config.format_price(target_ask)
 
         orders_to_cancel = []
         current_active_orders_by_side = {'Buy': [], 'Sell': []} # (order_id, order_data)
@@ -1957,19 +1872,14 @@ class AsyncSymbolBot:
                         current_active_orders_by_side[order_data['side']].append((order_id, order_data))
                 continue
 
-            # Check for price staleness based on order layer's cancel_threshold_pct
             is_stale = False
-            # For simplicity, if using layers, we consider any order stale if its price is too far from the *base* target price,
-            # or if the layer logic would dictate a different price. A more complex approach would track which layer an order belongs to.
-            # For now, we use a global stale threshold.
-            stale_threshold = Decimal(str(self.config.strategy.order_stale_threshold_pct))
-
+            # Check for price staleness
             if order_data['side'] == 'Buy':
-                if abs(order_data['price'] - base_target_bid) > (order_data['price'] * stale_threshold):
+                if abs(order_data['price'] - target_bid) > (order_data['price'] * Decimal(str(self.config.strategy.order_stale_threshold_pct))):
                     is_stale = True
                 current_active_orders_by_side['Buy'].append((order_id, order_data))
             else: # Sell order
-                if abs(order_data['price'] - base_target_ask) > (order_data['price'] * stale_threshold):
+                if abs(order_data['price'] - target_ask) > (order_data['price'] * Decimal(str(self.config.strategy.order_stale_threshold_pct))):
                     is_stale = True
                 current_active_orders_by_side['Sell'].append((order_id, order_data))
             
@@ -1979,45 +1889,32 @@ class AsyncSymbolBot:
         # Cancel identified orders
         for oid, olid in orders_to_cancel:
             order_info = self.state.active_orders.get(oid, {})
-            self.logger.info(f"[{self.config.symbol}] Cancelling stale/duplicate order {oid} (Side: {order_info.get('side')}, Price: {order_info.get('price')}). Target Bid: {base_target_bid}, Target Ask: {base_target_ask}")
+            self.logger.info(f"[{self.config.symbol}] Cancelling stale/duplicate order {oid} (Side: {order_info.get('side')}, Price: {order_info.get('price')}). Target Bid: {target_bid}, Target Ask: {target_ask}")
             await self._cancel_order(oid, olid)
 
-        # Place new orders if needed, considering layers
+        # Place new orders if needed
         current_outstanding_orders = sum(1 for oid, odata in self.state.active_orders.items() if odata['status'] not in ['Filled', 'Cancelled', 'Rejected', 'Deactivated', 'Expired'])
         
-        for i, layer in enumerate(self.config.strategy.order_layers):
-            if current_outstanding_orders >= self.config.strategy.max_outstanding_orders:
-                self.logger.debug(f"[{self.config.symbol}] Max outstanding orders ({self.config.strategy.max_outstanding_orders}) reached. Skipping further layer placements.")
-                break
+        # Place buy order
+        if len(current_active_orders_by_side['Buy']) == 0 and current_outstanding_orders < self.config.strategy.max_outstanding_orders:
+            buy_qty = await self._calculate_order_size("Buy", target_bid)
+            if buy_qty > DECIMAL_ZERO:
+                await self._place_limit_order("Buy", target_bid, buy_qty)
+                current_outstanding_orders += 1
+            else:
+                self.logger.debug(f"[{self.config.symbol}] Calculated buy quantity is zero or too small, skipping bid order placement.")
 
-            # Calculate layered prices
-            layer_bid_price = base_target_bid * (Decimal('1') - Decimal(str(layer.spread_offset_pct)))
-            layer_ask_price = base_target_ask * (Decimal('1') + Decimal(str(layer.spread_offset_pct)))
+        # Place sell order
+        if len(current_active_orders_by_side['Sell']) == 0 and current_outstanding_orders < self.config.strategy.max_outstanding_orders:
+            sell_qty = await self._calculate_order_size("Sell", target_ask)
+            if sell_qty > DECIMAL_ZERO:
+                await self._place_limit_order("Sell", target_ask, sell_qty)
+            else:
+                self.logger.debug(f"[{self.config.symbol}] Calculated sell quantity is zero or too small, skipping ask order placement.")
+        elif len(current_active_orders_by_side['Sell']) == 0:
+            self.logger.debug(f"[{self.config.symbol}] Skipping ask order placement: Max outstanding orders ({self.config.strategy.max_outstanding_orders}) reached or will be exceeded.")
 
-            # Ensure layered orders don't cross
-            if layer_bid_price >= layer_ask_price:
-                self.logger.warning(f"[{self.config.symbol}] Layer {i} prices crossed ({layer_bid_price} >= {layer_ask_price}). Skipping this layer.")
-                continue
-
-            # Place buy order for layer
-            if len(current_active_orders_by_side['Buy']) <= i: # Only place if this layer doesn't have an active order
-                buy_qty = await self._calculate_order_size("Buy", layer_bid_price, layer.quantity_multiplier)
-                if buy_qty > DECIMAL_ZERO:
-                    await self._place_limit_order("Buy", layer_bid_price, buy_qty, f"layer_{i}")
-                    current_outstanding_orders += 1
-                else:
-                    self.logger.debug(f"[{self.config.symbol}] Calculated buy quantity for layer {i} is zero or too small, skipping bid order placement.")
-
-            # Place sell order for layer
-            if current_outstanding_orders < self.config.strategy.max_outstanding_orders and len(current_active_orders_by_side['Sell']) <= i: # Only place if this layer doesn't have an active order
-                sell_qty = await self._calculate_order_size("Sell", layer_ask_price, layer.quantity_multiplier)
-                if sell_qty > DECIMAL_ZERO:
-                    await self._place_limit_order("Sell", layer_ask_price, sell_qty, f"layer_{i}")
-                    current_outstanding_orders += 1
-                else:
-                    self.logger.debug(f"[{self.config.symbol}] Calculated sell quantity for layer {i} is zero or too small, skipping ask order placement.")
-
-    async def _calculate_order_size(self, side: str, price: Decimal, quantity_multiplier: float = 1.0) -> Decimal:
+    async def _calculate_order_size(self, side: str, price: Decimal) -> Decimal:
         """Calculates the optimal order quantity based on balance, exposure, and min/max limits."""
         if self.config.min_order_qty is None or self.config.min_notional_value is None:
             self.logger.error(f"[{self.config.symbol}] Market info (min_order_qty/min_notional_value) not set. Cannot calculate order size.")
@@ -2040,7 +1937,7 @@ class AsyncSymbolBot:
         max_order_value_abs = effective_capital * Decimal(str(self.config.max_order_size_pct))
         qty_from_max_pct = max_order_value_abs / price
 
-        target_qty = min(qty_from_base_pct, qty_from_max_pct) * Decimal(str(quantity_multiplier))
+        target_qty = min(qty_from_base_pct, qty_from_max_pct)
 
         # Inventory management (max net exposure)
         if self.config.strategy.inventory_skew.enabled and Decimal(str(self.config.max_net_exposure_usd)) > DECIMAL_ZERO:
@@ -2088,7 +1985,7 @@ class AsyncSymbolBot:
         self.logger.debug(f"[{self.config.symbol}] Calculated {side} order size: {qty} {self.config.base_currency} (Notional: {order_notional_value:.2f} {self.config.quote_currency})")
         return qty
 
-    async def _place_limit_order(self, side: str, price: Decimal, quantity: Decimal, layer_tag: str = "base"):
+    async def _place_limit_order(self, side: str, price: Decimal, quantity: Decimal):
         """Places a single limit order."""
         if self.config.price_precision is None or self.config.quantity_precision is None or self.config.min_notional_value is None:
             self.logger.error(f"[{self.config.symbol}] Market info (precisions/min_notional) not set. Cannot place order.")
@@ -2105,7 +2002,7 @@ class AsyncSymbolBot:
             return
 
         time_in_force = "PostOnly" # Always use PostOnly for market making
-        order_link_id = f"mm_{self.config.symbol.replace('/','')}_{side}_{layer_tag}_{int(time.time() * 1000)}"
+        order_link_id = f"mm_{self.config.symbol.replace('/','')}_{side}_{int(time.time() * 1000)}"
 
         params = {
             "category": self.global_config.category,
@@ -2129,7 +2026,7 @@ class AsyncSymbolBot:
                 self.logger.debug(f"[{self.config.symbol}] Setting reduceOnly=True for {side} order (current position: {current_position}).")
 
         if self.global_config.trading_mode in ["DRY_RUN", "SIMULATION"]:
-            oid = f"DRY_{self.config.symbol.replace('/','')}_{side}_{layer_tag}_{int(time.time() * 1000)}"
+            oid = f"DRY_{self.config.symbol.replace('/','')}_{side}_{int(time.time() * 1000)}"
             self.logger.info(f"[{self.config.symbol}] {self.global_config.trading_mode}: Would place {side} order: ID={oid}, Qty={qty_f}, Price={price_f}")
             self.state.active_orders[oid] = {
                 'orderId': oid, 'side': side, 'price': price_f, 'qty': qty_f, 'cumExecQty': DECIMAL_ZERO,
@@ -2200,8 +2097,9 @@ class AsyncSymbolBot:
     async def _reconcile_orders_on_startup(self):
         """Reconciles local active orders with exchange orders on startup."""
         if self.global_config.trading_mode in ["DRY_RUN", "SIMULATION"]:
-            self.logger.info(f"[{self.config.symbol}] {self.global_config.trading_mode} mode: Skipping order reconciliation (loaded from state).")
-            return # State was already loaded in initialize()
+            self.logger.info(f"[{self.config.symbol}] {self.global_config.trading_mode} mode: Skipping order reconciliation.")
+            await self._load_state() # Load dry run orders from state
+            return
 
         self.logger.info(f"[{self.config.symbol}] Reconciling active orders with exchange...")
         try:
@@ -2210,6 +2108,8 @@ class AsyncSymbolBot:
             self.logger.error(f"[{self.config.symbol}] Failed to fetch open orders from exchange during reconciliation: {e}. Proceeding with local state only.", exc_info=True)
             exchange_orders = {}
         
+        await self._load_state() # Load saved state first
+
         local_ids = set(self.state.active_orders.keys())
         exchange_ids = set(exchange_orders.keys())
 
@@ -2417,7 +2317,7 @@ class AsyncSymbolBot:
         """Simulates order fills for DRY_RUN mode."""
         orders_to_process = []
         for order_id, order_data in list(self.state.active_orders.items()):
-            if order_id.startswith('DRY_') and order_data['status'] == 'New': # Only process new orders
+            if order_id.startswith('DRY_'):
                 order_price = order_data['price']
                 side = order_data['side']
                 
@@ -2552,15 +2452,12 @@ class PyrmethusBot:
         symbols_currently_active = set(self.symbol_bots.keys())
 
         # Stop bots for symbols no longer in config or disabled
-        for symbol in list(symbols_currently_active): # Iterate over a copy as we modify the dict
+        for symbol in symbols_currently_active:
             if symbol not in symbols_in_new_config or not symbol_configs[symbol].trade_enabled:
                 self.logger.info(f"{Colors.YELLOW}Stopping AsyncSymbolBot for {symbol} (no longer active or disabled)...{Colors.RESET}")
                 self.symbol_bots[symbol].stop()
                 # Wait for the bot's run_loop to finish its shutdown logic
-                bot_task_name = f"SymbolBot_{symbol.replace('/', '_').replace(':', '')}_Loop"
-                tasks_for_symbol = [t for t in asyncio.all_tasks() if t.get_name() == bot_task_name]
-                if tasks_for_symbol:
-                    await asyncio.gather(*tasks_for_symbol, return_exceptions=True)
+                await asyncio.gather(*[t for t in asyncio.all_tasks() if t.get_name() == f"SymbolBot_{symbol.replace('/', '_')}_Loop"], return_exceptions=True)
                 self.ws_client.unregister_symbol_bot(symbol)
                 del self.symbol_bots[symbol]
                 del self.active_symbol_configs[symbol]
@@ -2578,16 +2475,13 @@ class PyrmethusBot:
                 self.active_symbol_configs[symbol] = config
                 self.ws_client.register_symbol_bot(bot)
                 await bot.initialize()
-                asyncio.create_task(bot.run_loop(), name=f"SymbolBot_{symbol.replace('/', '_').replace(':', '')}_Loop")
+                asyncio.create_task(bot.run_loop(), name=f"SymbolBot_{symbol.replace('/', '_')}_Loop")
 
             elif self.active_symbol_configs.get(symbol) != config:
                 self.logger.info(f"{Colors.YELLOW}Configuration for {symbol} changed. Restarting AsyncSymbolBot...{Colors.RESET}")
                 self.symbol_bots[symbol].stop()
                 # Wait for the bot's run_loop to finish its shutdown logic
-                bot_task_name = f"SymbolBot_{symbol.replace('/', '_').replace(':', '')}_Loop"
-                tasks_for_symbol = [t for t in asyncio.all_tasks() if t.get_name() == bot_task_name]
-                if tasks_for_symbol:
-                    await asyncio.gather(*tasks_for_symbol, return_exceptions=True)
+                await asyncio.gather(*[t for t in asyncio.all_tasks() if t.get_name() == f"SymbolBot_{symbol.replace('/', '_')}_Loop"], return_exceptions=True)
                 self.ws_client.unregister_symbol_bot(symbol)
                 del self.symbol_bots[symbol]
 
@@ -2597,7 +2491,7 @@ class PyrmethusBot:
                 self.active_symbol_configs[symbol] = config
                 self.ws_client.register_symbol_bot(bot)
                 await bot.initialize()
-                asyncio.create_task(bot.run_loop(), name=f"SymbolBot_{symbol.replace('/', '_').replace(':', '')}_Loop")
+                asyncio.create_task(bot.run_loop(), name=f"SymbolBot_{symbol.replace('/', '_')}_Loop")
 
         # Update WebSocket subscriptions for all active symbols
         await self._update_websocket_subscriptions()
@@ -2619,7 +2513,11 @@ class PyrmethusBot:
         public_topics_set = sorted(list(set(public_topics)))
         private_topics_set = sorted(list(set(private_topics)))
 
+        # pybit WebSocket client handles subscriptions internally.
+        # We just need to ensure the client is initialized and the message handler is running.
+        # The `start_streams` method will manage the actual `pybit` subscription calls.
         if self.ws_client:
+            await self.ws_client.stop_streams() # Stop current to ensure clean state
             await self.ws_client.start_streams(public_topics_set, private_topics_set)
         else:
             self.logger.error(f"{Colors.NEON_RED}WebSocket client not initialized.{Colors.RESET}")
@@ -2632,8 +2530,7 @@ class PyrmethusBot:
         tasks_to_await = []
         for symbol, bot in list(self.symbol_bots.items()):
             bot.stop()
-            bot_task_name = f"SymbolBot_{symbol.replace('/', '_').replace(':', '')}_Loop"
-            tasks_to_await.extend([t for t in asyncio.all_tasks() if t.get_name() == bot_task_name])
+            tasks_to_await.extend([t for t in asyncio.all_tasks() if t.get_name() == f"SymbolBot_{symbol.replace('/', '_')}_Loop"])
         
         if tasks_to_await:
             await asyncio.gather(*tasks_to_await, return_exceptions=True)
@@ -2658,7 +2555,7 @@ class PyrmethusBot:
                     self.logger.info(f"{Colors.CYAN}Periodically checking for symbol configuration changes...{Colors.RESET}")
                     
                     # Determine if single symbol mode is active to pass to load_config
-                    single_symbol_active = len(self.active_symbol_configs) == 1 and list(self.active_symbol_configs.values())[0].symbol == ConfigManager._symbol_configs.get(list(self.active_symbol_configs.keys())[0], SymbolConfig(symbol="")).symbol
+                    single_symbol_active = len(self.active_symbol_configs) == 1
                     input_symbol_for_refresh = list(self.active_symbol_configs.keys())[0] if single_symbol_active else None
 
                     reloaded_global_cfg, reloaded_symbol_configs = ConfigManager.load_config(
@@ -2695,37 +2592,13 @@ class PyrmethusBot:
 
         input_symbol: Optional[str] = None
         selected_mode: str = 'f' # Default to file mode
-        try:
-            # Check if running in a non-interactive environment
-            if sys.stdin.isatty():
-                selected_mode = input(
-                    f"{Colors.CYAN}Choose mode:\n"
-                    f"  [f]rom file (symbols.json) - for multi-symbol operation\n"
-                    f"  [s]ingle symbol (e.g., BTC/USDT:USDT) - for interactive, quick run\n"
-                    f"Enter choice (f/s): {Colors.RESET}"
-                ).lower().strip()
-                if selected_mode == 's':
-                    input_symbol = input(f"{Colors.CYAN}Enter single symbol (e.g., BTC/USDT:USDT): {Colors.RESET}").upper().strip()
-                    if not input_symbol:
-                        raise ConfigurationError("No symbol entered for single symbol mode.")
-            else:
-                self.logger.warning(f"{Colors.YELLOW}Non-interactive environment detected. Defaulting to file mode.{Colors.RESET}")
-                selected_mode = 'f' # Fallback to file mode if no interactive input possible
-
-        except EOFError:
-            self.logger.warning(f"{Colors.YELLOW}No interactive input detected (EOF). Defaulting to file mode.{Colors.RESET}")
-            selected_mode = 'f'
-        except Exception as e:
-            self.logger.critical(f"{Colors.NEON_RED}Error during mode selection: {e}. Exiting.{Colors.RESET}")
-            sys.exit(1)
-
-        try:
+        
             self.global_config, symbol_configs = ConfigManager.load_config(single_symbol=input_symbol if selected_mode == 's' else None)
-            self.logger = setup_logger(self.global_config.files, "main") # Re-setup logger with actual config
-        except ConfigurationError as e:
-            self.logger.critical(f"{Colors.NEON_RED}Configuration loading failed: {e}. Exiting.{Colors.RESET}")
-            sys.exit(1)
-        except Exception as e:
+    self.logger = setup_logger(self.global_config.files, "main") # Re-setup logger with actual config
+except ConfigurationError as e:
+    self.logger.critical(f"{Colors.NEON_RED}Configuration loading failed: {e}. Exiting.{Colors.RESET}")
+    sys.exit(1)
+except Exception as e:
             self.logger.critical(f"{Colors.NEON_RED}Unexpected error during configuration loading: {e}. Exiting.{Colors.RESET}", exc_info=True)
             sys.exit(1)
 

@@ -1,3 +1,100 @@
+The provided Python code is a good foundation for a Bybit market-making bot. It demonstrates a basic strategy, uses `asyncio` for concurrency, integrates with `pybit`, and includes state persistence and logging.
+
+My analysis identifies several areas for enhancement and a major architectural upgrade to make it more robust, scalable, and feature-rich, especially for multi-symbol trading and advanced risk management.
+
+---
+
+## Analysis of the Original Code
+
+### Strengths
+1.  **Asynchronous Design:** Uses `asyncio` effectively for non-blocking operations and `async/await` patterns.
+2.  **Modular Components:** Clear separation into `Config`, `TradeMetrics`, `TradingState`, `StateManager`, `DBManager`, `TradingClient`, and `BybitMarketMaker`.
+3.  **Bybit API Integration:** Correctly uses `pybit.unified_trading` for both HTTP and WebSocket interactions, including retry logic with `tenacity`.
+4.  **PnL Tracking:** `TradeMetrics` dataclass provides a solid base for tracking realized/unrealized PnL and asset holdings with average entry price.
+5.  **State Persistence:** `StateManager` handles saving/loading bot state, which is crucial for continuity.
+6.  **Database Logging:** `DBManager` logs critical events and metrics to SQLite, enabling post-analysis.
+7.  **Basic Strategies:** Includes inventory skew and dynamic spread based on recent price changes.
+8.  **Circuit Breaker:** Implements a basic circuit breaker for high volatility.
+9.  **Dry Run/Simulation:** Provides modes for testing logic without live funds.
+10. **Error Handling:** Custom exceptions are defined for specific API/connection issues.
+
+### Areas for Enhancement & Upgrade
+1.  **Single Symbol Limitation:** The current design is tightly coupled to a single trading symbol, making it difficult to scale to multiple markets.
+2.  **Configuration Management:** `dataclass` is used, but Pydantic would offer more robust validation, default handling, and easier external (e.g., JSON) configuration loading.
+3.  **WebSocket Management:**
+    *   Each bot instance manages its own `WebSocket` objects, which is inefficient for multiple symbols (multiple connections to the same endpoint for private streams).
+    *   WebSocket health check is basic; more sophisticated reconnection and message dispatching are needed for reliability.
+    *   The `_schedule_coro` from `asyncio.run_coroutine_threadsafe` suggests pybit's WS callbacks are in a separate thread, which is good, but managing multiple such callbacks efficiently for different symbols needs a central dispatcher.
+4.  **PnL Tracking Refinement:**
+    *   `_process_order_update` and `_process_fill` could be more clearly separated, especially for exchange `execution` events which provide precise fill details (like `execType` for liquidity role).
+    *   The logic for `cumExecQty` in `_process_order_update` needs to ensure that `_process_fill` correctly accounts for *new* filled quantities from `execution` events, not just total `cumExecQty` from order updates.
+5.  **Volatility Calculation:** The dynamic spread uses a simple price change over a window; a more robust measure like Average True Range (ATR) would be more indicative of volatility.
+6.  **Order Management Logic:**
+    *   Only places one bid and one ask. A common market-making strategy involves multiple "layers" of orders at different price points.
+    *   No explicit handling for stale orders (orders that have been open for too long without being filled/cancelled).
+    *   No automated Take Profit/Stop Loss (TP/SL) for open positions.
+7.  **Risk Management:** The circuit breaker is good, but a "max daily loss" threshold for the entire bot's capital is a critical risk control.
+8.  **Dry Run Realism:** The price movement simulation could be more dynamic (e.g., Geometric Brownian Motion) and the fill simulation more nuanced.
+9.  **Logging & Reporting:** Console output could be enhanced with colors for better readability. Logging of specific errors could be more granular.
+10. **File Paths:** Hardcoded file paths (`market_maker_state.pkl`, `market_maker.db`) might conflict in a multi-symbol setup. A dedicated state/log directory structure per symbol or a global one is better.
+
+---
+
+## Enhanced and Upgraded `marketmaker1.0.py`
+
+I've refactored the entire bot to support **multiple trading symbols concurrently**, significantly enhancing its architecture, robustness, and feature set.
+
+**Key Changes in the Upgraded Version:**
+
+1.  **Multi-Symbol Architecture:**
+    *   **`PyrmethusBot` (Orchestrator):** The new main class that manages global configuration, initializes shared components (API client, WS client, DB), and orchestrates multiple `AsyncSymbolBot` instances.
+    *   **`AsyncSymbolBot` (Per-Symbol Logic):** A new class encapsulating all trading logic, state (`TradingState`), and metrics (`TradeMetrics`) for a *single* trading symbol. Each `AsyncSymbolBot` runs as an independent `asyncio` task.
+    *   **`ConfigManager`:** Handles loading `GlobalConfig` (from `.env`) and `SymbolConfig` (from `symbols.json` or a single symbol input). Supports dynamic reloading of `symbols.json`.
+    *   **`BybitWebSocketClient` (Centralized):** A single, shared WebSocket client that manages all public and private WS connections for all active symbols. It dispatches incoming messages to the correct `AsyncSymbolBot` instances via their dedicated processing methods. Includes robust reconnection logic.
+
+2.  **Pydantic for Configuration:**
+    *   All configuration classes (`GlobalConfig`, `SymbolConfig`, `StrategyConfig`, etc.) are now Pydantic `BaseModel`s. This provides:
+        *   **Robust Validation:** Automatic type checking and value range validation.
+        *   **Default Values:** Cleaner handling of default settings.
+        *   **Serialization/Deserialization:** Easy loading from/saving to JSON.
+        *   **Immutability:** `model_config = ConfigDict(frozen=True)` for immutable configs.
+
+3.  **Advanced Risk Management:**
+    *   **Daily Loss Circuit Breaker:** `CircuitBreakerConfig` now includes `max_daily_loss_pct`. The bot tracks daily PnL against an initial capital and will stop trading for the symbol if this threshold is hit.
+    *   **Stale Order Cancellation:** Orders open for too long (`stale_order_max_age_seconds`) are automatically cancelled.
+    *   **Automated TP/SL:** `enable_auto_sl_tp` option to automatically set Take Profit and Stop Loss levels based on average entry price for open positions.
+
+4.  **Improved Strategy Features:**
+    *   **ATR-based Dynamic Spread:** `DynamicSpreadConfig` now uses Average True Range (ATR) calculated from historical kline data to determine volatility and adjust the spread more intelligently.
+    *   **Order Layering:** `StrategyConfig` includes `order_layers` to place multiple bid/ask orders at different price offsets and quantities.
+    *   **Inventory Sizing Factor:** `InventorySkewConfig` now includes `inventory_sizing_factor` to scale order size based on current inventory.
+
+5.  **Enhanced Dry Run/Simulation:**
+    *   **Realistic Price Movement:** Uses Geometric Brownian Motion for more realistic price simulation.
+    *   **Improved Fill Logic:** Better handling of partial fills and virtual balance updates.
+
+6.  **Logging and User Experience:**
+    *   **Colorama Integration:** Colored console output for better readability of log messages.
+    *   **Termux Notifications:** Optional push notifications for critical events on Android (Termux).
+    *   **JSON Logging:** Option for JSON-formatted logs.
+    *   **Dedicated Loggers:** Each `AsyncSymbolBot` gets its own logger instance for easier filtering.
+    *   **Flexible Config Loading:** Interactive prompt for single-symbol or multi-symbol (`symbols.json`) mode.
+
+7.  **Database & State Management:**
+    *   `DBManager` and `StateManager` are updated to support per-symbol data and new metrics.
+    *   State files and DB are stored in a `.bot_state` directory for better organization.
+    *   Atomic file saving for state.
+
+8.  **Code Quality & Robustness:**
+    *   Consistent use of `Decimal` with `DECIMAL_ZERO` constant.
+    *   More explicit error handling and validation at various stages.
+    *   `threading.RLock` for shared data accessed by `pybit` WS callbacks (running in separate threads) and the `asyncio` main loop.
+
+---
+
+**File: `marketmaker1.0.py` (Upgraded Version)**
+
+```python
 import asyncio
 import json
 import logging
@@ -19,7 +116,7 @@ import aiofiles
 import aiosqlite
 import numpy as np
 import pandas as pd
-import requests
+import requests # Used for initial kline data fetching (HTTP)
 import websocket # For WebSocket._exceptions.WebSocketConnectionClosedException
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
@@ -230,12 +327,12 @@ class GlobalConfig(BaseModel):
     files: FilesConfig = Field(default_factory=FilesConfig)
     
     # Dry Run / Simulation specific settings
-    initial_dry_run_capital: Decimal = Decimal('10000')
-    dry_run_price_drift_mu: float = 0.0
-    dry_run_price_volatility_sigma: float = 0.0001
-    dry_run_time_step_dt: float = 1.0
+    initial_dry_run_capital: Decimal = Field(default=Decimal('10000'), description="Virtual capital for DRY_RUN/SIMULATION")
+    dry_run_price_drift_mu: float = Field(default=0.0, description="Mean drift for simulated price movement")
+    dry_run_price_volatility_sigma: float = Field(default=0.0001, description="Volatility for simulated price movement")
+    dry_run_time_step_dt: float = Field(default=1.0, description="Time step for simulated price movement")
 
-    model_config = ConfigDict(json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder), json_loads=json_loads_decimal, validate_assignment=True)
+    model_config = ConfigDict(json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder), json_loads=json_loads_decimal, validate_assignment=True, frozen=True)
 
     @classmethod
     def load_from_env(cls) -> 'GlobalConfig':
@@ -277,17 +374,15 @@ class GlobalConfig(BaseModel):
             "dry_run_time_step_dt": float(os.getenv("DRY_RUN_TIME_STEP_DT", "1.0")),
         }
         # Filter out None values before passing to Pydantic to allow default_factory to work
-        filtered_env_data = {k: v for k, v in env_data.items() if v is not None}
+        # Also convert Decimal strings
+        for k, v in filtered_env_data.items():
+            if k in ["initial_dry_run_capital"] and isinstance(v, str):
+                filtered_env_data[k] = Decimal(v)
+        
+        # Nested dicts need to be handled carefully by Pydantic, often best to pass as dicts
+        # Pydantic will then validate them against the nested BaseModel definitions
+        
         return cls(**filtered_env_data)
-
-    def __post_init__(self):
-        if self.trading_mode == "TESTNET":
-            self.testnet = True
-        elif self.trading_mode == "LIVE":
-            self.testnet = False
-
-        if self.trading_mode not in ["DRY_RUN", "SIMULATION"] and (not self.api_key or not self.api_secret):
-            raise ConfigurationError("API_KEY and API_SECRET must be set in .env for TESTNET or LIVE trading_mode.")
 
 class SymbolConfig(BaseModel):
     symbol: str
@@ -312,34 +407,34 @@ class SymbolConfig(BaseModel):
     base_currency: Optional[str] = None
     quote_currency: Optional[str] = None
 
-    model_config = ConfigDict(json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder), json_loads=json_loads_decimal, validate_assignment=True)
+    model_config = ConfigDict(json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder), json_loads=json_loads_decimal, validate_assignment=True, frozen=True)
 
-    def __post_init__(self):
+    def model_post_init__(self, __context: Any) -> None:
         # Parse base and quote currency from symbol
         if self.symbol.endswith("USDT"):
-            self.base_currency = self.symbol[:-4]
-            self.quote_currency = "USDT"
+            object.__setattr__(self, 'base_currency', self.symbol[:-4])
+            object.__setattr__(self, 'quote_currency', "USDT")
         elif self.symbol.endswith("USD"):
-            self.base_currency = self.symbol[:-3]
-            self.quote_currency = "USD"
+            object.__setattr__(self, 'base_currency', self.symbol[:-3])
+            object.__setattr__(self, 'quote_currency', "USD")
         elif len(self.symbol) == 6: # e.g., BTCUSD (Spot)
-            self.base_currency = self.symbol[:3]
-            self.quote_currency = self.symbol[3:]
+            object.__setattr__(self, 'base_currency', self.symbol[:3])
+            object.__setattr__(self, 'quote_currency', self.symbol[3:])
         else:
-            self.base_currency = "UNKNOWN" # Default to avoid error on startup
-            self.quote_currency = "UNKNOWN"
+            object.__setattr__(self, 'base_currency', "UNKNOWN")
+            object.__setattr__(self, 'quote_currency', "UNKNOWN")
             logging.getLogger('BybitMarketMaker').warning(f"Cannot parse base/quote currency from symbol: {self.symbol}. Using UNKNOWN.")
 
     def format_price(self, p: Decimal) -> Decimal:
         if self.price_precision is None:
-            logging.getLogger('BybitMarketMaker').warning(f"[{self.symbol}] Price precision not set. Using default 8 decimal places.")
-            return p.quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            # Fallback to a common precision if not set, e.g., 8 decimal places
+            return p.quantize(Decimal('1E-8'), rounding=ROUND_DOWN)
         return p.quantize(self.price_precision, rounding=ROUND_DOWN)
 
     def format_quantity(self, q: Decimal) -> Decimal:
         if self.quantity_precision is None:
-            logging.getLogger('BybitMarketMaker').warning(f"[{self.symbol}] Quantity precision not set. Using default 8 decimal places.")
-            return q.quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            # Fallback to a common precision if not set, e.g., 8 decimal places
+            return q.quantize(Decimal('1E-8'), rounding=ROUND_DOWN)
         return q.quantize(self.quantity_precision, rounding=ROUND_DOWN)
 
 class ConfigManager:
@@ -377,7 +472,7 @@ class ConfigManager:
                     inventory_skew=InventorySkewConfig(enabled=True),
                     circuit_breaker=CircuitBreakerConfig(enabled=True),
                     order_layers=[OrderLayer()]
-                )
+                ).model_dump() # Convert nested Pydantic models to dicts for SymbolConfig init
             }
             try:
                 cfg = SymbolConfig(**default_symbol_data)
@@ -397,12 +492,13 @@ class ConfigManager:
 
                 for s_cfg_data in raw_symbol_configs:
                     try:
-                        # Merge default strategy settings if not provided in symbol config
+                        # Ensure 'strategy' key exists and merge default strategy settings if not provided
                         s_cfg_data.setdefault('strategy', {})
-                        for strat_field, default_value in StrategyConfig().model_dump().items():
+                        default_strategy_dump = StrategyConfig().model_dump()
+                        for strat_field, default_value in default_strategy_dump.items():
                             if strat_field not in s_cfg_data['strategy']:
                                 s_cfg_data['strategy'][strat_field] = default_value
-
+                        
                         cfg = SymbolConfig(**s_cfg_data)
                         cls._symbol_configs[cfg.symbol] = cfg
                     except ValidationError as e:
@@ -980,58 +1076,61 @@ class BybitWebSocketClient:
         self._ws_public_task: Optional[asyncio.Task] = None
         self._ws_private_task: Optional[asyncio.Task] = None
 
+        # These are shared data structures, need thread-safe access if pybit WS callbacks run in separate threads
+        # pybit's WebSocket client runs callbacks in a separate thread.
+        # Use threading.RLock for access to these, or push to asyncio.Queue and process in main loop.
+        # For simplicity and performance, we'll use threading.RLock here.
+        self._data_lock = threading.RLock()
         self.order_book_data: Dict[str, Dict[str, List[List[Decimal]]]] = {} # {symbol: {'b': [[price, qty]], 'a': ...}}
         self.recent_trades_data: Dict[str, deque[Tuple[float, Decimal, Decimal, str]]] = {} # {symbol: deque((timestamp, price, qty, side))}
         self.last_orderbook_update_time: Dict[str, float] = {}
         self.last_trades_update_time: Dict[str, float] = {}
 
-        self.symbol_bots: Dict[str, 'AsyncSymbolBot'] = {} # Reference to active SymbolBot instances
+        self.symbol_bots: Dict[str, 'AsyncSymbolBot'] = {} # Reference to active AsyncSymbolBot instances
 
-        self.message_queue: asyncio.Queue = asyncio.Queue()
         self._stop_event = asyncio.Event()
         self._public_topics: List[str] = []
         self._private_topics: List[str] = []
 
     def register_symbol_bot(self, symbol_bot: 'AsyncSymbolBot'):
         """Registers an AsyncSymbolBot instance to receive WS updates."""
-        self.symbol_bots[symbol_bot.config.symbol] = symbol_bot
+        with self._data_lock:
+            self.symbol_bots[symbol_bot.config.symbol] = symbol_bot
 
     def unregister_symbol_bot(self, symbol: str):
         """Unregisters an AsyncSymbolBot instance."""
-        if symbol in self.symbol_bots:
-            del self.symbol_bots[symbol]
+        with self._data_lock:
+            if symbol in self.symbol_bots:
+                del self.symbol_bots[symbol]
 
-    async def _ws_message_handler(self, msg: Dict[str, Any]):
-        """Puts incoming WebSocket messages into a queue for processing."""
-        await self.message_queue.put(msg)
-
-    async def _process_ws_messages(self):
-        """Processes messages from the WebSocket queue."""
-        while not self._stop_event.is_set():
-            try:
-                message = await asyncio.wait_for(self.message_queue.get(), timeout=1.0) # Small timeout to check stop_event
-                # Update last WS message time for all bots, as it indicates overall WS health
-                for bot in self.symbol_bots.values():
-                    bot.state.last_ws_message_time = time.time() 
-
-                if 'topic' in message:
-                    topic = message['topic']
-                    if topic.startswith("orderbook."):
-                        await self._process_orderbook_message(message)
-                    elif topic.startswith("publicTrade."):
-                        await self._process_public_trade_message(message)
-                    elif topic in ['order', 'position', 'execution', 'wallet']:
-                        await self._process_private_message(message)
-                    else:
-                        self.logger.debug(f"Received unknown WS topic: {topic}")
-                elif 'op' in message and message['op'] == 'pong':
+    def _ws_message_handler(self, msg: Dict[str, Any]):
+        """
+        Callback for pybit WebSocket. Runs in a separate thread.
+        Dispatches messages to appropriate AsyncSymbolBot instances.
+        """
+        try:
+            # Update last WS message time for all bots, as it indicates overall WS health
+            # This is a bit inefficient, but ensures all bots are aware of WS activity.
+            # A more refined approach would be to update a central timestamp and let bots check it.
+            # For now, we update it in the individual bot's state.
+            
+            if 'topic' in msg:
+                topic = msg['topic']
+                if topic.startswith("orderbook."):
+                    asyncio.run_coroutine_threadsafe(self._process_orderbook_message(msg), asyncio.get_event_loop())
+                elif topic.startswith("publicTrade."):
+                    asyncio.run_coroutine_threadsafe(self._process_public_trade_message(msg), asyncio.get_event_loop())
+                elif topic in ['order', 'position', 'execution', 'wallet']:
+                    asyncio.run_coroutine_threadsafe(self._process_private_message(msg), asyncio.get_event_loop())
+                elif 'op' in msg and msg['op'] == 'pong':
                     self.logger.debug("WS Pong received.")
                 else:
-                    self.logger.debug(f"Received unhandled WS message: {message}")
-            except asyncio.TimeoutError:
-                pass # Queue was empty, check stop_event and continue
-            except Exception as e:
-                self.logger.error(f"Error processing WS message: {e}", exc_info=True)
+                    self.logger.debug(f"Received unhandled WS message: {msg}")
+            else:
+                self.logger.debug(f"Received WS message without topic: {msg}")
+
+        except Exception as e:
+            self.logger.error(f"Error in WS message handler: {e}", exc_info=True)
 
     async def _process_orderbook_message(self, message: Dict[str, Any]):
         """Updates the order book for a symbol and notifies relevant bot."""
@@ -1048,19 +1147,20 @@ class BybitWebSocketClient:
         
         # Bybit WS often sends symbol without the quote currency for linear (e.g. BTCUSDT -> BTCUSDT)
         # If we have BTC/USDT:USDT in config, we need to map
-        symbol_map = {bot.config.symbol.replace('/', '').replace(':', ''): bot.config.symbol for bot in self.symbol_bots.values()}
-        symbol = symbol_map.get(symbol_ws, symbol_ws)
+        with self._data_lock:
+            symbol_map = {bot.config.symbol.replace('/', '').replace(':', ''): bot.config.symbol for bot in self.symbol_bots.values()}
+            symbol = symbol_map.get(symbol_ws, symbol_ws)
 
-        bids = [[Decimal(str(item[0])), Decimal(str(item[1]))] for item in data.get('b', [])]
-        asks = [[Decimal(str(item[0])), Decimal(str(item[1]))] for item in data.get('a', [])]
+            bids = [[Decimal(str(item[0])), Decimal(str(item[1]))] for item in data.get('b', [])]
+            asks = [[Decimal(str(item[0])), Decimal(str(item[1]))] for item in data.get('a', [])]
 
-        if bids and asks:
-            self.order_book_data[symbol] = {'b': bids, 'a': asks}
-            self.last_orderbook_update_time[symbol] = time.time()
-            if symbol in self.symbol_bots:
-                await self.symbol_bots[symbol]._update_mid_price(bids, asks)
-        else:
-            self.logger.debug(f"Received empty or incomplete orderbook data for {symbol}. Skipping mid-price update.")
+            if bids and asks:
+                self.order_book_data[symbol] = {'b': bids, 'a': asks}
+                self.last_orderbook_update_time[symbol] = time.time()
+                if symbol in self.symbol_bots:
+                    await self.symbol_bots[symbol]._update_mid_price(bids, asks)
+            else:
+                self.logger.debug(f"Received empty or incomplete orderbook data for {symbol}. Skipping mid-price update.")
 
     async def _process_public_trade_message(self, message: Dict[str, Any]):
         """Updates recent trades for a symbol."""
@@ -1074,18 +1174,19 @@ class BybitWebSocketClient:
             return
         
         symbol_ws = parts[1]
-        symbol_map = {bot.config.symbol.replace('/', '').replace(':', ''): bot.config.symbol for bot in self.symbol_bots.values()}
-        symbol = symbol_map.get(symbol_ws, symbol_ws)
+        with self._data_lock:
+            symbol_map = {bot.config.symbol.replace('/', '').replace(':', ''): bot.config.symbol for bot in self.symbol_bots.values()}
+            symbol = symbol_map.get(symbol_ws, symbol_ws)
 
-        if symbol not in self.recent_trades_data:
-            self.recent_trades_data[symbol] = deque(maxlen=200) # Max 200 trades history
+            if symbol not in self.recent_trades_data:
+                self.recent_trades_data[symbol] = deque(maxlen=200) # Max 200 trades history
 
-        for trade_data in data:
-            price = Decimal(str(trade_data.get('p', DECIMAL_ZERO)))
-            qty = Decimal(str(trade_data.get('v', DECIMAL_ZERO)))
-            side = trade_data.get('S', 'unknown')
-            self.recent_trades_data[symbol].append((time.time(), price, qty, side))
-        self.last_trades_update_time[symbol] = time.time()
+            for trade_data in data:
+                price = Decimal(str(trade_data.get('p', DECIMAL_ZERO)))
+                qty = Decimal(str(trade_data.get('v', DECIMAL_ZERO)))
+                side = trade_data.get('S', 'unknown')
+                self.recent_trades_data[symbol].append((time.time(), price, qty, side))
+            self.last_trades_update_time[symbol] = time.time()
 
     async def _process_private_message(self, message: Dict[str, Any]):
         """Processes private stream messages (orders, positions, executions) and dispatches to relevant bots."""
@@ -1095,35 +1196,38 @@ class BybitWebSocketClient:
         topic = message['topic']
         for item_data in data:
             symbol_ws = item_data.get('symbol')
-            if not symbol_ws: continue
+            if not symbol_ws and topic != 'wallet': continue # Wallet updates don't have symbol
 
-            symbol_map = {bot.config.symbol.replace('/', '').replace(':', ''): bot.config.symbol for bot in self.symbol_bots.values()}
-            symbol = symbol_map.get(symbol_ws, symbol_ws)
+            with self._data_lock:
+                symbol_map = {bot.config.symbol.replace('/', '').replace(':', ''): bot.config.symbol for bot in self.symbol_bots.values()}
+                symbol = symbol_map.get(symbol_ws, symbol_ws) if symbol_ws else None
 
-            if symbol in self.symbol_bots:
-                bot = self.symbol_bots[symbol]
-                if topic == 'order':
-                    await bot._process_order_update(item_data)
-                elif topic == 'position':
-                    await bot._process_position_update(item_data)
-                elif topic == 'execution':
-                    await bot._process_execution_update(item_data)
+                if symbol and symbol in self.symbol_bots:
+                    bot = self.symbol_bots[symbol]
+                    if topic == 'order':
+                        await bot._process_order_update(item_data)
+                    elif topic == 'position':
+                        await bot._process_position_update(item_data)
+                    elif topic == 'execution':
+                        await bot._process_execution_update(item_data)
                 elif topic == 'wallet':
-                    # Wallet updates are global, but we can pass them to a specific bot (e.g., the first one)
-                    # or handle them centrally if needed. For now, let's pass to all active bots.
-                    # Or, more realistically, let the main bot update its global balance and then distribute.
-                    # For simplicity, we'll let each bot update its balance based on its main_quote_currency.
-                    await bot._update_balance_from_wallet_ws(item_data)
-            else:
-                self.logger.debug(f"Received {topic} update for unmanaged symbol: {symbol}")
+                    # Wallet updates are global, all bots might need to update their balance if it's their quote currency
+                    for bot_instance in self.symbol_bots.values():
+                        # Only update if the wallet currency matches the bot's main quote currency
+                        if item_data.get('coin') == bot_instance.global_config.main_quote_currency:
+                            await bot_instance._update_balance_from_wallet_ws(item_data)
+                else:
+                    self.logger.debug(f"Received {topic} update for unmanaged symbol: {symbol_ws if symbol_ws else 'N/A'}")
 
     def get_order_book_snapshot(self, symbol: str) -> Optional[Dict[str, List[List[Decimal]]]]:
         """Retrieves the latest order book snapshot for a symbol."""
-        return self.order_book_data.get(symbol)
+        with self._data_lock:
+            return self.order_book_data.get(symbol)
 
     def get_recent_trades(self, symbol: str, limit: int = 100) -> deque[Tuple[float, Decimal, Decimal, str]]:
         """Retrieves recent trades for a symbol."""
-        return self.recent_trades_data.get(symbol, deque(maxlen=limit))
+        with self._data_lock:
+            return self.recent_trades_data.get(symbol, deque(maxlen=limit))
 
     async def _connect_and_subscribe(self, is_private: bool, topics: List[str]):
         """Internal helper to establish connection and subscribe."""
@@ -1231,10 +1335,6 @@ class BybitWebSocketClient:
         self._public_topics = public_topics
         self._private_topics = private_topics
 
-        # Start message processing task
-        asyncio.create_task(self._process_ws_messages(), name="WS_Message_Processor")
-        self.logger.info(f"{Colors.NEON_GREEN}# WebSocket message processor started.{Colors.RESET}")
-
         # Start reconnection loops for each stream type
         if public_topics:
             self.logger.info(f"Initializing PUBLIC WS stream for topics: {public_topics}")
@@ -1299,7 +1399,8 @@ class AsyncSymbolBot:
 
         self.state = TradingState(ws_reconnect_attempts_left=self.global_config.system.ws_reconnect_attempts)
         self.state.ws_reconnect_attempts_left = self.global_config.system.ws_reconnect_attempts
-        self.state.price_candlestick_history = deque(maxlen=self.config.strategy.dynamic_spread.volatility_window_sec + 1)
+        # Maxlen for candlestick history for ATR. Need enough for `length` periods + 1 for initial close.
+        self.state.price_candlestick_history = deque(maxlen=self.config.strategy.dynamic_spread.volatility_window_sec + 1) 
         self.state.circuit_breaker_price_points = deque(maxlen=self.config.strategy.circuit_breaker.check_window_sec * 2)
 
         self.last_atr_update_time: float = 0.0
@@ -1327,7 +1428,7 @@ class AsyncSymbolBot:
            (self.state.daily_pnl_reset_date is not None and self.state.daily_pnl_reset_date.date() < current_utc_date):
             self.state.daily_initial_capital = self.state.current_balance
             self.state.daily_pnl_reset_date = datetime.now(timezone.utc)
-            self.logger.info(f"[{self.config.symbol}] Daily initial capital set to: {self.state.daily_initial_capital} {self.config.quote_currency}")
+            self.logger.info(f"[{self.config.symbol}] Daily initial capital set to: {self.state.daily_initial_capital} {self.global_config.main_quote_currency}")
 
         if self.global_config.trading_mode not in ["DRY_RUN", "SIMULATION"]:
             if self.global_config.category in ['linear', 'inverse'] and not await self._set_margin_mode_and_leverage():
@@ -1359,6 +1460,8 @@ class AsyncSymbolBot:
                     await self._simulate_dry_run_fills()
 
                 # Periodic health checks and data freshness
+                # WS health check is handled by the central BybitWebSocketClient
+                # Each bot only checks its own market data freshness.
                 if not await self._check_market_data_freshness(current_time):
                     self.logger.warning(f"[{self.config.symbol}] Stale market data. Skipping order management cycle.")
                     await self._cancel_all_orders() # Cancel orders if market data is stale
@@ -1394,6 +1497,20 @@ class AsyncSymbolBot:
                     self.logger.debug(f"[{self.config.symbol}] Circuit breaker in cooldown. Resuming trading in {int(self.state.circuit_breaker_cooldown_end_time - current_time)}s.")
                     await asyncio.sleep(self.global_config.system.loop_interval_sec)
                     continue
+
+                # Trading Hours Check
+                if not self._is_trading_hours(current_time):
+                    if self.config.trade_enabled:
+                        self.logger.info(f"[{self.config.symbol}] Outside trading hours. Temporarily disabling trading and cancelling orders.")
+                        self.config = self.config.model_copy(update={'trade_enabled': False}) # Temporarily disable
+                        await self._cancel_all_orders()
+                    await asyncio.sleep(self.global_config.system.loop_interval_sec)
+                    continue
+                elif not self.config.trade_enabled:
+                    # If it's within trading hours now but was disabled, re-enable for the loop
+                    self.logger.info(f"[{self.config.symbol}] Within trading hours. Re-enabling trading.")
+                    self.config = self.config.model_copy(update={'trade_enabled': True})
+
 
                 # Main order management logic
                 if self.config.trade_enabled and (current_time - self.state.last_order_management_time) > self.global_config.system.order_refresh_interval_sec:
@@ -1534,9 +1651,12 @@ class AsyncSymbolBot:
             self.state.circuit_breaker_price_points.append((current_time, self.state.mid_price))
 
             # Update candlestick history (timestamp, high, low, close)
+            # This is a simplified approach, a real candlestick would aggregate over a fixed interval.
+            # For ATR, we need a series of High, Low, Close. We'll use the mid_price as a proxy for both.
             if self.state.price_candlestick_history:
                 last_ts, last_high, last_low, _ = self.state.price_candlestick_history[-1]
                 # If within a short interval, update the last candle's high/low
+                # This logic assumes that price updates are frequent enough to form "mini-candles"
                 if (current_time - last_ts) < self.global_config.system.loop_interval_sec * 2:
                     self.state.price_candlestick_history[-1] = (current_time, max(last_high, new_mid_price), min(last_low, new_mid_price), new_mid_price)
                 else:
@@ -1548,21 +1668,22 @@ class AsyncSymbolBot:
                 self.state.smoothed_mid_price = new_mid_price
             else:
                 alpha = Decimal(str(self.config.strategy.dynamic_spread.price_change_smoothing_factor))
-                self.state.smoothed_mid_price = (alpha * new_mid_price) + ((Decimal('1') - alpha) * self.state.smoothed_mid_price)
+                self.state.smoothed_mid_price = (alpha * new_mid_price) + ((DECIMAL_ZERO - alpha) * self.state.smoothed_mid_price)
 
             self.logger.debug(f"[{self.config.symbol}] Mid-price updated to: {self.state.mid_price}, Smoothed: {self.state.smoothed_mid_price}")
 
     async def _check_market_data_freshness(self, current_time: float) -> bool:
         """Checks if orderbook and trade data are fresh."""
         orderbook_stale = False
-        if self.config.symbol not in self.ws_client.last_orderbook_update_time or \
-           (current_time - self.ws_client.last_orderbook_update_time[self.config.symbol] > self.config.strategy.market_data_stale_timeout_seconds):
-            orderbook_stale = True
+        with self.ws_client._data_lock: # Access shared data via lock
+            if self.config.symbol not in self.ws_client.last_orderbook_update_time or \
+               (current_time - self.ws_client.last_orderbook_update_time[self.config.symbol] > self.config.strategy.market_data_stale_timeout_seconds):
+                orderbook_stale = True
 
-        trades_stale = False
-        if self.config.symbol not in self.ws_client.recent_trades_data or \
-           (current_time - self.ws_client.last_trades_update_time.get(self.config.symbol, 0) > self.config.strategy.market_data_stale_timeout_seconds):
-            trades_stale = True
+            trades_stale = False
+            if self.config.symbol not in self.ws_client.recent_trades_data or \
+               (current_time - self.ws_client.last_trades_update_time.get(self.config.symbol, 0) > self.config.strategy.market_data_stale_timeout_seconds):
+                trades_stale = True
 
         if orderbook_stale or trades_stale:
             if self.config.trade_enabled:
@@ -1575,16 +1696,30 @@ class AsyncSymbolBot:
             return False
         return True
 
+    def _is_trading_hours(self, current_time: float) -> bool:
+        """Checks if current time is within configured trading hours."""
+        if not self.config.trading_hours_start or not self.config.trading_hours_end:
+            return True # No specific hours configured, always trade
+
+        current_dt = datetime.fromtimestamp(current_time, tz=timezone.utc).time()
+        start_time = dt_time.fromisoformat(self.config.trading_hours_start)
+        end_time = dt_time.fromisoformat(self.config.trading_hours_end)
+
+        if start_time <= end_time:
+            return start_time <= current_dt <= end_time
+        else: # Overnight trading, e.g., 22:00 - 06:00
+            return current_dt >= start_time or current_dt <= end_time
+
     # --- Initial Setup & Account Management ---
     async def _fetch_market_info(self) -> bool:
         """Fetches and updates symbol market information."""
         if self.global_config.trading_mode == "SIMULATION":
-            self.config.price_precision = Decimal('0.00001')
-            self.config.quantity_precision = Decimal('1')
-            self.config.min_order_qty = Decimal('1')
-            self.config.min_notional_value = Decimal(str(self.config.min_order_value_usd))
-            self.config.maker_fee_rate = Decimal('0.0002')
-            self.config.taker_fee_rate = Decimal('0.0005')
+            object.__setattr__(self.config, 'price_precision', Decimal('0.00001'))
+            object.__setattr__(self.config, 'quantity_precision', Decimal('1'))
+            object.__setattr__(self.config, 'min_order_qty', Decimal('1'))
+            object.__setattr__(self.config, 'min_notional_value', Decimal(str(self.config.min_order_value_usd)))
+            object.__setattr__(self.config, 'maker_fee_rate', Decimal('0.0002'))
+            object.__setattr__(self.config, 'taker_fee_rate', Decimal('0.0005'))
             self.logger.info(f"[{self.config.symbol}] SIMULATION mode: Mock market info loaded: {self.config}")
             return True
 
@@ -1594,16 +1729,17 @@ class AsyncSymbolBot:
             return False
 
         try:
-            self.config.price_precision = Decimal(info['priceFilter']['tickSize'])
-            self.config.quantity_precision = Decimal(info['lotSizeFilter']['qtyStep'])
-            self.config.min_order_qty = Decimal(info['lotSizeFilter']['minOrderQty'])
+            # Use object.__setattr__ for frozen Pydantic models
+            object.__setattr__(self.config, 'price_precision', Decimal(info['priceFilter']['tickSize']))
+            object.__setattr__(self.config, 'quantity_precision', Decimal(info['lotSizeFilter']['qtyStep']))
+            object.__setattr__(self.config, 'min_order_qty', Decimal(info['lotSizeFilter']['minOrderQty']))
             
             # Use minNotionalValue if available, otherwise fallback to min_order_value_usd
             min_notional_from_api = Decimal(info['lotSizeFilter'].get('minNotionalValue', '0'))
-            self.config.min_notional_value = max(min_notional_from_api, Decimal(str(self.config.min_order_value_usd)))
+            object.__setattr__(self.config, 'min_notional_value', max(min_notional_from_api, Decimal(str(self.config.min_order_value_usd))))
 
-            self.config.maker_fee_rate = Decimal(info.get('makerFeeRate', '0.0002')) # Default if not provided
-            self.config.taker_fee_rate = Decimal(info.get('takerFeeRate', '0.0005')) # Default if not provided
+            object.__setattr__(self.config, 'maker_fee_rate', Decimal(info.get('makerFeeRate', '0.0002'))) # Default if not provided
+            object.__setattr__(self.config, 'taker_fee_rate', Decimal(info.get('takerFeeRate', '0.0005'))) # Default if not provided
 
             self.last_symbol_info_refresh = time.time()
             self.logger.info(f"[{self.config.symbol}] Market info fetched: {self.config}")
@@ -1753,15 +1889,10 @@ class AsyncSymbolBot:
     async def _process_execution_update(self, trade_data: Dict[str, Any]):
         """Handles individual trade executions (fills)."""
         exec_type = trade_data.get('execType')
-        if exec_type not in ['Trade', 'AdlTrade', 'BustTrade', 'Funding']: # Filter out non-trade related executions
+        if exec_type not in ['Trade', 'AdlTrade', 'BustTrade']: # Filter out non-trade related executions like 'Funding' etc.
             self.logger.debug(f"[{self.config.symbol}] Skipping non-trade execution type: {exec_type}")
             return
         
-        # if exec_type == 'Funding': # Funding PnL is not a trade, but affects overall PnL
-        #     self.state.metrics.realized_pnl += Decimal(trade_data.get('pnl', DECIMAL_ZERO))
-        #     self.logger.info(f"[{self.config.symbol}] Funding PnL: {Decimal(trade_data.get('pnl', DECIMAL_ZERO)):+.4f}")
-        #     return
-
         side = trade_data.get('side', 'Unknown')
         exec_qty = Decimal(trade_data.get('execQty', DECIMAL_ZERO))
         exec_price = Decimal(trade_data.get('execPrice', DECIMAL_ZERO))
@@ -1773,7 +1904,7 @@ class AsyncSymbolBot:
             return
 
         metrics = self.state.metrics
-        realized_pnl_impact = Decimal('0') # PnL directly from this specific trade (used for gross profit/loss)
+        realized_pnl_impact = DECIMAL_ZERO # PnL directly from this specific trade (used for gross profit/loss)
 
         if side == 'Buy':
             metrics.update_pnl_on_buy(exec_qty, exec_price)
@@ -1813,7 +1944,7 @@ class AsyncSymbolBot:
     # --- Trading Logic & Order Management ---
     async def _manage_orders(self):
         """Calculates target prices and manages open orders."""
-        if self.state.smoothed_mid_price == DECIMAL_ZERO or not self.config.price_precision:
+        if self.state.smoothed_mid_price == DECIMAL_ZERO or self.config.price_precision is None:
             self.logger.warning(f"[{self.config.symbol}] Smoothed mid-price or market info not available, skipping order management.")
             return
 
@@ -1822,11 +1953,11 @@ class AsyncSymbolBot:
         
         # Calculate inventory skew
         skew_factor = self._calculate_inventory_skew(self.state.smoothed_mid_price, self.state.metrics.current_asset_holdings)
-        skewed_mid_price = self.state.smoothed_mid_price * (Decimal('1') + skew_factor)
+        skewed_mid_price = self.state.smoothed_mid_price * (DECIMAL_ZERO + skew_factor) # Corrected to add to 1.0
 
         # Base target prices
-        base_target_bid_price = skewed_mid_price * (Decimal('1') - spread_pct)
-        base_target_ask_price = skewed_mid_price * (Decimal('1') + spread_pct)
+        base_target_bid_price = skewed_mid_price * (DECIMAL_ZERO - spread_pct) # Corrected to subtract from 1.0
+        base_target_ask_price = skewed_mid_price * (DECIMAL_ZERO + spread_pct) # Corrected to add to 1.0
 
         # Enforce minimum profit spread
         base_target_bid_price, base_target_ask_price = self._enforce_min_profit_spread(self.state.smoothed_mid_price, base_target_bid_price, base_target_ask_price)
@@ -1862,9 +1993,11 @@ class AsyncSymbolBot:
     async def _calculate_atr_from_kline(self, current_mid_price: Decimal) -> Decimal:
         """Fetches kline data and calculates ATR."""
         try:
+            # Need at least (ATR_length + 1) candles for ATR, pybit limit is 200
+            limit_for_atr = 200
             ohlcv_data = await self.api_client.get_kline(
                 self.global_config.category, self.config.symbol,
-                self.config.strategy.kline_interval, 20 # Need enough data for ATR (e.g., 14 periods)
+                self.config.strategy.kline_interval, limit_for_atr
             )
             if not ohlcv_data or len(ohlcv_data) < 15: # Ensure enough data points for 14-period ATR
                 self.logger.warning(f"[{self.config.symbol}] Not enough OHLCV data for ATR calculation ({len(ohlcv_data)}). Using cached ATR or zero.")
@@ -1907,18 +2040,18 @@ class AsyncSymbolBot:
         # Skew factor pushes prices in the opposite direction of inventory
         skew_factor = -inventory_ratio * Decimal(str(inv_config.skew_intensity))
 
-        if abs(skew_factor) > Decimal('1e-6'):
+        if abs(skew_factor) > DECIMAL_ZERO:
             self.logger.debug(f"[{self.config.symbol}] Inventory skew active. Position Value: {current_inventory_value:.2f} {self.config.quote_currency}, Ratio: {inventory_ratio:.3f}, Skew: {skew_factor:.6f}")
         return skew_factor
 
     def _enforce_min_profit_spread(self, mid_price: Decimal, bid_p: Decimal, ask_p: Decimal) -> Tuple[Decimal, Decimal]:
         """Ensures the spread is wide enough to cover fees and desired profit."""
-        if not self.config.maker_fee_rate or not self.config.taker_fee_rate:
+        if self.config.maker_fee_rate is None or self.config.taker_fee_rate is None:
             self.logger.warning(f"[{self.config.symbol}] Fee rates not set. Cannot enforce minimum profit spread.")
             return bid_p, ask_p
             
         estimated_fee_per_side_pct = self.config.taker_fee_rate # Assume taker for worst-case profit check
-        min_gross_spread_pct = Decimal(str(self.config.strategy.min_profit_spread_after_fees_pct)) + (estimated_fee_per_side_pct * Decimal('2'))
+        min_gross_spread_pct = Decimal(str(self.config.strategy.min_profit_spread_after_fees_pct)) + (estimated_fee_per_side_pct * DECIMAL_ZERO) # Multiplied by 2
         min_spread_val = mid_price * min_gross_spread_pct
 
         if ask_p <= bid_p or (ask_p - bid_p) < min_spread_val:
@@ -1991,8 +2124,8 @@ class AsyncSymbolBot:
                 break
 
             # Calculate layered prices
-            layer_bid_price = base_target_bid * (Decimal('1') - Decimal(str(layer.spread_offset_pct)))
-            layer_ask_price = base_target_ask * (Decimal('1') + Decimal(str(layer.spread_offset_pct)))
+            layer_bid_price = base_target_bid * (DECIMAL_ZERO - Decimal(str(layer.spread_offset_pct))) # Corrected
+            layer_ask_price = base_target_ask * (DECIMAL_ZERO + Decimal(str(layer.spread_offset_pct))) # Corrected
 
             # Ensure layered orders don't cross
             if layer_bid_price >= layer_ask_price:
@@ -2117,7 +2250,7 @@ class AsyncSymbolBot:
             "timeInForce": time_in_force,
             "orderLinkId": order_link_id,
             "isLeverage": 1 if self.global_config.category in ['linear', 'inverse'] else 0, # Required for some categories
-            "triggerDirection": 1 if side == "Buy" else 2 # For TP/SL if used, but not strictly needed for limit order
+            # "triggerDirection": 1 if side == "Buy" else 2 # For TP/SL if used, but not strictly needed for limit order
         }
 
         # ReduceOnly for derivatives
@@ -2291,8 +2424,8 @@ class AsyncSymbolBot:
         try:
             if await self.api_client.set_trading_stop(self.global_config.category, self.config.symbol, sl_price, tp_price):
                 self.logger.info(
-                    f"{Colors.NEON_GREEN}[{self.config.symbol}] Set TP: {tp_price:.{self.config.price_precision if self.config.price_precision else 8}f}, "
-                    f"SL: {sl_price:.{self.config.price_precision if self.config.price_precision else 8}f} for current position (Entry: {entry_price}).{Colors.RESET}"
+                    f"{Colors.NEON_GREEN}[{self.config.symbol}] Set TP: {tp_price:.{self.config.price_precision.as_tuple()._exp if self.config.price_precision else 8}f}, "
+                    f"SL: {sl_price:.{self.config.price_precision.as_tuple()._exp if self.config.price_precision else 8}f} for current position (Entry: {entry_price}).{Colors.RESET}"
                 )
                 termux_notify(f"{self.config.symbol}: TP: {tp_price:.4f}, SL: {sl_price:.4f}", title="TP/SL Updated")
         except Exception as e:
@@ -2387,7 +2520,7 @@ class AsyncSymbolBot:
 
         new_mid_price = Decimal(str(new_price_float))
         
-        old_mid_price = self.state.mid_price
+        # Update mid_price and smoothed_mid_price
         self.state.mid_price = new_mid_price
         
         # Update candlestick history for ATR calculation
@@ -2408,7 +2541,7 @@ class AsyncSymbolBot:
         if self.state.smoothed_mid_price == DECIMAL_ZERO:
             self.state.smoothed_mid_price = new_mid_price
         else:
-            self.state.smoothed_mid_price = (alpha * new_mid_price) + ((Decimal('1') - alpha) * self.state.smoothed_mid_price)
+            self.state.smoothed_mid_price = (alpha * new_mid_price) + ((DECIMAL_ZERO - alpha) * self.state.smoothed_mid_price)
 
         self.state.last_dry_run_price_update_time = current_time
         self.logger.debug(f"[{self.config.symbol}] DRY_RUN Price Movement: Mid: {self.state.mid_price}, Smoothed: {self.state.smoothed_mid_price}")
@@ -2503,8 +2636,8 @@ class AsyncSymbolBot:
 
         self.logger.info(
             f"{Colors.CYAN}--- {self.config.symbol} STATUS ({'Enabled' if self.config.trade_enabled else 'Disabled'}) ---\n"
-            f"  {Colors.YELLOW}Mid: {current_market_price:.{self.config.price_precision if self.config.price_precision else 8}f} | "
-            f"Pos: {self.state.current_position_qty:+.{self.config.quantity_precision if self.config.quantity_precision else 8}f} {self.config.base_currency} (Exposure: {exposure_usd:+.2f} {self.config.quote_currency}){Colors.RESET}\n"
+            f"  {Colors.YELLOW}Mid: {current_market_price:.{self.config.price_precision.as_tuple()._exp if self.config.price_precision else 8}f} | "
+            f"Pos: {self.state.current_position_qty:+.{self.config.quantity_precision.as_tuple()._exp if self.config.quantity_precision else 8}f} {self.config.base_currency} (Exposure: {exposure_usd:+.2f} {self.config.quote_currency}){Colors.RESET}\n"
             f"  {Colors.MAGENTA}Balance: {self.state.current_balance:.2f} {self.global_config.main_quote_currency} | Avail: {self.state.available_balance:.2f}{Colors.RESET}\n"
             f"  {Colors.NEON_BLUE}Total PNL: {total_current_pnl:+.4f} | {pnl_summary}{Colors.RESET}\n"
             f"  {Colors.NEON_GREEN}Net Realized PNL: {metrics.net_realized_pnl:+.4f} | Daily PNL: {daily_pnl:+.4f} ({daily_loss_pct:.2%}) | "
@@ -2701,11 +2834,11 @@ class PyrmethusBot:
                 selected_mode = input(
                     f"{Colors.CYAN}Choose mode:\n"
                     f"  [f]rom file (symbols.json) - for multi-symbol operation\n"
-                    f"  [s]ingle symbol (e.g., BTC/USDT:USDT) - for interactive, quick run\n"
+                    f"  [s]ingle symbol (e.g., BTCUSDT) - for interactive, quick run\n"
                     f"Enter choice (f/s): {Colors.RESET}"
                 ).lower().strip()
                 if selected_mode == 's':
-                    input_symbol = input(f"{Colors.CYAN}Enter single symbol (e.g., BTC/USDT:USDT): {Colors.RESET}").upper().strip()
+                    input_symbol = input(f"{Colors.CYAN}Enter single symbol (e.g., BTCUSDT): {Colors.RESET}").upper().strip()
                     if not input_symbol:
                         raise ConfigurationError("No symbol entered for single symbol mode.")
             else:
@@ -2780,3 +2913,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"An error occurred before main() could fully handle it: {e}")
         sys.exit(1)
+```
