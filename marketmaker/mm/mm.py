@@ -209,7 +209,7 @@ def atr(high: pd.Series, low: pd.Series, close: pd.Series, length: int = 14) -> 
     tr["h_pc"] = (high - close.shift(1)).abs()
     tr["l_pc"] = (low - close.shift(1)).abs()
     tr["tr"] = tr[[ "h_l", "h_pc", "l_pc"]].max(axis=1)
-    return tr["tr"].ewm(span=length, adjust=False).mean() # Using EWM for standard ATR calculation
+    return tr["tr"].dropna().ewm(span=length, adjust=False).mean() # Using EWM for standard ATR calculation
 
 # --- Pydantic Models for Configuration and State ---
 class DynamicSpreadConfig(BaseModel):
@@ -315,7 +315,7 @@ class GlobalConfig(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
-    def __pydantic_post_init__(self, __context: Any) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Post-initialization hook for Pydantic model validation and logic."""
         if self.trading_mode == "TESTNET":
             object.__setattr__(self, 'testnet', True)
@@ -1087,14 +1087,14 @@ class BybitWebSocketClient:
         # Lock for protecting shared data like symbol_bots, order_books, recent_trades
         self.data_lock = Lock()
 
-    def register_symbol_bot(self, symbol_bot: 'AsyncSymbolBot') -> None:
+    async def register_symbol_bot(self, symbol_bot: 'AsyncSymbolBot') -> None:
         """Registers an AsyncSymbolBot instance to receive WS updates."""
-        with self.data_lock:
+        async with self.data_lock:
             self.symbol_bots[symbol_bot.config.symbol] = symbol_bot
 
-    def unregister_symbol_bot(self, symbol: str) -> None:
+    async def unregister_symbol_bot(self, symbol: str) -> None:
         """Unregisters an AsyncSymbolBot instance."""
-        with self.data_lock:
+        async with self.data_lock:
             if symbol in self.symbol_bots:
                 del self.symbol_bots[symbol]
 
@@ -1108,7 +1108,7 @@ class BybitWebSocketClient:
             try:
                 message = await asyncio.wait_for(self.message_queue.get(), timeout=1.0) # Small timeout to check stop_event
                 # Update last WS message time for all bots, as it indicates overall WS health
-                with self.data_lock:
+                async with self.data_lock:
                     for bot in self.symbol_bots.values():
                         bot.state.last_ws_message_time = time.time()
 
@@ -1172,10 +1172,10 @@ class BybitWebSocketClient:
         asks = [[Decimal(str(item[0])), Decimal(str(item[1]))] for item in data.get('a', [])]
 
         if bids or asks: # Update even if only one side has changes
-            with self.data_lock: # Protect shared order_book_data
+            async with self.data_lock: # Protect shared order_book_data
                 self.order_book_data[symbol] = {'b': bids, 'a': asks}
                 self.last_orderbook_update_time[symbol] = time.time()
-            with self.data_lock: # Access symbol_bots safely
+            async with self.data_lock: # Access symbol_bots safely
                 if symbol in self.symbol_bots:
                     await self.symbol_bots[symbol]._update_mid_price(bids, asks)
         else:
@@ -1195,7 +1195,7 @@ class BybitWebSocketClient:
         symbol_ws = parts[1]
         symbol = self._normalize_symbol_ws(symbol_ws)
 
-        with self.data_lock: # Protect shared recent_trades_data
+        async with self.data_lock: # Protect shared recent_trades_data
             if symbol not in self.recent_trades_data:
                 self.recent_trades_data[symbol] = deque(maxlen=200) # Max 200 trades history
 
@@ -1229,7 +1229,7 @@ class BybitWebSocketClient:
                 close_price = Decimal(kline_data.get('close', DECIMAL_ZERO))
                 timestamp = float(kline_data.get('timestamp', time.time() * 1000)) / 1000 # Convert ms to sec
 
-                with self.data_lock:
+                async with self.data_lock:
                     if symbol in self.symbol_bots:
                         self.symbol_bots[symbol].state.price_candlestick_history.append((timestamp, high_price, low_price, close_price))
                         self.last_kline_update_time[symbol] = time.time()
@@ -1243,7 +1243,7 @@ class BybitWebSocketClient:
                 symbol_ws = item_data.get("symbol")
                 if symbol_ws:
                     normalized_symbol = self._normalize_symbol_ws(symbol_ws)
-                    with self.data_lock: # Access symbol_bots safely
+                    async with self.data_lock: # Access symbol_bots safely
                         for bot in self.symbol_bots.values(): # Iterate through registered SymbolBot instances
                             if bot.config.symbol == normalized_symbol:
                                 if topic == "order": await bot._process_order_update(item_data)
@@ -1254,14 +1254,14 @@ class BybitWebSocketClient:
                         else: # If no bot found for the symbol
                             self.logger.debug(f"Received {topic} update for unmanaged symbol: {normalized_symbol}")
 
-    def get_order_book_snapshot(self, symbol: str) -> Optional[Dict[str, List[List[Decimal]]]]:
+    async def get_order_book_snapshot(self, symbol: str) -> Optional[Dict[str, List[List[Decimal]]]]:
         """Retrieves a snapshot of the order book for a symbol."""
-        with self.data_lock:  # Protect access to order_book_data
+        async with self.data_lock:  # Protect access to order_book_data
             return self.order_book_data.get(symbol)
 
-    def get_recent_trades(self, symbol: str, limit: int = 100) -> deque[Tuple[float, Decimal, Decimal, str]]:
+    async def get_recent_trades(self, symbol: str, limit: int = 100) -> deque[Tuple[float, Decimal, Decimal, str]]:
         """Retrieves recent trades for a symbol."""
-        with self.data_lock:  # Protect access to recent_trades_data
+        async with self.data_lock:  # Protect access to recent_trades_data
             return self.recent_trades_data.get(symbol, deque(maxlen=limit))
 
     async def _connect_and_subscribe(self, is_private: bool, topics: List[str]):
@@ -1283,8 +1283,22 @@ class BybitWebSocketClient:
 
             if topics:
                 self.logger.debug(f"Subscribing to WS topics: {topics}")
-                for topic in topics:
-                    ws_instance.subscribe(topic=topic, callback=self._ws_message_handler)
+                for topic_full_string in topics:
+                    # Parse topic to get topic_name and symbol
+                    parts = topic_full_string.split('.')
+                    if len(parts) > 1:
+                        # For public topics, topic_name is everything before the last dot, symbol is after
+                        topic_name = '.'.join(parts[:-1]) # e.g., "kline.1m", "orderbook.1", "publicTrade"
+                        symbol = parts[-1] # e.g., "XLMUSDT"
+                    else:
+                        # For private topics (no symbol in topic string)
+                        topic_name = topic_full_string
+                        symbol = None
+
+                    if symbol:
+                        ws_instance.subscribe(topic=topic_name, symbol=symbol, callback=self._ws_message_handler)
+                    else:
+                        ws_instance.subscribe(topic=topic_name, callback=self._ws_message_handler)
                 self.logger.info(f"Subscribed to WS topics: {', '.join(topics)}")
 
             return ws_instance
