@@ -104,6 +104,7 @@ class DynamicSpreadConfig:
     min_spread_pct: Decimal = Decimal("0.0005")
     max_spread_pct: Decimal = Decimal("0.01")
     price_change_smoothing_factor: Decimal = Decimal("0.2")
+    default_volatility: Decimal = Decimal("0.001")
 
 
 @dataclass(frozen=True)
@@ -123,6 +124,7 @@ class StrategyConfig:
     order_stale_threshold_pct: Decimal = Decimal("0.0005")
     min_profit_spread_after_fees_pct: Decimal = Decimal("0.0002")
     max_outstanding_orders: int = 2
+    max_position_size: Decimal = Decimal("1000")
     inventory: InventoryStrategyConfig = field(default_factory=InventoryStrategyConfig)
     dynamic_spread: DynamicSpreadConfig = field(default_factory=DynamicSpreadConfig)
     circuit_breaker: CircuitBreakerConfig = field(default_factory=CircuitBreakerConfig)

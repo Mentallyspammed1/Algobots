@@ -8,3 +8,10 @@ logs/
 
 # Environment variables
 .env
+
+# Database files
+*.db
+*.db-journal
+
+# Pickle files
+*.pkl

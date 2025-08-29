@@ -219,8 +219,8 @@ class Backtester:
         self.balance = self.initial_balance
         self.trades = []
         self.current_position = None
-        self.equity_curve = [self.initial_balance]
-        self.timestamps = []
+        self.equity_curve = [] # Initialize as empty
+        self.timestamps = []   # Initialize as empty
         self.last_supertrend = {'direction': 0, 'value': 0}
 
     def run_backtest(self,
@@ -473,6 +473,12 @@ class Backtester:
         # Basic statistics
         total_trades = len(self.trades)
 
+        # Initialize drawdown and related variables to default values
+        # in case no trades are made and the function returns early.
+        drawdown = np.array([])
+        max_drawdown_value = 0.0
+        max_drawdown = 0.0
+
         if total_trades == 0:
             return BacktestResult(
                 trades=self.trades,
@@ -498,7 +504,7 @@ class Backtester:
                 best_trade=None,
                 worst_trade=None,
                 equity_curve=self.equity_curve,
-                drawdown_curve=[],
+                drawdown_curve=drawdown.tolist(),
                 timestamps=self.timestamps,
                 config=config
             )
@@ -892,7 +898,7 @@ def main():
         'stopLossPct': 1.0,
         'takeProfitPct': 2.0,
         'trailingStopPct': 0.5,
-        'rsi_period': 14,
+        'rsi_length': 14,
         'rsi_overbought': 70,
         'rsi_oversold': 30,
         'fisher_threshold': 0.5,
@@ -902,7 +908,7 @@ def main():
         'macd_signal_period': 9,
         'bb_period': 20,
         'bb_std_dev': 2.0,
-        'supertrend_period': 10,
+        'supertrend_length': 10,
         'supertrend_multiplier': 3.0
     }
 
@@ -940,26 +946,27 @@ def main():
 
     # Visualize results
     visualizer = BacktestVisualizer()
-    visualizer.plot_equity_curve(result)
-    visualizer.plot_trade_distribution(result)
+    if result.total_trades > 0: # Only plot if there are trades
+        visualizer.plot_equity_curve(result)
+        visualizer.plot_trade_distribution(result)
+    else:
+        logger.warning("No trades generated in single backtest, skipping plotting.")
 
     # Optimization example
     logger.info("Running parameter optimization...")
     optimizer = StrategyOptimizer(df, initial_balance=10000)
 
-    # Define parameter grid for optimization
+    # Define parameter grid for optimization for Supertrend
     param_grid = {
-        'stopLossPct': [0.5, 1.0, 1.5, 2.0],
-        'takeProfitPct': [1.0, 2.0, 3.0, 4.0],
-        'trailingStopPct': [0.3, 0.5, 0.7, 1.0],
-        'fisher_threshold': [0.3, 0.5, 0.7, 1.0]
+        'supertrend_period': list(range(7, 15)), # 7 to 14 inclusive
+        'supertrend_multiplier': [2.0, 2.5, 3.0, 3.5, 4.0]
     }
 
     # Run grid search
     optimization_results = optimizer.grid_search(
         param_grid=param_grid,
         base_config=base_config,
-        metric='sharpe_ratio',
+        metric='total_return_pct', # Changed metric to total_return_pct for profit optimization
         n_jobs=4
     )
 

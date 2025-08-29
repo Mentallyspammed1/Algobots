@@ -74,7 +74,7 @@ from config_definitions import (
     TradingState,
     setup_logger,
 )
-
+from strategy_backtester import MarketMakingStrategy
 
 
 class StateManager:

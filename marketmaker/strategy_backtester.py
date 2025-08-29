@@ -28,6 +28,8 @@ class MarketMakingStrategy:
         self.config = config
         self.market_info = market_info
 
+    
+
     def _calculate_dynamic_spread(self, state: TradingState) -> Decimal:
         ds_config = self.config.strategy.dynamic_spread
         current_time = time.time() # In backtest, this will be simulated time
@@ -240,12 +242,15 @@ class MarketMakingStrategy:
         )
         return qty
 
-    def get_target_orders(self, state: TradingState) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    def get_target_orders(self, state: TradingState, orderbook_data: dict = None) -> tuple[Decimal, Decimal, Decimal, Decimal]:
         # This combines logic from _manage_orders to determine target prices and quantities
         mid_price_for_strategy = state.smoothed_mid_price
         pos_qty = state.metrics.current_asset_holdings
 
+        
+
         spread_pct = self._calculate_dynamic_spread(state)
+
         skew_factor = self._calculate_inventory_skew(mid_price_for_strategy, pos_qty)
         skewed_mid_price = mid_price_for_strategy * (Decimal("1") + skew_factor)
 
@@ -257,6 +262,8 @@ class MarketMakingStrategy:
 
         target_bid_price = self.market_info.format_price(target_bid_price)
         target_ask_price = self.market_info.format_price(target_ask_price)
+
+        
 
         buy_qty = self._calculate_order_size("Buy", target_bid_price, state)
         sell_qty = self._calculate_order_size("Sell", target_ask_price, state)
@@ -375,11 +382,19 @@ class Backtester:
 
     def _simulate_fill(self, side: str, qty: Decimal, price: Decimal, timestamp: datetime):
         logger.debug(f"Simulating {side} fill: Qty={qty}, Price={price}")
-        # Simplified fill simulation, directly updates metrics
         exec_fee = qty * price * self.market_info.taker_fee_rate # Assume taker fill for simplicity
 
         metrics = self.state.metrics
-        
+        realized_pnl_impact = Decimal("0")
+
+        # Calculate realized_pnl_impact before updating position
+        if side == "Sell" and metrics.current_asset_holdings > 0:
+            # Only calculate profit/loss on sale if we are closing a long position
+            realized_pnl_impact = (price - metrics.average_entry_price) * qty
+        elif side == "Buy" and metrics.current_asset_holdings < 0:
+            # Only calculate profit/loss on sale if we are closing a short position
+            realized_pnl_impact = (metrics.average_entry_price - price) * qty
+
         # Update position and PnL using the new method
         metrics.update_position_and_pnl(side, qty, price)
         
@@ -398,7 +413,7 @@ class Backtester:
             "qty": float(qty),
             "price": float(price),
             "fee": float(exec_fee),
-            "realized_pnl_impact": float(metrics.realized_pnl), # This will be the cumulative realized PnL
+            "realized_pnl_impact": float(realized_pnl_impact),
             "net_realized_pnl": float(metrics.net_realized_pnl),
             "current_asset_holdings": float(metrics.current_asset_holdings),
             "average_entry_price": float(metrics.average_entry_price),
