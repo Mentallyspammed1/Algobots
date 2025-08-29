@@ -1070,9 +1070,10 @@ class BybitWebSocketClient:
     Handles public orderbook/trades and private order/position/execution updates.
     Includes reconnection logic.
     """
-    def __init__(self, global_config: GlobalConfig, logger: logging.Logger):
+    def __init__(self, global_config: GlobalConfig, logger: logging.Logger, main_event_loop: asyncio.AbstractEventLoop):
         self.config = global_config
         self.logger = logger
+        self.main_event_loop = main_event_loop
 
         self._ws_public_instance: Optional[WebSocket] = None
         self._ws_private_instance: Optional[WebSocket] = None
@@ -1120,11 +1121,11 @@ class BybitWebSocketClient:
             if 'topic' in msg:
                 topic = msg['topic']
                 if topic.startswith("orderbook."):
-                    asyncio.run_coroutine_threadsafe(self._process_orderbook_message(msg), asyncio.get_event_loop())
+                    asyncio.run_coroutine_threadsafe(self._process_orderbook_message(msg), self.main_event_loop)
                 elif topic.startswith("publicTrade."):
-                    asyncio.run_coroutine_threadsafe(self._process_public_trade_message(msg), asyncio.get_event_loop())
+                    asyncio.run_coroutine_threadsafe(self._process_public_trade_message(msg), self.main_event_loop)
                 elif topic in ['order', 'position', 'execution', 'wallet']:
-                    asyncio.run_coroutine_threadsafe(self._process_private_message(msg), asyncio.get_event_loop())
+                    asyncio.run_coroutine_threadsafe(self._process_private_message(msg), self.main_event_loop)
                 elif 'op' in msg and msg['op'] == 'pong':
                     self.logger.debug("WS Pong received.")
                 else:
@@ -1259,7 +1260,7 @@ class BybitWebSocketClient:
                 elif topic.startswith("publicTrade."):
                     parts = topic.split('.')
                     symbol_ws = parts[1]
-                    ws_instance.public_trade_stream(symbol=symbol_ws, callback=self._ws_message_handler)
+                    ws_instance.trade_stream(symbol=symbol_ws, callback=self._ws_message_handler)
                     self.logger.info(f"Subscribed to publicTrade.{symbol_ws}")
                 elif topic == "wallet":
                     ws_instance.wallet_stream(callback=self._ws_message_handler)
@@ -2668,12 +2669,13 @@ class PyrmethusBot:
         self.active_symbol_configs: Dict[str, SymbolConfig] = {} # To track config changes
         
         self._stop_event = asyncio.Event()
+        self.main_event_loop: Optional[asyncio.AbstractEventLoop] = None
         self.config_refresh_task: Optional[asyncio.Task] = None
 
     async def _initialize_bot_components(self):
         """Initializes API client, WebSocket client, and database manager."""
         self.api_client = BybitAPIClient(self.global_config, self.logger)
-        self.ws_client = BybitWebSocketClient(self.global_config, self.logger)
+        self.ws_client = BybitWebSocketClient(self.global_config, self.logger, self.main_event_loop)
         self.db_manager = DBManager(STATE_DIR / self.global_config.files.db_file, self.logger)
         await self.db_manager.connect()
         await self.db_manager.create_tables()
@@ -2865,6 +2867,7 @@ class PyrmethusBot:
             self.logger.critical(f"{Colors.NEON_RED}Unexpected error during configuration loading: {e}. Exiting.{Colors.RESET}", exc_info=True)
             sys.exit(1)
 
+        self.main_event_loop = asyncio.get_running_loop() # Get the current running event loop
         await self._initialize_bot_components()
         await self._start_symbol_bots(symbol_configs)
 

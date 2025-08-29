@@ -68,307 +68,17 @@ class BybitInsufficientBalanceError(BybitAPIError):
     pass
 
 
-@dataclass
-class TradeMetrics:
-    total_trades: int = 0
-    gross_profit: Decimal = Decimal("0")
-    gross_loss: Decimal = Decimal("0")
-    total_fees: Decimal = Decimal("0")
-    wins: int = 0
-    losses: int = 0
-    win_rate: float = 0.0
-    realized_pnl: Decimal = Decimal("0")
-    current_asset_holdings: Decimal = Decimal("0")
-    average_entry_price: Decimal = Decimal("0")
-    last_pnl_update_timestamp: datetime | None = None
-
-    @property
-    def net_realized_pnl(self) -> Decimal:
-        return self.realized_pnl - self.total_fees
-
-    def update_win_rate(self):
-        self.win_rate = (
-            (self.wins / self.total_trades * 100.0) if self.total_trades > 0 else 0.0
-        )
-
-    def update_pnl_on_buy(self, quantity: Decimal, price: Decimal):
-        if self.current_asset_holdings > 0:
-            self.average_entry_price = (
-                (self.average_entry_price * self.current_asset_holdings)
-                + (price * quantity)
-            ) / (self.current_asset_holdings + quantity)
-        else:
-            self.average_entry_price = price
-        self.current_asset_holdings += quantity
-        self.last_pnl_update_timestamp = datetime.now(timezone.utc)
-
-    def update_pnl_on_sell(self, quantity: Decimal, price: Decimal):
-        if self.current_asset_holdings < quantity:
-            raise ValueError(
-                f"Attempted to sell {quantity} but only {self.current_asset_holdings} held."
-            )
-
-        profit_loss_on_sale = (price - self.average_entry_price) * quantity
-        self.realized_pnl += profit_loss_on_sale
-
-        self.current_asset_holdings -= quantity
-        if self.current_asset_holdings == Decimal("0"):
-            self.average_entry_price = Decimal("0")
-        self.last_pnl_update_timestamp = datetime.now(timezone.utc)
-
-    def calculate_unrealized_pnl(self, current_price: Decimal) -> Decimal:
-        if self.current_asset_holdings > 0 and self.average_entry_price > 0:
-            return (
-                current_price - self.average_entry_price
-            ) * self.current_asset_holdings
-        return Decimal("0")
+from config_definitions import Config, StrategyConfig, SystemConfig, FilesConfig, InventoryStrategyConfig, DynamicSpreadConfig, CircuitBreakerConfig, TradeMetrics, MarketInfo, TradingState, setup_logger
+from strategy_backtester import MarketMakingStrategy
 
 
-@dataclass(frozen=True)
-class InventoryStrategyConfig:
-    enabled: bool = True
-    skew_intensity: Decimal = Decimal("0.5")
-    max_inventory_ratio: Decimal = Decimal("0.5")
 
 
-@dataclass(frozen=True)
-class DynamicSpreadConfig:
-    enabled: bool = True
-    volatility_window_sec: int = 60
-    volatility_multiplier: Decimal = Decimal("2.0")
-    min_spread_pct: Decimal = Decimal("0.0005")
-    max_spread_pct: Decimal = Decimal("0.01")
-    price_change_smoothing_factor: Decimal = Decimal("0.2")
 
 
-@dataclass(frozen=True)
-class CircuitBreakerConfig:
-    enabled: bool = True
-    pause_threshold_pct: Decimal = Decimal("0.02")
-    check_window_sec: int = 10
-    pause_duration_sec: int = 60
-    cool_down_after_trip_sec: int = 300
-    max_daily_loss_pct: Decimal = Decimal("0.05")
 
 
-@dataclass(frozen=True)
-class StrategyConfig:
-    base_spread_pct: Decimal = Decimal("0.001")
-    base_order_size_pct_of_balance: Decimal = Decimal("0.005")
-    order_stale_threshold_pct: Decimal = Decimal("0.0005")
-    min_profit_spread_after_fees_pct: Decimal = Decimal("0.0002")
-    max_outstanding_orders: int = 2
-    inventory: InventoryStrategyConfig = field(default_factory=InventoryStrategyConfig)
-    dynamic_spread: DynamicSpreadConfig = field(default_factory=DynamicSpreadConfig)
-    circuit_breaker: CircuitBreakerConfig = field(default_factory=CircuitBreakerConfig)
 
-
-@dataclass(frozen=True)
-class SystemConfig:
-    loop_interval_sec: float = 0.5
-    order_refresh_interval_sec: float = 5.0
-    ws_heartbeat_sec: int = 30
-    cancellation_rate_limit_sec: float = 0.2
-    status_report_interval_sec: int = 30
-    ws_reconnect_attempts: int = 5
-    ws_reconnect_initial_delay_sec: int = 5
-    ws_reconnect_max_delay_sec: int = 60
-    api_retry_attempts: int = 5
-    api_retry_initial_delay_sec: float = 0.5
-    api_retry_max_delay_sec: float = 10.0
-    health_check_interval_sec: int = 10
-    api_timeout_sec: int = 30
-
-
-@dataclass(frozen=True)
-class FilesConfig:
-    log_level: str = "INFO"
-    log_file: str = "market_maker.log"
-    state_file: str = "market_maker_state.pkl"
-    db_file: str = "market_maker.db"
-
-
-@dataclass(frozen=True)
-class Config:
-    api_key: str = field(default_factory=lambda: os.getenv("BYBIT_API_KEY", ""))
-    api_secret: str = field(default_factory=lambda: os.getenv("BYBIT_API_SECRET", ""))
-    testnet: bool = os.getenv("BYBIT_TESTNET", "true").lower() == "true"
-    trading_mode: str = "DRY_RUN"
-    symbol: str = "XLMUSDT"
-    category: str = "linear"
-    leverage: Decimal = Decimal("1")
-    min_order_value_usd: Decimal = Decimal("10")
-    max_order_size_pct: Decimal = Decimal("0.1")
-    max_net_exposure_usd: Decimal = Decimal("500")
-    order_type: str = "Limit"
-    time_in_force: str = "GTC"
-    post_only: bool = True
-    strategy: StrategyConfig = field(default_factory=StrategyConfig)
-    system: SystemConfig = field(default_factory=SystemConfig)
-    files: FilesConfig = field(default_factory=FilesConfig)
-    initial_dry_run_capital: Decimal = Decimal("10000")
-    dry_run_price_drift_mu: float = 0.0
-    dry_run_price_volatility_sigma: float = 0.0001
-    dry_run_time_step_dt: float = 1.0
-
-    base_currency: str = field(init=False)
-    quote_currency: str = field(init=False)
-
-    def __post_init__(self):
-        def _set_attr(name, value):
-            object.__setattr__(self, name, value)
-
-        if self.symbol.endswith("USDT"):
-            _set_attr("base_currency", self.symbol[:-4])
-            _set_attr("quote_currency", "USDT")
-        elif self.symbol.endswith("USD"):
-            _set_attr("base_currency", self.symbol[:-3])
-            _set_attr("quote_currency", "USD")
-        elif len(self.symbol) == 6:
-            _set_attr("base_currency", self.symbol[:3])
-            _set_attr("quote_currency", self.symbol[3:])
-        else:
-            raise ConfigurationError(
-                f"Cannot parse base/quote currency from symbol: {self.symbol}. Use a standard format (e.g., BTCUSDT)."
-            )
-
-        if self.trading_mode == "TESTNET":
-            _set_attr("testnet", True)
-        elif self.trading_mode == "LIVE":
-            _set_attr("testnet", False)
-
-        if self.trading_mode not in ["DRY_RUN", "SIMULATION"] and (
-            not self.api_key or not self.api_secret
-        ):
-            raise ConfigurationError(
-                "API_KEY and API_SECRET must be set in .env for TESTNET or LIVE trading_mode."
-            )
-
-        if self.category in ["linear", "inverse"]:
-            if self.leverage <= 0:
-                raise ConfigurationError(
-                    "Leverage must be a positive decimal for linear/inverse categories."
-                )
-        elif self.category == "spot":
-            if self.leverage != Decimal("1"):
-                _set_attr("leverage", Decimal("1"))
-                logging.getLogger("MarketMakerBot").warning(
-                    "Leverage is not applicable for spot trading. Setting leverage to 1."
-                )
-
-        if self.strategy.inventory.enabled and self.max_net_exposure_usd <= 0:
-            raise ConfigurationError(
-                "max_net_exposure_usd must be positive when inventory strategy is enabled."
-            )
-        if not (Decimal("0") < self.max_order_size_pct <= Decimal("1")):
-            raise ConfigurationError(
-                "max_order_size_pct must be between 0 and 1 (exclusive)."
-            )
-        if self.min_order_value_usd <= Decimal("0"):
-            raise ConfigurationError("min_order_value_usd must be positive.")
-        if self.max_net_exposure_usd < Decimal("0"):
-            raise ConfigurationError("max_net_exposure_usd cannot be negative.")
-        if self.strategy.base_spread_pct <= Decimal("0"):
-            raise ConfigurationError("base_spread_pct must be positive.")
-        if self.category not in ["linear", "inverse", "spot"]:
-            raise ConfigurationError(f"Unsupported category: {self.category}")
-        if self.strategy.max_outstanding_orders < 0:
-            raise ConfigurationError("max_outstanding_orders cannot be negative.")
-
-        if self.strategy.dynamic_spread.enabled:
-            if not (
-                Decimal("0")
-                <= self.strategy.dynamic_spread.min_spread_pct
-                <= self.strategy.dynamic_spread.max_spread_pct
-            ):
-                raise ConfigurationError(
-                    "Dynamic spread min/max percentages are invalid."
-                )
-            if not (
-                Decimal("0")
-                < self.strategy.dynamic_spread.price_change_smoothing_factor
-                < Decimal("1")
-            ):
-                raise ConfigurationError(
-                    "Price change smoothing factor must be between 0 and 1 (exclusive)."
-                )
-
-        if not (
-            Decimal("0")
-            <= self.strategy.circuit_breaker.max_daily_loss_pct
-            < Decimal("1")
-        ):
-            raise ConfigurationError(
-                "max_daily_loss_pct must be between 0 and 1 (exclusive)."
-            )
-
-
-@dataclass(frozen=True)
-class MarketInfo:
-    symbol: str
-    price_precision: Decimal
-    quantity_precision: Decimal
-    min_order_qty: Decimal
-    min_notional_value: Decimal
-    maker_fee_rate: Decimal = Decimal("0")
-    taker_fee_rate: Decimal = Decimal("0")
-
-    def format_price(self, p: Decimal) -> Decimal:
-        return p.quantize(self.price_precision, rounding=ROUND_DOWN)
-
-    def format_quantity(self, q: Decimal) -> Decimal:
-        return q.quantize(self.quantity_precision, rounding=ROUND_DOWN)
-
-
-@dataclass
-class TradingState:
-    mid_price: Decimal = Decimal("0")
-    smoothed_mid_price: Decimal = Decimal("0")
-    current_balance: Decimal = Decimal("0")
-    available_balance: Decimal = Decimal("0")
-    current_position_qty: Decimal = Decimal("0")
-    unrealized_pnl_derivatives: Decimal = Decimal("0")
-
-    active_orders: dict[str, dict] = field(default_factory=dict)
-    last_order_management_time: float = 0.0
-    last_ws_message_time: float = field(default_factory=time.time)
-    last_status_report_time: float = 0.0
-    last_health_check_time: float = 0.0
-
-    price_candlestick_history: deque[tuple[float, Decimal, Decimal, Decimal]] = field(
-        default_factory=deque
-    )
-    circuit_breaker_price_points: deque[tuple[float, Decimal]] = field(
-        default_factory=deque
-    )
-
-    is_paused: bool = False
-    pause_end_time: float = 0.0
-    circuit_breaker_cooldown_end_time: float = 0.0
-    ws_reconnect_attempts_left: int = 0
-
-    metrics: TradeMetrics = field(default_factory=TradeMetrics)
-
-    daily_initial_capital: Decimal = Decimal("0")
-    daily_pnl_reset_date: datetime | None = None
-
-    last_dry_run_price_update_time: float = field(default_factory=time.time)
-
-
-def setup_logger(config: FilesConfig) -> logging.Logger:
-    logger = logging.getLogger("MarketMakerBot")
-    logger.setLevel(getattr(logging, config.log_level.upper()))
-    if not logger.handlers:
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-
-        ch = logging.StreamHandler()
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
-
-        fh = logging.FileHandler(config.log_file)
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-    return logger
 
 
 class StateManager:
@@ -912,6 +622,9 @@ class BybitMarketMaker:
         if not await self._fetch_market_info():
             raise MarketInfoError("Failed to fetch market info. Shutting down.")
 
+        # Instantiate MarketMakingStrategy here
+        self.strategy = MarketMakingStrategy(self.config, self.market_info)
+
         if not await self._update_balance_and_position():
             raise InitialBalanceError(
                 "Failed to fetch initial balance/position. Shutting down."
@@ -1304,7 +1017,7 @@ class BybitMarketMaker:
         async with self.active_orders_lock:
             for order_id, order_data in list(self.state.active_orders.items()):
                 if order_id.startswith("DRY_"):
-                    order_price = order_data["price"]
+                    order_price = Decimal(str(order_data["price"]))
                     side = order_data["side"]
 
                     filled = False
@@ -1314,7 +1027,7 @@ class BybitMarketMaker:
                         filled = True
 
                     if filled:
-                        fill_qty = order_data["qty"] - order_data["cumExecQty"]
+                        fill_qty = order_data["qty"] - order_data.get("cumExecQty", Decimal("0"))
                         if fill_qty <= Decimal("0"):
                             continue
 
@@ -1655,18 +1368,9 @@ class BybitMarketMaker:
                     "Smoothed mid-price or market info not available, skipping order management."
                 )
                 return
-            mid_price_for_strategy = self.state.smoothed_mid_price
-            pos_qty = self.state.metrics.current_asset_holdings
 
-        spread_pct = await self._calculate_dynamic_spread()
-        skew_factor = self._calculate_inventory_skew(mid_price_for_strategy, pos_qty)
-        skewed_mid_price = mid_price_for_strategy * (Decimal("1") + skew_factor)
-
-        target_bid_price = skewed_mid_price * (Decimal("1") - spread_pct)
-        target_ask_price = skewed_mid_price * (Decimal("1") + spread_pct)
-        target_bid_price, target_ask_price = self._enforce_min_profit_spread(
-            mid_price_for_strategy, target_bid_price, target_ask_price
-        )
+        # Use the strategy to get target orders
+        target_bid_price, buy_qty, target_ask_price, sell_qty = self.strategy.get_target_orders(self.state)
 
         await self._reconcile_and_place_orders(target_bid_price, target_ask_price)
 
@@ -1708,119 +1412,11 @@ class BybitMarketMaker:
             return True
         return False
 
-    async def _calculate_dynamic_spread(self) -> Decimal:
-        ds_config = self.config.strategy.dynamic_spread
-        current_time = time.time()
+    
 
-        async with self.market_data_lock:
-            relevant_candles = [
-                c
-                for c in self.state.price_candlestick_history
-                if (current_time - c[0]) <= ds_config.volatility_window_sec
-            ]
+    
 
-        if not ds_config.enabled or len(relevant_candles) < 2:
-            return self.config.strategy.base_spread_pct
-
-        true_ranges = []
-        for i in range(len(relevant_candles)):
-            ts, high, low, close = relevant_candles[i]
-
-            if i == len(relevant_candles) - 1 and self.state.mid_price > Decimal("0"):
-                close = self.state.mid_price
-
-            if i == 0:
-                tr = high - low
-            else:
-                _, _, _, prev_close = relevant_candles[i - 1]
-                tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
-            true_ranges.append(tr)
-
-        if not true_ranges:
-            return self.config.strategy.base_spread_pct
-
-        atr_value = Decimal(str(np.mean([float(tr) for tr in true_ranges])))
-
-        if self.state.mid_price <= Decimal("0"):
-            self.logger.warning(
-                "Mid-price is zero, cannot calculate ATR-based spread. Using base spread."
-            )
-            return self.config.strategy.base_spread_pct
-
-        volatility_pct = atr_value / self.state.mid_price
-
-        dynamic_adjustment = volatility_pct * ds_config.volatility_multiplier
-        clamped_spread = max(
-            ds_config.min_spread_pct,
-            min(
-                ds_config.max_spread_pct,
-                self.config.strategy.base_spread_pct + dynamic_adjustment,
-            ),
-        )
-        self.logger.debug(
-            f"ATR: {atr_value:.6f}, Volatility_pct: {volatility_pct:.6f}, Dynamic Spread: {clamped_spread:.4%}"
-        )
-        return clamped_spread
-
-    def _calculate_inventory_skew(
-        self, mid_price: Decimal, pos_qty: Decimal
-    ) -> Decimal:
-        inv_config = self.config.strategy.inventory
-        if (
-            not inv_config.enabled
-            or self.config.max_net_exposure_usd <= 0
-            or mid_price <= 0
-        ):
-            return Decimal("0")
-
-        current_inventory_value = pos_qty * mid_price
-        max_exposure_for_ratio = (
-            self.config.max_net_exposure_usd * inv_config.max_inventory_ratio
-        )
-        if max_exposure_for_ratio <= 0:
-            return Decimal("0")
-
-        inventory_ratio = current_inventory_value / max_exposure_for_ratio
-        inventory_ratio = max(Decimal("-1.0"), min(Decimal("1.0"), inventory_ratio))
-
-        skew_factor = -inventory_ratio * inv_config.skew_intensity
-
-        if abs(skew_factor) > Decimal("1e-6"):
-            self.logger.debug(
-                f"Inventory skew active. Position Value: {current_inventory_value:.2f} {self.config.quote_currency}, Ratio: {inventory_ratio:.3f}, Skew: {skew_factor:.6f}"
-            )
-        return skew_factor
-
-    def _enforce_min_profit_spread(
-        self, mid_price: Decimal, bid_p: Decimal, ask_p: Decimal
-    ) -> tuple[Decimal, Decimal]:
-        if not self.market_info or mid_price <= Decimal("0"):
-            self.logger.warning(
-                "Mid-price or market info not available for enforcing minimum profit spread. Returning original bid/ask."
-            )
-            return bid_p, ask_p
-
-        estimated_fee_per_side_pct = self.market_info.taker_fee_rate
-        min_gross_spread_pct = self.config.strategy.min_profit_spread_after_fees_pct + (
-            estimated_fee_per_side_pct * Decimal("2")
-        )
-        min_spread_val = mid_price * min_gross_spread_pct
-
-        if ask_p <= bid_p or (ask_p - bid_p) < min_spread_val:
-            self.logger.debug(
-                f"Adjusting spread. Original Bid: {bid_p}, Ask: {ask_p}, Mid: {mid_price}, Current Spread: {ask_p - bid_p:.6f}, Min Spread: {min_spread_val:.6f}"
-            )
-            half_min_spread = (min_spread_val / Decimal("2")).quantize(
-                self.market_info.price_precision
-            )
-            bid_p = (mid_price - half_min_spread).quantize(
-                self.market_info.price_precision
-            )
-            ask_p = (mid_price + half_min_spread).quantize(
-                self.market_info.price_precision
-            )
-            self.logger.debug(f"Adjusted to Bid: {bid_p}, Ask: {ask_p}")
-        return bid_p, ask_p
+    
 
     async def _reconcile_and_place_orders(
         self, target_bid: Decimal, target_ask: Decimal
@@ -2200,7 +1796,7 @@ class BybitMarketMaker:
         realized_pnl_impact = Decimal("0")
 
         if side == "Buy":
-            metrics.update_pnl_on_buy(exec_qty, exec_price)
+            metrics.update_position_and_pnl(side, exec_qty, exec_price)
             if self.config.trading_mode in ["DRY_RUN", "SIMULATION"]:
                 self.state.current_balance -= (exec_qty * exec_price) + exec_fee
                 self.state.available_balance = self.state.current_balance
@@ -2209,7 +1805,7 @@ class BybitMarketMaker:
             )
         elif side == "Sell":
             profit_loss_on_sale = (exec_price - metrics.average_entry_price) * exec_qty
-            metrics.update_pnl_on_sell(exec_qty, exec_price)
+            metrics.update_position_and_pnl(side, exec_qty, exec_price)
             realized_pnl_impact = profit_loss_on_sale
             if self.config.trading_mode in ["DRY_RUN", "SIMULATION"]:
                 self.state.current_balance += (exec_qty * exec_price) - exec_fee
@@ -2285,104 +1881,7 @@ class BybitMarketMaker:
         async with self.active_orders_lock:
             self.state.active_orders.clear()
 
-    async def _calculate_order_size(self, side: str, price: Decimal) -> Decimal:
-        async with self.balance_position_lock:
-            capital = (
-                self.state.available_balance
-                if self.config.category == "spot"
-                else self.state.current_balance
-            )
-            metrics_pos_qty = self.state.metrics.current_asset_holdings
-
-        if capital <= Decimal("0") or price <= Decimal("0") or not self.market_info:
-            self.logger.debug(
-                "Insufficient capital, zero price, or no market info. Order size 0."
-            )
-            return Decimal("0")
-
-        effective_capital = (
-            capital * self.config.leverage
-            if self.config.category in ["linear", "inverse"]
-            else capital
-        )
-
-        base_order_value = (
-            effective_capital * self.config.strategy.base_order_size_pct_of_balance
-        )
-        qty_from_base_pct = base_order_value / price
-
-        max_order_value_abs = effective_capital * self.config.max_order_size_pct
-        qty_from_max_pct = max_order_value_abs / price
-
-        target_qty = min(qty_from_base_pct, qty_from_max_pct)
-
-        if (
-            self.config.strategy.inventory.enabled
-            and self.config.max_net_exposure_usd > Decimal("0")
-        ):
-            async with self.market_data_lock:
-                current_mid_price = self.state.mid_price
-            if current_mid_price == Decimal("0"):
-                self.logger.warning(
-                    "Mid-price is zero, cannot calculate max net exposure. Skipping exposure check."
-                )
-                return Decimal("0")
-
-            max_allowed_pos_qty_abs = (
-                self.config.max_net_exposure_usd / current_mid_price
-            )
-
-            if side == "Buy":
-                qty_to_reach_max_long = max_allowed_pos_qty_abs - metrics_pos_qty
-                if qty_to_reach_max_long <= Decimal("0"):
-                    self.logger.debug(
-                        f"Cannot place buy order: Current position {metrics_pos_qty} already at or above max long exposure ({max_allowed_pos_qty_abs})."
-                    )
-                    return Decimal("0")
-                target_qty = min(target_qty, qty_to_reach_max_long)
-            else:
-                if metrics_pos_qty > Decimal("0"):
-                    target_qty = min(target_qty, metrics_pos_qty)
-                    self.logger.debug(
-                        f"Capping sell order quantity at current holdings: {target_qty}"
-                    )
-                else:
-                    qty_to_reach_max_short = -max_allowed_pos_qty_abs - metrics_pos_qty
-                    if qty_to_reach_max_short >= Decimal("0"):
-                        self.logger.debug(
-                            f"Cannot place sell order: Current position {metrics_pos_qty} already at or below max short exposure ({-max_allowed_pos_qty_abs})."
-                        )
-                        return Decimal("0")
-                    target_qty = min(target_qty, abs(qty_to_reach_max_short))
-
-        if target_qty <= Decimal("0"):
-            self.logger.debug(
-                "Calculated target quantity is zero or negative after exposure adjustments. Order size 0."
-            )
-            return Decimal("0")
-
-        qty = self.market_info.format_quantity(target_qty)
-
-        if qty < self.market_info.min_order_qty:
-            self.logger.debug(
-                f"Calculated quantity {qty} is less than min_order_qty {self.market_info.min_order_qty}. Order size 0."
-            )
-            return Decimal("0")
-
-        order_notional_value = qty * price
-        min_notional = max(
-            self.market_info.min_notional_value, self.config.min_order_value_usd
-        )
-        if order_notional_value < min_notional:
-            self.logger.debug(
-                f"Calculated notional value {order_notional_value:.2f} is less than min_notional_value {min_notional:.2f}. Order size 0."
-            )
-            return Decimal("0")
-
-        self.logger.debug(
-            f"Calculated {side} order size: {qty} {self.config.base_currency} (Notional: {order_notional_value:.2f} {self.config.quote_currency})"
-        )
-        return qty
+    
 
     async def _place_limit_order(self, side: str, price: Decimal, quantity: Decimal):
         if not self.market_info:

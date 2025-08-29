@@ -5,10 +5,28 @@ import random
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Callable
 
 import numpy as np
 import pandas as pd
 from pybit.unified_trading import HTTP
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+import logging # Ensure logging is imported for before_sleep_log
+
+class BybitAPIError(Exception):
+    def __init__(self, message: str, ret_code: int = -1, ret_msg: str = "Unknown"):
+        super().__init__(message)
+        self.ret_code = ret_code
+        self.ret_msg = ret_msg
+
+class BybitRateLimitError(BybitAPIError):
+    pass
 
 from config import Config
 
@@ -65,8 +83,40 @@ class BybitHistoricalData:
         self.params = params
         # For public endpoints, keys are optional
         self.http = HTTP(testnet=params.testnet)
+        self.logger = logging.getLogger("Backtester") # Use the existing logger
+        self._api_retry = self._get_api_retry_decorator() # Initialize the decorator here
 
-    def get_klines(self) -> pd.DataFrame:
+    def _is_retryable_bybit_error(self, exception: Exception) -> bool:
+        if not isinstance(exception, BybitAPIError):
+            return False
+        # Only retry on rate limits for now
+        if isinstance(exception, (BybitRateLimitError,)):
+            return True
+        return False
+
+    def _get_api_retry_decorator(self):
+        # Define retry parameters (can be made configurable in BacktestParams if needed)
+        api_retry_attempts = 5
+        api_retry_initial_delay_sec = 1.0
+        api_retry_max_delay_sec = 10.0
+
+        return retry(
+            stop=stop_after_attempt(api_retry_attempts),
+            wait=wait_exponential_jitter(
+                initial=api_retry_initial_delay_sec,
+                max=api_retry_max_delay_sec,
+            ),
+            retry=retry_if_exception(self._is_retryable_bybit_error),
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=False),
+            reraise=True,
+        )
+
+    @property
+    def get_klines(self) -> Callable[[], pd.DataFrame]:
+        # This property returns the decorated get_klines method
+        return self._api_retry(self._get_klines_impl)
+
+    def _get_klines_impl(self) -> pd.DataFrame:
         """
         Fetch klines over [start, end) range, handling pagination (limit=1000 bars).
         Returns DataFrame sorted by start time with columns:
@@ -79,16 +129,31 @@ class BybitHistoricalData:
         limit = 1000
 
         while True:
-            resp = self.http.get_kline(
-                category=self.params.category,
-                symbol=self.params.symbol,
-                interval=self.params.interval,
-                start=start_ms,
-                end=end_ms,
-                limit=limit,
-            )
-            if resp.get("retCode") != 0:
-                raise RuntimeError(f"Bybit get_kline error: {resp.get('retMsg')}")
+            try:
+                resp = self.http.get_kline(
+                    category=self.params.category,
+                    symbol=self.params.symbol,
+                    interval=self.params.interval,
+                    start=start_ms,
+                    end=end_ms,
+                    limit=limit,
+                )
+            except Exception as e: # Catch any exception from pybit's get_kline
+                # Check if it's a rate limit error or other API error
+                if hasattr(e, 'status_code') and e.status_code == 429: # Common rate limit status code
+                    raise BybitRateLimitError(f"API rate limit hit: {e}")
+                elif hasattr(e, 'message'): # pybit errors often have a 'message' attribute
+                    raise BybitAPIError(f"Bybit API error: {e.message}", ret_msg=e.message)
+                else:
+                    raise BybitAPIError(f"Unknown API error: {e}")
+
+            ret_code = resp.get("retCode")
+            ret_msg = resp.get("retMsg", "Unknown error")
+
+            if ret_code == 10006: # Specific Bybit rate limit error code
+                raise BybitRateLimitError(f"Bybit get_kline rate limit: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+            elif ret_code != 0:
+                raise BybitAPIError(f"Bybit get_kline error: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
 
             rows = resp["result"]["list"]
             if not rows:
@@ -108,8 +173,7 @@ class BybitHistoricalData:
                 break
             start_ms = next_ms
 
-            # Be kind to the API
-            time.sleep(API_SLEEP_INTERVAL)
+            # Removed time.sleep(API_SLEEP_INTERVAL) as tenacity handles delays
 
         if not all_rows:
             raise ValueError("No klines returned for the requested range.")

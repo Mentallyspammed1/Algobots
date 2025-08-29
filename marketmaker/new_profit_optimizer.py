@@ -1,4 +1,3 @@
-# profit_optimizer.py
 import argparse
 import json
 import logging
@@ -10,53 +9,43 @@ from dataclasses import replace
 import optuna
 import pandas as pd
 
-from backtest import BacktestParams, BybitHistoricalData, MarketMakerBacktester, from_ms
-from config_definitions import Config, StrategyConfig, SystemConfig, FilesConfig, InventoryStrategyConfig, DynamicSpreadConfig, CircuitBreakerConfig, TradeMetrics
+# Import the new Config definitions and Backtester
+from config_definitions import Config
+from strategy_backtester import Backtester
+from backtest import BybitHistoricalData # To fetch klines
+from backtest import BacktestParams # Import here to avoid circular dependency if BacktestParams uses Config
 
-logger = logging.getLogger("ProfitOptimizer")
+logger = logging.getLogger("NewProfitOptimizer")
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
-
 
 def parse_dt(s: str) -> datetime:
     """Parse an ISO-formatted datetime string to a UTC datetime object."""
     return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
 
-
-def clamp(x, lo, hi):
-    """Clamp a value x between a lower bound lo and an upper bound hi."""
-    return max(lo, min(hi, x))
-
-
-def fetch_klines_once(params: BacktestParams) -> pd.DataFrame:
+def fetch_klines_once(symbol: str, category: str, interval: str, start: datetime, end: datetime, testnet: bool) -> pd.DataFrame:
     logger.info("Fetching klines once for the entire optimization window...")
+    # BybitHistoricalData expects a BacktestParams object, so create a minimal one
+    params = BacktestParams(symbol=symbol, category=category, interval=interval, start=start, end=end, testnet=testnet)
     df = BybitHistoricalData(params).get_klines()
     logger.info(
-        f"Fetched {len(df)} candles from {from_ms(int(df.start.iloc[0]))} "
-        f"to {from_ms(int(df.start.iloc[-1]))}"
+        f"Fetched {len(df)} candles from {datetime.fromtimestamp(df.start.iloc[0]/1000)} "
+        f"to {datetime.fromtimestamp(df.start.iloc[-1]/1000)}"
     )
     return df
-
-
-def patch_bt_to_use_df(bt: MarketMakerBacktester, df_klines: pd.DataFrame):
-    """
-    Monkey-patch the backtester to reuse the pre-fetched klines.
-    """
-    bt.data.get_klines = lambda: df_klines
-
 
 def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     cfg = deepcopy(base_cfg)
 
     # 1. Define all parameters using tr.suggest_...
-    min_spread_pct = tr.suggest_float("min_spread_pct", 0.0001, 0.001, log=True)
-    base_spread_pct = tr.suggest_float("base_spread_pct", 0.0005, 0.005, log=True)
-    max_spread_pct = tr.suggest_float("max_spread_pct", base_spread_pct * 1.5, 0.02, log=True)
+    min_spread_pct = tr.suggest_float("min_spread_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
+    base_spread_pct = tr.suggest_float("base_spread_pct", 0.0005, 0.005, log=True) # 0.05% to 0.5%
+    max_spread_pct = tr.suggest_float("max_spread_pct", base_spread_pct * 1.5, 0.02, log=True) # up to 2%
 
-    base_order_size_pct_of_balance = tr.suggest_float("base_order_size_pct_of_balance", 0.001, 0.01, log=True)
+    base_order_size_pct_of_balance = tr.suggest_float("base_order_size_pct_of_balance", 0.001, 0.01, log=True) # 0.1% to 1%
     min_order_value_usd = tr.suggest_float("min_order_value_usd", 5.0, 50.0, log=True)
-    max_order_size_pct = tr.suggest_float("max_order_size_pct", 0.05, 0.5, log=True)
+    max_order_size_pct = tr.suggest_float("max_order_size_pct", 0.05, 0.5, log=True) # 5% to 50%
 
     max_inventory_ratio = tr.suggest_float("max_inventory_ratio", 0.1, 0.9)
     skew_intensity = tr.suggest_float("skew_intensity", 0.1, 1.0)
@@ -64,10 +53,10 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     volatility_window_sec = tr.suggest_int("volatility_window_sec", 30, 180)
     volatility_multiplier = tr.suggest_float("volatility_multiplier", 1.0, 5.0)
 
-    min_profit_spread_after_fees_pct = tr.suggest_float("min_profit_spread_after_fees_pct", 0.0001, 0.001, log=True)
-    max_daily_loss_pct = tr.suggest_float("max_daily_loss_pct", 0.01, 0.1)
+    min_profit_spread_after_fees_pct = tr.suggest_float("min_profit_spread_after_fees_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
+    max_daily_loss_pct = tr.suggest_float("max_daily_loss_pct", 0.01, 0.1) # 1% to 10%
 
-    order_stale_threshold_pct = tr.suggest_float("order_stale_threshold_pct", 0.0001, 0.001, log=True)
+    order_stale_threshold_pct = tr.suggest_float("order_stale_threshold_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
     max_outstanding_orders = tr.suggest_int("max_outstanding_orders", 1, 5)
 
     # 2. Use the defined parameters in replace() calls
@@ -109,15 +98,14 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
 
     return cfg
 
-
 def make_objective(
-    base_params: BacktestParams,
-    df_klines: pd.DataFrame,
+    klines_df: pd.DataFrame,
     base_cfg: Config,
     metric: str,
     risk_penalty: float,
     max_dd_cap: float,
     trials_verbose: bool,
+    kline_interval: str, # Add kline_interval here
 ):
     """
     Returns an Optuna objective callable.
@@ -126,21 +114,11 @@ def make_objective(
     assert metric in ("net", "sharpe")
 
     def objective(trial: optuna.Trial) -> float:
-        # Backtest params per-trial (can also be tuned)
-        params = deepcopy(base_params)
-        params.maker_fee = trial.suggest_float(
-            "maker_fee", -0.00025, 0.0006
-        )  # allow rebates or fees
-        params.volume_cap_ratio = trial.suggest_float("volume_cap_ratio", 0.05, 0.6)
-        params.fill_on_touch = trial.suggest_categorical("fill_on_touch", [True, False])
-        params.rng_seed = trial.suggest_int("rng_seed", 1, 10)
-
         # Config per-trial
         cfg = apply_trial_to_config(base_cfg, trial)
 
-        # Run backtest
-        bt = MarketMakerBacktester(params, cfg=cfg)
-        patch_bt_to_use_df(bt, df_klines)
+        # Run backtest using the new Backtester
+        bt = Backtester(config=cfg, klines_df=klines_df, kline_interval=kline_interval) # Use kline_interval
         results = bt.run()
 
         net = float(results["net_pnl"])
@@ -167,12 +145,11 @@ def make_objective(
 
     return objective
 
-
 def main():
     ap = argparse.ArgumentParser(
         description="Profit optimizer for MarketMaker using Optuna + Bybit historical data"
     )
-    ap.add_argument("--symbol", type=str, default="BTCUSDT")
+    ap.add_argument("--symbol", type=str, default="XLMUSDT")
     ap.add_argument(
         "--category", type=str, default="linear", choices=["linear", "inverse", "spot"]
     )
@@ -229,21 +206,22 @@ def main():
 
     args = ap.parse_args()
 
-    base_params = BacktestParams(
+    # Fetch data once
+    klines_df = fetch_klines_once(
         symbol=args.symbol,
         category=args.category,
         interval=args.interval,
         start=parse_dt(args.start),
         end=parse_dt(args.end),
-        testnet=args.testnet,
-        # maker_fee, volume_cap_ratio, rng_seed, fill_on_touch will be tuned per trial
+        testnet=args.testnet
     )
-
-    # Fetch data once
-    df_klines = fetch_klines_once(base_params)
 
     # Base config to be tuned
     base_cfg = Config(symbol=args.symbol, category=args.category)
+    # Create a new FilesConfig with DEBUG log level
+    new_files_config = replace(base_cfg.files, log_level="DEBUG")
+    # Create a new Config instance with the updated files config
+    base_cfg = replace(base_cfg, files=new_files_config)
 
     # Sampler / Pruner
     if args.sampler == "tpe":
@@ -273,13 +251,13 @@ def main():
 
     # Optimize
     obj = make_objective(
-        base_params=base_params,
-        df_klines=df_klines,
+        klines_df=klines_df,
         base_cfg=base_cfg,
         metric=args.metric,
         risk_penalty=args.risk_penalty,
         max_dd_cap=args.max_dd_cap,
         trials_verbose=args.trials_verbose,
+        kline_interval=args.interval, # Pass kline_interval here
     )
 
     logger.info(
@@ -293,7 +271,7 @@ def main():
     best = study.best_trial
     logger.info("Optimization complete.")
     logger.info(f"Best score: {best.value:.6f}")
-    logger.info(f"Best params:n{json.dumps(best.params, indent=2)}")
+    logger.info(f"Best params:\n{json.dumps(best.params, indent=2)}")
     logger.info(
         f"Best metrics: net={best.user_attrs.get('net_pnl'):.6f}, "
         f"dd={best.user_attrs.get('max_drawdown'):.6f}, "
@@ -320,17 +298,12 @@ def main():
     # Optional: re-run the backtest with best settings and dump equity curve
     logger.info("Re-running backtest with best parameters to export equity curve...")
     cfg_best = apply_trial_to_config(base_cfg, best)
-    params_best = deepcopy(base_params)
-    params_best.maker_fee = best.params["maker_fee"]
-    params_best.volume_cap_ratio = best.params["volume_cap_ratio"]
-    params_best.fill_on_touch = best.params["fill_on_touch"]
-    params_best.rng_seed = best.params["rng_seed"]
-
-    bt = MarketMakerBacktester(params_best, cfg=cfg_best)
-    patch_bt_to_use_df(bt, df_klines)
-    bt.run()
+    
+    bt = Backtester(config=cfg_best, klines_df=klines_df, kline_interval=args.interval) # Pass kline_interval here
+    results_best = bt.run() # Run backtest to get equity curve
+    
     eq = pd.DataFrame(bt.equity_curve, columns=["timestamp_ms", "equity"])
-    eq["timestamp"] = eq["timestamp_ms"].apply(lambda x: from_ms(x).isoformat())
+    eq["timestamp"] = eq["timestamp_ms"].apply(lambda x: datetime.fromtimestamp(x/1000, tz=timezone.utc).isoformat())
     eq.to_csv("equity_curve_best.csv", index=False)
     logger.info("Saved equity_curve_best.csv")
 
