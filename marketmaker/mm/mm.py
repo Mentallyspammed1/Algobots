@@ -445,7 +445,7 @@ class ConfigManager:
             symbol_config_path = Path(__file__).parent / cls._global_config.files.symbol_config_file
             try:
                 with open(symbol_config_path) as f:
-                    raw_symbol_configs = json_loads_decimal(f.read())
+                    raw_symbol_configs = json.loads(f.read(), parse_float=Decimal, parse_int=Decimal)
                 if not isinstance(raw_symbol_configs, list):
                     raise ValueError("Symbol configuration file must contain a JSON list.")
 
