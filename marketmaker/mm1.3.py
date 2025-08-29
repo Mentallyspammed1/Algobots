@@ -1,18 +1,6 @@
 
  
-An unexpected critical error occurred during bot initialization or runtime: 'function' object has no attribute '__wrapped__'
-2025-08-25 19:00:01,437 - CRITICAL - Unhandled exception in main: 'function' object has no attribute '__wrapped__'
-Traceback (most recent call last):
-  File "/data/data/com.termux/files/home/Algobots/marketmaker/mm1.3.py", line 1060, in <module>
-    bot = BybitMarketMaker(config)
-          ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/data/data/com.termux/files/home/Algobots/marketmaker/mm1.3.py", line 398, in __init__
-    self.trading_client._initialize_api_retry_decorator() # Initialize tenacity decorator with live config
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/data/data/com.termux/files/home/Algobots/marketmaker/mm1.3.py", line 296, in _initialize_api_retry_decorator
-    self.get_instruments_info = self.api_retry(self.get_instruments_info.__wrapped__)
-                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'function' object has no attribute '__wrapped__'
+
 import asyncio
 import logging
 import os
@@ -42,6 +30,21 @@ class APIAuthError(Exception):
 
 class WebSocketConnectionError(Exception):
     """Custom exception for WebSocket connection failures."""
+    pass
+
+class BybitAPIError(Exception):
+    """Custom exception for general Bybit API errors."""
+    def __init__(self, message, ret_code, ret_msg):
+        super().__init__(message)
+        self.ret_code = ret_code
+        self.ret_msg = ret_msg
+
+class BybitRateLimitError(BybitAPIError):
+    """Custom exception for Bybit rate limit errors."""
+    pass
+
+class BybitInsufficientBalanceError(BybitAPIError):
+    """Custom exception for insufficient balance errors."""
     pass
 
 # =====================================================================
@@ -105,6 +108,8 @@ class SystemConfig:
     ws_reconnect_initial_delay_sec: int = 5
     api_retry_attempts: int = 3
     api_retry_delay_sec: float = 1.0 # Fixed delay for simplicity, can be exponential
+    api_retry_initial_delay_sec: float = 1.0
+    api_retry_max_delay_sec: float = 10.0
 
 @dataclass
 class FilesConfig:
@@ -286,98 +291,141 @@ class TradingClient:
         self.http_session = HTTP(testnet=self.config.testnet, api_key=self.config.api_key, api_secret=self.config.api_secret)
         self.ws_public: Optional[WebSocket] = None
         self.ws_private: Optional[WebSocket] = None
-        self.last_cancel_time = 0
+        self.last_cancel_time = 0.0
 
-    # Tenacity retry decorator for API calls
-    # Note: `config` is an instance, not a class, so access system config directly.
-    api_retry = retry(
-        stop=stop_after_attempt(3), # Using a hardcoded value here, as config is instance-specific. Will fix this.
-        wait=wait_fixed(1.0), # Same here.
-        retry=retry_if_exception_type(Exception),
-        before_sleep=before_sleep_log(logging.getLogger('MarketMakerBot'), logging.WARNING),
-        reraise=True
-    )
+        # Store original methods to apply tenacity decorator
+        self._original_methods = {
+            "get_instruments_info": self.get_instruments_info_impl,
+            "get_wallet_balance": self.get_wallet_balance_impl,
+            "get_position_info": self.get_position_info_impl,
+            "set_leverage": self.set_leverage_impl,
+            "get_open_orders": self.get_open_orders_impl,
+            "place_order": self.place_order_impl,
+            "cancel_order": self.cancel_order_impl,
+            "cancel_all_orders": self.cancel_all_orders_impl,
+        }
+        self._initialize_api_retry_decorator()
 
-    # Re-initialize the decorator with the actual config values after config is fully loaded
-    def _initialize_api_retry_decorator(self):
-        self.api_retry = retry(
+    def _is_retryable_bybit_error(self, exception: Exception) -> bool:
+        """Predicate for tenacity: retry on BybitAPIError unless it's a specific non-retryable type."""
+        if not isinstance(exception, BybitAPIError):
+            return False
+        # Do NOT retry on these specific BybitAPIError subtypes or ValueErrors
+        if isinstance(exception, (APIAuthError, ValueError, BybitRateLimitError, BybitInsufficientBalanceError)):
+            return False
+        return True
+
+    def _get_api_retry_decorator(self):
+        """Returns a tenacity retry decorator configured with current system settings."""
+        return retry(
             stop=stop_after_attempt(self.config.system.api_retry_attempts),
-            wait=wait_fixed(self.config.system.api_retry_delay_sec),
-            retry=retry_if_exception_type(Exception),
-            before_sleep=before_sleep_log(self.logger, logging.WARNING),
+            wait=wait_exponential(
+                min=self.config.system.api_retry_initial_delay_sec,
+                max=self.config.system.api_retry_max_delay_sec
+            ),
+            retry=retry_if_exception_type(self._is_retryable_bybit_error), # Use the custom predicate
+            before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=False),
             reraise=True
         )
-        # Apply the decorator to methods
-        self.get_instruments_info = self.api_retry(self.get_instruments_info.__wrapped__)
-        self.get_wallet_balance = self.api_retry(self.get_wallet_balance.__wrapped__)
-        self.get_position_info = self.api_retry(self.get_position_info.__wrapped__)
-        self.set_leverage = self.api_retry(self.set_leverage.__wrapped__)
-        self.get_open_orders = self.api_retry(self.get_open_orders.__wrapped__)
-        self.place_order = self.api_retry(self.place_order.__wrapped__)
-        self.cancel_order = self.api_retry(self.cancel_order.__wrapped__)
-        self.cancel_all_orders = self.api_retry(self.cancel_all_orders.__wrapped__)
 
+    def _initialize_api_retry_decorator(self):
+        """Applies the dynamically configured retry decorator to API methods."""
+        api_retry = self._get_api_retry_decorator()
+        for name, method in self._original_methods.items():
+            setattr(self, name, api_retry(method))
+        self.logger.debug("API retry decorators initialized and applied.")
 
-    def _handle_response(self, response: Any, action: str):
+    async def _run_sync_api_call(self, api_method: Callable, *args, **kwargs) -> Any:
+        """Runs a synchronous pybit HTTP API method in a separate thread to avoid blocking the event loop."""
+        return await asyncio.to_thread(api_method, *args, **kwargs)
+
+    async def _handle_response_async(self, coro: Coroutine[Any, Any, Any], action: str):
+        """
+        Executes an API call (coroutine), processes its response, checks for errors,
+        and raises specific exceptions. Returns the 'result' dictionary on success.
+        """
+        response = await coro # Await the actual API call
+
         if not isinstance(response, dict):
             self.logger.error(f"API {action} failed: Invalid response format. Response: {response}")
-            return None
+            raise BybitAPIError(f"Invalid API response for {action}", ret_code=-1, ret_msg="Invalid format")
+
         ret_code = response.get('retCode', -1)
+        ret_msg = response.get('retMsg', 'Unknown error')
+
         if ret_code == 0:
             self.logger.debug(f"API {action} successful.")
             return response.get('result', {})
-        ret_msg = response.get('retMsg', 'Unknown error')
-        self.logger.error(f"API {action} failed: {ret_msg} (ErrCode: {ret_code}).")
+
         if ret_code == 10004:
             raise APIAuthError(f"Authentication failed: {ret_msg}. Check API key permissions and validity.")
-        # For other errors, we just return None and log, allowing retries to handle transient issues
-        return None
+        elif ret_code in [10006, 10007, 10016, 120004, 120005]:
+            raise BybitRateLimitError(f"API rate limit hit for {action}: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+        elif ret_code in [10001, 110001, 110003, 12130, 12131]:
+            raise BybitInsufficientBalanceError(f"Insufficient balance for {action}: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+        elif ret_code == 10002:
+            raise ValueError(f"API {action} parameter error: {ret_msg} (ErrCode: {ret_code})")
 
-    async def get_instruments_info(self) -> Optional[Dict]:
-        result = self._handle_response(self.http_session.get_instruments_info(category=self.config.category, symbol=self.config.symbol), "get_instruments_info")
+        raise BybitAPIError(f"API {action} failed: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+
+    async def get_instruments_info_impl(self) -> Optional[Dict]:
+        response_coro = self._run_sync_api_call(self.http_session.get_instruments_info, category=self.config.category, symbol=self.config.symbol)
+        result = await self._handle_response_async(response_coro, "get_instruments_info")
         return result.get('list', [{}])[0] if result else None
 
-    async def get_wallet_balance(self) -> Optional[Dict]:
+    async def get_wallet_balance_impl(self) -> Optional[Dict]:
         account_type = "UNIFIED" if self.config.category in ['linear', 'inverse'] else "SPOT"
-        result = self._handle_response(self.http_session.get_wallet_balance(accountType=account_type), "get_wallet_balance")
+        response_coro = self._run_sync_api_call(self.http_session.get_wallet_balance, accountType=account_type)
+        result = await self._handle_response_async(response_coro, "get_wallet_balance")
         return result.get('list', [{}])[0] if result else None
 
-    async def get_position_info(self) -> Optional[Dict]:
-        if self.config.category != 'linear': return None
-        response = self.http_session.get_positions(category=self.config.category, settleCoin=self.config.quote_currency)
-        result = self._handle_response(response, "get_position_info")
+    async def get_position_info_impl(self) -> Optional[Dict]:
+        if self.config.category not in ['linear', 'inverse']: return None
+        response_coro = self._run_sync_api_call(self.http_session.get_positions, category=self.config.category, symbol=self.config.symbol)
+        result = await self._handle_response_async(response_coro, "get_position_info")
         if result and result.get('list'):
             for position in result['list']:
                 if position['symbol'] == self.config.symbol: return position
         return None
 
-    async def set_leverage(self, leverage: Decimal) -> bool:
-        if self.config.category != 'linear': return True
-        response = self.http_session.set_leverage(category=self.config.category, symbol=self.config.symbol, buyLeverage=str(leverage), sellLeverage=str(leverage))
-        return self._handle_response(response, f"set_leverage to {leverage}") is not None
+    async def set_leverage_impl(self, leverage: Decimal) -> bool:
+        if self.config.category not in ['linear', 'inverse']: return True
+        response_coro = self._run_sync_api_call(self.http_session.set_leverage, category=self.config.category, symbol=self.config.symbol, buyLeverage=str(leverage), sellLeverage=str(leverage))
+        return await self._handle_response_async(response_coro, f"set_leverage to {leverage}") is not None
 
-    async def get_open_orders(self) -> List[Dict]:
-        result = self._handle_response(self.http_session.get_open_orders(category=self.config.category, symbol=self.config.symbol, limit=50), "get_open_orders")
+    async def get_open_orders_impl(self) -> List[Dict]:
+        response_coro = self._run_sync_api_call(self.http_session.get_open_orders, category=self.config.category, symbol=self.config.symbol, limit=50)
+        result = await self._handle_response_async(response_coro, "get_open_orders")
         return result.get('list', []) if result else []
 
-    async def place_order(self, params: Dict) -> Optional[Dict]:
-        return self._handle_response(self.http_session.place_order(**params), f"place_order ({params.get('side')} {params.get('qty')} @ {params.get('price')})")
+    async def place_order_impl(self, params: Dict) -> Optional[Dict]:
+        response_coro = self._run_sync_api_call(self.http_session.place_order, **params)
+        return await self._handle_response_async(response_coro, f"place_order ({params.get('side')} {params.get('qty')} @ {params.get('price')})")
 
-    async def cancel_order(self, order_id: str, order_link_id: Optional[str] = None) -> bool:
+    async def cancel_order_impl(self, order_id: str, order_link_id: Optional[str] = None) -> bool:
         current_time = time.time()
-        # Respect rate limit within the bot's logic, before API call
         if (current_time - self.last_cancel_time) < self.config.system.cancellation_rate_limit_sec:
             await asyncio.sleep(self.config.system.cancellation_rate_limit_sec - (current_time - self.last_cancel_time))
         params = {"category": self.config.category, "symbol": self.config.symbol, "orderId": order_id}
         if order_link_id: params["orderLinkId"] = order_link_id
-        response = self.http_session.cancel_order(**params)
+        response_coro = self._run_sync_api_call(self.http_session.cancel_order, **params)
         self.last_cancel_time = time.time()
-        return self._handle_response(response, f"cancel_order {order_id}") is not None
+        return await self._handle_response_async(response_coro, f"cancel_order {order_id}") is not None
 
-    async def cancel_all_orders(self) -> bool:
-        params = {"category": self.config.category}
-        if self.config.category in ['linear', 'inverse']: params['settleCoin'] = self.config.quote_currency
-        return self._handle_response(self.http_session.cancel_all_orders(**params), "cancel_all_orders") is not None
+    async def cancel_all_orders_impl(self) -> bool:
+        params = {"category": self.config.category, "symbol": self.config.symbol}
+        response_coro = self._run_sync_api_call(self.http_session.cancel_all_orders, **params)
+        return await self._handle_response_async(response_coro, "cancel_all_orders") is not None
+
+    # Type hints for the decorated methods
+    get_instruments_info: Callable[[], Coroutine[Any, Any, Optional[dict]]]
+    get_wallet_balance: Callable[[], Coroutine[Any, Any, Optional[dict]]]
+    get_position_info: Callable[[], Coroutine[Any, Any, Optional[dict]]]
+    set_leverage: Callable[[Decimal], Coroutine[Any, Any, bool]]
+    get_open_orders: Callable[[], Coroutine[Any, Any, list[dict]]]
+    place_order: Callable[[dict], Coroutine[Any, Any, Optional[dict]]]
+    cancel_order: Callable[[str, str | None], Coroutine[Any, Any, bool]]
+    cancel_all_orders: Callable[[], Coroutine[Any, Any, bool]]
 
     def _init_public_ws(self, callback: Callable):
         self.logger.info("Initializing PUBLIC orderbook stream...")
@@ -410,7 +458,6 @@ class BybitMarketMaker:
         self.state_manager = StateManager(config.files.state_file, self.logger)
         self.db_manager = DBManager(config.files.db_file, self.logger)
         self.trading_client = TradingClient(self.config, self.logger)
-        self.trading_client._initialize_api_retry_decorator() # Initialize tenacity decorator with live config
 
         self.market_info: Optional[MarketInfo] = None
         self.mid_price = Decimal('0')
@@ -481,7 +528,11 @@ class BybitMarketMaker:
         state = await self.state_manager.load_state()
         if state:
             self.active_orders = state.get('active_orders', {})
-            self.config.metrics = state.get('metrics', self.config.metrics)
+            loaded_metrics = state.get('metrics')
+            if loaded_metrics and isinstance(loaded_metrics, dict):
+                self.config.metrics = TradeMetrics(**loaded_metrics)
+            elif loaded_metrics:
+                self.config.metrics = loaded_metrics
             self.logger.info(f"Loaded state with {len(self.active_orders)} active orders.")
         
         await self._reconcile_orders_on_startup()

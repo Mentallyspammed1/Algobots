@@ -1,3 +1,4 @@
+"""
 The provided Python code is a good foundation for a Bybit market-making bot. It demonstrates a basic strategy, uses `asyncio` for concurrency, integrates with `pybit`, and includes state persistence and logging.
 
 My analysis identifies several areas for enhancement and a major architectural upgrade to make it more robust, scalable, and feature-rich, especially for multi-symbol trading and advanced risk management.
@@ -95,12 +96,14 @@ I've refactored the entire bot to support **multiple trading symbols concurrentl
 **File: `marketmaker1.0.py` (Upgraded Version)**
 
 ```python
+"""
 import asyncio
 import json
 import logging
 import os
 import signal
 import sys
+import threading
 import time
 from collections import deque
 from collections.abc import Callable, Coroutine
@@ -375,14 +378,14 @@ class GlobalConfig(BaseModel):
         }
         # Filter out None values before passing to Pydantic to allow default_factory to work
         # Also convert Decimal strings
-        for k, v in filtered_env_data.items():
+        for k, v in env_data.items():
             if k in ["initial_dry_run_capital"] and isinstance(v, str):
-                filtered_env_data[k] = Decimal(v)
+                env_data[k] = Decimal(v)
         
         # Nested dicts need to be handled carefully by Pydantic, often best to pass as dicts
         # Pydantic will then validate them against the nested BaseModel definitions
         
-        return cls(**filtered_env_data)
+        return cls(**env_data)
 
 class SymbolConfig(BaseModel):
     symbol: str
@@ -483,7 +486,7 @@ class ConfigManager:
                 raise ConfigurationError(f"Single symbol configuration failed: {e}")
         else:
             # Load multiple symbols from file
-            symbol_config_path = STATE_DIR / cls._global_config.files.symbol_config_file
+            symbol_config_path = Path(cls._global_config.files.symbol_config_file)
             try:
                 with open(symbol_config_path) as f:
                     raw_symbol_configs = json_loads_decimal(f.read())
@@ -2913,4 +2916,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"An error occurred before main() could fully handle it: {e}")
         sys.exit(1)
-```
