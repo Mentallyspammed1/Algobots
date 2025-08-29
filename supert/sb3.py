@@ -1,0 +1,1621 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Advanced Supertrend Trading Bot for Bybit V5 API - Enhanced Edition v2.0
+
+Enhanced features include:
+- Multi-timeframe analysis for signal confirmation
+- Real-time WebSocket for orders and positions
+- Advanced order book analysis
+- Adaptive indicator parameters
+- Kelly Criterion position sizing
+- Performance analytics and trade journaling
+- Market regime detection
+- Volume profile analysis
+"""
+
+import asyncio
+import json
+import logging
+import logging.handlers
+import os
+import pickle
+import signal
+import sys
+import threading
+import time
+from collections import defaultdict, deque
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta, timezone
+from decimal import ROUND_DOWN, Decimal, getcontext
+from enum import Enum
+from functools import wraps
+from pathlib import Path
+from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+import pandas_ta as ta
+from colorama import Fore, Style, init
+from dotenv import load_dotenv
+from pybit.exceptions import InvalidRequestError, RequestError
+from pybit.unified_trading import HTTP, WebSocket
+from scipy import stats
+
+# Initialize
+init(autoreset=True)
+load_dotenv()
+getcontext().prec = 10
+
+# =====================================================================
+# CONFIGURATION & ENUMS
+# =====================================================================
+
+class Signal(Enum):
+    STRONG_BUY = 2
+    BUY = 1
+    NEUTRAL = 0
+    SELL = -1
+    STRONG_SELL = -2
+
+class OrderType(Enum):
+    MARKET = "Market"
+    LIMIT = "Limit"
+    LIMIT_MAKER = "Limit"  # Post-only
+
+class MarketRegime(Enum):
+    TRENDING_UP = "Trending Up"
+    TRENDING_DOWN = "Trending Down"
+    RANGING = "Ranging"
+    VOLATILE = "Volatile"
+    CALM = "Calm"
+
+@dataclass
+class EnhancedConfig:
+    """Enhanced bot configuration with advanced features."""
+    # API Configuration
+    API_KEY: str = os.getenv("BYBIT_API_KEY", "")
+    API_SECRET: str = os.getenv("BYBIT_API_SECRET", "")
+    TESTNET: bool = os.getenv("BYBIT_TESTNET", "true").lower() in ['true', '1']
+    
+    # Trading Configuration
+    SYMBOL: str = os.getenv("BYBIT_SYMBOL", "BTCUSDT")
+    CATEGORY: str = os.getenv("BYBIT_CATEGORY", "linear")
+    LEVERAGE: Decimal = Decimal(os.getenv("BYBIT_LEVERAGE", "10"))
+    
+    # Multi-timeframe Configuration
+    PRIMARY_TIMEFRAME: str = os.getenv("PRIMARY_TIMEFRAME", "15")
+    SECONDARY_TIMEFRAMES: List[str] = field(default_factory=lambda: ["5", "60"])
+    
+    # Adaptive SuperTrend Parameters
+    ST_PERIOD_BASE: int = int(os.getenv("ST_PERIOD", "10"))
+    ST_MULTIPLIER_BASE: Decimal = Decimal(os.getenv("ST_MULTIPLIER", "3.0"))
+    ADAPTIVE_PARAMS: bool = True
+    
+    # Risk Management
+    RISK_PER_TRADE_PCT: Decimal = Decimal(os.getenv("RISK_PER_TRADE_PCT", "1.0"))
+    MAX_POSITION_SIZE_PCT: Decimal = Decimal(os.getenv("MAX_POSITION_SIZE_PCT", "30.0"))
+    STOP_LOSS_PCT: Decimal = Decimal(os.getenv("STOP_LOSS_PCT", "1.5"))
+    TAKE_PROFIT_PCT: Decimal = Decimal(os.getenv("TAKE_PROFIT_PCT", "3.0"))
+    USE_ATR_STOPS: bool = True
+    ATR_STOP_MULTIPLIER: Decimal = Decimal("1.5")
+    
+    # Daily Limits
+    MAX_DAILY_LOSS_PCT: Decimal = Decimal(os.getenv("MAX_DAILY_LOSS_PCT", "5.0"))
+    MAX_DAILY_TRADES: int = int(os.getenv("MAX_DAILY_TRADES", "10"))
+    MAX_CONSECUTIVE_LOSSES: int = int(os.getenv("MAX_CONSECUTIVE_LOSSES", "3"))
+    MAX_DRAWDOWN_PCT: Decimal = Decimal(os.getenv("MAX_DRAWDOWN_PCT", "10.0"))
+    
+    # Order Type & Execution
+    ORDER_TYPE: str = os.getenv("ORDER_TYPE", "Limit")
+    LIMIT_ORDER_OFFSET_PCT: Decimal = Decimal("0.01")  # Place limit orders 0.01% better than market
+    
+    # Signal Filters
+    ADX_TREND_FILTER: bool = True
+    ADX_MIN_THRESHOLD: int = int(os.getenv("ADX_MIN_THRESHOLD", "25"))
+    VOLUME_FILTER: bool = True
+    VOLUME_MULTIPLIER: Decimal = Decimal("1.5")
+    RSI_FILTER: bool = True
+    RSI_OVERSOLD: int = 30
+    RSI_OVERBOUGHT: int = 70
+    
+    # Market Structure
+    USE_ORDER_BOOK: bool = True
+    ORDER_BOOK_IMBALANCE_THRESHOLD: Decimal = Decimal("0.6")
+    USE_VOLUME_PROFILE: bool = True
+    
+    # Partial Take Profit
+    PARTIAL_TP_ENABLED: bool = True
+    PARTIAL_TP_TARGETS: List[Dict[str, Decimal]] = field(default_factory=lambda: [
+        {"profit_pct": Decimal("1.0"), "close_qty_pct": Decimal("0.3")},
+        {"profit_pct": Decimal("2.0"), "close_qty_pct": Decimal("0.3")},
+        {"profit_pct": Decimal("3.0"), "close_qty_pct": Decimal("0.4")}
+    ])
+    
+    # Breakeven & Trailing Stop
+    BREAKEVEN_PROFIT_PCT: Decimal = Decimal("0.5")
+    BREAKEVEN_OFFSET_PCT: Decimal = Decimal("0.01")
+    TRAILING_SL_ENABLED: bool = True
+    TRAILING_SL_ACTIVATION_PCT: Decimal = Decimal("1.0")
+    TRAILING_SL_DISTANCE_PCT: Decimal = Decimal("0.5")
+    
+    # Performance & Logging
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    SAVE_TRADES_CSV: bool = True
+    TRADES_FILE: str = "trades_history.csv"
+    STATE_FILE: str = "bot_state.pkl"
+    SAVE_STATE_INTERVAL: int = 300  # seconds
+    
+    # Kelly Criterion
+    USE_KELLY_SIZING: bool = True
+    KELLY_FRACTION_CAP: Decimal = Decimal("0.25")  # Max 25% of Kelly
+
+    def __post_init__(self):
+        """Validate configuration after initialization."""
+        # Validate percentages
+        for attr in ['RISK_PER_TRADE_PCT', 'STOP_LOSS_PCT', 'TAKE_PROFIT_PCT',
+                     'MAX_DAILY_LOSS_PCT', 'BREAKEVEN_PROFIT_PCT']:
+            if getattr(self, attr) < 0:
+                raise ValueError(f"{attr} cannot be negative")
+        
+        # Sort partial TP targets by profit percentage
+        self.PARTIAL_TP_TARGETS.sort(key=lambda x: x['profit_pct'])
+
+# =====================================================================
+# DATA STRUCTURES
+# =====================================================================
+
+@dataclass
+class MarketData:
+    """Real-time market data container."""
+    timestamp: datetime
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+    bid: Decimal = Decimal('0')
+    ask: Decimal = Decimal('0')
+    spread_pct: Decimal = Decimal('0')
+    order_book_imbalance: Decimal = Decimal('0')
+    vwap: Decimal = Decimal('0')
+    
+@dataclass
+class Position:
+    """Active position information."""
+    symbol: str
+    side: str
+    size: Decimal
+    entry_price: Decimal
+    current_price: Decimal = Decimal('0')
+    unrealized_pnl: Decimal = Decimal('0')
+    realized_pnl: Decimal = Decimal('0')
+    stop_loss: Decimal = Decimal('0')
+    take_profit: Decimal = Decimal('0')
+    breakeven_activated: bool = False
+    trailing_sl_activated: bool = False
+    partial_closes: List[Dict] = field(default_factory=list)
+    entry_time: datetime = field(default_factory=datetime.now)
+    
+    @property
+    def pnl_pct(self) -> Decimal:
+        if self.entry_price == 0:
+            return Decimal('0')
+        if self.side == "Buy":
+            return ((self.current_price - self.entry_price) / self.entry_price) * Decimal('100')
+        else:
+            return ((self.entry_price - self.current_price) / self.entry_price) * Decimal('100')
+    
+    @property
+    def duration(self) -> timedelta:
+        return datetime.now() - self.entry_time
+
+@dataclass
+class Trade:
+    """Completed trade record."""
+    symbol: str
+    side: str
+    entry_price: Decimal
+    exit_price: Decimal
+    size: Decimal
+    pnl: Decimal
+    pnl_pct: Decimal
+    entry_time: datetime
+    exit_time: datetime
+    duration: timedelta
+    exit_reason: str
+    fees: Decimal = Decimal('0')
+    
+@dataclass
+class PerformanceMetrics:
+    """Performance tracking metrics."""
+    total_trades: int = 0
+    winning_trades: int = 0
+    losing_trades: int = 0
+    total_pnl: Decimal = Decimal('0')
+    total_fees: Decimal = Decimal('0')
+    
+    # Streak tracking
+    consecutive_wins: int = 0
+    consecutive_losses: int = 0
+    max_consecutive_wins: int = 0
+    max_consecutive_losses: int = 0
+    
+    # Statistics
+    win_rate: Decimal = Decimal('0')
+    profit_factor: Decimal = Decimal('0')
+    sharpe_ratio: Decimal = Decimal('0')
+    sortino_ratio: Decimal = Decimal('0')
+    calmar_ratio: Decimal = Decimal('0')
+    
+    # Drawdown
+    max_drawdown: Decimal = Decimal('0')
+    current_drawdown: Decimal = Decimal('0')
+    peak_balance: Decimal = Decimal('0')
+    
+    # Trade statistics
+    avg_win: Decimal = Decimal('0')
+    avg_loss: Decimal = Decimal('0')
+    avg_trade_duration: timedelta = timedelta()
+    best_trade: Decimal = Decimal('0')
+    worst_trade: Decimal = Decimal('0')
+    
+    # Daily tracking
+    daily_pnl: Dict[str, Decimal] = field(default_factory=dict)
+    daily_trades: Dict[str, int] = field(default_factory=dict)
+    
+    def update(self, trade: Trade):
+        """Update metrics with a new completed trade."""
+        self.total_trades += 1
+        self.total_pnl += trade.pnl
+        self.total_fees += trade.fees
+        
+        # Track daily stats
+        today = trade.exit_time.strftime("%Y-%m-%d")
+        self.daily_pnl[today] = self.daily_pnl.get(today, Decimal('0')) + trade.pnl
+        self.daily_trades[today] = self.daily_trades.get(today, 0) + 1
+        
+        # Update win/loss stats
+        if trade.pnl > 0:
+            self.winning_trades += 1
+            self.consecutive_wins += 1
+            self.consecutive_losses = 0
+            self.max_consecutive_wins = max(self.max_consecutive_wins, self.consecutive_wins)
+            self.best_trade = max(self.best_trade, trade.pnl_pct)
+        else:
+            self.losing_trades += 1
+            self.consecutive_losses += 1
+            self.consecutive_wins = 0
+            self.max_consecutive_losses = max(self.max_consecutive_losses, self.consecutive_losses)
+            self.worst_trade = min(self.worst_trade, trade.pnl_pct)
+        
+        # Calculate averages
+        if self.winning_trades > 0:
+            wins = [t.pnl for t in self.get_trades() if t.pnl > 0]
+            self.avg_win = sum(wins) / len(wins) if wins else Decimal('0')
+        
+        if self.losing_trades > 0:
+            losses = [t.pnl for t in self.get_trades() if t.pnl < 0]
+            self.avg_loss = sum(losses) / len(losses) if losses else Decimal('0')
+        
+        # Update ratios
+        self.win_rate = Decimal(self.winning_trades) / Decimal(self.total_trades) if self.total_trades > 0 else Decimal('0')
+        
+        if abs(self.avg_loss) > 0:
+            self.profit_factor = abs(self.avg_win * self.winning_trades) / abs(self.avg_loss * self.losing_trades)
+        
+        # Update average duration
+        self.avg_trade_duration = (
+            (self.avg_trade_duration * (self.total_trades - 1) + trade.duration) / self.total_trades
+            if self.total_trades > 0 else timedelta()
+        )
+    
+    def calculate_sharpe_ratio(self, risk_free_rate: Decimal = Decimal('0')) -> Decimal:
+        """Calculate Sharpe ratio from daily returns."""
+        if len(self.daily_pnl) < 2:
+            return Decimal('0')
+        
+        daily_returns = list(self.daily_pnl.values())
+        if not daily_returns:
+            return Decimal('0')
+        
+        avg_return = sum(daily_returns) / len(daily_returns)
+        std_dev = Decimal(str(np.std([float(r) for r in daily_returns])))
+        
+        if std_dev == 0:
+            return Decimal('0')
+        
+        return (avg_return - risk_free_rate) / std_dev * Decimal(str(np.sqrt(252)))  # Annualized
+
+    def get_trades(self) -> List[Trade]:
+        """Placeholder for getting historical trades."""
+        return []
+
+@dataclass
+class BotState:
+    """Enhanced thread-safe state manager."""
+    # System
+    symbol: str
+    bot_status: str = "Initializing"
+    start_time: datetime = field(default_factory=datetime.now)
+    errors_count: int = 0
+    last_error: Optional[str] = None
+    
+    # Market data
+    market_regime: MarketRegime = MarketRegime.RANGING
+    current_price: Decimal = Decimal('0')
+    price_direction: int = 0  # 1=up, -1=down, 0=neutral
+    market_data: Dict[str, MarketData] = field(default_factory=dict)
+    
+    # Indicators
+    supertrend_direction: str = "Neutral"
+    supertrend_line: Optional[Decimal] = None
+    indicator_values: Dict[str, Any] = field(default_factory=dict)
+    signal_strength: Decimal = Decimal('0')
+    last_signal: Optional[Signal] = None
+    last_signal_time: Optional[datetime] = None
+    
+    # Position
+    position: Optional[Position] = None
+    pending_orders: List[Dict] = field(default_factory=list)
+    
+    # Performance
+    metrics: PerformanceMetrics = field(default_factory=PerformanceMetrics)
+    account_balance: Decimal = Decimal('0')
+    initial_balance: Decimal = Decimal('0')
+    
+    # Logging
+    log_messages: Deque[str] = field(default_factory=lambda: deque(maxlen=15))
+    trade_history: List[Trade] = field(default_factory=list)
+    
+    # Thread safety
+    lock: threading.RLock = field(default_factory=threading.RLock)
+    
+    def update(self, **kwargs):
+        """Thread-safe state update."""
+        with self.lock:
+            for key, value in kwargs.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+    
+    def add_log(self, message: str, level: str = "INFO"):
+        """Add a log message to the UI buffer."""
+        with self.lock:
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            color_map = {
+                "INFO": Fore.WHITE,
+                "SUCCESS": Fore.GREEN,
+                "WARNING": Fore.YELLOW,
+                "ERROR": Fore.RED
+            }
+            color = color_map.get(level, Fore.WHITE)
+            self.log_messages.append(f"{timestamp} [{level}] {message}")
+    
+    def save_state(self, filepath: str):
+        """Save current state to file."""
+        try:
+            with self.lock:
+                state_dict = {
+                    'metrics': self.metrics,
+                    'trade_history': self.trade_history,
+                    'initial_balance': self.initial_balance
+                }
+                with open(filepath, 'wb') as f:
+                    pickle.dump(state_dict, f)
+        except Exception as e:
+            self.add_log(f"Failed to save state: {e}", "ERROR")
+    
+    def load_state(self, filepath: str):
+        """Load state from file."""
+        try:
+            if os.path.exists(filepath):
+                with open(filepath, 'rb') as f:
+                    state_dict = pickle.load(f)
+                    with self.lock:
+                        self.metrics = state_dict.get('metrics', PerformanceMetrics())
+                        self.trade_history = state_dict.get('trade_history', [])
+                        self.initial_balance = state_dict.get('initial_balance', Decimal('0'))
+                return True
+        except Exception as e:
+            self.add_log(f"Failed to load state: {e}", "ERROR")
+        return False
+
+# =====================================================================
+# ENHANCED UI
+# =====================================================================
+
+class EnhancedUI(threading.Thread):
+    """Advanced terminal UI with comprehensive display."""
+    
+    def __init__(self, state: BotState, config: EnhancedConfig):
+        super().__init__(daemon=True)
+        self.state = state
+        self.config = config
+        self._stop_event = threading.Event()
+        
+    def stop(self):
+        self._stop_event.set()
+    
+    def run(self):
+        while not self._stop_event.is_set():
+            self.display()
+            time.sleep(1)
+    
+    def display(self):
+        with self.state.lock:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            
+            # Header
+            self._display_header()
+            
+            # Market Overview
+            self._display_market_overview()
+            
+            # Indicators
+            self._display_indicators()
+            
+            # Position
+            self._display_position()
+            
+            # Performance
+            self._display_performance()
+            
+            # Logs
+            self._display_logs()
+            
+            # Footer
+            self._display_footer()
+    
+    def _display_header(self):
+        print(Style.BRIGHT + Fore.CYAN + "=" * 80 + Style.RESET_ALL)
+        print(Style.BRIGHT + Fore.CYAN + 
+              f"    ADVANCED SUPERTREND BOT v2.0 | {self.state.symbol} | Status: {self.state.bot_status}" + 
+              Style.RESET_ALL)
+        print(Style.BRIGHT + Fore.CYAN + "=" * 80 + Style.RESET_ALL)
+    
+    def _display_market_overview(self):
+        print(Style.BRIGHT + "\n📊 MARKET OVERVIEW" + Style.RESET_ALL)
+        print("-" * 40)
+        
+        # Price
+        price_color = (Fore.GREEN if self.state.price_direction == 1 else 
+                      Fore.RED if self.state.price_direction == -1 else Fore.WHITE)
+        arrow = "↑" if self.state.price_direction == 1 else "↓" if self.state.price_direction == -1 else "→"
+        print(f"Price: {price_color}{self.state.current_price:.2f} {arrow}{Style.RESET_ALL}")
+        
+        # Market data
+        if self.config.PRIMARY_TIMEFRAME in self.state.market_data:
+            data = self.state.market_data[self.config.PRIMARY_TIMEFRAME]
+            if data.bid > 0 and data.ask > 0:
+                print(f"Bid/Ask: {data.bid:.2f} / {data.ask:.2f} (Spread: {data.spread_pct:.3f}%)")
+            if data.volume > 0:
+                print(f"Volume: {data.volume:,.0f}")
+            if data.order_book_imbalance != 0:
+                imb_color = (Fore.GREEN if data.order_book_imbalance > 0.2 else 
+                            Fore.RED if data.order_book_imbalance < -0.2 else Fore.YELLOW)
+                print(f"Order Book Imbalance: {imb_color}{data.order_book_imbalance:.2%}{Style.RESET_ALL}")
+        
+        # Market regime
+        regime_colors = {
+            MarketRegime.TRENDING_UP: Fore.GREEN,
+            MarketRegime.TRENDING_DOWN: Fore.RED,
+            MarketRegime.RANGING: Fore.YELLOW,
+            MarketRegime.VOLATILE: Fore.MAGENTA,
+            MarketRegime.CALM: Fore.CYAN
+        }
+        regime_color = regime_colors.get(self.state.market_regime, Fore.WHITE)
+        print(f"Market Regime: {regime_color}{self.state.market_regime.value}{Style.RESET_ALL}")
+    
+    def _display_indicators(self):
+        print(Style.BRIGHT + "\n📈 TECHNICAL INDICATORS" + Style.RESET_ALL)
+        print("-" * 40)
+        
+        # SuperTrend
+        st_color = (Fore.GREEN if self.state.supertrend_direction == "Uptrend" else 
+                   Fore.RED if self.state.supertrend_direction == "Downtrend" else Fore.YELLOW)
+        st_value = f"{self.state.supertrend_line:.2f}" if self.state.supertrend_line else "Calculating..."
+        print(f"SuperTrend: {st_color}{self.state.supertrend_direction} @ {st_value}{Style.RESET_ALL}")
+        
+        # Other indicators
+        indicators = self.state.indicator_values
+        if indicators:
+            # RSI
+            rsi = indicators.get('rsi')
+            if rsi is not None:
+                rsi_color = (Fore.RED if rsi > 70 else Fore.GREEN if rsi < 30 else Fore.YELLOW)
+                print(f"RSI: {rsi_color}{rsi:.1f}{Style.RESET_ALL}", end=" | ")
+            
+            # ADX
+            adx = indicators.get('adx')
+            if adx is not None:
+                adx_color = Fore.GREEN if adx > self.config.ADX_MIN_THRESHOLD else Fore.YELLOW
+                print(f"ADX: {adx_color}{adx:.1f}{Style.RESET_ALL}", end=" | ")
+            
+            # MACD
+            macd = indicators.get('macd_hist')
+            if macd is not None:
+                macd_color = Fore.GREEN if macd > 0 else Fore.RED
+                print(f"MACD: {macd_color}{macd:.4f}{Style.RESET_ALL}")
+            
+            # Volume
+            vol_ratio = indicators.get('volume_ratio')
+            if vol_ratio is not None:
+                vol_color = Fore.GREEN if vol_ratio > 1.5 else Fore.YELLOW
+                print(f"Volume Ratio: {vol_color}{vol_ratio:.2f}x{Style.RESET_ALL}")
+        
+        # Signal strength
+        if self.state.signal_strength > 0:
+            strength_color = (Fore.GREEN if self.state.signal_strength > 0.7 else 
+                            Fore.YELLOW if self.state.signal_strength > 0.5 else Fore.RED)
+            bars = "█" * int(self.state.signal_strength * 10)
+            print(f"Signal Strength: {strength_color}{bars} {self.state.signal_strength:.1%}{Style.RESET_ALL}")
+        
+        # Last signal
+        if self.state.last_signal and self.state.last_signal_time:
+            signal_age = (datetime.now() - self.state.last_signal_time).total_seconds()
+            signal_color = Fore.GREEN if self.state.last_signal.value > 0 else Fore.RED
+            print(f"Last Signal: {signal_color}{self.state.last_signal.name}{Style.RESET_ALL} ({signal_age:.0f}s ago)")
+    
+    def _display_position(self):
+        print(Style.BRIGHT + "\n💼 POSITION" + Style.RESET_ALL)
+        print("-" * 40)
+        
+        if self.state.position:
+            pos = self.state.position
+            
+            # Position details
+            side_color = Fore.GREEN if pos.side == "Buy" else Fore.RED
+            print(f"Side: {side_color}{pos.side}{Style.RESET_ALL} | Size: {pos.size:.4f}")
+            print(f"Entry: ${pos.entry_price:.2f} | Current: ${pos.current_price:.2f}")
+            
+            # PnL
+            pnl_color = Fore.GREEN if pos.unrealized_pnl >= 0 else Fore.RED
+            pnl_pct_color = Fore.GREEN if pos.pnl_pct >= 0 else Fore.RED
+            print(f"PnL: {pnl_color}${pos.unrealized_pnl:.2f}{Style.RESET_ALL} "
+                  f"({pnl_pct_color}{pos.pnl_pct:+.2f}%{Style.RESET_ALL})")
+            
+            # Risk levels
+            print(f"SL: ${pos.stop_loss:.2f} | TP: ${pos.take_profit:.2f}")
+            
+            # Status flags
+            flags = []
+            if pos.breakeven_activated:
+                flags.append(f"{Fore.GREEN}BREAKEVEN{Style.RESET_ALL}")
+            if pos.trailing_sl_activated:
+                flags.append(f"{Fore.CYAN}TRAILING{Style.RESET_ALL}")
+            if pos.partial_closes:
+                flags.append(f"{Fore.YELLOW}PARTIAL {len(pos.partial_closes)}/3{Style.RESET_ALL}")
+            
+            if flags:
+                print(f"Status: {' | '.join(flags)}")
+            
+            # Duration
+            duration = pos.duration
+            hours = duration.total_seconds() // 3600
+            minutes = (duration.total_seconds() % 3600) // 60
+            print(f"Duration: {hours:.0f}h {minutes:.0f}m")
+        else:
+            print(Fore.YELLOW + "No active position" + Style.RESET_ALL)
+            
+            # Show account balance
+            if self.state.account_balance > 0:
+                balance_change = self.state.account_balance - self.state.initial_balance
+                balance_color = Fore.GREEN if balance_change >= 0 else Fore.RED
+                print(f"Balance: ${self.state.account_balance:.2f} "
+                      f"({balance_color}{balance_change:+.2f}{Style.RESET_ALL})")
+    
+    def _display_performance(self):
+        print(Style.BRIGHT + "\n📊 PERFORMANCE METRICS" + Style.RESET_ALL)
+        print("-" * 40)
+        
+        metrics = self.state.metrics
+        
+        # Win rate and trades
+        if metrics.total_trades > 0:
+            wr_color = (Fore.GREEN if metrics.win_rate >= 0.5 else 
+                       Fore.YELLOW if metrics.win_rate >= 0.4 else Fore.RED)
+            print(f"Win Rate: {wr_color}{metrics.win_rate:.1%}{Style.RESET_ALL} "
+                  f"({metrics.winning_trades}W/{metrics.losing_trades}L)")
+        
+        # Today's performance
+        today = datetime.now().strftime("%Y-%m-%d")
+        today_pnl = metrics.daily_pnl.get(today, Decimal('0'))
+        today_trades = metrics.daily_trades.get(today, 0)
+        today_color = Fore.GREEN if today_pnl > 0 else Fore.RED if today_pnl < 0 else Fore.WHITE
+        print(f"Today: {today_color}${today_pnl:.2f}{Style.RESET_ALL} ({today_trades} trades)")
+        
+        # Overall PnL
+        total_color = Fore.GREEN if metrics.total_pnl > 0 else Fore.RED if metrics.total_pnl < 0 else Fore.WHITE
+        print(f"Total PnL: {total_color}${metrics.total_pnl:.2f}{Style.RESET_ALL}")
+        
+        # Key ratios
+        if metrics.profit_factor > 0:
+            pf_color = Fore.GREEN if metrics.profit_factor > 1.5 else Fore.YELLOW if metrics.profit_factor > 1 else Fore.RED
+            print(f"Profit Factor: {pf_color}{metrics.profit_factor:.2f}{Style.RESET_ALL}")
+        
+        if metrics.sharpe_ratio != 0:
+            sharpe_color = Fore.GREEN if metrics.sharpe_ratio > 1 else Fore.YELLOW if metrics.sharpe_ratio > 0 else Fore.RED
+            print(f"Sharpe Ratio: {sharpe_color}{metrics.sharpe_ratio:.2f}{Style.RESET_ALL}")
+        
+        # Drawdown
+        if metrics.max_drawdown != 0:
+            dd_color = Fore.YELLOW if metrics.max_drawdown < 5 else Fore.RED
+            print(f"Max Drawdown: {dd_color}{metrics.max_drawdown:.1f}%{Style.RESET_ALL}")
+        
+        # Streaks
+        if metrics.consecutive_wins > 0:
+            print(f"Streak: {Fore.GREEN}↑{metrics.consecutive_wins} wins{Style.RESET_ALL}")
+        elif metrics.consecutive_losses > 0:
+            print(f"Streak: {Fore.RED}↓{metrics.consecutive_losses} losses{Style.RESET_ALL}")
+        
+        # Best/Worst trades
+        if metrics.best_trade != 0 or metrics.worst_trade != 0:
+            print(f"Best/Worst: {Fore.GREEN}+{metrics.best_trade:.1f}%{Style.RESET_ALL} / "
+                  f"{Fore.RED}{metrics.worst_trade:.1f}%{Style.RESET_ALL}")
+    
+    def _display_logs(self):
+        print(Style.BRIGHT + "\n📝 RECENT ACTIVITY" + Style.RESET_ALL)
+        print("-" * 40)
+        
+        for msg in list(self.state.log_messages)[-5:]:  # Show last 5 messages
+            # Color code based on message content
+            if "ERROR" in msg:
+                print(Fore.RED + msg + Style.RESET_ALL)
+            elif "WARNING" in msg:
+                print(Fore.YELLOW + msg + Style.RESET_ALL)
+            elif "SUCCESS" in msg or "profit" in msg.lower():
+                print(Fore.GREEN + msg + Style.RESET_ALL)
+            else:
+                print(msg)
+    
+    def _display_footer(self):
+        print(Style.BRIGHT + Fore.CYAN + "\n" + "=" * 80 + Style.RESET_ALL)
+        
+        # Running time
+        uptime = datetime.now() - self.state.start_time
+        hours = uptime.total_seconds() // 3600
+        minutes = (uptime.total_seconds() % 3600) // 60
+        print(f"Uptime: {hours:.0f}h {minutes:.0f}m | ", end="")
+        
+        # Error count
+        if self.state.errors_count > 0:
+            print(f"{Fore.YELLOW}Errors: {self.state.errors_count}{Style.RESET_ALL} | ", end="")
+        
+        print(Fore.YELLOW + "Press Ctrl+C to exit gracefully" + Style.RESET_ALL)
+
+# =====================================================================
+# MARKET ANALYSIS
+# =====================================================================
+
+class MarketAnalyzer:
+    """Advanced market analysis and regime detection."""
+    
+    def __init__(self, config: EnhancedConfig):
+        self.config = config
+        self.regime_window = 50
+        self.volatility_window = 20
+        
+    def analyze_market_regime(self, df: pd.DataFrame) -> MarketRegime:
+        """Determine current market regime using multiple factors."""
+        if len(df) < self.regime_window:
+            return MarketRegime.RANGING
+        
+        close_prices = df['close'].values[-self.regime_window:]
+        
+        # 1. Trend strength using linear regression
+        x = np.arange(len(close_prices))
+        slope, intercept = np.polyfit(x, close_prices.astype(float), 1)
+        trend_strength = abs(slope) / np.mean(close_prices) * 100
+        
+        # 2. Volatility using ATR
+        atr = df['atr'].iloc[-1] if 'atr' in df.columns else 0
+        atr_pct = (atr / df['close'].iloc[-1]) * 100 if df['close'].iloc[-1] > 0 else 0
+        
+        # 3. Price position relative to moving averages
+        if 'ema_20' in df.columns and 'ema_50' in df.columns:
+            ema_20 = df['ema_20'].iloc[-1]
+            ema_50 = df['ema_50'].iloc[-1]
+            price = df['close'].iloc[-1]
+            
+            above_emas = price > ema_20 and price > ema_50
+            below_emas = price < ema_20 and price < ema_50
+        else:
+            above_emas = below_emas = False
+        
+        # Determine regime
+        if atr_pct > 3:  # High volatility
+            return MarketRegime.VOLATILE
+        elif atr_pct < 0.5:  # Low volatility
+            return MarketRegime.CALM
+        elif trend_strength > 1 and above_emas:
+            return MarketRegime.TRENDING_UP
+        elif trend_strength > 1 and below_emas:
+            return MarketRegime.TRENDING_DOWN
+        else:
+            return MarketRegime.RANGING
+    
+    def calculate_support_resistance(self, df: pd.DataFrame, window: int = 20) -> Dict[str, Decimal]:
+        """Calculate dynamic support and resistance levels."""
+        if len(df) < window:
+            return {}
+        
+        # Rolling highs and lows
+        highs = df['high'].rolling(window=window).max()
+        lows = df['low'].rolling(window=window).min()
+        
+        # Pivot points
+        last_high = df['high'].iloc[-1]
+        last_low = df['low'].iloc[-1]
+        last_close = df['close'].iloc[-1]
+        
+        pivot = (last_high + last_low + last_close) / 3
+        
+        return {
+            'resistance': Decimal(str(highs.iloc[-1])),
+            'support': Decimal(str(lows.iloc[-1])),
+            'pivot': Decimal(str(pivot)),
+            'r1': Decimal(str(2 * pivot - last_low)),
+            'r2': Decimal(str(pivot + (last_high - last_low))),
+            's1': Decimal(str(2 * pivot - last_high)),
+            's2': Decimal(str(pivot - (last_high - last_low)))
+        }
+    
+    def analyze_volume_profile(self, df: pd.DataFrame, bins: int = 10) -> Dict[str, Any]:
+        """Analyze volume distribution across price levels."""
+        if len(df) < bins:
+            return {}
+        
+        # Create price bins
+        price_range = df['close'].max() - df['close'].min()
+        bin_size = price_range / bins
+        
+        volume_profile = {}
+        for i in range(bins):
+            lower = df['close'].min() + i * bin_size
+            upper = lower + bin_size
+            mask = (df['close'] >= lower) & (df['close'] < upper)
+            volume_profile[f"{lower:.2f}-{upper:.2f}"] = df.loc[mask, 'volume'].sum()
+        
+        # Find POC (Point of Control - price level with highest volume)
+        poc_range = max(volume_profile, key=volume_profile.get)
+        poc_price = sum(map(float, poc_range.split('-'))) / 2
+        
+        # Calculate VWAP
+        vwap = (df['close'] * df['volume']).sum() / df['volume'].sum()
+        
+        return {
+            'volume_profile': volume_profile,
+            'poc': Decimal(str(poc_price)),
+            'vwap': Decimal(str(vwap)),
+            'volume_weighted_price': Decimal(str(vwap))
+        }
+
+# =====================================================================
+# TECHNICAL INDICATORS
+# =====================================================================
+
+class IndicatorCalculator:
+    """Advanced technical indicator calculations."""
+    
+    def __init__(self, config: EnhancedConfig):
+        self.config = config
+        
+    def calculate_adaptive_supertrend(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate SuperTrend with adaptive parameters based on volatility."""
+        # Calculate volatility
+        returns = df['close'].pct_change()
+        volatility = returns.std()
+        
+        # Adaptive parameters
+        if self.config.ADAPTIVE_PARAMS:
+            # Increase period in low volatility, decrease in high volatility
+            if volatility < 0.01:
+                period = min(self.config.ST_PERIOD_BASE + 5, 20)
+                multiplier = max(float(self.config.ST_MULTIPLIER_BASE) - 0.5, 1.5)
+            elif volatility > 0.03:
+                period = max(self.config.ST_PERIOD_BASE - 3, 7)
+                multiplier = min(float(self.config.ST_MULTIPLIER_BASE) + 0.5, 4.0)
+            else:
+                period = self.config.ST_PERIOD_BASE
+                multiplier = float(self.config.ST_MULTIPLIER_BASE)
+        else:
+            period = self.config.ST_PERIOD_BASE
+            multiplier = float(self.config.ST_MULTIPLIER_BASE)
+        
+        # Calculate SuperTrend
+        df.ta.supertrend(length=period, multiplier=multiplier, append=True)
+        
+        # Rename columns for consistency
+        st_col = f'SUPERT_{period}_{multiplier}'
+        st_dir_col = f'SUPERTd_{period}_{multiplier}'
+        
+        if st_col in df.columns:
+            df['st_line'] = df[st_col]
+            df['st_dir'] = df[st_dir_col]
+            df.drop([st_col, st_dir_col], axis=1, inplace=True, errors='ignore')
+        
+        return df
+    
+    def calculate_all_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate comprehensive set of technical indicators."""
+        # Ensure we have float data for calculations
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        # Trend Indicators
+        df = self.calculate_adaptive_supertrend(df)
+        df['ema_9'] = ta.ema(df['close'], length=9)
+        df['ema_20'] = ta.ema(df['close'], length=20)
+        df['ema_50'] = ta.ema(df['close'], length=50)
+        df['sma_200'] = ta.sma(df['close'], length=200)
+        
+        # Momentum Indicators
+        df['rsi'] = ta.rsi(df['close'], length=14)
+        macd = ta.macd(df['close'])
+        if macd is not None:
+            df['macd'] = macd['MACD_12_26_9']
+            df['macd_signal'] = macd['MACDs_12_26_9']
+            df['macd_hist'] = macd['MACDh_12_26_9']
+        
+        # Stochastic
+        stoch = ta.stoch(df['high'], df['low'], df['close'])
+        if stoch is not None:
+            df['stoch_k'] = stoch['STOCHk_14_3_3']
+            df['stoch_d'] = stoch['STOCHd_14_3_3']
+        
+        # Volatility Indicators
+        df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+        bb = ta.bbands(df['close'])
+        if bb is not None:
+            df['bb_upper'] = bb['BBU_20_2.0']
+            df['bb_middle'] = bb['BBM_20_2.0']
+            df['bb_lower'] = bb['BBL_20_2.0']
+            df['bb_width'] = df['bb_upper'] - df['bb_lower']
+            df['bb_position'] = (df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])
+        
+        # Volume Indicators
+        df['volume_sma'] = ta.sma(df['volume'], length=20)
+        df['volume_ratio'] = df['volume'] / df['volume_sma']
+        df['obv'] = ta.obv(df['close'], df['volume'])
+        
+        # Trend Strength
+        adx = ta.adx(df['high'], df['low'], df['close'])
+        if adx is not None:
+            df['adx'] = adx['ADX_14']
+            df['dmp'] = adx['DMP_14']
+            df['dmn'] = adx['DMN_14']
+        
+        # Custom calculations
+        df['hl2'] = (df['high'] + df['low']) / 2
+        df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
+        df['ohlc4'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+        
+        # Price action
+        df['body'] = abs(df['close'] - df['open'])
+        df['upper_wick'] = df['high'] - df[['close', 'open
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Enhanced Ehlers Supertrend Cross Trading Bot for Bybit V5 API
+
+This script is a professional-grade trading bot that implements an Ehlers
+Supertrend Cross strategy. It has been significantly upgraded with a real-time,
+WebSocket-driven architecture, a comprehensive suite of advanced trading features,
+and a robust, modular design for enhanced stability and performance.
+
+Key Features:
+- Real-Time Data: Utilizes WebSockets for low-latency updates on klines,
+  tickers, positions, and wallet balances.
+- Advanced Strategy: Refined Ehlers Supertrend Cross logic with confirmations
+  from ADX, RSI, and MACD for higher-probability entries.
+- Dynamic UI: A clean, real-time console UI that displays key metrics without
+  cluttering logs.
+- Sophisticated Risk Management: Includes dynamic take-profit based on ATR,
+  breakeven stop-loss, partial take-profits, and a daily loss limit.
+- Robust Error Handling: Implements resilient API call wrappers with exponential
+  backoff and detailed error logging.
+- Modular & Testable: Code is organized into logical classes for better
+  maintainability and easier testing.
+- Flexible Configuration: All parameters are configurable via a central Config
+  dataclass, with support for environment variables.
+- Interactive Setup: Prompts the user for symbol and timeframe at startup for
+  ease of use.
+- Graceful Shutdown: Captures system signals (like Ctrl+C) to safely shut
+  down, with an option to auto-close open positions.
+"""
+
+import os
+import time
+import pandas as pd
+import numpy as np
+from decimal import Decimal, ROUND_DOWN, InvalidOperation
+import logging
+import colorlog
+import threading
+import subprocess
+from dotenv import load_dotenv
+from pybit.unified_trading import HTTP, WebSocket
+from pybit.exceptions import InvalidRequestError
+import pandas_ta as ta
+from datetime import datetime
+import signal
+import json
+from typing import Optional, Dict, Any, List, Tuple
+import sys
+from dataclasses import dataclass, field
+from enum import Enum
+from colorama import init, Fore, Style
+
+# --- Initialization ---
+init(autoreset=True)  # Initialize Colorama for colored terminal output
+load_dotenv()  # Load environment variables from a .env file
+
+# =====================================================================
+# CONFIGURATION & ENUMS
+# =====================================================================
+
+class Signal(Enum):
+    """Enumeration for clear trading signals."""
+    BUY = 1
+    SELL = -1
+    NEUTRAL = 0
+
+class OrderType(Enum):
+    """Enumeration for supported order types."""
+    MARKET = "Market"
+    LIMIT = "Limit"
+
+class Category(Enum):
+    """Enumeration for Bybit product categories."""
+    LINEAR = "linear"
+    SPOT = "spot"
+    INVERSE = "inverse"
+    OPTION = "option"
+
+    @classmethod
+    def from_string(cls, value: str) -> "Category":
+        """Converts a string to a Category enum member."""
+        try:
+            return cls[value.upper()]
+        except KeyError:
+            raise ValueError(f"Invalid Category: {value}")
+
+@dataclass
+class Config:
+    """Central configuration for the trading bot."""
+    API_KEY: str = os.getenv("BYBIT_API_KEY", "YOUR_API_KEY")
+    API_SECRET: str = os.getenv("BYBIT_API_SECRET", "YOUR_API_SECRET")
+    TESTNET: bool = os.getenv("BYBIT_TESTNET", "true").lower() in ['true', '1', 't']
+    SYMBOL: str = os.getenv("BYBIT_SYMBOL", "BTCUSDT")
+    CATEGORY: str = os.getenv("BYBIT_CATEGORY", "linear")
+    TIMEFRAME: str = os.getenv("BYBIT_TIMEFRAME", "15")
+    LEVERAGE: int = int(os.getenv("BYBIT_LEVERAGE", 10))
+    
+    # Strategy Parameters
+    EHLERS_ST_LENGTH: int = int(os.getenv("EHLERS_ST_LENGTH", 10))
+    EHLERS_ST_MULTIPLIER: float = float(os.getenv("EHLERS_ST_MULTIPLIER", 3.0))
+    RSI_WINDOW: int = int(os.getenv("RSI_WINDOW", 14))
+    MACD_FAST: int = int(os.getenv("MACD_FAST", 12))
+    MACD_SLOW: int = int(os.getenv("MACD_SLOW", 26))
+    MACD_SIGNAL: int = int(os.getenv("MACD_SIGNAL", 9))
+    ADX_WINDOW: int = int(os.getenv("ADX_WINDOW", 14))
+    ADX_MIN_THRESHOLD: int = int(os.getenv("ADX_MIN_THRESHOLD", 20))
+    LOOKBACK_PERIODS: int = int(os.getenv("BYBIT_LOOKBACK_PERIODS", 200))
+    
+    # Risk Management
+    RISK_PER_TRADE_PCT: float = float(os.getenv("RISK_PER_TRADE_PCT", 1.0))
+    MAX_DAILY_LOSS_PCT: float = float(os.getenv("MAX_DAILY_LOSS_PCT", 5.0))
+    
+    # Advanced Features
+    DYNAMIC_TP_ENABLED: bool = os.getenv("DYNAMIC_TP_ENABLED", "true").lower() in ['true', '1', 't']
+    ATR_TP_MULTIPLIER: float = float(os.getenv("ATR_TP_MULTIPLIER", 1.5))
+    BREAKEVEN_ENABLED: bool = os.getenv("BREAKEVEN_ENABLED", "true").lower() in ['true', '1', 't']
+    BREAKEVEN_PROFIT_TRIGGER_PCT: float = float(os.getenv("BREAKEVEN_PROFIT_TRIGGER_PCT", 0.008)) # 0.8%
+    PARTIAL_TP_ENABLED: bool = os.getenv("PARTIAL_TP_ENABLED", "true").lower() in ['true', '1', 't']
+    PARTIAL_TP_TARGETS: List[Dict[str, float]] = field(default_factory=lambda: [
+        {"profit_pct": 0.01, "close_qty_pct": 0.5}, # Close 50% at 1% profit
+    ])
+    AUTO_CLOSE_ON_SHUTDOWN: bool = os.getenv("AUTO_CLOSE_ON_SHUTDOWN", "true").lower() in ['true', '1', 't']
+    
+    # Execution & Logging
+    ORDER_TYPE: str = os.getenv("ORDER_TYPE", "Market")
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FILE: str = "ehlers_supertrend_bot.log"
+    
+    def __post_init__(self):
+        """Validate and convert config values after initialization."""
+        self.CATEGORY_ENUM = Category.from_string(self.CATEGORY)
+        self.ORDER_TYPE_ENUM = OrderType[self.ORDER_TYPE.upper()]
+        if self.CATEGORY_ENUM == Category.SPOT:
+            self.LEVERAGE = 1
+
+# =====================================================================
+# LOGGING SETUP
+# =====================================================================
+
+def setup_logger(config: Config) -> logging.Logger:
+    """Configures a logger with both console and file handlers."""
+    logger = logging.getLogger('EhlersSuperTrendBot')
+    logger.setLevel(config.LOG_LEVEL.upper())
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    # Console Handler with colors
+    console_handler = colorlog.StreamHandler()
+    console_formatter = colorlog.ColoredFormatter(
+        '%(log_color)s%(asctime)s | %(levelname)-8s | %(message)s',
+        datefmt='%H:%M:%S'
+    )
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
+    # File Handler
+    file_handler = logging.FileHandler(config.LOG_FILE, mode='a')
+    file_formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)-8s | %(module)s:%(funcName)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+    
+    return logger
+
+# =====================================================================
+# BOT STATE & UI
+# =====================================================================
+
+@dataclass
+class BotState:
+    """Thread-safe state management for the bot."""
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    status: str = "Initializing"
+    current_price: Decimal = Decimal('0.0')
+    kline_data: pd.DataFrame = field(default_factory=pd.DataFrame)
+    position_active: bool = False
+    current_position: Optional[Dict[str, Any]] = None
+    account_balance: Decimal = Decimal('0.0')
+    start_of_day_balance: Decimal = Decimal('0.0')
+    last_signal: Signal = Signal.NEUTRAL
+    last_signal_reason: str = "N/A"
+
+class BotUI(threading.Thread):
+    """Renders a real-time console UI for the bot."""
+    def __init__(self, bot_state: BotState, config: Config, update_interval=1):
+        super().__init__(daemon=True, name="BotUI")
+        self.bot_state = bot_state
+        self.config = config
+        self.update_interval = update_interval
+        self._stop_event = threading.Event()
+
+    def run(self):
+        while not self._stop_event.is_set():
+            self._render_ui()
+            time.sleep(self.update_interval)
+
+    def stop(self):
+        self._stop_event.set()
+
+    def _clear_screen(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def _render_ui(self):
+        self._clear_screen()
+        with self.bot_state.lock:
+            # Header
+            print(Fore.CYAN + Style.BRIGHT + f"--- Ehlers Supertrend Bot --- | Status: {self.bot_state.status}")
+            print(f"Symbol: {self.config.SYMBOL} | Timeframe: {self.config.TIMEFRAME} | Mode: {'Testnet' if self.config.TESTNET else 'Mainnet'}")
+            print("-" * 50)
+
+            # Market & Strategy State
+            price_color = Fore.GREEN if self.bot_state.current_price > 0 else Fore.RED
+            print(f"Current Price: {price_color}{self.bot_state.current_price:,.4f} USDT")
+            signal_color = Fore.GREEN if self.bot_state.last_signal == Signal.BUY else Fore.RED if self.bot_state.last_signal == Signal.SELL else Fore.YELLOW
+            print(f"Last Signal:   {signal_color}{self.bot_state.last_signal.name}")
+            print(f"Signal Reason: {self.bot_state.last_signal_reason}")
+            print("-" * 50)
+            
+            # Position State
+            if self.bot_state.position_active and self.bot_state.current_position:
+                pos = self.bot_state.current_position
+                side_color = Fore.GREEN if pos['side'] == 'Buy' else Fore.RED
+                pnl = Decimal(pos.get('unrealisedPnl', '0'))
+                pnl_color = Fore.GREEN if pnl >= 0 else Fore.RED
+                entry_price = Decimal(pos.get('avgPrice', '0'))
+                
+                print(f"Active Position: {side_color}{pos['side']} {pos['size']} {pos['symbol']}")
+                print(f"  Entry Price: {entry_price:,.4f}")
+                print(f"  Unrealised PnL: {pnl_color}{pnl:,.4f} USDT")
+                print(f"  Stop Loss:   {pos.get('stopLoss', 'N/A')}")
+            else:
+                print("No active position.")
+            print("-" * 50)
+
+            # Account State
+            balance_color = Fore.GREEN if self.bot_state.account_balance >= self.bot_state.start_of_day_balance else Fore.RED
+            print(f"Account Balance: {balance_color}{self.bot_state.account_balance:,.4f} USDT")
+            daily_pnl = self.bot_state.account_balance - self.bot_state.start_of_day_balance
+            daily_pnl_color = Fore.GREEN if daily_pnl >= 0 else Fore.RED
+            print(f"Daily PnL:       {daily_pnl_color}{daily_pnl:,.4f} USDT")
+
+# =====================================================================
+# PRECISION & ORDER SIZING
+# =====================================================================
+
+@dataclass
+class InstrumentSpecs:
+    """Stores instrument specifications from Bybit."""
+    tick_size: Decimal
+    qty_step: Decimal
+    min_order_qty: Decimal
+
+class PrecisionManager:
+    """Manages decimal precision for trading pairs."""
+    def __init__(self, session: HTTP, logger: logging.Logger):
+        self.session = session
+        self.logger = logger
+        self.instruments: Dict[str, InstrumentSpecs] = {}
+
+    def get_specs(self, symbol: str, category: str) -> Optional[InstrumentSpecs]:
+        if symbol in self.instruments:
+            return self.instruments[symbol]
+        try:
+            response = self.session.get_instruments_info(category=category, symbol=symbol)
+            if response['retCode'] == 0:
+                info = response['result']['list'][0]
+                specs = InstrumentSpecs(
+                    tick_size=Decimal(info['priceFilter']['tickSize']),
+                    qty_step=Decimal(info['lotSizeFilter']['qtyStep']),
+                    min_order_qty=Decimal(info['lotSizeFilter']['minOrderQty'])
+                )
+                self.instruments[symbol] = specs
+                return specs
+        except Exception as e:
+            self.logger.error(f"Error fetching instrument specs for {symbol}: {e}")
+        return None
+
+    def round_price(self, specs: InstrumentSpecs, price: Decimal) -> Decimal:
+        return (price / specs.tick_size).quantize(Decimal('1'), rounding=ROUND_DOWN) * specs.tick_size
+
+    def round_quantity(self, specs: InstrumentSpecs, quantity: Decimal) -> Decimal:
+        return (quantity / specs.qty_step).quantize(Decimal('1'), rounding=ROUND_DOWN) * specs.qty_step
+
+class OrderSizingCalculator:
+    """Calculates order sizes based on risk management."""
+    def __init__(self, precision_manager: PrecisionManager, logger: logging.Logger):
+        self.precision = precision_manager
+        self.logger = logger
+
+    def calculate_position_size(self, specs: InstrumentSpecs, balance: Decimal, risk_pct: float, entry: Decimal, sl: Decimal, lev: int) -> Optional[Decimal]:
+        if balance <= 0 or entry <= 0 or lev <= 0 or abs(entry - sl) == 0:
+            return None
+        risk_amt = balance * Decimal(str(risk_pct / 100))
+        sl_dist_pct = abs(entry - sl) / entry
+        pos_val_needed = risk_amt / sl_dist_pct
+        pos_val_max = balance * Decimal(lev)
+        final_pos_val = min(pos_val_needed, pos_val_max)
+        qty = final_pos_val / entry
+        return self.precision.round_quantity(specs, qty)
+
+# =====================================================================
+# MAIN TRADING BOT CLASS
+# =====================================================================
+
+class EhlersSuperTrendBot:
+    """The main class for the Ehlers Supertrend Cross trading bot."""
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = setup_logger(config)
+        self.bot_state = BotState()
+        self.stop_event = threading.Event()
+
+        self.session = HTTP(testnet=config.TESTNET, api_key=config.API_KEY, api_secret=config.API_SECRET)
+        self.precision_manager = PrecisionManager(self.session, self.logger)
+        self.order_sizer = OrderSizingCalculator(self.precision_manager, self.logger)
+        
+        self.ws = None
+        self.breakeven_activated = False
+        self.partial_tp_hit_levels = []
+
+    def _api_call(self, api_method: Any, **kwargs) -> Optional[Dict[str, Any]]:
+        """A resilient wrapper for API calls with exponential backoff."""
+        for attempt in range(5):
+            try:
+                response = api_method(**kwargs)
+                if response['retCode'] == 0:
+                    return response['result']
+                else:
+                    self.logger.error(f"API Error ({response['retCode']}): {response['retMsg']}")
+            except InvalidRequestError as e:
+                self.logger.error(f"Invalid API Request: {e}")
+                return None # Don't retry on bad requests
+            except Exception as e:
+                self.logger.error(f"API Exception: {e}")
+            
+            time.sleep(2 ** attempt) # Exponential backoff
+        return None
+    
+    def run(self):
+        """Starts the bot and all its components."""
+        self.logger.info("🚀 Starting Ehlers Supertrend Bot...")
+        self._install_signal_handlers()
+
+        # Initial setup and data fetching
+        self.bot_state.start_of_day_balance = self._get_account_balance()
+        self.bot_state.account_balance = self.bot_state.start_of_day_balance
+        if not self._fetch_initial_klines():
+            self.logger.critical("Failed to fetch initial kline data. Shutting down.")
+            return
+
+        self._set_leverage_and_margin()
+        
+        # Start UI and WebSocket threads
+        self.ui = BotUI(self.bot_state, self.config)
+        self.ui.start()
+        
+        ws_thread = threading.Thread(target=self._connect_websocket, daemon=True, name="WebSocketManager")
+        ws_thread.start()
+
+        self.logger.info("Bot is now running. Press Ctrl+C to stop.")
+        self.stop_event.wait() # Main thread waits here until a stop signal is received
+
+        self.cleanup()
+
+    def _connect_websocket(self):
+        """Initializes and connects the WebSocket client."""
+        self.logger.info("Connecting to WebSocket...")
+        self.ws = WebSocket(
+            testnet=self.config.TESTNET,
+            channel_type=self.config.CATEGORY,
+            api_key=self.config.API_KEY,
+            api_secret=self.config.API_SECRET
+        )
+        # Subscribe to streams
+        self.ws.kline_stream(self.config.TIMEFRAME, self.config.SYMBOL, self._handle_kline_message)
+        self.ws.tickers_stream(self.config.SYMBOL, self._handle_ticker_message)
+        self.ws.position_stream(self._handle_position_message)
+        self.ws.wallet_stream(self._handle_wallet_message)
+        
+        with self.bot_state.lock:
+            self.bot_state.status = "Live"
+
+    # --- WebSocket Handlers ---
+    def _handle_kline_message(self, message: Dict[str, Any]):
+        kline = message['data'][0]
+        if kline['confirm']: # Only process confirmed candles
+            self.logger.info(f"New confirmed candle received for {kline['start']}")
+            self._update_kline_data(kline)
+            self._run_strategy_cycle()
+
+    def _handle_ticker_message(self, message: Dict[str, Any]):
+        with self.bot_state.lock:
+            self.bot_state.current_price = Decimal(message['data']['lastPrice'])
+
+    def _handle_position_message(self, message: Dict[str, Any]):
+        self.logger.info("Position update received.")
+        self._update_position_state()
+
+    def _handle_wallet_message(self, message: Dict[str, Any]):
+        self.logger.info("Wallet update received.")
+        with self.bot_state.lock:
+            self.bot_state.account_balance = self._get_account_balance()
+
+    # --- Core Bot Logic ---
+    def _run_strategy_cycle(self):
+        """The main logic cycle that runs on each new candle."""
+        with self.bot_state.lock:
+            self.bot_state.status = "Analyzing..."
+        
+        self._calculate_indicators()
+        self._update_position_state()
+        
+        if self.bot_state.position_active:
+            self._manage_active_position()
+        else:
+            self._check_for_entry_signal()
+        
+        with self.bot_state.lock:
+            self.bot_state.status = "Live"
+
+    def _check_for_entry_signal(self):
+        """Generates a signal and places a trade if conditions are met."""
+        signal, reason = self._generate_signal()
+        with self.bot_state.lock:
+            self.bot_state.last_signal = signal
+            self.bot_state.last_signal_reason = reason
+        
+        if signal != Signal.NEUTRAL:
+            self.logger.info(f"Signal Generated: {signal.name} - Reason: {reason}")
+            self._execute_trade(signal)
+
+    def _generate_signal(self) -> Tuple[Signal, str]:
+        """
+        Generates a trading signal based on the Ehlers Supertrend Cross strategy.
+        """
+        df = self.bot_state.kline_data
+        if len(df) < 2:
+            return Signal.NEUTRAL, "Insufficient data."
+
+        latest = df.iloc[-1]
+        prev = df.iloc[-2]
+        
+        # Strategy Conditions
+        price_crossed_up = prev['close'] < prev['ehlers_filter'] and latest['close'] > latest['ehlers_filter']
+        price_crossed_down = prev['close'] > prev['ehlers_filter'] and latest['close'] < latest['ehlers_filter']
+        
+        st_bullish = latest['supertrend_direction'] == 1
+        st_bearish = latest['supertrend_direction'] == -1
+        
+        adx_trending = latest['adx'] > self.config.ADX_MIN_THRESHOLD
+        rsi_bullish = latest['rsi'] > 51
+        rsi_bearish = latest['rsi'] < 49
+        macd_bullish = latest['macd_hist'] > 0
+        macd_bearish = latest['macd_hist'] < 0
+        
+        # Buy Signal Logic
+        if price_crossed_up and st_bullish and adx_trending and rsi_bullish and macd_bullish:
+            return Signal.BUY, "Ehlers cross up with ST, ADX, RSI, MACD confirmation."
+            
+        # Sell Signal Logic
+        if price_crossed_down and st_bearish and adx_trending and rsi_bearish and macd_bearish:
+            return Signal.SELL, "Ehlers cross down with ST, ADX, RSI, MACD confirmation."
+            
+        return Signal.NEUTRAL, "No signal conditions met."
+
+    def _execute_trade(self, signal: Signal):
+        """Calculates parameters and places the entry order."""
+        specs = self.precision_manager.get_specs(self.config.SYMBOL, self.config.CATEGORY)
+        if not specs:
+            self.logger.error("Could not get instrument specs. Cannot place trade.")
+            return
+
+        side = "Buy" if signal == Signal.BUY else "Sell"
+        entry_price = self.bot_state.current_price
+        
+        # Calculate SL and TP
+        sl_price = entry_price * (1 - Decimal('0.01')) if side == "Buy" else entry_price * (1 + Decimal('0.01')) # Fallback SL
+        if self.bot_state.kline_data.iloc[-1]['atr'] > 0:
+            atr = Decimal(str(self.bot_state.kline_data.iloc[-1]['atr']))
+            sl_price = entry_price - (atr * Decimal('1.5')) if side == "Buy" else entry_price + (atr * Decimal('1.5'))
+        
+        tp_price = entry_price * (1 + Decimal('0.02')) if side == "Buy" else entry_price * (1 - Decimal('0.02')) # Fallback TP
+        if self.config.DYNAMIC_TP_ENABLED and self.bot_state.kline_data.iloc[-1]['atr'] > 0:
+            atr = Decimal(str(self.bot_state.kline_data.iloc[-1]['atr']))
+            tp_price = entry_price + (atr * Decimal(str(self.config.ATR_TP_MULTIPLIER))) if side == "Buy" else entry_price - (atr * Decimal(str(self.config.ATR_TP_MULTIPLIER)))
+
+        sl_price = self.precision_manager.round_price(specs, sl_price)
+        tp_price = self.precision_manager.round_price(specs, tp_price)
+
+        qty = self.order_sizer.calculate_position_size(specs, self.bot_state.account_balance, self.config.RISK_PER_TRADE_PCT, entry_price, sl_price, self.config.LEVERAGE)
+        
+        if qty and qty >= specs.min_order_qty:
+            self.logger.info(f"Placing {side} order for {qty} {self.config.SYMBOL} at ~{entry_price:,.4f}")
+            self._place_order(side, qty, self.config.ORDER_TYPE_ENUM, entry_price, sl_price, tp_price)
+            self.breakeven_activated = False
+            self.partial_tp_hit_levels.clear()
+        else:
+            self.logger.warning(f"Calculated quantity ({qty}) is below minimum. No trade placed.")
+    
+    def _manage_active_position(self):
+        """Manages SL, TP, breakeven, and partial profits for an open position."""
+        pos = self.bot_state.current_position
+        if not pos: return
+
+        entry_price = Decimal(pos['avgPrice'])
+        current_price = self.bot_state.current_price
+        pnl_pct = (current_price - entry_price) / entry_price if pos['side'] == 'Buy' else (entry_price - current_price) / entry_price
+
+        # Breakeven Logic
+        if self.config.BREAKEVEN_ENABLED and not self.breakeven_activated and pnl_pct > Decimal(str(self.config.BREAKEVEN_PROFIT_TRIGGER_PCT)):
+            self.logger.info("Breakeven profit target hit. Moving SL to entry price.")
+            self._api_call(self.session.set_trading_stop, category=self.config.CATEGORY, symbol=self.config.SYMBOL, stopLoss=str(entry_price))
+            self.breakeven_activated = True
+
+        # Partial Take Profit Logic
+        if self.config.PARTIAL_TP_ENABLED:
+            for i, target in enumerate(self.config.PARTIAL_TP_TARGETS):
+                if i not in self.partial_tp_hit_levels and pnl_pct >= Decimal(str(target['profit_pct'])):
+                    qty_to_close = Decimal(pos['size']) * Decimal(str(target['close_qty_pct']))
+                    specs = self.precision_manager.get_specs(self.config.SYMBOL, self.config.CATEGORY)
+                    if specs:
+                       qty_to_close = self.precision_manager.round_quantity(specs, qty_to_close)
+                       self.logger.info(f"Partial TP target {i+1} hit. Closing {qty_to_close} of position.")
+                       self._close_position(partial_qty=qty_to_close)
+                       self.partial_tp_hit_levels.append(i)
+
+    # --- Data & State Management ---
+    def _fetch_initial_klines(self) -> bool:
+        """Fetches the initial set of kline data for indicators."""
+        self.logger.info(f"Fetching initial {self.config.LOOKBACK_PERIODS} klines for {self.config.SYMBOL}...")
+        result = self._api_call(self.session.get_kline,
+            category=self.config.CATEGORY,
+            symbol=self.config.SYMBOL,
+            interval=self.config.TIMEFRAME,
+            limit=self.config.LOOKBACK_PERIODS
+        )
+        if result and result['list']:
+            df = pd.DataFrame(result['list'], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = pd.to_numeric(df[col])
+            with self.bot_state.lock:
+                self.bot_state.kline_data = df.sort_values('timestamp').reset_index(drop=True)
+            self.logger.info("Initial kline data fetched successfully.")
+            return True
+        return False
+
+    def _update_kline_data(self, kline: Dict[str, Any]):
+        """Updates the main kline DataFrame with a new candle."""
+        new_row = {
+            'timestamp': pd.to_datetime(kline['start'], unit='ms'),
+            'open': float(kline['open']),
+            'high': float(kline['high']),
+            'low': float(kline['low']),
+            'close': float(kline['close']),
+            'volume': float(kline['volume']),
+        }
+        with self.bot_state.lock:
+            self.bot_state.kline_data.loc[len(self.bot_state.kline_data)] = new_row
+            self.bot_state.kline_data.drop(self.bot_state.kline_data.index[0], inplace=True)
+
+    def _calculate_indicators(self):
+        """Calculates all necessary indicators on the kline DataFrame."""
+        with self.bot_state.lock:
+            df = self.bot_state.kline_data
+            
+            # Ehlers Filter
+            a1 = np.exp(-np.pi * np.sqrt(2) / 10)
+            b1 = 2 * a1 * np.cos(np.sqrt(2) * np.pi / 10)
+            c2, c3, c1 = b1, -a1 * a1, 1 - b1 + a1 * a1
+            filt = np.zeros(len(df.close))
+            filt[0] = df.close.iloc[0]
+            filt[1] = (c1 * (df.close.iloc[1] + df.close.iloc[0]) / 2.0) + (c2 * filt[0])
+            for i in range(2, len(df.close)):
+                filt[i] = c1 * (df.close.iloc[i] + df.close.iloc[i-1]) / 2.0 + c2 * filt[i-1] + c3 * filt[i-2]
+            df['ehlers_filter'] = filt
+            
+            # Supertrend, ADX, RSI, MACD using pandas_ta
+            df.ta.supertrend(length=self.config.EHLERS_ST_LENGTH, multiplier=self.config.EHLERS_ST_MULTIPLIER, append=True)
+            df.ta.adx(length=self.config.ADX_WINDOW, append=True)
+            df.ta.rsi(length=self.config.RSI_WINDOW, append=True)
+            df.ta.macd(fast=self.config.MACD_FAST, slow=self.config.MACD_SLOW, signal=self.config.MACD_SIGNAL, append=True)
+            df.ta.atr(length=14, append=True)
+            
+            # Rename columns for easier access
+            df.rename(columns={
+                f'SUPERTd_{self.config.EHLERS_ST_LENGTH}_{self.config.EHLERS_ST_MULTIPLIER}.0': 'supertrend_direction',
+                f'ADX_{self.config.ADX_WINDOW}': 'adx',
+                f'RSI_{self.config.RSI_WINDOW}': 'rsi',
+                f'MACDh_{self.config.MACD_FAST}_{self.config.MACD_SLOW}_{self.config.MACD_SIGNAL}': 'macd_hist',
+                'ATRr_14': 'atr'
+            }, inplace=True)
+            
+            self.bot_state.kline_data = df.dropna()
+
+    def _update_position_state(self):
+        """Fetches and updates the bot's current position state."""
+        result = self._api_call(self.session.get_positions, category=self.config.CATEGORY, symbol=self.config.SYMBOL)
+        with self.bot_state.lock:
+            if result and result['list']:
+                pos = result['list'][0]
+                if float(pos['size']) > 0:
+                    self.bot_state.position_active = True
+                    self.bot_state.current_position = pos
+                else:
+                    self.bot_state.position_active = False
+                    self.bot_state.current_position = None
+            else:
+                self.bot_state.position_active = False
+                self.bot_state.current_position = None
+
+    def _get_account_balance(self, coin="USDT") -> Decimal:
+        """Fetches the account balance for a specific coin."""
+        result = self._api_call(self.session.get_wallet_balance, accountType="UNIFIED", coin=coin)
+        if result and result['list']:
+            for item in result['list']:
+                for c in item['coin']:
+                    if c['coin'] == coin:
+                        return Decimal(c['walletBalance'])
+        self.logger.warning("Could not retrieve account balance.")
+        return Decimal('0')
+
+    # --- Order Execution ---
+    def _place_order(self, side: str, qty: Decimal, order_type: OrderType, price: Optional[Decimal], sl: Decimal, tp: Decimal):
+        """Places a trade order on Bybit."""
+        params = {
+            "category": self.config.CATEGORY,
+            "symbol": self.config.SYMBOL,
+            "side": side,
+            "orderType": order_type.value,
+            "qty": str(qty),
+            "stopLoss": str(sl),
+            "takeProfit": str(tp),
+        }
+        if order_type == OrderType.LIMIT and price:
+            params["price"] = str(price)
+            
+        result = self._api_call(self.session.place_order, **params)
+        if result:
+            self.logger.info(f"Order placed successfully: {result}")
+        else:
+            self.logger.error("Order placement failed.")
+    
+    def _close_position(self, partial_qty: Optional[Decimal] = None):
+        """Closes the current active position, fully or partially."""
+        pos = self.bot_state.current_position
+        if not pos: return
+
+        side = "Sell" if pos['side'] == "Buy" else "Buy"
+        qty = partial_qty if partial_qty else Decimal(pos['size'])
+        
+        self.logger.info(f"Closing {'part of' if partial_qty else 'all of'} position. Side: {side}, Qty: {qty}")
+        self._place_order(side, qty, OrderType.MARKET, None, Decimal('0'), Decimal('0'))
+
+    def _set_leverage_and_margin(self):
+        """Sets leverage and margin mode for the trading symbol."""
+        if self.config.CATEGORY == "spot": return
+        
+        self.logger.info(f"Setting leverage to {self.config.LEVERAGE}x for {self.config.SYMBOL}")
+        self._api_call(self.session.set_leverage,
+            category=self.config.CATEGORY,
+            symbol=self.config.SYMBOL,
+            buyLeverage=str(self.config.LEVERAGE),
+            sellLeverage=str(self.config.LEVERAGE)
+        )
+    
+    # --- Shutdown & Cleanup ---
+    def _signal_handler(self, signum, frame):
+        self.logger.warning(f"Signal {signum} received. Initiating graceful shutdown...")
+        self.stop_event.set()
+
+    def _install_signal_handlers(self):
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+    
+    def cleanup(self):
+        self.logger.info("Cleaning up and shutting down bot...")
+        if self.ui:
+            self.ui.stop()
+        if self.ws:
+            self.ws.exit()
+        
+        if self.config.AUTO_CLOSE_ON_SHUTDOWN:
+            self._update_position_state()
+            if self.bot_state.position_active:
+                self.logger.info("Auto-closing active position as per configuration.")
+                self._close_position()
+
+        self.logger.info("Bot shutdown complete. Goodbye! 👋")
+
+# =====================================================================
+# MAIN ENTRY POINT
+# =====================================================================
+if __name__ == "__main__":
+    config = Config()
+
+    # --- Interactive Setup for Symbol and Timeframe ---
+    print(Fore.CYAN + "--- Interactive Setup ---")
+    user_symbol = input(f"Enter trading symbol [Default: {config.SYMBOL}]: ").strip().upper()
+    if user_symbol:
+        config.SYMBOL = user_symbol
+
+    valid_intervals = {"1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"}
+    while True:
+        user_timeframe = input(f"Enter timeframe {list(valid_intervals)} [Default: {config.TIMEFRAME}]: ").strip()
+        if not user_timeframe:
+            break
+        if user_timeframe in valid_intervals:
+            config.TIMEFRAME = user_timeframe
+            break
+        else:
+            print(Fore.RED + "Invalid timeframe selected. Please try again.")
+
+    print(Fore.GREEN + f"Configuration set to Symbol: {config.SYMBOL}, Timeframe: {config.TIMEFRAME}\n")
+
+    try:
+        bot = EhlersSuperTrendBot(config)
+        bot.run()
+    except Exception as e:
+        # Catch any fatal error during bot initialization
+        logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s - %(levelname)s - %(message)s')
+        logging.critical(f"A fatal error occurred: {e}", exc_info=True)
+        sys.exit(1)

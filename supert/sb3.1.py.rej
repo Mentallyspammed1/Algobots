@@ -1,0 +1,12 @@
+--- sb3.1.py
++++ sb3.1.py
+@@ -1348,7 +1348,7 @@
+         st_bearish = latest['supertrend_direction'] == -1
+         
+         adx_trending = latest['adx'] > self.config.ADX_MIN_THRESHOLD
+-        rsi_bullish = latest['rsi'] > 51
+-        rsi_bearish = latest['rsi
++        rsi_bullish = latest['rsi'] > 50
++        rsi_bearish = latest['rsi'] < 50
+         
+         # Entry Conditions

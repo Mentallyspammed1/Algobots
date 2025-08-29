@@ -109,6 +109,7 @@ NEON_BLUE = Fore.CYAN
 NEON_PURPLE = Fore.MAGENTA
 NEON_YELLOW = Fore.YELLOW
 NEON_RED = Fore.LIGHTRED_EX
+NEON_CYAN = Fore.CYAN # Added NEON_CYAN definition
 RESET = Style.RESET_ALL
 
 # --- Configuration & Constants ---
