@@ -19,6 +19,7 @@ import pandas as pd
 import pytz
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
+from pybit.exceptions import FailedRequestError
 
 # --- INITIAL SETUP ---
 
@@ -713,54 +714,87 @@ class BybitTradingBot:
     async def _place_single_order(self, symbol: str, side: OrderSide, quantity: float, order_type: OrderType,
                                   price: Optional[float] = None, stop_loss: Optional[float] = None,
                                   take_profit: Optional[float] = None) -> Optional[str]:
-        """Internal helper to place a single order for a specific symbol with proper precision and error handling."""
+        """
+        Internal helper to place a single order for a specific symbol with proper precision and error handling.
+        Includes retry logic with exponential backoff for rate limit errors.
+        """
         if symbol not in self.market_info:
             logger.error(f"[{symbol}] Cannot place order, market info not loaded.")
             return None
         
         market_info = self.market_info[symbol] # Get market info for the specific symbol
 
-        try:
-            formatted_qty = market_info.format_quantity(quantity)
-            if float(formatted_qty) <= float(market_info.lot_size): # Ensure quantity is not zero or too small after precision formatting
-                logger.warning(f"[{symbol}] Formatted quantity for order is too small ({formatted_qty}), skipping. Original: {quantity}. Minimum lot size: {market_info.lot_size}")
-                return None
-
-            params = {
-                "category": self.config.category,
-                "symbol": symbol, # Use the specific symbol
-                "side": side.value,
-                "orderType": order_type.value,
-                "qty": formatted_qty,
-                "isLeverage": 1, # Always use leverage for derivatives
-                "tpslMode": "Full" # Ensure SL/TP are attached to the position
-            }
-
-            if order_type == OrderType.LIMIT and price is not None:
-                params["price"] = market_info.format_price(price) # Use specific market_info for formatting
-            
-            if stop_loss is not None:
-                params["stopLoss"] = market_info.format_price(stop_loss)
-                params["slTriggerBy"] = "MarkPrice" # Using MarkPrice for consistent triggering
-            
-            if take_profit is not None:
-                params["takeProfit"] = market_info.format_price(take_profit)
-                params["tpTriggerBy"] = "MarkPrice"
-
-            logger.debug(f"[{symbol}] Attempting to place order with params: {params}")
-            response = self.session.place_order(**params)
-            
-            if response and response['retCode'] == 0:
-                order_id = response['result']['orderId']
-                logger.info(f"[{symbol}] TRADE: Order placed successfully: ID {order_id}, Side {side.value}, Qty {formatted_qty}, SL: {stop_loss}, TP: {take_profit}")
-                return order_id
-            else:
-                error_msg = response.get('retMsg', 'Unknown error') if response else 'No response from API'
-                logger.error(f"[{symbol}] Failed to place order: {error_msg} (Code: {response.get('retCode', 'N/A')})")
-                return None
-        except Exception as e:
-            logger.error(f"[{symbol}] Error placing order: {e}", exc_info=True)
+        formatted_qty = market_info.format_quantity(quantity)
+        if float(formatted_qty) <= float(market_info.lot_size): # Ensure quantity is not zero or too small after precision formatting
+            logger.warning(f"[{symbol}] Formatted quantity for order is too small ({formatted_qty}), skipping. Original: {quantity}. Minimum lot size: {market_info.lot_size}")
             return None
+
+        params = {
+            "category": self.config.category,
+            "symbol": symbol, # Use the specific symbol
+            "side": side.value,
+            "orderType": order_type.value,
+            "qty": formatted_qty,
+            "isLeverage": 1, # Always use leverage for derivatives
+            "tpslMode": "Full" # Ensure SL/TP are attached to the position
+        }
+
+        if order_type == OrderType.LIMIT and price is not None:
+            params["price"] = market_info.format_price(price) # Use specific market_info for formatting
+        
+        if stop_loss is not None:
+            params["stopLoss"] = market_info.format_price(stop_loss)
+            params["slTriggerBy"] = "MarkPrice" # Using MarkPrice for consistent triggering
+        
+        if take_profit is not None:
+            params["takeProfit"] = market_info.format_price(take_profit)
+            params["tpTriggerBy"] = "MarkPrice"
+
+        retries = 5
+        delay = 5  # Initial delay in seconds
+
+        for i in range(retries):
+            try:
+                logger.debug(f"[{symbol}] Attempting to place order (attempt {i+1}/{retries}) with params: {params}")
+                response = self.session.place_order(**params)
+                
+                if response and response['retCode'] == 0:
+                    order_id = response['result']['orderId']
+                    logger.info(f"[{symbol}] TRADE: Order placed successfully: ID {order_id}, Side {side.value}, Qty {formatted_qty}, SL: {stop_loss}, TP: {take_profit}")
+                    return order_id
+                else:
+                    error_msg = response.get('retMsg', 'Unknown error') if response else 'No response from API'
+                    ret_code = response.get('retCode', 'N/A')
+                    # Bybit's specific rate limit error code is 10006.
+                    if ret_code == 10006 or "rate limit" in error_msg:
+                        logger.warning(f"[{symbol}] Rate limit hit on attempt {i+1}/{retries}: {error_msg}. Retrying in {delay}s.")
+                        if i < retries - 1:
+                            await asyncio.sleep(delay)
+                            delay *= 2  # Exponential backoff
+                            continue
+                    
+                    logger.error(f"[{symbol}] Failed to place order with non-retriable error: {error_msg} (Code: {ret_code})")
+                    return None
+
+            except FailedRequestError as e:
+                # This catches HTTP errors like 403 Forbidden, which Bybit uses for IP-based rate limits or region blocks.
+                if "rate limit" in str(e) or "403" in str(e):
+                    if i < retries - 1:
+                        logger.warning(f"[{symbol}] Rate limit HTTP error on attempt {i+1}/{retries}: {e}. Retrying in {delay}s. If this persists, your IP may be blocked (e.g., from USA).")
+                        await asyncio.sleep(delay)
+                        delay *= 2
+                    else:
+                        logger.error(f"[{symbol}] Final attempt failed due to rate limit error: {e}", exc_info=True)
+                        return None
+                else:
+                    logger.error(f"[{symbol}] Non-retriable HTTP error placing order: {e}", exc_info=True)
+                    return None # Don't retry for other HTTP errors
+            except Exception as e:
+                logger.error(f"[{symbol}] An unexpected error occurred placing order: {e}", exc_info=True)
+                return None # Don't retry for unexpected errors
+
+        logger.error(f"[{symbol}] Failed to place order after {retries} attempts.")
+        return None
 
     async def place_market_order(self, symbol: str, side: OrderSide, quantity: float, stop_loss: Optional[float] = None, take_profit: Optional[float] = None) -> Optional[str]:
         """Place a market order for a specific symbol."""

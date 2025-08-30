@@ -15,3 +15,5 @@ logs/
 
 # Pickle files
 *.pkl
+.gemini/
+gha-creds-*.json

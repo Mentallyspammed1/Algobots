@@ -1,0 +1,152 @@
+name: Unified Code Quality
+
+on:
+  push:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  python-quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pylint flake8 black google-generativeai
+
+    - name: Run Linters
+      run: |
+        pylint **/*.py > pylint-report.txt || true
+        flake8 . > flake8-report.txt || true
+
+    - name: Analyze Linter Results with Gemini
+      id: gemini-analysis-python
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        python .github/scripts/analyze_python.py pylint-report.txt flake8-report.txt gemini-python-suggestions.md
+
+    - name: Apply Black Formatting
+      run: black .
+
+    - name: Check for changes
+      id: changes
+      run: |
+        git status --porcelain
+        echo "has_changes=$(if [[ -n $(git status -s) ]]; then echo "true"; else echo "false"; fi)" >> $GITHUB_OUTPUT
+
+    - name: Create Auto-fix PR for Python
+      if: steps.changes.outputs.has_changes == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "style(python): Auto-apply black and fix lint issues"
+        title: "🤖 Auto-fix (Python): Code quality improvements"
+        body: |
+          This PR automatically applies `black` formatting and provides linting suggestions from Gemini for Python files.
+
+          ### 🧙‍♂️ Gemini's Python Suggestions ✨
+          ${{ steps.gemini-analysis-python.outputs.suggestions || 'No suggestions generated.' }}
+        branch: auto-fix/python-${{ github.run_id }}
+        delete-branch: true
+        labels: automated, ai-generated, code-quality, python
+
+  javascript-quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install -g @google/generative-ai prettier
+
+    - name: Determine changed files
+      id: changed
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          git fetch origin main
+          CHANGED=$(git diff --name-only origin/main...HEAD -- '*.js' '*.ts' '*.jsx' '*.tsx')
+        else
+          CHANGED=$(git ls-files '*.js' '*.ts' '*.jsx' '*.tsx')
+        fi
+        echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGED" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Run linters and collect issues
+      id: linting
+      run: |
+        npm run lint:all || true
+        npm run eslint -- --format json --output-file eslint-issues.json || true
+        echo "issues_summary<<EOF" >> $GITHUB_OUTPUT
+        if [ -f eslint-issues.json ]; then
+          cat eslint-issues.json
+        fi
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Analyze code with Gemini
+      id: gemini-analysis-js
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        # Assuming analyze-with-gemini.js exists and works as in the original file
+        if [ -f .github/scripts/analyze-with-gemini.js ]; then
+          node .github/scripts/analyze-with-gemini.js \
+            --issues "${{ steps.linting.outputs.issues_summary }}" \
+            --files "${{ steps.changed.outputs.changed_files }}" \
+            --output analysis-results.json
+        else
+            echo '{"has-fixes": "false", "summary": "analyze-with-gemini.js not found"}' > analysis-results.json
+        fi
+
+    - name: Format code after AI fixes
+      if: fromJson(steps.gemini-analysis-js.outputs.has-fixes || 'false')
+      run: |
+        npx prettier --write .
+        npm run fix:lint || true
+
+    - name: Create or update auto-fix PR for JS/TS
+      if: fromJson(steps.gemini-analysis-js.outputs.has-fixes || 'false') && github.event.pull_request.head.repo.full_name == github.repository
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "fix(js): Auto-fix code quality issues"
+        title: "🤖 Auto-fix (JS/TS): Code quality improvements"
+        body: |
+          This PR automatically fixes code quality issues detected by ESLint/Stylelint and analyzed by Gemini.
+
+          ## Changes Summary
+          ${{ fromJson(steps.gemini-analysis-js.outputs.changes-summary || '{}') }}
+
+          ## Files Changed
+          ${{ fromJson(steps.gemini-analysis-js.outputs.files-changed || '{}') }}
+        branch: auto-fix/js-${{ github.run_id }}
+        delete-branch: true
+        labels: automated, ai-generated, code-quality, javascript
