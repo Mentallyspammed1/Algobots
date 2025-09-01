@@ -9,7 +9,7 @@
         "enabled": true,
         "account_balance": 100.0,
         "risk_per_trade_percent": 1.0,
-        "stop_loss_atr_multiple": 0.4,
+        "stop_loss_atr_multiple": 0.5,
         "take_profit_atr_multiple": 0.9,
         "max_open_positions": 5,
         "trailing_stop_atr_multiple": 0.3,
