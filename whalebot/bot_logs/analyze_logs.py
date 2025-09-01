@@ -23,7 +23,7 @@ def analyze_trade_logs(log_file_path: str) -> list:
     confidence_level = None
     last_timestamp = None
 
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\-_]|[\[0-?]*[ -/]*[@-~])')
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\-_]|[[\[0-?]*[ -/]*[@-~])')
     timestamp_regex = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})")
 
     try:
@@ -56,8 +56,6 @@ def analyze_trade_logs(log_file_path: str) -> list:
                 )
 
                 if opened_position_match:
-                    # Extract details for opened trade
-                    # Group 1: BUY/SELL, Group 2: entry_time_str, Group 3: symbol, Group 4: side, Group 5: entry_price, Group 6: qty, Group 7: stop_loss, Group 8: take_profit
                     side = opened_position_match.group(1)
                     entry_time_str = opened_position_match.group(2)
                     symbol = opened_position_match.group(3)
@@ -65,7 +63,6 @@ def analyze_trade_logs(log_file_path: str) -> list:
                     stop_loss = float(opened_position_match.group(7))
                     take_profit = float(opened_position_match.group(8))
 
-                    # Create a unique trade ID using entry_time and symbol
                     trade_id = f"{symbol}_{entry_time_str}"
 
                     if current_price is not None and confidence_level is not None and last_timestamp is not None:
@@ -86,8 +83,6 @@ def analyze_trade_logs(log_file_path: str) -> list:
                         print(f"Warning: Skipped opened trade entry due to missing data: {clean_line}")
 
                 elif closed_position_match:
-                    # Extract details for closed trade
-                    # Group 1: BUY/SELL, Group 2: close_reason, Group 3: entry_time_str, Group 4: symbol, Group 5: side, Group 6: entry_price, Group 7: qty, Group 8: stop_loss, Group 9: take_profit, Group 10: exit_time_str, Group 11: exit_price, Group 12: closed_by, Group 13: pnl
                     entry_time_str = closed_position_match.group(3)
                     symbol = closed_position_match.group(4)
 
@@ -107,13 +102,30 @@ def analyze_trade_logs(log_file_path: str) -> list:
 
     return list(active_trades.values()) # Return only currently active trades
 
+def suggest_trades(current_signals: list, confidence_threshold: float = 1.5) -> list:
+    """
+    Suggests new trades based on current open signals and a confidence threshold.
+
+    Args:
+        current_signals (list): A list of currently open trade signals.
+        confidence_threshold (float): The minimum confidence level required to suggest a trade.
+
+    Returns:
+        list: A list of suggested trades.
+    """
+    suggested_trades = []
+    for signal in current_signals:
+        if signal['confidence_level'] >= confidence_threshold:
+            suggested_trades.append(signal)
+    return suggested_trades
+
 # Example Usage:
 if __name__ == "__main__":
     log_file_path = "/data/data/com.termux/files/home/Algobots/whalebot/bot_logs/wgwhalex_bot.log"
 
     current_signals = analyze_trade_logs(log_file_path)
+    suggested_trades = suggest_trades(current_signals, confidence_threshold=1.5) # Example threshold
 
-    # Find the trade with the highest confidence level among current signals
     top_confidence_signal = None
     if current_signals:
         top_confidence_signal = max(current_signals, key=lambda x: x['confidence_level'])
@@ -132,6 +144,18 @@ if __name__ == "__main__":
             styled_output.append(f"    **Current Price:** {signal['current_price']:.5f}")
             styled_output.append("")
 
+        if suggested_trades:
+            styled_output.append("💡 **Prophecies of New Trades (Suggested based on Confidence):**")
+            for trade in suggested_trades:
+                styled_output.append(f"  - **Time:** {trade['timestamp']}")
+                styled_output.append(f"    **Suggestion:** Initiate a {trade['side']} trade (Confidence: {trade['confidence_level']:.2f})")
+                styled_output.append(f"    **Entry Price:** {trade['entry']:.5f} | **Anticipated TP:** {trade['tp']:.5f} | **Protective SL:** {trade['sl']:.5f}")
+                styled_output.append(f"    **Current Market Price:** {trade['current_price']:.5f}")
+                styled_output.append("")
+        else:
+            styled_output.append("No new trade prophecies at this moment (no signals met the confidence threshold).")
+        styled_output.append("")
+
         if top_confidence_signal:
             styled_output.append("🌟 **Top Confidence Current Signal:**")
             styled_output.append(f"  - **Time:** {top_confidence_signal['timestamp']}")
@@ -141,5 +165,8 @@ if __name__ == "__main__":
             styled_output.append("")
     else:
         styled_output.append("No current open scalp trades (signals) found in the log.")
+
+    styled_output.append("--- To leverage the Gemini API for more advanced strategy formulation or signal interpretation, you would integrate a Python library like `google-generativeai` here. This would allow the model to analyze the `current_signals` data and provide nuanced insights or even generate dynamic trading rules based on complex patterns.")
+    styled_output.append("For example, you could send the `current_signals` data to the Gemini API and ask: \"Given these trade signals, what is the optimal strategy?\"")
 
     print("\n".join(styled_output))

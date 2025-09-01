@@ -1,16 +1,16 @@
 {
     "symbol": "TRUMPUSDT",
-    "interval": "3",
+    "interval": "1",
     "loop_delay": 1,
-    "orderbook_limit": 50,
-    "signal_score_threshold": 1.1,
+    "orderbook_limit": 150,
+    "signal_score_threshold": 0.8,
     "volume_confirmation_multiplier": 0.5,
     "trade_management": {
         "enabled": true,
-        "account_balance": 1000.0,
+        "account_balance": 100.0,
         "risk_per_trade_percent": 0.1,
-        "stop_loss_atr_multiple": 0.3,
-        "take_profit_atr_multiple": 0.7,
+        "stop_loss_atr_multiple": 0.5,
+        "take_profit_atr_multiple": 0.8,
         "max_open_positions": 5,
         "trailing_stop_atr_multiple": 0.5,
         "default_leverage": 5
@@ -18,8 +18,8 @@
     "mtf_analysis": {
         "enabled": true,
         "higher_timeframes": [
-            "15",
-            "240"
+            "3",
+            "15"
         ],
         "trend_indicators": [
             "ema",
