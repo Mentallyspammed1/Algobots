@@ -1,19 +1,21 @@
 {
-    "symbol": "TRUMPUSDT",
-    "interval": "1",
+    "symbol": "BTCUSDT",
+    "interval": "60",
     "loop_delay": 1,
     "orderbook_limit": 150,
-    "signal_score_threshold": 0.8,
+    "signal_score_threshold": 0.7,
     "volume_confirmation_multiplier": 0.5,
     "trade_management": {
         "enabled": true,
         "account_balance": 100.0,
         "risk_per_trade_percent": 0.1,
-        "stop_loss_atr_multiple": 0.5,
-        "take_profit_atr_multiple": 0.8,
+        "stop_loss_atr_multiple": 0.4,
+        "take_profit_atr_multiple": 0.7,
         "max_open_positions": 5,
         "trailing_stop_atr_multiple": 0.5,
-        "default_leverage": 5
+        "default_leverage": 5,
+        "order_precision": 4,
+        "price_precision": 2
     },
     "mtf_analysis": {
         "enabled": true,
@@ -84,7 +86,11 @@
         "williams_r_oversold": -80,
         "williams_r_overbought": -20,
         "mfi_oversold": 10,
-        "mfi_overbought": 90
+        "mfi_overbought": 90,
+        "volatility_index_period": 20,
+        "vwma_period": 20,
+        "volume_delta_period": 5,
+        "volume_delta_threshold": 0.2
     },
     "indicators": {
         "ema_alignment": true,
@@ -107,7 +113,10 @@
         "adx": true,
         "ichimoku_cloud": true,
         "obv": true,
-        "cmf": true
+        "cmf": true,
+        "volatility_index": true,
+        "vwma": true,
+        "volume_delta": true
     },
     "weight_sets": {
         "default_scalping": {
@@ -131,7 +140,11 @@
             "ichimoku_confluence": 0.38,
             "obv_momentum": 0.18,
             "cmf_flow": 0.12,
-            "mtf_trend_confluence": 0.32
+            "mtf_trend_confluence": 0.32,
+            "momentum_rsi_stoch_cci_wr_mfi": 0.18,
+            "volatility_index_signal": 0.15,
+            "vwma_cross": 0.15,
+            "volume_delta_signal": 0.1
         }
     },
     "testnet": false,

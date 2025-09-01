@@ -1052,13 +1052,21 @@ class BybitClient:
         self.logger.info(f"{NEON_BLUE}Private WebSocket started.{RESET}")
 
     async def _monitor_ws_connection(self, ws_client: WebSocket, name: str):
-        """Monitors WebSocket connection and logs status."""
+        """Monitors WebSocket connection, logs status, and sends pings."""
+        custom_ping_message = json.dumps({"op": "ping"})
         while True:
-            await asyncio.sleep(5)
+            await asyncio.sleep(15)  # Check every 15 seconds
             if not ws_client.is_connected():
                 self.logger.info(f"{NEON_YELLOW}{name} is not connected. pybit will attempt automatic reconnection.{RESET}")
             else:
-                self.logger.debug(f"{name} is connected.")
+                try:
+                    # Send a custom ping to keep the connection alive
+                    ws_client.send(custom_ping_message)
+                    self.logger.debug(f"Sent ping to {name}.")
+                except WebSocketConnectionClosedException:
+                    self.logger.warning(f"Could not send ping to {name}, connection is closed.")
+                except Exception as e:
+                    self.logger.error(f"An error occurred while sending ping to {name}: {e}")
 
     async def stop_ws(self):
         """Stops all WebSocket connections."""
@@ -1620,7 +1628,7 @@ class TradingAnalyzer:
                 self.indicator_values["RSI"] = self.df["RSI"].iloc[-1]
 
         if cfg["indicators"].get("stoch_rsi", False):
-            stoch_rsi_k, stoch_rsi_d = self._safe_calculate(
+            stoch_rsi_result = self._safe_calculate(
                 self.indicator_calculator.calculate_stoch_rsi,
                 "StochRSI",
                 min_data_points=isd["stoch_rsi_period"]
@@ -1629,30 +1637,34 @@ class TradingAnalyzer:
                 df=self.df, period=isd["stoch_rsi_period"], k_period=isd["stoch_k_period"],
                 d_period=isd["stoch_d_period"],
             )
-            if stoch_rsi_k is not None and not stoch_rsi_k.empty:
-                self.df["StochRSI_K"] = stoch_rsi_k
-                self.indicator_values["StochRSI_K"] = stoch_rsi_k.iloc[-1]
-            if stoch_rsi_d is not None and not stoch_rsi_d.empty:
-                self.df["StochRSI_D"] = stoch_rsi_d
-                self.indicator_values["StochRSI_D"] = stoch_rsi_d.iloc[-1]
+            if stoch_rsi_result is not None:
+                stoch_rsi_k, stoch_rsi_d = stoch_rsi_result
+                if stoch_rsi_k is not None and not stoch_rsi_k.empty:
+                    self.df["StochRSI_K"] = stoch_rsi_k
+                    self.indicator_values["StochRSI_K"] = stoch_rsi_k.iloc[-1]
+                if stoch_rsi_d is not None and not stoch_rsi_d.empty:
+                    self.df["StochRSI_D"] = stoch_rsi_d
+                    self.indicator_values["StochRSI_D"] = stoch_rsi_d.iloc[-1]
 
         if cfg["indicators"].get("bollinger_bands", False):
-            bb_upper, bb_middle, bb_lower = self._safe_calculate(
+            bb_result = self._safe_calculate(
                 self.indicator_calculator.calculate_bollinger_bands,
                 "BollingerBands",
                 min_data_points=isd["bollinger_bands_period"],
                 df=self.df, period=isd["bollinger_bands_period"],
                 std_dev=isd["bollinger_bands_std_dev"],
             )
-            if bb_upper is not None and not bb_upper.empty:
-                self.df["BB_Upper"] = bb_upper
-                self.indicator_values["BB_Upper"] = bb_upper.iloc[-1]
-            if bb_middle is not None and not bb_middle.empty:
-                self.df["BB_Middle"] = bb_middle
-                self.indicator_values["BB_Middle"] = bb_middle.iloc[-1]
-            if bb_lower is not None and not bb_lower.empty:
-                self.df["BB_Lower"] = bb_lower
-                self.indicator_values["BB_Lower"] = bb_lower.iloc[-1]
+            if bb_result is not None:
+                bb_upper, bb_middle, bb_lower = bb_result
+                if bb_upper is not None and not bb_upper.empty:
+                    self.df["BB_Upper"] = bb_upper
+                    self.indicator_values["BB_Upper"] = bb_upper.iloc[-1]
+                if bb_middle is not None and not bb_middle.empty:
+                    self.df["BB_Middle"] = bb_middle
+                    self.indicator_values["BB_Middle"] = bb_middle.iloc[-1]
+                if bb_lower is not None and not bb_lower.empty:
+                    self.df["BB_Lower"] = bb_lower
+                    self.indicator_values["BB_Lower"] = bb_lower.iloc[-1]
 
         if cfg["indicators"].get("cci", False):
             self.df["CCI"] = self._safe_calculate(
@@ -1794,39 +1806,43 @@ class TradingAnalyzer:
                 self.indicator_values["ST_Slow_Val"] = st_slow_result["supertrend"].iloc[-1]
 
         if cfg["indicators"].get("macd", False):
-            macd_line, signal_line, histogram = self._safe_calculate(
+            macd_result = self._safe_calculate(
                 self.indicator_calculator.calculate_macd,
                 "MACD",
                 min_data_points=isd["macd_slow_period"] + isd["macd_signal_period"],
                 df=self.df, fast_period=isd["macd_fast_period"], slow_period=isd["macd_slow_period"],
                 signal_period=isd["macd_signal_period"],
             )
-            if macd_line is not None and not macd_line.empty:
-                self.df["MACD_Line"] = macd_line
-                self.indicator_values["MACD_Line"] = macd_line.iloc[-1]
-            if signal_line is not None and not signal_line.empty:
-                self.df["MACD_Signal"] = signal_line
-                self.indicator_values["MACD_Signal"] = signal_line.iloc[-1]
-            if histogram is not None and not histogram.empty:
-                self.df["MACD_Hist"] = histogram
-                self.indicator_values["MACD_Hist"] = histogram.iloc[-1]
+            if macd_result is not None:
+                macd_line, signal_line, histogram = macd_result
+                if macd_line is not None and not macd_line.empty:
+                    self.df["MACD_Line"] = macd_line
+                    self.indicator_values["MACD_Line"] = macd_line.iloc[-1]
+                if signal_line is not None and not signal_line.empty:
+                    self.df["MACD_Signal"] = signal_line
+                    self.indicator_values["MACD_Signal"] = signal_line.iloc[-1]
+                if histogram is not None and not histogram.empty:
+                    self.df["MACD_Hist"] = histogram
+                    self.indicator_values["MACD_Hist"] = histogram.iloc[-1]
 
         if cfg["indicators"].get("adx", False):
-            adx_val, plus_di, minus_di = self._safe_calculate(
+            adx_result = self._safe_calculate(
                 self.indicator_calculator.calculate_adx,
                 "ADX",
                 min_data_points=isd["adx_period"] * 2,
                 df=self.df, period=isd["adx_period"],
             )
-            if adx_val is not None and not adx_val.empty:
-                self.df["ADX"] = adx_val
-                self.indicator_values["ADX"] = adx_val.iloc[-1]
-            if plus_di is not None and not plus_di.empty:
-                self.df["PlusDI"] = plus_di
-                self.indicator_values["PlusDI"] = plus_di.iloc[-1]
-            if minus_di is not None and not minus_di.empty:
-                self.df["MinusDI"] = minus_di
-                self.indicator_values["MinusDI"] = minus_di.iloc[-1]
+            if adx_result is not None:
+                adx_val, plus_di, minus_di = adx_result
+                if adx_val is not None and not adx_val.empty:
+                    self.df["ADX"] = adx_val
+                    self.indicator_values["ADX"] = adx_val.iloc[-1]
+                if plus_di is not None and not plus_di.empty:
+                    self.df["PlusDI"] = plus_di
+                    self.indicator_values["PlusDI"] = plus_di.iloc[-1]
+                if minus_di is not None and not minus_di.empty:
+                    self.df["MinusDI"] = minus_di
+                    self.indicator_values["MinusDI"] = minus_di.iloc[-1]
 
         initial_len = len(self.df)
 

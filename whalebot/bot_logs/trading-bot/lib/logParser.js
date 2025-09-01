@@ -76,7 +76,8 @@ export default class LogParser {
         for (const [key, pattern] of Object.entries(this.indicatorPatterns)) {
           const match = line.match(pattern);
           if (match) {
-            currentDataPoint[key] = parseFloat(match[1]) || match[1];
+            const parsedValue = parseFloat(match[1]);
+            currentDataPoint[key] = isNaN(parsedValue) ? undefined : parsedValue;
           }
         }
 

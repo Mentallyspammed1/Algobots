@@ -85,8 +85,8 @@ export default class SignalGenerator {
       stopLoss: this.roundPrice(stopLoss),
       takeProfit: this.roundPrice(takeProfit),
       riskReward: riskReward.toFixed(2),
-      slPercentage: slPercentage.toFixed(2),
-      tpPercentage: tpPercentage.toFixed(2),
+      slPercentage: slPercentage,
+      tpPercentage: tpPercentage,
       positionSize: this.calculatePositionSize(entry, stopLoss),
       entryStrategy: aiAnalysis.entryStrategy,
       exitStrategy: aiAnalysis.exitStrategy
@@ -94,23 +94,28 @@ export default class SignalGenerator {
   }
 
   calculateStopLoss(entry, atr, action, marketData) {
-    // Use multiple factors for stop loss
-    let stopDistance = atr * 1.5; // 1.5x ATR as base
-    
-    // Adjust based on volatility
-    if (marketData.adx > 40) {
+    // Ensure atr is a valid number, default to 0.2% of currentPrice if not
+    const safeAtr = (typeof atr === 'number' && !isNaN(atr)) ? atr : (entry * 0.002);
+    let stopDistance = safeAtr * 1.5; // 1.5x ATR as base
+
+    // Adjust based on volatility, ensure marketData.adx is a number
+    const adxValue = (typeof marketData.adx === 'number' && !isNaN(marketData.adx)) ? marketData.adx : 0;
+    if (adxValue > 40) {
       stopDistance *= 1.2; // Wider stop for strong trends
     }
-    
-    // Consider Bollinger Bands
-    if (action === 'BUY' && marketData.bb_lower) {
-      const bbStop = entry - (entry - marketData.bb_lower) * 0.5;
+
+    // Consider Bollinger Bands, ensure bb_lower and bb_upper are numbers
+    const bbLower = (typeof marketData.bb_lower === 'number' && !isNaN(marketData.bb_lower)) ? marketData.bb_lower : undefined;
+    const bbUpper = (typeof marketData.bb_upper === 'number' && !isNaN(marketData.bb_upper)) ? marketData.bb_upper : undefined;
+
+    if (action === 'BUY' && bbLower !== undefined) {
+      const bbStop = entry - (entry - bbLower) * 0.5;
       return Math.min(entry - stopDistance, bbStop);
-    } else if (action === 'SELL' && marketData.bb_upper) {
-      const bbStop = entry + (marketData.bb_upper - entry) * 0.5;
+    } else if (action === 'SELL' && bbUpper !== undefined) {
+      const bbStop = entry + (bbUpper - entry) * 0.5;
       return Math.max(entry + stopDistance, bbStop);
     }
-    
+
     return action === 'BUY' ? entry - stopDistance : entry + stopDistance;
   }
 
@@ -169,5 +174,30 @@ export default class SignalGenerator {
       trend: 'UNKNOWN',
       trendStrength: 0
     };
+  }
+
+  logSignalSummary(signal) {
+    console.log(chalk.cyan('\n' + '='.repeat(50)));
+    console.log(chalk.white.bold('📊 SIGNAL SUMMARY'));
+    console.log(chalk.cyan('='.repeat(50)));
+
+    const actionColor = signal.action === 'BUY' ? chalk.green :
+                       signal.action === 'SELL' ? chalk.red :
+                       chalk.yellow;
+
+    console.log(chalk.white(`Symbol: ${chalk.bold(signal.symbol || 'N/A')}`));
+    console.log(chalk.white(`Action: ${actionColor.bold(signal.action || 'N/A')}`));
+    console.log(chalk.white(`Current Price: ${chalk.bold(`$${typeof signal.currentPrice === 'number' && !isNaN(signal.currentPrice) ? signal.currentPrice.toFixed(2) : 'N/A'}`)}`));
+
+    if (signal.action !== 'HOLD') {
+      console.log(chalk.white(`Entry: ${chalk.bold(`$${typeof signal.entry === 'number' && !isNaN(signal.entry) ? signal.entry.toFixed(2) : 'N/A'}`)}`));
+      console.log(chalk.green(`Take Profit: ${chalk.bold(`$${typeof signal.takeProfit === 'number' && !isNaN(signal.takeProfit) ? signal.takeProfit.toFixed(2) : 'N/A'}`)} (${typeof signal.tpPercentage === 'number' && !isNaN(signal.tpPercentage) ? signal.tpPercentage.toFixed(2) : 'N/A'}%)`));
+      console.log(chalk.red(`Stop Loss: ${chalk.bold(`$${typeof signal.stopLoss === 'number' && !isNaN(signal.stopLoss) ? signal.stopLoss.toFixed(2) : 'N/A'}`)} (${typeof signal.slPercentage === 'number' && !isNaN(signal.slPercentage) ? signal.slPercentage.toFixed(2) : 'N/A'}%)`));
+      console.log(chalk.white(`Risk/Reward: ${chalk.bold(signal.riskReward || 'N/A')}`));
+    }
+
+    console.log(chalk.white(`Confidence: ${this.getConfidenceBar(signal.confidence || 0)}`));
+    console.log(chalk.white(`Reasoning: ${signal.reasoning || 'No specific reasoning provided.'}`));
+    console.log(chalk.cyan('='.repeat(50) + '\n'));
   }
 }
