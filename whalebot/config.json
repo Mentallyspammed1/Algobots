@@ -2,7 +2,7 @@
     "symbol": "TRUMPUSDT",
     "interval": "3",
     "loop_delay": 1,
-    "orderbook_limit": 250,
+    "orderbook_limit": 50,
     "signal_score_threshold": 1.1,
     "volume_confirmation_multiplier": 0.5,
     "trade_management": {
@@ -83,8 +83,8 @@
         "cci_overbought": 100,
         "williams_r_oversold": -80,
         "williams_r_overbought": -20,
-        "mfi_oversold": 20,
-        "mfi_overbought": 80
+        "mfi_oversold": 10,
+        "mfi_overbought": 90
     },
     "indicators": {
         "ema_alignment": true,
@@ -135,5 +135,12 @@
         }
     },
     "testnet": false,
-    "timezone": "America/Chicago"
+    "timezone": "America/Chicago",
+    "gemini_ai_analysis": {
+        "enabled": false,
+        "model_name": "gemini-pro",
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "weight": 0.3
+    }
 }

@@ -20,7 +20,13 @@ import pandas_ta as ta
 import requests
 from colorama import Fore, Style, init
 
+import warnings
+warnings.simplefilter("ignore", FutureWarning)
+warnings.simplefilter("ignore", UserWarning)
+
 from pybit.unified_trading import HTTP, WebSocket
+
+from gemini_client import GeminiClient # New: Import GeminiClient
 
 SKLEARN_AVAILABLE = False
 
@@ -979,9 +985,8 @@ class BybitClient:
         """Starts public WebSocket streams."""
         self.ws_public = WebSocket(channel_type=self.category, testnet=self.testnet)
 
-        async def _ws_callback_wrapper(raw_message):
-            try:
-                message = json.loads(raw_message)
+        def _ws_callback_wrapper(raw_message):
+            async def _handle_message_async(message):
                 topic = message.get('topic')
                 if topic and 'kline' in topic:
                     await kline_callback(message)
@@ -989,6 +994,9 @@ class BybitClient:
                     await ticker_callback(message)
                 elif topic and 'orderbook' in topic:
                     await orderbook_callback(message)
+            try:
+                message = json.loads(raw_message)
+                asyncio.create_task(_handle_message_async(message))
             except json.JSONDecodeError:
                 self.logger.error(f"{NEON_RED}Failed to decode WS message: {raw_message}{RESET}")
             except Exception as e:
@@ -1016,9 +1024,8 @@ class BybitClient:
             api_secret=self.api_secret
         )
 
-        async def _ws_callback_wrapper(raw_message):
-            try:
-                message = json.loads(raw_message)
+        def _ws_callback_wrapper(raw_message):
+            async def _handle_message_async(message):
                 topic = message.get('topic')
                 if topic == 'position':
                     await position_callback(message)
@@ -1028,6 +1035,9 @@ class BybitClient:
                     await execution_callback(message)
                 elif topic == 'wallet':
                     await wallet_callback(message)
+            try:
+                message = json.loads(raw_message)
+                asyncio.create_task(_handle_message_async(message))
             except json.JSONDecodeError:
                 self.logger.error(f"{NEON_RED}Failed to decode WS message: {raw_message}{RESET}")
             except Exception as e:
@@ -1046,7 +1056,7 @@ class BybitClient:
         while True:
             await asyncio.sleep(5)
             if not ws_client.is_connected():
-                self.logger.warning(f"{NEON_YELLOW}{name} is not connected. pybit will attempt automatic reconnection.{RESET}")
+                self.logger.info(f"{NEON_YELLOW}{name} is not connected. pybit will attempt automatic reconnection.{RESET}")
             else:
                 self.logger.debug(f"{name} is connected.")
 
@@ -1478,6 +1488,22 @@ class TradingAnalyzer:
         self.weights = config["weight_sets"]["default_scalping"]
         self.indicator_settings = config["indicator_settings"]
 
+        self.gemini_client: GeminiClient | None = None
+        if config["gemini_ai_analysis"]["enabled"]:
+            gemini_api_key = os.getenv("GEMINI_API_KEY")
+            if not gemini_api_key:
+                self.logger.error(f"{NEON_RED}GEMINI_API_KEY environment variable is not set, but gemini_ai_analysis is enabled. Disabling Gemini AI analysis.{RESET}")
+                config["gemini_ai_analysis"]["enabled"] = False
+            else:
+                self.gemini_client = GeminiClient(
+                    api_key=gemini_api_key,
+                    model_name=config["gemini_ai_analysis"]["model_name"],
+                    temperature=config["gemini_ai_analysis"]["temperature"],
+                    top_p=config["gemini_ai_analysis"]["top_p"],
+                    logger=logger
+                )
+                self.logger.info(f"{NEON_GREEN}Gemini AI analysis enabled and client initialized.{RESET}")
+
     def update_data(self, new_df: pd.DataFrame):
         """Updates the internal DataFrame and recalculates indicators."""
         if new_df.empty:
@@ -1861,6 +1887,26 @@ class TradingAnalyzer:
             "100.0%": decimal_low,
         }
         self.logger.debug(f"Calculated Fibonacci levels: {self.fib_levels}")
+
+    def _summarize_market_for_gemini(self, current_price: Decimal) -> str:
+        """Summarizes current market data and indicators for Gemini AI analysis."""
+        summary = f"Current Market Data for {self.symbol}:\n"
+        summary += f"Current Price: {current_price}\n"
+        summary += f"Current Volume: {self.df['volume'].iloc[-1] if not self.df.empty else 'N/A'}\n\n"
+
+        summary += "Indicator Values:\n"
+        for indicator_name, value in self.indicator_values.items():
+            summary += f"  {indicator_name}: {value}\n"
+
+        if self.fib_levels:
+            summary += "\nFibonacci Levels:\n"
+            for level_name, level_price in self.fib_levels.items():
+                summary += f"  {level_name}: {level_price}\n"
+
+        summary += "\nProvide a trading recommendation in JSON format based on this data. " \
+                   "The recommendation should include: \"entry\" (BUY/SELL/HOLD), \"exit\" (N/A or specific instruction), \"take_profit\", \"stop_loss\", \"confidence_level\" (0-100). " \
+                   "Ensure all price values are numeric (float or int). Example JSON: {\"entry\": \"BUY\", \"exit\": \"N/A\", \"take_profit\": 103.00, \"stop_loss\": 98.00, \"confidence_level\": 85}"
+        return summary
 
     def _get_indicator_value(self, key: str, default: Any = np.nan) -> Any:
         """Safely retrieve an indicator value."""
@@ -2365,6 +2411,30 @@ class TradingAnalyzer:
                 self.logger.debug(
                     f"MTF Confluence: Score {normalized_mtf_score:.2f} (Buy: {mtf_buy_score}, Sell: {mtf_sell_score}). Total MTF contribution: {mtf_weight * normalized_mtf_score:.2f}"
                 )
+
+        if self.config["gemini_ai_analysis"]["enabled"] and self.gemini_client:
+            gemini_prompt = self._summarize_market_for_gemini(current_close)
+            gemini_analysis = await self.gemini_client.analyze_market_data(gemini_prompt)
+
+            if gemini_analysis:
+                self.logger.info(f"{NEON_PURPLE}Gemini AI Analysis: {json.dumps(gemini_analysis, indent=2)}{RESET}")
+                gemini_entry = gemini_analysis.get("entry")
+                gemini_confidence = gemini_analysis.get("confidence_level", 0)
+                gemini_weight = self.config["gemini_ai_analysis"]["weight"]
+
+                if gemini_confidence >= 50: # Only consider if confidence is reasonable
+                    if gemini_entry == "BUY":
+                        signal_score += gemini_weight
+                        self.logger.info(f"{NEON_GREEN}Gemini AI recommends BUY (Confidence: {gemini_confidence}). Adding {gemini_weight} to signal score.{RESET}")
+                    elif gemini_entry == "SELL":
+                        signal_score -= gemini_weight
+                        self.logger.info(f"{NEON_RED}Gemini AI recommends SELL (Confidence: {gemini_confidence}). Subtracting {gemini_weight} from signal score.{RESET}")
+                    else:
+                        self.logger.info(f"{NEON_YELLOW}Gemini AI recommends HOLD (Confidence: {gemini_confidence}). No change to signal score.{RESET}")
+                else:
+                    self.logger.info(f"{NEON_YELLOW}Gemini AI confidence ({gemini_confidence}) too low. Skipping influence on signal score.{RESET}")
+            else:
+                self.logger.warning(f"{NEON_YELLOW}Gemini AI analysis failed or returned no data. Skipping influence on signal score.{RESET}")
 
         threshold = self.config["signal_score_threshold"]
         final_signal = "HOLD"
