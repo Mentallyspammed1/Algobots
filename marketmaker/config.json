@@ -1,44 +1,31 @@
-[
-    {
-        "symbol": "XLMUSDT",
-        "trade_enabled": true,
-        "base_spread": 0.001,
-        "order_amount": 0.001,
-        "leverage": 10.0,
-        "order_refresh_time": 10,
-        "max_spread": 0.005,
-        "inventory_limit": 0.01,
-        "dynamic_spread": {"enabled": true, "volatility_multiplier": 0.5, "atr_update_interval": 300},
-        "inventory_skew": {"enabled": true, "skew_factor": 0.1, "max_skew": 0.0005},
-        "momentum_window": 10,
-        "take_profit_percentage": 0.002,
-        "stop_loss_percentage": 0.001,
-        "inventory_sizing_factor": 0.5,
-        "min_liquidity_depth": 1000.0,
-        "depth_multiplier": 2.0,
-        "imbalance_threshold": 0.3,
-        "slippage_tolerance_pct": 0.002,
-        "funding_rate_threshold": 0.0005,
-        "min_recent_trade_volume": 0.0,
-        "enable_auto_sl_tp": true,
-        "take_profit_target_pct": 0.005,
-        "stop_loss_trigger_pct": 0.005,
-        "use_batch_orders_for_refresh": true,
-        "stale_order_max_age_seconds": 300,
-        "market_data_stale_timeout_seconds": 30,
-        "kline_interval": "1m"
+{
+    "symbol": "XLMUSDT",
+    "testnet": false,
+    "leverage": 25,
+    "order_management": {
+        "base_order_size": 20.0,
+        "order_reprice_delay_seconds": 2.0,
+        "stale_order_timeout_seconds": 300
     },
-    {
-        "symbol": "ETHUSDT",
-        "trade_enabled": false,
-        "base_spread": 0.0015,
-        "order_amount": 0.005,
-        "leverage": 5.0,
-        "order_refresh_time": 15,
-        "max_spread": 0.008,
-        "inventory_limit": 0.05,
-        "dynamic_spread": {"enabled": true, "volatility_multiplier": 0.7, "atr_update_interval": 600},
-        "inventory_skew": {"enabled": true, "skew_factor": 0.2, "max_skew": 0.001},
-        "kline_interval": "5m"
+    "strategy": {
+        "base_spread_percentage": 0.001,
+        "volatility_spread_multiplier": 2.5,
+        "inventory_skew_intensity": 0.05,
+        "imbalance_skew_intensity": 0.02
+    },
+    "risk_management": {
+        "max_position_size": 100.0,
+        "take_profit_pct": 0.015,
+        "stop_loss_pct": 0.01
+    },
+    "technical": {
+        "orderbook_depth": 50,
+        "volatility_window_seconds": 120,
+        "api_max_retries": 5,
+        "api_retry_delay_seconds": 3
+    },
+    "analysis": {
+        "depth": 10,
+        "large_order_multiplier": 5.0
     }
-]
+}
