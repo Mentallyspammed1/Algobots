@@ -91,7 +91,7 @@ API_KEY = os.getenv("BYBIT_API_KEY")
 API_SECRET = os.getenv("BYBIT_API_SECRET")
 BASE_URL = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
 CONFIG_FILE = "config.json"
-LOG_DIRECTORY = "bot_logs"
+LOG_DIRECTORY = "bot_logs/trading-bot/logs"
 Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
 # Using UTC for consistency and to avoid timezone issues with API timestamps

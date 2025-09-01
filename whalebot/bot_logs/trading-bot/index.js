@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import LogParser from './lib/logParser.js';
 import GeminiAnalyzer from './lib/geminiAnalyzer.js';
 import SignalGenerator from './lib/signalGenerator.js';
+import LiveDataFetcher from './lib/liveDataFetcher.js'; // NEW
 import { logger } from './lib/utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,8 +18,12 @@ dotenv.config();
 // Centralized Configuration Vessel
 const config = {
   geminiApiKey: process.env.GEMINI_API_KEY,
+  tradingSymbol: process.env.TRADING_SYMBOL || 'TRUMPUSDT', // NEW: Centralized trading symbol
+  liveDataMode: process.env.LIVE_DATA_MODE === 'true', // NEW: Enable live data fetching
+  bybitApiKey: process.env.BYBIT_API_KEY, // NEW: Bybit API Key
+  bybitApiSecret: process.env.BYBIT_API_SECRET, // NEW: Bybit API Secret
   outputPath: process.env.OUTPUT_PATH || './output/signals.json',
-  logFilePath: process.env.LOG_FILE_PATH || './logs/trading.log',
+  logFilePath: process.env.LOG_FILE_PATH || './logs/wgwhalex_bot.log',
   refreshIntervalMs: parseInt(process.env.REFRESH_INTERVAL_MS || '5000', 10), // Milliseconds
   cronSchedule: process.env.CRON_SCHEDULE || '*/5 * * * *', // Every 5 minutes by default
   signalHistoryLimit: parseInt(process.env.SIGNAL_HISTORY_LIMIT || '100', 10),
@@ -71,20 +76,34 @@ class TradingBot {
     logger.info(chalk.cyan('📈 Starting a new analysis cycle...'));
 
     try {
-      // Step 1: Parse log file
-      const logData = await this.logParser.parseLogFile(this.logFilePath);
+      let latestData;
 
-      if (!logData || logData.length === 0) {
-        logger.warn(chalk.yellow('No valid log data found to analyze.'));
-        return;
-      }
+      if (config.liveDataMode) {
+        // Step 1 (Live Data Mode): Fetch live market data
+        const liveDataFetcher = new LiveDataFetcher(config.bybitApiKey, config.bybitApiSecret, config.tradingSymbol);
+        const fetchedData = await liveDataFetcher.fetchCurrentPrice(); // Only fetching current price for POC
 
-      // Step 2: Get latest market data
-      const latestData = this.logParser.getLatestMarketData(logData);
+        if (!fetchedData || !fetchedData.currentPrice) {
+          logger.warn(chalk.yellow('No live market data available.'));
+          return;
+        }
+        latestData = fetchedData;
+      } else {
+        // Step 1 (Log File Mode): Parse log file
+        const logData = await this.logParser.parseLogFile(this.logFilePath);
 
-      if (!latestData || !latestData.currentPrice) {
-        logger.warn(chalk.yellow('No current price data available from logs.'));
-        return;
+        if (!logData || logData.length === 0) {
+          logger.warn(chalk.yellow('No valid log data found to analyze.'));
+          return;
+        }
+
+        // Step 2 (Log File Mode): Get latest market data from logs
+        latestData = this.logParser.getLatestMarketData(logData);
+
+        if (!latestData || !latestData.currentPrice) {
+          logger.warn(chalk.yellow('No current price data available from logs.'));
+          return;
+        }
       }
 
       // Step 3: Analyze with Gemini AI
@@ -122,7 +141,7 @@ class TradingBot {
     } finally {
       this.isRunning = false;
     }
-  }
+  } // finally block is removed here, it will be added back in the next step
 
   async saveSignals(newSignal) {
     try {
@@ -293,8 +312,8 @@ class TradingBot {
 
 // Start the bot with dependency injection
 const bot = new TradingBot(
-  new LogParser(),
-  new GeminiAnalyzer(config.geminiApiKey),
+  new LogParser(config.tradingSymbol), // Pass trading symbol to LogParser
+  new GeminiAnalyzer(config.geminiApiKey, config.tradingSymbol), // Pass trading symbol to GeminiAnalyzer
   new SignalGenerator()
 );
 

@@ -2,7 +2,8 @@ import chalk from 'chalk';
 import { logger } from './utils.js';
 
 export default class SignalGenerator {
-  constructor() {
+  constructor(tradingSymbol) { // Accept tradingSymbol
+    this.tradingSymbol = tradingSymbol; // Store tradingSymbol
     this.riskPercentage = parseFloat(process.env.RISK_PERCENTAGE) || 1;
     this.minConfidence = 60;
     this.defaultRiskReward = 2;
@@ -10,7 +11,7 @@ export default class SignalGenerator {
 
   async generateSignals(marketData, aiAnalysis) {
     try {
-      const symbol = marketData.symbol || 'TRUMPUSDT';
+      const symbol = this.tradingSymbol;
       const currentPrice = marketData.currentPrice;
       
       logger.info(chalk.blue('🎯 Generating trading signals...'));
@@ -185,7 +186,7 @@ export default class SignalGenerator {
                        signal.action === 'SELL' ? chalk.red :
                        chalk.yellow;
 
-    console.log(chalk.white(`Symbol: ${chalk.bold(signal.symbol || 'N/A')}`));
+    console.log(chalk.white(`Symbol: ${chalk.bold(this.tradingSymbol || 'N/A')}`));
     console.log(chalk.white(`Action: ${actionColor.bold(signal.action || 'N/A')}`));
     console.log(chalk.white(`Current Price: ${chalk.bold(`$${typeof signal.currentPrice === 'number' && !isNaN(signal.currentPrice) ? signal.currentPrice.toFixed(2) : 'N/A'}`)}`));
 
@@ -197,6 +198,7 @@ export default class SignalGenerator {
     }
 
     console.log(chalk.white(`Confidence: ${this.getConfidenceBar(signal.confidence || 0)}`));
+    console.log(chalk.white(`Confidence Reasoning: ${signal.confidenceReasoning || 'No specific confidence reasoning provided.'}`));
     console.log(chalk.white(`Reasoning: ${signal.reasoning || 'No specific reasoning provided.'}`));
     console.log(chalk.cyan('='.repeat(50) + '\n'));
   }

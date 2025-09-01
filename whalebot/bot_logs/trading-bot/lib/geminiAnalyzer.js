@@ -3,13 +3,14 @@ import chalk from 'chalk';
 import { logger } from './utils.js';
 
 export default class GeminiAnalyzer {
-  constructor(apiKey) {
+  constructor(apiKey, tradingSymbol) { // Accept tradingSymbol
     if (!apiKey) {
       throw new Error('Gemini API key is required');
     }
     
     this.genAI = new GoogleGenerativeAI(apiKey);
     this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    this.tradingSymbol = tradingSymbol; // Store tradingSymbol
   }
 
   async analyzeTrends(marketData) {
@@ -34,7 +35,7 @@ export default class GeminiAnalyzer {
     You are an expert cryptocurrency scalping trader. Analyze the following market data and provide a trading signal.
     
     CURRENT MARKET DATA:
-    Symbol: ${data.symbol || 'TRUMPUSDT'}
+    Symbol: ${this.tradingSymbol}
     Current Price: $${data.currentPrice}
     Price Change: ${data.priceChangePercent?.toFixed(2)}%
     
@@ -65,12 +66,15 @@ export default class GeminiAnalyzer {
       "strength": 1-100,
       "action": "BUY/SELL/HOLD",
       "confidence": 1-100,
+      "confidenceReasoning": "detailed explanation for the confidence score", // NEW FIELD
       "keyFactors": ["factor1", "factor2", "factor3"],
       "riskLevel": "LOW/MEDIUM/HIGH",
       "entryStrategy": "description",
       "exitStrategy": "description",
-      "reasoning": "detailed explanation"
+      "reasoning": "detailed explanation for the trading signal"
     }
+
+    When determining the 'confidence' score, provide a detailed explanation in 'confidenceReasoning' justifying your assessment based on the confluence or divergence of indicators, market context, and risk factors.
     
     Focus on:
     1. Momentum and trend alignment across timeframes
@@ -85,15 +89,26 @@ export default class GeminiAnalyzer {
 
   parseAIResponse(response) {
     try {
-      // Extract JSON from response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const analysis = JSON.parse(jsonMatch[0]);
+      // Find the first and last curly braces to extract the JSON content
+      const firstCurly = response.indexOf('{');
+      const lastCurly = response.lastIndexOf('}');
+
+      if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
+        const jsonString = response.substring(firstCurly, lastCurly + 1);
+        const analysis = JSON.parse(jsonString);
+        // Ensure confidenceReasoning is a string, default if not present or invalid
+        if (typeof analysis.confidenceReasoning !== 'string' || analysis.confidenceReasoning.trim() === '') {
+          analysis.confidenceReasoning = 'AI did not provide specific confidence reasoning.';
+        }
         logger.info(chalk.green('✅ AI analysis completed'));
         return analysis;
+      } else {
+        logger.error(chalk.red('AI response did not contain a valid JSON object.'));
+        logger.debug(chalk.red(`Raw AI response: ${response}`)); // Log raw response for debugging
       }
     } catch (error) {
       logger.error(chalk.red('Error parsing AI response:', error));
+      logger.debug(chalk.red(`Raw AI response that caused error: ${response}`)); // Log raw response for debugging
     }
     
     return this.getDefaultAnalysis();
@@ -105,6 +120,7 @@ export default class GeminiAnalyzer {
       strength: 50,
       action: "HOLD",
       confidence: 40,
+      confidenceReasoning: "Default reasoning: Insufficient data or error during AI analysis.", // NEW FIELD
       keyFactors: ["Insufficient data", "Manual review recommended"],
       riskLevel: "HIGH",
       entryStrategy: "Wait for clearer signals",

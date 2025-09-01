@@ -157,7 +157,7 @@ class Backtester:
             signal, score = await self.trading_analyzer.generate_trading_signal(
                 current_price, self.mock_orderbook_manager, self.mock_mtf_trends
             )
-
+            self.logger.debug(f"Signal: {signal}, Score: {score}")
             self.logger.debug(f"Bar {timestamp}: Price={current_price}, Signal={signal}, Score={score}, Capital={self.capital:.2f}, Position={self.position_size:.4f}")
 
             # Simulate trade execution
@@ -181,7 +181,9 @@ class Backtester:
 
     async def _execute_trade(self, bar: pd.Series, signal_side: str, current_price: Decimal):
         """Simulates placing a trade."""
+        self.logger.debug(f"Attempting to execute {signal_side} trade. Capital: {self.capital:.2f}")
         if self.position_size > 0: # Already in a position
+            self.logger.debug("Skipping trade: Already in a position.")
             return
 
         # Calculate position size based on risk per trade and leverage
@@ -193,22 +195,23 @@ class Backtester:
 
         # Ensure trade_amount_usd is not zero or negative
         if trade_amount_usd <= 0:
-            self.logger.warning(f"{NEON_YELLOW}Calculated trade amount is zero or negative. Skipping trade.{RESET}")
+            self.logger.warning(f"{NEON_YELLOW}Calculated trade amount ({trade_amount_usd:.2f}) is zero or negative. Skipping trade.{RESET}")
             return
 
         # Calculate quantity based on current price
         quantity = (trade_amount_usd / current_price).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+        self.logger.debug(f"Calculated trade_amount_usd: {trade_amount_usd:.2f}, quantity: {quantity:.8f}")
 
         # Ensure quantity meets minimum requirements (mocking precision manager)
         if quantity < Decimal("0.00001"): # Example min quantity
-            self.logger.warning(f"{NEON_YELLOW}Calculated quantity {quantity} is too small. Skipping trade.{RESET}")
+            self.logger.warning(f"{NEON_YELLOW}Calculated quantity ({quantity:.8f}) is too small. Skipping trade.{RESET}")
             return
 
         fee_rate = Decimal("0.0005") # Example: 0.05% taker fee
         trade_fee = (quantity * current_price * fee_rate).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
 
         if self.capital < trade_fee:
-            self.logger.warning(f"{NEON_YELLOW}Insufficient capital for trade fees. Skipping trade.{RESET}")
+            self.logger.warning(f"{NEON_YELLOW}Insufficient capital ({self.capital:.2f}) for trade fees ({trade_fee:.8f}). Skipping trade.{RESET}")
             return
 
         self.capital -= trade_fee

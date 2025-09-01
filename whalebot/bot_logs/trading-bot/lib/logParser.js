@@ -3,7 +3,8 @@ import chalk from 'chalk';
 import { logger } from './utils.js';
 
 export default class LogParser {
-  constructor() {
+  constructor(tradingSymbol) { // Accept tradingSymbol
+    this.tradingSymbol = tradingSymbol; // Store tradingSymbol
     this.indicatorPatterns = {
       currentPrice: /Current Price:\s*([\d.]+)/,
       ema_short: /EMA_Short:\s*([\d.]+)/,
@@ -23,7 +24,7 @@ export default class LogParser {
       obv: /OBV:\s*([-\d.]+)/,
       mfi: /MFI:\s*([\d.]+)/,
       cci: /CCI:\s*([-\d.]+)/,
-      symbol: /Symbol:\s*([A-Z]+USDT)/,
+      symbol: /(?:Symbol:|\\\[)([A-Z]+USDT)(?:\\\\])?/, // Use tradingSymbol for regex
       signal: /Final Signal:\s*(\w+)/,
       score: /Score:\s*([-\d.]+)/
     };
@@ -71,9 +72,17 @@ export default class LogParser {
         isCapturingIndicators = true;
       }
 
+      // Extract symbol (always try to extract symbol)
+      const symbolMatch = line.match(this.indicatorPatterns.symbol);
+      if (symbolMatch) {
+        currentDataPoint.symbol = symbolMatch[1];
+      }
+
       // Extract indicators
       if (isCapturingIndicators) {
         for (const [key, pattern] of Object.entries(this.indicatorPatterns)) {
+          // Skip symbol as it's handled separately
+          if (key === 'symbol') continue; 
           const match = line.match(pattern);
           if (match) {
             const parsedValue = parseFloat(match[1]);

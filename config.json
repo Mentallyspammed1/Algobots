@@ -28,7 +28,12 @@
         "fve": true,
         "sma_10": false,
         "mfi": true,
-        "stochastic_oscillator": true
+        "stochastic_oscillator": true,
+        "sma_trend_filter": true,
+        "bollinger_bands": true,
+        "orderbook_imbalance": true,
+        "fibonacci_levels": true,
+        "ehlers_supertrend": true
     },
     "weight_sets": {
         "low_volatility": {
@@ -70,6 +75,24 @@
             "sma_10": 0.0,
             "mfi": 0.4,
             "stochastic_oscillator": 0.3
+        },
+        "default_scalping": {
+            "ema_alignment": 0.25,
+            "sma_trend_filter": 0.3,
+            "momentum": 0.2,
+            "volume_confirmation": 0.15,
+            "stoch_rsi": 0.4,
+            "rsi": 0.2,
+            "bollinger_bands": 0.3,
+            "vwap": 0.2,
+            "cci": 0.15,
+            "wr": 0.15,
+            "psar": 0.2,
+            "sma_10": 0.1,
+            "mfi": 0.2,
+            "orderbook_imbalance": 0.1,
+            "ehlers_supertrend_alignment": 0.6,
+            "mtf_trend_confluence": 0.4
         }
     },
     "stoch_rsi_oversold_threshold": 20,
@@ -200,5 +223,77 @@
         "path": "bot_data/trading_bot.db",
         "backup_enabled": true,
         "backup_interval_hours": 24
+    },
+    "symbol": "BTCUSDT",
+    "loop_delay": 15,
+    "orderbook_limit": 50,
+    "trade_management": {
+        "enabled": true,
+        "account_balance": 1000.0,
+        "risk_per_trade_percent": 1.0,
+        "stop_loss_atr_multiple": 1.5,
+        "take_profit_atr_multiple": 2.0,
+        "max_open_positions": 1
+    },
+    "mtf_analysis": {
+        "enabled": true,
+        "higher_timeframes": [
+            "1h",
+            "4h"
+        ],
+        "trend_indicators": [
+            "ema",
+            "ehlers_supertrend"
+        ],
+        "trend_period": 50,
+        "mtf_request_delay_seconds": 0.5
+    },
+    "ml_enhancement": {
+        "enabled": false,
+        "model_path": "ml_model.pkl",
+        "retrain_on_startup": false,
+        "training_data_limit": 5000,
+        "prediction_lookahead": 12,
+        "profit_target_percent": 0.5,
+        "feature_lags": [
+            1,
+            2,
+            3,
+            5
+        ],
+        "cross_validation_folds": 5
+    },
+    "indicator_settings": {
+        "atr_period": 14,
+        "ema_short_period": 9,
+        "ema_long_period": 21,
+        "rsi_period": 14,
+        "stoch_rsi_period": 14,
+        "stoch_k_period": 3,
+        "stoch_d_period": 3,
+        "bollinger_bands_period": 20,
+        "bollinger_bands_std_dev": 2.0,
+        "cci_period": 20,
+        "williams_r_period": 14,
+        "mfi_period": 14,
+        "psar_acceleration": 0.02,
+        "psar_max_acceleration": 0.2,
+        "sma_short_period": 10,
+        "sma_long_period": 50,
+        "fibonacci_window": 60,
+        "ehlers_fast_period": 10,
+        "ehlers_fast_multiplier": 2.0,
+        "ehlers_slow_period": 20,
+        "ehlers_slow_multiplier": 3.0,
+        "rsi_oversold": 30,
+        "rsi_overbought": 70,
+        "stoch_rsi_oversold": 20,
+        "stoch_rsi_overbought": 80,
+        "cci_oversold": -100,
+        "cci_overbought": 100,
+        "williams_r_oversold": -80,
+        "williams_r_overbought": -20,
+        "mfi_oversold": 20,
+        "mfi_overbought": 80
     }
 }

@@ -196,11 +196,14 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             "williams_r_overbought": -20,
             "mfi_oversold": 20,
             "mfi_overbought": 80,
+            "volatility_index_period": 20,
+            "vwma_period": 20,
+            "volume_delta_period": 5,
+            "volume_delta_threshold": 0.2,
         },
         "indicators": {
             "ema_alignment": True,
             "sma_trend_filter": True,
-            "momentum": True,
             "volume_confirmation": True,
             "stoch_rsi": True,
             "rsi": True,
@@ -219,12 +222,14 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             "ichimoku_cloud": True,
             "obv": True,
             "cmf": True,
+            "volatility_index": True,
+            "vwma": True,
+            "volume_delta": True,
         },
         "weight_sets": {
             "default_scalping": {
                 "ema_alignment": 0.22,
                 "sma_trend_filter": 0.28,
-                "momentum": 0.18,
                 "volume_confirmation": 0.12,
                 "stoch_rsi": 0.30,
                 "rsi": 0.12,
@@ -243,6 +248,9 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "obv_momentum": 0.18,
                 "cmf_flow": 0.12,
                 "mtf_trend_confluence": 0.32,
+                "volatility_index_signal": 0.15,
+                "vwma_cross": 0.15,
+                "volume_delta_signal": 0.10,
             }
         },
     }
@@ -1474,6 +1482,36 @@ class IndicatorCalculator:
 
         return psar_val, psar_dir
 
+    def calculate_volatility_index(self, df: pd.DataFrame, period: int) -> pd.Series:
+        """Calculate a simple Volatility Index based on ATR normalized by price."""
+        if len(df) < period or "ATR" not in df.columns:
+            return pd.Series(np.nan, index=df.index)
+        # ATR is assumed to be calculated
+        normalized_atr = df["ATR"] / df["close"]
+        volatility_index = normalized_atr.rolling(window=period).mean()
+        return self._safe_series_op(volatility_index, "Volatility_Index")
+
+    def calculate_vwma(self, df: pd.DataFrame, period: int) -> pd.Series:
+        """Calculate Volume Weighted Moving Average (VWMA)."""
+        if len(df) < period or df["volume"].isnull().any():
+            return pd.Series(np.nan, index=df.index)
+        valid_volume = df["volume"].replace(0, np.nan)
+        pv = df["close"] * valid_volume
+        vwma = pv.rolling(window=period).sum() / valid_volume.rolling(window=period).sum()
+        return self._safe_series_op(vwma, "VWMA")
+
+    def calculate_volume_delta(self, df: pd.DataFrame, period: int) -> pd.Series:
+        """Calculate Volume Delta, indicating buying vs selling pressure."""
+        if len(df) < 2: # MIN_DATA_POINTS_VOLATILITY
+            return pd.Series(np.nan, index=df.index)
+        buy_volume = df["volume"].where(df["close"] > df["open"], 0)
+        sell_volume = df["volume"].where(df["close"] < df["open"], 0)
+        buy_volume_sum = buy_volume.rolling(window=period, min_periods=1).sum()
+        sell_volume_sum = sell_volume.rolling(window=period, min_periods=1).sum()
+        total_volume_sum = buy_volume_sum + sell_volume_sum
+        volume_delta = (buy_volume_sum - sell_volume_sum) / total_volume_sum.replace(0, np.nan)
+        return self._safe_series_op(volume_delta.fillna(0), "Volume_Delta")
+
 
 class TradingAnalyzer:
     """Analyzes trading data and generates signals with MTF and Ehlers SuperTrend."""
@@ -1844,6 +1882,36 @@ class TradingAnalyzer:
                     self.df["MinusDI"] = minus_di
                     self.indicator_values["MinusDI"] = minus_di.iloc[-1]
 
+        if cfg["indicators"].get("volatility_index", False):
+            self.df["Volatility_Index"] = self._safe_calculate(
+                self.indicator_calculator.calculate_volatility_index,
+                "Volatility_Index",
+                min_data_points=isd["volatility_index_period"],
+                df=self.df, period=isd["volatility_index_period"],
+            )
+            if self.df["Volatility_Index"] is not None and not self.df["Volatility_Index"].empty:
+                self.indicator_values["Volatility_Index"] = self.df["Volatility_Index"].iloc[-1]
+
+        if cfg["indicators"].get("vwma", False):
+            self.df["VWMA"] = self._safe_calculate(
+                self.indicator_calculator.calculate_vwma,
+                "VWMA",
+                min_data_points=isd["vwma_period"],
+                df=self.df, period=isd["vwma_period"],
+            )
+            if self.df["VWMA"] is not None and not self.df["VWMA"].empty:
+                self.indicator_values["VWMA"] = self.df["VWMA"].iloc[-1]
+
+        if cfg["indicators"].get("volume_delta", False):
+            self.df["Volume_Delta"] = self._safe_calculate(
+                self.indicator_calculator.calculate_volume_delta,
+                "Volume_Delta",
+                min_data_points=isd["volume_delta_period"],
+                df=self.df, period=isd["volume_delta_period"],
+            )
+            if self.df["Volume_Delta"] is not None and not self.df["Volume_Delta"].empty:
+                self.indicator_values["Volume_Delta"] = self.df["Volume_Delta"].iloc[-1]
+
         initial_len = len(self.df)
 
         for col in self.df.columns:
@@ -1998,6 +2066,253 @@ class TradingAnalyzer:
                     return "DOWN"
             return "UNKNOWN"
         return "UNKNOWN"
+
+    async def generate_trading_signal(
+        self,
+        current_price: Decimal,
+        orderbook_manager: AdvancedOrderbookManager,
+        mtf_trends: dict[str, str],
+    ) -> tuple[str, float]:
+        """Generate a signal using confluence of indicators."""
+        signal_score = 0.0
+        active_indicators = self.config["indicators"]
+        weights = self.weights
+        isd = self.indicator_settings
+
+        if self.df.empty:
+            self.logger.warning(
+                f"{NEON_YELLOW}DataFrame is empty in generate_trading_signal. Cannot generate signal.{RESET}"
+            )
+            return "HOLD", 0.0
+
+        current_close = Decimal(str(self.df["close"].iloc[-1]))
+
+        # EMA Alignment
+        if active_indicators.get("ema_alignment", False):
+            ema_short = self._get_indicator_value("EMA_Short")
+            ema_long = self._get_indicator_value("EMA_Long")
+            if not pd.isna(ema_short) and not pd.isna(ema_long):
+                if ema_short > ema_long:
+                    signal_score += weights.get("ema_alignment", 0)
+                elif ema_short < ema_long:
+                    signal_score -= weights.get("ema_alignment", 0)
+
+        # SMA Trend Filter
+        if active_indicators.get("sma_trend_filter", False):
+            sma_long = self._get_indicator_value("SMA_Long")
+            if not pd.isna(sma_long):
+                if current_close > sma_long:
+                    signal_score += weights.get("sma_trend_filter", 0)
+                elif current_close < sma_long:
+                    signal_score -= weights.get("sma_trend_filter", 0)
+
+        # RSI
+        if active_indicators.get("rsi", False):
+            rsi = self._get_indicator_value("RSI")
+            if not pd.isna(rsi):
+                if rsi < isd["rsi_oversold"]:
+                    signal_score += weights.get("rsi", 0)
+                elif rsi > isd["rsi_overbought"]:
+                    signal_score -= weights.get("rsi", 0)
+
+        # StochRSI
+        if active_indicators.get("stoch_rsi", False):
+            stoch_k = self._get_indicator_value("StochRSI_K")
+            stoch_d = self._get_indicator_value("StochRSI_D")
+            if not pd.isna(stoch_k) and not pd.isna(stoch_d) and len(self.df) > 1:
+                prev_stoch_k = self.df["StochRSI_K"].iloc[-2]
+                prev_stoch_d = self.df["StochRSI_D"].iloc[-2]
+                if (
+                    stoch_k > stoch_d
+                    and prev_stoch_k <= prev_stoch_d
+                    and stoch_k < isd["stoch_rsi_oversold"]
+                ):
+                    signal_score += weights.get("stoch_rsi", 0)
+                    self.logger.debug(f"StochRSI: Bullish crossover from oversold.")
+                elif (
+                    stoch_k < stoch_d
+                    and prev_stoch_k >= prev_stoch_d
+                    and stoch_k > isd["stoch_rsi_overbought"]
+                ):
+                    signal_score -= weights.get("stoch_rsi", 0)
+                    self.logger.debug(f"StochRSI: Bearish crossover from overbought.")
+
+        # CCI
+        if active_indicators.get("cci", False):
+            cci = self._get_indicator_value("CCI")
+            if not pd.isna(cci):
+                if cci < isd["cci_oversold"]:
+                    signal_score += weights.get("cci", 0)
+                elif cci > isd["cci_overbought"]:
+                    signal_score -= weights.get("cci", 0)
+
+        # Williams %R
+        if active_indicators.get("wr", False):
+            wr = self._get_indicator_value("WR")
+            if not pd.isna(wr):
+                if wr < isd["williams_r_oversold"]:
+                    signal_score += weights.get("wr", 0)
+                elif wr > isd["williams_r_overbought"]:
+                    signal_score -= weights.get("wr", 0)
+
+        # MFI
+        if active_indicators.get("mfi", False):
+            mfi = self._get_indicator_value("MFI")
+            if not pd.isna(mfi):
+                if mfi < isd["mfi_oversold"]:
+                    signal_score += weights.get("mfi", 0)
+                elif mfi > isd["mfi_overbought"]:
+                    signal_score -= weights.get("mfi", 0)
+
+        # Bollinger Bands
+        if active_indicators.get("bollinger_bands", False):
+            bb_upper = self._get_indicator_value("BB_Upper")
+            bb_lower = self._get_indicator_value("BB_Lower")
+            if not pd.isna(bb_upper) and not pd.isna(bb_lower):
+                if current_close < bb_lower:
+                    signal_score += weights.get("bollinger_bands", 0)
+                elif current_close > bb_upper:
+                    signal_score -= weights.get("bollinger_bands", 0)
+
+        # VWAP
+        if active_indicators.get("vwap", False):
+            vwap = self._get_indicator_value("VWAP")
+            if not pd.isna(vwap):
+                if current_close > vwap:
+                    signal_score += weights.get("vwap", 0)
+                elif current_close < vwap:
+                    signal_score -= weights.get("vwap", 0)
+
+        # PSAR
+        if active_indicators.get("psar", False):
+            psar_dir = self._get_indicator_value("PSAR_Dir")
+            if not pd.isna(psar_dir):
+                if psar_dir == 1:
+                    signal_score += weights.get("psar", 0)
+                elif psar_dir == -1:
+                    signal_score -= weights.get("psar", 0)
+
+        # Ehlers SuperTrend Alignment
+        if active_indicators.get("ehlers_supertrend", False):
+            st_fast_dir = self._get_indicator_value("ST_Fast_Dir")
+            st_slow_dir = self._get_indicator_value("ST_Slow_Dir")
+            if not pd.isna(st_fast_dir) and not pd.isna(st_slow_dir):
+                if st_fast_dir == 1 and st_slow_dir == 1:
+                    signal_score += weights.get("ehlers_supertrend_alignment", 0)
+                elif st_fast_dir == -1 and st_slow_dir == -1:
+                    signal_score -= weights.get("ehlers_supertrend_alignment", 0)
+
+        # MACD
+        if active_indicators.get("macd", False):
+            macd_line = self._get_indicator_value("MACD_Line")
+            signal_line = self._get_indicator_value("MACD_Signal")
+            if not pd.isna(macd_line) and not pd.isna(signal_line):
+                if macd_line > signal_line:
+                    signal_score += weights.get("macd_alignment", 0)
+                elif macd_line < signal_line:
+                    signal_score -= weights.get("macd_alignment", 0)
+
+        # ADX
+        if active_indicators.get("adx", False):
+            adx = self._get_indicator_value("ADX")
+            plus_di = self._get_indicator_value("PlusDI")
+            minus_di = self._get_indicator_value("MinusDI")
+            if not pd.isna(adx) and not pd.isna(plus_di) and not pd.isna(minus_di):
+                if adx > ADX_STRONG_TREND_THRESHOLD:
+                    if plus_di > minus_di:
+                        signal_score += weights.get("adx_strength", 0)
+                    else:
+                        signal_score -= weights.get("adx_strength", 0)
+
+        # Ichimoku Cloud
+        if active_indicators.get("ichimoku_cloud", False):
+            tenkan = self._get_indicator_value("Tenkan_Sen")
+            kijun = self._get_indicator_value("Kijun_Sen")
+            span_a = self._get_indicator_value("Senkou_Span_A")
+            span_b = self._get_indicator_value("Senkou_Span_B")
+            chikou = self._get_indicator_value("Chikou_Span")
+            if not any(pd.isna(v) for v in [tenkan, kijun, span_a, span_b, chikou]):
+                is_bullish = (current_close > span_a and current_close > span_b and
+                              tenkan > kijun and chikou > current_close)
+                is_bearish = (current_close < span_a and current_close < span_b and
+                              tenkan < kijun and chikou < current_close)
+                if is_bullish:
+                    signal_score += weights.get("ichimoku_confluence", 0)
+                elif is_bearish:
+                    signal_score -= weights.get("ichimoku_confluence", 0)
+
+        # OBV
+        if active_indicators.get("obv", False):
+            obv = self._get_indicator_value("OBV")
+            obv_ema = self._get_indicator_value("OBV_EMA")
+            if not pd.isna(obv) and not pd.isna(obv_ema):
+                if obv > obv_ema:
+                    signal_score += weights.get("obv_momentum", 0)
+                elif obv < obv_ema:
+                    signal_score -= weights.get("obv_momentum", 0)
+
+        # CMF
+        if active_indicators.get("cmf", False):
+            cmf = self._get_indicator_value("CMF")
+            if not pd.isna(cmf):
+                if cmf > 0:
+                    signal_score += weights.get("cmf_flow", 0)
+                elif cmf < 0:
+                    signal_score -= weights.get("cmf_flow", 0)
+
+        # Orderbook Imbalance
+        if active_indicators.get("orderbook_imbalance", False) and orderbook_manager:
+            imbalance = await self._check_orderbook(current_price, orderbook_manager)
+            if imbalance > 0.1:
+                signal_score += weights.get("orderbook_imbalance", 0)
+            elif imbalance < -0.1:
+                signal_score -= weights.get("orderbook_imbalance", 0)
+
+        # MTF Trend Confluence
+        if self.config["mtf_analysis"]["enabled"] and mtf_trends:
+            up_trends = sum(1 for trend in mtf_trends.values() if trend == "UP")
+            down_trends = sum(1 for trend in mtf_trends.values() if trend == "DOWN")
+            if up_trends > down_trends:
+                signal_score += weights.get("mtf_trend_confluence", 0)
+            elif down_trends > up_trends:
+                signal_score -= weights.get("mtf_trend_confluence", 0)
+
+        # Volatility Index
+        if active_indicators.get("volatility_index", False):
+            volatility = self._get_indicator_value("Volatility_Index")
+            if not pd.isna(volatility) and "Volatility_Index" in self.df.columns:
+                if volatility > self.df["Volatility_Index"].mean():
+                    signal_score *= 0.95
+                else:
+                    signal_score *= 1.05
+
+        # VWMA Cross
+        if active_indicators.get("vwma", False):
+            vwma = self._get_indicator_value("VWMA")
+            if not pd.isna(vwma):
+                if current_close > vwma:
+                    signal_score += weights.get("vwma_cross", 0)
+                elif current_close < vwma:
+                    signal_score -= weights.get("vwma_cross", 0)
+
+        # Volume Delta
+        if active_indicators.get("volume_delta", False):
+            volume_delta = self._get_indicator_value("Volume_Delta")
+            delta_threshold = isd.get("volume_delta_threshold", 0.2)
+            if not pd.isna(volume_delta):
+                if volume_delta > delta_threshold:
+                    signal_score += weights.get("volume_delta_signal", 0)
+                elif volume_delta < -delta_threshold:
+                    signal_score -= weights.get("volume_delta_signal", 0)
+
+        # Final Signal
+        threshold = self.config["signal_score_threshold"]
+        if signal_score >= threshold:
+            return "BUY", signal_score
+        elif signal_score <= -threshold:
+            return "SELL", signal_score
+        else:
+            return "HOLD", signal_score
 
     async def generate_trading_signal(
         self,
