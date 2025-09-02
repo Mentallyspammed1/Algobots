@@ -15,7 +15,7 @@ export default class GeminiAnalyzer {
 
   async analyzeTrends(marketData) {
     try {
-      logger.info(chalk.blue('🤖 Analyzing with Gemini AI...'));
+      logger.info(chalk.hex('#00FFFF').bold('🤖 Analyzing with Gemini AI...'));
       
       const prompt = this.buildAnalysisPrompt(marketData);
       const result = await this.model.generateContent(prompt);
@@ -25,7 +25,7 @@ export default class GeminiAnalyzer {
       return this.parseAIResponse(analysis);
       
     } catch (error) {
-      logger.error(chalk.red('Gemini API error:', error));
+      logger.error(chalk.hex('#FF00FF').bold('Gemini API error:'), error);
       return this.getDefaultAnalysis();
     }
   }
@@ -36,7 +36,7 @@ export default class GeminiAnalyzer {
     
     CURRENT MARKET DATA:
     Symbol: ${this.tradingSymbol}
-    Current Price: $${data.currentPrice}
+    Current Price: ${data.currentPrice}
     Price Change: ${data.priceChangePercent?.toFixed(2)}%
     
     TECHNICAL INDICATORS:
@@ -96,19 +96,24 @@ export default class GeminiAnalyzer {
       if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
         const jsonString = response.substring(firstCurly, lastCurly + 1);
         const analysis = JSON.parse(jsonString);
-        // Ensure confidenceReasoning is a string, default if not present or invalid
+
+        // Validate essential fields
+        if (typeof analysis.reasoning !== 'string' || analysis.reasoning.trim() === '') {
+          analysis.reasoning = 'AI did not provide specific reasoning.';
+        }
         if (typeof analysis.confidenceReasoning !== 'string' || analysis.confidenceReasoning.trim() === '') {
           analysis.confidenceReasoning = 'AI did not provide specific confidence reasoning.';
         }
-        logger.info(chalk.green('✅ AI analysis completed'));
+
+        logger.info(chalk.hex('#00FF00').bold('✅ AI analysis completed'));
         return analysis;
       } else {
-        logger.error(chalk.red('AI response did not contain a valid JSON object.'));
-        logger.debug(chalk.red(`Raw AI response: ${response}`)); // Log raw response for debugging
+        logger.error(chalk.hex('#FF00FF').bold('AI response did not contain a valid JSON object.'));
+        logger.debug(chalk.hex('#FF00FF')(`Raw AI response: ${response}`)); // Log raw response for debugging
       }
     } catch (error) {
-      logger.error(chalk.red('Error parsing AI response:', error));
-      logger.debug(chalk.red(`Raw AI response that caused error: ${response}`)); // Log raw response for debugging
+      logger.error(chalk.hex('#FF00FF').bold('Error parsing AI response:'), error);
+      logger.debug(chalk.hex('#FF00FF')(`Raw AI response that caused error: ${response}`)); // Log raw response for debugging
     }
     
     return this.getDefaultAnalysis();

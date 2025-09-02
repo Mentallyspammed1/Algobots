@@ -14,7 +14,7 @@ export default class SignalGenerator {
       const symbol = this.tradingSymbol;
       const currentPrice = marketData.currentPrice;
       
-      logger.info(chalk.blue('🎯 Generating trading signals...'));
+      logger.info(chalk.hex('#00FFFF').bold('🎯 Generating trading signals...'));
       
       // Determine action based on AI analysis and confidence
       let action = aiAnalysis.action;
@@ -22,7 +22,7 @@ export default class SignalGenerator {
       
       // Override to HOLD if confidence is too low
       if (confidence < this.minConfidence && action !== 'HOLD') {
-        logger.warn(chalk.yellow(`Confidence too low (${confidence}%), changing to HOLD`));
+        logger.warn(chalk.hex('#FFFF00').bold(`Confidence too low (${confidence}%), changing to HOLD`));
         action = 'HOLD';
       }
 
@@ -53,7 +53,7 @@ export default class SignalGenerator {
       return signal;
       
     } catch (error) {
-      logger.error(chalk.red('Error generating signals:', error));
+      logger.error(chalk.hex('#FF00FF').bold('Error generating signals:'), error);
       return this.getDefaultSignal(marketData);
     }
   }
@@ -178,28 +178,36 @@ export default class SignalGenerator {
   }
 
   logSignalSummary(signal) {
-    console.log(chalk.cyan('\n' + '='.repeat(50)));
-    console.log(chalk.white.bold('📊 SIGNAL SUMMARY'));
-    console.log(chalk.cyan('='.repeat(50)));
+    // Neon colors
+    const neonGreen = chalk.hex('#00FF00');
+    const neonBlue = chalk.hex('#00FFFF');
+    const neonPink = chalk.hex('#FF00FF');
+    const neonYellow = chalk.hex('#FFFF00');
+    const neonOrange = chalk.hex('#FFA500');
+    const darkGray = chalk.hex('#555555');
 
-    const actionColor = signal.action === 'BUY' ? chalk.green :
-                       signal.action === 'SELL' ? chalk.red :
-                       chalk.yellow;
+    console.log(neonBlue('\n' + '═'.repeat(50)));
+    console.log(neonPink.bold('📊 SIGNAL SUMMARY'));
+    console.log(neonBlue('═'.repeat(50)));
 
-    console.log(chalk.white(`Symbol: ${chalk.bold(this.tradingSymbol || 'N/A')}`));
-    console.log(chalk.white(`Action: ${actionColor.bold(signal.action || 'N/A')}`));
-    console.log(chalk.white(`Current Price: ${chalk.bold(`$${typeof signal.currentPrice === 'number' && !isNaN(signal.currentPrice) ? signal.currentPrice.toFixed(2) : 'N/A'}`)}`));
+    const actionColor = signal.action === 'BUY' ? neonGreen :
+                       signal.action === 'SELL' ? neonPink :
+                       neonYellow;
+
+    console.log(neonBlue(`Symbol: ${neonYellow.bold(this.tradingSymbol || 'N/A')}`));
+    console.log(neonBlue(`Action: ${actionColor.bold(signal.action || 'N/A')}`));
+    console.log(neonBlue(`Current Price: ${neonGreen.bold(`${typeof signal.currentPrice === 'number' && !isNaN(signal.currentPrice) ? signal.currentPrice.toFixed(2) : 'N/A'}`)}`));
 
     if (signal.action !== 'HOLD') {
-      console.log(chalk.white(`Entry: ${chalk.bold(`$${typeof signal.entry === 'number' && !isNaN(signal.entry) ? signal.entry.toFixed(2) : 'N/A'}`)}`));
-      console.log(chalk.green(`Take Profit: ${chalk.bold(`$${typeof signal.takeProfit === 'number' && !isNaN(signal.takeProfit) ? signal.takeProfit.toFixed(2) : 'N/A'}`)} (${typeof signal.tpPercentage === 'number' && !isNaN(signal.tpPercentage) ? signal.tpPercentage.toFixed(2) : 'N/A'}%)`));
-      console.log(chalk.red(`Stop Loss: ${chalk.bold(`$${typeof signal.stopLoss === 'number' && !isNaN(signal.stopLoss) ? signal.stopLoss.toFixed(2) : 'N/A'}`)} (${typeof signal.slPercentage === 'number' && !isNaN(signal.slPercentage) ? signal.slPercentage.toFixed(2) : 'N/A'}%)`));
-      console.log(chalk.white(`Risk/Reward: ${chalk.bold(signal.riskReward || 'N/A')}`));
+      console.log(neonBlue(`Entry: ${neonGreen.bold(`${typeof signal.entry === 'number' && !isNaN(signal.entry) ? signal.entry.toFixed(2) : 'N/A'}`)}`));
+      console.log(neonGreen(`Take Profit: ${neonGreen.bold(`${typeof signal.takeProfit === 'number' && !isNaN(signal.takeProfit) ? signal.takeProfit.toFixed(2) : 'N/A'}`)} (${typeof signal.tpPercentage === 'number' && !isNaN(signal.tpPercentage) ? signal.tpPercentage.toFixed(2) : 'N/A'}%)`));
+      console.log(neonPink(`Stop Loss: ${neonPink.bold(`${typeof signal.stopLoss === 'number' && !isNaN(signal.stopLoss) ? signal.stopLoss.toFixed(2) : 'N/A'}`)} (${typeof signal.slPercentage === 'number' && !isNaN(signal.slPercentage) ? signal.slPercentage.toFixed(2) : 'N/A'}%)`));
+      console.log(neonBlue(`Risk/Reward: ${neonOrange.bold(signal.riskReward || 'N/A')}`));
     }
 
-    console.log(chalk.white(`Confidence: ${this.getConfidenceBar(signal.confidence || 0)}`));
-    console.log(chalk.white(`Confidence Reasoning: ${signal.confidenceReasoning || 'No specific confidence reasoning provided.'}`));
-    console.log(chalk.white(`Reasoning: ${signal.reasoning || 'No specific reasoning provided.'}`));
-    console.log(chalk.cyan('='.repeat(50) + '\n'));
+    console.log(neonBlue(`Confidence: ${this.getConfidenceBar(signal.confidence || 0)}`));
+    console.log(darkGray(`Confidence Reasoning: ${signal.confidenceReasoning || 'No specific confidence reasoning provided.'}`));
+    console.log(darkGray(`Reasoning: ${signal.reasoning || 'No specific reasoning provided.'}`));
+    console.log(neonBlue('═'.repeat(50) + '\n'));
   }
 }
