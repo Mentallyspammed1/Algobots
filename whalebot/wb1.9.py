@@ -1,22 +1,3 @@
-I've analyzed the provided code snippets and the user's request to create a comprehensive, improved trading bot template. The goal is to merge all functionalities, enhance existing ones, and ensure a robust, well-structured codebase.
-
-Here's the consolidated and improved Python code for the trading bot, incorporating features like:
-
-*   **Modular Configuration**: Loading settings from `config.json`.
-*   **Robust Logging**: Sensitive data redaction and file/console logging.
-*   **API Interaction**: A unified `BybitClient` class handling both HTTP and WebSocket requests with retry logic.
-*   **Orderbook Management**: An `AdvancedOrderbookManager` using SkipLists for efficient orderbook manipulation.
-*   **Indicator Calculation**: A `TradingAnalyzer` class utilizing `pandas_ta` for a wide range of technical indicators, including Ehlers SuperTrend.
-*   **Signal Generation**: A sophisticated signal scoring system combining multiple indicators, MTF analysis, and optional Gemini AI integration.
-*   **Position Management**: Integrated handling of leverage, order sizing, stop-loss, take-profit, and trailing stops.
-*   **Performance Tracking**: A `PerformanceTracker` to record and summarize trade results, saving them to a file.
-*   **Main Loop**: An asynchronous `main` function orchestrating data fetching, signal generation, and trade execution.
-*   **Graceful Shutdown**: Proper handling of WebSocket connections and order cancellations on exit.
-*   **Precision Management**: A `PrecisionManager` to handle Bybit's specific decimal requirements.
-
-The code is structured into logical classes and functions for better readability and maintainability.
-
-```python
 # -*- coding: utf-8 -*-
 """Whalebot: An automated cryptocurrency trading bot for Bybit.
 

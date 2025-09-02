@@ -21,7 +21,8 @@
         "order_mode": "MARKET",
         "take_profit_type": "MARKET",
         "stop_loss_type": "MARKET",
-        "trailing_stop_activation_percent": 0.3
+        "trailing_stop_activation_percent": 0.3,
+        "trailing_stop_trigger_by": "LastPrice"
     },
     "mtf_analysis": {
         "enabled": true,
@@ -176,5 +177,12 @@
         "temperature": 0.7,
         "top_p": 0.9,
         "weight": 0.3
+    },
+    "alert_system": {
+        "ALERT_COOLDOWN_SECONDS": 300,
+        "ALERT_TELEGRAM_ENABLED": false,
+        "ALERT_TELEGRAM_BOT_TOKEN": "",
+        "ALERT_TELEGRAM_CHAT_ID": "",
+        "ALERT_CRITICAL_LEVEL": "WARNING"
     }
 }

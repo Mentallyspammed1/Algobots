@@ -19,10 +19,10 @@ class AlertSystem:
         self.config = config
         self.logger = logger
         self.last_alert_times: Dict[str, float] = {} # {alert_message_hash: last_sent_timestamp}
-        self.alert_cooldown_seconds = config.ALERT_COOLDOWN_SECONDS
+        self.alert_cooldown_seconds = config['alert_system']['ALERT_COOLDOWN_SECONDS']
 
-        if self.config.ALERT_TELEGRAM_ENABLED:
-            if not self.config.ALERT_TELEGRAM_BOT_TOKEN or not self.config.ALERT_TELEGRAM_CHAT_ID:
+        if self.config['alert_system']['ALERT_TELEGRAM_ENABLED']:
+            if not self.config['alert_system']['ALERT_TELEGRAM_BOT_TOKEN'] or not self.config['alert_system']['ALERT_TELEGRAM_CHAT_ID']:
                 self.logger.error("Telegram alerting enabled but BOT_TOKEN or CHAT_ID are missing. Disabling Telegram alerts.")
                 self.config.ALERT_TELEGRAM_ENABLED = False
             else:
@@ -45,7 +45,7 @@ class AlertSystem:
         """
         # Convert level string to logging level integer for comparison
         log_level_int = getattr(logging, level.upper(), logging.INFO)
-        config_alert_level_int = getattr(logging, self.config.ALERT_CRITICAL_LEVEL.upper(), logging.WARNING)
+        config_alert_level_int = getattr(logging, self.config['alert_system']['ALERT_CRITICAL_LEVEL'].upper(), logging.WARNING)
 
         # Log the alert internally regardless of external sending
         if log_level_int >= logging.CRITICAL:
@@ -71,7 +71,7 @@ class AlertSystem:
             return False
 
         # Try sending to Telegram
-        if self.config.ALERT_TELEGRAM_ENABLED:
+        if self.config['alert_system']['ALERT_TELEGRAM_ENABLED']:
             # Use asyncio.to_thread to run the blocking requests.post call in a separate thread
             # This prevents blocking the main asyncio event loop.
             success = await asyncio.to_thread(self._send_telegram_message_sync, message, level)
@@ -84,11 +84,11 @@ class AlertSystem:
 
     def _send_telegram_message_sync(self, message: str, level: str = "INFO") -> bool:
         """Synchronous helper to send a message to a Telegram chat using requests.post."""
-        if not self.config.ALERT_TELEGRAM_BOT_TOKEN or not self.config.ALERT_TELEGRAM_CHAT_ID:
+        if not self.config['ALERT_TELEGRAM_BOT_TOKEN'] or not self.config['ALERT_TELEGRAM_CHAT_ID']:
             self.logger.error("Telegram bot token or chat ID is not set for sending message.")
             return False
 
-        telegram_url = f"https://api.telegram.org/bot{self.config.ALERT_TELEGRAM_BOT_TOKEN}/sendMessage"
+        telegram_url = f"https://api.telegram.org/bot{self.config['ALERT_TELEGRAM_BOT_TOKEN']}/sendMessage"
         
         emoji = "ℹ️"
         if level.upper() == "WARNING": emoji = "⚠️"
@@ -98,7 +98,7 @@ class AlertSystem:
         full_message = f"{emoji} {level.upper()}: {message}"
 
         payload = {
-            'chat_id': self.config.ALERT_TELEGRAM_CHAT_ID,
+            'chat_id': self.config['ALERT_TELEGRAM_CHAT_ID'],
             'text': full_message,
             'parse_mode': 'HTML'
         }

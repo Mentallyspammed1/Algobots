@@ -1,0 +1,924 @@
+This enhanced version focuses on clarity, conciseness, and flow by streamlining imports, reorganizing constants, improving docstrings, refining error handling, and making the overall structure more readable.
+
+```python
+import asyncio
+import json
+import logging
+import os
+import sys
+import warnings
+from datetime import UTC, datetime
+from decimal import ROUND_DOWN, Decimal, getcontext
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from typing import Any, Literal # ClassVar is not used, removed
+
+import numpy as np
+import pandas as pd
+import pandas_ta as ta
+import ccxt.async_support as ccxt
+from colorama import Fore, Style, init
+from dotenv import load_dotenv
+
+# Filter common warnings that can clutter output during development
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Initialize colorama for colored terminal output and set high decimal precision
+getcontext().prec = 28  # High precision for financial calculations to prevent floating-point errors
+init(autoreset=True)  # Automatically reset colors after each print
+load_dotenv()  # Load environment variables from .env file
+
+# --- Configuration & API Constants ---
+API_KEY = os.getenv("BYBIT_API_KEY")
+API_SECRET = os.getenv("BYBIT_API_SECRET")
+CONFIG_FILE = "config.json"
+LOG_DIRECTORY = "bot_logs/trading-bot/logs"
+Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True) # Ensure log directory exists
+
+# --- Time & Delay Constants ---
+TIMEZONE = UTC  # Use UTC for consistency and to avoid timezone issues with API timestamps
+REQUEST_TIMEOUT = 30  # Global timeout for CCXT requests in seconds
+LOOP_DELAY_SECONDS = 15  # Delay between main bot loop iterations
+WS_RECONNECT_DELAY_SECONDS = 5 # Delay before attempting WebSocket reconnect (if implemented)
+API_CALL_RETRY_DELAY_SECONDS = 3 # Delay for individual CCXT API call retries
+
+# --- Indicator & Strategy Constants (Magic Numbers) ---
+# Minimum data points required for specific indicator calculations
+MIN_DATA_POINTS_TRUE_RANGE = 2
+MIN_DATA_POINTS_SUPERSMOOTHER = 2
+MIN_DATA_POINTS_OBV = 2
+MIN_DATA_POINTS_PSAR_INITIAL = 4 # PSAR needs a few points to initialize reliably
+MIN_DATA_POINTS_VOLUME_DELTA = 2 # Volume Delta requires at least 2 bars for comparison
+
+# ADX trend strength thresholds
+ADX_STRONG_TREND_THRESHOLD = 25
+ADX_WEAK_TREND_THRESHOLD = 20
+
+# --- Colorama Styling Constants ---
+NEON_GREEN = Fore.LIGHTGREEN_EX
+NEON_BLUE = Fore.CYAN
+NEON_PURPLE = Fore.MAGENTA
+NEON_YELLOW = Fore.YELLOW
+NEON_RED = Fore.LIGHTRED_EX
+NEON_CYAN = Fore.CYAN
+RESET = Style.RESET_ALL
+
+# --- Indicator Specific Colors for Logging ---
+INDICATOR_COLORS = {
+    "SMA_10": Fore.LIGHTBLUE_EX,
+    "SMA_Long": Fore.BLUE,
+    "EMA_Short": Fore.LIGHTMAGENTA_EX,
+    "EMA_Long": Fore.MAGENTA,
+    "ATR": Fore.YELLOW,
+    "RSI": Fore.GREEN,
+    "StochRSI_K": Fore.CYAN,
+    "StochRSI_D": Fore.LIGHTCYAN_EX,
+    "BB_Upper": Fore.RED,
+    "BB_Middle": Fore.WHITE,
+    "BB_Lower": Fore.RED,
+    "CCI": Fore.LIGHTGREEN_EX,
+    "WR": Fore.LIGHTRED_EX,
+    "MFI": Fore.GREEN,
+    "OBV": Fore.BLUE,
+    "OBV_EMA": Fore.LIGHTBLUE_EX,
+    "CMF": Fore.MAGENTA,
+    "Tenkan_Sen": Fore.CYAN,
+    "Kijun_Sen": Fore.LIGHTCYAN_EX,
+    "Senkou_Span_A": Fore.GREEN,
+    "Senkou_Span_B": Fore.RED,
+    "Chikou_Span": Fore.YELLOW,
+    "PSAR_Val": Fore.MAGENTA,
+    "PSAR_Dir": Fore.LIGHTMAGENTA_EX,
+    "VWAP": Fore.WHITE,
+    "ST_Fast_Dir": Fore.BLUE,
+    "ST_Fast_Val": Fore.LIGHTBLUE_EX,
+    "ST_Slow_Dir": Fore.MAGENTA,
+    "ST_Slow_Val": Fore.LIGHTMAGENTA_EX,
+    "MACD_Line": Fore.GREEN,
+    "MACD_Signal": Fore.LIGHTGREEN_EX,
+    "MACD_Hist": Fore.YELLOW,
+    "ADX": Fore.CYAN,
+    "PlusDI": Fore.LIGHTCYAN_EX,
+    "MinusDI": Fore.RED,
+    "Volatility_Index": Fore.YELLOW,
+    "Volume_Delta": Fore.LIGHTCYAN_EX,
+    "VWMA": Fore.WHITE,
+}
+
+
+# --- Configuration Management ---
+def _get_default_config() -> dict[str, Any]:
+    """Returns the default configuration dictionary."""
+    return {
+        # Core Settings
+        "symbol": "BTCUSDT",
+        "interval": "15m",  # Bybit CCXT uses '15m', '1h', '4h', '1d', etc.
+        "loop_delay": LOOP_DELAY_SECONDS,
+        "orderbook_limit": 50,
+        "testnet": True,
+        "timezone": "America/Chicago",  # Note: Bot uses UTC internally, this is for display/user preference
+        # Signal Generation
+        "signal_score_threshold": 2.0,
+        "volume_confirmation_multiplier": 1.5,
+        # Position & Risk Management
+        "trade_management": {
+            "enabled": True,
+            "account_balance": 1000.0,  # Simulated balance if not using real API
+            "risk_per_trade_percent": 1.0,  # Percentage of account_balance to risk
+            "stop_loss_atr_multiple": 1.5,  # Stop loss distance as multiple of ATR
+            "take_profit_atr_multiple": 2.0,  # Take profit distance as multiple of ATR
+            "trailing_stop_atr_multiple": 0.3,  # Trailing stop distance as multiple of ATR
+            "max_open_positions": 1,
+            "order_precision": 4,  # Fallback decimal places for order quantity
+            "price_precision": 2,  # Fallback decimal places for price
+            "leverage": 10,  # Leverage for perpetual contracts
+            "order_mode": "MARKET",  # MARKET or LIMIT for entry orders
+            "take_profit_type": "MARKET",  # MARKET or LIMIT for TP
+            "stop_loss_type": "MARKET",  # MARKET or LIMIT for SL
+            "trailing_stop_activation_percent": 0.5,  # % profit to activate trailing stop
+        },
+        # Multi-Timeframe Analysis
+        "mtf_analysis": {
+            "enabled": True,
+            "higher_timeframes": ["1h", "4h"],  # Bybit CCXT intervals
+            "trend_indicators": ["ema", "ehlers_supertrend"],
+            "trend_period": 50,  # Period for MTF trend indicators like SMA/EMA
+            "mtf_request_delay_seconds": 0.5,
+        },
+        # Machine Learning Enhancement (Explicitly disabled)
+        "ml_enhancement": {
+            "enabled": False,  # ML explicitly disabled
+            "model_path": "ml_model.pkl",
+            "retrain_on_startup": False,
+            "training_data_limit": 5000,
+            "prediction_lookahead": 12,
+            "profit_target_percent": 0.5,
+            "feature_lags": [1, 2, 3, 5],
+            "cross_validation_folds": 5,
+        },
+        # Indicator Periods & Thresholds
+        "indicator_settings": {
+            "atr_period": 14,
+            "ema_short_period": 9,
+            "ema_long_period": 21,
+            "rsi_period": 14,
+            "stoch_rsi_period": 14,
+            "stoch_k_period": 3,
+            "stoch_d_period": 3,
+            "bollinger_bands_period": 20,
+            "bollinger_bands_std_dev": 2.0,
+            "cci_period": 20,
+            "williams_r_period": 14,
+            "mfi_period": 14,
+            "psar_acceleration": 0.02,
+            "psar_max_acceleration": 0.2,
+            "sma_short_period": 10,
+            "sma_long_period": 50,
+            "fibonacci_window": 60,
+            "ehlers_fast_period": 10,
+            "ehlers_fast_multiplier": 2.0,
+            "ehlers_slow_period": 20,
+            "ehlers_slow_multiplier": 3.0,
+            "macd_fast_period": 12,
+            "macd_slow_period": 26,
+            "macd_signal_period": 9,
+            "adx_period": 14,
+            "ichimoku_tenkan_period": 9,
+            "ichimoku_kijun_period": 26,
+            "ichimoku_senkou_span_b_period": 52,
+            "ichimoku_chikou_span_offset": 26,
+            "obv_ema_period": 20,
+            "cmf_period": 20,
+            "rsi_oversold": 30,
+            "rsi_overbought": 70,
+            "stoch_rsi_oversold": 20,
+            "stoch_rsi_overbought": 80,
+            "cci_oversold": -100,
+            "cci_overbought": 100,
+            "williams_r_oversold": -80,
+            "williams_r_overbought": -20,
+            "mfi_oversold": 20,
+            "mfi_overbought": 80,
+            "volatility_index_period": 20,
+            "vwma_period": 20,
+            "volume_delta_period": 5,
+            "volume_delta_threshold": 0.2,
+            "vwap_daily_reset": False,  # Should VWAP reset daily or be continuous
+        },
+        # Active Indicators & Weights
+        "indicators": {
+            "ema_alignment": True, "sma_trend_filter": True, "momentum": True,
+            "volume_confirmation": True, "stoch_rsi": True, "rsi": True,
+            "bollinger_bands": True, "vwap": True, "cci": True, "wr": True,
+            "psar": True, "sma_10": True, "mfi": True, "orderbook_imbalance": True,
+            "fibonacci_levels": True, "ehlers_supertrend": True, "macd": True,
+            "adx": True, "ichimoku_cloud": True, "obv": True, "cmf": True,
+            "volatility_index": True, "vwma": True, "volume_delta": True,
+        },
+        "weight_sets": {
+            "default_scalping": {
+                "ema_alignment": 0.22, "sma_trend_filter": 0.28, "momentum_rsi_stoch_cci_wr_mfi": 0.18,
+                "volume_confirmation": 0.12, "bollinger_bands": 0.22, "vwap": 0.22,
+                "psar": 0.22, "sma_10": 0.07, "orderbook_imbalance": 0.07,
+                "ehlers_supertrend_alignment": 0.55, "macd_alignment": 0.28,
+                "adx_strength": 0.18, "ichimoku_confluence": 0.38, "obv_momentum": 0.18,
+                "cmf_flow": 0.12, "mtf_trend_confluence": 0.32, "volatility_index_signal": 0.15,
+                "vwma_cross": 0.15, "volume_delta_signal": 0.10,
+            }
+        },
+        # Gemini AI Analysis (Optional)
+        "gemini_ai_analysis": {
+            "enabled": False,
+            "model_name": "gemini-1.0-pro",
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "weight": 0.3,  # Weight of Gemini's signal in the final score
+        },
+    }
+
+def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) -> None:
+    """Recursively ensures all keys from default_config are present in config."""
+    for key, default_value in default_config.items():
+        if key not in config:
+            config[key] = default_value
+        elif isinstance(default_value, dict) and isinstance(config.get(key), dict):
+            _ensure_config_keys(config[key], default_value)
+
+def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
+    """
+    Loads configuration from a JSON file. If the file is not found or corrupted,
+    it creates a default configuration and saves it.
+    """
+    path = Path(filepath)
+    default_config = _get_default_config()
+
+    if not path.exists():
+        try:
+            with path.open("w", encoding="utf-8") as f:
+                json.dump(default_config, f, indent=4)
+            logger.warning(
+                f"{NEON_YELLOW}Config file not found. Created default at {filepath} for {default_config['symbol']}.{RESET}"
+            )
+            return default_config
+        except OSError as e:
+            logger.error(f"{NEON_RED}Error creating default config file: {e}{RESET}")
+            return default_config
+
+    try:
+        with path.open(encoding="utf-8") as f:
+            config = json.load(f)
+        _ensure_config_keys(config, default_config)
+        # Save updated config to include any newly added default keys
+        with path.open("w", encoding="utf-8") as f_write:
+            json.dump(config, f_write, indent=4)
+        return config
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error(
+            f"{NEON_RED}Error loading config from {filepath}: {e}. Using default and attempting to save.{RESET}"
+        )
+        try:
+            with path.open("w", encoding="utf-8") as f_default:
+                json.dump(default_config, f_default, indent=4)
+        except OSError as e_save:
+            logger.error(f"{NEON_RED}Could not save default config: {e_save}{RESET}")
+        return default_config
+
+
+# --- Logging Setup ---
+class SensitiveFormatter(logging.Formatter):
+    """A log formatter that redacts sensitive information like API keys."""
+    SENSITIVE_WORDS = ["API_KEY", "API_SECRET"]
+
+    def __init__(self, fmt: str | None = None, datefmt: str | None = None, style: Literal['%', '{', '$'] = "%"):
+        super().__init__(fmt, datefmt, style)
+        self._fmt = fmt if fmt else "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Formats the log record, redacting sensitive words."""
+        original_message = super().format(record)
+        redacted_message = original_message
+        for word in self.SENSITIVE_WORDS:
+            if word in redacted_message:
+                redacted_message = redacted_message.replace(word, "*" * len(word))
+        return redacted_message
+
+def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
+    """Configures and returns a logger with console and rotating file handlers."""
+    logger = logging.getLogger(log_name)
+    logger.setLevel(level)
+    logger.propagate = False  # Prevent logs from propagating to the root logger
+
+    # Avoid adding duplicate handlers if the logger is already set up
+    if not logger.handlers:
+        # Console Handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(
+            SensitiveFormatter(f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}")
+        )
+        logger.addHandler(console_handler)
+
+        # File Handler (rotating logs to prevent excessive disk usage)
+        log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
+        file_handler = RotatingFileHandler(
+            log_file, maxBytes=10 * 1024 * 1024, backupCount=5 # 10MB per file, 5 backups
+        )
+        file_handler.setFormatter(
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
+        logger.addHandler(file_handler)
+    return logger
+
+
+# --- CCXT Exchange Wrapper ---
+class ExchangeClient:
+    """A wrapper for CCXT to interact with exchange functionalities, primarily Bybit."""
+
+    def __init__(
+        self,
+        exchange_id: str,
+        api_key: str,
+        api_secret: str,
+        testnet: bool,
+        logger: logging.Logger,
+    ):
+        self.logger = logger
+        self.exchange_id = exchange_id
+        self.symbol_to_ccxt: dict[str, str] = {} # Cache for Bybit symbol to CCXT symbol conversion
+        self.markets_loaded = False
+        
+        try:
+            exchange_class = getattr(ccxt, exchange_id)
+            self.exchange = exchange_class(
+                {
+                    "apiKey": api_key,
+                    "secret": api_secret,
+                    "enableRateLimit": True, # CCXT's built-in rate limiting
+                    "options": {
+                        "defaultType": "linear",  # Assuming perpetual futures
+                        "adjustForTimeDifference": True, # Automatically adjust for server time drift
+                    },
+                    "timeout": REQUEST_TIMEOUT * 1000 # CCXT timeout is in milliseconds
+                }
+            )
+            if testnet:
+                self.exchange.set_sandbox_mode(True)
+                self.logger.info(f"{NEON_YELLOW}CCXT {exchange_id} set to sandbox mode.{RESET}")
+            
+            self.logger.info(f"{NEON_GREEN}CCXT {exchange_id} client initialized.{RESET}")
+        except Exception as e:
+            self.logger.critical(f"{NEON_RED}Failed to initialize CCXT exchange client: {e}{RESET}")
+            sys.exit(1)
+
+    async def load_markets(self) -> None:
+        """Loads market data from the exchange to populate symbols and precision info."""
+        if not self.markets_loaded:
+            try:
+                await self.exchange.load_markets()
+                self.markets_loaded = True
+                self.logger.info(f"{NEON_GREEN}Markets loaded for {self.exchange_id}.{RESET}")
+                
+                # Pre-build a mapping for common Bybit market IDs (e.g., BTCUSDT) to CCXT symbols (BTC/USDT)
+                for market_id, market_data in self.exchange.markets_by_id.items():
+                    self.symbol_to_ccxt[market_id] = market_data['symbol']
+
+            except Exception as e:
+                self.logger.error(f"{NEON_RED}Failed to load markets: {e}{RESET}")
+                self.markets_loaded = False # Mark as not loaded, might need retry
+
+    def get_ccxt_symbol(self, bybit_symbol: str) -> str:
+        """Converts a Bybit symbol (e.g., BTCUSDT) to a CCXT symbol (e.g., BTC/USDT)."""
+        if not self.markets_loaded:
+            self.logger.warning(f"Markets not loaded, cannot reliably convert symbol {bybit_symbol}. Returning original.")
+            return bybit_symbol # Fallback to original, hoping CCXT can infer or it fails later
+        
+        # Use cached mapping
+        if bybit_symbol in self.symbol_to_ccxt:
+            return self.symbol_to_ccxt[bybit_symbol]
+
+        # If not in cache, try to find it (less efficient)
+        for market in self.exchange.markets.values():
+            if market['id'] == bybit_symbol:
+                self.symbol_to_ccxt[bybit_symbol] = market['symbol']
+                return market['symbol']
+        
+        self.logger.warning(f"{NEON_YELLOW}Could not find CCXT symbol for Bybit symbol: {bybit_symbol}. Using as is.{RESET}")
+        return bybit_symbol # Fallback if direct mapping or lookup fails
+
+    async def fetch_current_price(self, symbol: str) -> Decimal | None:
+        """Fetches the current market price for a symbol using CCXT ticker."""
+        ccxt_symbol = self.get_ccxt_symbol(symbol)
+        try:
+            ticker = await self.exchange.fetch_ticker(ccxt_symbol)
+            price = Decimal(str(ticker["last"]))
+            self.logger.debug(f"Fetched current price for {symbol}: {price}")
+            return price
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching ticker for {symbol}: {e}{RESET}")
+        except Exception as e:
+            self.logger.error(f"{NEON_RED}Error fetching ticker for {symbol}: {e}{RESET}")
+        return None
+
+    async def fetch_klines(self, symbol: str, interval: str, limit: int) -> pd.DataFrame | None:
+        """Fetches historical OHLCV kline data for a symbol and interval."""
+        ccxt_symbol = self.get_ccxt_symbol(symbol)
+        try:
+            ohlcv = await self.exchange.fetch_ohlcv(ccxt_symbol, interval, limit=limit)
+            if not ohlcv:
+                self.logger.warning(f"{NEON_YELLOW}Fetched klines for {symbol} {interval} but received empty list.{RESET}")
+                return None
+
+            df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+            df["start_time"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True).dt.tz_convert(TIMEZONE)
+            
+            # Ensure numeric types and drop rows with any NaNs in critical columns
+            df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].apply(pd.to_numeric, errors="coerce")
+            df.set_index("start_time", inplace=True)
+            df.sort_index(inplace=True)
+            df.dropna(subset=["open", "high", "low", "close", "volume"], inplace=True)
+
+            if df.empty:
+                self.logger.warning(f"{NEON_YELLOW}Klines for {symbol} {interval} empty after processing.{RESET}")
+                return None
+
+            self.logger.debug(f"Fetched {len(df)} {interval} klines for {symbol}.")
+            return df
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching klines for {symbol} {interval}: {e}{RESET}")
+        except Exception as e:
+            self.logger.error(f"{NEON_RED}Error fetching klines for {symbol} {interval}: {e}{RESET}")
+        return None
+
+    async def fetch_orderbook(self, symbol: str, limit: int) -> dict | None:
+        """Fetches orderbook data (bids and asks) for a symbol."""
+        ccxt_symbol = self.get_ccxt_symbol(symbol)
+        try:
+            orderbook = await self.exchange.fetch_order_book(ccxt_symbol, limit=limit)
+            self.logger.debug(f"Fetched orderbook for {symbol} with limit {limit}.")
+            return orderbook
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching orderbook for {symbol}: {e}{RESET}")
+        except Exception as e:
+            self.logger.error(f"{NEON_RED}Error fetching orderbook for {symbol}: {e}{RESET}")
+        return None
+
+    async def get_wallet_balance(self, coin: str) -> Decimal | None:
+        """Fetches the available wallet balance for a specific coin."""
+        try:
+            balance = await self.exchange.fetch_balance()
+            if coin in balance["free"]:
+                coin_balance = Decimal(str(balance["free"][coin]))
+                self.logger.debug(f"Fetched {coin} wallet balance: {coin_balance}")
+                return coin_balance
+            self.logger.warning(f"{NEON_YELLOW}Coin {coin} not found in balance.{RESET}")
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching balance for {coin}: {e}{RESET}")
+        except Exception as e:
+            self.logger.error(f"{NEON_RED}Error fetching balance for {coin}: {e}{RESET}")
+        return None
+
+    async def get_exchange_open_positions(self, symbol: str) -> list[dict]:
+        """Fetches currently open positions from the exchange."""
+        ccxt_symbol = self.get_ccxt_symbol(symbol)
+        try:
+            positions = await self.exchange.fetch_positions(symbols=[ccxt_symbol])
+            # Filter for non-zero size positions. CCXT standardizes to 'contracts'.
+            open_positions = [p for p in positions if Decimal(str(p.get('contracts', 0))) > 0]
+            self.logger.debug(f"Fetched {len(open_positions)} open positions for {symbol}.")
+            return open_positions
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching positions for {symbol}: {e}{RESET}")
+        except Exception as e:
+            self.logger.error(f"{NEON_RED}Error fetching positions for {symbol}: {e}{RESET}")
+        return []
+
+    async def place_order(
+        self,
+        symbol: str,
+        side: Literal["Buy", "Sell"],
+        order_type: Literal["Market", "Limit"],
+        qty: Decimal,
+        price: Decimal | None = None,
+        reduce_only: bool = False,
+        take_profit: Decimal | None = None,
+        stop_loss: Decimal | None = None,
+    ) -> dict | None:
+        """Places an order on the exchange."""
+        ccxt_symbol = self.get_ccxt_symbol(symbol)
+        ccxt_side = "buy" if side == "Buy" else "sell"
+        ccxt_order_type = order_type.lower()
+        
+        params: dict[str, Any] = {}
+        if reduce_only:
+            params["reduceOnly"] = True
+        if take_profit is not None:
+            params["takeProfit"] = float(take_profit)
+        if stop_loss is not None:
+            params["stopLoss"] = float(stop_loss)
+            
+        try:
+            order = await self.exchange.create_order(
+                ccxt_symbol,
+                ccxt_order_type,
+                ccxt_side,
+                float(qty), # CCXT expects float for quantity
+                float(price) if price is not None and ccxt_order_type == "limit" else None, # CCXT expects float for price
+                params=params,
+            )
+            self.logger.info(
+                f"{NEON_GREEN}Order placed for {symbol} ({side} {order_type} {qty.normalize()} @ {price.normalize() if price else 'N/A'}): ID {order.get('id')}{RESET}"
+            )
+            return order
+        except ccxt.InsufficientFunds as e:
+            self.logger.error(f"{NEON_RED}Insufficient funds for {symbol}: {e}{RESET}")
+        except ccxt.InvalidOrder as e:
+            self.logger.error(f"{NEON_RED}Invalid order parameters for {symbol}: {e}{RESET}")
+        except ccxt.NetworkError as e:
+            self.logger.error(f"{NEON_RED}Network error placing order for {symbol}: {e}{RESET}")
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"{NEON_RED}CCXT Exchange Error placing order for {symbol}: {e}{RESET}")
+        except Exception as e:
+            self.logger.error(f"{NEON_RED}Error placing order for {symbol}: {e}{RESET}")
+        return None
+
+    async def cancel_order(self, symbol: str, order_id: str) -> dict | None:
+        """Cancels an existing order on the exchange."""
+        ccxt_symbol = self.get_ccxt_symbol(symbol)
+        try:
+            response = await self.exchange.cancel_order(order_id, ccxt_symbol)
+            self.logger.info(f"{NEON_GREEN}Order {order_id} cancelled for {symbol}.{RESET}")
+            return response
+        except ccxt.OrderNotFound as e:
+            self.logger.warning(f"{NEON_YELLOW}Order {order_id} not found for {symbol}: {e}{RESET}")
+        except ccxt.NetworkError as e:
+            self.logger.error(f"{NEON_RED}Network error canceling order {order_id} for {symbol}: {e}{RESET}")
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"{NEON_RED}CCXT Exchange Error canceling order {order_id} for {symbol}: {e}{RESET}")
+        except Exception as e:
+            self.logger.error(f"{NEON_RED}Error canceling order {order_id} for {symbol}: {e}{RESET}")
+        return None
+    
+    async def set_leverage(self, symbol: str, leverage: int) -> bool:
+        """Sets the leverage for a trading pair."""
+        ccxt_symbol = self.get_ccxt_symbol(symbol)
+        try:
+            # Bybit v5 set_leverage often requires 'buyLeverage' and 'sellLeverage' parameters
+            await self.exchange.set_leverage(leverage=leverage, symbol=ccxt_symbol, params={'buyLeverage': leverage, 'sellLeverage': leverage})
+            self.logger.info(f"{NEON_GREEN}[{symbol}] Leverage set to {leverage}x.{RESET}")
+            return True
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"{NEON_RED}[{symbol}] Failed to set leverage to {leverage}x: {e}{RESET}")
+            return False
+        except Exception as e:
+            self.logger.error(f"{NEON_RED}Error setting leverage for {symbol}: {e}{RESET}")
+            return False
+
+
+# --- Precision Management ---
+class PrecisionManager:
+    """Manages symbol-specific precision for order quantity and price using CCXT."""
+
+    def __init__(
+        self,
+        symbol: str,
+        logger: logging.Logger,
+        config: dict[str, Any],
+        exchange_client: ExchangeClient,
+    ):
+        self.symbol = symbol
+        self.logger = logger
+        self.exchange_client = exchange_client
+        self.ccxt_symbol = self.exchange_client.get_ccxt_symbol(symbol)
+        self.market_info: dict | None = None
+        
+        # Fallback values from config if market info cannot be fetched
+        self.qty_step: Decimal = Decimal("1") / (Decimal("10") ** config["trade_management"]["order_precision"])
+        self.price_tick_size: Decimal = Decimal("1") / (Decimal("10") ** config["trade_management"]["price_precision"])
+        self.min_order_qty: Decimal = Decimal("0.0001") # Default reasonable minimum
+        
+        # Start fetching precision info asynchronously
+        asyncio.create_task(self._fetch_precision_info())
+
+    async def _fetch_precision_info(self) -> None:
+        """Fetches and stores precision info from the exchange via CCXT."""
+        self.logger.info(f"[{self.symbol}] Fetching precision information...")
+        try:
+            if not self.exchange_client.markets_loaded:
+                await self.exchange_client.load_markets() # Ensure markets are loaded
+                if not self.exchange_client.markets_loaded:
+                     self.logger.error(f"{NEON_RED}[{self.symbol}] Markets not loaded, cannot fetch precision info.{RESET}")
+                     return
+
+            self.market_info = self.exchange_client.exchange.market(self.ccxt_symbol)
+
+            if self.market_info:
+                # Use CCXT's standardized precision fields and Bybit's specific 'info' fields
+                if self.market_info["limits"]["amount"].get("min") is not None:
+                    self.min_order_qty = Decimal(str(self.market_info["limits"]["amount"]["min"]))
+                
+                # Check for Bybit specific filters in 'info' dict
+                if 'info' in self.market_info:
+                    price_filter = self.market_info['info'].get('priceFilter', {})
+                    lot_size_filter = self.market_info['info'].get('lotSizeFilter', {})
+                    
+                    if price_filter.get('tickSize') is not None:
+                        self.price_tick_size = Decimal(str(price_filter['tickSize']))
+                    
+                    if lot_size_filter.get('qtyStep') is not None:
+                        # qtyStep is often more granular than minOrderQty for increments
+                        self.qty_step = max(self.qty_step, Decimal(str(lot_size_filter['qtyStep'])))
+                    elif lot_size_filter.get('minOrderQty') is not None:
+                         self.qty_step = max(self.qty_step, Decimal(str(lot_size_filter['minOrderQty'])))
+
+                self.logger.info(
+                    f"[{self.symbol}] Precision loaded: Qty Step={self.qty_step.normalize()}, "
+                    f"Price Tick Size={self.price_tick_size.normalize()}, "
+                    f"Min Qty={self.min_order_qty.normalize()}"
+                )
+            else:
+                self.logger.error(
+                    f"{NEON_RED}[{self.symbol}] Failed to fetch precision info from CCXT. Using config defaults. This may cause order placement errors.{RESET}"
+                )
+        except Exception as e:
+            self.logger.error(
+                f"{NEON_RED}[{self.symbol}] Error fetching precision info via CCXT: {e}. Using config defaults.{RESET}"
+            )
+
+    def format_quantity(self, quantity: Decimal) -> Decimal:
+        """Formats the order quantity to the symbol's required precision."""
+        if self.market_info:
+            return Decimal(str(self.exchange_client.exchange.amount_to_precision(
+                self.ccxt_symbol, float(quantity)
+            )))
+        # Fallback if market info not available
+        return (quantity // self.qty_step) * self.qty_step
+
+    def format_price(self, price: Decimal) -> Decimal:
+        """Formats the order price to the symbol's required tick size."""
+        if self.market_info:
+            return Decimal(str(self.exchange_client.exchange.price_to_precision(
+                self.ccxt_symbol, float(price)
+            )))
+        # Fallback if market info not available
+        return (price // self.price_tick_size) * self.price_tick_size
+
+
+# --- Position Management ---
+class PositionManager:
+    """Manages open positions, stop-loss, and take-profit levels for a specific symbol."""
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        logger: logging.Logger,
+        symbol: str,
+        exchange_client: ExchangeClient,
+    ):
+        self.config = config
+        self.logger = logger
+        self.symbol = symbol
+        self.exchange_client = exchange_client
+        self.ccxt_symbol = self.exchange_client.get_ccxt_symbol(symbol)
+        
+        self.open_positions: dict[str, dict] = {} # Tracks positions opened by the bot locally
+        self.trade_management_enabled = config["trade_management"]["enabled"]
+        self.precision_manager = PrecisionManager(symbol, logger, config, exchange_client)
+        self.max_open_positions = config["trade_management"]["max_open_positions"]
+        self.leverage = config["trade_management"]["leverage"]
+        self.order_mode = config["trade_management"]["order_mode"]
+        self.trailing_stop_activation_percent = Decimal(str(config["trade_management"]["trailing_stop_activation_percent"])) / 100
+
+        if self.trade_management_enabled:
+            asyncio.create_task(self._set_leverage_on_startup())
+
+    async def _set_leverage_on_startup(self) -> None:
+        """Sets leverage for the trading pair when the bot starts."""
+        await self.exchange_client.set_leverage(self.symbol, self.leverage)
+
+    async def _get_available_balance(self) -> Decimal:
+        """Fetches the current available account balance for order sizing."""
+        if not self.trade_management_enabled:
+            return Decimal(str(self.config["trade_management"]["account_balance"]))
+
+        balance = await self.exchange_client.get_wallet_balance("USDT") # Assuming USDT for linear contracts
+        if balance is None:
+            self.logger.warning(f"{NEON_YELLOW}[{self.symbol}] Failed to fetch actual balance. Using simulated balance for calculation.{RESET}")
+            return Decimal(str(self.config["trade_management"]["account_balance"]))
+        return balance
+
+    def _calculate_order_size(
+        self, current_price: Decimal, atr_value: Decimal, account_balance: Decimal
+    ) -> Decimal:
+        """Calculates order size based on risk per trade, ATR, and available balance."""
+        if not self.trade_management_enabled or atr_value <= 0 or current_price <= 0:
+            return Decimal("0")
+
+        risk_per_trade_percent = Decimal(str(self.config["trade_management"]["risk_per_trade_percent"])) / 100
+        stop_loss_atr_multiple = Decimal(str(self.config["trade_management"]["stop_loss_atr_multiple"]))
+
+        risk_amount = account_balance * risk_per_trade_percent
+        stop_loss_distance_usd = atr_value * stop_loss_atr_multiple
+
+        if stop_loss_distance_usd <= 0:
+            self.logger.warning(f"{NEON_YELLOW}[{self.symbol}] Calculated stop loss distance is zero or negative ({stop_loss_distance_usd.normalize()}). Cannot determine order size.{RESET}")
+            return Decimal("0")
+
+        order_value_notional = risk_amount / stop_loss_distance_usd # Value in quote currency (e.g., USDT)
+        order_qty_unleveraged = order_value_notional / current_price # Quantity of base asset (e.g., BTC)
+        order_qty = order_qty_unleveraged * self.leverage # Apply leverage
+
+        order_qty = self.precision_manager.format_quantity(order_qty) # Apply exchange precision
+
+        if order_qty < self.precision_manager.min_order_qty:
+            self.logger.warning(
+                f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity ({order_qty.normalize()}) is below the minimum "
+                f"({self.precision_manager.min_order_qty.normalize()}). Cannot open position.{RESET}"
+            )
+            return Decimal("0")
+        if order_qty <= Decimal("0"):
+            self.logger.warning(f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity ({order_qty.normalize()}) is too small or zero. Cannot open position.{RESET}")
+            return Decimal("0")
+
+        self.logger.info(
+            f"[{self.symbol}] Calculated order size: {order_qty.normalize()} (Risk: {risk_amount.normalize():.2f} USDT, SL Distance: {stop_loss_distance_usd.normalize():.4f}, Leveraged Qty: {order_qty.normalize()})"
+        )
+        return order_qty
+
+    async def open_position(
+        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+    ) -> dict | None:
+        """Opens a new position if conditions allow by placing an order on the exchange."""
+        if not self.trade_management_enabled:
+            self.logger.info(f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Skipping opening position.{RESET}")
+            return None
+
+        exchange_open_positions = await self.exchange_client.get_exchange_open_positions(self.symbol)
+        if len(exchange_open_positions) >= self.max_open_positions:
+            self.logger.warning(f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}")
+            return None
+
+        # Simple check for locally tracked positions (can be refined with more robust reconciliation)
+        if self.symbol in self.open_positions and self.open_positions[self.symbol]["status"] == "OPEN":
+            self.logger.warning(f"{NEON_YELLOW}[{self.symbol}] Locally tracked position already open. Skipping.{RESET}")
+            return None
+
+        if signal not in ["BUY", "SELL"]:
+            self.logger.debug(f"Invalid signal '{signal}' for opening position.")
+            return None
+        
+        available_balance = await self._get_available_balance()
+        order_qty = self._calculate_order_size(current_price, atr_value, available_balance)
+        if order_qty <= Decimal("0"):
+            return None
+
+        stop_loss_atr_multiple = Decimal(str(self.config["trade_management"]["stop_loss_atr_multiple"]))
+        take_profit_atr_multiple = Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
+
+        side = "Buy" if signal == "BUY" else "Sell"
+        entry_price = current_price # Target entry price; actual fill price may differ for MARKET orders
+
+        if signal == "BUY":
+            stop_loss_price = current_price - (atr_value * stop_loss_atr_multiple)
+            take_profit_price = current_price + (atr_value * take_profit_atr_multiple)
+        else:  # SELL
+            stop_loss_price = current_price + (atr_value * stop_loss_atr_multiple)
+            take_profit_price = current_price - (atr_value * take_profit_atr_multiple)
+
+        entry_price = self.precision_manager.format_price(entry_price)
+        stop_loss_price = self.precision_manager.format_price(stop_loss_price)
+        take_profit_price = self.precision_manager.format_price(take_profit_price)
+
+        self.logger.info(
+            f"[{self.symbol}] Attempting to place {side} {self.order_mode} order: Qty={order_qty.normalize()}, "
+            f"SL={stop_loss_price.normalize()}, TP={take_profit_price.normalize()}"
+        )
+
+        placed_order = await self.exchange_client.place_order(
+            symbol=self.symbol,
+            side=side,
+            order_type=self.order_mode,
+            qty=order_qty,
+            price=entry_price if self.order_mode == "LIMIT" else None,
+            take_profit=take_profit_price,
+            stop_loss=stop_loss_price,
+        )
+
+        if placed_order:
+            self.logger.info(f"{NEON_GREEN}[{self.symbol}] Successfully initiated {signal} trade with order ID: {placed_order.get('id')}{RESET}")
+            position_info = {
+                "entry_time": datetime.now(TIMEZONE),
+                "symbol": self.symbol,
+                "side": signal,
+                "entry_price": entry_price, # This is target price, actual fill price might differ
+                "qty": order_qty,
+                "stop_loss": stop_loss_price,
+                "take_profit": take_profit_price,
+                "status": "OPEN",
+                "order_id": placed_order.get("id"),
+                "is_trailing_activated": False,
+                "current_trailing_sl": stop_loss_price, # Initialize trailing SL
+            }
+            self.open_positions[f"{self.symbol}_{signal}"] = position_info # Track by symbol and side
+            return position_info
+        else:
+            self.logger.error(f"{NEON_RED}[{self.symbol}] Failed to place {signal} order.{RESET}")
+            return None
+
+    async def manage_positions(self, current_price: Decimal, atr_value: Decimal, performance_tracker: Any) -> None:
+        """Manages open positions on the exchange, including updating trailing stops and recording closed trades."""
+        if not self.trade_management_enabled:
+            return
+
+        exchange_positions = await self.exchange_client.get_exchange_open_positions(self.symbol)
+        
+        exchange_positions_map = {}
+        for pos in exchange_positions:
+            # Normalize CCXT 'side' to bot's 'BUY'/'SELL'
+            bot_side = "BUY" if pos.get('side') == "long" else "SELL" if pos.get('side') == "short" else "UNKNOWN"
+            exchange_positions_map[f"{self.symbol}_{bot_side}"] = pos
+
+        positions_to_remove = []
+        for pos_key, local_position in list(self.open_positions.items()):
+            bot_side = local_position['side']
+            
+            if pos_key in exchange_positions_map:
+                exchange_pos_data = exchange_positions_map[pos_key]
+                # Ensure it's truly an open position (size > 0)
+                if Decimal(str(exchange_pos_data.get('contracts', 0))) > 0:
+                    # Position is still open on exchange. Update local info and manage trailing stop.
+                    local_position['entry_price'] = Decimal(str(exchange_pos_data.get('entryPrice', local_position['entry_price'])))
+                    
+                    # --- Trailing Stop Logic ---
+                    trailing_stop_atr_multiple = Decimal(str(self.config["trade_management"]["trailing_stop_atr_multiple"]))
+                    is_trailing_activated = local_position.get("is_trailing_activated", False)
+                    entry_price = local_position["entry_price"]
+
+                    if not is_trailing_activated:
+                        profit_percent = Decimal("0")
+                        if bot_side == "BUY":
+                            profit_percent = (current_price - entry_price) / entry_price if entry_price > 0 else Decimal("0")
+                        elif bot_side == "SELL":
+                            profit_percent = (entry_price - current_price) / entry_price if entry_price > 0 else Decimal("0")
+                        
+                        if profit_percent >= self.trailing_stop_activation_percent:
+                            local_position["is_trailing_activated"] = True
+                            if bot_side == "BUY":
+                                initial_trailing_sl = current_price - (atr_value * trailing_stop_atr_multiple)
+                            else: # SELL
+                                initial_trailing_sl = current_price + (atr_value * trailing_stop_atr_multiple)
+                            
+                            local_position["current_trailing_sl"] = self.precision_manager.format_price(initial_trailing_sl)
+                            self.logger.info(f"[{self.symbol}] Trailing stop activated. Initial SL: {local_position['current_trailing_sl'].normalize()}.")
+                            # TODO: Implement CCXT call to update stop loss on the exchange
+                            
+                    elif is_trailing_activated:
+                        potential_new_sl = Decimal("0")
+                        current_trailing_sl = local_position["current_trailing_sl"]
+
+                        if bot_side == "BUY":
+                            potential_new_sl = current_price - (atr_value * trailing_stop_atr_multiple)
+                            if potential_new_sl > current_trailing_sl:
+                                local_position["current_trailing_sl"] = self.precision_manager.format_price(potential_new_sl)
+                                self.logger.info(f"[{self.symbol}] Updating trailing stop to {local_position['current_trailing_sl'].normalize()}.")
+                                # TODO: Implement CCXT call to update stop loss on the exchange
+                        elif bot_side == "SELL":
+                            potential_new_sl = current_price + (atr_value * trailing_stop_atr_multiple)
+                            if potential_new_sl < current_trailing_sl:
+                                local_position["current_trailing_sl"] = self.precision_manager.format_price(potential_new_sl)
+                                self.logger.info(f"[{self.symbol}] Updating trailing stop to {local_position['current_trailing_sl'].normalize()}.")
+                                # TODO: Implement CCXT call to update stop loss on the exchange
+                else:
+                    # Position not found or closed on exchange (size 0), record and remove
+                    self.logger.info(f"{NEON_PURPLE}Position for {self.symbol} ({bot_side}) is closed on exchange. Recording trade.{RESET}")
+                    local_position["status"] = "CLOSED"
+                    local_position["exit_time"] = datetime.now(TIMEZONE)
+                    local_position["exit_price"] = self.precision_manager.format_price(
+                        Decimal(str(exchange_pos_data.get('markPrice', current_price))) # Use markPrice or current
+                    )
+                    local_position["closed_by"] = "EXCHANGE_CLOSURE"
+
+                    pnl = (
+                        (local_position["exit_price"] - local_position["entry_price"]) * local_position["qty"]
+                        if bot_side == "BUY"
+                        else (local_position["entry_price"] - local_position["exit_price"]) * local_position["qty"]
+                    )
+                    performance_tracker.record_trade(local_position, pnl)
+                    positions_to_remove.append(pos_key)
+            else:
+                # Local position not found on exchange, assume it was closed externally
+                self.logger.warning(f"{NEON_YELLOW}Local position for {self.symbol} ({bot_side}) not found on exchange. Assuming external closure and recording.{RESET}")
+                local_position["status"] = "CLOSED"
+                local_position["exit_time"] = datetime.now(TIMEZONE)
+                local_position["exit_price"] = self.precision_manager.format_price(current_price)
+                local_position["closed_by"] = "EXTERNAL_CLOSURE"
+
+                pnl = (
+                    (local_position["exit_price"] - local_position["entry_price"]) * local_position["qty"]
+                    if bot_side == "BUY"
+                    else (local_position["entry_price"] - local_position["exit_price"]) * local_position["qty"]
+                )
+                performance_tracker.record_trade(local_position, pnl)
+                positions_to_remove.append(pos_key)
+
+        # Remove closed positions from local tracking
+        for pos_key in positions_to
