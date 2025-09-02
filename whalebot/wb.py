@@ -132,8 +132,8 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             "stop_loss_atr_multiple": 1.5,
             "take_profit_atr_multiple": 2.0,
             "max_open_positions": 1,
-            "order_precision": 4,  # New: Decimal places for order quantity
-            "price_precision": 2,  # New: Decimal places for price
+            "order_precision": 5,  # New: Decimal places for order quantity
+            "price_precision": 3,  # New: Decimal places for price
         },
         # Multi-Timeframe Analysis
         "mtf_analysis": {

@@ -14,7 +14,6 @@ import os
 import sys
 import time
 import urllib.parse
-import warnings
 from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
@@ -33,9 +32,6 @@ from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
 
 # Note: Scikit-learn is explicitly excluded as per user request.
 # SKLEARN_AVAILABLE variable is removed as it is unused and its presence might suggest ML features.
@@ -122,6 +118,34 @@ INDICATOR_COLORS = {
     "Volume_Delta": Fore.LIGHTCYAN_EX,
     "VWMA": Fore.WHITE,
 }
+
+# --- Mock Gemini Client (for demonstration without actual API calls) ---
+class MockGeminiClient:
+    def __init__(self, api_key: str, model_name: str, temperature: float, top_p: float, logger: logging.Logger):
+        self.logger = logger
+        self.model_name = model_name
+        self.temperature = temperature
+        self.top_p = top_p
+        self.logger.info(f"Initialized Mock Gemini Client with model: {model_name}")
+        # In a real scenario, you would initialize the genai client here
+        # import google.generativeai as genai
+        # genai.configure(api_key=api_key)
+        # self.model = genai.GenerativeModel(model_name)
+
+    async def analyze_market_data(self, market_data_summary: str) -> dict | None:
+        """Simulates sending market data to Gemini and getting a trading recommendation."""
+        self.logger.debug(f"Mock Gemini: Analyzing market data summary: {market_data_summary[:200]}...")
+        # Simulate a delay for AI processing
+        await asyncio.sleep(2)
+
+        # Simulate different responses for demonstration
+        import random
+        if random.random() < 0.3: # 30% chance of BUY
+            return {"entry": "BUY", "confidence_level": random.randint(60, 90), "reason": "Simulated strong bullish confluence."}
+        elif random.random() < 0.6: # 30% chance of SELL
+            return {"entry": "SELL", "confidence_level": random.randint(60, 90), "reason": "Simulated strong bearish confluence."}
+        else: # 40% chance of HOLD
+            return {"entry": "HOLD", "confidence_level": random.randint(30, 70), "reason": "Simulated neutral market conditions."}
 
 
 # --- Configuration Management ---
@@ -238,7 +262,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             "psar": True,
             "sma_10": True,
             "mfi": True,
-            "orderbook_imbalance": True,
+            # "orderbook_imbalance": True, # Removed as AdvancedOrderbookManager is not implemented
             "fibonacci_levels": True,
             "ehlers_supertrend": True,
             "macd": True,
@@ -260,7 +284,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "vwap": 0.22,
                 "psar": 0.22,
                 "sma_10": 0.07,
-                "orderbook_imbalance": 0.07,
+                # "orderbook_imbalance": 0.07, # Removed
                 "ehlers_supertrend_alignment": 0.55,
                 "macd_alignment": 0.28,
                 "adx_strength": 0.18,
@@ -287,9 +311,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(default_config, f, indent=4)
             logger.warning(
-                f"{NEON_YELLOW}Configuration file not found. "
-                f"Created default config at {filepath} for symbol "
-                f"{default_config['symbol']}{RESET}"
+                f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath} for symbol {default_config['symbol']}{RESET}"
             )
             return default_config
         except OSError as e:
@@ -608,7 +630,6 @@ def place_order(
     stop_loss: Decimal | None = None,
     tp_sl_mode: Literal["Full", "Partial"] = "Full",
     logger: logging.Logger | None = None,
-    position_idx: int | None = None,  # Added parameter
 ) -> dict | None:
     """Place an order on Bybit."""
     if logger is None:
@@ -624,10 +645,6 @@ def place_order(
     }
     if order_type == "Limit" and price is not None:
         params["price"] = str(price)
-
-    # Add positionIdx if provided
-    if position_idx is not None:
-        params["positionIdx"] = position_idx
 
     # Add TP/SL to the order itself
     if take_profit is not None:
@@ -903,11 +920,6 @@ class PositionManager:
         )
 
         side = "Buy" if signal == "BUY" else "Sell"
-        # For Hedge Mode: 1 for long (Buy), 2 for short (Sell)
-        # For One-Way Mode: 0 for both
-        # Assuming Hedge Mode based on the error "position idx not match position mode"
-        position_idx = 1 if side == "Buy" else 2
-
         entry_price = (
             current_price  # For Market orders, entry price is roughly current price
         )
@@ -937,7 +949,6 @@ class PositionManager:
             stop_loss=stop_loss_price,
             tp_sl_mode=self.tp_sl_mode,
             logger=self.logger,
-            position_idx=position_idx,  # Pass position_idx
         )
 
         if placed_order:
@@ -975,8 +986,11 @@ class PositionManager:
         """Check and manage open positions on the exchange (SL/TP are handled by Bybit).
         This method will mainly check if positions are closed and record them.
         It also handles trailing stop logic locally.
-        NOTE: In a real bot, updating trailing stops would involve API calls to the exchange.
-        This implementation updates the local state for simulation/tracking purposes.
+        NOTE: In a real bot, updating trailing stops would involve API calls to the exchange
+        to modify the existing stop-loss order. This implementation updates the local state
+        for simulation/tracking purposes. To implement actual trailing stops on Bybit,
+        you would use the /v5/order/amend API endpoint to update the stopLoss price
+        when the trailing stop condition is met.
         """
         if not self.trade_management_enabled or not self.open_positions:
             return
@@ -1026,28 +1040,6 @@ class PositionManager:
                     # In a real scenario, you'd send a cancel_all_orders or close position API call here
                     # For this simulation, we just mark it as closed and record the trade.
                     position["status"] = "CLOSED"
-                    position["exit_time"] = datetime.now(TIMEZONE)
-                    position["exit_price"] = self.precision_manager.format_price(
-                        exit_price
-                    )
-                    position["closed_by"] = closed_by
-
-                    pnl = (
-                        (exit_price - entry_price) * qty
-                        if side == "BUY"
-                        else (entry_price - exit_price) * qty
-                    )
-                    performance_tracker.record_trade(position, pnl)
-                    positions_to_remove.append(symbol)
-                    continue  # Move to the next position
-
-                # Handle Trailing Stop Logic
-                trailing_stop_atr_multiple = Decimal(
-                    str(self.config["trade_management"]["trailing_stop_atr_multiple"])
-                )
-
-                if not is_trailing_activated:
-                    # Check if activation threshold is met
                     position["exit_time"] = datetime.now(TIMEZONE)
                     position["exit_price"] = self.precision_manager.format_price(
                         exit_price
@@ -1283,7 +1275,14 @@ class AlertSystem:
     def send_alert(
         self, message: str, level: Literal["INFO", "WARNING", "ERROR"]
     ) -> None:
-        """Send an alert (currently logs it)."""
+        """Send an alert (currently logs it).
+        
+        Future enhancements could include integration with external services like:
+        - Telegram: Using a bot API to send messages.
+        - Email: Sending email notifications.
+        - SMS: Via a third-party SMS gateway.
+        - Discord: Webhook integration.
+        """
         if level == "INFO":
             self.logger.info(f"{NEON_BLUE}ALERT: {message}{RESET}")
         elif level == "WARNING":
@@ -1325,20 +1324,15 @@ class TradingAnalyzer:
                 )
                 self.config["gemini_ai_analysis"]["enabled"] = False
             else:
-                # Assuming GeminiClient is available and correctly imported/implemented elsewhere
-                # from gemini_client import GeminiClient # Uncomment if GeminiClient is available
-                # self.gemini_client = GeminiClient(
-                #     api_key=gemini_api_key,
-                #     model_name=self.config["gemini_ai_analysis"]["model_name"],
-                #     temperature=self.config["gemini_ai_analysis"]["temperature"],
-                #     top_p=self.config["gemini_ai_analysis"]["top_p"],
-                #     logger=logger
-                # )
-                self.logger.warning(
-                    f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is not implemented/imported. Placeholder used.{RESET}"
+                # Instantiate the MockGeminiClient
+                self.gemini_client = MockGeminiClient(
+                    api_key=gemini_api_key,
+                    model_name=self.config["gemini_ai_analysis"]["model_name"],
+                    temperature=self.config["gemini_ai_analysis"]["temperature"],
+                    top_p=self.config["gemini_ai_analysis"]["top_p"],
+                    logger=logger
                 )
-                # Placeholder for GeminiClient if not available
-                self.gemini_client = lambda: None
+                self.logger.info(f"{NEON_GREEN}Gemini AI analysis enabled and MockGeminiClient initialized.{RESET}")
 
         if not self.df.empty:
             self._calculate_all_indicators()
@@ -2435,29 +2429,12 @@ class TradingAnalyzer:
         return self.indicator_values.get(key, default)
 
     def _check_orderbook(self, current_price: Decimal, orderbook_manager: Any) -> float:
-        """Analyze orderbook imbalance. Placeholder as AdvancedOrderbookManager is not provided."""
-        # This method requires access to the orderbook_manager instance,
-        # which should be passed during initialization or to the signal generation method.
-        # For now, assuming it's accessible.
-        if not orderbook_manager:
-            self.logger.warning(
-                "Orderbook manager not available for imbalance check. Returning 0.0."
-            )
-            return 0.0
-
-        # Placeholder logic if orderbook_manager were implemented
-        # bids, asks = orderbook_manager.get_depth(self.config["orderbook_limit"])
-        # bid_volume = sum(Decimal(str(b.quantity)) for b in bids)
-        # ask_volume = sum(Decimal(str(a.quantity)) for a in asks)
-        # total_volume = bid_volume + ask_volume
-        # if total_volume == 0:
-        #     return 0.0
-        # imbalance = (bid_volume - ask_volume) / total_volume
-        # self.logger.debug(
-        #     f"Orderbook Imbalance: {imbalance:.4f} (Bids: {bid_volume.normalize()}, Asks: {ask_volume.normalize()})"
-        # )
-        # return float(imbalance)
-        return 0.0  # Return 0.0 as a placeholder
+        """Placeholder for orderbook imbalance analysis. Currently returns 0.0."""
+        self.logger.debug(
+            "Orderbook imbalance calculation is currently a placeholder and returns 0.0. "
+            "Implement AdvancedOrderbookManager for actual functionality."
+        )
+        return 0.0
 
     def _get_mtf_trend(self, higher_tf_df: pd.DataFrame, indicator_type: str) -> str:
         """Determine trend from higher timeframe using specified indicator."""
@@ -2510,6 +2487,48 @@ class TradingAnalyzer:
                     return "DOWN"
             return "UNKNOWN"
         return "UNKNOWN"
+
+    def _prepare_gemini_prompt(self, current_price: Decimal, mtf_trends: dict[str, str]) -> str:
+        """Prepares a detailed market data summary for Gemini AI analysis."""
+        prompt_parts = [
+            f"Current Market Analysis for {self.symbol} on {self.config['interval']} timeframe:",
+            f"Current Price: {current_price.normalize()}",
+            "\n--- Key Indicator Values ---"
+        ]
+
+        # Add current indicator values
+        for ind_name, value in self.indicator_values.items():
+            if isinstance(value, Decimal):
+                prompt_parts.append(f"{ind_name}: {value.normalize()}")
+            elif isinstance(value, float):
+                prompt_parts.append(f"{ind_name}: {value:.4f}")
+            else:
+                prompt_parts.append(f"{ind_name}: {value}")
+
+        # Add Fibonacci levels if calculated
+        if self.fib_levels:
+            prompt_parts.append("\n--- Fibonacci Levels ---")
+            for level_name, level_price in self.fib_levels.items():
+                prompt_parts.append(f"{level_name}: {level_price.normalize()}")
+
+        # Add Multi-Timeframe Trends
+        if mtf_trends:
+            prompt_parts.append("\n--- Multi-Timeframe Trends ---")
+            for tf_indicator, trend in mtf_trends.items():
+                prompt_parts.append(f"{tf_indicator}: {trend}")
+
+        # Add recent price action context
+        if len(self.df) >= 2:
+            last_close = Decimal(str(self.df["close"].iloc[-1]))
+            prev_close = Decimal(str(self.df["close"].iloc[-2]))
+            price_change = ((last_close - prev_close) / prev_close) * 100
+            prompt_parts.append(f"\nRecent Price Change (last bar): {price_change:.2f}%")
+            prompt_parts.append(f"Last Close: {last_close.normalize()}, Previous Close: {prev_close.normalize()}")
+
+        prompt_parts.append("\nBased on this data, provide a concise trading recommendation (BUY, SELL, or HOLD) and a confidence level (0-100), along with a brief reason. Format as JSON: {\"entry\": \"BUY/SELL/HOLD\", \"confidence_level\": 0-100, \"reason\": \"...\"}")
+
+        return "\n".join(prompt_parts)
+
 
     async def generate_trading_signal(
         self,
@@ -2779,13 +2798,13 @@ class TradingAnalyzer:
                             f"  PSAR: Bearish reversal detected (-{weights.get('psar', 0) * 0.4:.2f})"
                         )
 
-        # Orderbook Imbalance
-        if active_indicators.get("orderbook_imbalance", False) and orderbook_manager:
-            imbalance = self._check_orderbook(current_price, orderbook_manager)
-            signal_score += imbalance * weights.get("orderbook_imbalance", 0)
-            self.logger.debug(
-                f"  Orderbook Imbalance: {imbalance:.2f} (Contribution: {imbalance * weights.get('orderbook_imbalance', 0):.2f})"
-            )
+        # Orderbook Imbalance (Placeholder)
+        # if active_indicators.get("orderbook_imbalance", False) and orderbook_manager:
+        #     imbalance = self._check_orderbook(current_price, orderbook_manager)
+        #     signal_score += imbalance * weights.get("orderbook_imbalance", 0)
+        #     self.logger.debug(
+        #         f"  Orderbook Imbalance: {imbalance:.2f} (Contribution: {imbalance * weights.get('orderbook_imbalance', 0):.2f})"
+        #     )
 
         # Fibonacci Levels (confluence with price action)
         if active_indicators.get("fibonacci_levels", False) and self.fib_levels:
@@ -3233,6 +3252,9 @@ class TradingAnalyzer:
 
         # --- Gemini AI Analysis Scoring ---
         if self.config["gemini_ai_analysis"]["enabled"] and self.gemini_client:
+            # Prepare a summary of current market conditions and indicators for Gemini
+            market_data_summary = self._prepare_gemini_prompt(current_price, mtf_trends)
+            gemini_analysis = await self.gemini_client.analyze_market_data(market_data_summary)
 
             if gemini_analysis:
                 self.logger.info(
@@ -3351,9 +3373,10 @@ def display_indicator_values_and_price(
         for tf_indicator, trend in mtf_trends.items():
             logger.info(f"  {NEON_YELLOW}{tf_indicator}: {trend}{RESET}")
 
-    if config["indicators"].get("orderbook_imbalance", False):
-        imbalance = analyzer._check_orderbook(current_price, orderbook_manager)
-        logger.info(f"{NEON_CYAN}Orderbook Imbalance: {imbalance:.4f}{RESET}")
+    # Removed orderbook imbalance display as it's a placeholder
+    # if config["indicators"].get("orderbook_imbalance", False):
+    #     imbalance = analyzer._check_orderbook(current_price, orderbook_manager)
+    #     logger.info(f"{NEON_CYAN}Orderbook Imbalance: {imbalance:.4f}{RESET}")
 
     logger.info(f"{NEON_BLUE}--------------------------------------{RESET}")
 
@@ -3569,128 +3592,18 @@ if __name__ == "__main__":
         )  # Save trades to a file
 
         # Initialize other components needed by the main loop or analyzer
-        # Note: GeminiClient initialization is conditional and requires API key setup.
-        # For now, it's a placeholder.
         gemini_client = None
         if config["gemini_ai_analysis"]["enabled"]:
             gemini_api_key = os.getenv("GEMINI_API_KEY")
             if gemini_api_key:
-                # Assuming GeminiClient is available and correctly implemented elsewhere
-                # from gemini_client import GeminiClient # Uncomment if GeminiClient is available
-                # gemini_client = GeminiClient(...)
-                logger.warning(
-                    f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is not implemented/imported. Placeholder used.{RESET}"
+                gemini_client = MockGeminiClient( # Use MockGeminiClient
+                    api_key=gemini_api_key,
+                    model_name=config["gemini_ai_analysis"]["model_name"],
+                    temperature=config["gemini_ai_analysis"]["temperature"],
+                    top_p=config["gemini_ai_analysis"]["top_p"],
+                    logger=logger
                 )
-
-                def gemini_client():
-                    return None  # Placeholder
-
-            else:
-                logger.error(
-                    f"{NEON_RED}GEMINI_API_KEY not set, disabling Gemini AI analysis.{RESET}"
-                )
-                config["gemini_ai_analysis"]["enabled"] = False
-
-        # Start the asynchronous main loop
-        asyncio.run(
-            main_async_loop(
-                config,
-                logger,
-                position_manager,
-                performance_tracker,
-                alert_system,
-                gemini_client,
-            )
-        )
-
-    except KeyboardInterrupt:
-        logger.info(
-            f"{NEON_BLUE}KeyboardInterrupt detected. Shutting down bot...{RESET}"
-        )
-        # The shutdown logic is handled within main_async_loop's finally block
-    except Exception as e:
-        logger.critical(
-            f"{NEON_RED}Critical error during bot startup or top-level execution: {e}{RESET}",
-            exc_info=True,
-        )
-        sys.exit(1)  # Exit if critical setup fails
-        # Start the asynchronous main loop
-        asyncio.run(
-            main_async_loop(
-                config,
-                logger,
-                position_manager,
-                performance_tracker,
-                alert_system,
-                gemini_client,
-            )
-        )
-
-    except KeyboardInterrupt:
-        logger.info(
-            f"{NEON_BLUE}KeyboardInterrupt detected. Shutting down bot...{RESET}"
-        )
-        # The shutdown logic is handled within main_async_loop's finally block
-    except Exception as e:
-        logger.critical(
-            f"{NEON_RED}Critical error during bot startup or top-level execution: {e}{RESET}",
-            exc_info=True,
-        )
-        sys.exit(1)  # Exit if critical setup fails
-        if config["interval"] not in valid_bybit_intervals:
-            logger.error(
-                f"{NEON_RED}Invalid primary interval '{config['interval']}' in config.json. Please use Bybit's valid string formats (e.g., '15', '60', 'D'). Exiting.{RESET}"
-            )
-            sys.exit(1)
-        for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
-            if htf_interval not in valid_bybit_intervals:
-                logger.error(
-                    f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}' in config.json. Please use Bybit's valid string formats (e.g., '60', '240'). Exiting.{RESET}"
-                )
-                sys.exit(1)
-
-        if not API_KEY or not API_SECRET:
-            logger.critical(
-                f"{NEON_RED}BYBIT_API_KEY or BYBIT_API_SECRET environment variables are not set. Please set them before running the bot. Exiting.{RESET}"
-            )
-            sys.exit(1)
-
-        logger.info(f"{NEON_GREEN}--- Whalebot Trading Bot Initialized ---{RESET}")
-        logger.info(f"Symbol: {config['symbol']}, Interval: {config['interval']}")
-        logger.info(
-            f"Trade Management Enabled: {config['trade_management']['enabled']}"
-        )
-        if config["trade_management"]["enabled"]:
-            logger.info(
-                f"Leverage: {config['trade_management']['leverage']}x, Order Mode: {config['trade_management']['order_mode']}"
-            )
-        else:
-            logger.info(
-                f"Using simulated balance for position sizing: {config['trade_management']['account_balance']:.2f} USDT"
-            )
-
-        position_manager = PositionManager(config, logger, config["symbol"])
-        performance_tracker = PerformanceTracker(
-            logger, config_file="bot_logs/trading-bot/trades.json"
-        )  # Save trades to a file
-
-        # Initialize other components needed by the main loop or analyzer
-        # Note: GeminiClient initialization is conditional and requires API key setup.
-        # For now, it's a placeholder.
-        gemini_client = None
-        if config["gemini_ai_analysis"]["enabled"]:
-            gemini_api_key = os.getenv("GEMINI_API_KEY")
-            if gemini_api_key:
-                # Assuming GeminiClient is available and correctly implemented elsewhere
-                # from gemini_client import GeminiClient # Uncomment if GeminiClient is available
-                # gemini_client = GeminiClient(...)
-                logger.warning(
-                    f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is not implemented/imported. Placeholder used.{RESET}"
-                )
-
-                def gemini_client():
-                    return None  # Placeholder
-
+                logger.info(f"{NEON_GREEN}Gemini AI analysis enabled and MockGeminiClient initialized.{RESET}")
             else:
                 logger.error(
                     f"{NEON_RED}GEMINI_API_KEY not set, disabling Gemini AI analysis.{RESET}"
