@@ -1,0 +1,28 @@
+{
+  "name": "ai-trading-bot-node",
+  "version": "1.0.0",
+  "description": "Modular AI Trading Bot using Gemini AI and Bybit in Node.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "NODE_ENV=development node --watch index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ."
+  },
+  "keywords": ["ai", "trading", "gemini", "bybit", "nodejs"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^0.11.0",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0",
+    "eslint": "^8.0.0",
+    "@babel/eslint-parser": "^7.0.0"
+  },
+  "type": "module"
+}
