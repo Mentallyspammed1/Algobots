@@ -1,289 +1,323 @@
-// src/trading_ai_system.js
-import { GeminiAPI } from './api/gemini_api.js';
-import { BybitAPI } from './api/bybit_api.js';
-import { RiskPolicy } from './core/risk_policy.js';
-import { TradingFunctions } from './core/trading_functions.js';
-import { AdvancedIndicatorProcessor } from './indicators/advanced_indicator_processor.js';
-import { PatternRecognitionProcessor } from './patterns/pattern_recognition_processor.js';
-import { Logger } from './utils/logger.js';
+import 'dotenv/config';
+import { config } from './config.js';
+import BybitAPI from './api/bybit_api.js';
+import BybitWebSocket from './api/bybit_websocket.js';
+import GeminiAPI from './api/gemini_api.js';
+import { loadState, saveState, defaultState } from './utils/state_manager.js';
+import { calculateIndicators, formatMarketContext, calculatePositionSize, determineExitPrices } from './core/trading_logic.js';
+import { applyRiskPolicy } from './core/risk_policy.js';
+import logger from './utils/logger.js';
 
+class TradingAiSystem {
+    constructor() {
+        this.bybitApi = new BybitAPI(process.env.BYBIT_API_KEY, process.env.BYBIT_API_SECRET);
+        this.geminiApi = new GeminiAPI(process.env.GEMINI_API_KEY);
+        this.isProcessing = false; // Lock to prevent concurrent runs
 
-import Decimal from 'decimal.js';
+        // Execution/risk knobs with safe defaults (overridable via config.js)
+        this.hedgeMode = Boolean(config?.hedgeMode ?? false);             // dual-side positions
+        this.flipCooldownMs = Number(config?.flipCooldownMs ?? 30_000);   // avoid rapid flip-flops
+        this.maxSpreadPct = Number(config?.maxSpreadPct ?? 0.0015);       // 15 bps guard (if spread available)
+        this.dryRun = Boolean(config?.dryRun ?? false);                   // if true, skip placing/closing orders
 
-const logger = new Logger('AI_SYSTEM');
-
-export class TradingAISystem {
-        constructor(geminiApiKey, bybitApiKey, bybitApiSecret, useTestnet = false, appConfig) {
-        this.config = appConfig;
-        this.bybitAdapter = new BybitAPI(bybitApiKey, bybitApiSecret, useTestnet);
-        this.riskPolicy = new RiskPolicy(this.bybitAdapter);
-        this.tradingFunctions = new TradingFunctions(this.bybitAdapter, this.riskPolicy);
-        this.indicatorProcessor = new AdvancedIndicatorProcessor();
-        this.patternProcessor = new PatternRecognitionProcessor();
-
-        // Define tools for Gemini function calling
-        this.toolDeclarations = [
-            {
-                functionDeclarations: [
-                    {
-                        name: 'getMarketData',
-                        description: 'Get current real-time market data for a given symbol.',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                symbol: { type: 'string', description: 'The trading pair symbol, e.g., "BTCUSDT".' }
-                            },
-                            required: ['symbol']
-                        }
-                    },
-                    {
-                        name: 'getHistoricalData',
-                        description: 'Get historical candlestick data for a given symbol and interval.',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                symbol: { type: 'string', description: 'The trading pair symbol, e.g., "BTCUSDT".' },
-                                interval: { type: 'string', description: 'Candlestick interval, e.g., "1h", "1d".' },
-                                limit: { type: 'number', description: 'Number of candles to retrieve (max 200).', default: 100 }
-                            },
-                            required: ['symbol', 'interval']
-                        }
-                    },
-                    {
-                        name: 'getPortfolio',
-                        description: 'Get the current account portfolio details including balances and positions.',
-                        parameters: { type: 'object', properties: {} }
-                    },
-                    {
-                        name: 'marketBuy',
-                        description: 'Place a market buy order for a specified quantity of an asset.',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                symbol: { type: 'string', description: 'The trading pair symbol, e.g., "BTCUSDT".' },
-                                quantity: { type: 'string', description: 'The quantity of the base asset to buy (as a string for Decimal).' }
-                            },
-                            required: ['symbol', 'quantity']
-                        }
-                    },
-                    {
-                        name: 'limitSell',
-                        description: 'Place a limit sell order for a specified quantity of an asset at a given price.',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                symbol: { type: 'string', description: 'The trading pair symbol, e.g., "BTCUSDT".' },
-                                quantity: { type: 'string', description: 'The quantity of the base asset to sell (as a string for Decimal).' },
-                                price: { type: 'string', description: 'The limit price for the sell order (as a string for Decimal).' }
-                            },
-                            required: ['symbol', 'quantity', 'price']
-                        }
-                    },
-                    {
-                        name: 'cancelOrder',
-                        description: 'Cancel an open order by its order ID.',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                symbol: { type: 'string', description: 'The trading pair symbol, e.g., "BTCUSDT".' },
-                                orderId: { type: 'string', description: 'The ID of the order to cancel.' }
-                            },
-                            required: ['symbol', 'orderId']
-                        }
-                    }
-                ]
-            }
-        ];
-        this.geminiAPI = new GeminiAPI(geminiApiKey, this.toolDeclarations);
-        logger.info('TradingAISystem initialized.');
+        this._lastFlipAt = 0; // global cooldown; customize per symbol if you trade many
+        this._printedBanner = false;
     }
 
-    /**
-     * Executes a tool call requested by the Gemini AI.
-     * @param {object} toolCall - The toolCall object from Gemini's response.
-     * @returns {Promise<any>} - The result of the executed function.
-     */
-    async _executeToolCall(toolCall) {
-        const functionName = toolCall.name;
-        const args = toolCall.args;
+    async handleNewCandle() {
+        if (this.isProcessing) {
+            logger.warn("Already processing a cycle, skipping new candle trigger.");
+            return;
+        }
+        this.isProcessing = true;
 
-        logger.debug(`Executing tool call: ${functionName} with args:`, args);
+        const tStart = Date.now();
+        if (!this._printedBanner) {
+            logger.info("Starting Trading AI System with config: " + JSON.stringify({
+                symbol: config.symbol,
+                interval: config.interval,
+                hedgeMode: this.hedgeMode,
+                flipCooldownMs: this.flipCooldownMs,
+                maxSpreadPct: this.maxSpreadPct,
+                dryRun: this.dryRun
+            }));
+            this._printedBanner = true;
+        }
 
-        // Convert Decimal string args back to Decimal objects where appropriate
-        const processedArgs = {};
-        for (const key in args) {
-            if (['quantity', 'price'].includes(key) && typeof args[key] === 'string') {
-                processedArgs[key] = new Decimal(args[key]);
+        logger.info("=========================================");
+        logger.info("Handling new confirmed candle...");
+
+        let cycleSummary = { decision: 'HOLD', reason: 'init', action: 'HOLD' };
+
+        try {
+            // 1) Load State & Fetch Data
+            const state = await loadState();
+            const klines = await this.bybitApi.getHistoricalMarketData(config.symbol, config.interval);
+            if (!klines || !Array.isArray(klines) || klines.length === 0) throw new Error("Failed to fetch market data.");
+
+            // 2) Indicators & Context
+            const indicators = calculateIndicators(klines);
+            const latest = indicators?.latest;
+            if (!latest || typeof latest.price !== 'number') {
+                throw new Error("Indicators missing latest price.");
+            }
+
+            // Optional market guards (spread/liquidity) if API supports it
+            const spreadPct = await this._maybeComputeLiveSpreadPct();
+            if (spreadPct != null && spreadPct > this.maxSpreadPct) {
+                logger.warn(`Spread too wide (${(spreadPct * 100).toFixed(3)} bps > ${(this.maxSpreadPct * 100).toFixed(3)} bps). Skipping trade.`);
+                cycleSummary = { decision: 'HOLD', reason: 'Spread too wide', action: 'HOLD' };
+                return;
+            }
+
+            // 3) Build AI context and get decision
+            const marketContext = formatMarketContext(state, latest);
+            const aiDecision = await this.geminiApi.getTradeDecision(marketContext);
+
+            // 4) Apply Risk Policy
+            const policyResult = applyRiskPolicy(aiDecision, latest);
+            cycleSummary = { decision: policyResult?.decision ?? 'HOLD', reason: policyResult?.reason ?? 'No reason' };
+
+            if (policyResult.decision === 'HOLD') {
+                logger.info(`Decision: HOLD. Reason: ${policyResult.reason}`);
+                return;
+            }
+
+            const trade = policyResult.trade;
+            if (!trade || !trade.name || !trade.args) {
+                logger.warn("AI policy returned an invalid trade object; holding.");
+                cycleSummary = { decision: 'HOLD', reason: 'Invalid policy trade', action: 'HOLD' };
+                return;
+            }
+
+            // 5) Execute trade intent safely
+            if (trade.name === 'proposeTrade') {
+                await this._executeProposedEntry(state, trade.args, latest);
+                cycleSummary.action = 'ENTRY';
+                cycleSummary.side = trade.args?.side;
+            } else if (trade.name === 'proposeExit') {
+                if (state.inPosition) {
+                    await this.executeExit(state, trade.args);
+                    cycleSummary.action = 'EXIT';
+                } else {
+                    logger.warn("Exit proposed but no open position; holding.");
+                    cycleSummary.action = 'HOLD';
+                }
             } else {
-                processedArgs[key] = args[key];
+                logger.warn(`AI proposed an unknown action '${trade.name}'; holding.`);
+                cycleSummary.action = 'HOLD';
             }
-        }
 
-        if (typeof this.tradingFunctions[functionName] === 'function') {
-            try {
-                const result = await this.tradingFunctions[functionName](...Object.values(processedArgs));
-                logger.info(`Tool call ${functionName} executed successfully. Result:`, result);
-                return result;
-            } catch (error) {
-                logger.error(`Error executing tool call ${functionName}:`, error);
-                return { error: error.message };
-            }
-        }
-        else {
-            logger.error(`Unknown function requested by Gemini: ${functionName}`);
-            return { error: `Function ${functionName} not found.` };
+        } catch (error) {
+            logger.exception(error);
+            cycleSummary = { decision: 'HOLD', reason: 'Exception during cycle', action: 'HOLD' };
+        } finally {
+            const wallMs = Date.now() - tStart;
+            this.isProcessing = false;
+            logger.info(`Processing cycle finished. Summary=${JSON.stringify(cycleSummary)} wall=${wallMs}ms`);
+            logger.info("=========================================\n");
         }
     }
 
+    // --- Entry flow with conflict resolution and cooldown ---
+    async _executeProposedEntry(state, args, indicators) {
+        const side = String(args?.side || '').toUpperCase();
+        const reasoning = args?.reasoning || 'No reasoning';
+        logger.info(`Executing ENTRY proposal: ${side} - ${reasoning}`);
 
-    /**
-     * Performs a comprehensive quantitative analysis using local indicators and AI insights.
-     * @param {string} symbol - Trading pair.
-     * @param {string} interval - Candlestick interval.
-     * @returns {Promise<object>} - Analysis report.
-     */
-    async performQuantitativeAnalysis(symbol, interval) {
-        logger.info(`Starting quantitative analysis for ${symbol} on ${interval} interval.`);
-
-        // 1. Fetch historical data
-        const historicalData = await this.tradingFunctions.getHistoricalData(symbol, interval, 200);
-        if (!historicalData || historicalData.length === 0) {
-            return { error: 'No historical data available for analysis.' };
-        }
-
-        const closes = historicalData.map(d => d.close);
-
-        // 2. Calculate local technical indicators
-        const rsi = this.indicatorProcessor.calculateRSI(closes);
-        const macd = this.indicatorProcessor.calculateMACD(closes);
-        const bbands = this.indicatorProcessor.calculateBBands(closes);
-        const atr = this.indicatorProcessor.calculateATR(historicalData); // ATR needs OHLC
-
-        const indicatorResults = {
-            closes,
-            rsi: rsi.slice(-1)[0], // Last RSI value
-            macd: { // Last MACD values
-                macd: macd.macd.slice(-1)[0],
-                signal: macd.signal.slice(-1)[0],
-                hist: macd.hist.slice(-1)[0],
-            },
-            bbands: { // Last BBands values
-                upper: bbands.upper.slice(-1)[0],
-                middle: bbands.middle.slice(-1)[0],
-                lower: bbands.lower.slice(-1)[0],
-            },
-            atr: atr.slice(-1)[0], // Last ATR value
-        };
-        logger.debug('Latest Indicator Results:', indicatorResults);
-
-        const compositeSignal = this.indicatorProcessor.calculateCompositeSignals({
-            closes,
-            rsi: rsi,
-            macd: macd,
-            bbands: bbands
-        }, { rsi: 0.3, macd: 0.4, bbands: 0.3 }); // Example weights
-        logger.debug('Composite Signal:', compositeSignal);
-
-        // 3. Detect local candlestick patterns
-        const detectedPatterns = this.patternProcessor.analyzeCandlestickPatterns(historicalData.slice(-2)); // Check last 2 candles
-        logger.debug('Detected Candlestick Patterns:', detectedPatterns);
-
-        // 4. Prepare prompt for Gemini AI with local analysis
-        let aiPrompt = `Perform a detailed market analysis for ${symbol} on the ${interval} interval.
-        Consider the following recent data and technical indicators:
-
-        - Current Price: ${historicalData.slice(-1)[0].close.toFixed(2)}
-        - Last Close: ${historicalData.slice(-1)[0].close.toFixed(2)}
-        - Last RSI: ${indicatorResults.rsi.isNaN() ? 'N/A' : indicatorResults.rsi.toFixed(2)}
-        - Last MACD Line: ${indicatorResults.macd.macd.isNaN() ? 'N/A' : indicatorResults.macd.macd.toFixed(4)}
-        - Last MACD Signal Line: ${indicatorResults.macd.signal.isNaN() ? 'N/A' : indicatorResults.macd.signal.toFixed(4)}
-        - Last MACD Histogram: ${indicatorResults.macd.hist.isNaN() ? 'N/A' : indicatorResults.macd.hist.toFixed(4)}
-        - Last Bollinger Bands (Upper, Middle, Lower): ${indicatorResults.bbands.upper.isNaN() ? 'N/A' : indicatorResults.bbands.upper.toFixed(2)}, ${indicatorResults.bbands.middle.isNaN() ? 'N/A' : indicatorResults.bbands.middle.toFixed(2)}, ${indicatorResults.bbands.lower.isNaN() ? 'N/A' : indicatorResults.bbands.lower.toFixed(2)}
-        - Last ATR: ${indicatorResults.atr.isNaN() ? 'N/A' : indicatorResults.atr.toFixed(4)}
-
-        Detected candlestick patterns:
-        ${detectedPatterns.length > 0 ? detectedPatterns.map(p => `- ${p.pattern} (Confidence: ${p.confidence * 100}%, Signal: ${p.signal})`).join('\n') : 'None'}
-
-        Composite signal from local analysis: ${compositeSignal.interpretation} (Score: ${compositeSignal.signal.toFixed(2)})
-        Details: ${compositeSignal.details}
-
-        Based on this information, provide:
-        1. An overall market sentiment (Bullish, Bearish, Neutral, Volatile).
-        2. Key price levels (support, resistance).
-        3. Potential trade ideas (e.g., "Consider buying if price breaks above X", "Consider selling if price drops below Y").
-        4. Any additional insights or risks.
-        5. If appropriate, use the available tools to suggest a specific trade action (e.g., marketBuy, limitSell).`;
-
-        this.geminiAPI.updateMarketContext(aiPrompt); // Update context for future AI interactions
-
-        // 5. Get AI's analysis and potential tool calls
-        let aiResponse = await this.geminiAPI.getAIResponse(aiPrompt);
-
-        // Handle tool calls if Gemini suggests any
-        const functionCalls = JSON.parse(aiResponse).functionCalls; // Assuming AI response is JSON string containing tool calls
-        if (functionCalls && functionCalls.length > 0) {
-            for (const call of functionCalls) {
-                const toolResult = await this._executeToolCall(call);
-                // Potentially send toolResult back to Gemini for further refinement
-                logger.info('Gemini tool execution result:', toolResult);
-            }
-            // After executing tools, you might want to ask Gemini for a final summary
-            aiResponse = await this.geminiAPI.getAIResponse('Based on the executed actions, provide a final analysis and updated trade recommendation.');
-        }
-
-        // 6. Integrate AI's analysis with local insights
-        const analysisReport = {
-            timestamp: new Date().toISOString(),
-            symbol: symbol,
-            interval: interval,
-            localIndicators: indicatorResults,
-            localPatterns: detectedPatterns,
-            compositeSignal: compositeSignal,
-            aiAnalysis: aiResponse,
-        };
-
-        logger.info(`Quantitative analysis complete for ${symbol}.`);
-        return analysisReport;
-    }
-
-    /**
-     * Conceptually starts a live trading session.
-     * In a real bot, this would involve a continuous loop fetching data, analyzing, and potentially trading.
-     * @param {string} symbol - Trading pair.
-     * @param {string} interval - Candlestick interval.
-     */
-    async startLiveTradingSession(symbol, interval) {
-        if (!this.bybitAdapter.bybitEnabled) {
-            logger.error('Bybit API is not enabled. Cannot start live trading session.');
+        if (side !== 'BUY' && side !== 'SELL') {
+            logger.warn("Invalid side in proposal. Holding.");
             return;
         }
 
-        logger.info(`Starting conceptual live trading session for ${symbol} on ${interval} interval.`);
-        // This would be a continuous loop
-        setInterval(async () => {
-            try {
-                logger.info(`[${new Date().toISOString()}] Executing trade cycle...`);
-                const analysis = await this.performQuantitativeAnalysis(symbol, interval);
-                logger.debug('Current analysis for live session:', analysis);
+        // Cooldown to avoid rapid flip-flops
+        if (Date.now() - this._lastFlipAt < this.flipCooldownMs) {
+            const msLeft = this.flipCooldownMs - (Date.now() - this._lastFlipAt);
+            logger.warn(`Flip rejected due to cooldown. ${msLeft}ms remaining.`);
+            return;
+        }
 
-                // Here, you would parse `analysis.aiAnalysis` and `analysis.compositeSignal`
-                // to make actual trading decisions.
-                // Example: If AI suggests a 'Strong Bullish' signal AND local RSI is oversold, consider a buy.
-                // let tradeDecision = this.makeTradingDecision(analysis);
-                // if (tradeDecision.action === 'buy') {
-                //     await this.tradingFunctions.marketBuy(symbol, new Decimal(tradeDecision.quantity));
-                // } else if (tradeDecision.action === 'sell') {
-                //     await this.tradingFunctions.limitSell(symbol, new Decimal(tradeDecision.quantity), new Decimal(tradeDecision.price));
-                // }
+        const price = indicators.price;
+        const balance = await this.bybitApi.getAccountBalance();
+        if (!balance) throw new Error("Could not retrieve account balance.");
 
-                logger.log('Trade cycle completed.');
+        // Determine exits (SL/TP) and position size
+        const { stopLoss, takeProfit } = determineExitPrices(price, side);
+        const quantity = calculatePositionSize(balance, price, stopLoss);
 
-            } catch (error) {
-                logger.exception('Error during live trading session cycle:', error);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            logger.error("Calculated quantity is invalid (<= 0). Aborting trade.");
+            return;
+        }
+
+        // Hedge vs One-way logic
+        if (!this.hedgeMode) {
+            // One-way: flatten if opposite side already open
+            const current = await this._getLivePositionSideSafe(config.symbol);
+            if (current && current !== 'FLAT' && current !== this._desiredSide(side)) {
+                logger.info(`Flattening existing ${current} position before opening ${this._desiredSide(side)} (one-way mode).`);
+                if (this.dryRun) {
+                    logger.info("[DRY-RUN] Would close existing position before flip.");
+                } else {
+                    const closeId = this._genClientOrderId('CLOSE');
+                    const closed = await this.bybitApi.closePosition(config.symbol, current, { clientOrderId: closeId });
+                    if (!closed) {
+                        logger.error("Close position failed; aborting flip.");
+                        return;
+                    }
+                }
             }
-        }, 60 * 1000); // Run every minute (adjust as needed for interval)
+        }
 
-        // For a more robust solution, use WebSockets for real-time updates rather than polling.
-        // this.bybitAdapter.connectWebSocket();
+        // Place entry
+        await this.executeEntry({ side, reasoning }, indicators, { stopLoss, takeProfit, quantity });
+        this._lastFlipAt = Date.now();
+    }
+
+    // --- Public entry executor (kept compatible) ---
+    async executeEntry(args, indicators, precomputed = undefined) {
+        const { side } = args;
+        const { price } = indicators;
+
+        const balance = await this.bybitApi.getAccountBalance();
+        if (!balance) throw new Error("Could not retrieve account balance.");
+
+        // Use provided SL/TP/qty if passed by caller; otherwise compute
+        let stopLoss, takeProfit, quantity;
+        if (precomputed) {
+            ({ stopLoss, takeProfit, quantity } = precomputed);
+        } else {
+            const exits = determineExitPrices(price, side);
+            stopLoss = exits.stopLoss;
+            takeProfit = exits.takeProfit;
+            quantity = calculatePositionSize(balance, price, stopLoss);
+        }
+
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            logger.error("Calculated quantity is zero or less. Aborting trade.");
+            return;
+        }
+
+        const clientOrderId = this._genClientOrderId('ENTRY');
+
+        if (this.dryRun) {
+            logger.info(`[DRY-RUN] Would place ${side} order: qty=${quantity}, TP=${takeProfit}, SL=${stopLoss}, cid=${clientOrderId}`);
+            await saveState({
+                inPosition: true,
+                positionSide: side,
+                entryPrice: price,
+                quantity: quantity,
+                orderId: `dryrun-${clientOrderId}`,
+            });
+            logger.info(`(DRY-RUN) Entered ${side} position.`);
+            return;
+        }
+
+        const orderResult = await this.bybitApi.placeOrder({
+            symbol: config.symbol,
+            side,
+            qty: quantity,
+            takeProfit,
+            stopLoss,
+            clientOrderId,
+            hedge: this.hedgeMode === true
+        });
+
+        if (orderResult) {
+            await saveState({
+                inPosition: true,
+                positionSide: side,
+                entryPrice: price,
+                quantity: quantity,
+                orderId: orderResult.orderId || clientOrderId,
+            });
+            logger.info(`Successfully entered ${side} position. Order ID: ${orderResult.orderId || clientOrderId}`);
+        }
+    }
+
+    // --- Exit flow (compatible) ---
+    async executeExit(state, args) {
+        const reasoning = args?.reasoning || 'No reasoning';
+        logger.info(`Executing EXIT: ${reasoning}`);
+
+        const clientOrderId = this._genClientOrderId('EXIT');
+
+        if (this.dryRun) {
+            logger.info(`[DRY-RUN] Would close ${state.positionSide} position. cid=${clientOrderId}`);
+            await saveState({ ...defaultState });
+            logger.info("(DRY-RUN) Closed position.");
+            return;
+        }
+
+        const closeResult = await this.bybitApi.closePosition(config.symbol, state.positionSide, { clientOrderId });
+        if (closeResult) {
+            await saveState({ ...defaultState });
+            logger.info(`Successfully closed position. Order ID: ${closeResult.orderId || clientOrderId}`);
+        }
+    }
+
+    start() {
+        logger.info("Starting Trading AI System...");
+        const ws = new BybitWebSocket(() => this.handleNewCandle());
+        ws.connect();
+        // Optional: run once on startup without waiting for the first candle
+        setTimeout(() => this.handleNewCandle(), 2000);
+    }
+
+    // --- Helpers ---
+
+    _genClientOrderId(tag) {
+        const ts = Date.now().toString(36);
+        const rnd = Math.random().toString(36).slice(2, 8);
+        return `gbb:${config.symbol}:${tag}:${ts}:${rnd}`;
+        // This enables idempotency on retries if your Bybit wrapper forwards clientOrderId/orderLinkId
+    }
+
+    _desiredSide(buySell) {
+        return buySell === 'BUY' ? 'LONG' : 'SHORT';
+    }
+
+    async _getLivePositionSideSafe(symbol) {
+        try {
+            if (typeof this.bybitApi.getPosition === 'function') {
+                const pos = await this.bybitApi.getPosition(symbol);
+                // Normalize: expect { side: 'LONG'|'SHORT', size: number } or null
+                if (pos && pos.size > 0 && (pos.side === 'LONG' || pos.side === 'SHORT')) {
+                    return pos.side;
+                }
+            }
+        } catch (e) {
+            logger.warn("getPosition failed (non-fatal): " + (e?.message || e));
+        }
+        return 'FLAT';
+    }
+
+    async _maybeComputeLiveSpreadPct() {
+        try {
+            // If your API exposes a best bid/ask endpoint, use it.
+            // Fallbacks are no-ops to preserve compatibility.
+            if (typeof this.bybitApi.getTicker === 'function') {
+                const t = await this.bybitApi.getTicker(config.symbol);
+                const bid = Number(t?.bid);
+                const ask = Number(t?.ask);
+                if (Number.isFinite(bid) && Number.isFinite(ask) && ask > 0) {
+                    return (ask - bid) / ((ask + bid) / 2);
+                }
+            } else if (typeof this.bybitApi.getOrderBook === 'function') {
+                const ob = await this.bybitApi.getOrderBook(config.symbol);
+                const bestBid = Number(ob?.bids?.[0]?.price);
+                const bestAsk = Number(ob?.asks?.[0]?.price);
+                if (Number.isFinite(bestBid) && Number.isFinite(bestAsk) && bestAsk > 0) {
+                    return (bestAsk - bestBid) / ((bestAsk + bestBid) / 2);
+                }
+            }
+        } catch (e) {
+            logger.warn("Spread check failed (ignored): " + (e?.message || e));
+        }
+        return undefined;
     }
 }
+
+// --- Main Execution ---
+const tradingSystem = new TradingAiSystem();
+tradingSystem.start();

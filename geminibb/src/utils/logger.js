@@ -1,46 +1,23 @@
-// src/utils/logger.js
-import { Constants } from './constants.js';
+const RESET = "\x1b[0m";
+const NEON_RED = "\x1b[38;5;196m";
+const NEON_GREEN = "\x1b[38;5;46m";
+const NEON_YELLOW = "\x1b[38;5;226m";
+const NEON_BLUE = "\x1b[38;5;39m";
 
-const { COLOR_CODES } = Constants;
+const getTimestamp = () => new Date().toISOString();
 
-export class Logger {
-    constructor(moduleName = 'APP') {
-        this.moduleName = moduleName;
-        this.timestamp = () => new Date().toISOString();
-    }
-
-    _log(level, message, colorCode, data = null) {
-        const dataString = data ? `
-${JSON.stringify(data, null, 2)}` : '';
-        console.log(`${colorCode}[${this.timestamp()}] [${this.moduleName}] [${level}] ${message}${dataString}${COLOR_CODES.RESET}`);
-    }
-
-    info(message, data = null) {
-        this._log('INFO', message, COLOR_CODES.CYAN, data);
-    }
-
-    warn(message, data = null) {
-        this._log('WARN', message, COLOR_CODES.YELLOW, data);
-    }
-
-    error(message, data = null) {
-        this._log('ERROR', message, COLOR_CODES.RED, data);
-    }
-
-    debug(message, data = null) {
-        if (process.env.NODE_ENV === 'development') { // Only log debug in dev environment
-            this._log('DEBUG', message, COLOR_CODES.MAGENTA, data);
+const logger = {
+    info: (message) => console.log(`${NEON_GREEN}[INFO][${getTimestamp()}] ${message}${RESET}`),
+    warn: (message) => console.warn(`${NEON_YELLOW}[WARN][${getTimestamp()}] ${message}${RESET}`),
+    error: (message) => console.error(`${NEON_RED}[ERROR][${getTimestamp()}] ${message}${RESET}`),
+    debug: (message) => console.log(`${NEON_BLUE}[DEBUG][${getTimestamp()}] ${message}${RESET}`),
+    exception: (error) => {
+        if (error instanceof Error) {
+            console.error(`${NEON_RED}[EXCEPTION][${getTimestamp()}] ${error.message}\n${error.stack}${RESET}`);
+        } else {
+            console.error(`${NEON_RED}[EXCEPTION][${getTimestamp()}] ${String(error)}${RESET}`);
         }
-    }
+    },
+};
 
-    log(message, data = null) {
-        this._log('LOG', message, COLOR_CODES.WHITE, data);
-    }
-
-    exception(message, error, data = null) {
-        this._log('EXCEPTION', `${message} ${error.message}`, COLOR_CODES.RED, {
-            errorStack: error.stack,
-            ...data
-        });
-    }
-}
+export default logger;
