@@ -5,24 +5,26 @@
     "orderbook_limit": 100,
     "testnet": false,
     "timezone": "America/Chicago",
-    "signal_score_threshold": 0.8,
-    "volume_confirmation_multiplier": 0.5,
+    "signal_score_threshold": 1.2,
+    "volume_confirmation_multiplier": 1.5,
     "trade_management": {
         "enabled": true,
         "account_balance": 10.0,
         "risk_per_trade_percent": 1.0,
-        "stop_loss_atr_multiple": 1.2,
-        "take_profit_atr_multiple": 2.2,
-        "trailing_stop_atr_multiple": 0.3,
-        "max_open_positions": 5,
-        "order_precision": 4,
-        "price_precision": 3,
-        "leverage": 15,
+        "stop_loss_atr_multiple": 2.0,
+        "take_profit_atr_multiple": 3.0,
+        "trailing_stop_atr_multiple": 1.0,
+        "max_open_positions": 2,
+        "order_precision": 8,
+        "price_precision": 8,
+        "leverage": 5,
         "order_mode": "MARKET",
         "take_profit_type": "MARKET",
         "stop_loss_type": "MARKET",
         "trailing_stop_activation_percent": 0.3,
-        "trailing_stop_trigger_by": "LastPrice"
+        "trailing_stop_trigger_by": "LastPrice",
+        "slippage_percent": 0.001,
+        "trading_fee_percent": 0.0006
     },
     "mtf_analysis": {
         "enabled": true,
@@ -38,18 +40,17 @@
         "mtf_request_delay_seconds": 0.5
     },
     "ml_enhancement": {
-        "enabled": true,
+        "enabled": false,
         "model_path": "ml_model.pkl",
         "retrain_on_startup": false,
-        "training_data_limit": 10000,
+        "training_data_limit": 5000,
         "prediction_lookahead": 12,
         "profit_target_percent": 0.5,
         "feature_lags": [
             1,
             2,
             3,
-            5,
-            8
+            5
         ],
         "cross_validation_folds": 5
     },
@@ -99,7 +100,10 @@
         "vwma_period": 20,
         "volume_delta_period": 5,
         "volume_delta_threshold": 0.2,
-        "vwap_daily_reset": false
+        "vwap_daily_reset": false,
+        "kama_period": 10,
+        "kama_fast_period": 2,
+        "kama_slow_period": 30
     },
     "indicators": {
         "ema_alignment": true,
@@ -125,29 +129,32 @@
         "cmf": true,
         "volatility_index": true,
         "vwma": true,
-        "volume_delta": true
+        "volume_delta": true,
+        "kaufman_ama": true,
+        "fibonacci_pivot_points": true
     },
     "weight_sets": {
         "default_scalping": {
             "ema_alignment": 0.22,
             "sma_trend_filter": 0.28,
-            "momentum_rsi_stoch_cci_wr_mfi": 0.18,
-            "volume_confirmation": 0.12,
+            "momentum_rsi_stoch_cci_wr_mfi": 0.25,
+            "volume_confirmation": 0.2,
             "bollinger_bands": 0.22,
             "vwap": 0.22,
             "psar": 0.22,
             "sma_10": 0.07,
-            "orderbook_imbalance": 0.07,
-            "ehlers_supertrend_alignment": 0.55,
+            "orderbook_imbalance": 0.15,
+            "ehlers_supertrend_alignment": 0.35,
             "macd_alignment": 0.28,
             "adx_strength": 0.18,
-            "ichimoku_confluence": 0.38,
+            "ichimoku_confluence": 0.25,
             "obv_momentum": 0.18,
             "cmf_flow": 0.12,
             "mtf_trend_confluence": 0.32,
             "volatility_index_signal": 0.15,
             "vwma_cross": 0.15,
-            "volume_delta_signal": 0.1
+            "volume_delta_signal": 0.1,
+            "kaufman_ama_cross": 0.2
         },
         "trend_following": {
             "ema_alignment": 0.3,
