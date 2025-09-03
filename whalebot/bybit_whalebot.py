@@ -81,6 +81,13 @@ INDICATOR_COLORS = {
     "ADX": Fore.CYAN,
     "PlusDI": Fore.LIGHTCYAN_EX,
     "MinusDI": Fore.RED,
+    "Relative_Volume": Fore.LIGHTMAGENTA_EX, # New indicator color
+    "Market_Structure_Trend": Fore.LIGHTCYAN_EX, # New indicator color
+    "DEMA": Fore.BLUE, # New indicator color
+    "Keltner_Upper": Fore.LIGHTMAGENTA_EX,
+    "Keltner_Middle": Fore.WHITE,
+    "Keltner_Lower": Fore.MAGENTA,
+    "ROC": Fore.LIGHTGREEN_EX, # New indicator color
 }
 
 # --- Constants ---
