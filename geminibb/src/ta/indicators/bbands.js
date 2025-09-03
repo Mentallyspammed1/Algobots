@@ -13,5 +13,12 @@ class BollingerBands {
     const lower = mid - this.k * s.std;
     return this.value = { mid, upper, lower, std: s.std };
   }
+  /**
+   * Indicates if the Bollinger Bands indicator has enough data to produce values.
+   * @returns {boolean}
+   */
+  get isReady() {
+    return this.stats.filled();
+  }
 }
 export default BollingerBands;

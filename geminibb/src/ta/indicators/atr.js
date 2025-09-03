@@ -8,6 +8,16 @@ class ATR {
     this._initCount = 0;
     this._sumTR = 0;
   }
+
+  /**
+   * Resets the ATR, clearing previous close, ATR value, and initialization sums.
+   */
+  reset() {
+    this.prevClose = undefined;
+    this.atr = undefined;
+    this._initCount = 0;
+    this._sumTR = 0;
+  }
   next(candle) {
     const h = candle.h ?? candle.high;
     const l = candle.l ?? candle.low;
@@ -25,5 +35,12 @@ class ATR {
     return this.atr;
   }
   get value() { return this.atr; }
+  /**
+   * Indicates if the ATR has enough data to produce a value.
+   * @returns {boolean}
+   */
+  get isReady() {
+    return this.atr !== undefined;
+  }
 }
 export default ATR;

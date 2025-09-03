@@ -7,12 +7,28 @@ class SMA {
     this.sum = 0;
     this.value = undefined;
   }
+
+  /**
+   * Resets the SMA, clearing the internal buffer and sum.
+   */
+  reset() {
+    this.buf = new RingBuffer(this.n);
+    this.sum = 0;
+    this.value = undefined;
+  }
   next(x) {
     const dropped = this.buf.push(x);
     this.sum += x;
     if (dropped !== undefined) this.sum -= dropped;
     if (!this.buf.filled()) return this.value = undefined;
     return this.value = this.sum / this.n;
+  }
+  /**
+   * Indicates if the SMA has enough data to produce a value.
+   * @returns {boolean}
+   */
+  get isReady() {
+    return this.buf.filled();
   }
 }
 export default SMA;

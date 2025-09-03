@@ -9,6 +9,15 @@ class RollingStats {
     this.sum = 0;
     this.sumSq = 0;
   }
+  
+  /**
+   * Resets the rolling statistics, clearing all sums and the internal buffer.
+   */
+  reset() {
+    this.buf = new RingBuffer(this.n); // Re-initialize buffer
+    this.sum = 0;
+    this.sumSq = 0;
+  }
   next(x) {
     const dropped = this.buf.push(x);
     this.sum += x;
@@ -23,6 +32,34 @@ class RollingStats {
     const std = Math.sqrt(varPop);
     return { mean, std };
   }
+  /**
+   * Returns the current population variance if the buffer is filled, otherwise undefined.
+   * @returns {number|undefined}
+   */
+  get variance() {
+    if (!this.buf.filled()) return undefined;
+    const mean = this.sum / this.n;
+    return Math.max(0, this.sumSq / this.n - mean * mean);
+  }
+
+  /**
+   * Returns the current mean if the buffer is filled, otherwise undefined.
+   * @returns {number|undefined}
+   */
+  get mean() {
+    if (!this.buf.filled()) return undefined;
+    return this.sum / this.n;
+  }
+
+  /**
+   * Returns the current standard deviation if the buffer is filled, otherwise undefined.
+   * @returns {number|undefined}
+   */
+  get std() {
+    if (!this.buf.filled()) return undefined;
+    return Math.sqrt(this.variance);
+  }
+
   filled() { return this.buf.filled(); }
 }
 export default RollingStats;

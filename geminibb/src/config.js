@@ -13,7 +13,19 @@ export const config = {
     bybit: {
         restUrl: 'https://api.bybit.com',
         wsUrl: 'wss://stream.bybit.com/v5/public/linear',
-        requestRetryAttempts: 3, // Number of times to retry a failed API request
+        privateWsUrl: 'wss://stream.bybit.com/v5/private',
+        testnet: false,
+        category: 'linear', // IMPROVEMENT 3: Consistent category for Bybit API
+        accountType: 'UNIFIED', // IMPROVEMENT 3: Consistent account type
+        requestRetryAttempts: 3,
+        requestTimeoutMs: 5000, // IMPROVEMENT 3: Request timeout for REST API
+        recvWindow: '20000', // Bybit default for recvWindow
+        requestIntervalMs: 200, // Delay between queued requests for rate limiting
+        maxRetries: 3,          // Max retries for failed API requests
+        maxRetryDelayMs: 10000, // Max delay for exponential backoff (10 seconds)
+        publicPingIntervalMs: 20000, // Ping interval for public WS
+        privatePingIntervalMs: 20000, // Ping interval for private WS
+        maxReconnectDelayMs: 60000, // IMPROVEMENT 9: Max delay for WS reconnection backoff
     },
 
     // Technical Indicator Settings
@@ -28,20 +40,23 @@ export const config = {
     // Risk Management
     riskPercentage: 2.0,
     riskToRewardRatio: 1.5,
-    stopLossStrategy: 'atr',
+    stopLossStrategy: 'atr', // 'atr', 'percentage', 'trailing' (IMPROVEMENT 17)
     stopLossPercentage: 1.5,
     atrMultiplier: 2.0,
-    // NEW: Slippage and fee estimation for more accurate calculations
-    slippagePercentage: 0.05, // Estimated 0.05% slippage on market orders
-    exchangeFeePercentage: 0.055, // Bybit taker fee for USDT perpetuals
-    // NEW: Cooldown period after a trade is closed (in minutes)
+    slippagePercentage: 0.05,
+    exchangeFeePercentage: 0.055,
     tradeCooldownMinutes: 30,
+    maxDailyLossPercentage: 10, // IMPROVEMENT 17: Max percentage of initial balance allowed to lose per day
+    maxOpenPositions: 1, // IMPROVEMENT 18: Max concurrent open positions (for future expansion)
 
-    // Order Precision & Minimums
-    pricePrecision: 2,
-    quantityPrecision: 3,
-    minOrderSize: 0.001,
+    // Order Precision & Minimums (These will be dynamically loaded from Bybit API if possible)
+    pricePrecision: 2, // Default, overridden by Bybit API
+    quantityPrecision: 3, // Default, overridden by Bybit API
+    minOrderSize: 0.001, // Default min order size if API info isn't available
 
     // AI Model Configuration
-    geminiModel: 'gemini-1.5-pro-latest',
-};
+    geminiModel: 'gemini-2.5-flash-lite',
+    gemini: { // IMPROVEMENT 13: Configurable Gemini parameters
+        temperature: 0.7,
+        topP: 0.9,
+    },

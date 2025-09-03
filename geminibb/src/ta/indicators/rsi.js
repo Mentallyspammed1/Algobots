@@ -11,6 +11,19 @@ class RSI {
     this._sumGain = 0;
     this._sumLoss = 0;
   }
+
+  /**
+   * Resets the RSI, clearing all previous values and sums.
+   */
+  reset() {
+    this.prev = undefined;
+    this.gain = undefined;
+    this.loss = undefined;
+    this.value = undefined;
+    this._initCount = 0;
+    this._sumGain = 0;
+    this._sumLoss = 0;
+  }
   next(close) {
     if (this.prev === undefined) { this.prev = close; return undefined; }
     const change = close - this.prev;
@@ -33,6 +46,29 @@ class RSI {
     const rs = this.loss === 0 ? 100 : this.gain / this.loss;
     this.value = 100 - 100 / (1 + rs);
     return this.value;
+  }
+  /**
+   * Indicates if the RSI has enough data to produce a value.
+   * @returns {boolean}
+   */
+  get isReady() {
+    return this.value !== undefined;
+  }
+
+  /**
+   * Returns the current average gain (Wilder's smoothing).
+   * @returns {number|undefined}
+   */
+  get currentGain() {
+    return this.gain;
+  }
+
+  /**
+   * Returns the current average loss (Wilder's smoothing).
+   * @returns {number|undefined}
+   */
+  get currentLoss() {
+    return this.loss;
   }
 }
 export default RSI;

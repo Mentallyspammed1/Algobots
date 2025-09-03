@@ -26,5 +26,16 @@ class CandleAggregator {
     }
     return undefined;
   }
+  /**
+   * Returns the current in-progress aggregated candle and resets the aggregator,
+   * even if the `factor` has not been met. Useful for end-of-session handling.
+   * @returns {object|undefined} The current partial candle, or undefined if no work in progress.
+   */
+  flush() {
+    const out = this._work;
+    this._work = null;
+    this._count = 0;
+    return out;
+  }
 }
 export default CandleAggregator;
