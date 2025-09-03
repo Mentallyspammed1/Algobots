@@ -1,16 +1,28 @@
 {
-  "name": "trading-ai-system-js",
-  "version": "2.0.0",
-  "description": "Enhanced event-driven AI trading system",
-  "main": "src/trading_ai_system.js",
+  "name": "gemini-bybit-trader",
+  "version": "2.1.0",
+  "description": "An advanced AI-powered trading bot for Bybit using Google Gemini.",
+  "main": "main.js",
   "type": "module",
   "scripts": {
-    "start": "node src/trading_ai_system.js"
+    "start": "node main.js",
+    "analyze": "node analyze.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "trading",
+    "bot",
+    "bybit",
+    "gemini",
+    "ai"
+  ],
+  "author": "AI Assistant",
+  "license": "ISC",
   "dependencies": {
-    "@google/generative-ai": "^0.11.0",
-    "decimal.js": "^10.4.3",
+    "@google/generative-ai": "^0.11.3",
+    "crypto-js": "^4.2.0",
     "dotenv": "^16.4.5",
-    "ws": "^8.17.0"
+    "ws": "^8.17.0",
+    "zod": "^3.23.8"
   }
 }

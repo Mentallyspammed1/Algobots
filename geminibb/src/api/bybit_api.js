@@ -1,128 +1,97 @@
-import crypto from 'crypto';
+// src/api/bybit_api.js
+import crypto from 'crypto-js';
 import { config } from '../config.js';
 import logger from '../utils/logger.js';
+import { SIDES } from '../core/constants.js';
 
-// Helper function to handle API responses robustly
-async function handleResponse(response, path) {
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-        const data = await response.json();
-        if (data.retCode !== 0) {
-            throw new Error(`Bybit API Error (${path}): ${data.retMsg} (retCode: ${data.retCode})`);
-        }
-        return data.result;
-    } else {
-        const text = await response.text();
-        logger.error(`Bybit API did not return JSON. Status: ${response.status}. Path: ${path}. Response body:`);
-        console.error(text); // Log the raw response for debugging
-        throw new Error(`Bybit API did not return JSON. Received: ${contentType}`);
-    }
-}
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-
-class BybitAPI {
+export default class BybitAPI {
     constructor(apiKey, apiSecret) {
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
         this.baseUrl = config.bybit.restUrl;
     }
 
-    generateSignature(timestamp, recvWindow, params) {
-        const paramStr = timestamp + this.apiKey + recvWindow + params;
-        return crypto.createHmac('sha256', this.apiSecret).update(paramStr).digest('hex');
+    // NEW: Internal request method with retry logic
+    async _request(method, endpoint, params = {}) {
+        for (let i = 0; i < config.bybit.requestRetryAttempts; i++) {
+            try {
+                return await this._makeRequest(method, endpoint, params);
+            } catch (error) {
+                logger.warn(`Attempt ${i + 1} failed for ${method} ${endpoint}: ${error.message}`);
+                if (i === config.bybit.requestRetryAttempts - 1) {
+                    logger.error(`All retry attempts failed for ${method} ${endpoint}.`);
+                    throw error; // Re-throw the error after all retries fail
+                }
+                const delay = Math.pow(2, i) * 1000; // Exponential backoff: 1s, 2s, 4s...
+                await sleep(delay);
+            }
+        }
     }
 
-    async sendRequest(path, method, body = null) {
+    async _makeRequest(method, endpoint, params = {}) {
         const timestamp = Date.now().toString();
-        const recvWindow = '5000';
-        const bodyString = body ? JSON.stringify(body) : '';
-        const signature = this.generateSignature(timestamp, recvWindow, bodyString);
+        const recvWindow = '20000';
+        const queryString = method === 'GET' ? new URLSearchParams(params).toString() : JSON.stringify(params);
+        const signPayload = timestamp + this.apiKey + recvWindow + (queryString || '');
+        const signature = crypto.HmacSHA256(signPayload, this.apiSecret).toString();
 
         const headers = {
-            'X-BAPI-API-KEY': this.apiKey,
-            'X-BAPI-TIMESTAMP': timestamp,
-            'X-BAPI-SIGN': signature,
-            'X-BAPI-RECV-WINDOW': recvWindow,
-            'Content-Type': 'application/json',
+            'X-BAPI-API-KEY': this.apiKey, 'X-BAPI-SIGN': signature,
+            'X-BAPI-SIGN-TYPE': '2', 'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-RECV-WINDOW': recvWindow, 'Content-Type': 'application/json',
         };
 
-        try {
-            const response = await fetch(this.baseUrl + path, { method, headers, body: body ? bodyString : null });
-            const result = await handleResponse(response, path);
-            return result;
-        } catch (error) {
-            logger.exception(error);
-            return null;
+        const url = `${this.baseUrl}${endpoint}${method === 'GET' && queryString ? '?' + queryString : ''}`;
+        const options = { method, headers };
+        if (method !== 'GET') options.body = queryString;
+
+        const response = await fetch(url, options);
+        const data = await response.json();
+        if (data.retCode !== 0) {
+            throw new Error(`Bybit API Error: ${data.retMsg} (Code: ${data.retCode})`);
         }
+        return data.result;
     }
 
     async getHistoricalMarketData(symbol, interval, limit = 200) {
-        const path = `/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}`;
-        // Public endpoint, no signature needed
-        try {
-            const response = await fetch(this.baseUrl + path);
-            const result = await handleResponse(response, path);
-            return result ? result.list : null;
-        } catch (error) {
-            logger.exception(error);
-            return null;
-        }
+        return this._request('GET', '/v5/market/kline', { category: 'linear', symbol, interval, limit });
     }
 
-    async getAccountBalance(coin = 'USDT') {
-        const path = `/v5/account/wallet-balance?accountType=UNIFIED&coin=${coin}`;
-        const result = await this.sendRequest(path, 'GET');
-        if (result && result.list && result.list.length > 0) {
-            return parseFloat(result.list[0].totalEquity);
-        }
-        return null;
+    async getAccountBalance() {
+        const result = await this._request('GET', '/v5/account/wallet-balance', { accountType: 'UNIFIED' });
+        const usdtBalance = result?.list?.[0]?.coin?.find(c => c.coin === 'USDT');
+        return usdtBalance ? parseFloat(usdtBalance.walletBalance) : null;
     }
 
-    async placeOrder({ symbol, side, qty, takeProfit, stopLoss }) {
-        const path = '/v5/order/create';
-        const body = {
-            category: 'linear',
-            symbol,
-            side,
-            orderType: 'Market',
-            qty: String(qty),
-            takeProfit: takeProfit ? String(takeProfit) : undefined,
-            stopLoss: stopLoss ? String(stopLoss) : undefined,
-        };
-        logger.info(`Placing order: ${JSON.stringify(body)}`);
-        return this.sendRequest(path, 'POST', body);
+    async getCurrentPosition(symbol) {
+        const result = await this._request('GET', '/v5/position/list', { category: 'linear', symbol });
+        const position = result?.list?.find(p => p.symbol === symbol);
+        return position && parseFloat(position.size) > 0 ? position : null;
+    }
+
+    async placeOrder(order) {
+        const { symbol, side, qty, takeProfit, stopLoss } = order;
+        const log = `Placing order: ${side} ${qty} ${symbol} | TP: ${takeProfit}, SL: ${stopLoss}`;
+        if (config.dryRun) {
+            logger.info(`[DRY RUN] ${log}`);
+            return { orderId: `dry-run-${Date.now()}` };
+        }
+        logger.info(log);
+        return this._request('POST', '/v5/order/create', {
+            category: 'linear', symbol, side, orderType: 'Market',
+            qty: qty.toString(), takeProfit: takeProfit.toString(), stopLoss: stopLoss.toString(),
+        });
     }
 
     async closePosition(symbol, side) {
-        const path = '/v5/order/create';
-        const position = await this.getOpenPosition(symbol);
+        const position = await this.getCurrentPosition(symbol);
         if (!position) {
-            logger.warn(`Attempted to close position for ${symbol}, but no position was found.`);
+            logger.warn("Attempted to close a position that does not exist.");
             return null;
         }
-        
-        const body = {
-            category: 'linear',
-            symbol,
-            side: side === 'Buy' ? 'Sell' : 'Buy', // Opposite side to close
-            orderType: 'Market',
-            qty: position.size,
-            reduceOnly: true,
-        };
-        logger.info(`Closing position with order: ${JSON.stringify(body)}`);
-        return this.sendRequest(path, 'POST', body);
-    }
-
-    async getOpenPosition(symbol) {
-        const path = `/v5/position/list?category=linear&symbol=${symbol}`;
-        const result = await this.sendRequest(path, 'GET');
-        if (result && result.list && result.list.length > 0) {
-            // Assuming one position per symbol for one-way mode
-            const openPosition = result.list.find(p => p.size > 0);
-            return openPosition || null;
-        }
-        return null;
+        const closeSide = side === SIDES.BUY ? SIDES.SELL : SIDES.BUY;
+        return this.placeOrder({ symbol, side: closeSide, qty: position.size, takeProfit: 0, stopLoss: 0 });
     }
 }
-
-export default BybitAPI;

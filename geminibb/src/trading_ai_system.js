@@ -1,323 +1,240 @@
+// src/trading_ai_system.js
 import 'dotenv/config';
 import { config } from './config.js';
 import BybitAPI from './api/bybit_api.js';
-import BybitWebSocket from './api/bybit_websocket.js';
-import GeminiAPI from './api/gemini_api.js';
 import { loadState, saveState, defaultState } from './utils/state_manager.js';
-import { calculateIndicators, formatMarketContext, calculatePositionSize, determineExitPrices } from './core/trading_logic.js';
+import { calculatePositionSize, determineExitPrices } from './core/trading_logic.js';
 import { applyRiskPolicy } from './core/risk_policy.js';
 import logger from './utils/logger.js';
+import { ACTIONS } from './core/constants.js';
+import GeminiAPI from './api/gemini_api.js';
+import FeatureEngineer from './features/feature_engineer.js';
+
+// Helper to format the market context for the AI
+function formatMarketContext(state, primaryIndicators, higherTfIndicators) {
+    const safeFormat = (value, precision) => (typeof value === 'number' && !isNaN(value) ? value.toFixed(precision) : 'N/A');
+
+    let context = `## PRIMARY TIMEFRAME ANALYSIS (${config.primaryInterval}min)
+`;
+    context += formatIndicatorText(primaryIndicators);
+
+    higherTfIndicators.forEach(htf => {
+        context += `
+## HIGHER TIMEFRAME CONTEXT (${htf.interval}min)
+`;
+        context += formatIndicatorText(htf.indicators);
+    });
+
+    if (state.inPosition) {
+        const pnl = (primaryIndicators.close - state.entryPrice) * state.quantity * (state.positionSide === 'Buy' ? 1 : -1);
+        const pnlPercent = (pnl / (state.entryPrice * state.quantity)) * 100;
+        context += `
+## CURRENT POSITION
+- **Status:** In a **${state.positionSide}** position.
+- **Entry Price:** ${safeFormat(state.entryPrice, config.pricePrecision)}
+- **Unrealized P/L:** ${safeFormat(pnl, 2)} USDT (${safeFormat(pnlPercent, 2)}%)`;
+    } else {
+        context += "\n## CURRENT POSITION\n- **Status:** FLAT (No open position).";
+    }
+    return context;
+}
+
+function formatIndicatorText(indicators) {
+    if (!indicators) return "  - No data available.\n";
+    const { close, rsi, atr, macd, bb } = indicators;
+    const safeFormat = (value, precision) => (typeof value === 'number' && !isNaN(value) ? value.toFixed(precision) : 'N/A');
+
+    let text = `  - **Price:** ${safeFormat(close, config.pricePrecision)}
+`;
+    if (rsi) text += `  - **Momentum (RSI):** ${safeFormat(rsi, 2)}
+`;
+    if (atr) text += `  - **Volatility (ATR):** ${safeFormat(atr, config.pricePrecision)}
+`;
+    if (macd) text += `  - **Trend (MACD Histogram):** ${safeFormat(macd.hist, 4)}
+`;
+    if (bb) text += `  - **Bollinger Bands:** Mid ${safeFormat(bb.mid, 2)}, Upper ${safeFormat(bb.upper, 2)}, Lower ${safeFormat(bb.lower, 2)}
+`;
+    return text;
+}
 
 class TradingAiSystem {
     constructor() {
         this.bybitApi = new BybitAPI(process.env.BYBIT_API_KEY, process.env.BYBIT_API_SECRET);
         this.geminiApi = new GeminiAPI(process.env.GEMINI_API_KEY);
-        this.isProcessing = false; // Lock to prevent concurrent runs
+        this.isProcessing = false;
 
-        // Execution/risk knobs with safe defaults (overridable via config.js)
-        this.hedgeMode = Boolean(config?.hedgeMode ?? false);             // dual-side positions
-        this.flipCooldownMs = Number(config?.flipCooldownMs ?? 30_000);   // avoid rapid flip-flops
-        this.maxSpreadPct = Number(config?.maxSpreadPct ?? 0.0015);       // 15 bps guard (if spread available)
-        this.dryRun = Boolean(config?.dryRun ?? false);                   // if true, skip placing/closing orders
-
-        this._lastFlipAt = 0; // global cooldown; customize per symbol if you trade many
-        this._printedBanner = false;
+        // NEW: Create persistent feature engineers for each timeframe
+        this.featureEngineers = new Map();
+        this.featureEngineers.set(config.primaryInterval, new FeatureEngineer());
+        config.multiTimeframeIntervals.forEach(interval => {
+            this.featureEngineers.set(interval, new FeatureEngineer());
+        });
     }
 
-    async handleNewCandle() {
+    // NEW: Method to calculate indicators using the correct stateful engineer
+    calculateIndicators(klines, interval) {
+        const featureEngineer = this.featureEngineers.get(interval);
+        if (!featureEngineer) {
+            throw new Error(`No feature engineer found for interval: ${interval}`);
+        }
+
+        if (!klines || klines.length === 0) return null;
+        const reversedKlines = [...klines].reverse();
+        const formattedKlines = reversedKlines.map(k => ({
+            t: parseInt(k[0]),
+            o: parseFloat(k[1]),
+            h: parseFloat(k[2]),
+            l: parseFloat(k[3]),
+            c: parseFloat(k[4]),
+            v: parseFloat(k[5]),
+        }));
+
+        let lastFeature;
+        for (const kline of formattedKlines) {
+            lastFeature = featureEngineer.next(kline);
+        }
+        return lastFeature;
+    }
+
+    async runAnalysisCycle() {
         if (this.isProcessing) {
-            logger.warn("Already processing a cycle, skipping new candle trigger.");
+            logger.warn("Skipping analysis cycle: a previous one is still active.");
             return;
         }
         this.isProcessing = true;
-
-        const tStart = Date.now();
-        if (!this._printedBanner) {
-            logger.info("Starting Trading AI System with config: " + JSON.stringify({
-                symbol: config.symbol,
-                interval: config.interval,
-                hedgeMode: this.hedgeMode,
-                flipCooldownMs: this.flipCooldownMs,
-                maxSpreadPct: this.maxSpreadPct,
-                dryRun: this.dryRun
-            }));
-            this._printedBanner = true;
-        }
-
         logger.info("=========================================");
-        logger.info("Handling new confirmed candle...");
-
-        let cycleSummary = { decision: 'HOLD', reason: 'init', action: 'HOLD' };
+        logger.info(`Starting new analysis cycle for ${config.symbol}...`);
 
         try {
-            // 1) Load State & Fetch Data
-            const state = await loadState();
-            const klines = await this.bybitApi.getHistoricalMarketData(config.symbol, config.interval);
-            if (!klines || !Array.isArray(klines) || klines.length === 0) throw new Error("Failed to fetch market data.");
+            const state = await this.reconcileState();
+            
+            const allIntervals = [config.primaryInterval, ...config.multiTimeframeIntervals];
+            const klinesPromises = allIntervals.map(interval => 
+                this.bybitApi.getHistoricalMarketData(config.symbol, interval)
+            );
+            const klinesResults = await Promise.all(klinesPromises);
 
-            // 2) Indicators & Context
-            const indicators = calculateIndicators(klines);
-            const latest = indicators?.latest;
-            if (!latest || typeof latest.price !== 'number') {
-                throw new Error("Indicators missing latest price.");
+            const indicatorResults = klinesResults.map((result, i) => {
+                const interval = allIntervals[i];
+                if (!result || !result.list) {
+                    logger.warn(`Failed to fetch market data for interval ${interval}.`);
+                    return null;
+                }
+                return this.calculateIndicators(result.list, interval);
+            });
+
+            const primaryIndicators = indicatorResults[0];
+            if (!primaryIndicators) {
+                throw new Error("Failed to calculate primary indicators.");
             }
 
-            // Optional market guards (spread/liquidity) if API supports it
-            const spreadPct = await this._maybeComputeLiveSpreadPct();
-            if (spreadPct != null && spreadPct > this.maxSpreadPct) {
-                logger.warn(`Spread too wide (${(spreadPct * 100).toFixed(3)} bps > ${(this.maxSpreadPct * 100).toFixed(3)} bps). Skipping trade.`);
-                cycleSummary = { decision: 'HOLD', reason: 'Spread too wide', action: 'HOLD' };
-                return;
-            }
+            const higherTfIndicators = indicatorResults.slice(1).map((indicators, i) => ({
+                interval: config.multiTimeframeIntervals[i],
+                indicators: indicators
+            }));
 
-            // 3) Build AI context and get decision
-            const marketContext = formatMarketContext(state, latest);
+            const marketContext = formatMarketContext(state, primaryIndicators, higherTfIndicators);
             const aiDecision = await this.geminiApi.getTradeDecision(marketContext);
-
-            // 4) Apply Risk Policy
-            const policyResult = applyRiskPolicy(aiDecision, latest);
-            cycleSummary = { decision: policyResult?.decision ?? 'HOLD', reason: policyResult?.reason ?? 'No reason' };
+            const policyResult = applyRiskPolicy(aiDecision, primaryIndicators, state);
 
             if (policyResult.decision === 'HOLD') {
                 logger.info(`Decision: HOLD. Reason: ${policyResult.reason}`);
                 return;
             }
 
-            const trade = policyResult.trade;
-            if (!trade || !trade.name || !trade.args) {
-                logger.warn("AI policy returned an invalid trade object; holding.");
-                cycleSummary = { decision: 'HOLD', reason: 'Invalid policy trade', action: 'HOLD' };
-                return;
+            const { name, args } = policyResult.trade;
+            if (name === ACTIONS.PROPOSE_TRADE) {
+                await this.executeEntry(args, primaryIndicators);
+            } else if (name === ACTIONS.PROPOSE_EXIT) {
+                await this.executeExit(state, args);
             }
-
-            // 5) Execute trade intent safely
-            if (trade.name === 'proposeTrade') {
-                await this._executeProposedEntry(state, trade.args, latest);
-                cycleSummary.action = 'ENTRY';
-                cycleSummary.side = trade.args?.side;
-            } else if (trade.name === 'proposeExit') {
-                if (state.inPosition) {
-                    await this.executeExit(state, trade.args);
-                    cycleSummary.action = 'EXIT';
-                } else {
-                    logger.warn("Exit proposed but no open position; holding.");
-                    cycleSummary.action = 'HOLD';
-                }
-            } else {
-                logger.warn(`AI proposed an unknown action '${trade.name}'; holding.`);
-                cycleSummary.action = 'HOLD';
-            }
-
         } catch (error) {
             logger.exception(error);
-            cycleSummary = { decision: 'HOLD', reason: 'Exception during cycle', action: 'HOLD' };
         } finally {
-            const wallMs = Date.now() - tStart;
             this.isProcessing = false;
-            logger.info(`Processing cycle finished. Summary=${JSON.stringify(cycleSummary)} wall=${wallMs}ms`);
+            logger.info("Analysis cycle finished.");
             logger.info("=========================================\n");
         }
     }
 
-    // --- Entry flow with conflict resolution and cooldown ---
-    async _executeProposedEntry(state, args, indicators) {
-        const side = String(args?.side || '').toUpperCase();
-        const reasoning = args?.reasoning || 'No reasoning';
-        logger.info(`Executing ENTRY proposal: ${side} - ${reasoning}`);
+    async executeEntry(args, indicators) {
+        logger.info(`Executing ENTRY: ${args.side}. Reason: ${args.reasoning}`);
+        const { side } = args;
+        const price = indicators.close;
+        const atr = indicators.atr;
 
-        if (side !== 'BUY' && side !== 'SELL') {
-            logger.warn("Invalid side in proposal. Holding.");
-            return;
-        }
-
-        // Cooldown to avoid rapid flip-flops
-        if (Date.now() - this._lastFlipAt < this.flipCooldownMs) {
-            const msLeft = this.flipCooldownMs - (Date.now() - this._lastFlipAt);
-            logger.warn(`Flip rejected due to cooldown. ${msLeft}ms remaining.`);
-            return;
-        }
-
-        const price = indicators.price;
         const balance = await this.bybitApi.getAccountBalance();
         if (!balance) throw new Error("Could not retrieve account balance.");
 
-        // Determine exits (SL/TP) and position size
-        const { stopLoss, takeProfit } = determineExitPrices(price, side);
+        const { stopLoss, takeProfit } = determineExitPrices(price, side, atr);
         const quantity = calculatePositionSize(balance, price, stopLoss);
 
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-            logger.error("Calculated quantity is invalid (<= 0). Aborting trade.");
-            return;
-        }
-
-        // Hedge vs One-way logic
-        if (!this.hedgeMode) {
-            // One-way: flatten if opposite side already open
-            const current = await this._getLivePositionSideSafe(config.symbol);
-            if (current && current !== 'FLAT' && current !== this._desiredSide(side)) {
-                logger.info(`Flattening existing ${current} position before opening ${this._desiredSide(side)} (one-way mode).`);
-                if (this.dryRun) {
-                    logger.info("[DRY-RUN] Would close existing position before flip.");
-                } else {
-                    const closeId = this._genClientOrderId('CLOSE');
-                    const closed = await this.bybitApi.closePosition(config.symbol, current, { clientOrderId: closeId });
-                    if (!closed) {
-                        logger.error("Close position failed; aborting flip.");
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Place entry
-        await this.executeEntry({ side, reasoning }, indicators, { stopLoss, takeProfit, quantity });
-        this._lastFlipAt = Date.now();
-    }
-
-    // --- Public entry executor (kept compatible) ---
-    async executeEntry(args, indicators, precomputed = undefined) {
-        const { side } = args;
-        const { price } = indicators;
-
-        const balance = await this.bybitApi.getAccountBalance();
-        if (!balance) throw new Error("Could not retrieve account balance.");
-
-        // Use provided SL/TP/qty if passed by caller; otherwise compute
-        let stopLoss, takeProfit, quantity;
-        if (precomputed) {
-            ({ stopLoss, takeProfit, quantity } = precomputed);
-        } else {
-            const exits = determineExitPrices(price, side);
-            stopLoss = exits.stopLoss;
-            takeProfit = exits.takeProfit;
-            quantity = calculatePositionSize(balance, price, stopLoss);
-        }
-
-        if (!Number.isFinite(quantity) || quantity <= 0) {
+        if (quantity <= 0) {
             logger.error("Calculated quantity is zero or less. Aborting trade.");
             return;
         }
 
-        const clientOrderId = this._genClientOrderId('ENTRY');
-
-        if (this.dryRun) {
-            logger.info(`[DRY-RUN] Would place ${side} order: qty=${quantity}, TP=${takeProfit}, SL=${stopLoss}, cid=${clientOrderId}`);
-            await saveState({
-                inPosition: true,
-                positionSide: side,
-                entryPrice: price,
-                quantity: quantity,
-                orderId: `dryrun-${clientOrderId}`,
-            });
-            logger.info(`(DRY-RUN) Entered ${side} position.`);
-            return;
-        }
-
         const orderResult = await this.bybitApi.placeOrder({
-            symbol: config.symbol,
-            side,
-            qty: quantity,
-            takeProfit,
-            stopLoss,
-            clientOrderId,
-            hedge: this.hedgeMode === true
+            symbol: config.symbol, side, qty: quantity, takeProfit, stopLoss, 
         });
 
-        if (orderResult) {
+        if (orderResult && orderResult.orderId) {
             await saveState({
-                inPosition: true,
-                positionSide: side,
-                entryPrice: price,
-                quantity: quantity,
-                orderId: orderResult.orderId || clientOrderId,
+                inPosition: true, positionSide: side, entryPrice: price,
+                quantity: quantity, orderId: orderResult.orderId,
+                lastTradeTimestamp: 0 // Reset cooldown timer on entry
             });
-            logger.info(`Successfully entered ${side} position. Order ID: ${orderResult.orderId || clientOrderId}`);
+            logger.info(`Successfully placed ENTRY order. Order ID: ${orderResult.orderId}`);
         }
     }
-
-    // --- Exit flow (compatible) ---
+    
     async executeExit(state, args) {
-        const reasoning = args?.reasoning || 'No reasoning';
-        logger.info(`Executing EXIT: ${reasoning}`);
+        logger.info(`Executing EXIT from ${state.positionSide} position. Reason: ${args.reasoning}`);
+        const closeResult = await this.bybitApi.closePosition(config.symbol, state.positionSide);
 
-        const clientOrderId = this._genClientOrderId('EXIT');
-
-        if (this.dryRun) {
-            logger.info(`[DRY-RUN] Would close ${state.positionSide} position. cid=${clientOrderId}`);
-            await saveState({ ...defaultState });
-            logger.info("(DRY-RUN) Closed position.");
-            return;
-        }
-
-        const closeResult = await this.bybitApi.closePosition(config.symbol, state.positionSide, { clientOrderId });
-        if (closeResult) {
-            await saveState({ ...defaultState });
-            logger.info(`Successfully closed position. Order ID: ${closeResult.orderId || clientOrderId}`);
+        if (closeResult && closeResult.orderId) {
+            await saveState({ ...defaultState, lastTradeTimestamp: Date.now() });
+            logger.info(`Successfully placed EXIT order. Order ID: ${closeResult.orderId}`);
         }
     }
 
-    start() {
-        logger.info("Starting Trading AI System...");
-        const ws = new BybitWebSocket(() => this.handleNewCandle());
-        ws.connect();
-        // Optional: run once on startup without waiting for the first candle
-        setTimeout(() => this.handleNewCandle(), 2000);
-    }
+    async reconcileState() {
+        logger.info("Reconciling local state with exchange...");
+        const localState = await loadState();
+        if (config.dryRun) {
+            logger.info("[DRY RUN] Skipping remote state reconciliation.");
+            return localState;
+        }
 
-    // --- Helpers ---
+        const exchangePosition = await this.bybitApi.getCurrentPosition(config.symbol);
 
-    _genClientOrderId(tag) {
-        const ts = Date.now().toString(36);
-        const rnd = Math.random().toString(36).slice(2, 8);
-        return `gbb:${config.symbol}:${tag}:${ts}:${rnd}`;
-        // This enables idempotency on retries if your Bybit wrapper forwards clientOrderId/orderLinkId
-    }
-
-    _desiredSide(buySell) {
-        return buySell === 'BUY' ? 'LONG' : 'SHORT';
-    }
-
-    async _getLivePositionSideSafe(symbol) {
-        try {
-            if (typeof this.bybitApi.getPosition === 'function') {
-                const pos = await this.bybitApi.getPosition(symbol);
-                // Normalize: expect { side: 'LONG'|'SHORT', size: number } or null
-                if (pos && pos.size > 0 && (pos.side === 'LONG' || pos.side === 'SHORT')) {
-                    return pos.side;
-                }
+        if (exchangePosition) {
+            if (!localState.inPosition || localState.positionSide !== exchangePosition.side) {
+                logger.warn("State discrepancy! Recovering state from exchange.");
+                const recoveredState = {
+                    ...localState, 
+                    inPosition: true,
+                    positionSide: exchangePosition.side,
+                    entryPrice: parseFloat(exchangePosition.avgPrice),
+                    quantity: parseFloat(exchangePosition.size),
+                    orderId: localState.orderId, 
+                };
+                await saveState(recoveredState);
+                return recoveredState;
             }
-        } catch (e) {
-            logger.warn("getPosition failed (non-fatal): " + (e?.message || e));
-        }
-        return 'FLAT';
-    }
-
-    async _maybeComputeLiveSpreadPct() {
-        try {
-            // If your API exposes a best bid/ask endpoint, use it.
-            // Fallbacks are no-ops to preserve compatibility.
-            if (typeof this.bybitApi.getTicker === 'function') {
-                const t = await this.bybitApi.getTicker(config.symbol);
-                const bid = Number(t?.bid);
-                const ask = Number(t?.ask);
-                if (Number.isFinite(bid) && Number.isFinite(ask) && ask > 0) {
-                    return (ask - bid) / ((ask + bid) / 2);
-                }
-            } else if (typeof this.bybitApi.getOrderBook === 'function') {
-                const ob = await this.bybitApi.getOrderBook(config.symbol);
-                const bestBid = Number(ob?.bids?.[0]?.price);
-                const bestAsk = Number(ob?.asks?.[0]?.price);
-                if (Number.isFinite(bestBid) && Number.isFinite(bestAsk) && bestAsk > 0) {
-                    return (bestAsk - bestBid) / ((bestAsk + bestBid) / 2);
-                }
+            logger.info(`State confirmed: In ${exchangePosition.side} position.`);
+            return localState;
+        } else {
+            if (localState.inPosition) {
+                logger.warn("State discrepancy! Position closed on exchange. Resetting state.");
+                const newState = { ...defaultState, lastTradeTimestamp: Date.now() };
+                await saveState(newState);
+                return newState;
             }
-        } catch (e) {
-            logger.warn("Spread check failed (ignored): " + (e?.message || e));
+            logger.info("State confirmed: No open position.");
+            return localState;
         }
-        return undefined;
     }
 }
 
-// --- Main Execution ---
-const tradingSystem = new TradingAiSystem();
-tradingSystem.start();
+export default TradingAiSystem;

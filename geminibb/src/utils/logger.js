@@ -1,23 +1,42 @@
-const RESET = "\x1b[0m";
-const NEON_RED = "\x1b[38;5;196m";
-const NEON_GREEN = "\x1b[38;5;46m";
-const NEON_YELLOW = "\x1b[38;5;226m";
-const NEON_BLUE = "\x1b[38;5;39m";
+// src/utils/logger.js
+import fs from 'fs';
 
+const logStream = fs.createWriteStream('bot.log', { flags: 'a' });
 const getTimestamp = () => new Date().toISOString();
 
+const logToFile = (message) => {
+    logStream.write(`${message}\n`);
+};
+
 const logger = {
-    info: (message) => console.log(`${NEON_GREEN}[INFO][${getTimestamp()}] ${message}${RESET}`),
-    warn: (message) => console.warn(`${NEON_YELLOW}[WARN][${getTimestamp()}] ${message}${RESET}`),
-    error: (message) => console.error(`${NEON_RED}[ERROR][${getTimestamp()}] ${message}${RESET}`),
-    debug: (message) => console.log(`${NEON_BLUE}[DEBUG][${getTimestamp()}] ${message}${RESET}`),
-    exception: (error) => {
-        if (error instanceof Error) {
-            console.error(`${NEON_RED}[EXCEPTION][${getTimestamp()}] ${error.message}\n${error.stack}${RESET}`);
-        } else {
-            console.error(`${NEON_RED}[EXCEPTION][${getTimestamp()}] ${String(error)}${RESET}`);
+    info: (message) => {
+        const formatted = `[INFO][${getTimestamp()}] ${message}`;
+        console.log(formatted);
+        logToFile(formatted);
+    },
+    warn: (message) => {
+        const formatted = `[WARN][${getTimestamp()}] ${message}`;
+        console.warn(formatted);
+        logToFile(formatted);
+    },
+    error: (message, error) => {
+        const formatted = `[ERROR][${getTimestamp()}] ${message}`;
+        console.error(formatted);
+        logToFile(formatted);
+        if (error) {
+            const errorStack = error.stack || error.toString();
+            console.error(errorStack);
+            logToFile(errorStack);
         }
     },
+    exception: (error) => {
+        const message = `[EXCEPTION][${getTimestamp()}] An uncaught exception occurred:`
+        console.error(message);
+        logToFile(message);
+        const errorStack = error.stack || error.toString();
+        console.error(errorStack);
+        logToFile(errorStack);
+    }
 };
 
 export default logger;
