@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import LogParser from './lib/logParser.js';
 import GeminiAnalyzer from './lib/geminiAnalyzer.js';
 import SignalGenerator from './lib/signalGenerator.js';
-import LiveDataFetcher from './lib/liveDataFetcher.js'; // NEW
+import LiveDataFetcher from './lib/liveDataFetcher.js';
 import { logger } from './lib/utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,15 +18,68 @@ dotenv.config();
 // Centralized Configuration Vessel
 const config = {
   geminiApiKey: process.env.GEMINI_API_KEY,
-  tradingSymbol: process.env.TRADING_SYMBOL || 'TRUMPUSDT', // NEW: Centralized trading symbol
-  liveDataMode: process.env.LIVE_DATA_MODE === 'true', // NEW: Enable live data fetching
-  bybitApiKey: process.env.BYBIT_API_KEY, // NEW: Bybit API Key
-  bybitApiSecret: process.env.BYBIT_API_SECRET, // NEW: Bybit API Secret
+  tradingSymbol: process.env.TRADING_SYMBOL || 'POPCATUSDT',
+  liveDataMode: process.env.LIVE_DATA_MODE === 'true',
+  bybitApiKey: process.env.BYBIT_API_KEY,
+  bybitApiSecret: process.env.BYBIT_API_SECRET,
   outputPath: process.env.OUTPUT_PATH || './output/signals.json',
   logFilePath: process.env.LOG_FILE_PATH || './logs/wgwhalex_bot.log',
-  refreshIntervalMs: parseInt(process.env.REFRESH_INTERVAL_MS || '5000', 10), // Milliseconds
-  cronSchedule: process.env.CRON_SCHEDULE || '*/5 * * * *', // Every 5 minutes by default
+  refreshIntervalMs: parseInt(process.env.REFRESH_INTERVAL_MS || '5000', 10),
+  cronSchedule: process.env.CRON_SCHEDULE || '*/5 * * * *',
   signalHistoryLimit: parseInt(process.env.SIGNAL_HISTORY_LIMIT || '100', 10),
+  // New indicator settings from whalebot.py config.json
+  indicatorSettings: {
+    atr_period: parseInt(process.env.ATR_PERIOD || '14', 10),
+    ema_short_period: parseInt(process.env.EMA_SHORT_PERIOD || '9', 10),
+    ema_long_period: parseInt(process.env.EMA_LONG_PERIOD || '21', 10),
+    rsi_period: parseInt(process.env.RSI_PERIOD || '14', 10),
+    stoch_rsi_period: parseInt(process.env.STOCH_RSI_PERIOD || '14', 10),
+    stoch_k_period: parseInt(process.env.STOCH_K_PERIOD || '3', 10),
+    stoch_d_period: parseInt(process.env.STOCH_D_PERIOD || '3', 10),
+    bollinger_bands_period: parseInt(process.env.BOLLINGER_BANDS_PERIOD || '20', 10),
+    bollinger_bands_std_dev: parseFloat(process.env.BOLLINGER_BANDS_STD_DEV || '2.0'),
+    cci_period: parseInt(process.env.CCI_PERIOD || '20', 10),
+    williams_r_period: parseInt(process.env.WILLIAMS_R_PERIOD || '14', 10),
+    mfi_period: parseInt(process.env.MFI_PERIOD || '14', 10),
+    psar_acceleration: parseFloat(process.env.PSAR_ACCELERATION || '0.02'),
+    psar_max_acceleration: parseFloat(process.env.PSAR_MAX_ACCELERATION || '0.2'),
+    sma_short_period: parseInt(process.env.SMA_SHORT_PERIOD || '10', 10),
+    sma_long_period: parseInt(process.env.SMA_LONG_PERIOD || '50', 10),
+    fibonacci_window: parseInt(process.env.FIBONACCI_WINDOW || '60', 10),
+    ehlers_fast_period: parseInt(process.env.EHLERS_FAST_PERIOD || '10', 10),
+    ehlers_fast_multiplier: parseFloat(process.env.EHLERS_FAST_MULTIPLIER || '2.0'),
+    ehlers_slow_period: parseInt(process.env.EHLERS_SLOW_PERIOD || '20', 10),
+    ehlers_slow_multiplier: parseFloat(process.env.EHLERS_SLOW_MULTIPLIER || '3.0'),
+    macd_fast_period: parseInt(process.env.MACD_FAST_PERIOD || '12', 10),
+    macd_slow_period: parseInt(process.env.MACD_SLOW_PERIOD || '26', 10),
+    macd_signal_period: parseInt(process.env.MACD_SIGNAL_PERIOD || '9', 10),
+    adx_period: parseInt(process.env.ADX_PERIOD || '14', 10),
+    ichimoku_tenkan_period: parseInt(process.env.ICHIMOKU_TENKAN_PERIOD || '9', 10),
+    ichimoku_kijun_period: parseInt(process.env.ICHIMOKU_KIJUN_PERIOD || '26', 10),
+    ichimoku_senkou_span_b_period: parseInt(process.env.ICHIMOKU_SENKOU_SPAN_B_PERIOD || '52', 10),
+    ichimoku_chikou_span_offset: parseInt(process.env.ICHIMOKU_CHIKOU_SPAN_OFFSET || '26', 10),
+    obv_ema_period: parseInt(process.env.OBV_EMA_PERIOD || '20', 10),
+    cmf_period: parseInt(process.env.CMF_PERIOD || '20', 10),
+    rsi_oversold: parseInt(process.env.RSI_OVERSOLD || '30', 10),
+    rsi_overbought: parseInt(process.env.RSI_OVERBOUGHT || '70', 10),
+    stoch_rsi_oversold: parseInt(process.env.STOCH_RSI_OVERSOLD || '20', 10),
+    stoch_rsi_overbought: parseInt(process.env.STOCH_RSI_OVERBOUGHT || '80', 10),
+    cci_oversold: parseInt(process.env.CCI_OVERSOLD || '-100', 10),
+    cci_overbought: parseInt(process.env.CCI_OVERBOUGHT || '100', 10),
+    williams_r_oversold: parseInt(process.env.WILLIAMS_R_OVERSOLD || '-80', 10),
+    williams_r_overbought: parseInt(process.env.WILLIAMS_R_OVERBOUGHT || '-20', 10),
+    mfi_oversold: parseInt(process.env.MFI_OVERSOLD || '20', 10),
+    mfi_overbought: parseInt(process.env.MFI_OVERBOUGHT || '80', 10),
+    volatility_index_period: parseInt(process.env.VOLATILITY_INDEX_PERIOD || '20', 10),
+    vwma_period: parseInt(process.env.VWMA_PERIOD || '20', 10),
+    volume_delta_period: parseInt(process.env.VOLUME_DELTA_PERIOD || '5', 10),
+    volume_delta_threshold: parseFloat(process.env.VOLUME_DELTA_THRESHOLD || '0.2'),
+    kama_period: parseInt(process.env.KAMA_PERIOD || '10', 10),
+    kama_fast_period: parseInt(process.env.KAMA_FAST_PERIOD || '2', 10),
+    kama_slow_period: parseInt(process.env.KAMA_SLOW_PERIOD || '30', 10),
+  },
+  klineInterval: process.env.KLINE_INTERVAL || '15',
+  klineLimit: parseInt(process.env.KLINE_LIMIT || '200', 10),
 };
 
 class TradingBot {
@@ -38,17 +91,15 @@ class TradingBot {
     this.logFilePath = config.logFilePath;
     this.isRunning = false;
     this.lastSuccessfulRun = null;
-    this.logFileWatcher = null; // To store the watcher instance
+    this.logFileWatcher = null;
   }
 
   async initialize() {
     try {
       logger.info(chalk.magenta('✨ Invoking the bot initialization ritual...'));
 
-      // Ensure output directory exists
       await fs.ensureDir(path.dirname(this.outputPath));
 
-      // Validate essential configurations
       if (!config.geminiApiKey) {
         logger.error(chalk.red('🚫 GEMINI_API_KEY is not set. Aborting initialization.'));
         return false;
@@ -76,20 +127,30 @@ class TradingBot {
     logger.info(chalk.cyan('📈 Starting a new analysis cycle...'));
 
     try {
-      let latestData;
+      let latestData = {};
 
       if (config.liveDataMode) {
-        // Step 1 (Live Data Mode): Fetch live market data
         const liveDataFetcher = new LiveDataFetcher(config.bybitApiKey, config.bybitApiSecret, config.tradingSymbol);
-        const fetchedData = await liveDataFetcher.fetchCurrentPrice(); // Only fetching current price for POC
+        const fetchedPriceData = await liveDataFetcher.fetchCurrentPrice();
+        const fetchedKlineData = await liveDataFetcher.fetchKlineData(config.klineInterval, config.klineLimit);
 
-        if (!fetchedData || !fetchedData.currentPrice) {
-          logger.warn(chalk.yellow('No live market data available.'));
+        if (!fetchedPriceData || !fetchedPriceData.currentPrice) {
+          logger.warn(chalk.yellow('No live market price data available.'));
           return;
         }
-        latestData = fetchedData;
+        if (!fetchedKlineData || fetchedKlineData.length === 0) {
+          logger.warn(chalk.yellow('No live kline data available.'));
+          return;
+        }
+
+        latestData = {
+          currentPrice: fetchedPriceData.currentPrice,
+          symbol: fetchedPriceData.symbol,
+          klines: fetchedKlineData,
+          indicatorSettings: config.indicatorSettings, // Pass indicator settings
+        };
+
       } else {
-        // Step 1 (Log File Mode): Parse log file
         const logData = await this.logParser.parseLogFile(this.logFilePath);
 
         if (!logData || logData.length === 0) {
@@ -97,16 +158,17 @@ class TradingBot {
           return;
         }
 
-        // Step 2 (Log File Mode): Get latest market data from logs
         latestData = this.logParser.getLatestMarketData(logData);
 
         if (!latestData || !latestData.currentPrice) {
           logger.warn(chalk.yellow('No current price data available from logs.'));
           return;
         }
+        // In log mode, klines and indicator settings are assumed to be part of the parsed log data if needed by GeminiAnalyzer
+        // For now, we'll just pass the existing latestData structure.
+        latestData.indicatorSettings = config.indicatorSettings; // Ensure settings are passed even in log mode
       }
 
-      // Step 3: Analyze with Gemini AI
       logger.info(chalk.blue('🧠 Consulting the Gemini AI oracle for trend analysis...'));
       const aiAnalysis = await this.geminiAnalyzer.analyzeTrends(latestData);
 
@@ -115,7 +177,6 @@ class TradingBot {
         return;
       }
 
-      // Step 4: Generate trading signals
       logger.info(chalk.blue('✨ Generating trading signals based on market data and AI insights...'));
       const signals = await this.signalGenerator.generateSignals(
         latestData,
@@ -127,21 +188,19 @@ class TradingBot {
         return;
       }
 
-      // Step 5: Save signals to JSON
       await this.saveSignals(signals);
 
-      // Log summary
       this.logSignalSummary(signals);
-      this.lastSuccessfulRun = new Date().toISOString(); // Update last successful run time
+      this.lastSuccessfulRun = new Date().toISOString();
       logger.info(chalk.green('✅ Analysis cycle completed successfully.'));
 
     } catch (error) {
       logger.error(chalk.red(`❌ Error during analysis cycle: ${error.message}`));
-      logger.debug(chalk.red(error.stack)); // For detailed debugging
+      logger.debug(chalk.red(error.stack));
     } finally {
       this.isRunning = false;
     }
-  } // finally block is removed here, it will be added back in the next step
+  }
 
   async saveSignals(newSignal) {
     try {
@@ -155,20 +214,17 @@ class TradingBot {
         }
       }
 
-      // Add timestamp and unique ID to new signal
       const timestampedSignal = {
         ...newSignal,
         timestamp: new Date().toISOString(),
         id: `signal_${Date.now()}`
       };
 
-      // Maintain history (keep last N signals)
       existingSignals.push(timestampedSignal);
       if (existingSignals.length > config.signalHistoryLimit) {
-        existingSignals.shift(); // Remove the oldest signal
+        existingSignals.shift();
       }
 
-      // Prepare output structure
       const output = {
         latest: timestampedSignal,
         history: existingSignals,
@@ -238,7 +294,7 @@ class TradingBot {
   getConfidenceBar(confidence) {
     const filled = Math.round(confidence / 10);
     const empty = 10 - filled;
-    const bar = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, empty)); // Ensure non-negative repeats
+    const bar = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, empty));
 
     const color = confidence >= 80 ? chalk.green :
                   confidence >= 60 ? chalk.yellow :
@@ -252,13 +308,11 @@ class TradingBot {
 
     if (!initialized) {
       logger.error(chalk.red('Failed to initialize bot. Exiting.'));
-      process.exit(1); // Exit if initialization fails
+      process.exit(1);
     }
 
-    // Run initial analysis immediately
     await this.analyzeAndGenerateSignals();
 
-    // Schedule periodic analysis using cron or setInterval
     if (config.cronSchedule) {
       logger.info(chalk.green(`⏰ Scheduling analysis via cron: ${chalk.bold(config.cronSchedule)}`));
       cron.schedule(config.cronSchedule, async () => {
@@ -272,7 +326,6 @@ class TradingBot {
       }, config.refreshIntervalMs);
     }
 
-    // Watch log file for changes
     this.watchLogFile();
   }
 
@@ -282,7 +335,6 @@ class TradingBot {
       return;
     }
 
-    // Ensure only one watcher is active
     if (this.logFileWatcher) {
       fs.unwatchFile(this.logFilePath);
     }
@@ -297,31 +349,26 @@ class TradingBot {
     logger.info(chalk.green(`👁️ Watching log file for changes at ${chalk.bold(this.logFilePath)}`));
   }
 
-  // Graceful shutdown
   async shutdown() {
     logger.info(chalk.yellow('\n👋 Initiating graceful shutdown sequence...'));
     if (this.logFileWatcher) {
       fs.unwatchFile(this.logFilePath);
       logger.info(chalk.yellow('🛑 Log file watcher stopped.'));
     }
-    // Any other cleanup like closing connections can go here
     logger.info(chalk.yellow('✨ Shutdown complete. May your digital journey be prosperous!'));
     process.exit(0);
   }
 }
 
-// Start the bot with dependency injection
 const bot = new TradingBot(
-  new LogParser(config.tradingSymbol), // Pass trading symbol to LogParser
-  new GeminiAnalyzer(config.geminiApiKey, config.tradingSymbol), // Pass trading symbol to GeminiAnalyzer
+  new LogParser(config.tradingSymbol),
+  new GeminiAnalyzer(config.geminiApiKey, config.tradingSymbol),
   new SignalGenerator()
 );
 
-// Handle graceful shutdown
 process.on('SIGINT', () => bot.shutdown());
-process.on('SIGTERM', () => bot.shutdown()); // Also handle SIGTERM
+process.on('SIGTERM', () => bot.shutdown());
 
-// Invoke the bot's main incantation
 bot.startBot().catch(error => {
   logger.error(chalk.red(`🔥 Fatal disturbance in the code-weave: ${error.message}`));
   logger.error(chalk.red(error.stack));

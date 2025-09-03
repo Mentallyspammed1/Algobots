@@ -1,6 +1,13 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import chalk from 'chalk';
 import { logger } from './utils.js';
+import {
+  calculateVolatilityIndex,
+  calculateVWMA,
+  calculateVolumeDelta,
+  calculateKaufmanAMA,
+  calculateFibonacciPivotPoints,
+} from './indicators.js';
 
 export default class GeminiAnalyzer {
   constructor(apiKey, tradingSymbol) { // Accept tradingSymbol
@@ -17,7 +24,20 @@ export default class GeminiAnalyzer {
     try {
       logger.info(chalk.hex('#00FFFF').bold('🤖 Analyzing with Gemini AI...'));
       
-      const prompt = this.buildAnalysisPrompt(marketData);
+      let indicators = {};
+      if (marketData.klines && marketData.klines.length > 0) {
+        // Calculate new indicators
+        const klines = marketData.klines;
+        const indicatorSettings = marketData.indicatorSettings; // Assuming indicator settings are passed
+
+        indicators.volatilityIndex = calculateVolatilityIndex(klines, indicatorSettings.volatility_index_period).slice(-1)[0];
+        indicators.vwma = calculateVWMA(klines, indicatorSettings.vwma_period).slice(-1)[0];
+        indicators.volumeDelta = calculateVolumeDelta(klines, indicatorSettings.volume_delta_period).slice(-1)[0];
+        indicators.kaufmanAMA = calculateKaufmanAMA(klines, indicatorSettings.kama_period, indicatorSettings.kama_fast_period, indicatorSettings.kama_slow_period).slice(-1)[0];
+        indicators.fibonacciPivotPoints = calculateFibonacciPivotPoints(klines);
+      }
+
+      const prompt = this.buildAnalysisPrompt(marketData, indicators);
       const result = await this.model.generateContent(prompt);
       const response = await result.response;
       const analysis = response.text();
@@ -30,7 +50,7 @@ export default class GeminiAnalyzer {
     }
   }
 
-  buildAnalysisPrompt(data) {
+  buildAnalysisPrompt(data, indicators) {
     return `
     You are an expert cryptocurrency scalping trader. Analyze the following market data and provide a trading signal.
     
@@ -53,6 +73,11 @@ export default class GeminiAnalyzer {
     - MFI: ${data.mfi}
     - CCI: ${data.cci}
     - VWAP: ${data.vwap}
+    - Volatility Index: ${indicators.volatilityIndex?.toFixed(4)}
+    - VWMA: ${indicators.vwma?.toFixed(4)}
+    - Volume Delta: ${indicators.volumeDelta?.toFixed(4)}
+    - Kaufman AMA: ${indicators.kaufmanAMA?.toFixed(4)}
+    - Fibonacci Pivot Points: Pivot=${indicators.fibonacciPivotPoints?.pivot?.toFixed(4)}, R1=${indicators.fibonacciPivotPoints?.r1?.toFixed(4)}, R2=${indicators.fibonacciPivotPoints?.r2?.toFixed(4)}, S1=${indicators.fibonacciPivotPoints?.s1?.toFixed(4)}, S2=${indicators.fibonacciPivotPoints?.s2?.toFixed(4)}
     
     MULTI-TIMEFRAME TRENDS:
     - 3min EMA Trend: ${data['3_ema']}

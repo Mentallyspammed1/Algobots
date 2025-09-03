@@ -1,324 +1,20 @@
 {
   "latest": {
-    "currentPrice": 0.255,
-    "action": "SELL",
-    "confidence": 65,
-    "reasoning": "The market data suggests TRUMPUSDT is currently facing immediate resistance. The current price ($0.255) is essentially touching the Upper Bollinger Band ($0.25545563), which often acts as a ceiling and indicates a potential short-term overextension. Further reinforcing this bearish outlook is the MACD, which shows a bearish cross (MACD Line below MACD Signal) and a negative Histogram, signaling a loss of bullish momentum and an impending pullback. While the 3-minute and 15-minute EMA trends are still pointing 'UP', indicating an underlying bullish bias on these shorter timeframes, the overall trend strength (ADX: 14.19) is weak. This combination of price at resistance, bearish momentum divergence, and weak trend strength creates an opportune setup for a quick counter-trend 'SELL' scalp. The goal is to profit from an immediate pullback towards the Middle Bollinger Band or Short EMA before the underlying bullish pressure might reassert itself. Traders should employ tight risk management due to the counter-trend nature of the trade and the weak overall trend.",
+    "currentPrice": 0.2503,
+    "action": "HOLD",
+    "confidence": 40,
+    "reasoning": "Unable to determine clear trend from available data",
     "keyFactors": [
-      "Price at Upper Bollinger Band (resistance)",
-      "MACD bearish cross (loss of bullish momentum)",
-      "Weak ADX (low trend strength)",
-      "Bullish EMA trends (underlying, but not immediate confirmation)"
+      "Insufficient data",
+      "Manual review recommended"
     ],
-    "riskLevel": "MEDIUM",
+    "riskLevel": "HIGH",
     "trend": "NEUTRAL",
-    "trendStrength": 30,
-    "entry": 0.255,
-    "stopLoss": 0.2557,
-    "takeProfit": 0.2536,
-    "riskReward": "2.00",
-    "slPercentage": 0.28218235294116767,
-    "tpPercentage": 0.5643647058823353,
-    "positionSize": {
-      "units": 13897,
-      "riskAmount": "10.00",
-      "notionalValue": "3543.81"
-    },
-    "entryStrategy": "Enter a short position upon confirmed rejection from the Upper Bollinger Band. Look for bearish candlestick patterns (e.g., shooting star, engulfing) or a clear price action signaling a turn downwards at or just below $0.255.",
-    "exitStrategy": "Target profit at the Middle Bollinger Band (~$0.254665) or the Short EMA (~$0.254858) for a quick scalp. Set a tight stop-loss just above the Upper Bollinger Band (~$0.2555) or the most recent swing high to manage risk effectively given it's a counter-trend trade.",
-    "timestamp": "2025-09-01T19:30:26.143Z",
-    "id": "signal_1756755026143"
+    "trendStrength": 50,
+    "timestamp": "2025-09-03T13:05:07.882Z",
+    "id": "signal_1756904707882"
   },
   "history": [
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 75,
-      "reasoning": "The TRUMPUSDT market is currently exhibiting extreme oversold conditions across multiple momentum oscillators, with RSI at 6.08, Stochastic RSI at 0, and CCI at -206.78. The price has fallen significantly below the lower Bollinger Band, indicating an extended move to the downside that may be stretched in the very short term. While the overall trend is strongly bearish (confirmed by ADX at 43.9, bearish EMA crossover, and price below VWAP and EMAs), such extreme oversold readings often precede short-term counter-trend bounces as sellers temporarily exhaust and short positions may begin to cover. This presents a high-risk scalping opportunity for a quick upward move. The 3min Supertrend showing 'UP' (despite the 3min EMA 'DOWN') could be an early, albeit weak, signal of a bounce attempt. Due to the strong underlying bearish trend, this is a counter-trend trade, and strict risk management with a tight stop-loss is paramount.",
-      "keyFactors": [
-        "RSI extremely oversold (6.08)",
-        "Stochastic RSI at 0 (extremely oversold)",
-        "Price below Bollinger Lower Band (107550.06)",
-        "CCI extremely oversold (-206.78)",
-        "Strong underlying downtrend (ADX 43.9) indicating potential exhaustion"
-      ],
-      "riskLevel": "HIGH",
-      "trend": "NEUTRAL",
-      "trendStrength": 75,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109528.1,
-      "riskReward": "2.50",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.010166532637683,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Enter a long position on confirmation of selling pressure easing (e.g., bullish engulfing candle or hammer formation) near the current price ($107369.8) or a slight dip below it. Look for volume accompanying a potential reversal.",
-      "exitStrategy": "Set a tight stop-loss below the immediate support/recent low (e.g., $106800, which is approximately 1.2x ATR below the current price). Target a quick scalp profit at the Bollinger Middle Band ($108509.35) or the EMA Short ($108085.45), as these act as dynamic resistance.",
-      "timestamp": "2025-09-01T03:40:40.979Z",
-      "id": "signal_1756698040979"
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 75,
-      "reasoning": "TRUMPUSDT is exhibiting extreme oversold conditions, indicated by an RSI of 6.08, Stochastic RSI at 0/0, and CCI deeply negative at -206.78. The price is also trading below the Lower Bollinger Band ($107550.05), which typically signals a strong potential for a short-term upward bounce or mean reversion. While the multi-timeframe analysis and indicators like MACD (line below signal, negative histogram), EMAs (short below long), and a high ADX (43.9) confirm a strong underlying bearish trend, these extreme oversold readings often provide high-probability counter-trend scalping opportunities for quick profits. The 3min Supertrend signaling 'UP' could be an early, albeit weak, indication of an imminent bounce. High ATR suggests good volatility for capturing small price movements. This is a high-risk scalping trade against the prevailing trend, requiring strict risk management and rapid execution due to the strong bearish momentum.",
-      "keyFactors": [
-        "Extremely oversold RSI (6.08) and Stochastic RSI (0/0)",
-        "Price trading below Lower Bollinger Band ($107550.05)",
-        "CCI deeply oversold (-206.78)",
-        "Strong underlying bearish trend (MACD, EMAs, ADX 43.9)",
-        "High ATR ($479.62) indicating good volatility for scalping"
-      ],
-      "riskLevel": "HIGH",
-      "trend": "BEARISH",
-      "trendStrength": 88,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109528.1,
-      "riskReward": "2.50",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.010166532637683,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Enter on a confirmed reversal candle formation (e.g., hammer, bullish engulfing) or when price reclaims and holds above the Lower Bollinger Band (~$107550), aiming for a quick bounce from extreme oversold conditions. Look for bullish divergence on smaller timeframes for added conviction.",
-      "exitStrategy": "Set a tight stop-loss immediately below the recent low (e.g., ~$107200). Target profit quickly at the Lower Bollinger Band (if entered below), or aggressively at the 3min EMA Short (~$108085) or Middle Bollinger Band (~$108509). Scale out profits rapidly as this is a counter-trend scalping trade.",
-      "timestamp": "2025-09-01T03:41:03.278Z",
-      "id": "signal_1756698063278"
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 75,
-      "reasoning": "TRUMPUSDT is currently in a strong bearish trend, confirmed by the EMA crossover (Short EMA < Long EMA), MACD line below its signal, current price significantly below VWAP, and a very high ADX (43.90) indicating powerful trend strength. However, the market is flashing extreme oversold conditions across multiple key oscillators:\n\n1.  **RSI (6.08)** is deep into oversold territory, signaling a potential for an upward correction.\n2.  **Stochastic RSI (K=0, D=0)** is at its absolute lowest, reinforcing the extreme oversold condition.\n3.  The **Current Price ($107369.8)** has aggressively broken below the **Lower Bollinger Band ($107550.05)**, which often acts as a dynamic support level and signals a likely rebound back into the bands.\n4.  **CCI (-206.78)** is also deep in oversold territory, further confirming the buying opportunity for a bounce.\n\nWhile the Money Flow Index (MFI) at 37.77 indicates bearish money flow, the confluence of extreme oversold signals presents a high-probability, short-term scalp 'BUY' opportunity for a quick bounce. This is a counter-trend trade against a very strong downtrend, making the risk level HIGH. A cautious approach with strict risk management (tight stop-loss and quick profit-taking) is imperative.",
-      "keyFactors": [
-        "RSI extremely oversold (6.08)",
-        "Price below Lower Bollinger Band (107550.05)",
-        "Stochastic RSI at 0 (extremely oversold)",
-        "CCI extremely oversold (-206.78)",
-        "Strong ADX (43.90) indicates powerful underlying downtrend (high risk counter-trend)",
-        "Bearish money flow (MFI 37.77) suggests caution on bounce strength"
-      ],
-      "riskLevel": "HIGH",
-      "trend": "BEARISH",
-      "trendStrength": 75,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109528.1,
-      "riskReward": "2.50",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.010166532637683,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Monitor for immediate signs of buying pressure or a slight upward tick after the price has breached the Lower Bollinger Band. A conservative entry point could be at current levels ($107369.8) or slightly higher on confirmation of a bounce, aiming to capture a quick rebound. Utilize tight stop-loss.",
-      "exitStrategy": "Target a quick scalp profit by aiming for the price to move back into the Bollinger Bands or towards the Middle Bollinger Band ($108509.35). Given the strong underlying downtrend, take profits quickly. Place a very tight stop-loss just below the immediate swing low or a fixed percentage (e.g., 0.3-0.5% below entry) to protect against continued downside.",
-      "timestamp": "2025-09-01T03:41:28.765Z",
-      "id": "signal_1756698088765"
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 90,
-      "reasoning": "TRUMPUSDT is in an extremely oversold condition across multiple key indicators: RSI (6.08), Stochastic RSI (0), and CCI (-206.78) are all signaling extreme oversold levels. The current price ($107369.8) is trading significantly below its Lower Bollinger Band ($107550.05), which typically precedes a mean reversion bounce back into the bands. While the overall multi-timeframe trend (3min EMA Trend: DOWN) and MACD histogram indicate strong bearish momentum (ADX 43.9 suggests a strong trend), these extreme oversold conditions frequently lead to short-term counter-trend scalping opportunities. The 3min Supertrend showing 'UP' could be an early indication of an attempt to reverse. This is a counter-trend scalp, inherently carrying higher risk due to the strong underlying bearish trend, but the confluence of extreme oversold signals provides a high-confidence setup for a quick bounce.",
-      "keyFactors": [
-        "RSI extremely oversold (6.08)",
-        "Stochastic RSI at 0 (extremely oversold)",
-        "Price below Lower Bollinger Band ($107550.05)",
-        "CCI extremely oversold (-206.78)",
-        "Strong bearish momentum (ADX 43.9, MACD negative) suggests a bounce is statistically likely after such an extreme move down"
-      ],
-      "riskLevel": "MEDIUM-HIGH",
-      "trend": "BEARISH",
-      "trendStrength": 85,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109959.8,
-      "riskReward": "3.00",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.41219983916522,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Initiate a long position immediately as price shows signs of bottoming or a bullish candle forms, aiming for a quick bounce back into the Bollinger Bands. Entry around current price ($107369.8) or slightly lower if selling pressure continues briefly.",
-      "exitStrategy": "Target the Middle Bollinger Band ($108509.35) or the Short EMA ($108085.45) for profit taking. Set a tight stop-loss below the immediate low, e.g., 1-1.5x ATR below entry (~$106900 - $106600) to manage the risk of the strong underlying bearish trend continuing.",
-      "timestamp": "2025-09-01T03:41:53.191Z",
-      "id": "signal_1756698113191"
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 85,
-      "reasoning": "TRUMPUSDT is currently in a strong bearish trend, evidenced by the ADX (43.9), negative MACD histogram, and the current price being well below both short and long EMAs, as well as the 3min EMA trend indicating 'DOWN'. However, multiple indicators signal extreme oversold conditions, presenting a high-probability scalping opportunity for a counter-trend bounce. The RSI (6.08), Stochastic RSI (0), and CCI (-206.78) are all in deeply oversold territory. Critically, the price is currently trading *below* the Lower Bollinger Band ($107550.05), a strong signal for a potential mean-reversion bounce back into the bands. While the overall trend is bearish, these extreme conditions often lead to rapid, short-lived price corrections suitable for scalping. The 'UP' signal on the 3min Supertrend, despite the 'DOWN' EMA trend, could be an early confirmation of this impending bounce. The risk is considered medium due to trading against the dominant trend, requiring strict risk management.",
-      "keyFactors": [
-        "RSI extremely oversold (6.08)",
-        "Price trading below Lower Bollinger Band (107550.05)",
-        "Stochastic RSI at 0 (extremely oversold)",
-        "CCI at -206.78 (deeply oversold)",
-        "Strong underlying bearish trend (ADX 43.9, EMAs, MACD) suggesting potential for a strong counter-trend bounce due to exhaustion"
-      ],
-      "riskLevel": "MEDIUM",
-      "trend": "BEARISH",
-      "trendStrength": 80,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109959.8,
-      "riskReward": "3.00",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.41219983916522,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Initiate a long position (BUY) if the price shows immediate signs of reversal (e.g., green candle close, upward wick) after breaching the Lower Bollinger Band. Aim for an entry as close to the current price ($107369.8) as possible, or slightly lower if a quick dip occurs.",
-      "exitStrategy": "Set a primary take profit target at the Lower Bollinger Band ($107550.05) for a quick scalp. A secondary, more ambitious target could be the Middle Bollinger Band ($108509.35). Place a tight stop-loss order approximately 0.5% to 1% below the entry price, or just below the immediate prior low (e.g., $106800 - $107000), to manage risk effectively in this counter-trend trade. Adjust based on ATR (479.62) for optimal positioning.",
-      "timestamp": "2025-09-01T03:42:18.120Z",
-      "id": "signal_1756698138120"
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 85,
-      "reasoning": "The market data for TRUMPUSDT presents an excellent scalping opportunity for a counter-trend bounce. Despite a strong underlying bearish trend confirmed by MACD, EMAs, and a high ADX (43.9), the price is in an extremely oversold state across multiple indicators. The RSI (6.08) and Stochastic RSI (0) are at critical lows, signaling that the asset is deeply oversold. Furthermore, the price is trading significantly below the Lower Bollinger Band, which often precedes a mean reversion bounce. The CCI at -206.78 reinforces these oversold conditions. A key contrarian signal is the 3-minute Supertrend showing 'UP', which, at these price lows, suggests either an early stage of a bullish reversal or strong underlying support. This confluence of extreme oversold readings provides a high-probability setup for a short-term BUY to capture a quick bounce back towards the Bollinger Bands. Risk is considered medium due to trading against the strong prevailing trend, necessitating strict adherence to stop-loss orders and quick profit-taking.",
-      "keyFactors": [
-        "Extreme RSI (6.08) and Stochastic RSI (0) indicating severe oversold conditions.",
-        "Price is below the Lower Bollinger Band (107550.05), suggesting strong deviation and potential for mean reversion.",
-        "3-minute Supertrend is 'UP', acting as a contrarian bullish signal amidst lows.",
-        "CCI at -206.78 confirms strong oversold conditions.",
-        "High ADX (43.9) indicating a strong existing trend, which often leads to sharp snap-back bounces from extremes."
-      ],
-      "riskLevel": "MEDIUM",
-      "trend": "BEARISH",
-      "trendStrength": 75,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109959.8,
-      "riskReward": "3.00",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.41219983916522,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Monitor for confirmation of slowing bearish momentum or a slight positive divergence on the 1-minute chart. Place a BUY order at or slightly below the current price ($107369.8), anticipating a rapid bounce. Consider scaling into the position if there's a minor dip below the entry.",
-      "exitStrategy": "Set a primary profit target at the Lower Bollinger Band ($107550.05) and a secondary target at the Middle Bollinger Band ($108509.35) for quick scalp profits. Implement a tight stop-loss order immediately below the recent low or at approximately 1 ATR ($479.62) below the entry point to manage risk effectively. Be prepared to exit swiftly.",
-      "timestamp": "2025-09-01T03:42:43.761Z",
-      "id": "signal_1756698163762"
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 90,
-      "reasoning": "TRUMPUSDT is in an extremely oversold condition, evidenced by multiple strong indicators. The RSI (6.08), Stochastic RSI (K=0, D=0), and CCI (-206.78) are all at critical lows, and the price is currently trading below its Lower Bollinger Band. This confluence of signals presents a high-probability setup for a short-term relief bounce, despite the overarching bearish momentum indicated by MACD and the 3min EMA trend. The ADX (43.91) confirms a strong trend is in play, suggesting the recent strong downside move may be due for a temporary correction. As a scalper, the strategy is to capitalize on this anticipated mean-reversion bounce, targeting key resistance levels like the Middle Bollinger Band or short-term EMAs, while maintaining strict risk management for this counter-trend position.",
-      "keyFactors": [
-        "Extreme RSI (6.08) indicating severely oversold conditions",
-        "Price trading significantly below the Lower Bollinger Band (107550.06)",
-        "Stochastic RSI (K=0, D=0) confirming extreme oversold state",
-        "CCI (-206.78) reinforcing oversold signal",
-        "Strong underlying bearish momentum (MACD, 3min EMA DOWN) setting up for a potential counter-trend relief bounce"
-      ],
-      "riskLevel": "MEDIUM",
-      "trend": "BEARISH",
-      "trendStrength": 85,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109959.8,
-      "riskReward": "3.00",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.41219983916522,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Initiate a long position near the current price ($107369.8). Look for signs of selling pressure abating on a lower timeframe (e.g., 1-minute chart showing slowing momentum or a hammer/doji candle) before entry. The extreme oversold state suggests an imminent bounce.",
-      "exitStrategy": "Set a primary profit target at the Middle Bollinger Band (~$108509.35) or the EMA Short (~$108085.45) for a quick scalp. Place a tight stop-loss order immediately below the current low or a significant psychological level, for example, $106800 to $107000, to protect against further downside if the bearish trend accelerates. Be prepared to exit quickly as this is a counter-trend trade.",
-      "timestamp": "2025-09-01T03:43:07.295Z",
-      "id": "signal_1756698187295"
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 75,
-      "reasoning": "The market data for TRUMPUSDT indicates a severely oversold condition, making a short-term counter-trend bounce highly probable. The RSI (6.08), Stochastic RSI (0), and CCI (-206.78) are all at extreme lows, signaling deep oversold territory. Crucially, the current price ($107369.8) has dropped below the Lower Bollinger Band ($107550.05), which typically acts as a strong dynamic support level for a rebound back into the bands. While the EMA trends (short < long) and MACD histogram indicate a strong underlying bearish momentum (ADX 43.9), these extreme oversold signals often lead to sharp, albeit short-lived, reversals. The 3-minute Supertrend flashing 'UP' provides a potential early confirmation of an impending bullish bounce on the very short timeframe. This combination suggests a favorable risk/reward for a quick scalp to the upside, targeting immediate resistance levels like the EMAs or Middle Bollinger Band before the dominant bearish trend potentially resumes.",
-      "keyFactors": [
-        "RSI extremely oversold (6.08)",
-        "Stochastic RSI at 0 (extremely oversold)",
-        "Price below Lower Bollinger Band",
-        "CCI extremely oversold (-206.78)",
-        "3min Supertrend signalling UP (potential early bounce confirmation)"
-      ],
-      "riskLevel": "MEDIUM",
-      "trend": "BULLISH",
-      "trendStrength": 80,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109528.1,
-      "riskReward": "2.50",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.010166532637683,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Enter a long position immediately around the current price of $107369.8, or slightly lower if a quick wick occurs, capitalizing on the extreme oversold conditions.",
-      "exitStrategy": "Target initial profit at the 3-min EMA Short ($108085.45) or the Middle Bollinger Band ($108509.35). Set a tight stop-loss approximately 1x ATR below entry, around $106890, to manage the risk of the strong underlying bearish trend continuing.",
-      "timestamp": "2025-09-01T03:43:28.593Z",
-      "id": "signal_1756698208594"
-    },
-    {
-      "symbol": "TRUMPUSDT",
-      "currentPrice": 107369.8,
-      "action": "BUY",
-      "confidence": 85,
-      "reasoning": "TRUMPUSDT is exhibiting extreme oversold conditions across multiple key technical indicators. The RSI (6.08), Stochastic RSI (K=0, D=0), and CCI (-206.78) are all indicating severe selling pressure and that the asset is deeply oversold. Furthermore, the current price ($107369.8) has fallen below the Lower Bollinger Band ($107550.05), which is a strong signal for a potential mean reversion bounce. While the multi-timeframe 3min EMA Trend is 'DOWN' and the MACD histogram shows strong bearish momentum, the ADX (43.9) confirms a strong trend which, when combined with extreme oversold readings, often precedes a significant counter-trend correction or bounce. The Money Flow Index (37.77) is low, indicating selling, but not as extreme as other oscillators. The 3min Supertrend showing 'UP' could be an early, albeit weak, signal of an impending bounce. This scalping opportunity is a counter-trend trade aimed at capturing a quick rebound from these extreme levels, therefore requiring strict risk management.",
-      "keyFactors": [
-        "Extreme Oversold RSI (6.08)",
-        "Extreme Oversold Stochastic RSI (K=0, D=0)",
-        "Price trading below Lower Bollinger Band (107550.05)",
-        "Extreme Oversold CCI (-206.78)",
-        "Strong underlying bearish trend (ADX 43.9) indicating potential for strong mean reversion"
-      ],
-      "riskLevel": "MEDIUM-HIGH",
-      "trend": "BULLISH",
-      "trendStrength": 85,
-      "entry": 107369.8,
-      "stopLoss": 106506.5,
-      "takeProfit": 109959.8,
-      "riskReward": "3.00",
-      "slPercentage": 0.8040666130550733,
-      "tpPercentage": 2.41219983916522,
-      "positionSize": {
-        "units": 0.0116,
-        "riskAmount": "10.00",
-        "notionalValue": "1243.68"
-      },
-      "entryStrategy": "Initiate a long position (BUY) for a short-term bounce. Look for price consolidation around current levels or a slight bullish candle formation on lower timeframes (e.g., 1-minute chart) as confirmation. Enter near the current price ($107369.8) or slightly below if a final dip occurs.",
-      "exitStrategy": "Target the Middle Bollinger Band ($108509.35) or the EMA Short ($108085.45) for initial profit taking. Implement a tight stop-loss order immediately below the current low or recent support level, e.g., 0.5 * ATR ($239.8) below the entry price, to manage the inherent risk of a counter-trend trade.",
-      "timestamp": "2025-09-01T03:43:53.700Z",
-      "id": "signal_1756698233700"
-    },
     {
       "symbol": "TRUMPUSDT",
       "currentPrice": 107369.8,
@@ -2491,19 +2187,216 @@
       "exitStrategy": "Target profit at the Middle Bollinger Band (~$0.254665) or the Short EMA (~$0.254858) for a quick scalp. Set a tight stop-loss just above the Upper Bollinger Band (~$0.2555) or the most recent swing high to manage risk effectively given it's a counter-trend trade.",
       "timestamp": "2025-09-01T19:30:26.143Z",
       "id": "signal_1756755026143"
+    },
+    {
+      "currentPrice": 0.255,
+      "action": "SELL",
+      "confidence": 60,
+      "reasoning": "TRUMPUSDT is trading at 0.255, pressing against its Upper Bollinger Band (0.25545563), which typically acts as a strong resistance zone. While both 3-minute and 15-minute EMA trends are 'UP', indicating an underlying bullish bias, the immediate momentum shows signs of weakness. The MACD has registered a bearish cross and a negative histogram, suggesting that the recent upward push is losing steam. Additionally, the low ADX value of 14.19 indicates that the market lacks a strong, defined trend, increasing the likelihood of a temporary pullback or consolidation rather than a powerful breakout. For a scalping strategy, the convergence of price at a key resistance level and the bearish divergence in MACD momentum presents a short-term SELL opportunity to capitalize on a quick retracement towards the Middle Bollinger Band or the EMAs, despite the broader bullish EMA trend.",
+      "keyFactors": [
+        "Price at Upper Bollinger Band (Immediate Resistance)",
+        "MACD Bearish Cross / Negative Histogram (Weakening Momentum)",
+        "Low ADX (Weak Trend Strength)",
+        "Underlying Bullish Multi-Timeframe EMA Trends"
+      ],
+      "riskLevel": "MEDIUM",
+      "trend": "BULLISH",
+      "trendStrength": 50,
+      "entry": 0.255,
+      "stopLoss": 0.2557,
+      "takeProfit": 0.2536,
+      "riskReward": "2.00",
+      "slPercentage": 0.28218235294116767,
+      "tpPercentage": 0.5643647058823353,
+      "positionSize": {
+        "units": 13897,
+        "riskAmount": "10.00",
+        "notionalValue": "3543.81"
+      },
+      "entryStrategy": "Initiate a SELL position immediately at or very close to the current price of 0.255, anticipating a rejection from the Upper Bollinger Band resistance. This is a counter-trend scalp aiming for a quick dip.",
+      "exitStrategy": "Set a Take Profit target at the Middle Bollinger Band (0.254665) or the Short EMA (0.25485843) for a rapid profit capture. Implement a tight Stop Loss slightly above the Upper Bollinger Band (e.g., 0.2556) to protect against an unexpected breakout and to manage the risk associated with a counter-trend scalp.",
+      "timestamp": "2025-09-03T12:43:55.121Z",
+      "id": "signal_1756903435122"
+    },
+    {
+      "currentPrice": 0.2503,
+      "action": "HOLD",
+      "confidence": 55,
+      "reasoning": "The market data for POPCATUSDT indicates a strong underlying bearish sentiment. The MACD's bearish crossover and widening negative histogram, coupled with the EMA's bearish crossover (short below long), point to building downward momentum. Money flow is clearly negative (MFI below 50), and the CCI is in bearish territory. The current price is trading below both the VWAP and the Middle Bollinger Band, confirming selling pressure. Although the 15-minute Supertrend is 'UP', it is outweighed by the 15-minute EMA Trend being 'DOWN' and the confluence of other bearish momentum indicators. The Stochastic RSI's K-line in overbought territory further suggests that any recent buying pressure may be exhausted, paving the way for a potential retracement or continuation of a downtrend. While the 3-minute trends are undefined, implying short-term choppiness, the overall picture leans bearish. For scalping, the preferred action is 'SELL', aiming to capitalize on this prevailing bearish momentum, but with a cautious entry strategy due to the price's proximity to the Lower Bollinger Band and conflicting long-term Supertrend.",
+      "keyFactors": [
+        "MACD bearish crossover and widening negative histogram",
+        "EMA Short (0.25028) below EMA Long (0.25059) indicating bearish crossover",
+        "MFI (35.69) indicating money outflow and bearish pressure",
+        "CCI (-54.51) in bearish territory",
+        "Current price (0.2503) below VWAP (0.25307) and Middle Bollinger Band (0.25108)",
+        "15min EMA Trend is DOWN",
+        "Stochastic RSI K (73.83) in overbought territory, suggesting potential for downward reversal",
+        "Conflicting 15min Supertrend (UP) creates uncertainty"
+      ],
+      "riskLevel": "MEDIUM",
+      "trend": "BEARISH",
+      "trendStrength": 60,
+      "timestamp": "2025-09-03T12:57:14.550Z",
+      "id": "signal_1756904234551"
+    },
+    {
+      "currentPrice": 0.2504,
+      "action": "HOLD",
+      "confidence": 5,
+      "reasoning": "The market data provided is severely incomplete, rendering any meaningful technical analysis impossible for a cryptocurrency scalping strategy. All crucial indicators like RSI, MACD, EMAs, Bollinger Bands, ATR, ADX, Stochastic RSI, MFI, CCI, VWAP, and multi-timeframe trends are marked as `undefined`. For a scalper, this lack of information means there is no basis to identify short-term momentum, support/resistance, overbought/oversold conditions, or trend alignment across timeframes. Trading under such conditions would be akin to gambling, carrying an extremely high and unquantifiable risk. The current price change of 0.04% is negligible and offers no actionable insight without supporting technical context. Therefore, the only responsible action is to `HOLD` and wait for comprehensive, actionable data to become available before considering any entry or exit points.",
+      "keyFactors": [
+        "Absence of critical technical indicator data",
+        "Inability to determine trend direction or strength",
+        "No insight into momentum or volatility",
+        "Lack of overbought/oversold signals",
+        "Current price change is negligible"
+      ],
+      "riskLevel": "HIGH",
+      "trend": "NEUTRAL",
+      "trendStrength": 10,
+      "timestamp": "2025-09-03T12:57:41.094Z",
+      "id": "signal_1756904261095"
+    },
+    {
+      "currentPrice": 0.2504,
+      "action": "HOLD",
+      "confidence": 75,
+      "reasoning": "The market for POPCATUSDT is currently in a state of indecision and very low volatility, making it highly unsuitable for scalping. The extremely low Average True Range (ATR) suggests that price movements are minimal, which significantly reduces profit potential and increases the risk of being stopped out by minor fluctuations. Trend indicators are conflicting across multiple timeframes; the 15min EMA trend is 'DOWN' while the 15min Supertrend is 'UP', and the 3min trends are 'undefined'. The ADX confirms this lack of trend strength. Momentum indicators are also mixed: MACD shows weak bearish momentum, MFI indicates money flowing out (bearish), and CCI is mildly bearish. However, the RSI is neutral, and the Stochastic RSI shows an overbought condition, which conflicts with the price being near the Lower Bollinger Band. The current price is below the Middle Bollinger Band and VWAP, suggesting a slight bearish bias, but there's no strong momentum to justify a short, nor is there clear buying pressure to support a long. Given these conflicting signals, low volatility, and weak trend, the risk-reward ratio for a directional scalping trade is unfavorable. Therefore, a 'HOLD' signal is advised, meaning no trade should be initiated until a clearer trend emerges, volatility increases, or a strong confluence of indicators points to a definite direction.",
+      "keyFactors": [
+        "Extremely low ATR",
+        "Conflicting multi-timeframe trends (15min EMA DOWN vs. 15min Supertrend UP)",
+        "Low ADX indicating weak trend strength",
+        "Neutral RSI with bearish MFI",
+        "Price near lower Bollinger Band without clear directional conviction"
+      ],
+      "riskLevel": "HIGH",
+      "trend": "NEUTRAL",
+      "trendStrength": 25,
+      "timestamp": "2025-09-03T12:58:12.308Z",
+      "id": "signal_1756904292308"
+    },
+    {
+      "currentPrice": 0.2504,
+      "action": "HOLD",
+      "confidence": 1,
+      "reasoning": "A 'HOLD' signal is issued because the provided market data is critically incomplete. Every technical indicator and multi-timeframe trend is 'undefined'. Scalping relies on swift, precise decisions based on real-time technical analysis, momentum shifts, and clear support/resistance levels. With no data on RSI, MACD, EMAs, Bollinger Bands, ATR, ADX, Stochastic RSI, MFI, CCI, or VWAP, it is impossible to gauge market sentiment, trend direction, volatility, or potential entry/exit points. Furthermore, the lack of 3min and 15min EMA/Supertrend data prevents any multi-timeframe trend alignment assessment. Engaging in a BUY or SELL action under such conditions would expose capital to an unquantifiable and extremely high risk, as it would be based purely on chance rather than analysis. Therefore, the most prudent action is to abstain from trading and 'HOLD' until comprehensive and actionable market data becomes available for a proper technical assessment.",
+      "keyFactors": [
+        "All technical indicators undefined",
+        "No multi-timeframe trend data available",
+        "Insufficient information for momentum assessment",
+        "Inability to determine overbought/oversold conditions",
+        "Lack of data for volatility and volume analysis"
+      ],
+      "riskLevel": "HIGH",
+      "trend": "NEUTRAL",
+      "trendStrength": 0,
+      "timestamp": "2025-09-03T12:58:37.981Z",
+      "id": "signal_1756904317981"
+    },
+    {
+      "currentPrice": 0.2504,
+      "action": "SELL",
+      "confidence": 60,
+      "reasoning": "The market data presents a setup for a short-term scalping opportunity on the SELL side for POPCATUSDT. The most compelling factor is the Stochastic RSI being extremely overbought (K=97.09, D=77.54), which is a strong contrarian indicator for an imminent price pullback. This signal is bolstered by bearish readings from MACD (crossover and negative histogram) and EMA (short below long), suggesting weakening bullish momentum and potential for downside. The current price (0.2504) is also trading below the VWAP (0.2530) and the Middle Bollinger Band (0.2510), further reinforcing the bearish sentiment for a quick scalp. While the overall trend strength (ADX=20.85) is weak and the 3-minute trends are undefined, suggesting a potentially choppy market, the confluence of these immediate bearish signals, particularly the overbought Stochastic RSI, provides a window for a quick short scalp. The very low ATR (0.0003) emphasizes the need for very tight stops and quick profit-taking for this strategy.",
+      "keyFactors": [
+        "Stochastic RSI (K=97.09) extremely overbought",
+        "Bearish MACD crossover and negative histogram",
+        "EMA Short below EMA Long",
+        "Price below VWAP and Middle Bollinger Band",
+        "Low ADX and ATR indicating weak trend/volatility"
+      ],
+      "riskLevel": "MEDIUM",
+      "trend": "NEUTRAL-TO-BEARISH",
+      "trendStrength": 40,
+      "entry": 0.2504,
+      "stopLoss": 0.2514,
+      "takeProfit": 0.2484,
+      "riskReward": "2.00",
+      "slPercentage": 0.40479632587859343,
+      "tpPercentage": 0.8095926517571869,
+      "positionSize": {
+        "units": 9866,
+        "riskAmount": "10.00",
+        "notionalValue": "2470.38"
+      },
+      "entryStrategy": "Enter short on a confirmed bearish candle following the signal, or if price attempts to retest the Middle Bollinger Band (0.2510) and shows clear rejection. A tight stop loss should be placed just above the immediate consolidation high or slightly above the Middle Bollinger Band (e.g., 0.2512) to manage risk effectively due to the low ATR.",
+      "exitStrategy": "Target quick profits, aiming for the Lower Bollinger Band (0.2496) as an initial target, or a fixed percentage profit (e.g., 0.1-0.2%) given the very low ATR. Exit immediately if bullish momentum appears, the stop loss is hit, or if price shows signs of consolidation without further downside. Consider using a trailing stop to lock in profits.",
+      "timestamp": "2025-09-03T12:59:11.497Z",
+      "id": "signal_1756904351497"
+    },
+    {
+      "currentPrice": 0.2503,
+      "action": "SELL",
+      "confidence": 60,
+      "reasoning": "The market data for POPCATUSDT presents a short-term bearish outlook suitable for a SELL scalping signal. The MACD shows a clear bearish crossover with a negative histogram, indicating increasing downside momentum. Price is trading below both its short and long EMAs (0.2503 < 0.2503192 < 0.2505611) and significantly below the VWAP (0.25308137), suggesting bearish control in the immediate term. Furthermore, the Stochastic RSI is in heavily overbought territory (K=90.53, D=88.12), which typically precedes a price correction or reversal to the downside, aligning with a short opportunity. The CCI is also negative (-41.45), supporting bearish momentum. The current price is positioned below the Middle Bollinger Band (0.2510225), leaning towards a test of the Lower Band (0.24964169). While the 15min Supertrend is UP, this conflicts with the 15min EMA trend being DOWN, and the overall ADX indicates a weak trend, suggesting that any bearish move might be quick but not sustained. Given the confluence of these short-term bearish indicators, a quick short trade aiming for a small profit is warranted, but caution is advised due to low volatility (ATR) and conflicting longer-term signals, necessitating tight risk management.",
+      "keyFactors": [
+        "Stochastic RSI Overbought",
+        "MACD Bearish Crossover",
+        "Price Below EMAs & VWAP",
+        "Low ADX (Weak Trend)",
+        "Conflicting 15min Trends (EMA Down, Supertrend Up)"
+      ],
+      "riskLevel": "MEDIUM",
+      "trend": "BEARISH",
+      "trendStrength": 55,
+      "entry": 0.2503,
+      "stopLoss": 0.2514,
+      "takeProfit": 0.2482,
+      "riskReward": "2.00",
+      "slPercentage": 0.4201578106272411,
+      "tpPercentage": 0.8403156212544822,
+      "positionSize": {
+        "units": 9509,
+        "riskAmount": "10.00",
+        "notionalValue": "2380.06"
+      },
+      "entryStrategy": "Initiate a short position immediately at or slightly below the current price (0.2503), taking advantage of the immediate bearish momentum and overbought conditions for a quick scalp. A small partial entry could also be considered on any minor retest of the EMA Short (0.2503192) acting as resistance.",
+      "exitStrategy": "Set a tight Take Profit target around the Lower Bollinger Band (0.24964169) or a minor price dip below it, given the low ATR and the scalping nature. Place a strict Stop Loss just above the EMA Long (0.2505611) or the Middle Bollinger Band (0.2510225) to manage risk effectively for a quick exit if the bearish momentum fails or reverses.",
+      "timestamp": "2025-09-03T12:59:40.445Z",
+      "id": "signal_1756904380445"
+    },
+    {
+      "currentPrice": 0.2503,
+      "action": "HOLD",
+      "confidence": 40,
+      "reasoning": "Unable to determine clear trend from available data",
+      "keyFactors": [
+        "Insufficient data",
+        "Manual review recommended"
+      ],
+      "riskLevel": "HIGH",
+      "trend": "NEUTRAL",
+      "trendStrength": 50,
+      "timestamp": "2025-09-03T13:00:12.156Z",
+      "id": "signal_1756904412157"
+    },
+    {
+      "currentPrice": 0.2503,
+      "action": "HOLD",
+      "confidence": 40,
+      "reasoning": "Unable to determine clear trend from available data",
+      "keyFactors": [
+        "Insufficient data",
+        "Manual review recommended"
+      ],
+      "riskLevel": "HIGH",
+      "trend": "NEUTRAL",
+      "trendStrength": 50,
+      "timestamp": "2025-09-03T13:05:07.882Z",
+      "id": "signal_1756904707882"
     }
   ],
   "statistics": {
     "totalSignals": 100,
-    "buySignals": 49,
-    "sellSignals": 5,
-    "holdSignals": 46,
-    "averageConfidence": 75,
-    "lastCalculation": "2025-09-01T19:30:26.143Z"
+    "buySignals": 40,
+    "sellSignals": 8,
+    "holdSignals": 52,
+    "averageConfidence": 72.81,
+    "lastCalculation": "2025-09-03T13:05:07.882Z"
   },
-  "lastUpdated": "2025-09-01T19:30:26.143Z",
+  "lastUpdated": "2025-09-03T13:05:07.882Z",
   "botStatus": {
     "isRunning": true,
-    "lastSuccessfulRun": "2025-09-01T19:25:25.194Z"
+    "lastSuccessfulRun": "2025-09-03T13:00:12.170Z"
   }
 }

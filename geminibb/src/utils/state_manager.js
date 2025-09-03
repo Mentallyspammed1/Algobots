@@ -62,14 +62,27 @@ export async function loadState() {
         await fs.access(stateFilePath);
         const data = await fs.readFile(stateFilePath, 'utf8');
         logger.info("Successfully loaded state from file.");
-        const loaded = JSON.parse(data);
-        // Merge with default state to ensure new fields are present
-        // and convert financial strings back to Decimal objects for active use
+        let loaded = JSON.parse(data);
+
+        // IMPROVEMENT 16: Handle state versioning and migration
+        if (loaded._version === undefined || loaded._version < defaultState._version) {
+            logger.warn(`Migrating state from version ${loaded._version || 'N/A'} to ${defaultState._version}.`);
+            // This simple merge handles new fields, but for complex transformations
+            // (e.g., renaming a field, combining data), dedicated migration functions
+            // for each version increment would be needed here.
+            loaded = { ...defaultState, ...loaded, _version: defaultState._version }; // Apply default for missing, update version
+            // For example, if adding `openOrders` in v2:
+            // if (loaded._version < 2 && defaultState._version >= 2) {
+            //    loaded.openOrders = loaded.openOrders || [];
+            // }
+            // After migration, save the updated state
+            await saveState(getDecimalState(loaded)); // Save the migrated state immediately
+        }
+
         const mergedState = { ...defaultState, ...loaded };
         return getDecimalState(mergedState);
     } catch (error) {
-        logger.warn("No state file found or failed to read. Using default state.");
-        // Return default state with Decimal values initialized
+        logger.warn("No state file found or failed to read. Using default state.", error);
         return getDecimalState(defaultState);
     }
 }
