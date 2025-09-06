@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import chalk from 'chalk';
-import { logger } from './utils.js';
+import { logger, stripAnsi } from './utils.js';
 
 export default class LogParser {
   constructor(tradingSymbol, options = {}) {
@@ -180,7 +180,7 @@ export default class LogParser {
     let parseErrors = 0;
 
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+      const line = stripAnsi(lines[i]);
       
       try {
         // Check for new data block
@@ -223,6 +223,11 @@ export default class LogParser {
               const value = this.parseValue(match[1], key);
               if (value !== undefined) {
                 currentDataPoint[key] = value;
+                if (this.options.debugMode && key === 'currentPrice') {
+                  logger.debug(chalk.magenta(`[DEBUG] Line: ${line}`));
+                  logger.debug(chalk.magenta(`[DEBUG] Extracted currentPrice: ${value}`));
+                  logger.debug(chalk.magenta(`[DEBUG] currentDataPoint after currentPrice: ${JSON.stringify(currentDataPoint)}`));
+                }
               }
             }
           }

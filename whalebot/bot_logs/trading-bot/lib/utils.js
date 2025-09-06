@@ -74,6 +74,15 @@ class PerformanceTransport extends winston.transports.File {
 }
 
 // Configure enhanced logger
+
+// Strips ANSI escape codes from a string
+export const stripAnsi = (str) => {
+  if (typeof str !== 'string' || str.length === 0) {
+    return '';
+  }
+  return str.replace(/[\u001b\u009b][[()#;?]*.?[0-9;]*[0-9A-ORZcf-nqry=><]/g, '');
+};
+
 export const logger = winston.createLogger({
   levels: customLevels.levels,
   level: process.env.LOG_LEVEL || 'info',
