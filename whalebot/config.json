@@ -1,75 +1,61 @@
 {
-    "symbol": "POPCATUSDT",
+    "symbol": "TRUMPUSDT",
     "interval": "1",
     "loop_delay": 15,
-    "orderbook_limit": 100,
-    "signal_score_threshold": 1.2,
+    "orderbook_limit": 50,
+    "signal_score_threshold": 0.8,
     "volume_confirmation_multiplier": 1.2,
     "trade_management": {
         "enabled": true,
         "account_balance": 20.0,
-        "risk_per_trade_percent": 2.0,
-        "stop_loss_atr_multiple": 1.2,
-        "take_profit_atr_multiple": 0.8,
+        "risk_per_trade_percent": 1.0,
+        "stop_loss_atr_multiple": 0.5,
+        "take_profit_atr_multiple": 0.3,
         "max_open_positions": 2,
-        "order_precision": 8,
-        "price_precision": 8,
-        "slippage_percent": 0.001,
-        "trading_fee_percent": 0.0005
+        "order_precision": 5,
+        "price_precision": 3
     },
     "mtf_analysis": {
         "enabled": true,
         "higher_timeframes": [
-            "5",
-            "15"
+            "3",
+            "5"
         ],
         "trend_indicators": [
             "ema",
             "ehlers_supertrend"
         ],
-        "trend_period": 34,
+        "trend_period": 10,
         "mtf_request_delay_seconds": 0.5
     },
     "ml_enhancement": {
-        "enabled": false,
-        "model_path": "ml_model.pkl",
-        "retrain_on_startup": false,
-        "training_data_limit": 5000,
-        "prediction_lookahead": 12,
-        "profit_target_percent": 0.5,
-        "feature_lags": [
-            1,
-            2,
-            3,
-            5
-        ],
-        "cross_validation_folds": 5
+        "enabled": false
     },
     "indicator_settings": {
-        "atr_period": 12,
-        "ema_short_period": 5,
-        "ema_long_period": 8,
-        "rsi_period": 8,
-        "stoch_rsi_period": 10,
+        "atr_period": 14,
+        "ema_short_period": 9,
+        "ema_long_period": 21,
+        "rsi_period": 14,
+        "stoch_rsi_period": 14,
         "stoch_k_period": 3,
         "stoch_d_period": 3,
-        "bollinger_bands_period": 22,
-        "bollinger_bands_std_dev": 2.2,
-        "cci_period": 12,
-        "williams_r_period": 12,
-        "mfi_period": 7,
+        "bollinger_bands_period": 20,
+        "bollinger_bands_std_dev": 2.0,
+        "cci_period": 20,
+        "williams_r_period": 14,
+        "mfi_period": 14,
         "psar_acceleration": 0.02,
         "psar_max_acceleration": 0.2,
-        "sma_short_period": 5,
-        "sma_long_period": 12,
-        "fibonacci_window": 80,
-        "ehlers_fast_period": 8,
-        "ehlers_fast_multiplier": 1.2,
-        "ehlers_slow_period": 12,
-        "ehlers_slow_multiplier": 2.2,
-        "macd_fast_period": 3,
-        "macd_slow_period": 40,
-        "macd_signal_period": 89,
+        "sma_short_period": 10,
+        "sma_long_period": 50,
+        "fibonacci_window": 60,
+        "ehlers_fast_period": 10,
+        "ehlers_fast_multiplier": 2.0,
+        "ehlers_slow_period": 20,
+        "ehlers_slow_multiplier": 3.0,
+        "macd_fast_period": 12,
+        "macd_slow_period": 26,
+        "macd_signal_period": 9,
         "adx_period": 14,
         "ichimoku_tenkan_period": 9,
         "ichimoku_kijun_period": 26,
@@ -77,32 +63,20 @@
         "ichimoku_chikou_span_offset": 26,
         "obv_ema_period": 20,
         "cmf_period": 20,
-        "rsi_oversold": 33,
-        "rsi_overbought": 66,
-        "stoch_rsi_oversold": 15,
-        "stoch_rsi_overbought": 85,
+        "rsi_oversold": 30,
+        "rsi_overbought": 70,
+        "stoch_rsi_oversold": 20,
+        "stoch_rsi_overbought": 80,
         "cci_oversold": -100,
         "cci_overbought": 100,
-        "williams_r_oversold": -85,
-        "williams_r_overbought": -15,
+        "williams_r_oversold": -80,
+        "williams_r_overbought": -20,
         "mfi_oversold": 20,
         "mfi_overbought": 80,
         "volatility_index_period": 20,
-        "vwma_period": 10,
+        "vwma_period": 20,
         "volume_delta_period": 5,
-        "volume_delta_threshold": 0.2,
-        "kama_period": 10,
-        "kama_fast_period": 5,
-        "kama_slow_period": 30,
-        "relative_volume_period": 20,
-        "relative_volume_threshold": 1.5,
-        "market_structure_lookback_period": 20,
-        "dema_period": 14,
-        "keltner_period": 20,
-        "keltner_atr_multiplier": 2.0,
-        "roc_period": 12,
-        "roc_oversold": -5.0,
-        "roc_overbought": 5.0
+        "volume_delta_threshold": 0.2
     },
     "indicators": {
         "ema_alignment": true,
@@ -128,15 +102,7 @@
         "cmf": true,
         "volatility_index": true,
         "vwma": true,
-        "volume_delta": true,
-        "kaufman_ama": true,
-        "relative_volume": true,
-        "market_structure": true,
-        "dema": true,
-        "keltner_channels": true,
-        "roc": true,
-        "candlestick_patterns": true,
-        "fibonacci_pivot_points": true
+        "volume_delta": true
     },
     "weight_sets": {
         "default_scalping": {
@@ -158,15 +124,80 @@
             "mtf_trend_confluence": 0.32,
             "volatility_index_signal": 0.15,
             "vwma_cross": 0.15,
-            "volume_delta_signal": 0.1,
-            "kaufman_ama_cross": 0.2,
-            "relative_volume_confirmation": 0.1,
-            "market_structure_confluence": 0.25,
-            "dema_crossover": 0.18,
-            "keltner_breakout": 0.2,
-            "roc_signal": 0.12,
-            "candlestick_confirmation": 0.15,
-            "fibonacci_pivot_points_confluence": 0.2
+            "volume_delta_signal": 0.1
+        }
+    },
+    "execution": {
+        "use_pybit": true,
+        "testnet": false,
+        "account_type": "UNIFIED",
+        "category": "linear",
+        "position_mode": "ONE_WAY",
+        "tpsl_mode": "Partial",
+        "buy_leverage": "3",
+        "sell_leverage": "3",
+        "tp_trigger_by": "LastPrice",
+        "sl_trigger_by": "LastPrice",
+        "default_time_in_force": "GoodTillCancel",
+        "reduce_only_default": false,
+        "post_only_default": false,
+        "position_idx_overrides": {
+            "ONE_WAY": 0,
+            "HEDGE_BUY": 1,
+            "HEDGE_SELL": 2
+        },
+        "tp_scheme": {
+            "mode": "atr_multiples",
+            "targets": [
+                {
+                    "name": "TP1",
+                    "atr_multiple": 1.0,
+                    "size_pct": 0.4,
+                    "order_type": "Limit",
+                    "tif": "PostOnly",
+                    "post_only": true
+                },
+                {
+                    "name": "TP2",
+                    "atr_multiple": 1.5,
+                    "size_pct": 0.4,
+                    "order_type": "Limit",
+                    "tif": "IOC",
+                    "post_only": false
+                },
+                {
+                    "name": "TP3",
+                    "atr_multiple": 2.0,
+                    "size_pct": 0.2,
+                    "order_type": "Limit",
+                    "tif": "GoodTillCancel",
+                    "post_only": false
+                }
+            ]
+        },
+        "sl_scheme": {
+            "type": "atr_multiple",
+            "atr_multiple": 1.5,
+            "percent": 1.0,
+            "use_conditional_stop": true,
+            "stop_order_type": "Market"
+        },
+        "breakeven_after_tp1": {
+            "enabled": true,
+            "offset_type": "atr",
+            "offset_value": 0.1,
+            "lock_in_min_percent": 0,
+            "sl_trigger_by": "LastPrice"
+        },
+        "live_sync": {
+            "enabled": true,
+            "poll_ms": 2500,
+            "max_exec_fetch": 200,
+            "only_track_linked": true,
+            "heartbeat": {
+                "enabled": true,
+                "interval_ms": 5000
+            }
         }
     }
 }
