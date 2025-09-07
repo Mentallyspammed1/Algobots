@@ -1,11 +1,8 @@
-import hashlib
-import hmac
 import json
 import logging
 import os
 import sys
 import time
-import urllib.parse
 from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
@@ -14,11 +11,8 @@ from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
-import requests
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 # Scikit-learn is explicitly excluded as per user request.
 SKLEARN_AVAILABLE = False
@@ -110,6 +104,22 @@ ADX_STRONG_TREND_THRESHOLD = 25
 ADX_WEAK_TREND_THRESHOLD = 20
 MIN_DATA_POINTS_VWMA = 2
 MIN_DATA_POINTS_VOLATILITY = 2
+
+
+# --- Helper Functions for Precision ---
+def round_qty(qty: Decimal, qty_step: Decimal) -> Decimal:
+    """Rounds the quantity down to the nearest multiple of qty_step."""
+    if qty_step is None or qty_step.is_zero():
+        # Fallback for safety, though it should be set.
+        return qty.quantize(Decimal("1.000000"), rounding=ROUND_DOWN)
+    return (qty // qty_step) * qty_step
+
+
+def round_price(price: Decimal, price_precision: int) -> Decimal:
+    """Rounds the price to the correct number of decimal places."""
+    if price_precision < 0:
+        price_precision = 0
+    return price.quantize(Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN)
 
 
 # --- Configuration Management ---
@@ -374,46 +384,7 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
 
 
 # --- API Interaction & Live Trading ---
-def create_session() -> requests.Session:
-    """Create a requests session with retry logic."""
-    session = requests.Session()
-    retries = Retry(
-        total=MAX_API_RETRIES,
-        backoff_factor=RETRY_DELAY_SECONDS,
-        status_forcelist=[429, 500, 502, 503, 504],
-    )
-    session.mount("https://", HTTPAdapter(max_retries=retries))
-    return session
 
-
-def bybit_request(
-    method: Literal["GET", "POST"],
-    endpoint: str,
-    params: dict | None = None,
-    logger: logging.Logger | None = None,
-) -> dict | None:
-    """Send a public request to the Bybit API (for klines, tickers)."""
-    if logger is None:
-        logger = setup_logger("bybit_public_api")
-    session = create_session()
-    url = f"{BASE_URL}{endpoint}"
-    try:
-        response = session.get(
-            url, params=params, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT
-        )
-        response.raise_for_status()
-        data = response.json()
-        if data.get("retCode") != 0:
-            logger.error(
-                f"{NEON_RED}Bybit API Error: {data.get('retMsg')} (Code: {data.get('retCode')}){RESET}"
-            )
-            return None
-        return data
-    except requests.exceptions.RequestException as e:
-        logger.error(f"{NEON_RED}HTTP Request Error: {e}{RESET}")
-    except json.JSONDecodeError:
-        logger.error(f"{NEON_RED}Failed to decode JSON response.{RESET}")
-    return None
 
 
 class PybitTradingClient:
@@ -567,23 +538,38 @@ class PybitTradingClient:
             return None
 
 
-def fetch_current_price(symbol: str, logger: logging.Logger) -> Decimal | None:
-    """Fetch the current market price for a symbol."""
-    response = bybit_request(
-        "GET", "/v5/market/tickers", {"category": "linear", "symbol": symbol}, logger=logger
+def fetch_current_price(symbol: str, pybit_client: "PybitTradingClient", logger: logging.Logger) -> Decimal | None:
+    """Fetch the current market price for a symbol using PybitTradingClient."""
+    response = pybit_client.session.get_tickers(
+        category="linear", symbol=symbol
     )
-    if response and response.get("result", {}).get("list"):
+    if response and response.get("retCode") == 0 and response.get("result", {}).get("list"):
         return Decimal(response["result"]["list"][0]["lastPrice"])
     logger.warning(f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}")
     return None
 
 
+def fetch_instrument_info(symbol: str, pybit_client: "PybitTradingClient", logger: logging.Logger) -> dict | None:
+    """Fetch instrument info for a symbol using PybitTradingClient."""
+    response = pybit_client.session.get_instruments_info(
+        category="linear", symbol=symbol
+    )
+    if response and response.get("retCode") == 0 and response.get("result", {}).get("list"):
+        return response["result"]["list"][0]
+    logger.warning(f"{NEON_YELLOW}Could not fetch instrument info for {symbol}.{RESET}")
+    return None
+
+
 def fetch_klines(
-    symbol: str, interval: str, limit: int, logger: logging.Logger
+    symbol: str,
+    interval: str,
+    limit: int,
+    pybit_client: "PybitTradingClient",
+    logger: logging.Logger,
 ) -> pd.DataFrame | None:
     """Fetch kline data for a symbol and interval."""
     params = {"category": "linear", "symbol": symbol, "interval": interval, "limit": limit}
-    response = bybit_request("GET", "/v5/market/kline", params, logger=logger)
+    response = pybit_client.session.get_kline(**params)
     if response and response.get("result", {}).get("list"):
         df = pd.DataFrame(
             response["result"]["list"],
@@ -613,13 +599,12 @@ def fetch_klines(
     return None
 
 
-def fetch_orderbook(symbol: str, limit: int, logger: logging.Logger) -> dict | None:
+def fetch_orderbook(
+    symbol: str, limit: int, pybit_client: "PybitTradingClient", logger: logging.Logger
+) -> dict | None:
     """Fetch orderbook data for a symbol."""
-    response = bybit_request(
-        "GET",
-        "/v5/market/orderbook",
-        {"category": "linear", "symbol": symbol, "limit": limit},
-        logger=logger,
+    response = pybit_client.session.get_orderbook(
+        category="linear", symbol=symbol, limit=limit
     )
     if response and response.get("result"):
         return response["result"]
@@ -644,10 +629,40 @@ class PositionManager:
         self.open_positions: list[dict] = []
         self.trade_management_enabled = config["trade_management"]["enabled"]
         self.max_open_positions = config["trade_management"]["max_open_positions"]
+
+        # Initialize with config values, will be updated from exchange
         self.order_precision = config["trade_management"]["order_precision"]
         self.price_precision = config["trade_management"]["price_precision"]
+        self.qty_step = None
+
         self.pybit = pybit_client
         self.live = bool(config.get("execution", {}).get("use_pybit", False))
+        self._update_precision_from_exchange()
+
+    def _update_precision_from_exchange(self):
+        """Fetch and set precision settings from the exchange."""
+        self.logger.info(f"Fetching precision for {self.symbol}...")
+        info = fetch_instrument_info(self.symbol, self.pybit, self.logger)
+        if info:
+            if "lotSizeFilter" in info:
+                lot_size_filter = info["lotSizeFilter"]
+                self.qty_step = Decimal(str(lot_size_filter.get("qtyStep")))
+                if not self.qty_step.is_zero():
+                    self.order_precision = abs(self.qty_step.as_tuple().exponent)
+                self.logger.info(f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}")
+            else:
+                self.logger.warning(f"Could not find lotSizeFilter for {self.symbol}.")
+
+            if "priceFilter" in info:
+                price_filter = info["priceFilter"]
+                tick_size = Decimal(str(price_filter.get("tickSize")))
+                if not tick_size.is_zero():
+                    self.price_precision = abs(tick_size.as_tuple().exponent)
+                self.logger.info(f"Updated price_precision: {self.price_precision}")
+            else:
+                self.logger.warning(f"Could not find priceFilter for {self.symbol}.")
+        else:
+            self.logger.warning(f"Could not fetch precision for {self.symbol}. Using config values.")
 
     def _get_current_balance(self) -> Decimal:
         """Fetch current account balance from exchange if live, else use config."""
@@ -676,14 +691,31 @@ class PositionManager:
         risk_amount = account_balance * risk_per_trade_percent
         stop_loss_distance = atr_value * stop_loss_atr_multiple
         if stop_loss_distance <= 0:
+            self.logger.warning(f"{NEON_YELLOW}Stop loss distance is zero or negative. Cannot calculate order size.{RESET}")
             return Decimal("0")
         order_qty = (risk_amount / stop_loss_distance) / current_price
-        return round_qty(order_qty, self.order_precision)
+
+        if self.qty_step and self.qty_step > Decimal(0):
+            return round_qty(order_qty, self.qty_step)
+
+        # Fallback to old logic if qty_step is not available
+        self.logger.warning(f"{NEON_YELLOW}qty_step not available. Using legacy precision rounding.{RESET}")
+        return order_qty.quantize(
+            Decimal("1e-" + str(self.order_precision)), rounding=ROUND_DOWN
+        )
 
     def open_position(
         self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
     ) -> dict | None:
         """Open a new position, placing live orders if enabled."""
+        if self.live and self.pybit and self.pybit.enabled:
+            positions_resp = self.pybit.get_positions(self.symbol)
+            if positions_resp and self.pybit._ok(positions_resp):
+                pos_list = positions_resp.get("result", {}).get("list", [])
+                if any(p.get("size") and Decimal(p.get("size")) > 0 for p in pos_list):
+                    self.logger.warning(f"{NEON_YELLOW}Exchange position exists, aborting new position.{RESET}")
+                    return None
+
         if not self.trade_management_enabled or len(self.open_positions) >= self.max_open_positions:
             self.logger.info(
                 f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}"
@@ -739,7 +771,7 @@ class PositionManager:
                 self.logger.info(f"{NEON_GREEN}Live entry submitted: {entry_link}{RESET}")
                 if self.config["execution"]["tpsl_mode"] == "Partial":
                     targets = build_partial_tp_targets(
-                        signal, position["entry_price"], atr_value, order_qty, self.config
+                        signal, position["entry_price"], atr_value, order_qty, self.config, self.qty_step
                     )
                     batch = []
                     for t in targets:
@@ -762,9 +794,12 @@ class PositionManager:
                             payload["isPostOnly"] = True
                         batch.append(payload)
                     if batch:
-                        bresp = self.pybit.batch_place_orders(batch)
-                        if self.pybit._ok(bresp):
-                            self.logger.info(f"{NEON_GREEN}Placed {len(batch)} TP targets.{RESET}")
+                        for p in batch:
+                            resp_tp = self.pybit.place_order(**p)
+                            if resp_tp and resp_tp.get("retCode") == 0:
+                                self.logger.info(f"{NEON_GREEN}Placed individual TP target: {p.get('orderLinkId')}{RESET}")
+                            else:
+                                self.logger.error(f"{NEON_RED}Failed to place individual TP target: {p.get('orderLinkId')}. Error: {resp_tp.get('retMsg') if resp_tp else 'No response'}{RESET}")
                 if self.config["execution"]["sl_scheme"]["use_conditional_stop"]:
                     sl_link = f"{position['link_prefix']}_sl"
                     sresp = self.pybit.place_order(
@@ -2209,8 +2244,8 @@ class TradingAnalyzer:
                     level_name not in ["0.0%", "100.0%"]
                     and abs(current_price - level_price) / current_price
                     < Decimal("0.001")
+                    and len(self.df) > 1
                 ):
-                    if len(self.df) > 1:
                         if current_close > prev_close and current_close > level_price:
                             signal_score += weights.get("fibonacci_levels", 0) * 0.1
                         elif current_close < prev_close and current_close < level_price:
@@ -2394,8 +2429,7 @@ class TradingAnalyzer:
         if active_indicators.get("volatility_index", False):
             vol_idx = self._get_indicator_value("Volatility_Index")
             weight = weights.get("volatility_index_signal", 0.0)
-            if not pd.isna(vol_idx):
-                if len(self.df) > 2 and "Volatility_Index" in self.df.columns:
+            if not pd.isna(vol_idx) and len(self.df) > 2 and "Volatility_Index" in self.df.columns:
                     prev_vol_idx = self.df["Volatility_Index"].iloc[-2]
                     prev_prev_vol_idx = self.df["Volatility_Index"].iloc[-3]
 
@@ -2404,8 +2438,7 @@ class TradingAnalyzer:
                             signal_score += weight * 0.2
                         elif signal_score < 0:
                             signal_score -= weight * 0.2
-                    elif vol_idx < prev_vol_idx < prev_prev_vol_idx:
-                        if abs(signal_score) > 0:
+                    elif vol_idx < prev_vol_idx < prev_prev_vol_idx and abs(signal_score) > 0:
                             signal_score *= 0.8
 
         # --- VWMA Cross Scoring ---
@@ -2453,7 +2486,7 @@ class TradingAnalyzer:
                 signal_score += mtf_weight * normalized_mtf_score
 
         # --- Final Signal Determination ---
-        threshold = self.config["signal_score_threshold"]
+        threshold = max(self.config["signal_score_threshold"], 2.5) # Enforce higher threshold for profitability
         final_signal = "HOLD"
         if signal_score >= threshold:
             final_signal = "BUY"
@@ -2467,14 +2500,6 @@ class TradingAnalyzer:
 
 
 # --- Utilities for execution layer ---
-def round_qty(x: Decimal, precision: int) -> Decimal:
-    s = "0." + "0" * (precision - 1) + "1" if precision > 0 else "1"
-    return Decimal(x).quantize(Decimal(s), rounding=ROUND_DOWN)
-
-
-def round_price(x: Decimal, precision: int) -> Decimal:
-    s = "0." + "0" * (precision - 1) + "1" if precision > 0 else "1"
-    return Decimal(x).quantize(Decimal(s), rounding=ROUND_DOWN)
 
 
 def build_partial_tp_targets(
@@ -2483,14 +2508,14 @@ def build_partial_tp_targets(
     atr_value: Decimal,
     total_qty: Decimal,
     cfg: dict,
+    qty_step: Decimal,
 ) -> list[dict]:
     ex = cfg["execution"]
     tps = ex["tp_scheme"]["targets"]
     price_prec = cfg["trade_management"]["price_precision"]
-    order_prec = cfg["trade_management"]["order_precision"]
     out = []
     for i, t in enumerate(tps, start=1):
-        qty = round_qty(total_qty * Decimal(str(t["size_pct"])), order_prec)
+        qty = round_qty(total_qty * Decimal(str(t["size_pct"])), qty_step)
         if qty <= 0:
             continue
         if ex["tp_scheme"]["mode"] == "atr_multiples":
@@ -2505,13 +2530,16 @@ def build_partial_tp_targets(
                 if side == "BUY"
                 else entry_price * (1 - Decimal(str(t.get("percent", 1))) / 100)
             )
+        tif = t.get("tif", ex.get("default_time_in_force"))
+        if tif == "GoodTillCancel":
+            tif = "GTC"
         out.append(
             {
                 "name": t.get("name", f"TP{i}"),
                 "price": round_price(price, price_prec),
                 "qty": qty,
                 "order_type": t.get("order_type", "Limit"),
-                "tif": t.get("tif", ex.get("default_time_in_force")),
+                "tif": tif,
                 "post_only": bool(t.get("post_only", ex.get("post_only_default", False))),
                 "link_id_suffix": f"tp{i}",
             }
@@ -2524,6 +2552,10 @@ def compute_stop_loss_price(
 ) -> Decimal:
     ex = cfg["execution"]
     sch = ex["sl_scheme"]
+    price_prec = cfg["trade_management"]["price_precision"]
+    tick_size = Decimal(f"1e-{price_prec}")
+    buffer = tick_size * 5  # 5 ticks buffer
+
     if sch["type"] == "atr_multiple":
         sl = (
             entry_price - atr_value * Decimal(str(sch["atr_multiple"]))
@@ -2536,7 +2568,9 @@ def compute_stop_loss_price(
             if side == "BUY"
             else entry_price * (1 + Decimal(str(sch["percent"])) / 100)
         )
-    return round_price(sl, cfg["trade_management"]["price_precision"])
+
+    sl_with_buffer = sl - buffer if side == "BUY" else sl + buffer
+    return round_price(sl_with_buffer, price_prec)
 
 
 # --- Main Execution Logic ---
@@ -2577,12 +2611,12 @@ def main() -> None:
             logger.info(
                 f"{NEON_PURPLE}--- New Analysis Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
             )
-            current_price = fetch_current_price(config["symbol"], logger)
+            current_price = fetch_current_price(config["symbol"], pybit_client, logger)
             if current_price is None:
                 time.sleep(config["loop_delay"])
                 continue
 
-            df = fetch_klines(config["symbol"], config["interval"], 1000, logger)
+            df = fetch_klines(config["symbol"], config["interval"], 1000, pybit_client, logger)
             if df is None or df.empty:
                 time.sleep(config["loop_delay"])
                 continue
@@ -2590,13 +2624,13 @@ def main() -> None:
             orderbook_data = None
             if config["indicators"].get("orderbook_imbalance", False):
                 orderbook_data = fetch_orderbook(
-                    config["symbol"], config["orderbook_limit"], logger
+                    config["symbol"], config["orderbook_limit"], pybit_client, logger
                 )
 
             mtf_trends: dict[str, str] = {}
             if config["mtf_analysis"]["enabled"]:
                 for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
-                    htf_df = fetch_klines(config["symbol"], htf_interval, 1000, logger)
+                    htf_df = fetch_klines(config["symbol"], htf_interval, 1000, pybit_client, logger)
                     if htf_df is not None and not htf_df.empty:
                         for trend_ind in config["mtf_analysis"]["trend_indicators"]:
                             temp_htf_analyzer = TradingAnalyzer(
