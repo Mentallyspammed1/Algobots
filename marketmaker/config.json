@@ -1,0 +1,46 @@
+{
+  "testnet": true,
+  "dry_run": true,
+  "symbol": "BTCUSDT",
+  "credentials": {
+    "api_key": "",
+    "api_secret": ""
+  },
+  "risk_management": {
+    "take_profit_pct": 0.005,
+    "stop_loss_pct": 0.01,
+    "circuit_breaker_threshold": 5,
+    "circuit_breaker_cooldown_seconds": 300,
+    "max_position_size": 0.01
+  },
+  "order_management": {
+    "price_tolerance_ticks": 0.5,
+    "qty_tolerance_steps": 0,
+    "mid_drift_threshold_ticks": 0.5,
+    "base_order_size": 0.0005,
+    "order_tiers": 2,
+    "tier_spread_increase_bps": 1.0,
+    "tier_qty_multiplier": 0.5,
+    "order_reprice_delay_seconds": 1.0
+  },
+  "technical": {
+    "orderbook_depth": 500,
+    "vol_window": 60
+  },
+  "strategy": {
+    "base_spread_percentage": 0.0005,
+    "volatility_spread_multiplier": 100.0,
+    "inventory_skew_intensity": 0.1
+  },
+  "ta": {
+    "enabled": false,
+    "rsi_length": 14,
+    "ema_fast": 12,
+    "ema_slow": 26,
+    "bb_length": 20,
+    "bb_std": 2.0,
+    "signal_fair_value_bps": 2.0,
+    "bb_spread_mult": 0.5,
+    "qty_bias_max": 0.5
+  }
+}
