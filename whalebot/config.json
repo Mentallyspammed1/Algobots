@@ -199,5 +199,34 @@
                 "interval_ms": 5000
             }
         }
+    },
+    "cooldown_sec": 60,
+    "hysteresis_ratio": 0.85,
+    "risk_guardrails": {
+        "enabled": true,
+        "max_day_loss_pct": 3.0,
+        "max_drawdown_pct": 8.0,
+        "cooldown_after_kill_min": 120,
+        "spread_filter_bps": 5.0,
+        "ev_filter_enabled": true
+    },
+    "session_filter": {
+        "enabled": false,
+        "utc_allowed": [
+            [
+                "00:00",
+                "08:00"
+            ],
+            [
+                "13:00",
+                "20:00"
+            ]
+        ]
+    },
+    "pyramiding": {
+        "enabled": false,
+        "max_adds": 2,
+        "step_atr": 0.7,
+        "size_pct_of_initial": 0.5
     }
 }
