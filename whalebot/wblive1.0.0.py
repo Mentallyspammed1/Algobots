@@ -11,15 +11,16 @@ from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
+import indicators # Import the new indicators module
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
 
-# Scikit-learn is explicitly excluded as per user request.
-SKLEARN_AVAILABLE = False
+
 
 # Guarded import for the live trading client
 try:
     from pybit.unified_trading import HTTP as PybitHTTP
+    import pybit.exceptions
 
     PYBIT_AVAILABLE = True
 except ImportError:
@@ -95,15 +96,7 @@ RETRY_DELAY_SECONDS = 7
 REQUEST_TIMEOUT = 20
 LOOP_DELAY_SECONDS = 15
 
-# Magic Numbers as Constants
-MIN_DATA_POINTS_TR = 2
-MIN_DATA_POINTS_SMOOTHER = 2
-MIN_DATA_POINTS_OBV = 2
-MIN_DATA_POINTS_PSAR = 2
-ADX_STRONG_TREND_THRESHOLD = 25
-ADX_WEAK_TREND_THRESHOLD = 20
-MIN_DATA_POINTS_VWMA = 2
-MIN_DATA_POINTS_VOLATILITY = 2
+
 
 
 # --- Helper Functions for Precision ---
@@ -417,7 +410,7 @@ class PybitTradingClient:
             self.logger.info(
                 f"{NEON_GREEN}PyBit client initialized. Testnet={self.testnet}{RESET}"
             )
-        except Exception as e:
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.enabled = False
             self.session = None
             self.logger.error(f"{NEON_RED}Failed to init PyBit client: {e}{RESET}")
@@ -461,7 +454,10 @@ class PybitTradingClient:
             )
             self._log_api("set_leverage", resp)
             return self._ok(resp)
-        except Exception as e:
+        except pybit.exceptions.InvalidRequestError as e:
+            self.logger.error(f"{NEON_RED}set_leverage failed: {e}. Please check symbol, leverage, and account status.{RESET}")
+            return False
+        except pybit.exceptions.PybitHTTPException as e:
             self.logger.error(f"{NEON_RED}set_leverage exception: {e}{RESET}")
             return False
 
@@ -473,7 +469,7 @@ class PybitTradingClient:
             if symbol:
                 params["symbol"] = symbol
             return self.session.get_positions(**params)
-        except Exception as e:
+        except pybit.exceptions.FailedRequestError as e:
             self.logger.error(f"{NEON_RED}get_positions exception: {e}{RESET}")
             return None
 
@@ -485,7 +481,7 @@ class PybitTradingClient:
                 accountType=self.cfg["execution"].get("account_type", "UNIFIED"),
                 coin=coin,
             )
-        except Exception as e:
+        except pybit.exceptions.FailedRequestError as e:
             self.logger.error(f"{NEON_RED}get_wallet_balance exception: {e}{RESET}")
             return None
 
@@ -496,7 +492,7 @@ class PybitTradingClient:
             resp = self.session.place_order(**kwargs)
             self._log_api("place_order", resp)
             return resp
-        except Exception as e:
+        except pybit.exceptions.FailedRequestError as e:
             self.logger.error(f"{NEON_RED}place_order exception: {e}{RESET}")
             return None
 
@@ -509,7 +505,7 @@ class PybitTradingClient:
             )
             self._log_api("batch_place_order", resp)
             return resp
-        except Exception as e:
+        except pybit.exceptions.FailedRequestError as e:
             self.logger.error(f"{NEON_RED}batch_place_orders exception: {e}{RESET}")
             return None
 
@@ -522,7 +518,7 @@ class PybitTradingClient:
             )
             self._log_api("cancel_by_link_id", resp)
             return resp
-        except Exception as e:
+        except pybit.exceptions.FailedRequestError as e:
             self.logger.error(f"{NEON_RED}cancel_by_link_id exception: {e}{RESET}")
             return None
 
@@ -533,83 +529,108 @@ class PybitTradingClient:
             return self.session.get_executions(
                 category=self.category, symbol=symbol, startTime=start_time_ms, limit=limit
             )
-        except Exception as e:
+        except pybit.exceptions.FailedRequestError as e:
             self.logger.error(f"{NEON_RED}get_executions exception: {e}{RESET}")
             return None
 
 
-def fetch_current_price(symbol: str, pybit_client: "PybitTradingClient", logger: logging.Logger) -> Decimal | None:
-    """Fetch the current market price for a symbol using PybitTradingClient."""
-    response = pybit_client.session.get_tickers(
-        category="linear", symbol=symbol
-    )
-    if response and response.get("retCode") == 0 and response.get("result", {}).get("list"):
-        return Decimal(response["result"]["list"][0]["lastPrice"])
-    logger.warning(f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}")
-    return None
-
-
-def fetch_instrument_info(symbol: str, pybit_client: "PybitTradingClient", logger: logging.Logger) -> dict | None:
-    """Fetch instrument info for a symbol using PybitTradingClient."""
-    response = pybit_client.session.get_instruments_info(
-        category="linear", symbol=symbol
-    )
-    if response and response.get("retCode") == 0 and response.get("result", {}).get("list"):
-        return response["result"]["list"][0]
-    logger.warning(f"{NEON_YELLOW}Could not fetch instrument info for {symbol}.{RESET}")
-    return None
-
-
-def fetch_klines(
-    symbol: str,
-    interval: str,
-    limit: int,
-    pybit_client: "PybitTradingClient",
-    logger: logging.Logger,
-) -> pd.DataFrame | None:
-    """Fetch kline data for a symbol and interval."""
-    params = {"category": "linear", "symbol": symbol, "interval": interval, "limit": limit}
-    response = pybit_client.session.get_kline(**params)
-    if response and response.get("result", {}).get("list"):
-        df = pd.DataFrame(
-            response["result"]["list"],
-            columns=[
-                "start_time",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "turnover",
-            ],
-        )
-        df["start_time"] = pd.to_datetime(
-            df["start_time"].astype(int), unit="ms", utc=True
-        ).dt.tz_convert(TIMEZONE)
-        for col in ["open", "high", "low", "close", "volume", "turnover"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-        df.set_index("start_time", inplace=True)
-        df.sort_index(inplace=True)
-        if df.empty:
+    def fetch_current_price(self, symbol: str) -> Decimal | None:
+        """Fetch the current market price for a symbol using PybitTradingClient."""
+        if not self.enabled:
             return None
-        return df
-    logger.warning(
-        f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}.{RESET}"
-    )
-    return None
+        try:
+            response = self.session.get_tickers(
+                category="linear", symbol=symbol
+            )
+            if response and response.get("retCode") == 0 and response.get("result", {}).get("list"):
+                return Decimal(response["result"]["list"][0]["lastPrice"])
+            self.logger.warning(f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}")
+            return None
+        except pybit.exceptions.FailedRequestError as e:
+            self.logger.error(f"{NEON_RED}fetch_current_price exception: {e}{RESET}")
+            return None
 
 
-def fetch_orderbook(
-    symbol: str, limit: int, pybit_client: "PybitTradingClient", logger: logging.Logger
-) -> dict | None:
-    """Fetch orderbook data for a symbol."""
-    response = pybit_client.session.get_orderbook(
-        category="linear", symbol=symbol, limit=limit
-    )
-    if response and response.get("result"):
-        return response["result"]
-    logger.warning(f"{NEON_YELLOW}Could not fetch orderbook for {symbol}.{RESET}")
-    return None
+    def fetch_instrument_info(self, symbol: str) -> dict | None:
+        """Fetch instrument info for a symbol using PybitTradingClient."""
+        if not self.enabled:
+            return None
+        try:
+            response = self.session.get_instruments_info(
+                category="linear", symbol=symbol
+            )
+            if response and response.get("retCode") == 0 and response.get("result", {}).get("list"):
+                return response["result"]["list"][0]
+            self.logger.warning(f"{NEON_YELLOW}Could not fetch instrument info for {symbol}.{RESET}")
+            return None
+        except pybit.exceptions.FailedRequestError as e:
+            self.logger.error(f"{NEON_RED}fetch_instrument_info exception: {e}{RESET}")
+            return None
+
+
+    def fetch_klines(
+        self,
+        symbol: str,
+        interval: str,
+        limit: int,
+    ) -> pd.DataFrame | None:
+        """Fetch kline data for a symbol and interval."""
+        if not self.enabled:
+            return None
+        try:
+            params = {"category": "linear", "symbol": symbol, "interval": interval, "limit": limit}
+            response = self.session.get_kline(**params)
+            if response and response.get("result", {}).get("list"):
+                df = pd.DataFrame(
+                    response["result"]["list"],
+                    columns=[
+                        "start_time",
+                        "open",
+                        "high",
+                        "low",
+                        "close",
+                        "volume",
+                        "turnover",
+                    ],
+                )
+                df["start_time"] = pd.to_datetime(
+                    df["start_time"].astype(int), unit="ms", utc=True
+                ).dt.tz_convert(TIMEZONE)
+                for col in ["open", "high", "low", "close", "volume", "turnover"]:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+                df.set_index("start_time", inplace=True)
+                df.sort_index(inplace=True)
+                if df.empty:
+                    return None
+                return df
+            self.logger.warning(
+                f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}.{RESET}"
+            )
+            return None
+        except pybit.exceptions.FailedRequestError as e:
+            self.logger.error(f"{NEON_RED}fetch_klines exception: {e}{RESET}")
+            return None
+
+
+    def fetch_orderbook(
+        self,
+        symbol: str,
+        limit: int,
+    ) -> dict | None:
+        """Fetch orderbook data for a symbol."""
+        if not self.enabled:
+            return None
+        try:
+            response = self.session.get_orderbook(
+                category="linear", symbol=symbol, limit=limit
+            )
+            if response and response.get("result"):
+                return response["result"]
+            self.logger.warning(f"{NEON_YELLOW}Could not fetch orderbook for {symbol}.{RESET}")
+            return None
+        except pybit.exceptions.FailedRequestError as e:
+            self.logger.error(f"{NEON_RED}fetch_orderbook exception: {e}{RESET}")
+            return None
 
 
 # --- Position Management ---
@@ -641,8 +662,11 @@ class PositionManager:
 
     def _update_precision_from_exchange(self):
         """Fetch and set precision settings from the exchange."""
+        if not self.pybit or not self.pybit.enabled:
+            self.logger.warning(f"Pybit client not enabled. Cannot fetch precision for {self.symbol}. Using config values.")
+            return
         self.logger.info(f"Fetching precision for {self.symbol}...")
-        info = fetch_instrument_info(self.symbol, self.pybit, self.logger)
+        info = self.pybit.fetch_instrument_info(self.symbol)
         if info:
             if "lotSizeFilter" in info:
                 lot_size_filter = info["lotSizeFilter"]
@@ -728,20 +752,8 @@ class PositionManager:
             )
             return None
 
-        stop_loss = compute_stop_loss_price(signal, current_price, atr_value, self.config)
-        take_profit = (
-            current_price
-            + (
-                atr_value
-                * Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
-            )
-            if signal == "BUY"
-            else current_price
-            - (
-                atr_value
-                * Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
-            )
-        )
+        stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
+        take_profit = self._calculate_take_profit_price(signal, current_price, atr_value)
 
         position = {
             "entry_time": datetime.now(TIMEZONE),
@@ -874,29 +886,53 @@ class PerformanceTracker:
         self.logger = logger
         self.trades: list[dict] = []
         self.total_pnl = Decimal("0")
+        self.gross_profit = Decimal("0")
+        self.gross_loss = Decimal("0")
         self.wins = 0
         self.losses = 0
+        self.peak_pnl = Decimal("0")
+        self.max_drawdown = Decimal("0")
 
     def record_trade(self, position: dict, pnl: Decimal):
         self.trades.append({**position, "pnl": pnl})
         self.total_pnl += pnl
         if pnl > 0:
             self.wins += 1
+            self.gross_profit += pnl
         else:
             self.losses += 1
+            self.gross_loss += abs(pnl)
+        
+        if self.total_pnl > self.peak_pnl:
+            self.peak_pnl = self.total_pnl
+        
+        drawdown = self.peak_pnl - self.total_pnl
+        if drawdown > self.max_drawdown:
+            self.max_drawdown = drawdown
+
         self.logger.info(
-            f"{NEON_CYAN}Trade recorded. PnL: {pnl:.2f}. Total PnL: {self.total_pnl:.2f}{RESET}"
+            f"{NEON_CYAN}Trade recorded. PnL: {pnl:.4f}. Total PnL: {self.total_pnl:.4f}{RESET}"
         )
 
     def get_summary(self) -> dict:
-        total = len(self.trades)
-        win_rate = (self.wins / total) * 100 if total > 0 else 0
+        total_trades = len(self.trades)
+        win_rate = (self.wins / total_trades) * 100 if total_trades > 0 else 0
+        profit_factor = self.gross_profit / self.gross_loss if self.gross_loss > 0 else Decimal("inf")
+        avg_win = self.gross_profit / self.wins if self.wins > 0 else Decimal("0")
+        avg_loss = self.gross_loss / self.losses if self.losses > 0 else Decimal("0")
+
         return {
-            "total_trades": total,
-            "total_pnl": self.total_pnl,
+            "total_trades": total_trades,
+            "total_pnl": f"{self.total_pnl:.4f}",
+            "gross_profit": f"{self.gross_profit:.4f}",
+            "gross_loss": f"{self.gross_loss:.4f}",
+            "profit_factor": f"{profit_factor:.2f}",
+            "max_drawdown": f"{self.max_drawdown:.4f}",
             "wins": self.wins,
             "losses": self.losses,
             "win_rate": f"{win_rate:.2f}%",
+            "avg_win": f"{avg_win:.4f}",
+            "avg_loss": f"{avg_loss:.4f}",
         }
 
 
@@ -973,7 +1009,7 @@ class ExchangeExecutionSync:
             )
             if self.pybit._ok(sresp):
                 self.logger.info(f"{NEON_GREEN}Moved SL to breakeven at {new_sl}.{RESET}")
-        except Exception as e:
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(f"{NEON_RED}Breakeven move exception: {e}{RESET}")
 
     def poll(self):
@@ -1046,7 +1082,7 @@ class ExchangeExecutionSync:
             self.pm.open_positions = [
                 p for p in self.pm.open_positions if p.get("status") == "OPEN"
             ]
-        except Exception as e:
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(f"{NEON_RED}Execution sync error: {e}{RESET}")
 
 
@@ -1104,7 +1140,7 @@ class PositionHeartbeat:
                     "symbol": self.symbol,
                     "side": side,
                     "entry_price": round_price(avg_price, self.pm.price_precision),
-                    "qty": round_qty(abs(net_qty), self.pm.order_precision),
+                    "qty": round_qty(abs(net_qty), self.pm.qty_step),
                     "status": "OPEN",
                     "link_prefix": f"hb_{int(time.time()*1000)}",
                 }
@@ -1112,7 +1148,7 @@ class PositionHeartbeat:
                 self.logger.info(
                     f"{NEON_YELLOW}Heartbeat: Created synthetic local position.{RESET}"
                 )
-        except Exception as e:
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(f"{NEON_RED}Heartbeat error: {e}{RESET}")
 
 
@@ -1151,16 +1187,24 @@ class TradingAnalyzer:
             return
         self._calculate_all_indicators()
         if self.config["indicators"].get("fibonacci_levels", False):
-            self.calculate_fibonacci_levels()
+            fib_levels = indicators.calculate_fibonacci_levels(self.df, self.indicator_settings["fibonacci_window"])
+            if fib_levels:
+                self.fib_levels = fib_levels
+                self.logger.debug(f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}")
+            else:
+                self.logger.warning(f"{NEON_YELLOW}[{self.symbol}] Fibonacci levels could not be calculated.{RESET}")
 
     def _safe_calculate(
-        self, func: callable, name: str, min_data_points: int = 0, *args, **kwargs
+        self, func: callable, name: str, *args, **kwargs
     ) -> Any | None:
         """Safely calculate indicators and log errors."""
-        if len(self.df) < min_data_points:
-            return None
         try:
-            result = func(*args, **kwargs)
+            # Pass self.df as the first argument if the function expects a DataFrame
+            if 'df' in func.__code__.co_varnames and func.__code__.co_varnames[0] == 'df':
+                result = func(self.df, *args, **kwargs)
+            else:
+                result = func(*args, **kwargs)
+
             is_empty = (
                 result is None
                 or (isinstance(result, pd.Series) and result.empty)
@@ -1176,7 +1220,7 @@ class TradingAnalyzer:
                     f"{NEON_YELLOW}[{self.symbol}] Indicator '{name}' returned empty.{RESET}"
                 )
             return result if not is_empty else None
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, IndexError, Exception) as e:
             self.logger.error(
                 f"{NEON_RED}[{self.symbol}] Error calculating '{name}': {e}{RESET}"
             )
@@ -1191,17 +1235,17 @@ class TradingAnalyzer:
         # SMA
         if cfg["indicators"].get("sma_10", False):
             self.df["SMA_10"] = self._safe_calculate(
-                lambda: self.df["close"].rolling(window=isd["sma_short_period"]).mean(),
+                indicators.calculate_sma,
                 "SMA_10",
-                min_data_points=isd["sma_short_period"],
+                period=isd["sma_short_period"],
             )
             if self.df["SMA_10"] is not None and not self.df["SMA_10"].empty:
                 self.indicator_values["SMA_10"] = self.df["SMA_10"].iloc[-1]
         if cfg["indicators"].get("sma_trend_filter", False):
             self.df["SMA_Long"] = self._safe_calculate(
-                lambda: self.df["close"].rolling(window=isd["sma_long_period"]).mean(),
+                indicators.calculate_sma,
                 "SMA_Long",
-                min_data_points=isd["sma_long_period"],
+                period=isd["sma_long_period"],
             )
             if self.df["SMA_Long"] is not None and not self.df["SMA_Long"].empty:
                 self.indicator_values["SMA_Long"] = self.df["SMA_Long"].iloc[-1]
@@ -1209,18 +1253,14 @@ class TradingAnalyzer:
         # EMA
         if cfg["indicators"].get("ema_alignment", False):
             self.df["EMA_Short"] = self._safe_calculate(
-                lambda: self.df["close"]
-                .ewm(span=isd["ema_short_period"], adjust=False)
-                .mean(),
+                indicators.calculate_ema,
                 "EMA_Short",
-                min_data_points=isd["ema_short_period"],
+                period=isd["ema_short_period"],
             )
             self.df["EMA_Long"] = self._safe_calculate(
-                lambda: self.df["close"]
-                .ewm(span=isd["ema_long_period"], adjust=False)
-                .mean(),
+                indicators.calculate_ema,
                 "EMA_Long",
-                min_data_points=isd["ema_long_period"],
+                period=isd["ema_long_period"],
             )
             if self.df["EMA_Short"] is not None and not self.df["EMA_Short"].empty:
                 self.indicator_values["EMA_Short"] = self.df["EMA_Short"].iloc[-1]
@@ -1229,12 +1269,12 @@ class TradingAnalyzer:
 
         # ATR
         self.df["TR"] = self._safe_calculate(
-            self.calculate_true_range, "TR", min_data_points=MIN_DATA_POINTS_TR
+            indicators.calculate_true_range, "TR"
         )
         self.df["ATR"] = self._safe_calculate(
-            lambda: self.df["TR"].ewm(span=isd["atr_period"], adjust=False).mean(),
+            indicators.calculate_atr,
             "ATR",
-            min_data_points=isd["atr_period"],
+            period=isd["atr_period"],
         )
         if self.df["ATR"] is not None and not self.df["ATR"].empty:
             self.indicator_values["ATR"] = self.df["ATR"].iloc[-1]
@@ -1242,9 +1282,8 @@ class TradingAnalyzer:
         # RSI
         if cfg["indicators"].get("rsi", False):
             self.df["RSI"] = self._safe_calculate(
-                self.calculate_rsi,
+                indicators.calculate_rsi,
                 "RSI",
-                min_data_points=isd["rsi_period"] + 1,
                 period=isd["rsi_period"],
             )
             if self.df["RSI"] is not None and not self.df["RSI"].empty:
@@ -1253,11 +1292,8 @@ class TradingAnalyzer:
         # Stochastic RSI
         if cfg["indicators"].get("stoch_rsi", False):
             stoch_rsi_k, stoch_rsi_d = self._safe_calculate(
-                self.calculate_stoch_rsi,
+                indicators.calculate_stoch_rsi,
                 "StochRSI",
-                min_data_points=isd["stoch_rsi_period"]
-                + isd["stoch_d_period"]
-                + isd["stoch_k_period"],
                 period=isd["stoch_rsi_period"],
                 k_period=isd["stoch_k_period"],
                 d_period=isd["stoch_d_period"],
@@ -1272,9 +1308,8 @@ class TradingAnalyzer:
         # Bollinger Bands
         if cfg["indicators"].get("bollinger_bands", False):
             bb_upper, bb_middle, bb_lower = self._safe_calculate(
-                self.calculate_bollinger_bands,
+                indicators.calculate_bollinger_bands,
                 "BollingerBands",
-                min_data_points=isd["bollinger_bands_period"],
                 period=isd["bollinger_bands_period"],
                 std_dev=isd["bollinger_bands_std_dev"],
             )
@@ -1291,9 +1326,8 @@ class TradingAnalyzer:
         # CCI
         if cfg["indicators"].get("cci", False):
             self.df["CCI"] = self._safe_calculate(
-                self.calculate_cci,
+                indicators.calculate_cci,
                 "CCI",
-                min_data_points=isd["cci_period"],
                 period=isd["cci_period"],
             )
             if self.df["CCI"] is not None and not self.df["CCI"].empty:
@@ -1302,9 +1336,8 @@ class TradingAnalyzer:
         # Williams %R
         if cfg["indicators"].get("wr", False):
             self.df["WR"] = self._safe_calculate(
-                self.calculate_williams_r,
+                indicators.calculate_williams_r,
                 "WR",
-                min_data_points=isd["williams_r_period"],
                 period=isd["williams_r_period"],
             )
             if self.df["WR"] is not None and not self.df["WR"].empty:
@@ -1313,9 +1346,8 @@ class TradingAnalyzer:
         # MFI
         if cfg["indicators"].get("mfi", False):
             self.df["MFI"] = self._safe_calculate(
-                self.calculate_mfi,
+                indicators.calculate_mfi,
                 "MFI",
-                min_data_points=isd["mfi_period"] + 1,
                 period=isd["mfi_period"],
             )
             if self.df["MFI"] is not None and not self.df["MFI"].empty:
@@ -1324,9 +1356,8 @@ class TradingAnalyzer:
         # OBV
         if cfg["indicators"].get("obv", False):
             obv_val, obv_ema = self._safe_calculate(
-                self.calculate_obv,
+                indicators.calculate_obv,
                 "OBV",
-                min_data_points=isd["obv_ema_period"],
                 ema_period=isd["obv_ema_period"],
             )
             if obv_val is not None and not obv_val.empty:
@@ -1339,9 +1370,8 @@ class TradingAnalyzer:
         # CMF
         if cfg["indicators"].get("cmf", False):
             cmf_val = self._safe_calculate(
-                self.calculate_cmf,
+                indicators.calculate_cmf,
                 "CMF",
-                min_data_points=isd["cmf_period"],
                 period=isd["cmf_period"],
             )
             if cmf_val is not None and not cmf_val.empty:
@@ -1352,14 +1382,8 @@ class TradingAnalyzer:
         if cfg["indicators"].get("ichimoku_cloud", False):
             tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span = (
                 self._safe_calculate(
-                    self.calculate_ichimoku_cloud,
+                    indicators.calculate_ichimoku_cloud,
                     "IchimokuCloud",
-                    min_data_points=max(
-                        isd["ichimoku_tenkan_period"],
-                        isd["ichimoku_kijun_period"],
-                        isd["ichimoku_senkou_span_b_period"],
-                    )
-                    + isd["ichimoku_chikou_span_offset"],
                     tenkan_period=isd["ichimoku_tenkan_period"],
                     kijun_period=isd["ichimoku_kijun_period"],
                     senkou_span_b_period=isd["ichimoku_senkou_span_b_period"],
@@ -1385,9 +1409,8 @@ class TradingAnalyzer:
         # PSAR
         if cfg["indicators"].get("psar", False):
             psar_val, psar_dir = self._safe_calculate(
-                self.calculate_psar,
+                indicators.calculate_psar,
                 "PSAR",
-                min_data_points=MIN_DATA_POINTS_PSAR,
                 acceleration=isd["psar_acceleration"],
                 max_acceleration=isd["psar_max_acceleration"],
             )
@@ -1401,7 +1424,7 @@ class TradingAnalyzer:
         # VWAP (requires volume and turnover, which are in df)
         if cfg["indicators"].get("vwap", False):
             self.df["VWAP"] = self._safe_calculate(
-                self.calculate_vwap, "VWAP", min_data_points=1
+                indicators.calculate_vwap, "VWAP",
             )
             if self.df["VWAP"] is not None and not self.df["VWAP"].empty:
                 self.indicator_values["VWAP"] = self.df["VWAP"].iloc[-1]
@@ -1409,9 +1432,8 @@ class TradingAnalyzer:
         # --- Ehlers SuperTrend Calculation ---
         if cfg["indicators"].get("ehlers_supertrend", False):
             st_fast_result = self._safe_calculate(
-                self.calculate_ehlers_supertrend,
+                indicators.calculate_ehlers_supertrend,
                 "EhlersSuperTrendFast",
-                min_data_points=isd["ehlers_fast_period"] * 3,
                 period=isd["ehlers_fast_period"],
                 multiplier=isd["ehlers_fast_multiplier"],
             )
@@ -1426,9 +1448,8 @@ class TradingAnalyzer:
                 ].iloc[-1]
 
             st_slow_result = self._safe_calculate(
-                self.calculate_ehlers_supertrend,
+                indicators.calculate_ehlers_supertrend,
                 "EhlersSuperTrendSlow",
-                min_data_points=isd["ehlers_slow_period"] * 3,
                 period=isd["ehlers_slow_period"],
                 multiplier=isd["ehlers_slow_multiplier"],
             )
@@ -1445,9 +1466,8 @@ class TradingAnalyzer:
         # MACD
         if cfg["indicators"].get("macd", False):
             macd_line, signal_line, histogram = self._safe_calculate(
-                self.calculate_macd,
+                indicators.calculate_macd,
                 "MACD",
-                min_data_points=isd["macd_slow_period"] + isd["macd_signal_period"],
                 fast_period=isd["macd_fast_period"],
                 slow_period=isd["macd_slow_period"],
                 signal_period=isd["macd_signal_period"],
@@ -1465,9 +1485,8 @@ class TradingAnalyzer:
         # ADX
         if cfg["indicators"].get("adx", False):
             adx_val, plus_di, minus_di = self._safe_calculate(
-                self.calculate_adx,
+                indicators.calculate_adx,
                 "ADX",
-                min_data_points=isd["adx_period"] * 2,
                 period=isd["adx_period"],
             )
             if adx_val is not None and not adx_val.empty:
@@ -1484,9 +1503,8 @@ class TradingAnalyzer:
         # Volatility Index
         if cfg["indicators"].get("volatility_index", False):
             self.df["Volatility_Index"] = self._safe_calculate(
-                self.calculate_volatility_index,
+                indicators.calculate_volatility_index,
                 "Volatility_Index",
-                min_data_points=isd["volatility_index_period"],
                 period=isd["volatility_index_period"],
             )
             if self.df["Volatility_Index"] is not None and not self.df["Volatility_Index"].empty:
@@ -1497,9 +1515,8 @@ class TradingAnalyzer:
         # VWMA
         if cfg["indicators"].get("vwma", False):
             self.df["VWMA"] = self._safe_calculate(
-                self.calculate_vwma,
+                indicators.calculate_vwma,
                 "VWMA",
-                min_data_points=isd["vwma_period"],
                 period=isd["vwma_period"],
             )
             if self.df["VWMA"] is not None and not self.df["VWMA"].empty:
@@ -1508,9 +1525,8 @@ class TradingAnalyzer:
         # Volume Delta
         if cfg["indicators"].get("volume_delta", False):
             self.df["Volume_Delta"] = self._safe_calculate(
-                self.calculate_volume_delta,
+                indicators.calculate_volume_delta,
                 "Volume_Delta",
-                min_data_points=isd["volume_delta_period"],
                 period=isd["volume_delta_period"],
             )
             if self.df["Volume_Delta"] is not None and not self.df["Volume_Delta"].empty:
@@ -1523,499 +1539,45 @@ class TradingAnalyzer:
                 f"{NEON_YELLOW}DataFrame empty after indicator calculations.{RESET}"
             )
 
-    def calculate_true_range(self) -> pd.Series:
-        """Calculate True Range (TR)."""
-        if len(self.df) < MIN_DATA_POINTS_TR:
-            return pd.Series(np.nan, index=self.df.index)
-        high_low = self.df["high"] - self.df["low"]
-        high_prev_close = (self.df["high"] - self.df["close"].shift()).abs()
-        low_prev_close = (self.df["low"] - self.df["close"].shift()).abs()
-        return pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(
-            axis=1
-        )
-
-    def calculate_super_smoother(self, series: pd.Series, period: int) -> pd.Series:
-        """Apply Ehlers SuperSmoother filter to reduce lag and noise."""
-        if period <= 0 or len(series) < MIN_DATA_POINTS_SMOOTHER:
-            return pd.Series(np.nan, index=series.index)
-
-        series = pd.to_numeric(series, errors="coerce").dropna()
-        if len(series) < MIN_DATA_POINTS_SMOOTHER:
-            return pd.Series(np.nan, index=series.index)
-
-        a1 = np.exp(-np.sqrt(2) * np.pi / period)
-        b1 = 2 * a1 * np.cos(np.sqrt(2) * np.pi / period)
-        c1 = 1 - b1 + a1**2
-        c2 = b1 - 2 * a1**2
-        c3 = a1**2
-
-        filt = pd.Series(0.0, index=series.index)
-        if len(series) >= 1:
-            filt.iloc[0] = series.iloc[0]
-        if len(series) >= 2:
-            filt.iloc[1] = (series.iloc[0] + series.iloc[1]) / 2
-
-        for i in range(2, len(series)):
-            filt.iloc[i] = (
-                (c1 / 2) * (series.iloc[i] + series.iloc[i - 1])
-                + c2 * filt.iloc[i - 1]
-                - c3 * filt.iloc[i - 2]
-            )
-        return filt.reindex(self.df.index)
-
-    def calculate_ehlers_supertrend(
-        self, period: int, multiplier: float
-    ) -> pd.DataFrame | None:
-        """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
-        if len(self.df) < period * 3:
-            return None
-
-        df_copy = self.df.copy()
-
-        hl2 = (df_copy["high"] + df_copy["low"]) / 2
-        smoothed_price = self.calculate_super_smoother(hl2, period)
-
-        tr = self.calculate_true_range()
-        smoothed_atr = self.calculate_super_smoother(tr, period)
-
-        df_copy["smoothed_price"] = smoothed_price
-        df_copy["smoothed_atr"] = smoothed_atr
-
-        df_copy.dropna(subset=["smoothed_price", "smoothed_atr"], inplace=True)
-        if df_copy.empty:
-            return None
-
-        upper_band = df_copy["smoothed_price"] + multiplier * df_copy["smoothed_atr"]
-        lower_band = df_copy["smoothed_price"] - multiplier * df_copy["smoothed_atr"]
-
-        direction = pd.Series(0, index=df_copy.index, dtype=int)
-        supertrend = pd.Series(np.nan, index=df_copy.index)
-
-        first_valid_idx_val = smoothed_price.first_valid_index()
-        if first_valid_idx_val is None:
-            return None
-        first_valid_idx = df_copy.index.get_loc(first_valid_idx_val)
-        if first_valid_idx >= len(df_copy):
-            return None
-
-        if df_copy["close"].iloc[first_valid_idx] > upper_band.iloc[first_valid_idx]:
-            direction.iloc[first_valid_idx] = 1
-            supertrend.iloc[first_valid_idx] = lower_band.iloc[first_valid_idx]
-        elif (
-            df_copy["close"].iloc[first_valid_idx] < lower_band.iloc[first_valid_idx]
-        ):
-            direction.iloc[first_valid_idx] = -1
-            supertrend.iloc[first_valid_idx] = upper_band.iloc[first_valid_idx]
-        else:
-            direction.iloc[first_valid_idx] = 0
-            supertrend.iloc[first_valid_idx] = lower_band.iloc[first_valid_idx]
-
-        for i in range(first_valid_idx + 1, len(df_copy)):
-            prev_direction = direction.iloc[i - 1]
-            prev_supertrend = supertrend.iloc[i - 1]
-            curr_close = df_copy["close"].iloc[i]
-
-            if prev_direction == 1:
-                if curr_close < prev_supertrend:
-                    direction.iloc[i] = -1
-                    supertrend.iloc[i] = upper_band.iloc[i]
-                else:
-                    direction.iloc[i] = 1
-                    supertrend.iloc[i] = max(lower_band.iloc[i], prev_supertrend)
-            elif prev_direction == -1:
-                if curr_close > prev_supertrend:
-                    direction.iloc[i] = 1
-                    supertrend.iloc[i] = lower_band.iloc[i]
-                else:
-                    direction.iloc[i] = -1
-                    supertrend.iloc[i] = min(upper_band.iloc[i], prev_supertrend)
-            else:
-                if curr_close > upper_band.iloc[i]:
-                    direction.iloc[i] = 1
-                    supertrend.iloc[i] = lower_band.iloc[i]
-                elif curr_close < lower_band.iloc[i]:
-                    direction.iloc[i] = -1
-                    supertrend.iloc[i] = upper_band.iloc[i]
-                else:
-                    direction.iloc[i] = prev_direction
-                    supertrend.iloc[i] = prev_supertrend
-
-        result = pd.DataFrame({"supertrend": supertrend, "direction": direction})
-        return result.reindex(self.df.index)
-
-    def calculate_macd(
-        self, fast_period: int, slow_period: int, signal_period: int
-    ) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate Moving Average Convergence Divergence (MACD)."""
-        if len(self.df) < slow_period + signal_period:
-            return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
-
-        ema_fast = self.df["close"].ewm(span=fast_period, adjust=False).mean()
-        ema_slow = self.df["close"].ewm(span=slow_period, adjust=False).mean()
-
-        macd_line = ema_fast - ema_slow
-        signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
-        histogram = macd_line - signal_line
-
-        return macd_line, signal_line, histogram
-
-    def calculate_rsi(self, period: int) -> pd.Series:
-        """Calculate Relative Strength Index (RSI)."""
-        if len(self.df) <= period:
-            return pd.Series(np.nan, index=self.df.index)
-        delta = self.df["close"].diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-
-        avg_gain = gain.ewm(span=period, adjust=False, min_periods=period).mean()
-        avg_loss = loss.ewm(span=period, adjust=False, min_periods=period).mean()
-
-        rs = avg_gain / avg_loss.replace(0, np.nan)
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-
-    def calculate_stoch_rsi(
-        self, period: int, k_period: int, d_period: int
-    ) -> tuple[pd.Series, pd.Series]:
-        """Calculate Stochastic RSI."""
-        if len(self.df) <= period:
-            return pd.Series(np.nan, index=self.df.index), pd.Series(
-                np.nan, index=self.df.index
-            )
-        rsi = self.calculate_rsi(period)
-
-        lowest_rsi = rsi.rolling(window=period, min_periods=period).min()
-        highest_rsi = rsi.rolling(window=period, min_periods=period).max()
-
-        denominator = highest_rsi - lowest_rsi
-        denominator[denominator == 0] = np.nan
-        stoch_rsi_k_raw = ((rsi - lowest_rsi) / denominator) * 100
-        stoch_rsi_k_raw = stoch_rsi_k_raw.fillna(0).clip(0, 100)
-
-        stoch_rsi_k = (
-            stoch_rsi_k_raw.rolling(window=k_period, min_periods=k_period)
-            .mean()
-            .fillna(0)
-        )
-        stoch_rsi_d = (
-            stoch_rsi_k.rolling(window=d_period, min_periods=d_period).mean().fillna(0)
-        )
-
-        return stoch_rsi_k, stoch_rsi_d
-
-    def calculate_adx(self, period: int) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate Average Directional Index (ADX)."""
-        if len(self.df) < period * 2:
-            return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
-
-        tr = self.calculate_true_range()
-
-        plus_dm = self.df["high"].diff()
-        minus_dm = -self.df["low"].diff()
-
-        plus_dm_final = pd.Series(0.0, index=self.df.index)
-        minus_dm_final = pd.Series(0.0, index=self.df.index)
-
-        for i in range(1, len(self.df)):
-            if plus_dm.iloc[i] > minus_dm.iloc[i] and plus_dm.iloc[i] > 0:
-                plus_dm_final.iloc[i] = plus_dm.iloc[i]
-            if minus_dm.iloc[i] > plus_dm.iloc[i] and minus_dm.iloc[i] > 0:
-                minus_dm_final.iloc[i] = minus_dm.iloc[i]
-
-        atr = tr.ewm(span=period, adjust=False).mean()
-        plus_di = (plus_dm_final.ewm(span=period, adjust=False).mean() / atr) * 100
-        minus_di = (minus_dm_final.ewm(span=period, adjust=False).mean() / atr) * 100
-
-        di_diff = abs(plus_di - minus_di)
-        di_sum = plus_di + minus_di
-        dx = (di_diff / di_sum.replace(0, np.nan)).fillna(0) * 100
-
-        adx = dx.ewm(span=period, adjust=False).mean()
-
-        return adx, plus_di, minus_di
-
-    def calculate_bollinger_bands(
-        self, period: int, std_dev: float
-    ) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate Bollinger Bands."""
-        if len(self.df) < period:
-            return (
-                pd.Series(np.nan, index=self.df.index),
-                pd.Series(np.nan, index=self.df.index),
-                pd.Series(np.nan, index=self.df.index),
-            )
-        middle_band = self.df["close"].rolling(window=period, min_periods=period).mean()
-        std = self.df["close"].rolling(window=period, min_periods=period).std()
-        upper_band = middle_band + (std * std_dev)
-        lower_band = middle_band - (std * std_dev)
-        return upper_band, middle_band, lower_band
-
-    def calculate_vwap(self) -> pd.Series:
-        """Calculate Volume Weighted Average Price (VWAP)."""
-        if self.df.empty:
-            return pd.Series(np.nan, index=self.df.index)
-        typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        cumulative_tp_vol = (typical_price * self.df["volume"]).cumsum()
-        cumulative_vol = self.df["volume"].cumsum()
-        vwap = cumulative_tp_vol / cumulative_vol
-        return vwap.reindex(self.df.index)
-
-    def calculate_cci(self, period: int) -> pd.Series:
-        """Calculate Commodity Channel Index (CCI)."""
-        if len(self.df) < period:
-            return pd.Series(np.nan, index=self.df.index)
-        tp = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        sma_tp = tp.rolling(window=period, min_periods=period).mean()
-        mad = tp.rolling(window=period, min_periods=period).apply(
-            lambda x: np.abs(x - x.mean()).mean(), raw=False
-        )
-        cci = (tp - sma_tp) / (0.015 * mad.replace(0, np.nan))
-        return cci
-
-    def calculate_williams_r(self, period: int) -> pd.Series:
-        """Calculate Williams %R."""
-        if len(self.df) < period:
-            return pd.Series(np.nan, index=self.df.index)
-        highest_high = self.df["high"].rolling(window=period, min_periods=period).max()
-        lowest_low = self.df["low"].rolling(window=period, min_periods=period).min()
-        denominator = highest_high - lowest_low
-        wr = -100 * ((highest_high - self.df["close"]) / denominator.replace(0, np.nan))
-        return wr
-
-    def calculate_ichimoku_cloud(
-        self,
-        tenkan_period: int,
-        kijun_period: int,
-        senkou_span_b_period: int,
-        chikou_span_offset: int,
-    ) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
-        """Calculate Ichimoku Cloud components."""
-        if (
-            len(self.df)
-            < max(tenkan_period, kijun_period, senkou_span_b_period)
-            + chikou_span_offset
-        ):
-            return (
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-            )
-
-        tenkan_sen = (
-            self.df["high"].rolling(window=tenkan_period).max()
-            + self.df["low"].rolling(window=tenkan_period).min()
-        ) / 2
-
-        kijun_sen = (
-            self.df["high"].rolling(window=kijun_period).max()
-            + self.df["low"].rolling(window=kijun_period).min()
-        ) / 2
-
-        senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(kijun_period)
-
-        senkou_span_b = (
-            (
-                self.df["high"].rolling(window=senkou_span_b_period).max()
-                + self.df["low"].rolling(window=senkou_span_b_period).min()
-            )
-            / 2
-        ).shift(kijun_period)
-
-        chikou_span = self.df["close"].shift(-chikou_span_offset)
-
-        return tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span
-
-    def calculate_mfi(self, period: int) -> pd.Series:
-        """Calculate Money Flow Index (MFI)."""
-        if len(self.df) <= period:
-            return pd.Series(np.nan, index=self.df.index)
-        typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        money_flow = typical_price * self.df["volume"]
-
-        price_diff = typical_price.diff()
-        positive_flow = money_flow.where(price_diff > 0, 0)
-        negative_flow = money_flow.where(price_diff < 0, 0)
-
-        positive_mf_sum = positive_flow.rolling(window=period, min_periods=period).sum()
-        negative_mf_sum = negative_flow.rolling(window=period, min_periods=period).sum()
-
-        mf_ratio = positive_mf_sum / negative_mf_sum.replace(0, np.nan)
-        mfi = 100 - (100 / (1 + mf_ratio))
-        return mfi
-
-    def calculate_obv(self, ema_period: int) -> tuple[pd.Series, pd.Series]:
-        """Calculate On-Balance Volume (OBV) and its EMA."""
-        if len(self.df) < MIN_DATA_POINTS_OBV:
-            return pd.Series(np.nan), pd.Series(np.nan)
-
-        obv_direction = np.sign(self.df["close"].diff().fillna(0))
-        obv = (obv_direction * self.df["volume"]).cumsum()
-
-        obv_ema = obv.ewm(span=ema_period, adjust=False).mean()
-
-        return obv, obv_ema
-
-    def calculate_cmf(self, period: int) -> pd.Series:
-        """Calculate Chaikin Money Flow (CMF)."""
-        if len(self.df) < period:
-            return pd.Series(np.nan)
-
-        high_low_range = self.df["high"] - self.df["low"]
-        mfm = (
-            (self.df["close"] - self.df["low"]) - (self.df["high"] - self.df["close"])
-        ) / high_low_range.replace(0, np.nan)
-        mfm = mfm.fillna(0)
-
-        mfv = mfm * self.df["volume"]
-
-        volume_sum = self.df["volume"].rolling(window=period).sum()
-        cmf = mfv.rolling(window=period).sum() / volume_sum.replace(0, np.nan)
-        cmf = cmf.fillna(0)
-
-        return cmf
-
-    def calculate_psar(
-        self, acceleration: float, max_acceleration: float
-    ) -> tuple[pd.Series, pd.Series]:
-        """Calculate Parabolic SAR."""
-        if len(self.df) < MIN_DATA_POINTS_PSAR:
-            return pd.Series(np.nan, index=self.df.index), pd.Series(
-                np.nan, index=self.df.index
-            )
-
-        psar = self.df["close"].copy()
-        bull = pd.Series(True, index=self.df.index)
-        af = acceleration
-        ep = (
-            self.df["low"].iloc[0]
-            if self.df["close"].iloc[0] < self.df["close"].iloc[1]
-            else self.df["high"].iloc[0]
-        )
-
-        for i in range(1, len(self.df)):
-            prev_bull = bull.iloc[i - 1]
-            prev_psar = psar.iloc[i - 1]
-
-            if prev_bull:
-                psar.iloc[i] = prev_psar + af * (ep - prev_psar)
-            else:
-                psar.iloc[i] = prev_psar - af * (prev_psar - ep)
-
-            reverse = False
-            if prev_bull and self.df["low"].iloc[i] < psar.iloc[i]:
-                bull.iloc[i] = False
-                reverse = True
-            elif not prev_bull and self.df["high"].iloc[i] > psar.iloc[i]:
-                bull.iloc[i] = True
-                reverse = True
-            else:
-                bull.iloc[i] = prev_bull
-
-            if reverse:
-                af = acceleration
-                ep = self.df["high"].iloc[i] if bull.iloc[i] else self.df["low"].iloc[i]
-                if bull.iloc[i]:
-                    psar.iloc[i] = min(self.df["low"].iloc[i], self.df["low"].iloc[i - 1])
-                else:
-                    psar.iloc[i] = max(self.df["high"].iloc[i], self.df["high"].iloc[i - 1])
-
-            elif bull.iloc[i]:
-                if self.df["high"].iloc[i] > ep:
-                    ep = self.df["high"].iloc[i]
-                    af = min(af + acceleration, max_acceleration)
-                psar.iloc[i] = min(psar.iloc[i], self.df["low"].iloc[i], self.df["low"].iloc[i - 1])
-            else:
-                if self.df["low"].iloc[i] < ep:
-                    ep = self.df["low"].iloc[i]
-                    af = min(af + acceleration, max_acceleration)
-                psar.iloc[i] = max(psar.iloc[i], self.df["high"].iloc[i], self.df["high"].iloc[i - 1])
-
-        direction = pd.Series(0, index=self.df.index, dtype=int)
-        direction[psar < self.df["close"]] = 1
-        direction[psar > self.df["close"]] = -1
-
-        return psar, direction
-
-    def calculate_fibonacci_levels(self) -> None:
-        """Calculate Fibonacci retracement levels based on a recent high-low swing."""
-        window = self.config["indicator_settings"]["fibonacci_window"]
-        if len(self.df) < window:
-            self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Not enough data for Fibonacci levels (need {window} bars).{RESET}"
-            )
-            return
-
-        recent_high = self.df["high"].iloc[-window:].max()
-        recent_low = self.df["low"].iloc[-window:].min()
-
-        diff = recent_high - recent_low
-
-        if diff <= 0:
-            self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Invalid high-low range for Fibonacci calculation. Diff: {diff}{RESET}"
-            )
-            return
-
-        self.fib_levels = {
-            "0.0%": Decimal(str(recent_high)),
-            "23.6%": Decimal(str(recent_high - 0.236 * diff)).quantize(
-                Decimal("0.00001"), rounding=ROUND_DOWN
-            ),
-            "38.2%": Decimal(str(recent_high - 0.382 * diff)).quantize(
-                Decimal("0.00001"), rounding=ROUND_DOWN
-            ),
-            "50.0%": Decimal(str(recent_high - 0.500 * diff)).quantize(
-                Decimal("0.00001"), rounding=ROUND_DOWN
-            ),
-            "61.8%": Decimal(str(recent_high - 0.618 * diff)).quantize(
-                Decimal("0.00001"), rounding=ROUND_DOWN
-            ),
-            "78.6%": Decimal(str(recent_high - 0.786 * diff)).quantize(
-                Decimal("0.00001"), rounding=ROUND_DOWN
-            ),
-            "100.0%": Decimal(str(recent_low)),
-        }
-        self.logger.debug(f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}")
-
-    def calculate_volatility_index(self, period: int) -> pd.Series:
-        """Calculate a simple Volatility Index based on ATR normalized by price."""
-        if len(self.df) < period or "ATR" not in self.df.columns:
-            return pd.Series(np.nan, index=self.df.index)
-
-        normalized_atr = self.df["ATR"] / self.df["close"]
-        volatility_index = normalized_atr.rolling(window=period).mean()
-        return volatility_index
-
-    def calculate_vwma(self, period: int) -> pd.Series:
-        """Calculate Volume Weighted Moving Average (VWMA)."""
-        if len(self.df) < period or self.df["volume"].isnull().any():
-            return pd.Series(np.nan, index=self.df.index)
-
-        valid_volume = self.df["volume"].replace(0, np.nan)
-        pv = self.df["close"] * valid_volume
-        vwma = pv.rolling(window=period).sum() / valid_volume.rolling(
-            window=period
-        ).sum()
-        return vwma
-
-    def calculate_volume_delta(self, period: int) -> pd.Series:
-        """Calculate Volume Delta, indicating buying vs selling pressure."""
-        if len(self.df) < MIN_DATA_POINTS_VOLATILITY:
-            return pd.Series(np.nan, index=self.df.index)
-
-        buy_volume = self.df["volume"].where(self.df["close"] > self.df["open"], 0)
-        sell_volume = self.df["volume"].where(self.df["close"] < self.df["open"], 0)
-
-        buy_volume_sum = buy_volume.rolling(window=period, min_periods=1).sum()
-        sell_volume_sum = sell_volume.rolling(window=period, min_periods=1).sum()
-
-        total_volume_sum = buy_volume_sum + sell_volume_sum
-        volume_delta = (buy_volume_sum - sell_volume_sum) / total_volume_sum.replace(
-            0, np.nan
-        )
-        return volume_delta.fillna(0)
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
 
     def _get_indicator_value(self, key: str, default: Any = np.nan) -> Any:
         """Safely retrieve an indicator value."""
@@ -2038,58 +1600,7 @@ class TradingAnalyzer:
         )
         return float(imbalance)
 
-    def _get_mtf_trend(self, higher_tf_df: pd.DataFrame, indicator_type: str) -> str:
-        """Determine trend from higher timeframe using specified indicator."""
-        if higher_tf_df.empty:
-            return "UNKNOWN"
-
-        last_close = higher_tf_df["close"].iloc[-1]
-        period = self.config["mtf_analysis"]["trend_period"]
-
-        if indicator_type == "sma":
-            if len(higher_tf_df) < period:
-                return "UNKNOWN"
-            sma = (
-                higher_tf_df["close"]
-                .rolling(window=period, min_periods=period)
-                .mean()
-                .iloc[-1]
-            )
-            if last_close > sma:
-                return "UP"
-            if last_close < sma:
-                return "DOWN"
-            return "SIDEWAYS"
-        elif indicator_type == "ema":
-            if len(higher_tf_df) < period:
-                return "UNKNOWN"
-            ema = (
-                higher_tf_df["close"]
-                .ewm(span=period, adjust=False, min_periods=period)
-                .mean()
-                .iloc[-1]
-            )
-            if last_close > ema:
-                return "UP"
-            if last_close < ema:
-                return "DOWN"
-            return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
-            temp_analyzer = TradingAnalyzer(
-                higher_tf_df, self.config, self.logger, self.symbol
-            )
-            st_result = temp_analyzer.calculate_ehlers_supertrend(
-                period=self.indicator_settings["ehlers_slow_period"],
-                multiplier=self.indicator_settings["ehlers_slow_multiplier"],
-            )
-            if st_result is not None and not st_result.empty:
-                st_dir = st_result["direction"].iloc[-1]
-                if st_dir == 1:
-                    return "UP"
-                if st_dir == -1:
-                    return "DOWN"
-            return "UNKNOWN"
-        return "UNKNOWN"
+    
 
     def generate_trading_signal(
         self,
@@ -2099,6 +1610,8 @@ class TradingAnalyzer:
     ) -> tuple[str, float]:
         """Generate a signal using confluence of indicators."""
         signal_score = 0.0
+        buy_reasons = []
+        sell_reasons = []
         active_indicators = self.config["indicators"]
         weights = self.weights
         isd = self.indicator_settings
@@ -2117,31 +1630,42 @@ class TradingAnalyzer:
             ema_long = self._get_indicator_value("EMA_Long")
             if not pd.isna(ema_short) and not pd.isna(ema_long):
                 if ema_short > ema_long:
-                    signal_score += weights.get("ema_alignment", 0)
+                    score_change = weights.get("ema_alignment", 0)
+                    signal_score += score_change
+                    buy_reasons.append(f"EMA Bullish: +{score_change:.2f}")
                 elif ema_short < ema_long:
-                    signal_score -= weights.get("ema_alignment", 0)
+                    score_change = -weights.get("ema_alignment", 0)
+                    signal_score += score_change
+                    sell_reasons.append(f"EMA Bearish: {score_change:.2f}")
 
         # SMA Trend Filter
         if active_indicators.get("sma_trend_filter", False):
             sma_long = self._get_indicator_value("SMA_Long")
             if not pd.isna(sma_long):
                 if current_close > sma_long:
-                    signal_score += weights.get("sma_trend_filter", 0)
+                    score_change = weights.get("sma_trend_filter", 0)
+                    signal_score += score_change
+                    buy_reasons.append(f"SMA Trend Bullish: +{score_change:.2f}")
                 elif current_close < sma_long:
-                    signal_score -= weights.get("sma_trend_filter", 0)
+                    score_change = -weights.get("sma_trend_filter", 0)
+                    signal_score += score_change
+                    sell_reasons.append(f"SMA Trend Bearish: {score_change:.2f}")
 
         # Momentum Indicators (RSI, StochRSI, CCI, WR, MFI)
         if active_indicators.get("momentum", False):
             momentum_weight = weights.get("momentum_rsi_stoch_cci_wr_mfi", 0)
-
             if active_indicators.get("rsi", False):
                 rsi = self._get_indicator_value("RSI")
                 if not pd.isna(rsi):
                     if rsi < isd["rsi_oversold"]:
-                        signal_score += momentum_weight * 0.5
+                        score_change = momentum_weight * 0.5
+                        signal_score += score_change
+                        buy_reasons.append(f"RSI Oversold: +{score_change:.2f}")
                     elif rsi > isd["rsi_overbought"]:
-                        signal_score -= momentum_weight * 0.5
-
+                        score_change = -momentum_weight * 0.5
+                        signal_score += score_change
+                        sell_reasons.append(f"RSI Overbought: {score_change:.2f}")
+            
             if active_indicators.get("stoch_rsi", False):
                 stoch_k = self._get_indicator_value("StochRSI_K")
                 stoch_d = self._get_indicator_value("StochRSI_D")
@@ -2153,340 +1677,33 @@ class TradingAnalyzer:
                         and prev_stoch_k <= prev_stoch_d
                         and stoch_k < isd["stoch_rsi_oversold"]
                     ):
-                        signal_score += momentum_weight * 0.6
+                        score_change = momentum_weight * 0.6
+                        signal_score += score_change
+                        buy_reasons.append(f"StochRSI Bullish Cross: +{score_change:.2f}")
                     elif (
                         stoch_k < stoch_d
                         and prev_stoch_k >= prev_stoch_d
                         and stoch_k > isd["stoch_rsi_overbought"]
                     ):
-                        signal_score -= momentum_weight * 0.6
+                        score_change = -momentum_weight * 0.6
+                        signal_score += score_change
+                        sell_reasons.append(f"StochRSI Bearish Cross: {score_change:.2f}")
                     elif stoch_k > stoch_d and stoch_k < 50:
-                        signal_score += momentum_weight * 0.2
+                        score_change = momentum_weight * 0.2
+                        signal_score += score_change
+                        buy_reasons.append(f"StochRSI Bullish: +{score_change:.2f}")
                     elif stoch_k < stoch_d and stoch_k > 50:
-                        signal_score -= momentum_weight * 0.2
+                        score_change = -momentum_weight * 0.2
+                        signal_score += score_change
+                        sell_reasons.append(f"StochRSI Bearish: {score_change:.2f}")
 
-            if active_indicators.get("cci", False):
-                cci = self._get_indicator_value("CCI")
-                if not pd.isna(cci):
-                    if cci < isd["cci_oversold"]:
-                        signal_score += momentum_weight * 0.4
-                    elif cci > isd["cci_overbought"]:
-                        signal_score -= momentum_weight * 0.4
+        # Final Signal Determination
+        if buy_reasons:
+            self.logger.info(f"{NEON_GREEN}Buy Reasons: {', '.join(buy_reasons)}{RESET}")
+        if sell_reasons:
+            self.logger.info(f"{NEON_RED}Sell Reasons: {', '.join(sell_reasons)}{RESET}")
 
-            if active_indicators.get("wr", False):
-                wr = self._get_indicator_value("WR")
-                if not pd.isna(wr):
-                    if wr < isd["williams_r_oversold"]:
-                        signal_score += momentum_weight * 0.4
-                    elif wr > isd["williams_r_overbought"]:
-                        signal_score -= momentum_weight * 0.4
-
-            if active_indicators.get("mfi", False):
-                mfi = self._get_indicator_value("MFI")
-                if not pd.isna(mfi):
-                    if mfi < isd["mfi_oversold"]:
-                        signal_score += momentum_weight * 0.4
-                    elif mfi > isd["mfi_overbought"]:
-                        signal_score -= momentum_weight * 0.4
-
-        # Bollinger Bands
-        if active_indicators.get("bollinger_bands", False):
-            bb_upper = self._get_indicator_value("BB_Upper")
-            bb_lower = self._get_indicator_value("BB_Lower")
-            if not pd.isna(bb_upper) and not pd.isna(bb_lower):
-                if current_close < bb_lower:
-                    signal_score += weights.get("bollinger_bands", 0) * 0.5
-                elif current_close > bb_upper:
-                    signal_score -= weights.get("bollinger_bands", 0) * 0.5
-
-        # VWAP
-        if active_indicators.get("vwap", False):
-            vwap = self._get_indicator_value("VWAP")
-            if not pd.isna(vwap):
-                if current_close > vwap:
-                    signal_score += weights.get("vwap", 0) * 0.2
-                elif current_close < vwap:
-                    signal_score -= weights.get("vwap", 0) * 0.2
-
-                if len(self.df) > 1 and "VWAP" in self.df.columns:
-                    prev_vwap = Decimal(str(self.df["VWAP"].iloc[-2]))
-                    if current_close > vwap and prev_close <= prev_vwap:
-                        signal_score += weights.get("vwap", 0) * 0.3
-                    elif current_close < vwap and prev_close >= prev_vwap:
-                        signal_score -= weights.get("vwap", 0) * 0.3
-
-        # PSAR
-        if active_indicators.get("psar", False):
-            psar_val = self._get_indicator_value("PSAR_Val")
-            psar_dir = self._get_indicator_value("PSAR_Dir")
-            if not pd.isna(psar_val) and not pd.isna(psar_dir):
-                if psar_dir == 1:
-                    signal_score += weights.get("psar", 0) * 0.5
-                elif psar_dir == -1:
-                    signal_score -= weights.get("psar", 0) * 0.5
-
-                if len(self.df) > 1 and "PSAR_Val" in self.df.columns:
-                    prev_psar_val = Decimal(str(self.df["PSAR_Val"].iloc[-2]))
-                    if current_close > psar_val and prev_close <= prev_psar_val:
-                        signal_score += weights.get("psar", 0) * 0.4
-                    elif current_close < psar_val and prev_close >= prev_psar_val:
-                        signal_score -= weights.get("psar", 0) * 0.4
-
-        # Orderbook Imbalance
-        if active_indicators.get("orderbook_imbalance", False) and orderbook_data:
-            imbalance = self._check_orderbook(current_price, orderbook_data)
-            signal_score += imbalance * weights.get("orderbook_imbalance", 0)
-
-        # Fibonacci Levels (confluence with price action)
-        if active_indicators.get("fibonacci_levels", False) and self.fib_levels:
-            for level_name, level_price in self.fib_levels.items():
-                if (
-                    level_name not in ["0.0%", "100.0%"]
-                    and abs(current_price - level_price) / current_price
-                    < Decimal("0.001")
-                    and len(self.df) > 1
-                ):
-                        if current_close > prev_close and current_close > level_price:
-                            signal_score += weights.get("fibonacci_levels", 0) * 0.1
-                        elif current_close < prev_close and current_close < level_price:
-                            signal_score -= weights.get("fibonacci_levels", 0) * 0.1
-
-        # --- Ehlers SuperTrend Alignment Scoring ---
-        if active_indicators.get("ehlers_supertrend", False):
-            st_fast_dir = self._get_indicator_value("ST_Fast_Dir")
-            st_slow_dir = self._get_indicator_value("ST_Slow_Dir")
-            prev_st_fast_dir = (
-                self.df["st_fast_dir"].iloc[-2]
-                if "st_fast_dir" in self.df.columns and len(self.df) > 1
-                else np.nan
-            )
-            weight = weights.get("ehlers_supertrend_alignment", 0.0)
-
-            if (
-                not pd.isna(st_fast_dir)
-                and not pd.isna(st_slow_dir)
-                and not pd.isna(prev_st_fast_dir)
-            ):
-                if st_slow_dir == 1 and st_fast_dir == 1 and prev_st_fast_dir == -1:
-                    signal_score += weight
-                elif st_slow_dir == -1 and st_fast_dir == -1 and prev_st_fast_dir == 1:
-                    signal_score -= weight
-                elif st_slow_dir == 1 and st_fast_dir == 1:
-                    signal_score += weight * 0.3
-                elif st_slow_dir == -1 and st_fast_dir == -1:
-                    signal_score -= weight * 0.3
-
-        # --- MACD Alignment Scoring ---
-        if active_indicators.get("macd", False):
-            macd_line = self._get_indicator_value("MACD_Line")
-            signal_line = self._get_indicator_value("MACD_Signal")
-            histogram = self._get_indicator_value("MACD_Hist")
-            weight = weights.get("macd_alignment", 0.0)
-
-            if (
-                not pd.isna(macd_line)
-                and not pd.isna(signal_line)
-                and not pd.isna(histogram)
-                and len(self.df) > 1
-            ):
-                if (
-                    macd_line > signal_line
-                    and self.df["MACD_Line"].iloc[-2] <= self.df["MACD_Signal"].iloc[-2]
-                ):
-                    signal_score += weight
-                elif (
-                    macd_line < signal_line
-                    and self.df["MACD_Line"].iloc[-2] >= self.df["MACD_Signal"].iloc[-2]
-                ):
-                    signal_score -= weight
-                elif histogram > 0 and self.df["MACD_Hist"].iloc[-2] < 0:
-                    signal_score += weight * 0.2
-                elif histogram < 0 and self.df["MACD_Hist"].iloc[-2] > 0:
-                    signal_score -= weight * 0.2
-
-        # --- ADX Alignment Scoring ---
-        if active_indicators.get("adx", False):
-            adx_val = self._get_indicator_value("ADX")
-            plus_di = self._get_indicator_value("PlusDI")
-            minus_di = self._get_indicator_value("MinusDI")
-            weight = weights.get("adx_strength", 0.0)
-
-            if not pd.isna(adx_val) and not pd.isna(plus_di) and not pd.isna(minus_di):
-                if adx_val > ADX_STRONG_TREND_THRESHOLD:
-                    if plus_di > minus_di:
-                        signal_score += weight
-                    elif minus_di > plus_di:
-                        signal_score -= weight
-                elif adx_val < ADX_WEAK_TREND_THRESHOLD:
-                    signal_score += 0
-
-        # --- Ichimoku Cloud Alignment Scoring ---
-        if active_indicators.get("ichimoku_cloud", False):
-            tenkan_sen = self._get_indicator_value("Tenkan_Sen")
-            kijun_sen = self._get_indicator_value("Kijun_Sen")
-            senkou_span_a = self._get_indicator_value("Senkou_Span_A")
-            senkou_span_b = self._get_indicator_value("Senkou_Span_B")
-            chikou_span = self._get_indicator_value("Chikou_Span")
-            weight = weights.get("ichimoku_confluence", 0.0)
-
-            if (
-                not pd.isna(tenkan_sen)
-                and not pd.isna(kijun_sen)
-                and not pd.isna(senkou_span_a)
-                and not pd.isna(senkou_span_b)
-                and not pd.isna(chikou_span)
-                and len(self.df) > 1
-            ):
-                if (
-                    tenkan_sen > kijun_sen
-                    and self.df["Tenkan_Sen"].iloc[-2] <= self.df["Kijun_Sen"].iloc[-2]
-                ):
-                    signal_score += weight * 0.5
-                elif (
-                    tenkan_sen < kijun_sen
-                    and self.df["Tenkan_Sen"].iloc[-2] >= self.df["Kijun_Sen"].iloc[-2]
-                ):
-                    signal_score -= weight * 0.5
-
-                if current_close > max(senkou_span_a, senkou_span_b) and self.df[
-                    "close"
-                ].iloc[-2] <= max(
-                    self.df["Senkou_Span_A"].iloc[-2], self.df["Senkou_Span_B"].iloc[-2]
-                ):
-                    signal_score += weight * 0.7
-                elif current_close < min(senkou_span_a, senkou_span_b) and self.df[
-                    "close"
-                ].iloc[-2] >= min(
-                    self.df["Senkou_Span_A"].iloc[-2], self.df["Senkou_Span_B"].iloc[-2]
-                ):
-                    signal_score -= weight * 0.7
-
-                if (
-                    chikou_span > current_close
-                    and self.df["Chikou_Span"].iloc[-2] <= self.df["close"].iloc[-2]
-                ):
-                    signal_score += weight * 0.3
-                elif (
-                    chikou_span < current_close
-                    and self.df["Chikou_Span"].iloc[-2] >= self.df["close"].iloc[-2]
-                ):
-                    signal_score -= weight * 0.3
-
-        # --- OBV Alignment Scoring ---
-        if active_indicators.get("obv", False):
-            obv_val = self._get_indicator_value("OBV")
-            obv_ema = self._get_indicator_value("OBV_EMA")
-            weight = weights.get("obv_momentum", 0.0)
-
-            if not pd.isna(obv_val) and not pd.isna(obv_ema) and len(self.df) > 1:
-                if (
-                    obv_val > obv_ema
-                    and self.df["OBV"].iloc[-2] <= self.df["OBV_EMA"].iloc[-2]
-                ):
-                    signal_score += weight * 0.5
-                elif (
-                    obv_val < obv_ema
-                    and self.df["OBV"].iloc[-2] >= self.df["OBV_EMA"].iloc[-2]
-                ):
-                    signal_score -= weight * 0.5
-
-                if len(self.df) > 2:
-                    if (
-                        obv_val > self.df["OBV"].iloc[-2]
-                        and obv_val > self.df["OBV"].iloc[-3]
-                    ):
-                        signal_score += weight * 0.2
-                    elif (
-                        obv_val < self.df["OBV"].iloc[-2]
-                        and obv_val < self.df["OBV"].iloc[-3]
-                    ):
-                        signal_score -= weight * 0.2
-
-        # --- CMF Alignment Scoring ---
-        if active_indicators.get("cmf", False):
-            cmf_val = self._get_indicator_value("CMF")
-            weight = weights.get("cmf_flow", 0.0)
-
-            if not pd.isna(cmf_val):
-                if cmf_val > 0:
-                    signal_score += weight * 0.5
-                elif cmf_val < 0:
-                    signal_score -= weight * 0.5
-
-                if len(self.df) > 2:
-                    if (
-                        cmf_val > self.df["CMF"].iloc[-2]
-                        and cmf_val > self.df["CMF"].iloc[-3]
-                    ):
-                        signal_score += weight * 0.3
-                    elif (
-                        cmf_val < self.df["CMF"].iloc[-2]
-                        and cmf_val < self.df["CMF"].iloc[-3]
-                    ):
-                        signal_score -= weight * 0.3
-
-        # --- Volatility Index Scoring ---
-        if active_indicators.get("volatility_index", False):
-            vol_idx = self._get_indicator_value("Volatility_Index")
-            weight = weights.get("volatility_index_signal", 0.0)
-            if not pd.isna(vol_idx) and len(self.df) > 2 and "Volatility_Index" in self.df.columns:
-                    prev_vol_idx = self.df["Volatility_Index"].iloc[-2]
-                    prev_prev_vol_idx = self.df["Volatility_Index"].iloc[-3]
-
-                    if vol_idx > prev_vol_idx > prev_prev_vol_idx:
-                        if signal_score > 0:
-                            signal_score += weight * 0.2
-                        elif signal_score < 0:
-                            signal_score -= weight * 0.2
-                    elif vol_idx < prev_vol_idx < prev_prev_vol_idx and abs(signal_score) > 0:
-                            signal_score *= 0.8
-
-        # --- VWMA Cross Scoring ---
-        if active_indicators.get("vwma", False):
-            vwma = self._get_indicator_value("VWMA")
-            weight = weights.get("vwma_cross", 0.0)
-            if not pd.isna(vwma) and len(self.df) > 1:
-                prev_vwma = self.df["VWMA"].iloc[-2]
-                if current_close > vwma and prev_close <= prev_vwma:
-                    signal_score += weight
-                elif current_close < vwma and prev_close >= prev_vwma:
-                    signal_score -= weight
-
-        # --- Volume Delta Scoring ---
-        if active_indicators.get("volume_delta", False):
-            volume_delta = self._get_indicator_value("Volume_Delta")
-            volume_delta_threshold = isd["volume_delta_threshold"]
-            weight = weights.get("volume_delta_signal", 0.0)
-
-            if not pd.isna(volume_delta):
-                if volume_delta > volume_delta_threshold:
-                    signal_score += weight
-                elif volume_delta < -volume_delta_threshold:
-                    signal_score -= weight
-                elif volume_delta > 0:
-                    signal_score += weight * 0.3
-                elif volume_delta < 0:
-                    signal_score -= weight * 0.3
-
-        # --- Multi-Timeframe Trend Confluence Scoring ---
-        if self.config["mtf_analysis"]["enabled"] and mtf_trends:
-            mtf_buy_score = 0
-            mtf_sell_score = 0
-            for _tf_indicator, trend in mtf_trends.items():
-                if trend == "UP":
-                    mtf_buy_score += 1
-                elif trend == "DOWN":
-                    mtf_sell_score += 1
-
-            mtf_weight = weights.get("mtf_trend_confluence", 0.0)
-            if mtf_trends:
-                normalized_mtf_score = (mtf_buy_score - mtf_sell_score) / len(
-                    mtf_trends
-                )
-                signal_score += mtf_weight * normalized_mtf_score
-
-        # --- Final Signal Determination ---
-        threshold = max(self.config["signal_score_threshold"], 2.5) # Enforce higher threshold for profitability
+        threshold = max(self.config["signal_score_threshold"], 1.0)
         final_signal = "HOLD"
         if signal_score >= threshold:
             final_signal = "BUY"
@@ -2547,30 +1764,48 @@ def build_partial_tp_targets(
     return out
 
 
-def compute_stop_loss_price(
-    side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal, cfg: dict
-) -> Decimal:
-    ex = cfg["execution"]
-    sch = ex["sl_scheme"]
-    price_prec = cfg["trade_management"]["price_precision"]
-    tick_size = Decimal(f"1e-{price_prec}")
-    buffer = tick_size * 5  # 5 ticks buffer
+    def _compute_stop_loss_price(
+        self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
+    ) -> Decimal:
+        ex = self.config["execution"]
+        sch = ex["sl_scheme"]
+        price_prec = self.config["trade_management"]["price_precision"]
+        tick_size = Decimal(f"1e-{price_prec}")
+        buffer = tick_size * 5  # 5 ticks buffer
 
-    if sch["type"] == "atr_multiple":
-        sl = (
-            entry_price - atr_value * Decimal(str(sch["atr_multiple"]))
-            if side == "BUY"
-            else entry_price + atr_value * Decimal(str(sch["atr_multiple"]))
-        )
-    else:
-        sl = (
-            entry_price * (1 - Decimal(str(sch["percent"])) / 100)
-            if side == "BUY"
-            else entry_price * (1 + Decimal(str(sch["percent"])) / 100)
-        )
+        if sch["type"] == "atr_multiple":
+            sl = (
+                entry_price - atr_value * Decimal(str(sch["atr_multiple"]))
+                if side == "BUY"
+                else entry_price + atr_value * Decimal(str(sch["atr_multiple"]))
+            )
+        else:
+            sl = (
+                entry_price * (1 - Decimal(str(sch["percent"])) / 100)
+                if side == "BUY"
+                else entry_price * (1 + Decimal(str(sch["percent"])) / 100)
+            )
 
-    sl_with_buffer = sl - buffer if side == "BUY" else sl + buffer
-    return round_price(sl_with_buffer, price_prec)
+        sl_with_buffer = sl - buffer if side == "BUY" else sl + buffer
+        return round_price(sl_with_buffer, price_prec)
+
+    def _calculate_take_profit_price(
+        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+    ) -> Decimal:
+        take_profit = (
+            current_price
+            + (
+                atr_value
+                * Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
+            )
+            if signal == "BUY"
+            else current_price
+            - (
+                atr_value
+                * Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
+            )
+        )
+        return round_price(take_profit, self.price_precision)
 
 
 # --- Main Execution Logic ---
@@ -2611,33 +1846,31 @@ def main() -> None:
             logger.info(
                 f"{NEON_PURPLE}--- New Analysis Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
             )
-            current_price = fetch_current_price(config["symbol"], pybit_client, logger)
+            current_price = pybit_client.fetch_current_price(config["symbol"])
+            logger.info(f"Current price for {config['symbol']}: {current_price}")
             if current_price is None:
                 time.sleep(config["loop_delay"])
                 continue
 
-            df = fetch_klines(config["symbol"], config["interval"], 1000, pybit_client, logger)
+            df = pybit_client.fetch_klines(config["symbol"], config["interval"], 1000)
             if df is None or df.empty:
                 time.sleep(config["loop_delay"])
                 continue
 
             orderbook_data = None
             if config["indicators"].get("orderbook_imbalance", False):
-                orderbook_data = fetch_orderbook(
-                    config["symbol"], config["orderbook_limit"], pybit_client, logger
+                orderbook_data = pybit_client.fetch_orderbook(
+                    config["symbol"], config["orderbook_limit"]
                 )
 
             mtf_trends: dict[str, str] = {}
             if config["mtf_analysis"]["enabled"]:
                 for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
-                    htf_df = fetch_klines(config["symbol"], htf_interval, 1000, pybit_client, logger)
+                    htf_df = pybit_client.fetch_klines(config["symbol"], htf_interval, 1000)
                     if htf_df is not None and not htf_df.empty:
                         for trend_ind in config["mtf_analysis"]["trend_indicators"]:
-                            temp_htf_analyzer = TradingAnalyzer(
-                                htf_df, config, logger, config["symbol"]
-                            )
-                            trend = temp_htf_analyzer._get_mtf_trend(
-                                temp_htf_analyzer.df, trend_ind
+                            trend = indicators._get_mtf_trend(
+                                htf_df, config, logger, config["symbol"], trend_ind
                             )
                             mtf_trends[f"{htf_interval}_{trend_ind}"] = trend
                     else:
@@ -2686,7 +1919,7 @@ def main() -> None:
             )
             time.sleep(config["loop_delay"])
 
-        except Exception as e:
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
             alert_system.send_alert(f"Unhandled error in main loop: {e}", "ERROR")
             logger.exception(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
             time.sleep(config["loop_delay"] * 2)
