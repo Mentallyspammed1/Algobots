@@ -1,10 +1,12 @@
 {
-  "testnet": true,
-  "dry_run": true,
-  "symbol": "BTCUSDT",
+  "market": {
+    "symbol": "BTCUSDT",
+    "testnet": false,
+    "dry_run": true
+  },
   "credentials": {
-    "api_key": "",
-    "api_secret": ""
+    "api_key": "pXXkHX8ryNx4tJw4oQ",
+    "api_secret": "091D2RzNbFwf8IPv6HKaKtjPiTSChLDuhYyn"
   },
   "risk_management": {
     "take_profit_pct": 0.005,
@@ -24,8 +26,8 @@
     "order_reprice_delay_seconds": 1.0
   },
   "technical": {
-    "orderbook_depth": 500,
-    "vol_window": 60
+    "orderbook_depth": 50,
+    "vol_window_seconds": 60
   },
   "strategy": {
     "base_spread_percentage": 0.0005,

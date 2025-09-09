@@ -353,8 +353,7 @@ class EnhancedBybitMarketMaker:
                 self.state.is_circuit_breaker_active = True
                 logger.critical("[bold red]CIRCUIT BREAKER TRIGGERED[/bold red]")
                 await self.cancel_all_orders()
-                cooldown = self.config['risk_management']['circuit_breake
-r_cooldown_seconds']
+                cooldown = self.config['risk_management']['circuit_breaker_cooldown_seconds']
                 logger.warning(f"Trading paused for {cooldown} seconds.")
                 await asyncio.sleep(cooldown)
                 self.state.consecutive_api_failures = 0

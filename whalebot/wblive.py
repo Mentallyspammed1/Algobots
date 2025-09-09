@@ -392,6 +392,57 @@ class PybitTradingClient:
             self._handle_403_error(e)
             return None
 
+    def batch_place_orders(self, requests: list[dict]) -> dict | None:
+        if not self.enabled: return None
+        try:
+            resp = self.session.batch_place_order(category=self.category, request=requests)
+            self._log_api("batch_place_order", resp)
+            return resp
+        except pybit.exceptions.FailedRequestError as e:
+            self.logger.error(f"{NEON_RED}batch_place_orders exception: {e}{RESET}")
+            return None
+
+    def cancel_by_link_id(self, symbol: str, order_link_id: str) -> dict | None:
+        if not self.enabled: return None
+        try:
+            resp = self.session.cancel_order(category=self.category, symbol=symbol, orderLinkId=order_link_id)
+            self._log_api("cancel_by_link_id", resp)
+            return resp
+        except pybit.exceptions.FailedRequestError as e:
+            self.logger.error(f"{NEON_RED}cancel_by_link_id exception: {e}{RESET}")
+            return None
+
+    def get_executions(self, symbol: str, start_time_ms: int, limit: int) -> dict | None:
+        if not self.enabled: return None
+        try:
+            return self.session.get_executions(category=self.category, symbol=symbol, startTime=start_time_ms, limit=limit)
+        except pybit.exceptions.FailedRequestError as e:
+            self.logger.error(f"{NEON_RED}get_executions exception: {e}{RESET}")
+            return None
+
+# --- Utilities for execution layer ---
+def build_partial_tp_targets(side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal, total_qty: Decimal, cfg: dict, qty_step: Decimal) -> list[dict]:
+    ex = cfg["execution"]
+    tps = ex["tp_scheme"]["targets"]
+    price_prec = cfg["trade_management"]["price_precision"]
+    out = []
+    for i, t in enumerate(tps, start=1):
+        qty = round_qty(total_qty * Decimal(str(t["size_pct"])), qty_step)
+        if qty <= 0: continue
+        if ex["tp_scheme"]["mode"] == "atr_multiples":
+            price = (entry_price + atr_value * Decimal(str(t["atr_multiple"]))) if side == "BUY" else (entry_price - atr_value * Decimal(str(t["atr_multiple"])))
+        else:
+            price = (entry_price * (1 + Decimal(str(t.get("percent", 1))) / 100)) if side == "BUY" else (entry_price * (1 - Decimal(str(t.get("percent", 1))) / 100))
+        tif = t.get("tif", ex.get("default_time_in_force"))
+        if tif == "GoodTillCancel": tif = "GTC"
+        out.append({
+            "name": t.get("name", f"TP{i}"), "price": round_price(price, price_prec), "qty": qty,
+            "order_type": t.get("order_type", "Limit"), "tif": tif,
+            "post_only": bool(t.get("post_only", ex.get("post_only_default", False))),
+            "link_id_suffix": f"tp{i}",
+        })
+    return out
+
 # --- Position Management ---
 class PositionManager:
     def __init__(self, config: dict[str, Any], logger: logging.Logger, symbol: str, pybit_client: "PybitTradingClient | None" = None):
@@ -430,7 +481,7 @@ class PositionManager:
     def _get_current_balance(self) -> Decimal:
         if self.live and self.pybit and self.pybit.enabled:
             resp = self.pybit.get_wallet_balance(coin="USDT")
-            if resp and self._ok(resp) and resp.get("result", {}).get("list"):
+            if resp and self.pybit._ok(resp) and resp.get("result", {}).get("list"):
                 for coin_balance in resp["result"]["list"][0]["coin"]:
                     if coin_balance["coin"] == "USDT":
                         return Decimal(coin_balance["walletBalance"])
@@ -440,7 +491,6 @@ class PositionManager:
         if not self.trade_management_enabled: return Decimal("0")
         account_balance = self._get_current_balance()
         base_risk_pct = Decimal(str(self.config["trade_management"]["risk_per_trade_percent"])) / 100
-        # Scale risk by conviction (e.g., 0.5x to 1.5x of base risk)
         risk_pct = base_risk_pct * Decimal(str(np.clip(0.5 + conviction, 0.5, 1.5)))
         stop_loss_atr_multiple = Decimal(str(self.config["trade_management"]["stop_loss_atr_multiple"]))
         risk_amount = account_balance * risk_pct
@@ -452,24 +502,70 @@ class PositionManager:
         return round_qty(order_qty, self.qty_step) if self.qty_step else order_qty.quantize(Decimal(f"1e-{self.order_precision}"), rounding=ROUND_DOWN)
 
     def open_position(self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal, conviction: float) -> dict | None:
+        if self.live and self.pybit and self.pybit.enabled:
+            positions_resp = self.pybit.get_positions(self.symbol)
+            if positions_resp and self.pybit._ok(positions_resp):
+                pos_list = positions_resp.get("result", {}).get("list", [])
+                if any(p.get("size") and Decimal(p.get("size")) > 0 for p in pos_list):
+                    self.logger.warning(f"{NEON_YELLOW}Exchange position exists, aborting new position.{RESET}")
+                    return None
+
         if not self.trade_management_enabled or len(self.open_positions) >= self.max_open_positions:
             self.logger.info(f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}")
             return None
+        
         order_qty = self._calculate_order_size(current_price, atr_value, conviction)
         if order_qty <= 0:
             self.logger.warning(f"{NEON_YELLOW}Order quantity is zero. Cannot open position.{RESET}")
             return None
+
         stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
         take_profit = self._calculate_take_profit_price(signal, current_price, atr_value)
+
         position = {
             "entry_time": datetime.now(TIMEZONE), "symbol": self.symbol, "side": signal,
             "entry_price": round_price(current_price, self.price_precision), "qty": order_qty,
             "stop_loss": stop_loss, "take_profit": round_price(take_profit, self.price_precision),
             "status": "OPEN", "link_prefix": f"wgx_{int(time.time()*1000)}", "adds": 0,
         }
+
+        if self.live and self.pybit and self.pybit.enabled:
+            entry_link = f"{position['link_prefix']}_entry"
+            resp = self.pybit.place_order(
+                category=self.pybit.category, symbol=self.symbol, side=self.pybit._side_to_bybit(signal),
+                orderType="Market", qty=self.pybit._q(order_qty), orderLinkId=entry_link,
+            )
+            if not self.pybit._ok(resp):
+                self.logger.error(f"{NEON_RED}Live entry failed. Simulating only.{RESET}")
+            else:
+                self.logger.info(f"{NEON_GREEN}Live entry submitted: {entry_link}{RESET}")
+                if self.config["execution"]["tpsl_mode"] == "Partial":
+                    targets = build_partial_tp_targets(signal, position["entry_price"], atr_value, order_qty, self.config, self.qty_step)
+                    for t in targets:
+                        payload = {
+                            "symbol": self.symbol, "side": self.pybit._side_to_bybit("SELL" if signal == "BUY" else "BUY"),
+                            "orderType": t["order_type"], "qty": self.pybit._q(t["qty"]), "timeInForce": t["tif"],
+                            "reduceOnly": True, "positionIdx": self.pybit._pos_idx(signal),
+                            "orderLinkId": f"{position['link_prefix']}_{t['link_id_suffix']}", "category": self.pybit.category,
+                        }
+                        if t["order_type"] == "Limit": payload["price"] = self.pybit._q(t["price"])
+                        if t.get("post_only"): payload["isPostOnly"] = True
+                        resp_tp = self.pybit.place_order(**payload)
+                        if resp_tp and resp_tp.get("retCode") == 0: self.logger.info(f"{NEON_GREEN}Placed individual TP target: {payload.get('orderLinkId')}{RESET}")
+                        else: self.logger.error(f"{NEON_RED}Failed to place TP target: {payload.get('orderLinkId')}. Error: {resp_tp.get('retMsg') if resp_tp else 'No response'}{RESET}")
+                
+                if self.config["execution"]["sl_scheme"]["use_conditional_stop"]:
+                    sl_link = f"{position['link_prefix']}_sl"
+                    sresp = self.pybit.place_order(
+                        category=self.pybit.category, symbol=self.symbol, side=self.pybit._side_to_bybit("SELL" if signal == "BUY" else "BUY"),
+                        orderType=self.config["execution"]["sl_scheme"]["stop_order_type"], qty=self.pybit._q(order_qty),
+                        reduceOnly=True, orderLinkId=sl_link, triggerPrice=self.pybit._q(stop_loss),
+                        triggerDirection=(2 if signal == "BUY" else 1), orderFilter="Stop",
+                    )
+                    if self.pybit._ok(sresp): self.logger.info(f"{NEON_GREEN}Conditional stop placed at {stop_loss}.{RESET}")
+
         self.open_positions.append(position)
         self.logger.info(f"{NEON_GREEN}Opened {signal} position (simulated): {position}{RESET}")
-        # Live trading logic would go here
         return position
 
     def manage_positions(self, current_price: Decimal, performance_tracker: Any):
@@ -495,9 +591,17 @@ class PositionManager:
         return [pos for pos in self.open_positions if pos["status"] == "OPEN"]
 
     def _compute_stop_loss_price(self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal) -> Decimal:
-        sl_mult = Decimal(str(self.config["trade_management"]["stop_loss_atr_multiple"]))
-        sl = (entry_price - atr_value * sl_mult) if side == "BUY" else (entry_price + atr_value * sl_mult)
-        return round_price(sl, self.price_precision)
+        ex = self.config["execution"]
+        sch = ex["sl_scheme"]
+        price_prec = self.config["trade_management"]["price_precision"]
+        tick_size = Decimal(f"1e-{price_prec}")
+        buffer = tick_size * 5
+        if sch["type"] == "atr_multiple":
+            sl = (entry_price - atr_value * Decimal(str(sch["atr_multiple"]))) if side == "BUY" else (entry_price + atr_value * Decimal(str(sch["atr_multiple"])))
+        else:
+            sl = (entry_price * (1 - Decimal(str(sch["percent"])) / 100)) if side == "BUY" else (entry_price * (1 + Decimal(str(sch["percent"])) / 100))
+        sl_with_buffer = sl - buffer if side == "BUY" else sl + buffer
+        return round_price(sl_with_buffer, price_prec)
 
     def _calculate_take_profit_price(self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal) -> Decimal:
         tp_mult = Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
@@ -512,13 +616,11 @@ class PositionManager:
         if side == "BUY":
             pos["best_price"] = max(pos["best_price"], current_price)
             new_sl = round_price(pos["best_price"] - atr_mult * atr_value, self.price_precision)
-            if new_sl > pos["stop_loss"]:
-                pos["stop_loss"] = new_sl
+            if new_sl > pos["stop_loss"]: pos["stop_loss"] = new_sl
         else: # SELL
             pos["best_price"] = min(pos["best_price"], current_price)
             new_sl = round_price(pos["best_price"] + atr_mult * atr_value, self.price_precision)
-            if new_sl < pos["stop_loss"]:
-                pos["stop_loss"] = new_sl
+            if new_sl < pos["stop_loss"]: pos["stop_loss"] = new_sl
 
     def try_pyramid(self, current_price: Decimal, atr_value: Decimal):
         if not self.trade_management_enabled or not self.open_positions or self.live: return
@@ -533,7 +635,6 @@ class PositionManager:
             if (pos["side"] == "BUY" and current_price >= target) or (pos["side"] == "SELL" and current_price <= target):
                 add_qty = round_qty(pos['qty'] * Decimal(str(py_cfg.get("size_pct_of_initial", 0.5))), self.qty_step or Decimal("0.0001"))
                 if add_qty > 0:
-                    # Update average entry price and total quantity
                     total_cost = (pos['qty'] * pos['entry_price']) + (add_qty * current_price)
                     pos['qty'] += add_qty
                     pos['entry_price'] = total_cost / pos['qty']
@@ -591,6 +692,122 @@ class PerformanceTracker:
             "avg_win": f"{avg_win:.4f}", "avg_loss": f"{avg_loss:.4f}",
         }
 
+class ExchangeExecutionSync:
+    def __init__(self, symbol: str, pybit: PybitTradingClient, logger: logging.Logger, cfg: dict, pm: PositionManager, pt: PerformanceTracker):
+        self.symbol = symbol
+        self.pybit = pybit
+        self.logger = logger
+        self.cfg = cfg
+        self.pm = pm
+        self.pt = pt
+        self.last_exec_time_ms = int(time.time() * 1000) - 5 * 60 * 1000
+
+    def _is_ours(self, link_id: str | None) -> bool:
+        if not link_id: return False
+        if not self.cfg["execution"]["live_sync"]["only_track_linked"]: return True
+        return link_id.startswith("wgx_")
+
+    def _compute_be_price(self, side: str, entry_price: Decimal, atr_value: Decimal) -> Decimal:
+        be_cfg = self.cfg["execution"]["breakeven_after_tp1"]
+        off_type = str(be_cfg.get("offset_type", "atr")).lower()
+        off_val = Decimal(str(be_cfg.get("offset_value", 0)))
+        if off_type == "atr": adj = atr_value * off_val
+        elif off_type == "percent": adj = entry_price * (off_val / Decimal("100"))
+        else: adj = off_val
+        lock_adj = entry_price * (Decimal(str(be_cfg.get("lock_in_min_percent", 0))) / Decimal("100"))
+        be = entry_price + max(adj, lock_adj) if side == "BUY" else entry_price - max(adj, lock_adj)
+        return round_price(be, self.pm.price_precision)
+
+    def _move_stop_to_breakeven(self, open_pos: dict, atr_value: Decimal):
+        if not self.cfg["execution"]["breakeven_after_tp1"].get("enabled", False): return
+        try:
+            entry, side = Decimal(str(open_pos["entry_price"])), open_pos["side"]
+            new_sl = self._compute_be_price(side, entry, atr_value)
+            link_prefix = open_pos.get("link_prefix")
+            old_sl_link = f"{link_prefix}_sl" if link_prefix else None
+            if old_sl_link: self.pybit.cancel_by_link_id(self.symbol, old_sl_link)
+            new_sl_link = f"{link_prefix}_sl_be" if link_prefix else f"wgx_{int(time.time()*1000)}_sl_be"
+            sresp = self.pybit.place_order(
+                category=self.pybit.category, symbol=self.symbol, side=self.pybit._side_to_bybit("SELL" if side == "BUY" else "BUY"),
+                orderType=self.cfg["execution"]["sl_scheme"]["stop_order_type"], qty=self.pybit._q(open_pos["qty"]),
+                reduceOnly=True, orderLinkId=new_sl_link, triggerPrice=self.pybit._q(new_sl),
+                triggerDirection=(2 if side == "BUY" else 1), orderFilter="Stop",
+            )
+            if self.pybit._ok(sresp): self.logger.info(f"{NEON_GREEN}Moved SL to breakeven at {new_sl}.{RESET}")
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
+            self.logger.error(f"{NEON_RED}Breakeven move exception: {e}{RESET}")
+
+    def poll(self):
+        if not (self.pybit and self.pybit.enabled): return
+        try:
+            resp = self.pybit.get_executions(self.symbol, self.last_exec_time_ms, self.cfg["execution"]["live_sync"]["max_exec_fetch"])
+            if not self.pybit._ok(resp): return
+            rows = resp.get("result", {}).get("list", [])
+            rows.sort(key=lambda r: int(r.get("execTime", 0)))
+            for r in rows:
+                link = r.get("orderLinkId")
+                if not self._is_ours(link): continue
+                ts_ms = int(r.get("execTime", 0))
+                self.last_exec_time_ms = max(self.last_exec_time_ms, ts_ms + 1)
+                tag = "ENTRY" if link.endswith("_entry") else ("SL" if "_sl" in link else ("TP" if "_tp" in link else "UNKNOWN"))
+                open_pos = next((p for p in self.pm.open_positions if p.get("status") == "OPEN"), None)
+                if tag in ("TP", "SL") and open_pos:
+                    is_reduce = (open_pos["side"] == "BUY" and r.get("side") == "Sell") or (open_pos["side"] == "SELL" and r.get("side") == "Buy")
+                    if is_reduce:
+                        exec_qty, exec_price = Decimal(str(r.get("execQty", "0"))), Decimal(str(r.get("execPrice", "0")))
+                        pnl = ((exec_price - open_pos["entry_price"]) * exec_qty) if open_pos["side"] == "BUY" else ((open_pos["entry_price"] - exec_price) * exec_qty)
+                        self.pt.record_trade({"exit_time": datetime.fromtimestamp(ts_ms / 1000, tz=TIMEZONE), "exit_price": exec_price, "qty": exec_qty, "closed_by": tag, **open_pos}, pnl)
+                        remaining = Decimal(str(open_pos["qty"])) - exec_qty
+                        open_pos["qty"] = max(remaining, Decimal("0"))
+                        if remaining <= 0:
+                            open_pos.update({"status": "CLOSED", "exit_time": datetime.fromtimestamp(ts_ms / 1000, tz=TIMEZONE), "exit_price": exec_price, "closed_by": tag})
+                            self.logger.info(f"{NEON_PURPLE}Position fully closed by {tag}.{RESET}")
+                    if tag == "TP" and link.endswith("_tp1"):
+                        atr_val = Decimal(str(self.cfg.get("_last_atr", "0.1")))
+                        self._move_stop_to_breakeven(open_pos, atr_val)
+            self.pm.open_positions = [p for p in self.pm.open_positions if p.get("status") == "OPEN"]
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
+            self.logger.error(f"{NEON_RED}Execution sync error: {e}{RESET}")
+
+class PositionHeartbeat:
+    def __init__(self, symbol: str, pybit: PybitTradingClient, logger: logging.Logger, cfg: dict, pm: PositionManager):
+        self.symbol = symbol
+        self.pybit = pybit
+        self.logger = logger
+        self.cfg = cfg
+        self.pm = pm
+        self._last_ms = 0
+
+    def tick(self):
+        hb_cfg = self.cfg["execution"]["live_sync"]["heartbeat"]
+        if not (hb_cfg.get("enabled", True) and self.pybit and self.pybit.enabled): return
+        now_ms = int(time.time() * 1000)
+        if now_ms - self._last_ms < int(hb_cfg.get("interval_ms", 5000)): return
+        self._last_ms = now_ms
+        try:
+            resp = self.pybit.get_positions(self.symbol)
+            if not self.pybit._ok(resp): return
+            lst = (resp.get("result", {}) or {}).get("list", [])
+            net_qty = sum(Decimal(p.get("size", "0")) * (1 if p.get("side") == "Buy" else -1) for p in lst)
+            local = next((p for p in self.pm.open_positions if p.get("status") == "OPEN"), None)
+            if net_qty == 0 and local:
+                local.update({"status": "CLOSED", "closed_by": "HEARTBEAT_SYNC"})
+                self.logger.info(f"{NEON_PURPLE}Heartbeat: Closed local position (exchange flat).{RESET}")
+                self.pm.open_positions = [p for p in self.pm.open_positions if p.get("status") == "OPEN"]
+            elif net_qty != 0 and not local:
+                avg_price = Decimal(lst[0].get("avgPrice", "0")) if lst else Decimal("0")
+                side = "BUY" if net_qty > 0 else "SELL"
+                synt = {
+                    "entry_time": datetime.now(TIMEZONE), "symbol": self.symbol, "side": side,
+                    "entry_price": round_price(avg_price, self.pm.price_precision),
+                    "qty": round_qty(abs(net_qty), self.pm.qty_step), "status": "OPEN",
+                    "link_prefix": f"hb_{int(time.time()*1000)}",
+                }
+                self.pm.open_positions.append(synt)
+                self.logger.info(f"{NEON_YELLOW}Heartbeat: Created synthetic local position.{RESET}")
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
+            self.logger.error(f"{NEON_RED}Heartbeat error: {e}{RESET}")
+
 # --- Trading Analysis ---
 class TradingAnalyzer:
     def __init__(self, df: pd.DataFrame, config: dict[str, Any], logger: logging.Logger, symbol: str):
@@ -626,193 +843,90 @@ class TradingAnalyzer:
         cfg = self.config
         isd = self.indicator_settings
 
-        # SMA
         if cfg["indicators"].get("sma_10", False):
             self.df["SMA_10"] = self._safe_calculate(indicators.calculate_sma, "SMA_10", period=isd["sma_short_period"])
-            if self.df["SMA_10"] is not None and not self.df["SMA_10"].empty:
-                self.indicator_values["SMA_10"] = self.df["SMA_10"].iloc[-1]
+            if self.df["SMA_10"] is not None and not self.df["SMA_10"].empty: self.indicator_values["SMA_10"] = self.df["SMA_10"].iloc[-1]
         if cfg["indicators"].get("sma_trend_filter", False):
             self.df["SMA_Long"] = self._safe_calculate(indicators.calculate_sma, "SMA_Long", period=isd["sma_long_period"])
-            if self.df["SMA_Long"] is not None and not self.df["SMA_Long"].empty:
-                self.indicator_values["SMA_Long"] = self.df["SMA_Long"].iloc[-1]
-
-        # EMA
+            if self.df["SMA_Long"] is not None and not self.df["SMA_Long"].empty: self.indicator_values["SMA_Long"] = self.df["SMA_Long"].iloc[-1]
         if cfg["indicators"].get("ema_alignment", False):
             self.df["EMA_Short"] = self._safe_calculate(indicators.calculate_ema, "EMA_Short", period=isd["ema_short_period"])
             self.df["EMA_Long"] = self._safe_calculate(indicators.calculate_ema, "EMA_Long", period=isd["ema_long_period"])
-            if self.df["EMA_Short"] is not None and not self.df["EMA_Short"].empty:
-                self.indicator_values["EMA_Short"] = self.df["EMA_Short"].iloc[-1]
-            if self.df["EMA_Long"] is not None and not self.df["EMA_Long"].empty:
-                self.indicator_values["EMA_Long"] = self.df["EMA_Long"].iloc[-1]
-
-        # ATR
+            if self.df["EMA_Short"] is not None and not self.df["EMA_Short"].empty: self.indicator_values["EMA_Short"] = self.df["EMA_Short"].iloc[-1]
+            if self.df["EMA_Long"] is not None and not self.df["EMA_Long"].empty: self.indicator_values["EMA_Long"] = self.df["EMA_Long"].iloc[-1]
         self.df["TR"] = self._safe_calculate(indicators.calculate_true_range, "TR")
         self.df["ATR"] = self._safe_calculate(indicators.calculate_atr, "ATR", period=isd["atr_period"])
-        if self.df["ATR"] is not None and not self.df["ATR"].empty:
-            self.indicator_values["ATR"] = self.df["ATR"].iloc[-1]
-
-        # RSI
+        if self.df["ATR"] is not None and not self.df["ATR"].empty: self.indicator_values["ATR"] = self.df["ATR"].iloc[-1]
         if cfg["indicators"].get("rsi", False):
             self.df["RSI"] = self._safe_calculate(indicators.calculate_rsi, "RSI", period=isd["rsi_period"])
-            if self.df["RSI"] is not None and not self.df["RSI"].empty:
-                self.indicator_values["RSI"] = self.df["RSI"].iloc[-1]
-
-        # Stochastic RSI
+            if self.df["RSI"] is not None and not self.df["RSI"].empty: self.indicator_values["RSI"] = self.df["RSI"].iloc[-1]
         if cfg["indicators"].get("stoch_rsi", False):
             stoch_rsi_k, stoch_rsi_d = self._safe_calculate(indicators.calculate_stoch_rsi, "StochRSI", period=isd["stoch_rsi_period"], k_period=isd["stoch_k_period"], d_period=isd["stoch_d_period"])
-            if stoch_rsi_k is not None and not stoch_rsi_k.empty:
-                self.df["StochRSI_K"] = stoch_rsi_k
-                self.indicator_values["StochRSI_K"] = stoch_rsi_k.iloc[-1]
-            if stoch_rsi_d is not None and not stoch_rsi_d.empty:
-                self.df["StochRSI_D"] = stoch_rsi_d
-                self.indicator_values["StochRSI_D"] = stoch_rsi_d.iloc[-1]
-
-        # Bollinger Bands
+            if stoch_rsi_k is not None and not stoch_rsi_k.empty: self.df["StochRSI_K"] = stoch_rsi_k; self.indicator_values["StochRSI_K"] = stoch_rsi_k.iloc[-1]
+            if stoch_rsi_d is not None and not stoch_rsi_d.empty: self.df["StochRSI_D"] = stoch_rsi_d; self.indicator_values["StochRSI_D"] = stoch_rsi_d.iloc[-1]
         if cfg["indicators"].get("bollinger_bands", False):
             bb_upper, bb_middle, bb_lower = self._safe_calculate(indicators.calculate_bollinger_bands, "BollingerBands", period=isd["bollinger_bands_period"], std_dev=isd["bollinger_bands_std_dev"])
-            if bb_upper is not None and not bb_upper.empty:
-                self.df["BB_Upper"] = bb_upper
-                self.indicator_values["BB_Upper"] = bb_upper.iloc[-1]
-            if bb_middle is not None and not bb_middle.empty:
-                self.df["BB_Middle"] = bb_middle
-                self.indicator_values["BB_Middle"] = bb_middle.iloc[-1]
-            if bb_lower is not None and not bb_lower.empty:
-                self.df["BB_Lower"] = bb_lower
-                self.indicator_values["BB_Lower"] = bb_lower.iloc[-1]
-
-        # CCI
+            if bb_upper is not None and not bb_upper.empty: self.df["BB_Upper"] = bb_upper; self.indicator_values["BB_Upper"] = bb_upper.iloc[-1]
+            if bb_middle is not None and not bb_middle.empty: self.df["BB_Middle"] = bb_middle; self.indicator_values["BB_Middle"] = bb_middle.iloc[-1]
+            if bb_lower is not None and not bb_lower.empty: self.df["BB_Lower"] = bb_lower; self.indicator_values["BB_Lower"] = bb_lower.iloc[-1]
         if cfg["indicators"].get("cci", False):
             self.df["CCI"] = self._safe_calculate(indicators.calculate_cci, "CCI", period=isd["cci_period"])
-            if self.df["CCI"] is not None and not self.df["CCI"].empty:
-                self.indicator_values["CCI"] = self.df["CCI"].iloc[-1]
-
-        # Williams %R
+            if self.df["CCI"] is not None and not self.df["CCI"].empty: self.indicator_values["CCI"] = self.df["CCI"].iloc[-1]
         if cfg["indicators"].get("wr", False):
             self.df["WR"] = self._safe_calculate(indicators.calculate_williams_r, "WR", period=isd["williams_r_period"])
-            if self.df["WR"] is not None and not self.df["WR"].empty:
-                self.indicator_values["WR"] = self.df["WR"].iloc[-1]
-
-        # MFI
+            if self.df["WR"] is not None and not self.df["WR"].empty: self.indicator_values["WR"] = self.df["WR"].iloc[-1]
         if cfg["indicators"].get("mfi", False):
             self.df["MFI"] = self._safe_calculate(indicators.calculate_mfi, "MFI", period=isd["mfi_period"])
-            if self.df["MFI"] is not None and not self.df["MFI"].empty:
-                self.indicator_values["MFI"] = self.df["MFI"].iloc[-1]
-
-        # OBV
+            if self.df["MFI"] is not None and not self.df["MFI"].empty: self.indicator_values["MFI"] = self.df["MFI"].iloc[-1]
         if cfg["indicators"].get("obv", False):
             obv_val, obv_ema = self._safe_calculate(indicators.calculate_obv, "OBV", ema_period=isd["obv_ema_period"])
-            if obv_val is not None and not obv_val.empty:
-                self.df["OBV"] = obv_val
-                self.indicator_values["OBV"] = obv_val.iloc[-1]
-            if obv_ema is not None and not obv_ema.empty:
-                self.df["OBV_EMA"] = obv_ema
-                self.indicator_values["OBV_EMA"] = obv_ema.iloc[-1]
-
-        # CMF
+            if obv_val is not None and not obv_val.empty: self.df["OBV"] = obv_val; self.indicator_values["OBV"] = obv_val.iloc[-1]
+            if obv_ema is not None and not obv_ema.empty: self.df["OBV_EMA"] = obv_ema; self.indicator_values["OBV_EMA"] = obv_ema.iloc[-1]
         if cfg["indicators"].get("cmf", False):
             cmf_val = self._safe_calculate(indicators.calculate_cmf, "CMF", period=isd["cmf_period"])
-            if cmf_val is not None and not cmf_val.empty:
-                self.df["CMF"] = cmf_val
-                self.indicator_values["CMF"] = cmf_val.iloc[-1]
-
-        # Ichimoku Cloud
+            if cmf_val is not None and not cmf_val.empty: self.df["CMF"] = cmf_val; self.indicator_values["CMF"] = cmf_val.iloc[-1]
         if cfg["indicators"].get("ichimoku_cloud", False):
             tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span = self._safe_calculate(indicators.calculate_ichimoku_cloud, "IchimokuCloud", tenkan_period=isd["ichimoku_tenkan_period"], kijun_period=isd["ichimoku_kijun_period"], senkou_span_b_period=isd["ichimoku_senkou_span_b_period"], chikou_span_offset=isd["ichimoku_chikou_span_offset"])
-            if tenkan_sen is not None and not tenkan_sen.empty:
-                self.df["Tenkan_Sen"] = tenkan_sen
-                self.indicator_values["Tenkan_Sen"] = tenkan_sen.iloc[-1]
-            if kijun_sen is not None and not kijun_sen.empty:
-                self.df["Kijun_Sen"] = kijun_sen
-                self.indicator_values["Kijun_Sen"] = kijun_sen.iloc[-1]
-            if senkou_span_a is not None and not senkou_span_a.empty:
-                self.df["Senkou_Span_A"] = senkou_span_a
-                self.indicator_values["Senkou_Span_A"] = senkou_span_a.iloc[-1]
-            if senkou_span_b is not None and not senkou_span_b.empty:
-                self.df["Senkou_Span_B"] = senkou_span_b
-                self.indicator_values["Senkou_Span_B"] = senkou_span_b.iloc[-1]
-            if chikou_span is not None and not chikou_span.empty:
-                self.df["Chikou_Span"] = chikou_span
-                self.indicator_values["Chikou_Span"] = chikou_span.fillna(0).iloc[-1]
-
-        # PSAR
+            if tenkan_sen is not None and not tenkan_sen.empty: self.df["Tenkan_Sen"] = tenkan_sen; self.indicator_values["Tenkan_Sen"] = tenkan_sen.iloc[-1]
+            if kijun_sen is not None and not kijun_sen.empty: self.df["Kijun_Sen"] = kijun_sen; self.indicator_values["Kijun_Sen"] = kijun_sen.iloc[-1]
+            if senkou_span_a is not None and not senkou_span_a.empty: self.df["Senkou_Span_A"] = senkou_span_a; self.indicator_values["Senkou_Span_A"] = senkou_span_a.iloc[-1]
+            if senkou_span_b is not None and not senkou_span_b.empty: self.df["Senkou_Span_B"] = senkou_span_b; self.indicator_values["Senkou_Span_B"] = senkou_span_b.iloc[-1]
+            if chikou_span is not None and not chikou_span.empty: self.df["Chikou_Span"] = chikou_span; self.indicator_values["Chikou_Span"] = chikou_span.fillna(0).iloc[-1]
         if cfg["indicators"].get("psar", False):
             psar_val, psar_dir = self._safe_calculate(indicators.calculate_psar, "PSAR", acceleration=isd["psar_acceleration"], max_acceleration=isd["psar_max_acceleration"])
-            if psar_val is not None and not psar_val.empty:
-                self.df["PSAR_Val"] = psar_val
-                self.indicator_values["PSAR_Val"] = psar_val.iloc[-1]
-            if psar_dir is not None and not psar_dir.empty:
-                self.df["PSAR_Dir"] = psar_dir
-                self.indicator_values["PSAR_Dir"] = psar_dir.iloc[-1]
-
-        # VWAP
+            if psar_val is not None and not psar_val.empty: self.df["PSAR_Val"] = psar_val; self.indicator_values["PSAR_Val"] = psar_val.iloc[-1]
+            if psar_dir is not None and not psar_dir.empty: self.df["PSAR_Dir"] = psar_dir; self.indicator_values["PSAR_Dir"] = psar_dir.iloc[-1]
         if cfg["indicators"].get("vwap", False):
             self.df["VWAP"] = self._safe_calculate(indicators.calculate_vwap, "VWAP")
-            if self.df["VWAP"] is not None and not self.df["VWAP"].empty:
-                self.indicator_values["VWAP"] = self.df["VWAP"].iloc[-1]
-
-        # Ehlers SuperTrend
+            if self.df["VWAP"] is not None and not self.df["VWAP"].empty: self.indicator_values["VWAP"] = self.df["VWAP"].iloc[-1]
         if cfg["indicators"].get("ehlers_supertrend", False):
             st_fast_result = self._safe_calculate(indicators.calculate_ehlers_supertrend, "EhlersSuperTrendFast", period=isd["ehlers_fast_period"], multiplier=isd["ehlers_fast_multiplier"])
-            if st_fast_result is not None and not st_fast_result.empty:
-                self.df["st_fast_dir"] = st_fast_result["direction"]
-                self.df["st_fast_val"] = st_fast_result["supertrend"]
-                self.indicator_values["ST_Fast_Dir"] = st_fast_result["direction"].iloc[-1]
-                self.indicator_values["ST_Fast_Val"] = st_fast_result["supertrend"].iloc[-1]
+            if st_fast_result is not None and not st_fast_result.empty: self.df["st_fast_dir"] = st_fast_result["direction"]; self.df["st_fast_val"] = st_fast_result["supertrend"]; self.indicator_values["ST_Fast_Dir"] = st_fast_result["direction"].iloc[-1]; self.indicator_values["ST_Fast_Val"] = st_fast_result["supertrend"].iloc[-1]
             st_slow_result = self._safe_calculate(indicators.calculate_ehlers_supertrend, "EhlersSuperTrendSlow", period=isd["ehlers_slow_period"], multiplier=isd["ehlers_slow_multiplier"])
-            if st_slow_result is not None and not st_slow_result.empty:
-                self.df["st_slow_dir"] = st_slow_result["direction"]
-                self.df["st_slow_val"] = st_slow_result["supertrend"]
-                self.indicator_values["ST_Slow_Dir"] = st_slow_result["direction"].iloc[-1]
-                self.indicator_values["ST_Slow_Val"] = st_slow_result["supertrend"].iloc[-1]
-
-        # MACD
+            if st_slow_result is not None and not st_slow_result.empty: self.df["st_slow_dir"] = st_slow_result["direction"]; self.df["st_slow_val"] = st_slow_result["supertrend"]; self.indicator_values["ST_Slow_Dir"] = st_slow_result["direction"].iloc[-1]; self.indicator_values["ST_Slow_Val"] = st_slow_result["supertrend"].iloc[-1]
         if cfg["indicators"].get("macd", False):
             macd_line, signal_line, histogram = self._safe_calculate(indicators.calculate_macd, "MACD", fast_period=isd["macd_fast_period"], slow_period=isd["macd_slow_period"], signal_period=isd["macd_signal_period"])
-            if macd_line is not None and not macd_line.empty:
-                self.df["MACD_Line"] = macd_line
-                self.indicator_values["MACD_Line"] = macd_line.iloc[-1]
-            if signal_line is not None and not signal_line.empty:
-                self.df["MACD_Signal"] = signal_line
-                self.indicator_values["MACD_Signal"] = signal_line.iloc[-1]
-            if histogram is not None and not histogram.empty:
-                self.df["MACD_Hist"] = histogram
-                self.indicator_values["MACD_Hist"] = histogram.iloc[-1]
-
-        # ADX
+            if macd_line is not None and not macd_line.empty: self.df["MACD_Line"] = macd_line; self.indicator_values["MACD_Line"] = macd_line.iloc[-1]
+            if signal_line is not None and not signal_line.empty: self.df["MACD_Signal"] = signal_line; self.indicator_values["MACD_Signal"] = signal_line.iloc[-1]
+            if histogram is not None and not histogram.empty: self.df["MACD_Hist"] = histogram; self.indicator_values["MACD_Hist"] = histogram.iloc[-1]
         if cfg["indicators"].get("adx", False):
             adx_val, plus_di, minus_di = self._safe_calculate(indicators.calculate_adx, "ADX", period=isd["adx_period"])
-            if adx_val is not None and not adx_val.empty:
-                self.df["ADX"] = adx_val
-                self.indicator_values["ADX"] = adx_val.iloc[-1]
-            if plus_di is not None and not plus_di.empty:
-                self.df["PlusDI"] = plus_di
-                self.indicator_values["PlusDI"] = plus_di.iloc[-1]
-            if minus_di is not None and not minus_di.empty:
-                self.df["MinusDI"] = minus_di
-                self.indicator_values["MinusDI"] = minus_di.iloc[-1]
-
-        # Volatility Index
+            if adx_val is not None and not adx_val.empty: self.df["ADX"] = adx_val; self.indicator_values["ADX"] = adx_val.iloc[-1]
+            if plus_di is not None and not plus_di.empty: self.df["PlusDI"] = plus_di; self.indicator_values["PlusDI"] = plus_di.iloc[-1]
+            if minus_di is not None and not minus_di.empty: self.df["MinusDI"] = minus_di; self.indicator_values["MinusDI"] = minus_di.iloc[-1]
         if cfg["indicators"].get("volatility_index", False):
             self.df["Volatility_Index"] = self._safe_calculate(indicators.calculate_volatility_index, "Volatility_Index", period=isd["volatility_index_period"])
-            if self.df["Volatility_Index"] is not None and not self.df["Volatility_Index"].empty:
-                self.indicator_values["Volatility_Index"] = self.df["Volatility_Index"].iloc[-1]
-
-        # VWMA
+            if self.df["Volatility_Index"] is not None and not self.df["Volatility_Index"].empty: self.indicator_values["Volatility_Index"] = self.df["Volatility_Index"].iloc[-1]
         if cfg["indicators"].get("vwma", False):
             self.df["VWMA"] = self._safe_calculate(indicators.calculate_vwma, "VWMA", period=isd["vwma_period"])
-            if self.df["VWMA"] is not None and not self.df["VWMA"].empty:
-                self.indicator_values["VWMA"] = self.df["VWMA"].iloc[-1]
-
-        # Volume Delta
+            if self.df["VWMA"] is not None and not self.df["VWMA"].empty: self.indicator_values["VWMA"] = self.df["VWMA"].iloc[-1]
         if cfg["indicators"].get("volume_delta", False):
             self.df["Volume_Delta"] = self._safe_calculate(indicators.calculate_volume_delta, "Volume_Delta", period=isd["volume_delta_period"])
-            if self.df["Volume_Delta"] is not None and not self.df["Volume_Delta"].empty:
-                self.indicator_values["Volume_Delta"] = self.df["Volume_Delta"].iloc[-1]
+            if self.df["Volume_Delta"] is not None and not self.df["Volume_Delta"].empty: self.indicator_values["Volume_Delta"] = self.df["Volume_Delta"].iloc[-1]
 
         self.df.dropna(subset=["close"], inplace=True)
         self.df.fillna(0, inplace=True)
-        if self.df.empty:
-            self.logger.warning(f"{NEON_YELLOW}DataFrame empty after indicator calculations.{RESET}")
+        if self.df.empty: self.logger.warning(f"{NEON_YELLOW}DataFrame empty after indicator calculations.{RESET}")
 
     def _get_indicator_value(self, key: str, default: Any = np.nan) -> Any:
         return self.indicator_values.get(key, default)
@@ -826,16 +940,12 @@ class TradingAnalyzer:
         imbalance = (bid_volume - ask_volume) / (bid_volume + ask_volume)
         return float(imbalance)
 
-    # --- NEW: Signal Generation Helpers ---
     def _nz(self, x, default=np.nan):
         try: return float(x)
         except Exception: return default
 
     def _clip(self, x, lo=-1.0, hi=1.0):
         return float(np.clip(x, lo, hi))
-
-    def _sigmoid(self, x):
-        return 1.0 / (1.0 + np.exp(-x))
 
     def _safe_prev(self, series_name: str, default=np.nan):
         s = self.df.get(series_name)
@@ -882,45 +992,139 @@ class TradingAnalyzer:
         ratio = float(np.clip(atr_now / atr_ma, 0.9, 1.5))
         return base_threshold * ratio
 
-    # --- NEW: Upgraded Signal Generation Logic ---
     def generate_trading_signal(self, current_price: Decimal, orderbook_data: dict | None, mtf_trends: dict[str, str]) -> tuple[str, float]:
         if self.df.empty: return "HOLD", 0.0
         w, active, isd = self.weights, self.config["indicators"], self.indicator_settings
         score, notes_buy, notes_sell = 0.0, [], []
-        close, prev_close = float(self.df["close"].iloc[-1]), float(self.df["close"].iloc[-2]) if len(self.df) > 1 else float(self.df["close"].iloc[-1])
+        close = float(self.df["close"].iloc[-1])
         regime = self._market_regime()
 
-        # Trend structure
         if active.get("ema_alignment"):
             es, el = self._nz(self._get_indicator_value("EMA_Short")), self._nz(self._get_indicator_value("EMA_Long"))
             if not np.isnan(es) and not np.isnan(el):
                 if es > el: score += w.get("ema_alignment", 0); notes_buy.append(f"EMA Bull +{w.get('ema_alignment',0):.2f}")
                 elif es < el: score -= w.get("ema_alignment", 0); notes_sell.append(f"EMA Bear -{w.get('ema_alignment',0):.2f}")
-        
-        # Final decision with dynamic threshold + cooldown + hysteresis
+        if active.get("sma_trend_filter"):
+            sma_long = self._nz(self._get_indicator_value("SMA_Long"))
+            if not np.isnan(sma_long):
+                if close > sma_long: score += w.get("sma_trend_filter", 0); notes_buy.append(f"SMA Trend Bull +{w.get('sma_trend_filter',0):.2f}")
+                elif close < sma_long: score -= w.get("sma_trend_filter", 0); notes_sell.append(f"SMA Trend Bear -{w.get('sma_trend_filter',0):.2f}")
+        if active.get("ehlers_supertrend"):
+            st_fast_dir, st_slow_dir = self._get_indicator_value("ST_Fast_Dir"), self._get_indicator_value("ST_Slow_Dir")
+            if st_fast_dir == 1 and st_slow_dir == 1: score += w.get("ehlers_supertrend_alignment", 0); notes_buy.append(f"EhlersST Bull +{w.get('ehlers_supertrend_alignment',0):.2f}")
+            elif st_fast_dir == -1 and st_slow_dir == -1: score -= w.get("ehlers_supertrend_alignment", 0); notes_sell.append(f"EhlersST Bear -{w.get('ehlers_supertrend_alignment',0):.2f}")
+        if active.get("macd"):
+            macd, signal = self._nz(self._get_indicator_value("MACD_Line")), self._nz(self._get_indicator_value("MACD_Signal"))
+            hist, prev_hist = self._safe_prev("MACD_Hist")
+            if not np.isnan(macd) and not np.isnan(signal):
+                if macd > signal and hist > 0 and prev_hist <= 0: score += w.get("macd_alignment", 0); notes_buy.append(f"MACD Bull Cross +{w.get('macd_alignment',0):.2f}")
+                elif macd < signal and hist < 0 and prev_hist >= 0: score -= w.get("macd_alignment", 0); notes_sell.append(f"MACD Bear Cross -{w.get('macd_alignment',0):.2f}")
+        if active.get("adx"):
+            adx, pdi, mdi = self._nz(self._get_indicator_value("ADX")), self._nz(self._get_indicator_value("PlusDI")), self._nz(self._get_indicator_value("MinusDI"))
+            if not np.isnan(adx) and adx > 20:
+                if pdi > mdi: score += w.get("adx_strength", 0) * (adx/50.0); notes_buy.append(f"ADX Bull {adx:.1f} +{w.get('adx_strength',0) * (adx/50.0):.2f}")
+                else: score -= w.get("adx_strength", 0) * (adx/50.0); notes_sell.append(f"ADX Bear {adx:.1f} -{w.get('adx_strength',0) * (adx/50.0):.2f}")
+        if active.get("ichimoku_cloud"):
+            tenkan, kijun, span_a, span_b, chikou = self._nz(self._get_indicator_value("Tenkan_Sen")), self._nz(self._get_indicator_value("Kijun_Sen")), self._nz(self._get_indicator_value("Senkou_Span_A")), self._nz(self._get_indicator_value("Senkou_Span_B")), self._nz(self._get_indicator_value("Chikou_Span"))
+            if not np.isnan(tenkan) and not np.isnan(kijun) and not np.isnan(span_a) and not np.isnan(span_b) and not np.isnan(chikou):
+                if close > span_a and close > span_b and tenkan > kijun and chikou > close: score += w.get("ichimoku_confluence", 0); notes_buy.append(f"Ichimoku Bull +{w.get('ichimoku_confluence',0):.2f}")
+                elif close < span_a and close < span_b and tenkan < kijun and chikou < close: score -= w.get("ichimoku_confluence", 0); notes_sell.append(f"Ichimoku Bear -{w.get('ichimoku_confluence',0):.2f}")
+        if active.get("psar"):
+            if self._get_indicator_value("PSAR_Dir") == 1: score += w.get("psar", 0); notes_buy.append(f"PSAR Bull +{w.get('psar',0):.2f}")
+            elif self._get_indicator_value("PSAR_Dir") == -1: score -= w.get("psar", 0); notes_sell.append(f"PSAR Bear -{w.get('psar',0):.2f}")
+        if active.get("vwap"):
+            vwap = self._nz(self._get_indicator_value("VWAP"))
+            if not np.isnan(vwap):
+                if close > vwap: score += w.get("vwap", 0); notes_buy.append(f"VWAP Bull +{w.get('vwap',0):.2f}")
+                elif close < vwap: score -= w.get("vwap", 0); notes_sell.append(f"VWAP Bear -{w.get('vwap',0):.2f}")
+        if active.get("vwma"):
+            vwma, sma = self._nz(self._get_indicator_value("VWMA")), self._nz(self._get_indicator_value("SMA_10"))
+            if not np.isnan(vwma) and not np.isnan(sma):
+                if vwma > sma: score += w.get("vwma_cross", 0); notes_buy.append(f"VWMA Cross Bull +{w.get('vwma_cross',0):.2f}")
+                elif vwma < sma: score -= w.get("vwma_cross", 0); notes_sell.append(f"VWMA Cross Bear -{w.get('vwma_cross',0):.2f}")
+        if active.get("sma_10"):
+            sma10 = self._nz(self._get_indicator_value("SMA_10"))
+            if not np.isnan(sma10):
+                if close > sma10: score += w.get("sma_10", 0); notes_buy.append(f"SMA10 Bull +{w.get('sma_10',0):.2f}")
+                elif close < sma10: score -= w.get("sma_10", 0); notes_sell.append(f"SMA10 Bear -{w.get('sma_10',0):.2f}")
+        if active.get("momentum"):
+            mom_score = 0.0
+            if not np.isnan(self._get_indicator_value("RSI")) and self._get_indicator_value("RSI") < isd.get("rsi_oversold", 30): mom_score += 1
+            elif not np.isnan(self._get_indicator_value("RSI")) and self._get_indicator_value("RSI") > isd.get("rsi_overbought", 70): mom_score -= 1
+            stoch_k, stoch_d = self._nz(self._get_indicator_value("StochRSI_K")), self._nz(self._get_indicator_value("StochRSI_D"))
+            if not np.isnan(stoch_k) and not np.isnan(stoch_d):
+                if stoch_k > stoch_d and stoch_k < isd.get("stoch_rsi_oversold", 20): mom_score += 1
+                elif stoch_k < stoch_d and stoch_k > isd.get("stoch_rsi_overbought", 80): mom_score -= 1
+            if not np.isnan(self._get_indicator_value("CCI")) and self._get_indicator_value("CCI") < isd.get("cci_oversold", -100): mom_score += 1
+            elif not np.isnan(self._get_indicator_value("CCI")) and self._get_indicator_value("CCI") > isd.get("cci_overbought", 100): mom_score -= 1
+            if not np.isnan(self._get_indicator_value("WR")) and self._get_indicator_value("WR") < isd.get("williams_r_oversold", -80): mom_score += 1
+            elif not np.isnan(self._get_indicator_value("WR")) and self._get_indicator_value("WR") > isd.get("williams_r_overbought", -20): mom_score -= 1
+            if not np.isnan(self._get_indicator_value("MFI")) and self._get_indicator_value("MFI") < isd.get("mfi_oversold", 20): mom_score += 1
+            elif not np.isnan(self._get_indicator_value("MFI")) and self._get_indicator_value("MFI") > isd.get("mfi_overbought", 80): mom_score -= 1
+            final_mom_score = w.get("momentum_rsi_stoch_cci_wr_mfi", 0) * self._clip(mom_score / 5.0)
+            score += final_mom_score
+            if final_mom_score > 0: notes_buy.append(f"Momentum Bull +{final_mom_score:.2f}")
+            elif final_mom_score < 0: notes_sell.append(f"Momentum Bear {final_mom_score:.2f}")
+        if active.get("bollinger_bands") and regime == "RANGING":
+            bb_u, bb_l = self._nz(self._get_indicator_value("BB_Upper")), self._nz(self._get_indicator_value("BB_Lower"))
+            if not np.isnan(bb_u) and not np.isnan(bb_l):
+                if close < bb_l: score += w.get("bollinger_bands", 0); notes_buy.append(f"BB Reversal Bull +{w.get('bollinger_bands',0):.2f}")
+                elif close > bb_u: score -= w.get("bollinger_bands", 0); notes_sell.append(f"BB Reversal Bear -{w.get('bollinger_bands',0):.2f}")
+        if active.get("volume_confirmation") and self._volume_confirm():
+            score_change = w.get("volume_confirmation", 0)
+            if score > 0: score += score_change; notes_buy.append(f"Vol Confirm +{score_change:.2f}")
+            elif score < 0: score -= score_change; notes_sell.append(f"Vol Confirm -{score_change:.2f}")
+        if active.get("obv"):
+            obv, obv_ema = self._nz(self._get_indicator_value("OBV")), self._nz(self._get_indicator_value("OBV_EMA"))
+            if not np.isnan(obv) and not np.isnan(obv_ema):
+                if obv > obv_ema: score += w.get("obv_momentum", 0); notes_buy.append(f"OBV Bull +{w.get('obv_momentum',0):.2f}")
+                elif obv < obv_ema: score -= w.get("obv_momentum", 0); notes_sell.append(f"OBV Bear -{w.get('obv_momentum',0):.2f}")
+        if active.get("cmf"):
+            cmf = self._nz(self._get_indicator_value("CMF"))
+            if not np.isnan(cmf) and cmf > 0.05: score += w.get("cmf_flow", 0); notes_buy.append(f"CMF Bull +{w.get('cmf_flow',0):.2f}")
+            elif not np.isnan(cmf) and cmf < -0.05: score -= w.get("cmf_flow", 0); notes_sell.append(f"CMF Bear -{w.get('cmf_flow',0):.2f}")
+        if active.get("volume_delta"):
+            vol_delta = self._nz(self._get_indicator_value("Volume_Delta"))
+            delta_thresh = self._nz(isd.get("volume_delta_threshold", 0.2))
+            if not np.isnan(vol_delta):
+                if vol_delta > delta_thresh: score += w.get("volume_delta_signal", 0); notes_buy.append(f"VolDelta Bull +{w.get('volume_delta_signal',0):.2f}")
+                elif vol_delta < -delta_thresh: score -= w.get("volume_delta_signal", 0); notes_sell.append(f"VolDelta Bear -{w.get('volume_delta_signal',0):.2f}")
+        if active.get("volatility_index"):
+            vol_idx = self._nz(self._get_indicator_value("Volatility_Index"))
+            if not np.isnan(vol_idx) and vol_idx > self.df["Volatility_Index"].rolling(50).mean().iloc[-1] * 1.5:
+                score *= 0.75; notes_buy.append("High Vol Dampen"); notes_sell.append("High Vol Dampen")
+        if active.get("orderbook_imbalance"):
+            ob_score, ob_note = self._orderbook_score(orderbook_data, w.get("orderbook_imbalance", 0))
+            score += ob_score
+            if ob_note:
+                if ob_score > 0: notes_buy.append(ob_note)
+                else: notes_sell.append(ob_note)
+        if active.get("mtf_analysis"):
+            mtf_score, mtf_note = self._mtf_confluence(mtf_trends, w.get("mtf_trend_confluence", 0))
+            score += mtf_score
+            if mtf_note:
+                if mtf_score > 0: notes_buy.append(mtf_note)
+                else: notes_sell.append(mtf_note)
+
         base_th = max(float(self.config.get("signal_score_threshold", 2.0)), 1.0)
         dyn_th = self._dynamic_threshold(base_th)
         last_score = float(self.config.get("_last_score", 0.0))
         hyster = float(self.config.get("hysteresis_ratio", 0.85))
         final_signal = "HOLD"
         if np.sign(score) != np.sign(last_score) and abs(score) < abs(last_score) * hyster:
-            final_signal = "HOLD"
+            final_signal = "HOLD"; self.logger.info(f"{NEON_YELLOW}Signal held by hysteresis. Score {score:.2f} vs last {last_score:.2f}{RESET}")
         else:
             if score >= dyn_th: final_signal = "BUY"
             elif score <= -dyn_th: final_signal = "SELL"
-        
         cooldown = int(self.config.get("cooldown_sec", 0))
         now_ts, last_ts = int(time.time()), int(self.config.get("_last_signal_ts", 0))
         if cooldown > 0 and now_ts - last_ts < cooldown and final_signal != "HOLD":
-            final_signal = "HOLD"
-            self.logger.info(f"{NEON_YELLOW}Signal ignored due to cooldown.{RESET}")
-
+            final_signal = "HOLD"; self.logger.info(f"{NEON_YELLOW}Signal ignored due to cooldown.{RESET}")
         self.config["_last_score"] = float(score)
         if final_signal in ("BUY", "SELL"): self.config["_last_signal_ts"] = now_ts
-
         if notes_buy: self.logger.info(f"{NEON_GREEN}Buy Factors: {', '.join(notes_buy)}{RESET}")
         if notes_sell: self.logger.info(f"{NEON_RED}Sell Factors: {', '.join(notes_sell)}{RESET}")
-        self.logger.info(f"{NEON_YELLOW}Regime: {regime} | Score: {score:.2f} | DynThresh: {dyn_th:.2f} | Final: {final_signal}{RESET}")
+        self.logger.info(f"{NEON_PURPLE}Regime: {regime} | Score: {score:.2f} | DynThresh: {dyn_th:.2f} | Final: {final_signal}{RESET}")
         return final_signal, float(score)
 
 # --- NEW: Helper functions for main loop ---
@@ -992,12 +1196,13 @@ def main() -> None:
     pybit_client = PybitTradingClient(config, logger)
     position_manager = PositionManager(config, logger, config["symbol"], pybit_client)
     performance_tracker = PerformanceTracker(logger)
+    exec_sync = ExchangeExecutionSync(config["symbol"], pybit_client, logger, config, position_manager, performance_tracker) if config["execution"]["live_sync"]["enabled"] else None
+    heartbeat = PositionHeartbeat(config["symbol"], pybit_client, logger, config, position_manager) if config["execution"]["live_sync"]["heartbeat"]["enabled"] else None
 
     while True:
         try:
             logger.info(f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
             
-            # --- GUARDRAILS & FILTERS ---
             guard = config.get("risk_guardrails", {})
             if guard.get("enabled", False):
                 equity = Decimal(str(config["trade_management"]["account_balance"])) + performance_tracker.total_pnl
@@ -1013,7 +1218,6 @@ def main() -> None:
                 logger.info(f"{NEON_BLUE}Outside allowed session. Holding.{RESET}")
                 time.sleep(config["loop_delay"]); continue
 
-            # --- DATA FETCHING ---
             current_price = pybit_client.fetch_current_price(config["symbol"])
             if current_price is None: time.sleep(config["loop_delay"]); continue
             
@@ -1032,34 +1236,40 @@ def main() -> None:
                 logger.warning(f"{NEON_YELLOW}Negative EV detected. Holding.{RESET}")
                 time.sleep(config["loop_delay"]); continue
 
-            # --- ADAPTIVE PARAMETERS ---
             tp_mult, sl_mult = adapt_exit_params(performance_tracker, config)
             config["trade_management"]["take_profit_atr_multiple"] = float(tp_mult)
             config["trade_management"]["stop_loss_atr_multiple"] = float(sl_mult)
 
-            # --- MTF ANALYSIS ---
             mtf_trends: dict[str, str] = {}
-            # (Your existing MTF logic here)
+            if config["mtf_analysis"]["enabled"]:
+                for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
+                    htf_df = pybit_client.fetch_klines(config["symbol"], htf_interval, 1000)
+                    if htf_df is not None and not htf_df.empty:
+                        for trend_ind in config["mtf_analysis"]["trend_indicators"]:
+                            trend = indicators._get_mtf_trend(htf_df, config, logger, config["symbol"], trend_ind)
+                            mtf_trends[f"{htf_interval}_{trend_ind}"] = trend
+                    time.sleep(config["mtf_analysis"]["mtf_request_delay_seconds"])
 
-            # --- ANALYSIS & SIGNAL GENERATION ---
             analyzer = TradingAnalyzer(df, config, logger, config["symbol"])
             if analyzer.df.empty: time.sleep(config["loop_delay"]); continue
             
             atr_value = Decimal(str(analyzer._get_indicator_value("ATR", Decimal("0.1"))))
+            config["_last_atr"] = str(atr_value)
             trading_signal, signal_score = analyzer.generate_trading_signal(current_price, orderbook_data, mtf_trends)
 
-            # --- POSITION MANAGEMENT (SIMULATION) ---
             for pos in position_manager.get_open_positions():
                 position_manager.trail_stop(pos, current_price, atr_value)
             position_manager.manage_positions(current_price, performance_tracker)
             position_manager.try_pyramid(current_price, atr_value)
 
-            # --- EXECUTION ---
             if trading_signal in ("BUY", "SELL"):
                 conviction = float(min(2.0, max(0.0, abs(signal_score) / max(config["signal_score_threshold"], 1.0))))
                 position_manager.open_position(trading_signal, current_price, atr_value, conviction)
             else:
                 logger.info(f"{NEON_BLUE}No strong signal. Holding. Score: {signal_score:.2f}{RESET}")
+
+            if exec_sync: exec_sync.poll()
+            if heartbeat: heartbeat.tick()
 
             logger.info(f"{NEON_YELLOW}Performance: {performance_tracker.get_summary()}{RESET}")
             logger.info(f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---{RESET}")
@@ -1071,6 +1281,5 @@ def main() -> None:
             time.sleep(config["loop_delay"] * 2)
 
 if __name__ == "__main__":
-    # Optional: Run weight tuning once on startup
     # random_tune_weights(CONFIG_FILE)
     main()
