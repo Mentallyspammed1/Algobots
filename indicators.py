@@ -1,7 +1,7 @@
 import logging
 import math
 from decimal import ROUND_HALF_UP, Decimal, getcontext
-from typing import Any
+from typing import Any, Union
 
 import pandas as pd
 from bot_logger import setup_logging
@@ -541,6 +541,127 @@ def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float =
     df['supertrend_direction'] = direction
     df.drop(columns=['tr1', 'tr2', 'tr3', 'tr', 'hl2'], inplace=True, errors='ignore')
     return df
+
+def interpret_indicator(logger: logging.Logger, indicator_name: str, values: Union[list[Decimal], Decimal, dict[str, Any], pd.DataFrame]) -> str | None:
+    """
+    Provides a human-readable interpretation of indicator values.
+    """
+    if values is None or (isinstance(values, list) and not values) or (isinstance(values, pd.DataFrame) and values.empty):
+        return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} No data available."
+    try:
+        # Convert single Decimal values to list for consistent indexing if needed
+        if isinstance(values, Decimal):
+            values_list = [values]
+        elif isinstance(values, dict): # For 'mom' which is a dict
+            if indicator_name == "mom":
+                trend = values.get("trend", "N/A")
+                strength = values.get("strength", Decimal('0.0'))
+                return f"{Fore.MAGENTA}Momentum Trend:{Style.RESET_ALL} {trend} (Strength: {strength:.2f})"
+            elif indicator_name == "order_book_walls":
+                 bullish = values.get("bullish", False)
+                 bearish = values.get("bearish", False)
+                 bullish_details = values.get("bullish_details", {})
+                 bearish_details = values.get("bearish_details", {})
+
+                 output = f"{Fore.BLUE}Order Book Walls:{Style.RESET_ALL}\\n"
+                 if bullish:
+                     output += f"{Fore.GREEN}  Bullish Walls Found: {', '.join([f'{k}:{v:.2f}' for k,v in bullish_details.items()])}{Style.RESET_ALL}\\n"
+                 if bearish:
+                     output += f"{Fore.RED}  Bearish Walls Found: {', '.join([f'{k}:{v:.2f}' for k,v in bearish_details.items()])}{Style.RESET_ALL}\\n"
+                 if not bullish and not bearish:
+                     output += "  No significant walls detected.\\n"
+                 return output
+            else:
+                return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} Dictionary format not specifically interpreted."
+        elif isinstance(values, pd.DataFrame): # For stoch_rsi_vals, macd
+            if indicator_name == "stoch_rsi_vals":
+                if not values.empty and 'k' in values.columns and 'd' in values.columns and 'stoch_rsi' in values.columns:
+                     return f"{Fore.GREEN}Stoch RSI:{Style.RESET_ALL} K={values['k'].iloc[-1]:.2f}, D={values['d'].iloc[-1]:.2f}, Stoch_RSI={values['stoch_rsi'].iloc[-1]:.2f}"
+                else:
+                     return f"{Fore.RED}Stoch RSI:{Style.RESET_ALL} Calculation issue or missing columns."
+            elif indicator_name == "macd":
+                 if not values.empty and 'macd' in values.columns and 'signal' in values.columns and 'histogram' in values.columns:
+                     macd_line, signal_line, histogram = values['macd'].iloc[-1], values['signal'].iloc[-1], values['histogram'].iloc[-1]
+                     return f"{Fore.GREEN}MACD:{Style.RESET_ALL} MACD={macd_line:.2f}, Signal={signal_line:.2f}, Histogram={histogram:.2f}"
+                 else:
+                     return f"{Fore.RED}MACD:{Style.RESET_ALL} Calculation issue or missing columns."
+            else:
+                return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} DataFrame format not specifically interpreted."
+        elif isinstance(values, list):
+            values_list = values
+        else:
+             return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} Unexpected value type: {type(values).__name__}."
+
+
+        # Interpret based on indicator name using the last value in the list
+        last_value = values_list[-1] if values_list else None
+        if last_value is None:
+             return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} No valid values for interpretation."
+
+        if indicator_name == "rsi":
+            if last_value > Decimal(70):
+                return f"{Fore.RED}RSI:{Style.RESET_ALL} Overbought ({last_value:.2f})"
+            elif last_value < Decimal(30):
+                return f"{Fore.GREEN}RSI:{Style.RESET_ALL} Oversold ({last_value:.2f})"
+            else:
+                return f"{Fore.YELLOW}RSI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
+        elif indicator_name == "mfi":
+            if last_value > Decimal(80):
+                return f"{Fore.RED}MFI:{Style.RESET_ALL} Overbought ({last_value:.2f})"
+            elif last_value < Decimal(20):
+                return f"{Fore.GREEN}MFI:{Style.RESET_ALL} Oversold ({last_value:.2f})\"\n"
+            else:
+                return f"{Fore.YELLOW}MFI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
+        elif indicator_name == "cci":
+            if last_value > Decimal(100):
+                return f"{Fore.RED}CCI:{Style.RESET_ALL} Overbought ({last_value:.2f})"
+            elif last_value < Decimal(-100):
+                return f"{Fore.GREEN}CCI:{Style.RESET_ALL} Oversold ({last_value:.2f})"
+            else:
+                return f"{Fore.YELLOW}CCI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
+        elif indicator_name == "wr":
+            if last_value < Decimal(-80):
+                return f"{Fore.GREEN}Williams %R:{Style.RESET_ALL} Oversold ({last_value:.2f})"
+            elif last_value > Decimal(-20):
+                return f"{Fore.RED}Williams %R:{Style.RESET_ALL} Overbought ({last_value:.2f})"
+            else:
+                return f"{Fore.YELLOW}Williams %R:{Style.RESET_ALL} Neutral ({last_value:.2f})"
+        elif indicator_name == "adx":
+            if last_value > Decimal(25):
+                return f"{Fore.GREEN}ADX:{Style.RESET_ALL} Trending ({last_value:.2f})"
+            else:
+                return f"{Fore.YELLOW}ADX:{Style.RESET_ALL} Ranging ({last_value:.2f})\"\n"
+        elif indicator_name == "obv":
+            if len(values_list) >= 2:
+                return f"{Fore.BLUE}OBV:{Style.RESET_ALL} {'Bullish' if values_list[-1] > values_list[-2] else 'Bearish' if values_list[-1] < values_list[-2] else 'Neutral'}"
+            else:
+                return f"{Fore.BLUE}OBV:{Style.RESET_ALL} {last_value:.2f} (Insufficient history for trend)"
+        elif indicator_name == "adi":
+            if len(values_list) >= 2:
+                return f"{Fore.BLUE}ADI:{Style.RESET_ALL} {'Accumulation' if values_list[-1] > values_list[-2] else 'Distribution' if values_list[-1] < values_list[-2] else 'Neutral'}"
+            else:
+                return f"{Fore.BLUE}ADI:{Style.RESET_ALL} {last_value:.2f} (Insufficient history for trend)"
+        elif indicator_name == "sma_10":
+            return f"{Fore.YELLOW}SMA (10):{Style.RESET_ALL} {last_value:.2f}"
+        elif indicator_name == "psar":
+            return f"{Fore.BLUE}PSAR:{Style.RESET_ALL} {last_value:.4f} (Last Value)"
+        elif indicator_name == "fve":
+            return f"{Fore.BLUE}FVE:{Style.RESET_ALL} {last_value:.2f} (Last Value)"
+        elif indicator_name == "supertrend":
+             if len(values_list) >= 2:
+                 # Assuming values_list is [..., latest_value, latest_direction]
+                 latest_value = values_list[-2]
+                 latest_direction = values_list[-1]
+                 status = 'Above (Bullish)' if latest_direction == 1 else 'Below (Bearish)'
+                 return f"{Fore.BLUE}Supertrend:{Style.RESET_ALL} {latest_value:.4f} ({status})"
+             else:
+                return f"{Fore.BLUE}Supertrend:{Style.RESET_ALL} {last_value:.4f} (Insufficient history for direction)"
+
+        else:
+            return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} No specific interpretation available."
+    except (TypeError, IndexError, KeyError, ValueError, InvalidOperation) as e:
+        logger.error(f"{Fore.RED}Error interpreting {indicator_name}: {e}. Values: {values}{Style.RESET_ALL}")
+        return f"{Fore.RED}{indicator_name.upper()}:{Style.RESET_ALL} Interpretation error."
 
 # --- Self-contained demonstration block ---
 if __name__ == "__main__":
