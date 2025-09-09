@@ -1697,12 +1697,368 @@ class TradingAnalyzer:
                         signal_score += score_change
                         sell_reasons.append(f"StochRSI Bearish: {score_change:.2f}")
 
-        # Final Signal Determination
-        if buy_reasons:
-            self.logger.info(f"{NEON_GREEN}Buy Reasons: {', '.join(buy_reasons)}{RESET}")
-        if sell_reasons:
-            self.logger.info(f"{NEON_RED}Sell Reasons: {', '.join(sell_reasons)}{RESET}")
+        def generate_trading_signal(
+        self,
+        current_price: Decimal,
+        orderbook_data: dict | None,
+        mtf_trends: dict[str, str],
+    ) -> tuple[str, float]:
+        """Generate a signal using confluence of indicators."""
+        signal_score = 0.0
+        active_indicators = self.config["indicators"]
+        weights = self.weights
+        isd = self.indicator_settings
 
+        if self.df.empty:
+            self.logger.warning(
+                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty in generate_trading_signal. Cannot generate signal.{RESET}"
+            )
+            return "HOLD", 0.0
+
+        current_close = Decimal(str(self.df["close"].iloc[-1]))
+        prev_close = Decimal(
+            str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close
+        )
+
+        # --- Indicator Scoring ---
+
+        # EMA Alignment
+        if active_indicators.get("ema_alignment", False):
+            ema_short = self._get_indicator_value("EMA_Short")
+            ema_long = self._get_indicator_value("EMA_Long")
+            if not pd.isna(ema_short) and not pd.isna(ema_long):
+                weight = weights.get("ema_alignment", 0)
+                if ema_short > ema_long:
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] EMA Bullish: +{weight:.2f}")
+                elif ema_short < ema_long:
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] EMA Bearish: -{weight:.2f}")
+
+        # SMA Trend Filter
+        if active_indicators.get("sma_trend_filter", False):
+            sma_long = self._get_indicator_value("SMA_Long")
+            if not pd.isna(sma_long):
+                weight = weights.get("sma_trend_filter", 0)
+                if current_close > sma_long:
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] SMA Trend Bullish: +{weight:.2f}")
+                elif current_close < sma_long:
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] SMA Trend Bearish: -{weight:.2f}")
+
+        # Momentum Indicators (RSI, StochRSI, CCI, WR, MFI) - Combined Weight
+        if active_indicators.get("momentum", False):
+            momentum_weight = weights.get("momentum_rsi_stoch_cci_wr_mfi", 0)
+            momentum_indicators_count = 0
+            temp_momentum_score = 0.0
+
+            # RSI
+            if active_indicators.get("rsi", False):
+                momentum_indicators_count += 1
+                rsi = self._get_indicator_value("RSI")
+                if not pd.isna(rsi):
+                    if rsi < isd["rsi_oversold"]:
+                        temp_momentum_score += 1
+                        self.logger.debug(f"[{self.symbol}] RSI Oversold (Bullish)")
+                    elif rsi > isd["rsi_overbought"]:
+                        temp_momentum_score -= 1
+                        self.logger.debug(f"[{self.symbol}] RSI Overbought (Bearish)")
+
+            # StochRSI
+            if active_indicators.get("stoch_rsi", False):
+                momentum_indicators_count += 1
+                stoch_k = self._get_indicator_value("StochRSI_K")
+                stoch_d = self._get_indicator_value("StochRSI_D")
+                if not pd.isna(stoch_k) and not pd.isna(stoch_d) and len(self.df) > 1:
+                    prev_stoch_k = self.df["StochRSI_K"].iloc[-2]
+                    prev_stoch_d = self.df["StochRSI_D"].iloc[-2]
+                    if (
+                        stoch_k > stoch_d
+                        and prev_stoch_k <= prev_stoch_d
+                        and stoch_k < isd["stoch_rsi_oversold"]
+                    ):
+                        temp_momentum_score += 1.2 # Stronger signal
+                        self.logger.debug(f"[{self.symbol}] StochRSI Bullish Cross from Oversold")
+                    elif (
+                        stoch_k < stoch_d
+                        and prev_stoch_k >= prev_stoch_d
+                        and stoch_k > isd["stoch_rsi_overbought"]
+                    ):
+                        temp_momentum_score -= 1.2 # Stronger signal
+                        self.logger.debug(f"[{self.symbol}] StochRSI Bearish Cross from Overbought")
+                    elif stoch_k > stoch_d and stoch_k < 50:
+                        temp_momentum_score += 0.5
+                        self.logger.debug(f"[{self.symbol}] StochRSI Bullish Momentum")
+                    elif stoch_k < stoch_d and stoch_k > 50:
+                        temp_momentum_score -= 0.5
+                        self.logger.debug(f"[{self.symbol}] StochRSI Bearish Momentum")
+
+            # CCI
+            if active_indicators.get("cci", False):
+                momentum_indicators_count += 1
+                cci = self._get_indicator_value("CCI")
+                if not pd.isna(cci):
+                    if cci < isd["cci_oversold"]:
+                        temp_momentum_score += 1
+                        self.logger.debug(f"[{self.symbol}] CCI Oversold (Bullish)")
+                    elif cci > isd["cci_overbought"]:
+                        temp_momentum_score -= 1
+                        self.logger.debug(f"[{self.symbol}] CCI Overbought (Bearish)")
+
+            # Williams %R
+            if active_indicators.get("wr", False):
+                momentum_indicators_count += 1
+                wr = self._get_indicator_value("WR")
+                if not pd.isna(wr):
+                    if wr < isd["williams_r_oversold"]:
+                        temp_momentum_score += 1
+                        self.logger.debug(f"[{self.symbol}] Williams %R Oversold (Bullish)")
+                    elif wr > isd["williams_r_overbought"]:
+                        temp_momentum_score -= 1
+                        self.logger.debug(f"[{self.symbol}] Williams %R Overbought (Bearish)")
+
+            # MFI
+            if active_indicators.get("mfi", False):
+                momentum_indicators_count += 1
+                mfi = self._get_indicator_value("MFI")
+                if not pd.isna(mfi):
+                    if mfi < isd["mfi_oversold"]:
+                        temp_momentum_score += 1
+                        self.logger.debug(f"[{self.symbol}] MFI Oversold (Bullish)")
+                    elif mfi > isd["mfi_overbought"]:
+                        temp_momentum_score -= 1
+                        self.logger.debug(f"[{self.symbol}] MFI Overbought (Bearish)")
+
+            if momentum_indicators_count > 0:
+                # Normalize temp_momentum_score to a range of -1 to 1, then apply weight
+                normalized_score = temp_momentum_score / momentum_indicators_count
+                signal_score += normalized_score * momentum_weight
+                self.logger.debug(f"[{self.symbol}] Momentum Indicators Combined Score: {normalized_score:.2f} * Weight {momentum_weight:.2f} = {normalized_score * momentum_weight:.2f}")
+
+        # Bollinger Bands
+        if active_indicators.get("bollinger_bands", False):
+            bb_upper = self._get_indicator_value("BB_Upper")
+            bb_lower = self._get_indicator_value("BB_Lower")
+            if not pd.isna(bb_upper) and not pd.isna(bb_lower):
+                weight = weights.get("bollinger_bands", 0)
+                if current_close < bb_lower:
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] Price below BB Lower (Bullish): +{weight:.2f}")
+                elif current_close > bb_upper:
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] Price above BB Upper (Bearish): -{weight:.2f}")
+
+        # VWAP
+        if active_indicators.get("vwap", False):
+            vwap = self._get_indicator_value("VWAP")
+            if not pd.isna(vwap):
+                weight = weights.get("vwap", 0)
+                if current_close > vwap:
+                    signal_score += weight * 0.5 # Half weight for being above/below
+                    self.logger.debug(f"[{self.symbol}] Price above VWAP (Bullish): +{weight*0.5:.2f}")
+                elif current_close < vwap:
+                    signal_score -= weight * 0.5
+                    self.logger.debug(f"[{self.symbol}] Price below VWAP (Bearish): -{weight*0.5:.2f}")
+
+                if len(self.df) > 1:
+                    prev_vwap = Decimal(str(self.df["VWAP"].iloc[-2]))
+                    if (current_close > vwap and prev_close <= prev_vwap):
+                        signal_score += weight * 0.5 # Other half for crossover
+                        self.logger.debug(f"[{self.symbol}] VWAP Bullish Crossover: +{weight*0.5:.2f}")
+                    elif (current_close < vwap and prev_close >= prev_vwap):
+                        signal_score -= weight * 0.5
+                        self.logger.debug(f"[{self.symbol}] VWAP Bearish Crossover: -{weight*0.5:.2f}")
+
+        # PSAR
+        if active_indicators.get("psar", False):
+            psar_dir = self._get_indicator_value("PSAR_Dir")
+            if not pd.isna(psar_dir):
+                weight = weights.get("psar", 0)
+                if psar_dir == 1: # Bullish
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] PSAR Bullish: +{weight:.2f}")
+                elif psar_dir == -1: # Bearish
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] PSAR Bearish: -{weight:.2f}")
+
+        # SMA_10 (Short-term trend)
+        if active_indicators.get("sma_10", False):
+            sma_10 = self._get_indicator_value("SMA_10")
+            if not pd.isna(sma_10):
+                weight = weights.get("sma_10", 0)
+                if current_close > sma_10:
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] Price above SMA_10 (Bullish): +{weight:.2f}")
+                elif current_close < sma_10:
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] Price below SMA_10 (Bearish): -{weight:.2f}")
+
+        # Orderbook Imbalance
+        if active_indicators.get("orderbook_imbalance", False) and orderbook_data:
+            imbalance = self._check_orderbook(current_price, orderbook_data)
+            weight = weights.get("orderbook_imbalance", 0)
+            if imbalance > 0.1: # Significant buy pressure
+                signal_score += weight
+                self.logger.debug(f"[{self.symbol}] Orderbook Buy Imbalance: +{weight:.2f}")
+            elif imbalance < -0.1: # Significant sell pressure
+                signal_score -= weight
+                self.logger.debug(f"[{self.symbol}] Orderbook Sell Imbalance: -{weight:.2f}")
+
+        # Ehlers Supertrend Alignment
+        if active_indicators.get("ehlers_supertrend", False):
+            st_fast_dir = self._get_indicator_value("ST_Fast_Dir")
+            st_slow_dir = self._get_indicator_value("ST_Slow_Dir")
+            if not pd.isna(st_fast_dir) and not pd.isna(st_slow_dir):
+                weight = weights.get("ehlers_supertrend_alignment", 0)
+                if st_fast_dir == 1 and st_slow_dir == 1: # Both bullish
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] Ehlers Supertrend Strong Bullish: +{weight:.2f}")
+                elif st_fast_dir == -1 and st_slow_dir == -1: # Both bearish
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] Ehlers Supertrend Strong Bearish: -{weight:.2f}")
+                elif st_fast_dir == 1 and st_slow_dir == 0: # Fast bullish, slow neutral
+                    signal_score += weight * 0.5
+                    self.logger.debug(f"[{self.symbol}] Ehlers Supertrend Weak Bullish: +{weight*0.5:.2f}")
+                elif st_fast_dir == -1 and st_slow_dir == 0: # Fast bearish, slow neutral
+                    signal_score -= weight * 0.5
+                    self.logger.debug(f"[{self.symbol}] Ehlers Supertrend Weak Bearish: -{weight*0.5:.2f}")
+
+        # MACD Alignment
+        if active_indicators.get("macd", False):
+            macd_line = self._get_indicator_value("MACD_Line")
+            signal_line = self._get_indicator_value("MACD_Signal")
+            histogram = self._get_indicator_value("MACD_Hist")
+            if not pd.isna(macd_line) and not pd.isna(signal_line) and not pd.isna(histogram):
+                weight = weights.get("macd_alignment", 0)
+                if macd_line > signal_line and histogram > 0:
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] MACD Bullish: +{weight:.2f}")
+                elif macd_line < signal_line and histogram < 0:
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] MACD Bearish: -{weight:.2f}")
+
+        # ADX Strength
+        if active_indicators.get("adx", False):
+            adx_val = self._get_indicator_value("ADX")
+            plus_di = self._get_indicator_value("PlusDI")
+            minus_di = self._get_indicator_value("MinusDI")
+            if not pd.isna(adx_val) and not pd.isna(plus_di) and not pd.isna(minus_di):
+                weight = weights.get("adx_strength", 0)
+                if adx_val > 25: # Strong trend
+                    if plus_di > minus_di:
+                        signal_score += weight
+                        self.logger.debug(f"[{self.symbol}] ADX Strong Bullish Trend: +{weight:.2f}")
+                    elif minus_di > plus_di:
+                        signal_score -= weight
+                        self.logger.debug(f"[{self.symbol}] ADX Strong Bearish Trend: -{weight:.2f}")
+
+        # Ichimoku Confluence
+        if active_indicators.get("ichimoku_cloud", False):
+            tenkan_sen = self._get_indicator_value("Tenkan_Sen")
+            kijun_sen = self._get_indicator_value("Kijun_Sen")
+            senkou_span_a = self._get_indicator_value("Senkou_Span_A")
+            senkou_span_b = self._get_indicator_value("Senkou_Span_B")
+            if not any(pd.isna(x) for x in [tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b]):
+                weight = weights.get("ichimoku_confluence", 0)
+                # Bullish conditions
+                if (current_close > senkou_span_a and current_close > senkou_span_b and # Price above cloud
+                    tenkan_sen > kijun_sen and # Tenkan above Kijun
+                    senkou_span_a > senkou_span_b): # Green cloud
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] Ichimoku Strong Bullish: +{weight:.2f}")
+                # Bearish conditions
+                elif (current_close < senkou_span_a and current_close < senkou_span_b and # Price below cloud
+                      tenkan_sen < kijun_sen and # Tenkan below Kijun
+                      senkou_span_a < senkou_span_b): # Red cloud
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] Ichimoku Strong Bearish: -{weight:.2f}")
+
+        # OBV Momentum
+        if active_indicators.get("obv", False):
+            obv_val = self._get_indicator_value("OBV")
+            obv_ema = self._get_indicator_value("OBV_EMA")
+            if not pd.isna(obv_val) and not pd.isna(obv_ema):
+                weight = weights.get("obv_momentum", 0)
+                if obv_val > obv_ema:
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] OBV Bullish: +{weight:.2f}")
+                elif obv_val < obv_ema:
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] OBV Bearish: -{weight:.2f}")
+
+        # CMF Flow
+        if active_indicators.get("cmf", False):
+            cmf_val = self._get_indicator_value("CMF")
+            if not pd.isna(cmf_val):
+                weight = weights.get("cmf_flow", 0)
+                if cmf_val > 0:
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] CMF Bullish: +{weight:.2f}")
+                elif cmf_val < 0:
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] CMF Bearish: -{weight:.2f}")
+
+        # MTF Trend Confluence
+        if self.config["mtf_analysis"]["enabled"] and mtf_trends:
+            weight = weights.get("mtf_trend_confluence", 0)
+            bullish_htfs = sum(1 for trend in mtf_trends.values() if trend == "UP")
+            bearish_htfs = sum(1 for trend in mtf_trends.values() if trend == "DOWN")
+            total_htfs = len(mtf_trends)
+
+            if total_htfs > 0:
+                if bullish_htfs == total_htfs: # All higher timeframes are up
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] MTF All Bullish: +{weight:.2f}")
+                elif bearish_htfs == total_htfs: # All higher timeframes are down
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] MTF All Bearish: -{weight:.2f}")
+                elif bullish_htfs > bearish_htfs: # Majority bullish
+                    signal_score += weight * (bullish_htfs / total_htfs) * 0.5
+                    self.logger.debug(f"[{self.symbol}] MTF Majority Bullish: +{weight * (bullish_htfs / total_htfs) * 0.5:.2f}")
+                elif bearish_htfs > bullish_htfs: # Majority bearish
+                    signal_score -= weight * (bearish_htfs / total_htfs) * 0.5
+                    self.logger.debug(f"[{self.symbol}] MTF Majority Bearish: -{weight * (bearish_htfs / total_htfs) * 0.5:.2f}")
+
+        # Volatility Index Signal
+        if active_indicators.get("volatility_index", False):
+            vol_idx = self._get_indicator_value("Volatility_Index")
+            if not pd.isna(vol_idx) and len(self.df) > 1:
+                prev_vol_idx = self.df["Volatility_Index"].iloc[-2]
+                weight = weights.get("volatility_index_signal", 0)
+                if vol_idx > prev_vol_idx: # Volatility increasing (potential for breakout)
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] Volatility Index Increasing (Bullish): +{weight:.2f}")
+                elif vol_idx < prev_vol_idx: # Volatility decreasing (potential for range)
+                    signal_score -= weight * 0.5 # Less bearish, but still a factor
+                    self.logger.debug(f"[{self.symbol}] Volatility Index Decreasing (Bearish): -{weight*0.5:.2f}")
+
+        # VWMA Cross
+        if active_indicators.get("vwma", False):
+            vwma = self._get_indicator_value("VWMA")
+            if not pd.isna(vwma):
+                weight = weights.get("vwma_cross", 0)
+                if current_close > vwma:
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] Price above VWMA (Bullish): +{weight:.2f}")
+                elif current_close < vwma:
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] Price below VWMA (Bearish): -{weight:.2f}")
+
+        # Volume Delta Signal
+        if active_indicators.get("volume_delta", False):
+            volume_delta = self._get_indicator_value("Volume_Delta")
+            if not pd.isna(volume_delta):
+                weight = weights.get("volume_delta_signal", 0)
+                threshold = isd["volume_delta_threshold"]
+                if volume_delta > threshold: # Strong buying pressure
+                    signal_score += weight
+                    self.logger.debug(f"[{self.symbol}] Volume Delta Strong Buy: +{weight:.2f}")
+                elif volume_delta < -threshold: # Strong selling pressure
+                    signal_score -= weight
+                    self.logger.debug(f"[{self.symbol}] Volume Delta Strong Sell: -{weight:.2f}")
+
+        # Final Signal Determination
         threshold = max(self.config["signal_score_threshold"], 1.0)
         final_signal = "HOLD"
         if signal_score >= threshold:
@@ -1764,6 +2120,100 @@ def build_partial_tp_targets(
     return out
 
 
+    class PositionManager:
+    """Manages open positions, stop-loss, and take-profit levels."""
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        logger: logging.Logger,
+        symbol: str,
+        pybit_client: "PybitTradingClient | None" = None,
+    ):
+        self.config = config
+        self.logger = logger
+        self.symbol = symbol
+        self.open_positions: list[dict] = []
+        self.trade_management_enabled = config["trade_management"]["enabled"]
+        self.max_open_positions = config["trade_management"]["max_open_positions"]
+
+        # Initialize with config values, will be updated from exchange
+        self.order_precision = config["trade_management"]["order_precision"]
+        self.price_precision = config["trade_management"]["price_precision"]
+        self.qty_step = None
+
+        self.pybit = pybit_client
+        self.live = bool(config.get("execution", {}).get("use_pybit", False))
+        self._update_precision_from_exchange()
+
+    def _update_precision_from_exchange(self):
+        """Fetch and set precision settings from the exchange."""
+        if not self.pybit or not self.pybit.enabled:
+            self.logger.warning(f"Pybit client not enabled. Cannot fetch precision for {self.symbol}. Using config values.")
+            return
+        self.logger.info(f"Fetching precision for {self.symbol}...")
+        info = self.pybit.fetch_instrument_info(self.symbol)
+        if info:
+            if "lotSizeFilter" in info:
+                lot_size_filter = info["lotSizeFilter"]
+                self.qty_step = Decimal(str(lot_size_filter.get("qtyStep")))
+                if not self.qty_step.is_zero():
+                    self.order_precision = abs(self.qty_step.as_tuple().exponent)
+                self.logger.info(f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}")
+            else:
+                self.logger.warning(f"Could not find lotSizeFilter for {self.symbol}.")
+
+            if "priceFilter" in info:
+                price_filter = info["priceFilter"]
+                tick_size = Decimal(str(price_filter.get("tickSize")))
+                if not tick_size.is_zero():
+                    self.price_precision = abs(tick_size.as_tuple().exponent)
+                self.logger.info(f"Updated price_precision: {self.price_precision}")
+            else:
+                self.logger.warning(f"Could not find priceFilter for {self.symbol}.")
+        else:
+            self.logger.warning(f"Could not fetch precision for {self.symbol}. Using config values.")
+
+    def _get_current_balance(self) -> Decimal:
+        """Fetch current account balance from exchange if live, else use config."""
+        if self.live and self.pybit and self.pybit.enabled:
+            resp = self.pybit.get_wallet_balance(coin="USDT")
+            if resp and self.pybit._ok(resp) and resp.get("result", {}).get("list"):
+                for coin_balance in resp["result"]["list"][0]["coin"]:
+                    if coin_balance["coin"] == "USDT":
+                        return Decimal(coin_balance["walletBalance"])
+        return Decimal(str(self.config["trade_management"]["account_balance"]))
+
+    def _calculate_order_size(
+        self, current_price: Decimal, atr_value: Decimal
+    ) -> Decimal:
+        """Calculate order size based on risk per trade and ATR."""
+        if not self.trade_management_enabled:
+            return Decimal("0")
+        account_balance = self._get_current_balance()
+        risk_per_trade_percent = (
+            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"]))
+            / 100
+        )
+        stop_loss_atr_multiple = Decimal(
+            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+        )
+        risk_amount = account_balance * risk_per_trade_percent
+        stop_loss_distance = atr_value * stop_loss_atr_multiple
+        if stop_loss_distance <= 0:
+            self.logger.warning(f"{NEON_YELLOW}Stop loss distance is zero or negative. Cannot calculate order size.{RESET}")
+            return Decimal("0")
+        order_qty = (risk_amount / stop_loss_distance) / current_price
+
+        if self.qty_step and self.qty_step > Decimal(0):
+            return round_qty(order_qty, self.qty_step)
+
+        # Fallback to old logic if qty_step is not available
+        self.logger.warning(f"{NEON_YELLOW}qty_step not available. Using legacy precision rounding.{RESET}")
+        return order_qty.quantize(
+            Decimal("1e-" + str(self.order_precision)), rounding=ROUND_DOWN
+        )
+
     def _compute_stop_loss_price(
         self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
     ) -> Decimal:
@@ -1806,6 +2256,611 @@ def build_partial_tp_targets(
             )
         )
         return round_price(take_profit, self.price_precision)
+
+    def open_position(
+        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+    ) -> dict | None:
+        """Open a new position, placing live orders if enabled."""
+        if self.live and self.pybit and self.pybit.enabled:
+            positions_resp = self.pybit.get_positions(self.symbol)
+            if positions_resp and self.pybit._ok(positions_resp):
+                pos_list = positions_resp.get("result", {}).get("list", [])
+                if any(p.get("size") and Decimal(p.get("size")) > 0 for p in pos_list):
+                    self.logger.warning(f"{NEON_YELLOW}Exchange position exists, aborting new position.{RESET}")
+                    return None
+
+        if not self.trade_management_enabled or len(self.open_positions) >= self.max_open_positions:
+            self.logger.info(
+                f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}"
+            )
+            return None
+        order_qty = self._calculate_order_size(current_price, atr_value)
+        if order_qty <= 0:
+            self.logger.warning(
+                f"{NEON_YELLOW}Order quantity is zero. Cannot open position.{RESET}"
+            )
+            return None
+
+        stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
+        take_profit = self._calculate_take_profit_price(signal, current_price, atr_value)
+
+        position = {
+            "entry_time": datetime.now(TIMEZONE),
+            "symbol": self.symbol,
+            "side": signal,
+            "entry_price": round_price(current_price, self.price_precision),
+            "qty": order_qty,
+            "stop_loss": stop_loss,
+            "take_profit": round_price(take_profit, self.price_precision),
+            "status": "OPEN",
+            "link_prefix": f"wgx_{int(time.time()*1000)}",
+        }
+
+        if self.live and self.pybit and self.pybit.enabled:
+            entry_link = f"{position['link_prefix']}_entry"
+            resp = self.pybit.place_order(
+                category=self.pybit.category,
+                symbol=self.symbol,
+                side=self.pybit._side_to_bybit(signal),
+                orderType="Market",
+                qty=self.pybit._q(order_qty),
+                orderLinkId=entry_link,
+            )
+            if not self.pybit._ok(resp):
+                self.logger.error(f"{NEON_RED}Live entry failed. Simulating only.{RESET}")
+            else:
+                self.logger.info(f"{NEON_GREEN}Live entry submitted: {entry_link}{RESET}")
+                if self.config["execution"]["tpsl_mode"] == "Partial":
+                    targets = build_partial_tp_targets(
+                        signal, position["entry_price"], atr_value, order_qty, self.config, self.qty_step
+                    )
+                    batch = []
+                    for t in targets:
+                        payload = {
+                            "symbol": self.symbol,
+                            "side": self.pybit._side_to_bybit(
+                                "SELL" if signal == "BUY" else "BUY"
+                            ),
+                            "orderType": t["order_type"],
+                            "qty": self.pybit._q(t["qty"]),
+                            "timeInForce": t["tif"],
+                            "reduceOnly": True,
+                            "positionIdx": self.pybit._pos_idx(signal),
+                            "orderLinkId": f"{position['link_prefix']}_{t['link_id_suffix']}",
+                            "category": self.pybit.category,
+                        }
+                        if t["order_type"] == "Limit":
+                            payload["price"] = self.pybit._q(t["price"])
+                        if t.get("post_only"):
+                            payload["isPostOnly"] = True
+                        batch.append(payload)
+                    if batch:
+                        for p in batch:
+                            resp_tp = self.pybit.place_order(**p)
+                            if resp_tp and resp_tp.get("retCode") == 0:
+                                self.logger.info(f"{NEON_GREEN}Placed individual TP target: {p.get('orderLinkId')}{RESET}")
+                            else:
+                                self.logger.error(f"{NEON_RED}Failed to place individual TP target: {p.get('orderLinkId')}. Error: {resp_tp.get('retMsg') if resp_tp else 'No response'}{RESET}")
+                if self.config["execution"]["sl_scheme"]["use_conditional_stop"]:
+                    sl_link = f"{position['link_prefix']}_sl"
+                    sresp = self.pybit.place_order(
+                        category=self.pybit.category,
+                        symbol=self.symbol,
+                        side=self.pybit._side_to_bybit("SELL" if signal == "BUY" else "BUY"),
+                        orderType=self.config["execution"]["sl_scheme"]["stop_order_type"],
+                        qty=self.pybit._q(order_qty),
+                        reduceOnly=True,
+                        orderLinkId=sl_link,
+                        triggerPrice=self.pybit._q(stop_loss),
+                        triggerDirection=(2 if signal == "BUY" else 1),
+                        orderFilter="Stop",
+                    )
+                    if self.pybit._ok(sresp):
+                        self.logger.info(f"{NEON_GREEN}Conditional stop placed at {stop_loss}.{RESET}")
+
+        self.open_positions.append(position)
+        self.logger.info(
+            f"{NEON_GREEN}Opened {signal} position (simulated): {position}{RESET}"
+        )
+        return position
+
+    def manage_positions(self, current_price: Decimal, performance_tracker: Any):
+        """Check and manage simulated positions (for backtesting/simulation mode)."""
+        if self.live or not self.trade_management_enabled or not self.open_positions:
+            return
+        positions_to_close = []
+        for i, pos in enumerate(self.open_positions):
+            if pos["status"] == "OPEN":
+                closed_by = ""
+                if pos["side"] == "BUY" and current_price <= pos["stop_loss"]:
+                    closed_by = "STOP_LOSS"
+                elif pos["side"] == "BUY" and current_price >= pos["take_profit"]:
+                    closed_by = "TAKE_PROFIT"
+                elif pos["side"] == "SELL" and current_price >= pos["stop_loss"]:
+                    closed_by = "STOP_LOSS"
+                elif pos["side"] == "SELL" and current_price <= pos["take_profit"]:
+                    closed_by = "TAKE_PROFIT"
+                if closed_by:
+                    pos.update(
+                        {
+                            "status": "CLOSED",
+                            "exit_time": datetime.now(TIMEZONE),
+                            "exit_price": current_price,
+                            "closed_by": closed_by,
+                        }
+                    )
+                    pnl = (
+                        (current_price - pos["entry_price"]) * pos["qty"]
+                        if pos["side"] == "BUY"
+                        else (pos["entry_price"] - current_price) * pos["qty"]
+                    )
+                    performance_tracker.record_trade(pos, pnl)
+                    self.logger.info(
+                        f"{NEON_PURPLE}Closed {pos['side']} by {closed_by}. PnL: {pnl:.2f}{RESET}"
+                    )
+                    positions_to_close.append(i)
+        self.open_positions = [
+            p for i, p in enumerate(self.open_positions) if i not in positions_to_close
+        ]
+
+    def get_open_positions(self) -> list[dict]:
+        return [pos for pos in self.open_positions if pos["status"] == "OPEN"]
+
+
+# --- Main Execution Logic ---
+def main() -> None:
+    """Orchestrate the bot's operation."""
+    logger = setup_logger("wgwhalex_bot")
+    config = load_config(CONFIG_FILE, logger)
+    alert_system = AlertSystem(logger)
+
+    logger.info(f"{NEON_GREEN}--- Wgwhalex Trading Bot Initialized ---{RESET}")
+    logger.info(f"Symbol: {config['symbol']}, Interval: {config['interval']}")
+
+    pybit_client = PybitTradingClient(config, logger)
+    if pybit_client.enabled:
+        pybit_client.set_leverage(
+            config["symbol"],
+            config["execution"]["buy_leverage"],
+            config["execution"]["sell_leverage"],
+        )
+
+    position_manager = PositionManager(config, logger, config["symbol"], pybit_client)
+    performance_tracker = PerformanceTracker(logger)
+    exec_sync = (
+        ExchangeExecutionSync(
+            config["symbol"], pybit_client, logger, config, position_manager, performance_tracker
+        )
+        if config["execution"]["live_sync"]["enabled"]
+        else None
+    )
+    heartbeat = (
+        PositionHeartbeat(config["symbol"], pybit_client, logger, config, position_manager)
+        if config["execution"]["live_sync"]["heartbeat"]["enabled"]
+        else None
+    )
+
+    while True:
+        try:
+            logger.info(
+                f"{NEON_PURPLE}--- New Analysis Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+            )
+            current_price = pybit_client.fetch_current_price(config["symbol"])
+            logger.info(f"Current price for {config['symbol']}: {current_price}")
+            if current_price is None:
+                time.sleep(config["loop_delay"])
+                continue
+
+            df = pybit_client.fetch_klines(config["symbol"], config["interval"], 1000)
+            if df is None or df.empty:
+                time.sleep(config["loop_delay"])
+                continue
+
+            orderbook_data = None
+            if config["indicators"].get("orderbook_imbalance", False):
+                orderbook_data = pybit_client.fetch_orderbook(
+                    config["symbol"], config["orderbook_limit"]
+                )
+
+            mtf_trends: dict[str, str] = {}
+            if config["mtf_analysis"]["enabled"]:
+                for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
+                    htf_df = pybit_client.fetch_klines(config["symbol"], htf_interval, 1000)
+                    if htf_df is not None and not htf_df.empty:
+                        for trend_ind in config["mtf_analysis"]["trend_indicators"]:
+                            trend = indicators._get_mtf_trend(
+                                htf_df, config, logger, config["symbol"], trend_ind
+                            )
+                            mtf_trends[f"{htf_interval}_{trend_ind}"] = trend
+                    else:
+                        logger.warning(
+                            f"{NEON_YELLOW}Could not fetch klines for higher timeframe {htf_interval} or it was empty. Skipping MTF trend for this TF.{RESET}"
+                        )
+                    time.sleep(
+                        config["mtf_analysis"]["mtf_request_delay_seconds"]
+                    )  # Delay between MTF requests
+
+            analyzer = TradingAnalyzer(df, config, logger, config["symbol"])
+            if analyzer.df.empty:
+                time.sleep(config["loop_delay"])
+                continue
+
+            atr_value = Decimal(
+                str(analyzer._get_indicator_value("ATR", Decimal("0.1")))
+            )
+            config["_last_atr"] = str(atr_value)
+
+            trading_signal, signal_score = analyzer.generate_trading_signal(
+                current_price, orderbook_data, mtf_trends
+            )
+
+            # Manage simulated positions (only runs if not live)
+            position_manager.manage_positions(current_price, performance_tracker)
+
+            if (
+                trading_signal in ("BUY", "SELL")
+                and abs(signal_score) >= config["signal_score_threshold"]
+            ):
+                position_manager.open_position(trading_signal, current_price, atr_value)
+            else:
+                logger.info(
+                    f"{NEON_BLUE}No strong signal. Holding. Score: {signal_score:.2f}{RESET}"
+                )
+
+            if exec_sync:
+                exec_sync.poll()
+            if heartbeat:
+                heartbeat.tick()
+
+            logger.info(f"{NEON_YELLOW}Performance: {performance_tracker.get_summary()}{RESET}")
+            logger.info(
+                f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---{RESET}"
+            )
+            time.sleep(config["loop_delay"])
+
+        except (pybit.exceptions.FailedRequestError, Exception) as e:
+            alert_system.send_alert(f"Unhandled error in main loop: {e}", "ERROR")
+            logger.exception(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
+            time.sleep(config["loop_delay"] * 2)
+
+
+if __name__ == "__main__":
+    main()
+
+
+# --- Utilities for execution layer ---
+
+
+def build_partial_tp_targets(
+    side: Literal["BUY", "SELL"],
+    entry_price: Decimal,
+    atr_value: Decimal,
+    total_qty: Decimal,
+    cfg: dict,
+    qty_step: Decimal,
+) -> list[dict]:
+    ex = cfg["execution"]
+    tps = ex["tp_scheme"]["targets"]
+    price_prec = cfg["trade_management"]["price_precision"]
+    out = []
+    for i, t in enumerate(tps, start=1):
+        qty = round_qty(total_qty * Decimal(str(t["size_pct"])), qty_step)
+        if qty <= 0:
+            continue
+        if ex["tp_scheme"]["mode"] == "atr_multiples":
+            price = (
+                entry_price + atr_value * Decimal(str(t["atr_multiple"]))
+                if side == "BUY"
+                else entry_price - atr_value * Decimal(str(t["atr_multiple"]))
+            )
+        else:
+            price = (
+                entry_price * (1 + Decimal(str(t.get("percent", 1))) / 100)
+                if side == "BUY"
+                else entry_price * (1 - Decimal(str(t.get("percent", 1))) / 100)
+            )
+        tif = t.get("tif", ex.get("default_time_in_force"))
+        if tif == "GoodTillCancel":
+            tif = "GTC"
+        out.append(
+            {
+                "name": t.get("name", f"TP{i}"),
+                "price": round_price(price, price_prec),
+                "qty": qty,
+                "order_type": t.get("order_type", "Limit"),
+                "tif": tif,
+                "post_only": bool(t.get("post_only", ex.get("post_only_default", False))),
+                "link_id_suffix": f"tp{i}",
+            }
+        )
+    return out
+
+
+    class PositionManager:
+    """Manages open positions, stop-loss, and take-profit levels."""
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        logger: logging.Logger,
+        symbol: str,
+        pybit_client: "PybitTradingClient | None" = None,
+    ):
+        self.config = config
+        self.logger = logger
+        self.symbol = symbol
+        self.open_positions: list[dict] = []
+        self.trade_management_enabled = config["trade_management"]["enabled"]
+        self.max_open_positions = config["trade_management"]["max_open_positions"]
+
+        # Initialize with config values, will be updated from exchange
+        self.order_precision = config["trade_management"]["order_precision"]
+        self.price_precision = config["trade_management"]["price_precision"]
+        self.qty_step = None
+
+        self.pybit = pybit_client
+        self.live = bool(config.get("execution", {}).get("use_pybit", False))
+        self._update_precision_from_exchange()
+
+    def _update_precision_from_exchange(self):
+        """Fetch and set precision settings from the exchange."""
+        if not self.pybit or not self.pybit.enabled:
+            self.logger.warning(f"Pybit client not enabled. Cannot fetch precision for {self.symbol}. Using config values.")
+            return
+        self.logger.info(f"Fetching precision for {self.symbol}...")
+        info = self.pybit.fetch_instrument_info(self.symbol)
+        if info:
+            if "lotSizeFilter" in info:
+                lot_size_filter = info["lotSizeFilter"]
+                self.qty_step = Decimal(str(lot_size_filter.get("qtyStep")))
+                if not self.qty_step.is_zero():
+                    self.order_precision = abs(self.qty_step.as_tuple().exponent)
+                self.logger.info(f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}")
+            else:
+                self.logger.warning(f"Could not find lotSizeFilter for {self.symbol}.")
+
+            if "priceFilter" in info:
+                price_filter = info["priceFilter"]
+                tick_size = Decimal(str(price_filter.get("tickSize")))
+                if not tick_size.is_zero():
+                    self.price_precision = abs(tick_size.as_tuple().exponent)
+                self.logger.info(f"Updated price_precision: {self.price_precision}")
+            else:
+                self.logger.warning(f"Could not find priceFilter for {self.symbol}.")
+        else:
+            self.logger.warning(f"Could not fetch precision for {self.symbol}. Using config values.")
+
+    def _get_current_balance(self) -> Decimal:
+        """Fetch current account balance from exchange if live, else use config."""
+        if self.live and self.pybit and self.pybit.enabled:
+            resp = self.pybit.get_wallet_balance(coin="USDT")
+            if resp and self.pybit._ok(resp) and resp.get("result", {}).get("list"):
+                for coin_balance in resp["result"]["list"][0]["coin"]:
+                    if coin_balance["coin"] == "USDT":
+                        return Decimal(coin_balance["walletBalance"])
+        return Decimal(str(self.config["trade_management"]["account_balance"]))
+
+    def _calculate_order_size(
+        self, current_price: Decimal, atr_value: Decimal
+    ) -> Decimal:
+        """Calculate order size based on risk per trade and ATR."""
+        if not self.trade_management_enabled:
+            return Decimal("0")
+        account_balance = self._get_current_balance()
+        risk_per_trade_percent = (
+            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"]))
+            / 100
+        )
+        stop_loss_atr_multiple = Decimal(
+            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+        )
+        risk_amount = account_balance * risk_per_trade_percent
+        stop_loss_distance = atr_value * stop_loss_atr_multiple
+        if stop_loss_distance <= 0:
+            self.logger.warning(f"{NEON_YELLOW}Stop loss distance is zero or negative. Cannot calculate order size.{RESET}")
+            return Decimal("0")
+        order_qty = (risk_amount / stop_loss_distance) / current_price
+
+        if self.qty_step and self.qty_step > Decimal(0):
+            return round_qty(order_qty, self.qty_step)
+
+        # Fallback to old logic if qty_step is not available
+        self.logger.warning(f"{NEON_YELLOW}qty_step not available. Using legacy precision rounding.{RESET}")
+        return order_qty.quantize(
+            Decimal("1e-" + str(self.order_precision)), rounding=ROUND_DOWN
+        )
+
+    def _compute_stop_loss_price(
+        self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
+    ) -> Decimal:
+        ex = self.config["execution"]
+        sch = ex["sl_scheme"]
+        price_prec = self.config["trade_management"]["price_precision"]
+        tick_size = Decimal(f"1e-{price_prec}")
+        buffer = tick_size * 5  # 5 ticks buffer
+
+        if sch["type"] == "atr_multiple":
+            sl = (
+                entry_price - atr_value * Decimal(str(sch["atr_multiple"]))
+                if side == "BUY"
+                else entry_price + atr_value * Decimal(str(sch["atr_multiple"]))
+            )
+        else:
+            sl = (
+                entry_price * (1 - Decimal(str(sch["percent"])) / 100)
+                if side == "BUY"
+                else entry_price * (1 + Decimal(str(sch["percent"])) / 100)
+            )
+
+        sl_with_buffer = sl - buffer if side == "BUY" else sl + buffer
+        return round_price(sl_with_buffer, price_prec)
+
+    def _calculate_take_profit_price(
+        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+    ) -> Decimal:
+        take_profit = (
+            current_price
+            + (
+                atr_value
+                * Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
+            )
+            if signal == "BUY"
+            else current_price
+            - (
+                atr_value
+                * Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
+            )
+        )
+        return round_price(take_profit, self.price_precision)
+
+    def open_position(
+        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+    ) -> dict | None:
+        """Open a new position, placing live orders if enabled."""
+        if self.live and self.pybit and self.pybit.enabled:
+            positions_resp = self.pybit.get_positions(self.symbol)
+            if positions_resp and self.pybit._ok(positions_resp):
+                pos_list = positions_resp.get("result", {}).get("list", [])
+                if any(p.get("size") and Decimal(p.get("size")) > 0 for p in pos_list):
+                    self.logger.warning(f"{NEON_YELLOW}Exchange position exists, aborting new position.{RESET}")
+                    return None
+
+        if not self.trade_management_enabled or len(self.open_positions) >= self.max_open_positions:
+            self.logger.info(
+                f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}"
+            )
+            return None
+        order_qty = self._calculate_order_size(current_price, atr_value)
+        if order_qty <= 0:
+            self.logger.warning(
+                f"{NEON_YELLOW}Order quantity is zero. Cannot open position.{RESET}"
+            )
+            return None
+
+        stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
+        take_profit = self._calculate_take_profit_price(signal, current_price, atr_value)
+
+        position = {
+            "entry_time": datetime.now(TIMEZONE),
+            "symbol": self.symbol,
+            "side": signal,
+            "entry_price": round_price(current_price, self.price_precision),
+            "qty": order_qty,
+            "stop_loss": stop_loss,
+            "take_profit": round_price(take_profit, self.price_precision),
+            "status": "OPEN",
+            "link_prefix": f"wgx_{int(time.time()*1000)}",
+        }
+
+        if self.live and self.pybit and self.pybit.enabled:
+            entry_link = f"{position['link_prefix']}_entry"
+            resp = self.pybit.place_order(
+                category=self.pybit.category,
+                symbol=self.symbol,
+                side=self.pybit._side_to_bybit(signal),
+                orderType="Market",
+                qty=self.pybit._q(order_qty),
+                orderLinkId=entry_link,
+            )
+            if not self.pybit._ok(resp):
+                self.logger.error(f"{NEON_RED}Live entry failed. Simulating only.{RESET}")
+            else:
+                self.logger.info(f"{NEON_GREEN}Live entry submitted: {entry_link}{RESET}")
+                if self.config["execution"]["tpsl_mode"] == "Partial":
+                    targets = build_partial_tp_targets(
+                        signal, position["entry_price"], atr_value, order_qty, self.config, self.qty_step
+                    )
+                    batch = []
+                    for t in targets:
+                        payload = {
+                            "symbol": self.symbol,
+                            "side": self.pybit._side_to_bybit(
+                                "SELL" if signal == "BUY" else "BUY"
+                            ),
+                            "orderType": t["order_type"],
+                            "qty": self.pybit._q(t["qty"]),
+                            "timeInForce": t["tif"],
+                            "reduceOnly": True,
+                            "positionIdx": self.pybit._pos_idx(signal),
+                            "orderLinkId": f"{position['link_prefix']}_{t['link_id_suffix']}",
+                            "category": self.pybit.category,
+                        }
+                        if t["order_type"] == "Limit":
+                            payload["price"] = self.pybit._q(t["price"])
+                        if t.get("post_only"):
+                            payload["isPostOnly"] = True
+                        batch.append(payload)
+                    if batch:
+                        for p in batch:
+                            resp_tp = self.pybit.place_order(**p)
+                            if resp_tp and resp_tp.get("retCode") == 0:
+                                self.logger.info(f"{NEON_GREEN}Placed individual TP target: {p.get('orderLinkId')}{RESET}")
+                            else:
+                                self.logger.error(f"{NEON_RED}Failed to place individual TP target: {p.get('orderLinkId')}. Error: {resp_tp.get('retMsg') if resp_tp else 'No response'}{RESET}")
+                if self.config["execution"]["sl_scheme"]["use_conditional_stop"]:
+                    sl_link = f"{position['link_prefix']}_sl"
+                    sresp = self.pybit.place_order(
+                        category=self.pybit.category,
+                        symbol=self.symbol,
+                        side=self.pybit._side_to_bybit("SELL" if signal == "BUY" else "BUY"),
+                        orderType=self.config["execution"]["sl_scheme"]["stop_order_type"],
+                        qty=self.pybit._q(order_qty),
+                        reduceOnly=True,
+                        orderLinkId=sl_link,
+                        triggerPrice=self.pybit._q(stop_loss),
+                        triggerDirection=(2 if signal == "BUY" else 1),
+                        orderFilter="Stop",
+                    )
+                    if self.pybit._ok(sresp):
+                        self.logger.info(f"{NEON_GREEN}Conditional stop placed at {stop_loss}.{RESET}")
+
+        self.open_positions.append(position)
+        self.logger.info(
+            f"{NEON_GREEN}Opened {signal} position (simulated): {position}{RESET}"
+        )
+        return position
+
+    def manage_positions(self, current_price: Decimal, performance_tracker: Any):
+        """Check and manage simulated positions (for backtesting/simulation mode)."""
+        if self.live or not self.trade_management_enabled or not self.open_positions:
+            return
+        positions_to_close = []
+        for i, pos in enumerate(self.open_positions):
+            if pos["status"] == "OPEN":
+                closed_by = ""
+                if pos["side"] == "BUY" and current_price <= pos["stop_loss"]:
+                    closed_by = "STOP_LOSS"
+                elif pos["side"] == "BUY" and current_price >= pos["take_profit"]:
+                    closed_by = "TAKE_PROFIT"
+                elif pos["side"] == "SELL" and current_price >= pos["stop_loss"]:
+                    closed_by = "STOP_LOSS"
+                elif pos["side"] == "SELL" and current_price <= pos["take_profit"]:
+                    closed_by = "TAKE_PROFIT"
+                if closed_by:
+                    pos.update(
+                        {
+                            "status": "CLOSED",
+                            "exit_time": datetime.now(TIMEZONE),
+                            "exit_price": current_price,
+                            "closed_by": closed_by,
+                        }
+                    )
+                    pnl = (
+                        (current_price - pos["entry_price"]) * pos["qty"]
+                        if pos["side"] == "BUY"
+                        else (pos["entry_price"] - current_price) * pos["qty"]
+                    )
+                    performance_tracker.record_trade(pos, pnl)
+                    self.logger.info(
+                        f"{NEON_PURPLE}Closed {pos['side']} by {closed_by}. PnL: {pnl:.2f}{RESET}"
+                    )
+                    positions_to_close.append(i)
+        self.open_positions = [
+            p for i, p in enumerate(self.open_positions) if i not in positions_to_close
+        ]
+
+    def get_open_positions(self) -> list[dict]:
+        return [pos for pos in self.open_positions if pos["status"] == "OPEN"]
 
 
 # --- Main Execution Logic ---
