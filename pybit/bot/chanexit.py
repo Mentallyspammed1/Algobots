@@ -1,839 +1,981 @@
-#!/usr/bin/env python3
 
-# Silence specific warnings
 import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module='pkg_resources')
+import socket
 
-import pandas as pd
-import pandas_ta as ta
-import logging
-import os # Still needed for os.getenv in config.py, but not directly here
-from time import sleep
+# --- Pyrmethus's DNS Bypass Incantation ---
+# We scribe this spell to teach the script the true IP of api.bybit.com,
+# bypassing the fickle DNS spirits within the Python environment.
+try:
+    _original_getaddrinfo = socket.getaddrinfo
+    _bybit_ip = '143.204.194.59' 
+
+    def _patched_getaddrinfo(host, *args, **kwargs):
+        if host == 'api.bybit.com':
+            return _original_getaddrinfo(_bybit_ip, *args, **kwargs)
+        return _original_getaddrinfo(host, *args, **kwargs)
+
+    socket.getaddrinfo = _patched_getaddrinfo
+except Exception:
+    pass # If the spell fails, proceed with the original magic.
+# --- End of Incantation ---
+import os
+import sys
 import datetime
 import pytz
-import numpy as np
+import time
 import uuid
-import sys
+import sqlite3
+import logging
+import asyncio
+import numpy as np
+import pandas as pd
+import pandas_ta as ta
+from typing import Optional, Tuple, Dict, Any, List
+from bybit import BybitAsync
 
-# Import from pybit
-from pybit.unified_trading import HTTP
+# silence the usual noisy packages
+warnings.filterwarnings("ignore", category=UserWarning, module='pkg_resources')
 
-# Import BOT_CONFIG from the new config file
+# --- IMPORT BOT CONFIGURATION ---
 from config import BOT_CONFIG
 
-# --- Custom Colored Logging Formatter ---
+# -------------- coloured logging (unchanged) --------------
 class ColoredFormatter(logging.Formatter):
-    # Define your neon colors
-    GREEN = "\033[92m"
-    RED = "\033[91m"
-    YELLOW = "\033[93m"
-    BLUE = "\033[94m"
-    MAGENTA = "\033[95m"
-    CYAN = "\033[96m"
-    WHITE = "\033[97m"
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    
+    GREEN = "\033[92m"; RED = "\033[91m"; YELLOW = "\033[93m"; BLUE = "\033[94m"
+    MAGENTA = "\033[95m"; CYAN = "\033[96m"; WHITE = "\033[97m"; RESET = "\033[0m"; BOLD = "\033[1m"
     FORMATS = {
-        logging.DEBUG: CYAN + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET,
-        logging.INFO: WHITE + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET, # Default INFO white
-        logging.WARNING: YELLOW + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET,
-        logging.ERROR: RED + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET,
+        logging.DEBUG:    CYAN + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET,
+        logging.INFO:     WHITE + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET,
+        logging.WARNING:  YELLOW + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET,
+        logging.ERROR:    RED + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET,
         logging.CRITICAL: BOLD + RED + "%(asctime)s - %(name)s - %(levelname)s - %(message)s" + RESET
     }
-
     def format(self, record):
-        # Check if stdout is a TTY (supports colors)
-        if sys.stdout.isatty():
-            log_fmt = self.FORMATS.get(record.levelno)
-        else: # No colors if not a TTY (e.g., redirected to a file)
-            log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        
-        formatter = logging.Formatter(log_fmt, datefmt='%Y-%m-%d %H:%M:%S')
-        return formatter.format(record)
+        return logging.Formatter(
+            self.FORMATS.get(record.levelno) if sys.stdout.isatty() else "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt='%Y-%m-%d %H:%M:%S'
+        ).format(record)
 
-# --- Logging Setup ---
-# This setup needs to happen before any loggers are created or used.
 root_logger = logging.getLogger()
-# Clear existing handlers to prevent duplicate output if basicConfig was called elsewhere
-if root_logger.hasHandlers():
-    root_logger.handlers.clear()
+if root_logger.hasHandlers(): root_logger.handlers.clear()
+handler = logging.StreamHandler(); handler.setFormatter(ColoredFormatter())
+root_logger.addHandler(handler); root_logger.setLevel(getattr(logging, BOT_CONFIG.get("LOG_LEVEL","INFO")))
 
-handler = logging.StreamHandler()
-handler.setFormatter(ColoredFormatter())
-root_logger.addHandler(handler)
+# -------------- SQLite position tracker --------------
+DB_FILE = "scalper_positions.sqlite"
+def _init_db():
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("""
+           CREATE TABLE IF NOT EXISTS trades(
+               id TEXT PRIMARY KEY,
+               order_id TEXT, -- Bybit order ID for tracking
+               symbol TEXT,
+               side TEXT,
+               qty REAL,
+               entry_time TEXT,
+               entry_price REAL,
+               sl REAL,
+               tp REAL,
+               status TEXT DEFAULT 'OPEN', -- OPEN, CLOSED, UNKNOWN, RECONCILED
+               exit_time TEXT,
+               exit_price REAL,
+               pnl REAL
+           )
+        """)
+_init_db()
 
-# Set root logger level based on config
-root_logger.setLevel(getattr(logging, BOT_CONFIG["LOG_LEVEL"]))
-
-
-# --- Bybit Client Class ---
+# -------------- Bybit client wrapper (async) --------------
 class Bybit:
-    def __init__(self, api, secret, testnet=False, dry_run=False):
-        if not api or not secret:
-            raise ValueError("API Key and Secret must be provided.")
-        self.api = api
-        self.secret = secret
-        self.testnet = testnet
-        self.dry_run = dry_run # New: Dry run flag
-        self.session = HTTP(api_key=self.api, api_secret=self.secret, testnet=self.testnet)
-        logging.info(f"Bybit client initialized. Testnet: {self.testnet}, Dry Run: {self.dry_run}")
+    def __init__(self, api: str, secret: str, testnet: bool = False, dry_run: bool = False):
+        if not api or not secret: raise ValueError("API Key and Secret must be provided.")
+        self.api, self.secret, self.testnet, self.dry_run = api, secret, testnet, dry_run
+        
+        config = {
+            'apiKey': api,
+            'secret': secret,
+            'options': {
+                'defaultType': 'linear',  # Specify linear perpetuals
+            },
+            'loadMarkets': False, # Disable auto-loading markets
+        }
+        if testnet:
+            config['urls'] = {'api': 'https://api-testnet.bybit.com'}
 
-    def get_balance(self, coin="USDT"):
-        """Fetches and returns the wallet balance for a specific coin."""
+        self.session = BybitAsync(config)
+        logging.info(f"Bybit client ready – testnet={testnet}  dry_run={dry_run}")
+
+    async def close_session(self):
+        await self.session.close()
+
+    async def get_balance(self, coin="USDT") -> float:
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                # Using fetch_balance(), common in CCXT-like libraries
+                resp = await self.session.fetch_balance()
+                if coin in resp:
+                    return float(resp[coin].get('total', 0))
+                logging.error(f"Balance for {coin} not found in response.")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"get_balance error (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return 0.
+
+    async def get_positions(self, settleCoin="USDT") -> List[Dict[str, Any]]:
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                resp = await self.session.get_positions(category='linear', settleCoin=settleCoin)
+                if resp['retCode'] == 0:
+                    return [p for p in resp['result']['list'] if float(p['size']) > 0]
+                logging.error(f"Error getting positions (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {resp.get('retMsg', 'Unknown error')} (Code: {resp.get('retCode', 'N/A')})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"get_positions error (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return []
+
+    async def get_tickers(self) -> Optional[List[str]]:
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                r = await self.session.get_tickers(category="linear")
+                if r['retCode'] == 0: return [t['symbol'] for t in r['result']['list'] if 'USDT' in t['symbol'] and 'USDC' not in t['symbol']]
+                logging.error(f"Error getting tickers (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r.get('retCode', 'N/A')})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"get_tickers error (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return None
+
+    async def klines(self, symbol: str, timeframe: int, limit: int = 500) -> pd.DataFrame:
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                r = await self.session.get_kline(category='linear', symbol=symbol, interval=str(timeframe), limit=limit)
+                if r['retCode'] == 0:
+                    df = pd.DataFrame(r['result']['list'], columns=['Time','Open','High','Low','Close','Volume','Turnover']).astype(float)
+                    df['Time'] = pd.to_datetime(df['Time'], unit='ms')
+                    df = df.set_index('Time').sort_index()
+                    if df[['Open', 'High', 'Low', 'Close']].isnull().all().any():
+                        logging.warning(f"Critical OHLCV columns are all NaN for {symbol}. Skipping this kline data.")
+                        return pd.DataFrame()
+                    return df
+                logging.error(f"Error getting klines for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r.get('retCode', 'N/A')})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"klines error {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return pd.DataFrame()
+
+    async def get_current_price(self, symbol: str) -> Optional[float]:
         try:
-            resp = self.session.get_wallet_balance(accountType="UNIFIED", coin=coin)
-            if resp['retCode'] == 0 and resp['result']['list']:
-                balance_data_list = resp['result']['list'][0]['coin']
-                if balance_data_list:
-                    for coin_data in balance_data_list:
-                        if coin_data['coin'] == coin:
-                            balance = float(coin_data['walletBalance'])
-                            logging.debug(f"Fetched balance: {balance} {coin}")
-                            return balance
-                    logging.warning(f"No balance data found for specified coin {coin}.")
-                    return 0.0
-                else:
-                    logging.warning(f"No coin data found in balance list for accountType CONTRACT.")
-                    return 0.0
-            else:
-                logging.error(f"Error getting balance for {coin}: {resp.get('retMsg', 'Unknown error')} (Code: {resp.get('retCode', 'N/A')})")
-                return None
-        except Exception as err:
-            logging.error(f"Exception getting balance for {coin}: {err}")
-            return None
+            r = await self.session.get_tickers(category='linear', symbol=symbol)
+            if r['retCode'] == 0 and r['result']['list']:
+                return float(r['result']['list'][0]['lastPrice'])
+        except Exception as e:
+            logging.error(f"Error getting current price for {symbol}: {e}")
+        return None
 
-    def get_positions(self, settleCoin="USDT"):
-        """Returns a list of symbols with open positions."""
-        try:
-            resp = self.session.get_positions(category='linear', settleCoin=settleCoin)
-            if resp['retCode'] == 0:
-                open_positions = [elem['symbol'] for elem in resp['result']['list'] if float(elem['leverage']) > 0 and float(elem['size']) > 0]
-                logging.debug(f"Fetched open positions: {open_positions}")
-                return open_positions
-            else:
-                logging.error(f"Error getting positions: {resp.get('retMsg', 'Unknown error')} (Code: {resp.get('retCode', 'N/A')})")
-                return []
-        except Exception as err:
-            logging.error(f"Exception getting positions: {err}")
-            return []
+    async def get_orderbook_levels(self, symbol: str, limit: int = 50) -> Tuple[Optional[float], Optional[float]]:
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                r = await self.session.fetch_order_book(symbol=symbol, limit=limit)
+                if r['retCode'] == 0 and 'result' in r and 'b' in r['result'] and 'a' in r['result']:
+                    best_bid = float(r['result']['b'][0][0]) if r['result']['b'] else None
+                    best_ask = float(r['result']['a'][0][0]) if r['result']['a'] else None
+                    return best_bid, best_ask
+                logging.error(f"Error getting orderbook for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r.get('retCode', 'N/A')})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"orderbook error {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return None, None
 
-    def get_tickers(self):
-        """Retrieves all USDT perpetual linear symbols from the derivatives market."""
-        try:
-            resp = self.session.get_tickers(category="linear")
-            if resp['retCode'] == 0:
-                symbols = [elem['symbol'] for elem in resp['result']['list'] if 'USDT' in elem['symbol'] and not 'USDC' in elem['symbol']]
-                logging.debug(f"Fetched {len(symbols)} tickers.")
-                return symbols
-            else:
-                logging.error(f"Error getting tickers: {resp.get('retMsg', 'Unknown error')} (Code: {resp.get('retCode', 'N/A')})")
-                return None
-        except Exception as err:
-            logging.error(f"Exception getting tickers: {err}")
-            return None
+    async def get_precisions(self, symbol: str) -> Tuple[int, int]:
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                r = await self.session.get_instruments_info(category='linear', symbol=symbol)
+                if r['retCode'] == 0 and r['result']['list']:
+                    info = r['result']['list'][0]
+                    price_step = info['priceFilter']['tickSize']; qty_step = info['lotSizeFilter']['qtyStep']
+                    price_prec = len(price_step.split('.')[1]) if '.' in price_step and len(price_step.split('.')) > 1 else 0
+                    qty_prec = len(qty_step.split('.')[1]) if '.' in qty_step and len(qty_step.split('.')) > 1 else 0
+                    return price_prec, qty_prec
+                logging.error(f"Error getting precisions for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r.get('retCode', 'N/A')})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"precisions error {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return 0, 0
 
-    def klines(self, symbol, timeframe, limit=500):
-        """Fetches klines (candlestick data) for a given symbol and returns a pandas DataFrame."""
-        try:
-            resp = self.session.get_kline(
-                category='linear',
-                symbol=symbol,
-                interval=str(timeframe), # Ensure interval is string
-                limit=limit
-            )
-            if resp['retCode'] == 0:
-                # Define dtypes for efficiency and clarity
-                klines_dtypes = {
-                    'Time': 'int64', # Timestamp is int before conversion
-                    'Open': 'float64',
-                    'High': 'float64',
-                    'Low': 'float64',
-                    'Close': 'float64',
-                    'Volume': 'float64',
-                    'Turnover': 'float64'
-                }
-                df = pd.DataFrame(resp['result']['list'], columns=klines_dtypes.keys()).astype(klines_dtypes)
-                df['Time'] = pd.to_datetime(df['Time'], unit='ms') # Convert timestamp to datetime
-                df = df.set_index('Time')
-                df = df.sort_index() # Ensure ascending order by time
-                
-                # Check for critical NaN values after conversion
-                if df[['Open', 'High', 'Low', 'Close']].isnull().all().any():
-                    logging.warning(f"Critical OHLCV columns are all NaN for {symbol}. Skipping this kline data.")
-                    return pd.DataFrame() # Return empty DataFrame if data is bad
-                logging.debug(f"Fetched {len(df)} klines for {symbol} ({timeframe}min).")
-                return df
-            else:
-                logging.error(f"Error getting klines for {symbol}: {resp.get('retMsg', 'Unknown error')} (Code: {resp.get('retCode', 'N/A')})")
-                return pd.DataFrame()
-        except Exception as err:
-            logging.error(f"Exception getting klines for {symbol}: {err}")
-            return pd.DataFrame() # Return empty DataFrame on error
-
-    def get_orderbook_levels(self, symbol, limit=50):
-        """Analyzes the order book to find strong support and resistance levels."""
-        try:
-            resp = self.session.get_orderbook(
-                category='linear',
-                symbol=symbol,
-                limit=limit
-            )
-            if resp['retCode'] == 0 and 'result' in resp and 'b' in resp['result'] and 'a' in resp['result']:
-                bids = pd.DataFrame(resp['result']['b'], columns=['price', 'volume']).astype(float)
-                asks = pd.DataFrame(resp['result']['a'], columns=['price', 'volume']).astype(float)
-                
-                strong_support_price = bids.loc[bids['volume'].idxmax()]['price'] if not bids.empty else None
-                strong_resistance_price = asks.loc[asks['volume'].idxmax()]['price'] if not asks.empty else None
-                
-                logging.debug(f"Orderbook for {symbol}: Support={strong_support_price}, Resistance={strong_resistance_price}")
-                return strong_support_price, strong_resistance_price
-            else:
-                logging.error(f"Error getting orderbook for {symbol}: Invalid response format or {resp.get('retMsg', 'Unknown error')} (Code: {resp.get('retCode', 'N/A')})")
-                return None, None
-        except Exception as err:
-            logging.error(f"Exception getting orderbook for {symbol}: {err}")
-            return None, None
-
-    def get_precisions(self, symbol):
-        """Retrieves the decimal precision for price and quantity."""
-        try:
-            resp = self.session.get_instruments_info(
-                category='linear',
-                symbol=symbol
-            )
-            if resp['retCode'] == 0 and resp['result']['list']:
-                info = resp['result']['list'][0] # Access the first element of the list
-                price_step = info['priceFilter']['tickSize']
-                qty_step = info['lotSizeFilter']['qtyStep']
-                
-                # Calculate precision based on tickSize/qtyStep format (e.g., 0.01 -> 2, 1 -> 0)
-                price_precision = len(price_step.split('.')[1]) if '.' in price_step and len(price_step.split('.')) > 1 else 0
-                qty_precision = len(qty_step.split('.')[1]) if '.' in qty_step and len(qty_step.split('.')) > 1 else 0
-                
-                logging.debug(f"Precisions for {symbol}: Price={price_precision}, Qty={qty_precision}")
-                return price_precision, qty_precision
-            else:
-                logging.error(f"Error getting precisions for {symbol}: {resp.get('retMsg', 'Unknown error')} (Code: {resp.get('retCode', 'N/A')})")
-                return 0, 0
-        except Exception as err:
-            logging.error(f"Exception getting precisions for {symbol}: {err}")
-            return 0, 0
-
-    def set_margin_mode_and_leverage(self, symbol, mode=1, leverage=10):
-        """Sets the margin mode and leverage for a symbol."""
+    async def set_margin_mode_and_leverage(self, symbol: str, mode: int = 1, leverage: int = 10):
         if self.dry_run:
-            logging.info(f"[DRY RUN] Would set margin mode to {'Isolated' if mode==1 else 'Cross'} and leverage to {leverage}x for {symbol}.")
+            logging.info(f"[DRY RUN] would set {symbol} margin={'Isolated' if mode==1 else 'Cross'} {leverage}x")
             return
-        
-        try:
-            # tradeMode: 0 for Cross, 1 for Isolated
-            resp = self.session.switch_margin_mode(
-                category='linear',
-                symbol=symbol,
-                tradeMode=str(mode),
-                buyLeverage=str(leverage),
-                sellLeverage=str(leverage)
-            )
-            if resp['retCode'] == 0:
-                logging.info(f"Margin mode set to {'Isolated' if mode==1 else 'Cross'} and leverage set to {leverage}x for {symbol}.")
-            elif resp['retCode'] == 110026 or resp['retCode'] == 110043: # Already set or in position
-                logging.debug(f"Margin mode or leverage already set for {symbol} (Code: {resp['retCode']}).")
-            else:
-                logging.warning(f"Failed to set margin mode/leverage for {symbol}: {resp.get('retMsg', 'Unknown error')} (Code: {resp['retCode']})")
-        except Exception as err:
-            if '110026' in str(err) or '110043' in str(err): # Already set or in position
-                logging.debug(f"Margin mode or leverage already set for {symbol}.")
-            else:
-                logging.error(f"Exception setting margin mode/leverage for {symbol}: {err}")
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                r = await self.session.switch_margin_mode(category='linear', symbol=symbol, tradeMode=str(mode),
+                                                          buyLeverage=str(leverage), sellLeverage=str(leverage))
+                if r['retCode'] == 0:
+                    logging.info(f"{symbol} margin={'Isolated' if mode==1 else 'Cross'} {leverage}x set.")
+                    return
+                elif r['retCode'] in (110026, 110043): # Already set
+                    logging.debug(f"{symbol} margin/leverage already set (Code: {r['retCode']}).")
+                    return
+                logging.warning(f"Failed to set margin mode/leverage for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r['retCode']})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"margin/lever error for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
 
-    def place_order_common(self, symbol, side, order_type, qty, price=None, trigger_price=None, tp_price=None, sl_price=None, time_in_force='GTC'):
-        """Internal common function to place various order types."""
+    async def place_order_common(self, symbol: str, side: str, order_type: str, qty: float, price: Optional[float]=None, trigger_price: Optional[float]=None, tp_price: Optional[float]=None, sl_price: Optional[float]=None, time_in_force: str = 'GTC', reduce_only: bool = False) -> Optional[str]:
         if self.dry_run:
-            dummy_order_id = f"DRY_RUN_ORDER_{uuid.uuid4()}"
-            log_msg = f"[DRY RUN] Would place order for {symbol} ({order_type} {side} {qty})"
-            if price: log_msg += f" at price {price}"
-            if trigger_price: log_msg += f" triggered by {trigger_price}"
-            if tp_price: log_msg += f" with TP {tp_price}"
-            if sl_price: log_msg += f" and SL {sl_price}"
-            logging.info(f"{log_msg}. Simulated Order ID: {dummy_order_id}")
-            return dummy_order_id # Simulate success
+            oid = f"DRY_{uuid.uuid4()}"
+            log_msg = f"[DRY RUN] {order_type} {side} {qty} {symbol}"
+            if price: log_msg += f" price={price}"
+            if trigger_price: log_msg += f" trigger={trigger_price}"
+            if tp_price: log_msg += f" TP={tp_price}"
+            if sl_price: log_msg += f" SL={sl_price}"
+            if reduce_only: log_msg += f" ReduceOnly"
+            logging.info(f"{log_msg}. Simulated Order ID: {oid}")
+            return oid
         
-        try:
-            params = {
-                'category': 'linear',
-                'symbol': symbol,
-                'side': side,
-                'orderType': order_type,
-                'qty': str(qty), # qty must be string
-                'timeInForce': time_in_force
-            }
-            if price is not None:
-                params['price'] = str(price) # price must be string
-            if trigger_price is not None:
-                params['triggerPrice'] = str(trigger_price) # triggerPrice must be string
-                params['triggerBy'] = 'MarkPrice' # Default to Mark Price for triggers
-            if tp_price is not None:
-                params['takeProfit'] = str(tp_price)
-                params['tpTriggerBy'] = 'Market' # Market price for TP/SL triggers is generally safer
-            if sl_price is not None:
-                params['stopLoss'] = str(sl_price)
-                params['slTriggerBy'] = 'Market'
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                params = dict(category='linear', symbol=symbol, side=side, orderType=order_type, qty=str(qty), timeInForce=time_in_force, reduceOnly=1 if reduce_only else 0)
+                if price is not None: params['price'] = str(price)
+                if trigger_price is not None: params['triggerPrice'] = str(trigger_price); params['triggerBy'] = 'MarkPrice'
+                if tp_price is not None: params['takeProfit'] = str(tp_price); params['tpTriggerBy'] = 'Market'
+                if sl_price is not None: params['stopLoss'] = str(sl_price); params['slTriggerBy'] = 'Market'
+                
+                r = await self.session.place_order(**params)
+                if r['retCode'] == 0:
+                    logging.info(f"Order placed for {symbol} ({order_type} {side} {qty}). Order ID: {r['result']['orderId']}")
+                    return r['result']['orderId']
+                
+                # Handle common order errors (e.g., insufficient balance, invalid price)
+                if r['retCode'] == 10001: # order fails due to insufficient balance, etc.
+                    logging.error(f"Order placement failed for {symbol} due to API error {r['retCode']}: {r.get('retMsg', 'Unknown API error')}")
+                    return None # Do not retry immediately for specific critical errors
+                
+                logging.error(f"Failed to place order for {symbol} ({order_type} {side} {qty}) (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r['retCode']})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"Exception placing {order_type} order for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return None
 
-            response = self.session.place_order(**params)
-            if response['retCode'] == 0:
-                logging.info(f"Order placed for {symbol} ({order_type} {side} {qty}). Order ID: {response['result']['orderId']}")
-                return response['result']['orderId']
-            else:
-                logging.error(f"Failed to place order for {symbol} ({order_type} {side} {qty}): {response.get('retMsg', 'Unknown error')} (Code: {response['retCode']})")
-                return None
-        except Exception as err:
-            logging.error(f"Exception placing {order_type} order for {symbol}: {err}")
-            return None
+    async def place_market_order(self, symbol: str, side: str, qty: float, tp_price: Optional[float]=None, sl_price: Optional[float]=None, reduce_only: bool = False) -> Optional[str]:
+        return await self.place_order_common(symbol, side, 'Market', qty, tp_price=tp_price, sl_price=sl_price, reduce_only=reduce_only)
 
-    def place_market_order(self, symbol, side, qty, tp_price=None, sl_price=None):
-        """Places a market order with optional TP/SL."""
-        return self.place_order_common(symbol, side, 'Market', qty, tp_price=tp_price, sl_price=sl_price)
+    async def place_limit_order(self, symbol: str, side: str, price: float, qty: float, tp_price: Optional[float]=None, sl_price: Optional[float]=None, time_in_force: str = 'GTC', reduce_only: bool = False) -> Optional[str]:
+        return await self.place_order_common(symbol, side, 'Limit', qty, price=price, tp_price=tp_price, sl_price=sl_price, time_in_force=time_in_force, reduce_only=reduce_only)
 
-    def place_limit_order(self, symbol, side, price, qty, tp_price=None, sl_price=None, time_in_force='GTC'):
-        """Places a limit order with optional TP/SL."""
-        return self.place_order_common(symbol, side, 'Limit', qty, price=price, tp_price=tp_price, sl_price=sl_price, time_in_force=time_in_force)
-
-    def place_conditional_order(self, symbol, side, qty, trigger_price, order_type='Market', price=None, tp_price=None, sl_price=None):
-        """Places a conditional order that becomes active at a trigger price.
-        If order_type is 'Limit', a specific `price` must be provided for the limit execution."""
+    async def place_conditional_order(self, symbol: str, side: str, qty: float, trigger_price: float, order_type: str = 'Market', price: Optional[float]=None, tp_price: Optional[float]=None, sl_price: Optional[float]=None, reduce_only: bool = False) -> Optional[str]:
         if order_type == 'Limit' and price is None:
-            price = trigger_price # Default to trigger_price if no explicit limit price given
+            price = trigger_price
             logging.warning(f"Conditional limit order requested for {symbol} without explicit `price`. Using `trigger_price` as limit execution price.")
+        return await self.place_order_common(symbol, side, order_type, qty, price=price, trigger_price=trigger_price, tp_price=tp_price, sl_price=sl_price, reduce_only=reduce_only)
 
-        return self.place_order_common(symbol, side, order_type, qty, price=price, trigger_price=trigger_price, tp_price=tp_price, sl_price=sl_price)
-    
-    def cancel_all_open_orders(self, symbol):
-        """Cancels all active orders for a given symbol."""
+    async def cancel_all_open_orders(self, symbol: str) -> bool:
         if self.dry_run:
             logging.info(f"[DRY RUN] Would cancel all open orders for {symbol}.")
-            return {'retCode': 0, 'retMsg': 'OK'} # Simulate success
+            return True
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                r = await self.session.cancel_all_orders(category='linear', symbol=symbol)
+                if r['retCode'] == 0:
+                    logging.info(f"All open orders for {symbol} cancelled successfully.")
+                    return True
+                logging.warning(f"Failed to cancel all orders for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r['retCode']})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"Exception cancelling all orders for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return False
+
+    async def modify_position_tpsl(self, symbol: str, tp_price: Optional[float], sl_price: Optional[float], position_idx: int = 0) -> bool:
+        if self.dry_run:
+            logging.info(f"[DRY RUN] Would modify TP/SL for {symbol}. TP:{tp_price}, SL:{sl_price}")
+            return True
         
-        try:
-            response = self.session.cancel_all_orders(
-                category='linear',
-                symbol=symbol
-            )
-            if response['retCode'] == 0:
-                logging.info(f"All open orders for {symbol} cancelled successfully.")
-            else:
-                logging.warning(f"Failed to cancel all orders for {symbol}: {response.get('retMsg', 'Unknown error')} (Code: {response['retCode']})")
-            return response
-        except Exception as err:
-            logging.error(f"Exception cancelling all orders for {symbol}: {err}")
-            return {'retCode': -1, 'retMsg': str(err)}
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                params = {'category': 'linear', 'symbol': symbol, 'positionIdx': position_idx}
+                if tp_price is not None: params['takeProfit'] = str(tp_price)
+                if sl_price is not None: params['stopLoss'] = str(sl_price)
+                params['tpTriggerBy'] = 'Market'
+                params['slTriggerBy'] = 'Market'
 
-    def get_open_orders(self, symbol=None):
-        """Retrieves all active orders for a given symbol, or all symbols if none specified."""
-        # This method should still function in dry run to get a realistic view of "open" orders
-        # if the dry run logic needs to simulate them. For now, it will always query the API.
-        try:
-            params = {'category': 'linear'}
-            if symbol:
-                params['symbol'] = symbol
-            
-            response = self.session.get_open_orders(**params)
-            if response['retCode'] == 0:
-                open_orders = response['result']['list']
-                logging.debug(f"Fetched {len(open_orders)} open orders for {symbol if symbol else 'all symbols'}.")
-                return open_orders
-            else:
-                logging.error(f"Error getting open orders for {symbol if symbol else 'all symbols'}: {response.get('retMsg', 'Unknown error')} (Code: {response['retCode']})")
-                return []
-        except Exception as err:
-            logging.error(f"Exception getting open orders for {symbol if symbol else 'all symbols'}: {err}")
-            return []
+                r = await self.session.set_trading_stop(**params)
+                if r['retCode'] == 0:
+                    logging.debug(f"Modified TP/SL for {symbol}. TP:{tp_price}, SL:{sl_price}")
+                    return True
+                elif r['retCode'] == 110026: # No position to modify
+                    logging.warning(f"No active position for {symbol} to modify TP/SL.")
+                    return False
+                logging.warning(f"Failed to modify TP/SL for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r['retCode']})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"Exception modifying TP/SL for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return False
 
-    def close_position(self, symbol, position_idx=0):
-        """
-        Closes an open position for a given symbol using a market order.
-        position_idx: 0 for one-way mode, 1 for buy side, 2 for sell side in hedge mode.
-        """
+    async def get_open_orders(self, symbol: Optional[str]=None) -> List[Dict[str, Any]]:
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                params={'category':'linear'}
+                if symbol: params['symbol']=symbol
+                r = await self.session.get_open_orders(**params)
+                if r['retCode'] == 0: return r['result']['list']
+                logging.error(f"Error getting open orders for {symbol if symbol else 'all symbols'} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {r.get('retMsg', 'Unknown error')} (Code: {r.get('retCode', 'N/A')})")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+            except Exception as e:
+                logging.error(f"Exception getting open orders for {symbol if symbol else 'all symbols'} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return []
+
+    async def close_position(self, symbol: str) -> Optional[str]:
         if self.dry_run:
             logging.info(f"[DRY RUN] Would close position for {symbol} with a market order.")
-            return f"DRY_RUN_CLOSE_ORDER_{uuid.uuid4()}" # Simulate success
-            
-        try:
-            # First, get current position details to determine side and size
-            positions_resp = self.session.get_positions(category='linear', symbol=symbol)
-            if positions_resp['retCode'] != 0 or not positions_resp['result']['list']:
-                logging.warning(f"Could not get position details for {symbol} to close. {positions_resp.get('retMsg', 'No position found')}")
-                return None
+            return f"DRY_CLOSE_{uuid.uuid4()}"
+        for attempt in range(BOT_CONFIG["ORDER_RETRY_ATTEMPTS"]):
+            try:
+                pos_resp = await self.session.get_positions(category='linear', symbol=symbol)
+                if pos_resp['retCode'] != 0 or not pos_resp['result']['list']:
+                    logging.warning(f"Could not get position details for {symbol} to close (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}). {pos_resp.get('retMsg', 'No position found')}")
+                    await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+                    continue
+                
+                position_info = next((p for p in pos_resp['result']['list'] if float(p['size']) > 0), None)
+                if not position_info:
+                    logging.info(f"No open position found for {symbol} to close (size is 0).")
+                    return None
 
-            position_info = None
-            for pos in positions_resp['result']['list']:
-                if float(pos['size']) > 0: # Found an open position
-                    position_info = pos
-                    break
-            
-            if not position_info:
-                logging.info(f"No open position found for {symbol} to close (size is 0).")
-                return None
+                side_to_close = 'Sell' if position_info['side'] == 'Buy' else 'Buy'
+                order_id = await self.place_market_order(
+                    symbol=symbol,
+                    side=side_to_close,
+                    qty=float(position_info['size']),
+                    reduce_only=True
+                )
+                return order_id
+            except Exception as e:
+                logging.error(f"Exception closing position for {symbol} (attempt {attempt+1}/{BOT_CONFIG['ORDER_RETRY_ATTEMPTS']}): {e}")
+                await asyncio.sleep(BOT_CONFIG["ORDER_RETRY_DELAY_SECONDS"])
+        return None
 
-            current_side = position_info['side']
-            current_size = float(position_info['size'])
-            
-            if current_size == 0:
-                logging.info(f"No open position found for {symbol} to close (size is 0).")
-                return None
+# -------------- higher TF confirmation --------------
+async def higher_tf_trend(bybit: Bybit, symbol: str) -> str:
+    htf = BOT_CONFIG.get("HIGHER_TF_TIMEFRAME", 5)
+    short = BOT_CONFIG.get("H_TF_EMA_SHORT_PERIOD", 8)
+    long = BOT_CONFIG.get("H_TF_EMA_LONG_PERIOD", 21)
+    df = await bybit.klines(symbol, htf, limit=long+5)
+    if df.empty or len(df) < max(short, long) + 1:
+        logging.debug(f"Not enough data for HTF trend for {symbol}.")
+        return 'none'
+    ema_s = ta.ema(df['Close'], short).iloc[-1]
+    ema_l = ta.ema(df['Close'], long).iloc[-1]
+    if ema_s > ema_l: return 'long'
+    if ema_s < ema_l: return 'short'
+    return 'none'
 
-            # Determine the opposite side to close the position
-            close_side = 'Sell' if current_side == 'Buy' else 'Buy'
+# -------------- Ehlers Supertrend (pandas-ta) --------------
+def est_supertrend(df: pd.DataFrame, length: int = 8, multiplier: float = 1.2) -> pd.Series:
+    st = ta.supertrend(df['High'], df['Low'], df['Close'], length=length, multiplier=multiplier)
+    if st.empty or st.shape[1] < 3:
+        return pd.Series(np.nan, index=df.index)
+    trend_col = [col for col in st.columns if '_D_' in col]
+    if trend_col:
+        return st[trend_col[0]]
+    return pd.Series(np.nan, index=df.index)
 
-            response = self.session.place_order(
-                category='linear',
-                symbol=symbol,
-                side=close_side,
-                orderType='Market',
-                qty=str(current_size),
-                isTpSl='false', # Do not attach TP/SL to closing order
-                reduceOnly=True, # Ensure this order only reduces position
-                positionIdx=position_idx
-            )
-            if response['retCode'] == 0:
-                logging.info(f"Market order placed to close {symbol} position ({current_side} {current_size}). Order ID: {response['result']['orderId']}")
-                return response['result']['orderId']
-            else:
-                logging.error(f"Failed to place market order to close {symbol} position: {response.get('retMsg', 'Unknown error')} (Code: {response['retCode']})")
-                return None
-        except Exception as err:
-            logging.error(f"Exception closing position for {symbol}: {err}")
-            return None
+# -------------- Fisher Transform --------------
+def fisher_transform(df: pd.DataFrame, period: int = 8) -> pd.Series:
+    fisher = ta.fisher(df['High'], df['Low'], length=period)
+    if fisher.empty or fisher.shape[1] < 2:
+        return pd.Series(np.nan, index=df.index)
+    trigger_col = [col for col in fisher.columns if '_T_' in col]
+    if trigger_col:
+        return fisher[trigger_col[0]]
+    return pd.Series(np.nan, index=df.index)
+
+# -------------- Stochastic Oscillator (New) --------------
+def stochastic_oscillator(df: pd.DataFrame, k_period: int = 14, d_period: int = 3, smoothing: int = 3) -> Tuple[pd.Series, pd.Series]:
+    stoch = ta.stoch(df['High'], df['Low'], df['Close'], k=k_period, d=d_period, smooth_k=smoothing)
+    if stoch.empty or stoch.shape[1] < 2:
+        return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
+    
+    k_col = [col for col in stoch.columns if '_K_' in col]
+    d_col = [col for col in stoch.columns if '_D_' in col]
+    
+    if k_col and d_col:
+        return stoch[k_col[0]], stoch[d_col[0]]
+    return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
+
+# -------------- MACD (New) --------------
+def macd_indicator(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    macd = ta.macd(df['Close'], fast=fast, slow=slow, signal=signal)
+    if macd.empty or macd.shape[1] < 3:
+        return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
+    
+    macd_col = [col for col in macd.columns if 'MACD_' in col]
+    hist_col = [col for col in macd.columns if 'HIST_' in col]
+    signal_col = [col for col in macd.columns if 'SIGNAL_' in col]
+
+    if macd_col and hist_col and signal_col:
+        return macd[macd_col[0]], macd[signal_col[0]], macd[hist_col[0]]
+    return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
+
+# -------------- ADX (New) --------------
+def adx_indicator(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    adx = ta.adx(df['High'], df['Low'], df['Close'], length=period)
+    if adx.empty or adx.shape[1] < 3:
+        return pd.Series(np.nan, index=df.index)
+    
+    adx_col = [col for col in adx.columns if 'ADX_' in col]
+    if adx_col:
+        return adx[adx_col[0]]
+    return pd.Series(np.nan, index=df.index)
 
 
-# --- API Session ---
-# Check for API keys from BOT_CONFIG, which now gets them from .env
-if not BOT_CONFIG["API_KEY"] or not BOT_CONFIG["API_SECRET"]:
-    logging.error("API keys not found. Please check your .env file.")
-    exit()
-
-try:
-    bybit_client = Bybit(
-        api=BOT_CONFIG["API_KEY"],
-        secret=BOT_CONFIG["API_SECRET"],
-        testnet=BOT_CONFIG["TESTNET"],
-        dry_run=BOT_CONFIG["DRY_RUN"] # Pass dry_run flag to client
-    )
-    mode_info = f"{ColoredFormatter.MAGENTA}{ColoredFormatter.BOLD}DRY RUN{ColoredFormatter.RESET}" if BOT_CONFIG["DRY_RUN"] else f"{ColoredFormatter.GREEN}{ColoredFormatter.BOLD}LIVE{ColoredFormatter.RESET}"
-    testnet_info = f"{ColoredFormatter.YELLOW}TESTNET{ColoredFormatter.RESET}" if BOT_CONFIG["TESTNET"] else f"{ColoredFormatter.BLUE}MAINNET{ColoredFormatter.RESET}"
-    logging.info(f"Successfully connected to Bybit API in {mode_info} mode on {testnet_info}.")
-    logging.debug(f"Bot configuration: {BOT_CONFIG}") # Log full config at DEBUG level
-except Exception as e:
-    logging.error(f"Failed to connect to Bybit API: {e}")
-    exit()
-
-# --- Helper Functions ---
-def get_current_time(timezone_str):
-    """Returns the current local and UTC time objects."""
-    tz = pytz.timezone(timezone_str)
-    local_time = datetime.datetime.now(tz)
-    utc_time = datetime.datetime.now(pytz.utc)
-    return local_time, utc_time
-
-def is_market_open(local_time, open_hour, close_hour):
-    """Checks if the market is open based on configured hours, handling overnight closures."""
-    current_hour = local_time.hour
-    # Convert to int to ensure proper comparison
-    open_hour_int = int(open_hour)
-    close_hour_int = int(close_hour)
-
-    # Handle overnight market closure (e.g., open 22:00, close 06:00 next day)
-    if open_hour_int < close_hour_int:
-        # Normal daily closure (e.g., open 09:00, close 17:00)
-        return open_hour_int <= current_hour < close_hour_int
-    else:
-        # Overnight closure (e.g., open 04:00, close 03:00 next day, meaning closed from 03:00 to 04:00)
-        # Market is open if current_hour is >= open_hour_int OR current_hour is < close_hour_int
-        return current_hour >= open_hour_int or current_hour < close_hour_int
-
-# --- Strategy Section (Chandelier Exit Scalping Logic) ---
-def calculate_chandelier_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculate Chandelier Exit, EMAs, RSI, and volume indicators for scalping.
-    Uses pandas_ta for efficiency.
-    """
+# -------------- upgraded chandelier + multi-TF --------------
+def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+    for c in ['Open','High','Low','Close','Volume']:
+        df[c] = pd.to_numeric(df[c], errors='coerce')
+        df[c] = df[c].ffill().fillna(0)
     
-    # Ensure columns are float and fill NaNs immediately for critical columns
-    for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-        # Fill NaNs with previous valid observation, then with 0 if still NaN
-        df[col] = df[col].ffill().fillna(0)
-
-    # Calculate ATR
-    atr_series = ta.atr(high=df['High'], low=df['Low'], close=df['Close'], length=BOT_CONFIG["ATR_PERIOD"])
-    df['atr'] = atr_series.rename(f'ATR_{BOT_CONFIG["ATR_PERIOD"]}') # Ensure consistent naming, though pandas_ta usually does this
-    # Handle cases where ATR might be all NaNs due to insufficient data or other issues
-    if df['atr'].isnull().all():
-        logging.warning(f"ATR_14 column is all NaNs for {df.index.name}. This might indicate insufficient data or problematic input.")
-        # Optionally, you could return an empty DataFrame or raise an error here if ATR is critical.
-        # For now, we'll let the subsequent checks handle invalid ATR values.
-
-    # Calculate highest high and lowest low for Chandelier Exit
-    df['highest_high'] = df['High'].rolling(window=BOT_CONFIG["ATR_PERIOD"]).max()
-    df['lowest_low'] = df['Low'].rolling(window=BOT_CONFIG["ATR_PERIOD"]).min()
+    atr_series = ta.atr(df['High'], df['Low'], df['Close'], BOT_CONFIG["ATR_PERIOD"])
+    df['atr'] = atr_series.fillna(method='ffill').fillna(0)
     
-    # Dynamic ATR multiplier (using a 20-period std of ATR for volatility)
-    # Ensure enough data for volatility calculation
-    if len(df) >= 20:
-        df['volatility'] = df['atr'].rolling(window=20).std()
-        # Handle cases where volatility might be zero or NaN
-        mean_volatility = df['volatility'].mean()
-        if mean_volatility > 0 and not pd.isna(mean_volatility):
+    df['highest_high'] = df['High'].rolling(BOT_CONFIG["ATR_PERIOD"], min_periods=1).max().fillna(method='ffill').fillna(0)
+    df['lowest_low'] = df['Low'].rolling(BOT_CONFIG["ATR_PERIOD"], min_periods=1).min().fillna(method='ffill').fillna(0)
+
+    if len(df) >= BOT_CONFIG.get("VOLATILITY_LOOKBACK", 20):
+        price_std = df['Close'].pct_change().rolling(window=BOT_CONFIG.get("VOLATILITY_LOOKBACK", 20), min_periods=1).std()
+        if price_std.mean() > 0 and not pd.isna(price_std.mean()):
             df['dynamic_multiplier'] = np.clip(
-                BOT_CONFIG["CHANDELIER_MULTIPLIER"] * (df['volatility'] / mean_volatility),
+                BOT_CONFIG["CHANDELIER_MULTIPLIER"] * (price_std / price_std.mean()),
                 BOT_CONFIG["MIN_ATR_MULTIPLIER"],
                 BOT_CONFIG["MAX_ATR_MULTIPLIER"]
             )
         else:
             df['dynamic_multiplier'] = BOT_CONFIG["CHANDELIER_MULTIPLIER"]
     else:
-        df['dynamic_multiplier'] = BOT_CONFIG["CHANDELIER_MULTIPLIER"] # Default if not enough data
+        df['dynamic_multiplier'] = BOT_CONFIG["CHANDELIER_MULTIPLIER"]
 
-    # Chandelier Exit levels
-    df['chandelier_long'] = df['highest_high'] - (df['atr'] * df['dynamic_multiplier'])
-    df['chandelier_short'] = df['lowest_low'] + (df['atr'] * df['dynamic_multiplier'])
-    
-    # Trend filter (EMA)
-    trend_ema_series = ta.ema(close=df['Close'], length=BOT_CONFIG["TREND_EMA_PERIOD"])
-    df['trend_ema'] = trend_ema_series
-    
-    # EMAs for entries
-    ema_short_series = ta.ema(close=df['Close'], length=BOT_CONFIG["EMA_SHORT_PERIOD"])
-    df['ema_short'] = ema_short_series
-    ema_long_series = ta.ema(close=df['Close'], length=BOT_CONFIG["EMA_LONG_PERIOD"])
-    df['ema_long'] = ema_long_series
-    
-    # RSI
-    rsi_series = ta.rsi(close=df['Close'], length=BOT_CONFIG["RSI_PERIOD"])
-    df['rsi'] = rsi_series
-    
-    # Volume filter
-    volume_ma_series = ta.sma(close=df['Volume'], length=20) # 20-period SMA for volume
-    df['volume_ma'] = volume_ma_series
-    df['volume_spike'] = (df['Volume'] / df['volume_ma']) > BOT_CONFIG["VOLUME_THRESHOLD_MULTIPLIER"]
-    
-    # Clean up temporary columns and fill NaNs
-    df = df.drop(columns=[col for col in df.columns if ('ATR_' in col or 'EMA_' in col or 'RSI_' in col or 'SMA_' in col) and col not in ['atr', 'ema_short', 'ema_long', 'trend_ema', 'rsi', 'volume_ma']], errors='ignore')
-    df = df.ffill().fillna(0) # Fill NaNs forward, then with 0
+    df['dynamic_multiplier'] = df['dynamic_multiplier'].fillna(method='ffill').fillna(BOT_CONFIG["CHANDELIER_MULTIPLIER"])
 
-    # Final check for critical indicator columns after all calculations and NaNs filling
-    critical_indicator_cols = ['atr', 'dynamic_multiplier', 'chandelier_long', 'chandelier_short', 'trend_ema', 'ema_short', 'ema_long', 'rsi', 'volume_ma']
-    for col in critical_indicator_cols:
-        if col not in df.columns or df[col].isnull().all():
-            logging.warning(f"Critical indicator column '{col}' is missing or all NaNs after calculation for {df.index.name}. Strategy data not fully populated.")
-            return pd.DataFrame() # Return empty DataFrame if critical data is missing
+    df['ch_long'] = df['highest_high'] - (df['atr'] * df['dynamic_multiplier'])
+    df['ch_short'] = df['lowest_low'] + (df['atr'] * df['dynamic_multiplier'])
+    
+    df['trend_ema'] = ta.ema(df['Close'], BOT_CONFIG["TREND_EMA_PERIOD"]).fillna(method='ffill').fillna(0)
+    df['ema_s'] = ta.ema(df['Close'], BOT_CONFIG["EMA_SHORT_PERIOD"]).fillna(method='ffill').fillna(0)
+    df['ema_l'] = ta.ema(df['Close'], BOT_CONFIG["EMA_LONG_PERIOD"]).fillna(method='ffill').fillna(0)
+    df['rsi'] = ta.rsi(df['Close'], BOT_CONFIG["RSI_PERIOD"]).fillna(method='ffill').fillna(50)
+    
+    df['vol_ma'] = ta.sma(df['Volume'], BOT_CONFIG.get("VOLUME_MA_PERIOD", 20)).fillna(method='ffill').fillna(0)
+    df['vol_spike'] = (df['Volume'] / df['vol_ma'].replace(0, np.nan)) > BOT_CONFIG["VOLUME_THRESHOLD_MULTIPLIER"]
+    df['vol_spike'] = df['vol_spike'].fillna(False)
 
-    return df
+    df['est_slow'] = est_supertrend(df, BOT_CONFIG.get("EST_SLOW_LENGTH", 8), BOT_CONFIG.get("EST_SLOW_MULTIPLIER", 1.2)).fillna(method='ffill').fillna(0)
+    df['fisher'] = fisher_transform(df, BOT_CONFIG.get("EHLERS_FISHER_PERIOD", 8)).fillna(method='ffill').fillna(0)
 
-def generate_chandelier_signals(df: pd.DataFrame):
-    """
-    Generate explicit long and short signals based on Chandelier Exit Scalping Strategy.
-    Returns 'Buy', 'Sell', or 'none', along with calculated risk distance, TP, SL, dynamic multiplier, and the full DataFrame with indicators.
-    """
-    # Ensure enough data for all indicators, including lookback periods for EMA, ATR, RSI, and Volume MA
-    min_required_klines = max(BOT_CONFIG["MIN_KLINES_FOR_STRATEGY"], BOT_CONFIG["TREND_EMA_PERIOD"], 
-                              BOT_CONFIG["EMA_LONG_PERIOD"], BOT_CONFIG["ATR_PERIOD"], 
-                              BOT_CONFIG["RSI_PERIOD"], 20) # 20 for Volume MA and volatility std
+    if BOT_CONFIG.get("USE_STOCH_FILTER", False):
+        df['stoch_k'], df['stoch_d'] = stochastic_oscillator(df, BOT_CONFIG["STOCH_K_PERIOD"], BOT_CONFIG["STOCH_D_PERIOD"], BOT_CONFIG["STOCH_SMOOTHING"])
+        df['stoch_k'] = df['stoch_k'].fillna(method='ffill').fillna(50)
+        df['stoch_d'] = df['stoch_d'].fillna(method='ffill').fillna(50)
+    
+    if BOT_CONFIG.get("USE_MACD_FILTER", False):
+        df['macd_line'], df['macd_signal'], df['macd_hist'] = macd_indicator(df, BOT_CONFIG["MACD_FAST_PERIOD"], BOT_CONFIG["MACD_SLOW_PERIOD"], BOT_CONFIG["MACD_SIGNAL_PERIOD"])
+        df['macd_line'] = df['macd_line'].fillna(method='ffill').fillna(0)
+        df['macd_signal'] = df['macd_signal'].fillna(method='ffill').fillna(0)
+        df['macd_hist'] = df['macd_hist'].fillna(method='ffill').fillna(0)
+
+    if BOT_CONFIG.get("USE_ADX_FILTER", False):
+        df['adx'] = adx_indicator(df, BOT_CONFIG["ADX_PERIOD"])
+        df['adx'] = df['adx'].fillna(method='ffill').fillna(0)
+
+    return df.ffill().fillna(0)
+
+# -------------- signal generator --------------
+last_signal_bar: Dict[str, int] = {}
+async def generate_signal(bybit: Bybit, symbol: str, df: pd.DataFrame) -> Tuple[str, float, float, float, str]:
+    min_required_klines = max(
+        BOT_CONFIG["MIN_KLINES_FOR_STRATEGY"], BOT_CONFIG["TREND_EMA_PERIOD"], 
+        BOT_CONFIG["EMA_LONG_PERIOD"], BOT_CONFIG["ATR_PERIOD"], 
+        BOT_CONFIG["RSI_PERIOD"], BOT_CONFIG.get("VOLUME_MA_PERIOD", 20),
+        BOT_CONFIG.get("VOLATILITY_LOOKBACK", 20),
+        BOT_CONFIG.get("EST_SLOW_LENGTH", 8) + 5, BOT_CONFIG.get("EHLERS_FISHER_PERIOD", 8) + 5
+    )
+    if BOT_CONFIG.get("USE_STOCH_FILTER", False): min_required_klines = max(min_required_klines, BOT_CONFIG["STOCH_K_PERIOD"] + BOT_CONFIG["STOCH_SMOOTHING"] + 5)
+    if BOT_CONFIG.get("USE_MACD_FILTER", False): min_required_klines = max(min_required_klines, BOT_CONFIG["MACD_SLOW_PERIOD"] + BOT_CONFIG["MACD_SIGNAL_PERIOD"] + 5)
+    if BOT_CONFIG.get("USE_ADX_FILTER", False): min_required_klines = max(min_required_klines, BOT_CONFIG["ADX_PERIOD"] + 5)
     
     if df.empty or len(df) < min_required_klines:
-        logging.debug(f"Not enough data for Chandelier Exit strategy indicators (needed >{min_required_klines}, got {len(df)}).")
-        return 'none', None, None, None, None, df # signal, risk, tp, sl, dynamic_multiplier, df_with_indicators
-
-    # Ensure all indicators are calculated
-    df_with_indicators = calculate_chandelier_indicators(df)
+        return 'none', 0, 0, 0, f'not enough bars ({len(df)} < {min_required_klines})'
     
-    # Get the last two rows for current and previous candle analysis
-    last_row = df_with_indicators.iloc[-1]
-    prev_row = df_with_indicators.iloc[-2]
+    df = build_indicators(df)
+    i = -1
+    j = -2
 
-    current_price = last_row['Close']
-    atr_value = last_row['atr']
-    dynamic_multiplier = last_row['dynamic_multiplier']
+    critical_indicators = ['Close', 'atr', 'dynamic_multiplier', 'ema_s', 'ema_l', 'trend_ema', 'rsi', 'vol_spike', 'est_slow', 'fisher']
+    if BOT_CONFIG.get("USE_STOCH_FILTER", False): critical_indicators.extend(['stoch_k', 'stoch_d'])
+    if BOT_CONFIG.get("USE_MACD_FILTER", False): critical_indicators.extend(['macd_line', 'macd_signal'])
+    if BOT_CONFIG.get("USE_ADX_FILTER", False): critical_indicators.append('adx')
 
-    if atr_value <= 0 or pd.isna(atr_value) or pd.isna(dynamic_multiplier): # Avoid division by zero or invalid ATR/multiplier
-        logging.warning("ATR value or dynamic multiplier is invalid, cannot calculate risk. Skipping signal generation.")
-        return 'none', None, None, None, None, df_with_indicators
+    critical_indicators_exist = all(col in df.columns and not pd.isna(df[col].iloc[i]) for col in critical_indicators)
+    if not critical_indicators_exist:
+        return 'none', 0, 0, 0, 'critical indicators missing/NaN'
 
-    risk_distance = atr_value * dynamic_multiplier
+    cp = df['Close'].iloc[i]
+    atr = df['atr'].iloc[i]
+    dynamic_multiplier = df['dynamic_multiplier'].iloc[i]
     
-    # Long entry conditions
-    long_entry_condition = (
-        last_row['ema_short'] > last_row['ema_long'] and
-        prev_row['ema_short'] <= prev_row['ema_long'] and # Crossover
-        last_row['Close'] > last_row['trend_ema'] and # Price above long-term trend
-        last_row['rsi'] < BOT_CONFIG["RSI_OVERBOUGHT"] and # RSI not overbought
-        last_row['volume_spike'] # Volume confirmation
+    if atr <= 0 or np.isnan(atr) or np.isnan(dynamic_multiplier):
+        return 'none', 0, 0, 0, 'bad atr or dynamic multiplier'
+    
+    risk_distance = atr * dynamic_multiplier
+    
+    htf_trend = await higher_tf_trend(bybit, symbol)
+    if htf_trend == 'none':
+        return 'none', 0, 0, 0, 'htf neutral'
+    
+    current_bar_timestamp = int(df.index[i].timestamp())
+    if symbol in last_signal_bar and (current_bar_timestamp - last_signal_bar[symbol]) < (BOT_CONFIG.get("MIN_BARS_BETWEEN_TRADES", 3) * BOT_CONFIG["TIMEFRAME"] * 60):
+        return 'none', 0, 0, 0, 'cool-down period active'
+    
+    if len(df) < 2:
+        return 'none', 0, 0, 0, 'not enough candles for crossover check'
+
+    # Base conditions
+    long_cond = (
+        df['ema_s'].iloc[i] > df['ema_l'].iloc[i] and
+        df['ema_s'].iloc[j] <= df['ema_l'].iloc[j] and
+        cp > df['trend_ema'].iloc[i] and
+        df['rsi'].iloc[i] < BOT_CONFIG["RSI_OVERBOUGHT"] and
+        df['vol_spike'].iloc[i] and
+        (htf_trend == 'long')
     )
 
-    # Short entry conditions
-    short_entry_condition = (
-        last_row['ema_short'] < last_row['ema_long'] and
-        prev_row['ema_short'] >= prev_row['ema_long'] and # Crossover
-        last_row['Close'] < last_row['trend_ema'] and # Price below long-term trend
-        last_row['rsi'] > BOT_CONFIG["RSI_OVERSOLD"] and # RSI not oversold
-        last_row['volume_spike'] # Volume confirmation
+    short_cond = (
+        df['ema_s'].iloc[i] < df['ema_l'].iloc[i] and
+        df['ema_s'].iloc[j] >= df['ema_l'].iloc[j] and
+        cp < df['trend_ema'].iloc[i] and
+        df['rsi'].iloc[i] > BOT_CONFIG["RSI_OVERSOLD"] and
+        df['vol_spike'].iloc[i] and
+        (htf_trend == 'short')
     )
 
+    # Ehlers Supertrend filter
+    if BOT_CONFIG.get("USE_EST_SLOW_FILTER", True):
+        long_cond = long_cond and (df['est_slow'].iloc[i] == 1)
+        short_cond = short_cond and (df['est_slow'].iloc[i] == -1)
+    
+    # Stochastic filter
+    if BOT_CONFIG.get("USE_STOCH_FILTER", False) and 'stoch_k' in df.columns and 'stoch_d' in df.columns:
+        stoch_k_curr, stoch_d_curr = df['stoch_k'].iloc[i], df['stoch_d'].iloc[i]
+        stoch_k_prev, stoch_d_prev = df['stoch_k'].iloc[j], df['stoch_d'].iloc[j]
+
+        long_stoch_cond = (stoch_k_curr > stoch_d_curr and stoch_k_prev <= stoch_d_prev and stoch_k_curr < BOT_CONFIG["STOCH_OVERBOUGHT"])
+        short_stoch_cond = (stoch_k_curr < stoch_d_curr and stoch_k_prev >= stoch_d_prev and stoch_k_curr > BOT_CONFIG["STOCH_OVERSOLD"])
+
+        long_cond = long_cond and long_stoch_cond
+        short_cond = short_cond and short_stoch_cond
+
+    # MACD filter
+    if BOT_CONFIG.get("USE_MACD_FILTER", False) and 'macd_line' in df.columns and 'macd_signal' in df.columns:
+        macd_line_curr, macd_signal_curr = df['macd_line'].iloc[i], df['macd_signal'].iloc[i]
+        macd_line_prev, macd_signal_prev = df['macd_line'].iloc[j], df['macd_signal'].iloc[j]
+
+        long_macd_cond = (macd_line_curr > macd_signal_curr and macd_line_prev <= macd_signal_prev and macd_line_curr > 0)
+        short_macd_cond = (macd_line_curr < macd_signal_curr and macd_line_prev >= macd_signal_prev and macd_line_curr < 0)
+
+        long_cond = long_cond and long_macd_cond
+        short_cond = short_cond and short_macd_cond
+
+    # ADX filter
+    if BOT_CONFIG.get("USE_ADX_FILTER", False) and 'adx' in df.columns:
+        adx_curr = df['adx'].iloc[i]
+        long_adx_cond = (adx_curr > BOT_CONFIG["ADX_THRESHOLD"])
+        short_adx_cond = (adx_curr > BOT_CONFIG["ADX_THRESHOLD"])
+
+        long_cond = long_cond and long_adx_cond
+        short_cond = short_cond and short_adx_cond
+        
     signal = 'none'
     tp_price = None
     sl_price = None
+    reason = 'no match'
 
-    if long_entry_condition:
+    if long_cond:
         signal = 'Buy'
-        sl_price = current_price - risk_distance
-        tp_price = current_price + (risk_distance * BOT_CONFIG["REWARD_RISK_RATIO"])
-    elif short_entry_condition:
+        sl_price = cp - risk_distance
+        tp_price = cp + (risk_distance * BOT_CONFIG.get("REWARD_RISK_RATIO", 2.5))
+        reason = 'EMA cross up, price above trend EMA, RSI not overbought, volume spike, HTF long'
+    elif short_cond:
         signal = 'Sell'
-        sl_price = current_price + risk_distance
-        tp_price = current_price - (risk_distance * BOT_CONFIG["REWARD_RISK_RATIO"])
+        sl_price = cp + risk_distance
+        tp_price = cp - (risk_distance * BOT_CONFIG.get("REWARD_RISK_RATIO", 2.5))
+        reason = 'EMA cross down, price below trend EMA, RSI not oversold, volume spike, HTF short'
     
-    return signal, risk_distance, tp_price, sl_price, dynamic_multiplier, df_with_indicators
+    if signal != 'none':
+        last_signal_bar[symbol] = current_bar_timestamp
+    
+    return signal, cp, sl_price, tp_price, reason
 
+# -------------- equity guard --------------
+equity_reference: Optional[float] = None
+async def emergency_stop(bybit: Bybit) -> bool:
+    global equity_reference
+    current_equity = await bybit.get_balance()
+    if equity_reference is None:
+        equity_reference = current_equity
+        logging.info(f"Initial equity reference set to {equity_reference:.2f} USDT.")
+        return False
+    
+    if current_equity <= 0:
+        logging.warning("Current equity is zero or negative. Cannot calculate drawdown.")
+        return False
+        
+    if current_equity < equity_reference:
+        drawdown = ((equity_reference - current_equity) / equity_reference) * 100
+        if drawdown >= BOT_CONFIG.get("EMERGENCY_STOP_IF_DOWN_PCT", 15):
+            logging.critical(f"{ColoredFormatter.BOLD}{ColoredFormatter.RED}!!! EMERGENCY STOP !!! Equity down {drawdown:.1f}%. Shutting down bot.{ColoredFormatter.RESET}")
+            return True
+    return False
 
-# --- Main Bot Loop ---
-def main():
+# -------------- main loop --------------
+async def main():
     symbols = BOT_CONFIG["TRADING_SYMBOLS"]
-    if not symbols:
-        logging.info("No symbols configured. Exiting.")
-        return
+    if not symbols: logging.info("No symbols configured. Exiting."); return
 
+    bybit = Bybit(BOT_CONFIG["API_KEY"], BOT_CONFIG["API_SECRET"], BOT_CONFIG["TESTNET"], BOT_CONFIG["DRY_RUN"])
+    
     mode_info = f"{ColoredFormatter.MAGENTA}{ColoredFormatter.BOLD}DRY RUN{ColoredFormatter.RESET}" if BOT_CONFIG["DRY_RUN"] else f"{ColoredFormatter.GREEN}{ColoredFormatter.BOLD}LIVE{ColoredFormatter.RESET}"
     testnet_info = f"{ColoredFormatter.YELLOW}TESTNET{ColoredFormatter.RESET}" if BOT_CONFIG["TESTNET"] else f"{ColoredFormatter.BLUE}MAINNET{ColoredFormatter.RESET}"
     logging.info(f"Starting trading bot in {mode_info} mode on {testnet_info}. Checking {len(symbols)} symbols.")
+    logging.info("Bot started – Press Ctrl+C to stop.")
 
-    # Dictionary to track active trades for time-based exit (symbol -> {'entry_time': datetime, 'order_id': str, 'side': str})
-    # This is a simplified in-memory tracker. For persistence, a database would be needed.
-    active_trades_tracker = {}
+    last_reconciliation_time = datetime.datetime.now(pytz.utc)
 
-    while True:
-        local_time, utc_time = get_current_time(BOT_CONFIG["TIMEZONE"])
-        logging.info(f"Local Time: {local_time.strftime('%Y-%m-%d %H:%M:%S')} | UTC Time: {utc_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    try:
+        while True:
+            local_time, utc_time = get_current_time(BOT_CONFIG["TIMEZONE"])
+            logging.info(f"Local Time: {local_time.strftime('%Y-%m-%d %H:%M:%S')} | UTC Time: {utc_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        if not is_market_open(local_time, BOT_CONFIG["MARKET_OPEN_HOUR"], BOT_CONFIG["MARKET_CLOSE_HOUR"]):
-            logging.info(f"Market is closed ({BOT_CONFIG['MARKET_OPEN_HOUR']}:00-{BOT_CONFIG['MARKET_CLOSE_HOUR']}:00 {BOT_CONFIG['TIMEZONE']}). Skipping this cycle. Waiting {BOT_CONFIG['LOOP_WAIT_TIME_SECONDS']} seconds.")
-            sleep(BOT_CONFIG['LOOP_WAIT_TIME_SECONDS'])
-            continue
-            
-        balance = bybit_client.get_balance()
-        if balance is None:
-            logging.error(f'Cannot connect to API or get balance. Waiting {BOT_CONFIG["LOOP_WAIT_TIME_SECONDS"]} seconds and retrying.')
-            sleep(BOT_CONFIG['LOOP_WAIT_TIME_SECONDS'])
-            continue
-        
-        logging.info(f'Current balance: {balance:.2f} USDT')
-        
-        current_positions = bybit_client.get_positions()
-        logging.info(f'You have {len(current_positions)} open positions: {current_positions}')
-
-        # --- Manage existing trades (time-based exit) ---
-        symbols_to_remove_from_tracker = []
-        for symbol, trade_info in active_trades_tracker.items():
-            # In dry run, we simulate positions being open. In live, we check actual positions.
-            if not BOT_CONFIG["DRY_RUN"] and symbol not in current_positions:
-                logging.info(f"Position for {symbol} closed (not in current_positions). Removing from tracker.")
-                symbols_to_remove_from_tracker.append(symbol)
+            if not is_market_open(local_time, BOT_CONFIG["MARKET_OPEN_HOUR"], BOT_CONFIG["MARKET_CLOSE_HOUR"]):
+                logging.info(f"Market is closed ({BOT_CONFIG['MARKET_OPEN_HOUR']}:00-{BOT_CONFIG['MARKET_CLOSE_HOUR']}:00 {BOT_CONFIG['TIMEZONE']}). Skipping this cycle. Waiting {BOT_CONFIG['LOOP_WAIT_TIME_SECONDS']} seconds.")
+                await asyncio.sleep(BOT_CONFIG['LOOP_WAIT_TIME_SECONDS'])
                 continue
-
-            # Calculate elapsed candles (approximate)
-            # This assumes `entry_time` is roughly aligned with candle open times.
-            # For more precision, one would need to track the entry candle's timestamp.
-            elapsed_seconds = (utc_time - trade_info['entry_time']).total_seconds()
-            elapsed_candles = elapsed_seconds / (BOT_CONFIG["TIMEFRAME"] * 60)
-
-            if elapsed_candles >= BOT_CONFIG["MAX_HOLDING_CANDLES"]:
-                logging.info(f"Position for {symbol} has exceeded MAX_HOLDING_CANDLES ({BOT_CONFIG['MAX_HOLDING_CANDLES']}). Attempting to close.")
-                # Cancel any open orders for this symbol first
-                bybit_client.cancel_all_open_orders(symbol)
-                sleep(0.5)
-                # Then close the position
-                bybit_client.close_position(symbol)
-                symbols_to_remove_from_tracker.append(symbol)
-        
-        for symbol in symbols_to_remove_from_tracker:
-            if symbol in active_trades_tracker:
-                del active_trades_tracker[symbol]
-
-        # --- Iterate through symbols for new trades ---
-        for symbol in symbols:
-            # Re-check positions and max_pos inside the loop, as positions can change
-            current_positions = bybit_client.get_positions() 
-            if len(current_positions) >= BOT_CONFIG["MAX_POSITIONS"]:
-                logging.info(f"Max positions ({BOT_CONFIG['MAX_POSITIONS']}) reached. Halting signal checks for this cycle.")
-                break # Exit the symbol loop, continue to next main loop iteration
-
-            if symbol in current_positions:
-                logging.debug(f"Skipping {symbol} as there is already an open position.")
-                continue
-
-            # Check for open orders for this symbol to avoid duplicate entries
-            open_orders_for_symbol = bybit_client.get_open_orders(symbol)
-            if len(open_orders_for_symbol) >= BOT_CONFIG["MAX_OPEN_ORDERS_PER_SYMBOL"]:
-                logging.debug(f"Skipping {symbol} as there are {len(open_orders_for_symbol)} open orders (max {BOT_CONFIG['MAX_OPEN_ORDERS_PER_SYMBOL']}).")
-                continue
-
-            kl = bybit_client.klines(symbol, BOT_CONFIG["TIMEFRAME"])
-            if kl.empty or len(kl) < BOT_CONFIG["MIN_KLINES_FOR_STRATEGY"]: # Ensure enough data for indicators
-                logging.warning(f"Not enough klines data for {symbol} (needed >{BOT_CONFIG['MIN_KLINES_FOR_STRATEGY']}). Skipping.")
-                continue
-
-            support, resistance = bybit_client.get_orderbook_levels(symbol)
-            current_price = kl['Close'].iloc[-1]
-            
-            if support is None or resistance is None:
-                logging.warning(f"Could not retrieve orderbook levels for {symbol}. Skipping strategy check.")
-                continue
-
-            # --- Chandelier Exit Scalping Strategy Signal Generation ---
-            final_signal, risk_distance, tp_price, sl_price, dynamic_multiplier, df_with_indicators = generate_chandelier_signals(kl) # Capture df_with_indicators
-
-            # Extract current indicator values for logging (always display)
-            last_row_indicators = df_with_indicators.iloc[-1]
-            log_details = (
-                f"Current Price: {ColoredFormatter.WHITE}{current_price:.4f}{ColoredFormatter.RESET} | "
-                f"ATR ({BOT_CONFIG['ATR_PERIOD']}): {ColoredFormatter.CYAN}{last_row_indicators['atr']:.4f}{ColoredFormatter.RESET} | "
-                f"Dynamic Multiplier: {ColoredFormatter.CYAN}{last_row_indicators['dynamic_multiplier']:.2f}{ColoredFormatter.RESET} | "
-                f"EMA Short ({BOT_CONFIG['EMA_SHORT_PERIOD']}): {ColoredFormatter.BLUE}{last_row_indicators['ema_short']:.4f}{ColoredFormatter.RESET} | "
-                f"EMA Long ({BOT_CONFIG['EMA_LONG_PERIOD']}): {ColoredFormatter.BLUE}{last_row_indicators['ema_long']:.4f}{ColoredFormatter.RESET} | "
-                f"Trend EMA ({BOT_CONFIG['TREND_EMA_PERIOD']}): {ColoredFormatter.BLUE}{last_row_indicators['trend_ema']:.4f}{ColoredFormatter.RESET} | "
-                f"RSI ({BOT_CONFIG['RSI_PERIOD']}): {ColoredFormatter.YELLOW}{last_row_indicators['rsi']:.2f}{ColoredFormatter.RESET} | "
-                f"Volume Spike: {ColoredFormatter.GREEN if last_row_indicators['volume_spike'] else ColoredFormatter.RED}{'Yes' if last_row_indicators['volume_spike'] else 'No'}{ColoredFormatter.RESET}"
-            )
-            logging.info(f"[{symbol}] Indicator Values: {log_details}") # Log for each symbol
-
-            # --- Order Placement Logic based on Final Signal ---
-            if final_signal != 'none':
-                # Determine specific reasoning for the signal
-                reasoning = []
-                if final_signal == 'Buy':
-                    reasoning.append(f"EMA Short ({last_row_indicators['ema_short']:.4f}) crossed above EMA Long ({last_row_indicators['ema_long']:.4f})")
-                    reasoning.append(f"Price ({current_price:.4f}) is above Trend EMA ({last_row_indicators['trend_ema']:.4f})")
-                    reasoning.append(f"RSI ({last_row_indicators['rsi']:.2f}) is below Overbought ({BOT_CONFIG['RSI_OVERBOUGHT']})")
-                    if last_row_indicators['volume_spike']:
-                        reasoning.append("Volume spike detected")
-                    
-                    logging.info(f'{ColoredFormatter.GREEN}{ColoredFormatter.BOLD}BUY SIGNAL for {symbol} 📈{ColoredFormatter.RESET}')
-                    logging.info(f'{ColoredFormatter.GREEN}Reasoning: {"; ".join(reasoning)}{ColoredFormatter.RESET}')
-                    logging.info(f'{ColoredFormatter.GREEN}Calculated TP: {tp_price:.4f}, SL: {sl_price:.4f}{ColoredFormatter.RESET}')
-
-                    # Calculate common order parameters
-                    price_precision, qty_precision = bybit_client.get_precisions(symbol)
-                    
-                    # Calculate position size based on risk per trade
-                    capital_for_risk = balance 
-                    risk_amount_usdt = capital_for_risk * BOT_CONFIG["RISK_PER_TRADE_PCT"]
-                    
-                    if risk_distance <= 0:
-                        logging.warning(f"Calculated risk_distance for {symbol} is zero or negative. Skipping order.")
-                        continue
-
-                    order_qty_risk_based = risk_amount_usdt / risk_distance
-                    order_qty_from_usdt = BOT_CONFIG["ORDER_QTY_USDT"] / current_price
-                    order_qty = min(round(order_qty_risk_based, qty_precision), round(order_qty_from_usdt, qty_precision))
-                    
-                    if order_qty <= 0:
-                        logging.warning(f"Calculated order quantity for {symbol} is zero or negative ({order_qty}). Skipping order.")
-                        continue
-
-                    bybit_client.set_margin_mode_and_leverage(
-                        symbol, BOT_CONFIG["MARGIN_MODE"], BOT_CONFIG["LEVERAGE"]
-                    )
-                    sleep(0.5) # Give API a moment to process
-
-                    order_id = None
-                    if support and abs(current_price - support) < (current_price * BOT_CONFIG["PRICE_DETECTION_THRESHOLD_PCT"]):
-                        logging.info(f"{ColoredFormatter.BLUE}Price near support at {support:.4f}. Placing Limit Order to Buy at support.{ColoredFormatter.RESET}")
-                        order_id = bybit_client.place_limit_order(
-                            symbol=symbol, side='Buy', price=round(support, price_precision), qty=order_qty,
-                            tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision)
-                        )
-                    elif resistance and current_price > resistance:
-                        logging.info(f"{ColoredFormatter.BLUE}Price broken above resistance at {resistance:.4f}. Placing Conditional Market Order for breakout.{ColoredFormatter.RESET}")
-                        trigger_price = current_price * (1 + 0.001) # 0.1% above current price
-                        order_id = bybit_client.place_conditional_order(
-                            symbol=symbol, side='Buy', qty=order_qty, trigger_price=round(trigger_price, price_precision),
-                            order_type='Market', tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision)
-                        )
-                    else:
-                        logging.info(f"{ColoredFormatter.BLUE}No specific S/R condition. Placing Market Order to Buy.{ColoredFormatter.RESET}")
-                        order_id = bybit_client.place_market_order(
-                            symbol=symbol, side='Buy', qty=order_qty,
-                            tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision)
-                        )
-
-                elif final_signal == 'Sell':
-                    reasoning.append(f"EMA Short ({last_row_indicators['ema_short']:.4f}) crossed below EMA Long ({last_row_indicators['ema_long']:.4f})")
-                    reasoning.append(f"Price ({current_price:.4f}) is below Trend EMA ({last_row_indicators['trend_ema']:.4f})")
-                    reasoning.append(f"RSI ({last_row_indicators['rsi']:.2f}) is above Oversold ({BOT_CONFIG['RSI_OVERSOLD']})")
-                    if last_row_indicators['volume_spike']:
-                        reasoning.append("Volume spike detected")
-
-                    logging.info(f'{ColoredFormatter.RED}{ColoredFormatter.BOLD}SELL SIGNAL for {symbol} 📉{ColoredFormatter.RESET}')
-                    logging.info(f'{ColoredFormatter.RED}Reasoning: {"; ".join(reasoning)}{ColoredFormatter.RESET}')
-                    logging.info(f'{ColoredFormatter.RED}Calculated TP: {tp_price:.4f}, SL: {sl_price:.4f}{ColoredFormatter.RESET}')
-
-                    # Calculate common order parameters
-                    price_precision, qty_precision = bybit_client.get_precisions(symbol)
-                    
-                    # Calculate position size based on risk per trade
-                    capital_for_risk = balance 
-                    risk_amount_usdt = capital_for_risk * BOT_CONFIG["RISK_PER_TRADE_PCT"]
-                    
-                    if risk_distance <= 0:
-                        logging.warning(f"Calculated risk_distance for {symbol} is zero or negative. Skipping order.")
-                        continue
-
-                    order_qty_risk_based = risk_amount_usdt / risk_distance
-                    order_qty_from_usdt = BOT_CONFIG["ORDER_QTY_USDT"] / current_price
-                    order_qty = min(round(order_qty_risk_based, qty_precision), round(order_qty_from_usdt, qty_precision))
-                    
-                    if order_qty <= 0:
-                        logging.warning(f"Calculated order quantity for {symbol} is zero or negative ({order_qty}). Skipping order.")
-                        continue
-
-                    bybit_client.set_margin_mode_and_leverage(
-                        symbol, BOT_CONFIG["MARGIN_MODE"], BOT_CONFIG["LEVERAGE"]
-                    )
-                    sleep(0.5) # Give API a moment to process
-
-                    order_id = None
-                    if resistance and abs(current_price - resistance) < (current_price * BOT_CONFIG["PRICE_DETECTION_THRESHOLD_PCT"]):
-                        logging.info(f"{ColoredFormatter.MAGENTA}Price near resistance at {resistance:.4f}. Placing Limit Order to Sell at resistance.{ColoredFormatter.RESET}")
-                        order_id = bybit_client.place_limit_order(
-                            symbol=symbol, side='Sell', price=round(resistance, price_precision), qty=order_qty,
-                            tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision)
-                        )
-                    elif support and current_price < support:
-                        logging.info(f"{ColoredFormatter.MAGENTA}Price broken below support at {support:.4f}. Placing Conditional Market Order for breakdown.{ColoredFormatter.RESET}")
-                        trigger_price = current_price * (1 - 0.001) # 0.1% below current price
-                        order_id = bybit_client.place_conditional_order(
-                            symbol=symbol, side='Sell', qty=order_qty, trigger_price=round(trigger_price, price_precision),
-                            order_type='Market', tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision)
-                        )
-                    else:
-                        logging.info(f"{ColoredFormatter.MAGENTA}No specific S/R condition. Placing Market Order to Sell.{ColoredFormatter.RESET}")
-                        order_id = bybit_client.place_market_order(
-                            symbol=symbol, side='Sell', qty=order_qty,
-                            tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision)
-                        )
                 
-                if order_id:
-                    active_trades_tracker[symbol] = {
-                        'entry_time': utc_time, # Store UTC time of order placement
-                        'order_id': order_id,
-                        'side': final_signal
-                    }
-            else:
-                logging.debug(f"No strong combined trading signal for {symbol}.")
+            if await emergency_stop(bybit): break
+
+            balance = await bybit.get_balance()
+            if balance is None or balance <= 0:
+                logging.error(f'Cannot connect to API or balance is zero/negative ({balance}). Waiting {BOT_CONFIG["LOOP_WAIT_TIME_SECONDS"]} seconds and retrying.')
+                await asyncio.sleep(BOT_CONFIG['LOOP_WAIT_TIME_SECONDS'])
+                continue
+            
+            logging.info(f'Current balance: {balance:.2f} USDT')
+            
+            current_positions_on_exchange = await bybit.get_positions()
+            current_positions_symbols_on_exchange = {p['symbol']: p for p in current_positions_on_exchange} # Map for easy lookup
+            logging.info(f'You have {len(current_positions_on_exchange)} open positions on exchange: {list(current_positions_symbols_on_exchange.keys())}')
+
+            # --- Position Reconciliation (Exchange vs. DB) ---
+            if (utc_time - last_reconciliation_time).total_seconds() / 60 >= BOT_CONFIG["POSITION_RECONCILIATION_INTERVAL_MINUTES"]:
+                logging.info(f"{ColoredFormatter.CYAN}Performing position reconciliation...{ColoredFormatter.RESET}")
+                await reconcile_positions(bybit, current_positions_symbols_on_exchange, utc_time)
+                last_reconciliation_time = utc_time
+
+            # --- Position Exit Manager (Time, Chandelier Exit, Fisher Transform, Fixed Profit, Trailing Stop) ---
+            active_db_trades = []
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.execute("SELECT id, symbol, side, entry_time, entry_price, sl, tp, order_id FROM trades WHERE status = 'OPEN'")
+                active_db_trades = cursor.fetchall()
+            
+            exit_tasks = []
+            for trade_id, symbol, side, entry_time_str, entry_price, sl, tp, order_id in active_db_trades:
+                position_info = current_positions_symbols_on_exchange.get(symbol)
+                exit_tasks.append(manage_trade_exit(bybit, trade_id, symbol, side, entry_time_str, entry_price, sl, tp, position_info, utc_time))
+            await asyncio.gather(*exit_tasks)
+
+            # Refresh active_db_trades after exits
+            active_db_trades = []
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.execute("SELECT id, symbol, side FROM trades WHERE status = 'OPEN'")
+                active_db_trades = cursor.fetchall()
+            current_db_positions_symbols = [t[1] for t in active_db_trades]
+
+            # --- Signal Search and Order Placement ---
+            signal_tasks = []
+            for symbol in symbols:
+                if len(current_db_positions_symbols) >= BOT_CONFIG["MAX_POSITIONS"]:
+                    logging.info(f"Max positions ({BOT_CONFIG['MAX_POSITIONS']}) reached. Halting signal checks for this cycle.")
+                    break
+                
+                if symbol in current_db_positions_symbols:
+                    logging.debug(f"Skipping {symbol} as there is already an open position in DB tracker.")
+                    continue
+
+                open_orders_for_symbol = await bybit.get_open_orders(symbol)
+                if len(open_orders_for_symbol) >= BOT_CONFIG["MAX_OPEN_ORDERS_PER_SYMBOL"]:
+                    logging.debug(f"Skipping {symbol} as there are {len(open_orders_for_symbol)} open orders (max {BOT_CONFIG['MAX_OPEN_ORDERS_PER_SYMBOL']}).")
+                    continue
+
+                signal_tasks.append(process_symbol_for_signal(bybit, symbol, balance, utc_time))
+
+            await asyncio.gather(*signal_tasks)
+
+            logging.info(f'--- Cycle finished. Waiting {BOT_CONFIG["LOOP_WAIT_TIME_SECONDS"]} seconds for next loop. ---')
+            await asyncio.sleep(BOT_CONFIG['LOOP_WAIT_TIME_SECONDS'])
+    finally:
+        await bybit.close_session()
+
+async def reconcile_positions(bybit: Bybit, exchange_positions: Dict[str, Dict[str, Any]], utc_time: datetime.datetime):
+    """Reconciles database tracked positions with actual exchange positions."""
+    db_positions = {}
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.execute("SELECT id, order_id, symbol, side, status, entry_price FROM trades WHERE status = 'OPEN'")
+        for row in cursor.fetchall():
+            db_positions[row[2]] = {'db_id': row[0], 'order_id': row[1], 'side': row[3], 'status': row[4], 'entry_price': row[5]}
+    
+    # 1. Mark DB positions as CLOSED if not found on exchange
+    for symbol, db_info in db_positions.items():
+        if symbol not in exchange_positions:
+            logging.warning(f"Position for {symbol} found in DB (ID: {db_info['db_id']}) but not on exchange. Marking as CLOSED.")
+            current_price = await bybit.get_current_price(symbol)
+            pnl = (current_price - db_info['entry_price']) * (1 if db_info['side'] == 'Buy' else -1) if current_price else 0
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.execute("UPDATE trades SET status = ?, exit_time = ?, exit_price = ?, pnl = ? WHERE id = ?",
+                             ('CLOSED', utc_time.isoformat(), current_price, pnl, db_info['db_id']))
+
+    # 2. Add exchange positions to DB if not found in DB
+    for symbol, ex_info in exchange_positions.items():
+        if symbol not in db_positions:
+            logging.warning(f"Position for {symbol} found on exchange but not in DB. Adding as RECONCILED.")
+            # Assume entry price is mark price if original entry isn't available
+            entry_price = float(ex_info['avgPrice']) if float(ex_info['avgPrice']) > 0 else float(ex_info['markPrice'])
+            p_uuid = str(uuid.uuid4())
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.execute("INSERT INTO trades(id, order_id, symbol, side, qty, entry_time, entry_price, sl, tp, status, exit_time, exit_price, pnl) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                             (p_uuid, ex_info.get('orderId', 'N/A'), symbol, ex_info['side'], float(ex_info['size']), 
+                              utc_time.isoformat(), entry_price, 
+                              float(ex_info['stopLoss']), float(ex_info['takeProfit']), # Use current SL/TP from exchange
+                              'RECONCILED', None, None, None)) # Mark as reconciled, no exit details yet
+
+async def manage_trade_exit(bybit: Bybit, trade_id: str, symbol: str, side: str, entry_time_str: str, entry_price: float, sl_db: float, tp_db: float, position_info: Optional[Dict[str, Any]], utc_time: datetime.datetime):
+    """Handles exiting an open trade based on various conditions."""
+    if not position_info:
+        logging.info(f"Position for {symbol} not found on exchange while managing trade {trade_id}. Marking as CLOSED in DB tracker.")
+        current_price = await bybit.get_current_price(symbol)
+        pnl = (current_price - entry_price) * (1 if side == 'Buy' else -1) if current_price else 0
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("UPDATE trades SET status = ?, exit_time = ?, exit_price = ?, pnl = ? WHERE id=?",
+                         ('CLOSED', utc_time.isoformat(), current_price, pnl, trade_id))
+        return
+
+    klines_df = await bybit.klines(symbol, BOT_CONFIG["TIMEFRAME"], limit=BOT_CONFIG.get("MAX_HOLDING_CANDLES", 50) + 5)
+    if klines_df.empty or len(klines_df) < 2:
+        logging.warning(f"Not enough klines for {symbol} to manage existing trade. Skipping exit check.")
+        return
+    
+    df_with_indicators = build_indicators(klines_df)
+    last_row = df_with_indicators.iloc[-1]
+    current_price = last_row['Close']
+    
+    reason_to_exit = None
+
+    # Calculate PNL for fixed profit target
+    current_pnl_percentage = 0.0
+    if entry_price > 0:
+        if side == 'Buy':
+            current_pnl_percentage = (current_price - entry_price) / entry_price
+        else: # Sell
+            current_pnl_percentage = (entry_price - current_price) / entry_price
+
+    # Fixed Profit Target Exit
+    if BOT_CONFIG.get("FIXED_PROFIT_TARGET_PCT", 0) > 0 and current_pnl_percentage >= BOT_CONFIG["FIXED_PROFIT_TARGET_PCT"]:
+        reason_to_exit = f"Fixed Profit Target ({BOT_CONFIG['FIXED_PROFIT_TARGET_PCT'] * 100:.1f}%) reached (Current PnL: {current_pnl_percentage * 100:.1f}%)"
+
+    # Chandelier Exit (Trailing Stop equivalent, dynamic update if active)
+    new_sl_price = sl_db # Start with current SL in DB
+    if BOT_CONFIG.get("TRAILING_STOP_ACTIVE", True):
+        if side == 'Buy':
+            ch_sl = last_row['ch_long']
+            if ch_sl > new_sl_price: # Only trail SL upwards
+                new_sl_price = ch_sl
+        elif side == 'Sell':
+            ch_sl = last_row['ch_short']
+            if ch_sl < new_sl_price: # Only trail SL downwards
+                new_sl_price = ch_sl
+        
+        price_prec, _ = await bybit.get_precisions(symbol)
+        new_sl_price = round(new_sl_price, price_prec)
+
+        if abs(new_sl_price - sl_db) / sl_db > 0.0001: # Only modify if SL moved significantly
+            await bybit.modify_position_tpsl(symbol, tp_price=round(tp_db, price_prec), sl_price=new_sl_price)
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.execute("UPDATE trades SET sl = ? WHERE id=?", (new_sl_price, trade_id))
+            logging.debug(f"[{symbol}] Trailing Stop Loss updated to {new_sl_price:.4f}.")
+            sl_db = new_sl_price # Update for current check
+
+        # Check if price hit the *current* effective stop loss (either initial or trailed)
+        if side == 'Buy' and current_price <= sl_db:
+            reason_to_exit = f"Stop Loss hit (current price {current_price:.4f} <= SL {sl_db:.4f})"
+        elif side == 'Sell' and current_price >= sl_db:
+            reason_to_exit = f"Stop Loss hit (current price {current_price:.4f} >= SL {sl_db:.4f})"
+            
+    # Fisher Transform Flip Early Exit
+    if reason_to_exit is None and BOT_CONFIG.get("USE_FISHER_EXIT", True):
+        if side == 'Buy' and last_row['fisher'] < 0 and df_with_indicators['fisher'].iloc[-2] >= 0:
+            reason_to_exit = f"Fisher Transform (bearish flip: {last_row['fisher']:.2f})"
+        elif side == 'Sell' and last_row['fisher'] > 0 and df_with_indicators['fisher'].iloc[-2] <= 0:
+            reason_to_exit = f"Fisher Transform (bullish flip: {last_row['fisher']:.2f})"
+
+    # Time-based Exit
+    entry_dt = datetime.datetime.fromisoformat(entry_time_str).replace(tzinfo=pytz.utc)
+    elapsed_candles = (utc_time - entry_dt).total_seconds() / (BOT_CONFIG["TIMEFRAME"] * 60)
+    if reason_to_exit is None and elapsed_candles >= BOT_CONFIG["MAX_HOLDING_CANDLES"]:
+        reason_to_exit = f"Max holding candles ({BOT_CONFIG['MAX_HOLDING_CANDLES']}) exceeded"
+
+    if reason_to_exit:
+        logging.info(f"{ColoredFormatter.MAGENTA}Closing {side} position for {symbol} due to: {reason_to_exit}{ColoredFormatter.RESET}")
+        await bybit.cancel_all_open_orders(symbol)
+        await asyncio.sleep(0.5)
+        await bybit.close_position(symbol)
+        
+        pnl = (current_price - entry_price) * (1 if side == 'Buy' else -1)
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("UPDATE trades SET status = ?, exit_time = ?, exit_price = ?, pnl = ? WHERE id=?",
+                         ('CLOSED', utc_time.isoformat(), current_price, pnl, trade_id))
+        logging.info(f"Trade {trade_id} for {symbol} marked as CLOSED in DB tracker. PNL: {pnl:.2f} USDT")
+
+async def process_symbol_for_signal(bybit: Bybit, symbol: str, balance: float, utc_time: datetime.datetime):
+    """Processes a single symbol for signal generation and order placement."""
+    klines_df = await bybit.klines(symbol, BOT_CONFIG["TIMEFRAME"], limit=200)
+    if klines_df.empty or len(klines_df) < BOT_CONFIG["MIN_KLINES_FOR_STRATEGY"]:
+        logging.warning(f"Not enough klines data for {symbol} (needed >{BOT_CONFIG['MIN_KLINES_FOR_STRATEGY']}). Skipping.")
+        return
+
+    signal, current_price, sl_price, tp_price, signal_reason = await generate_signal(bybit, symbol, klines_df)
+    
+    df_with_indicators = build_indicators(klines_df)
+    if not df_with_indicators.empty:
+        last_row_indicators = df_with_indicators.iloc[-1]
+        log_details = (
+            f"Price: {current_price:.4f} | "
+            f"ATR ({BOT_CONFIG['ATR_PERIOD']}): {last_row_indicators['atr']:.4f} | "
+            f"Dyn Mult: {last_row_indicators['dynamic_multiplier']:.2f} | "
+            f"EMA S({BOT_CONFIG['EMA_SHORT_PERIOD']}): {last_row_indicators['ema_s']:.4f} | "
+            f"EMA L({BOT_CONFIG['EMA_LONG_PERIOD']}): {last_row_indicators['ema_l']:.4f} | "
+            f"Trend EMA({BOT_CONFIG['TREND_EMA_PERIOD']}): {last_row_indicators['trend_ema']:.4f} | "
+            f"RSI({BOT_CONFIG['RSI_PERIOD']}): {last_row_indicators['rsi']:.2f} | "
+            f"Vol Spike: {'Yes' if last_row_indicators['vol_spike'] else 'No'} | "
+            f"EST Slow: {last_row_indicators['est_slow']:.2f} | "
+            f"Fisher: {last_row_indicators['fisher']:.2f}"
+        )
+        if BOT_CONFIG.get("USE_STOCH_FILTER", False):
+             log_details += f" | Stoch K/D: {last_row_indicators['stoch_k']:.2f}/{last_row_indicators['stoch_d']:.2f}"
+        if BOT_CONFIG.get("USE_MACD_FILTER", False):
+             log_details += f" | MACD Line/Sig: {last_row_indicators['macd_line']:.2f}/{last_row_indicators['macd_signal']:.2f}"
+        if BOT_CONFIG.get("USE_ADX_FILTER", False):
+             log_details += f" | ADX: {last_row_indicators['adx']:.2f}"
+        logging.debug(f"[{symbol}] Indicators: {log_details}")
+
+    if signal == 'none':
+        logging.debug(f"[{symbol}] No trading signal ({signal_reason}).")
+        return
+
+    logging.info(f"{ColoredFormatter.BOLD}{ColoredFormatter.GREEN if signal == 'Buy' else ColoredFormatter.RED}{signal} SIGNAL for {symbol} {('📈' if signal == 'Buy' else '📉')}{ColoredFormatter.RESET}")
+    logging.info(f"[{symbol}] Reasoning: {signal_reason}. Calculated TP: {tp_price:.4f}, SL: {sl_price:.4f}")
+
+    price_precision, qty_precision = await bybit.get_precisions(symbol)
+    
+    capital_for_risk = balance
+    risk_amount_usdt = capital_for_risk * BOT_CONFIG["RISK_PER_TRADE_PCT"]
+    
+    risk_distance = abs(current_price - sl_price) if sl_price is not None else 0
+    if risk_distance <= 0:
+        logging.warning(f"[{symbol}] Calculated risk_distance is zero or negative. Skipping order.")
+        return
+
+    order_qty_risk_based = risk_amount_usdt / risk_distance
+    max_notional_qty = BOT_CONFIG.get("MAX_NOTIONAL_PER_TRADE_USDT", 1e9) / current_price if current_price else 1e9
+    order_qty_calculated = min(order_qty_risk_based, max_notional_qty)
+    order_qty = round(order_qty_calculated, qty_precision)
+    
+    if order_qty <= 0:
+        logging.warning(f"[{symbol}] Calculated order quantity is zero or negative ({order_qty}). Skipping order.")
+        return
+
+    await bybit.set_margin_mode_and_leverage(symbol, BOT_CONFIG["MARGIN_MODE"], BOT_CONFIG["LEVERAGE"])
+    await asyncio.sleep(0.5)
+
+    order_id = None
+    order_type_config = BOT_CONFIG.get("ORDER_TYPE", "Market").lower()
+    
+    best_bid, best_ask = await bybit.get_orderbook_levels(symbol)
+    
+    if order_type_config == 'limit':
+        limit_execution_price = None
+        if signal == 'Buy' and best_bid is not None and (current_price - best_bid) < (current_price * BOT_CONFIG["PRICE_DETECTION_THRESHOLD_PCT"]):
+            limit_execution_price = round(best_bid, price_precision)
+            logging.info(f"[{symbol}] Price near best bid at {best_bid:.4f}. Placing Limit Order to Buy at bid.")
+        elif signal == 'Sell' and best_ask is not None and (best_ask - current_price) < (current_price * BOT_CONFIG["PRICE_DETECTION_THRESHOLD_PCT"]):
+            limit_execution_price = round(best_ask, price_precision)
+            logging.info(f"[{symbol}] Price near best ask at {best_ask:.4f}. Placing Limit Order to Sell at ask.")
+        else:
+            limit_execution_price = round(current_price, price_precision)
+            logging.info(f"[{symbol}] No specific S/R condition for limit. Placing Limit Order at current price {limit_execution_price:.4f}.")
+        
+        if limit_execution_price:
+            order_id = await bybit.place_limit_order(
+                symbol=symbol, side=signal, price=limit_execution_price, qty=order_qty,
+                tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision),
+                time_in_force='PostOnly' if BOT_CONFIG.get("POST_ONLY", False) else 'GTC'
+            )
+    elif order_type_config == 'conditional':
+        trigger_price = None
+        if signal == 'Buy':
+            trigger_price = current_price * (1 + BOT_CONFIG.get("BREAKOUT_TRIGGER_PERCENT", 0.001))
+        else:
+            trigger_price = current_price * (1 - BOT_CONFIG.get("BREAKOUT_TRIGGER_PERCENT", 0.001))
+        
+        trigger_price = round(trigger_price, price_precision)
+        logging.info(f"[{symbol}] Placing Conditional Market Order triggered at {trigger_price:.4f}.")
+        order_id = await bybit.place_conditional_order(
+            symbol=symbol, side=signal, qty=order_qty, trigger_price=trigger_price,
+            order_type='Market', tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision)
+        )
+    else:
+        logging.info(f"[{symbol}] Placing Market Order.")
+        order_id = await bybit.place_market_order(
+            symbol=symbol, side=signal, qty=order_qty,
+            tp_price=round(tp_price, price_precision), sl_price=round(sl_price, price_precision)
+        )
+    
+    if order_id:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("INSERT INTO trades(id, order_id, symbol, side, qty, entry_time, entry_price, sl, tp, status, exit_time, exit_price, pnl) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                         (str(uuid.uuid4()), order_id, symbol, signal, order_qty, utc_time.isoformat(), current_price, sl_price, tp_price, 'OPEN', None, None, None))
+        logging.info(f"New trade logged for {symbol} ({signal} {order_qty}). Order ID: {order_id}")
 
 
-        logging.info(f'--- Cycle finished. Waiting {BOT_CONFIG["LOOP_WAIT_TIME_SECONDS"]} seconds for next loop. ---')
-        sleep(BOT_CONFIG['LOOP_WAIT_TIME_SECONDS'])
+# -------------- tiny helpers --------------
+def get_current_time(tz_str: str) -> Tuple[datetime.datetime, datetime.datetime]:
+    t = pytz.timezone(tz_str)
+    return datetime.datetime.now(t), datetime.datetime.now(pytz.utc)
 
+def is_market_open(local_time: datetime.datetime, open_hour: int, close_hour: int) -> bool:
+    current_hour = local_time.hour
+    if open_hour < close_hour:
+        return open_hour <= current_hour < close_hour
+    return current_hour >= open_hour or current_hour < close_hour
+
+# -------------- start --------------
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt: logging.info("Bot stopped by user via KeyboardInterrupt.")
+    except Exception as e: logging.critical(f"Bot terminated due to an unexpected error: {e}", exc_info=True)

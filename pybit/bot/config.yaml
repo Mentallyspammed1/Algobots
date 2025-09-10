@@ -1,0 +1,74 @@
+# config.yaml for ehlerssupertrend.py
+
+# --- API & General Settings ---
+api:
+  testnet: false
+  dry_run: true
+  # For enhanced security, API_KEY and API_SECRET are best sourced from environment variables.
+  # The script will look for BYBIT_API_KEY and BYBIT_API_SECRET.
+
+# --- Bot Behavior ---
+bot:
+  log_level: "INFO" # DEBUG, INFO, WARNING, ERROR
+  loop_wait_time_seconds: 60
+  timezone: "UTC"
+  market_open_hour: 0
+  market_close_hour: 24 # 24-hour market
+
+# --- Trading Parameters ---
+trading:
+  timeframe: 60 # in minutes
+  trading_symbols:
+    - "BTCUSDT"
+    - "ETHUSDT"
+  max_positions: 5
+  max_open_orders_per_symbol: 1
+  min_klines_for_strategy: 100
+  max_holding_candles: 24
+
+# --- Risk & Position Sizing ---
+risk_management:
+  margin_mode: 1 # 1 for Isolated, 0 for Cross
+  leverage: 10
+  risk_per_trade_pct: 0.01 # 1% of balance
+  order_qty_usdt: 100 # Fallback/max order size in USDT
+
+# --- Ehlers Supertrend Cross Strategy ---
+strategy:
+  # Fast Supertrend
+  est_fast:
+    length: 10
+    multiplier: 2.0
+  # Slow Supertrend
+  est_slow:
+    length: 20
+    multiplier: 3.0
+  # Ehlers Fisher Transform
+  ehlers_fisher:
+    period: 9
+  # RSI
+  rsi:
+    period: 14
+    overbought: 70
+    oversold: 30
+    confirm_long_threshold: 55
+    confirm_short_threshold: 45
+  # Volume
+  volume:
+    ma_period: 20
+    threshold_multiplier: 2.0
+  # ATR for TP/SL
+  atr:
+    period: 14
+
+# --- Order & Exit Logic ---
+order_logic:
+  # Reward/Risk Ratio (used if use_atr_for_tp_sl is false)
+  reward_risk_ratio: 1.5
+  # ATR-based TP/SL
+  use_atr_for_tp_sl: true
+  tp_atr_multiplier: 1.5
+  sl_atr_multiplier: 1.0
+  # S/R and Breakout
+  price_detection_threshold_pct: 0.005 # 0.5%
+  breakout_trigger_pct: 0.001 # 0.1%
