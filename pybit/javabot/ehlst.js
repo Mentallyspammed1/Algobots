@@ -4,8 +4,8 @@ const process = require('process');
 const yaml = require('js-yaml');
 const axios = require('axios');
 const CryptoJS = require('crypto-js');
+const { calculateEhlSupertrendIndicators } = require('./indicators.js');
 const { DateTime, Settings } = require('luxon');
-const technicalindicators = require('technicalindicators');
 const { randomUUID } = require('crypto');
 
 const colors = {
@@ -136,7 +136,7 @@ class Bybit {
 
         if (method === 'GET') {
             queryString = new URLSearchParams(params).toString();
-            const signPayload = timestamp + this.api + recvWindow + queryString;
+            const signPayload = timestamp + this.api + queryString;
             sign = CryptoJS.HmacSHA256(signPayload, this.secret).toString();
             headers['X-BAPI-SIGN'] = sign;
             try {
@@ -148,7 +148,7 @@ class Bybit {
             }
         } else if (method === 'POST') {
             bodyString = JSON.stringify(params);
-            const signPayload = timestamp + this.api + recvWindow + bodyString;
+            const signPayload = timestamp + this.api + bodyString;
             sign = CryptoJS.HmacSHA256(signPayload, this.secret).toString();
             headers['X-BAPI-SIGN'] = sign;
             try {
@@ -558,134 +558,7 @@ function calculatePnl(side, entryPrice, exitPrice, qty) {
     return side === 'Buy' ? (exitPrice - entryPrice) * qty : (entryPrice - exitPrice) * qty;
 }
 
-function calculateEhlSupertrendIndicators(klines) {
-    if (!klines || klines.length === 0) {
-        return [];
-    }
 
-    const processedKlines = klines.map(kline => ({
-        ...kline,
-        open: parseFloat(kline.open) || 0,
-        high: parseFloat(kline.high) || 0,
-        low: parseFloat(kline.low) || 0,
-        close: parseFloat(kline.close) || 0,
-        volume: parseFloat(kline.volume) || 0
-    }));
-
-    const input = {
-        open: processedKlines.map(k => k.open),
-        high: processedKlines.map(k => k.high),
-        low: processedKlines.map(k => k.low),
-        close: processedKlines.map(k => k.close),
-        volume: processedKlines.map(k => k.volume)
-    };
-
-    let df_with_indicators = processedKlines.map(kline => ({ ...kline }));
-
-    try {
-        const stFastConfig = CONFIG.strategy.est_fast;
-        const stFastResult = technicalindicators.Supertrend.calculate({
-            high: input.high,
-            low: input.low,
-            close: input.close,
-            period: stFastConfig.length,
-            multiplier: stFastConfig.multiplier
-        });
-        df_with_indicators.forEach((k, i) => {
-            k.st_fast_line = stFastResult[i]?.supertrend || 0;
-            k.st_fast_direction = stFastResult[i]?.direction || 0;
-        });
-    } catch (e) {
-        logger.error(`${colors.RED}Error calculating fast Supertrend: ${e.message}${colors.RESET}`);
-        df_with_indicators.forEach(k => { k.st_fast_line = 0; k.st_fast_direction = 0; });
-    }
-
-    try {
-        const stSlowConfig = CONFIG.strategy.est_slow;
-        const stSlowResult = technicalindicators.Supertrend.calculate({
-            high: input.high,
-            low: input.low,
-            close: input.close,
-            period: stSlowConfig.length,
-            multiplier: stSlowConfig.multiplier
-        });
-        df_with_indicators.forEach((k, i) => {
-            k.st_slow_line = stSlowResult[i]?.supertrend || 0;
-            k.st_slow_direction = stSlowResult[i]?.direction || 0;
-        });
-    } catch (e) {
-        logger.error(`${colors.RED}Error calculating slow Supertrend: ${e.message}${colors.RESET}`);
-        df_with_indicators.forEach(k => { k.st_slow_line = 0; k.st_slow_direction = 0; });
-    }
-
-    try {
-        const rsiResult = technicalindicators.RSI.calculate({
-            values: input.close,
-            period: CONFIG.strategy.rsi.period
-        });
-        df_with_indicators.forEach((k, i) => { k.rsi = rsiResult[i] || 0; });
-    } catch (e) {
-        logger.error(`${colors.RED}Error calculating RSI: ${e.message}${colors.RESET}`);
-        df_with_indicators.forEach(k => { k.rsi = 0; });
-    }
-
-    try {
-        const volumeMASeries = technicalindicators.SMA.calculate({
-            values: input.volume,
-            period: CONFIG.strategy.volume.ma_period
-        });
-        df_with_indicators.forEach((k, i) => {
-            k.volume_ma = volumeMASeries[i] || 0;
-            if (k.volume_ma > 0) {
-                k.volume_spike = (k.volume / k.volume_ma) > CONFIG.strategy.volume.threshold_multiplier;
-            } else {
-                k.volume_spike = false;
-            }
-        });
-    } catch (e) {
-        logger.error(`${colors.RED}Error calculating Volume MA: ${e.message}${colors.RESET}`);
-        df_with_indicators.forEach(k => { k.volume_ma = 0; k.volume_spike = false; });
-    }
-
-    try {
-        const fisherConfig = CONFIG.strategy.ehlers_fisher;
-        const fisherResult = technicalindicators.FisherTransform.calculate({
-            high: input.high,
-            low: input.low,
-            period: fisherConfig.period
-        });
-        df_with_indicators.forEach((k, i) => {
-            k.fisher = fisherResult[i]?.value || 0;
-            k.fisher_signal = fisherResult[i]?.signal || 0;
-        });
-    } catch (e) {
-        logger.error(`${colors.RED}Error calculating Fisher Transform: ${e.message}${colors.RESET}`);
-        df_with_indicators.forEach(k => { k.fisher = 0; k.fisher_signal = 0; });
-    }
-
-    try {
-        const atrResult = technicalindicators.ATR.calculate({
-            high: input.high,
-            low: input.low,
-            close: input.close,
-            period: CONFIG.strategy.atr.period
-        });
-        df_with_indicators.forEach((k, i) => { k.atr = atrResult[i] || 0; });
-    } catch (e) {
-        logger.error(`${colors.RED}Error calculating ATR: ${e.message}${colors.RESET}`);
-        df_with_indicators.forEach(k => { k.atr = 0; });
-    }
-    
-    for (let i = 1; i < df_with_indicators.length; i++) {
-        for (const key of ['st_fast_line', 'st_fast_direction', 'st_slow_line', 'st_slow_direction', 'rsi', 'volume_ma', 'fisher', 'fisher_signal', 'atr']) {
-            if (df_with_indicators[i][key] === 0 && df_with_indicators[i-1][key] !== undefined) {
-                df_with_indicators[i][key] = df_with_indicators[i-1][key];
-            }
-        }
-    }
-
-    return df_with_indicators;
-}
 
 function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyPrecision) {
     const minKlines = CONFIG.trading.min_klines_for_strategy;
@@ -693,7 +566,7 @@ function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyP
         return ['none', null, null, null, [], false];
     }
 
-    const dfIndicators = calculateEhlSupertrendIndicators(klines);
+    const dfIndicators = calculateEhlSupertrendIndicators(klines, CONFIG, logger);
     if (!dfIndicators || dfIndicators.length < minKlines) {
         return ['none', null, null, null, dfIndicators, false];
     }

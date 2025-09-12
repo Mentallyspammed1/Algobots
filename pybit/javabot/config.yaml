@@ -1,0 +1,62 @@
+# config.yaml
+# Configuration for the Ehlers Supertrend Cross Strategy (ehlst.js)
+
+bot:
+  log_level: INFO # Valid levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  timezone: UTC   # e.g., America/New_York, Europe/London, Asia/Shanghai
+  market_open_hour: 0 # 24-hour format (e.g., 9 for 9 AM)
+  market_close_hour: 24 # 24-hour format (e.g., 17 for 5 PM, 24 for always open)
+  loop_wait_time_seconds: 10 # How long to wait between main loop iterations
+
+api:
+  # API_KEY and API_SECRET are primarily read from environment variables (e.g., in a .env file).
+  # These are placeholders for illustration. DO NOT hardcode sensitive keys here in production.
+  key: YOUR_BYBIT_API_KEY_OR_ENV # Will be overridden by process.env.BYBIT_API_KEY
+  secret: YOUR_BYBIT_API_SECRET_OR_ENV # Will be overridden by process.env.BYBIT_API_SECRET
+  testnet: false # Set to true for Bybit Testnet, false for Mainnet
+  dry_run: true # Set to true to simulate trades without real execution (requires no API keys if true)
+
+trading:
+  trading_symbols: ["BTCUSDT", "ETHUSDT"] # List of symbols to trade (e.g., ["BTCUSDT", "SOLUSDT"])
+  timeframe: 5 # Kline timeframe in minutes (e.g., 1, 5, 15, 60)
+  min_klines_for_strategy: 50 # Minimum number of klines required to calculate all indicators
+  max_positions: 1 # Maximum number of concurrent open positions
+
+strategy:
+  # Ehlers Supertrend (Fast)
+  est_fast:
+    length: 10
+    multiplier: 1.0
+  # Ehlers Supertrend (Slow)
+  est_slow:
+    length: 20
+    multiplier: 2.0
+  # Relative Strength Index (RSI)
+  rsi:
+    period: 14
+    confirm_long_threshold: 40 # RSI must be above this for long signal confirmation
+    confirm_short_threshold: 60 # RSI must be below this for short signal confirmation
+    overbought: 70
+    oversold: 30
+  # Volume Moving Average
+  volume:
+    ma_period: 20
+    threshold_multiplier: 1.5 # Volume spike if current volume is X times MA
+  # Ehlers Fisher Transform
+  ehlers_fisher:
+    period: 10
+  # Average True Range (ATR)
+  atr:
+    period: 14
+
+order_logic:
+  reward_risk_ratio: 2.5 # Target Take Profit / Stop Loss ratio
+  use_atr_for_tp_sl: false # If true, TP/SL are calculated directly from ATR, not RR ratio
+  tp_atr_multiplier: 2.0 # Multiplier for ATR to set Take Profit (if use_atr_for_tp_sl is true)
+  sl_atr_multiplier: 1.0 # Multiplier for ATR to set Stop Loss (if use_atr_for_tp_sl is true)
+
+risk_management:
+  risk_per_trade_pct: 0.01 # Percentage of total balance to risk per trade (0.01 = 1%)
+  max_notional_per_trade_usdt: 1000 # Maximum USD value for a single trade
+  margin_mode: 1 # 1 for Isolated, 0 for Cross (Unified accounts manage this differently, often implicit)
+  leverage: 10 # Desired leverage for trades

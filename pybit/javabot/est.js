@@ -2,7 +2,7 @@ const { RestClientV5 } = require('bybit-api');
 const yaml = require('js-yaml');
 const fs = require('fs');
 const chalk = require('chalk');
-const ta = require('technicalindicators');
+const { calculateEhlSupertrendIndicators } = require('./indicators.js');
 
 // --- Logger with Chalk ---
 const logger = {
@@ -164,45 +164,7 @@ class BybitClient {
     }
 }
 
-// --- Indicator Calculations ---
-function calculateIndicators(klines, config) {
-    const closePrices = klines.map(k => k.close);
-    const highPrices = klines.map(k => k.high);
-    const lowPrices = klines.map(k => k.low);
-    const volume = klines.map(k => k.volume);
 
-    const stFastInput = { high: highPrices, low: lowPrices, close: closePrices, period: config.strategy.est_fast.length, multiplier: config.strategy.est_fast.multiplier };
-    const stSlowInput = { high: highPrices, low: lowPrices, close: closePrices, period: config.strategy.est_slow.length, multiplier: config.strategy.est_slow.multiplier };
-    const rsiInput = { values: closePrices, period: config.strategy.rsi.period };
-    const fisherInput = { high: highPrices, low: lowPrices, period: config.strategy.ehlers_fisher.period };
-    const atrInput = { high: highPrices, low: lowPrices, close: closePrices, period: config.strategy.atr.period };
-    const volumeMaInput = { values: volume, period: config.strategy.volume.ma_period };
-
-    const stFast = ta.Supertrend.calculate(stFastInput);
-    const stSlow = ta.Supertrend.calculate(stSlowInput);
-    const rsi = ta.RSI.calculate(rsiInput);
-    const fisher = ta.FisherTransform.calculate(fisherInput);
-    const atr = ta.ATR.calculate(atrInput);
-    const volumeMa = ta.SMA.calculate(volumeMaInput);
-
-    // Combine indicators with klines
-    return klines.map((k, i) => {
-        const offset = klines.length - rsi.length; // Adjust for indicators with different output lengths
-        return {
-            ...k,
-            st_fast_line: stFast[i]?.value,
-            st_fast_direction: stFast[i]?.direction === 'up' ? 1 : -1,
-            st_slow_line: stSlow[i]?.value,
-            st_slow_direction: stSlow[i]?.direction === 'up' ? 1 : -1,
-            rsi: i >= offset ? rsi[i - offset] : null,
-            fisher: fisher[i]?.fisher,
-            fisher_signal: fisher[i]?.trigger,
-            atr: atr[i],
-            volume_ma: volumeMa[i],
-            volume_spike: volumeMa[i] ? k.volume / volumeMa[i] > config.strategy.volume.threshold_multiplier : false,
-        };
-    });
-}
 
 // --- Signal Generation ---
 function generateSignals(df, config) {
@@ -285,7 +247,7 @@ async function main() {
                 continue;
             }
 
-            const df = calculateIndicators(klines, CONFIG);
+            const df = calculateEhlSupertrendIndicators(klines, CONFIG, logger);
             const { signal, sl_price, tp_price, reasoning } = generateSignals(df, CONFIG);
             const last = df[df.length - 1];
 

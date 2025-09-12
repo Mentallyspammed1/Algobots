@@ -424,7 +424,11 @@ class Bybit {
   async placeConditionalOrder(symbol, side, qty, triggerPrice, orderType = 'Market', price = null, tpPrice = null, slPrice = null, reduceOnly = false) {
     if (orderType === 'Limit' && price === null) {
       price = triggerPrice;
-      rootLogger.warning(`Conditional limit order requested for ${symbol} without explicit \`price\`. Using \`trigger_price\` as limit execution price.`);
+      rootLogger.warning(`Conditional limit order requested for ${symbol} without explicit 
+price
+. Using 
+trigger_price
+ as limit execution price.`);
     }
     return await this.placeOrderCommon(symbol, side, orderType, qty, price, triggerPrice, tpPrice, slPrice, 'GTC', reduceOnly);
   }
@@ -784,7 +788,7 @@ function buildIndicators(df) {
   ]);
 
   const volumeMa = calculateSMA(volumes, BOT_CONFIG.VOLUME_MA_PERIOD || 20);
-  const volSpike = volumes.map((vol, i) => (volMa[i] > 0 && vol / volumeMa[i] > BOT_CONFIG.VOLUME_THRESHOLD_MULTIPLIER));
+  const volSpike = volumes.map((vol, i) => (volumeMa[i] > 0 && vol / volumeMa[i] > BOT_CONFIG.VOLUME_THRESHOLD_MULTIPLIER));
   clonedDf.addColumns([
       volumeMa.map(val => ({vol_ma: val})),
       volSpike.map(val => ({vol_spike: val}))
@@ -1313,7 +1317,7 @@ async function processSymbolForSignal(bybit, symbol, balance, utcTime) {
   }
 
   await bybit.setMarginModeAndLeverage(symbol, BOT_CONFIG.MARGIN_MODE, BOT_CONFIG.LEVERAGE);
-  await setTimeout(500);
+  await setTimeout(500); // 0.5 seconds
 
   let orderId = null;
   const orderTypeConfig = (BOT_CONFIG.ORDER_TYPE || "Market").toLowerCase();
