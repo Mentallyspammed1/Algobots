@@ -7,7 +7,7 @@ export const BOT_CONFIG = {
     // These defaults are placeholders for illustration. DO NOT hardcode sensitive keys here in production.
     API_KEY: process.env.BYBIT_API_KEY || 'YOUR_BYBIT_API_KEY',
     API_SECRET: process.env.BYBIT_API_SECRET || 'YOUR_BYBIT_API_SECRET',
-    TESTNET: true, // Set to true for Bybit Testnet, false for Mainnet
+    TESTNET: false, // Set to true for Bybit Testnet, false for Mainnet
     DRY_RUN: true, // Set to true to simulate trades without real execution (requires no API keys if true)
 
     // --- Logging ---

@@ -46,9 +46,9 @@ function formatMarketContext(state, primaryIndicators, higherTfIndicators) {
 - **Quantity:** ${safeFormat(quantity, config.quantityPrecision)}
 - **Unrealized P/L:** ${safeFormat(pnl, 2)} USDT (${safeFormat(pnlPercent, 2)}%)`;
     } else {
-        context += "
+        context += `
 ## CURRENT POSITION
-- **Status:** FLAT (No open position).";
+- **Status:** FLAT (No open position).`;
     }
     // IMPROVEMENT 18: Add daily loss to context
     context += `
@@ -131,7 +131,7 @@ class TradingAiSystem {
         logger.info(`Starting new analysis cycle for ${config.symbol}...`);
 
         try {
-            const state = await this.reconcileState();
+            let state = await this.reconcileState();
             
             // IMPROVEMENT 20: Check if bot is in a HALT state
             if (state.isHalted) { // Assuming a `isHalted` flag could be added to state
@@ -139,7 +139,6 @@ class TradingAiSystem {
                 return;
             }
 
-            let state = await this.reconcileState(); // Use 'let' to allow reassigning updated state
             // IMPROVEMENT 18: Initialize initialBalance if not set
             if (state.initialBalance.isZero()) {
                 const currentBalance = await this.bybitApi.getAccountBalance();

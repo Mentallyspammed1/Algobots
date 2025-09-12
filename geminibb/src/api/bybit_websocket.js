@@ -119,42 +119,7 @@ class BybitWebSocket extends EventEmitter { // Extend EventEmitter
         );
     }
 
-    // IMPROVEMENT 11: Private WebSocket Authentication and Subscription
-    connectPrivate() {
-        this.privateWs = this._connectWs('private', this.privateUrl,
-            (ws) => {
-                const expires = Date.now() + 10000;
-                const signature = crypto.HmacSHA256(`GET/realtime${expires}`, this.apiSecret).toString();
-                const authMessage = { op: "auth", args: [this.apiKey, expires.toString(), signature] };
-                ws.send(JSON.stringify(authMessage));
-                logger.info("Sent private WebSocket authentication request.");
-
-                const authHandler = (data) => {
-                    const message = JSON.parse(data.toString());
-                    if (message.op === 'auth') {
-                        if (message.success) {
-                            logger.info("Private WebSocket authenticated successfully.");
-                            ws.off('message', authHandler);
-                            const privateSubscriptions = { op: "subscribe", args: [`order`, `position`] };
-                            ws.send(JSON.stringify(privateSubscriptions));
-                            logger.info(`Subscribed to private topics: ${privateSubscriptions.args}`);
-                            this._startHeartbeat(ws, 'privatePingInterval', config.bybit.privatePingIntervalMs);
-                        } else {
-                            logger.error(`Private WebSocket authentication failed: ${message.retMsg} (Code: ${message.retCode})`);
-                            ws.close();
-                        }
-                    } else {
-                        this.emit('privateMessage', message); // Emit a 'privateMessage' event
-                    }
-                };
-                ws.on('message', authHandler);
-            },
-            (data) => {
-                const message = JSON.parse(data.toString());
-                this.emit('privateMessage', message); // Emit a 'privateMessage' event
-                // ... existing unhandled message logging ...
-            },
-    }
+    
 
     // IMPROVEMENT 11: Private WebSocket Authentication and Subscription
     connectPrivate() {

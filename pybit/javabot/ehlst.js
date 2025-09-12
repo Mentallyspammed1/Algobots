@@ -4,7 +4,7 @@ const process = require('process');
 const yaml = require('js-yaml');
 const axios = require('axios');
 const CryptoJS = require('crypto-js');
-const { calculateEhlSupertrendIndicators } = require('./indicators.js');
+const { calculateEhlSupertrendIndicators } = require('./stindicators.js');
 const { DateTime, Settings } = require('luxon');
 const { randomUUID } = require('crypto');
 
@@ -591,13 +591,14 @@ function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyP
     const rsiConfirmShort = CONFIG.strategy.rsi.oversold < lastRow.rsi && lastRow.rsi < CONFIG.strategy.rsi.confirm_short_threshold;
     
     const volumeConfirm = lastRow.volume_spike || prevRow.volume_spike;
+    const adxConfirm = lastRow.adx > CONFIG.strategy.adx.threshold;
     
     let signal = 'none';
     let riskDistance = null;
     let tpPrice = null;
     let slPrice = null;
 
-    if (longTrendConfirmed && fastCrossesAboveSlow && ((fisherConfirmLong ? 1 : 0) + (rsiConfirmLong ? 1 : 0) + (volumeConfirm ? 1 : 0) >= 2)) {
+    if (longTrendConfirmed && fastCrossesAboveSlow && adxConfirm && ((fisherConfirmLong ? 1 : 0) + (rsiConfirmLong ? 1 : 0) + (volumeConfirm ? 1 : 0) >= 2)) {
         signal = 'Buy';
         slPrice = prevRow.st_slow_line;
         riskDistance = currentPrice - slPrice;
@@ -615,7 +616,7 @@ function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyP
             signal = 'none';
         }
 
-    } else if (shortTrendConfirmed && fastCrossesBelowSlow && ((fisherConfirmShort ? 1 : 0) + (rsiConfirmShort ? 1 : 0) + (volumeConfirm ? 1 : 0) >= 2)) {
+    } else if (shortTrendConfirmed && fastCrossesBelowSlow && adxConfirm && ((fisherConfirmShort ? 1 : 0) + (rsiConfirmShort ? 1 : 0) + (volumeConfirm ? 1 : 0) >= 2)) {
         signal = 'Sell';
         slPrice = prevRow.st_slow_line;
         riskDistance = slPrice - currentPrice;
@@ -699,6 +700,7 @@ async function main() {
                     `FastST: ${colors.CYAN}${lastRow.st_fast_line.toFixed(4)}${colors.RESET} | ` +
                     `RSI: ${colors.YELLOW}${lastRow.rsi.toFixed(2)}${colors.RESET} | ` +
                     `Fisher: ${colors.MAGENTA}${lastRow.fisher.toFixed(2)} (Sig: ${lastRow.fisher_signal.toFixed(2)})${colors.RESET} | ` +
+                    `ADX: ${colors.BLUE}${lastRow.adx.toFixed(2)}${colors.RESET} | ` +
                     `VolSpike: ${(volConfirm ? colors.GREEN : colors.RED)}${volConfirm ? 'Yes' : 'No'}${colors.RESET}`
                 );
                 logger.info(logMsg);
@@ -707,23 +709,27 @@ async function main() {
             }
 
             if (signal !== 'none' && risk !== null && risk > 0) {
-                const reasoning = [];
                 const lastRow = dfIndicators[dfIndicators.length - 1];
+                const prevRow = dfIndicators[dfIndicators.length - 2];
+                const reasoning = [];
+
                 if (signal === 'Buy') {
-                    reasoning.push("SlowST is Up");
-                    reasoning.push("FastST crossed above SlowST");
+                    reasoning.push(`SlowST is Up (${prevRow.st_slow_line.toFixed(4)})`);
+                    reasoning.push(`FastST crossed above SlowST (${prevRow.st_fast_line.toFixed(4)} -> ${lastRow.st_fast_line.toFixed(4)})`);
+                    reasoning.push(`ADX > ${CONFIG.strategy.adx.threshold} (${lastRow.adx.toFixed(2)})`);
                     const confirmations = [];
-                    if (lastRow.fisher > lastRow.fisher_signal) confirmations.push("Fisher");
-                    if (CONFIG.strategy.rsi.confirm_long_threshold < lastRow.rsi && lastRow.rsi < CONFIG.strategy.rsi.overbought) confirmations.push("RSI");
-                    if (volConfirm) confirmations.push("Volume");
+                    if (lastRow.fisher > lastRow.fisher_signal) confirmations.push(`Fisher (${lastRow.fisher.toFixed(2)} > ${lastRow.fisher_signal.toFixed(2)})`);
+                    if (CONFIG.strategy.rsi.confirm_long_threshold < lastRow.rsi && lastRow.rsi < CONFIG.strategy.rsi.overbought) confirmations.push(`RSI (${lastRow.rsi.toFixed(2)})`);
+                    if (volConfirm) confirmations.push("Volume Spike");
                     reasoning.push(`Confirms (${confirmations.length}/2): ${confirmations.join(', ')}`);
                 } else {
-                    reasoning.push("SlowST is Down");
-                    reasoning.push("FastST crossed below SlowST");
+                    reasoning.push(`SlowST is Down (${prevRow.st_slow_line.toFixed(4)})`);
+                    reasoning.push(`FastST crossed below SlowST (${prevRow.st_fast_line.toFixed(4)} -> ${lastRow.st_fast_line.toFixed(4)})`);
+                    reasoning.push(`ADX > ${CONFIG.strategy.adx.threshold} (${lastRow.adx.toFixed(2)})`);
                     const confirmations = [];
-                    if (lastRow.fisher < lastRow.fisher_signal) confirmations.push("Fisher");
-                    if (CONFIG.strategy.rsi.oversold < lastRow.rsi && lastRow.rsi < CONFIG.strategy.rsi.confirm_short_threshold) confirmations.push("RSI");
-                    if (volConfirm) confirmations.push("Volume");
+                    if (lastRow.fisher < lastRow.fisher_signal) confirmations.push(`Fisher (${lastRow.fisher.toFixed(2)} < ${lastRow.fisher_signal.toFixed(2)})`);
+                    if (CONFIG.strategy.rsi.oversold < lastRow.rsi && lastRow.rsi < CONFIG.strategy.rsi.confirm_short_threshold) confirmations.push(`RSI (${lastRow.rsi.toFixed(2)})`);
+                    if (volConfirm) confirmations.push("Volume Spike");
                     reasoning.push(`Confirms (${confirmations.length}/2): ${confirmations.join(', ')}`);
                 }
 

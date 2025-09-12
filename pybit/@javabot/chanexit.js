@@ -1,24 +1,16 @@
-import dotenv from 'dotenv';
-dotenv.config();
-import warnings from 'warnings'; // This would need a JS equivalent or be handled differently
-import net from 'net'; // Corresponds to socket in Python
-import { URL } from 'url';
-import { performance } from 'perf_hooks'; // For timestamp related to python time
-import os from 'os'; // For os.environ, though not directly used in the provided Python code
-import fs from 'fs'; // For file system operations, like SQLite file management
-import path from 'path'; // For path manipulation
+
 import { v4 as uuidv4 } from 'uuid'; // For generating UUIDs
 import sqlite3 from 'sqlite3'; // Or 'sqlite3-async' for async operations
 import { open } from 'sqlite'; // Helper to open db with async
 import { setTimeout } from 'timers/promises'; // For async sleep
 import moment from 'moment-timezone'; // For datetime and pytz
-import { RestClientV5 } from 'bybit-api';
+const indicatorModule = new BybitIndicatorModule(BOT_CONFIG.API_KEY, BOT_CONFIG.API_SECRET);
 
 // For pandas and numpy equivalents, we'd use 'dataframe-js' or similar,
 // but for simple operations, direct array/object manipulation might suffice.
 // Or consider a more robust library like 'danfojs' if available and suitable for server-side.
 // For now, we'll simulate pandas DataFrame behavior with plain objects/arrays.
-import { DataFrame } from 'dataframe-js'; // A common choice for JS DataFrames
+import { BybitIndicatorModule } from './indicators.js';
 
 // Import pandas_ta equivalents or re-implement
 // This part is the trickiest without a direct JS equivalent of pandas_ta
@@ -85,7 +77,7 @@ class ColoredLogger {
   critical(message, ...args) { this._log("CRITICAL", BOLD + RED, message, ...args); }
 }
 
-const rootLogger = new ColoredLogger("root"); // Simulating Python's logging.getLogger()
+
 
 // -------------- SQLite position tracker --------------
 const DB_FILE = "scalper_positions.sqlite";
@@ -138,7 +130,7 @@ class Bybit {
     };
 
     // The BybitAsync client doesn't need explicit URL config, it infers testnet from 'testnet' option.
-    this.session = new RestClientV5({
+    this.session = new BybitAsync({
       key: api,
       secret: secret,
       // The `BybitAsync` client library (bybit-api/client) automatically handles testnet based on the `testnet` boolean in constructor
@@ -423,11 +415,7 @@ class Bybit {
   async placeConditionalOrder(symbol, side, qty, triggerPrice, orderType = 'Market', price = null, tpPrice = null, slPrice = null, reduceOnly = false) {
     if (orderType === 'Limit' && price === null) {
       price = triggerPrice;
-      rootLogger.warning(`Conditional limit order requested for ${symbol} without explicit 
-price
-. Using 
-trigger_price
- as limit execution price.`);
+      rootLogger.warning(`Conditional limit order requested for ${symbol} without explicit \`price\`. Using \`trigger_price\` as limit execution price.`);
     }
     return await this.placeOrderCommon(symbol, side, orderType, qty, price, triggerPrice, tpPrice, slPrice, 'GTC', reduceOnly);
   }
@@ -542,108 +530,7 @@ trigger_price
   }
 }
 
-// Placeholder for pandas_ta functions. These would need to be implemented or a suitable library found.
-// For now, these are simplified or mock implementations.
-// A more robust solution would integrate 'danfojs' or similar and port indicators.
 
-// Helper to calculate EMA
-function calculateEMA(data, period) {
-  if (data.length < period) return new Array(data.length).fill(NaN);
-  const ema = [];
-  let sum = 0;
-  for (let i = 0; i < period; i++) {
-    sum += data[i];
-  }
-  ema[period - 1] = sum / period;
-  const multiplier = 2 / (period + 1);
-  for (let i = period; i < data.length; i++) {
-    ema[i] = (data[i] - ema[i - 1]) * multiplier + ema[i - 1];
-  }
-  return new Array(period - 1).fill(NaN).concat(ema.slice(period - 1));
-}
-
-// Helper to calculate SMA
-function calculateSMA(data, period) {
-  if (data.length < period) return new Array(data.length).fill(NaN);
-  const sma = [];
-  for (let i = 0; i <= data.length - period; i++) {
-    const slice = data.slice(i, i + period);
-    const sum = slice.reduce((a, b) => a + b, 0);
-    sma.push(sum / period);
-  }
-  return new Array(period - 1).fill(NaN).concat(sma);
-}
-
-// Helper to calculate ATR
-function calculateATR(high, low, close, period) {
-  if (high.length < period) return new Array(high.length).fill(0);
-  const tr = [];
-  for (let i = 0; i < high.length; i++) {
-    const h = high[i];
-    const l = low[i];
-    const cPrev = i > 0 ? close[i - 1] : close[i]; // Use current close if no prev
-    tr.push(Math.max(h - l, Math.abs(h - cPrev), Math.abs(l - cPrev)));
-  }
-  const atr = calculateEMA(tr, period); // Using EMA for ATR as is common
-  return atr.map(val => isNaN(val) ? 0 : val);
-}
-
-// Helper for RSI
-function calculateRSI(data, period) {
-  if (data.length < period + 1) return new Array(data.length).fill(50); // Need at least period + 1 for initial change
-  const rsi = new Array(data.length).fill(NaN);
-  const gains = new Array(data.length).fill(0);
-  const losses = new Array(data.length).fill(0);
-
-  for (let i = 1; i < data.length; i++) {
-    const diff = data[i] - data[i - 1];
-    if (diff > 0) {
-      gains[i] = diff;
-    } else {
-      losses[i] = Math.abs(diff);
-    }
-  }
-
-  let avgGain = gains.slice(1, period + 1).reduce((a, b) => a + b, 0) / period;
-  let avgLoss = losses.slice(1, period + 1).reduce((a, b) => a + b, 0) / period;
-
-  if (avgLoss === 0) {
-    if (avgGain === 0) {
-      rsi[period] = 50;
-    } else {
-      rsi[period] = 100;
-    }
-  } else {
-    const rs = avgGain / avgLoss;
-    rsi[period] = 100 - (100 / (1 + rs));
-  }
-
-  for (let i = period + 1; i < data.length; i++) {
-    avgGain = ((avgGain * (period - 1)) + gains[i]) / period;
-    avgLoss = ((avgLoss * (period - 1)) + losses[i]) / period;
-
-    if (avgLoss === 0) {
-      if (avgGain === 0) {
-        rsi[i] = 50;
-      } else {
-        rsi[i] = 100;
-      }
-    } else {
-      const rs = avgGain / avgLoss;
-      rsi[i] = 100 - (100 / (1 + rs));
-    }
-  }
-  return rsi.map(val => isNaN(val) ? 50 : val);
-}
-
-
-// Mock Supertrend and Fisher Transform for now
-// Real implementations would be complex.
-const mockSupertrend = (df, length, multiplier) => new Array(df.length).fill(0); // placeholder
-const mockFisherTransform = (df, period) => new Array(df.length).fill(0); // placeholder
-const mockStochasticOscillator = (df, k, d, smoothing) => [new Array(df.length).fill(50), new Array(df.length).fill(50)]; // placeholder
-const mockMacdIndicator = (df, fast, slow, signal) => [new Array(df.length).fill(0), new Array(df.length).fill(0), new Array(df.length).fill(0)]; // placeholder
-const mockAdxIndicator = (df, period) => new Array(df.length).fill(0); // placeholder
 
 // -------------- higher TF confirmation --------------
 async function higherTfTrend(bybit, symbol) {
@@ -787,7 +674,7 @@ function buildIndicators(df) {
   ]);
 
   const volumeMa = calculateSMA(volumes, BOT_CONFIG.VOLUME_MA_PERIOD || 20);
-  const volSpike = volumes.map((vol, i) => (volumeMa[i] > 0 && vol / volumeMa[i] > BOT_CONFIG.VOLUME_THRESHOLD_MULTIPLIER));
+  const volSpike = volumes.map((vol, i) => (volMa[i] > 0 && vol / volumeMa[i] > BOT_CONFIG.VOLUME_THRESHOLD_MULTIPLIER));
   clonedDf.addColumns([
       volumeMa.map(val => ({vol_ma: val})),
       volSpike.map(val => ({vol_spike: val}))
@@ -1316,7 +1203,7 @@ async function processSymbolForSignal(bybit, symbol, balance, utcTime) {
   }
 
   await bybit.setMarginModeAndLeverage(symbol, BOT_CONFIG.MARGIN_MODE, BOT_CONFIG.LEVERAGE);
-  await setTimeout(500); // 0.5 seconds
+  await setTimeout(500);
 
   let orderId = null;
   const orderTypeConfig = (BOT_CONFIG.ORDER_TYPE || "Market").toLowerCase();

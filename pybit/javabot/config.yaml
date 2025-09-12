@@ -49,6 +49,11 @@ strategy:
   atr:
     period: 14
 
+  # Average Directional Index (ADX)
+  adx:
+    period: 14
+    threshold: 25 # ADX must be above this value to confirm a trend
+
 order_logic:
   reward_risk_ratio: 2.5 # Target Take Profit / Stop Loss ratio
   use_atr_for_tp_sl: false # If true, TP/SL are calculated directly from ATR, not RR ratio
