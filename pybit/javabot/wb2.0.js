@@ -201,65 +201,9 @@ class ConfigManager {
 // --- Logging Setup ---
 const sensitivePrintf = (template, sensitiveWords) => {
     const escapeRegExp = (string) => {
-        return string.replace(/[.*+?^${}()|[\\]/g, '\\const sensitivePrintf = (template, sensitiveWords) => {
+        return string.replace(/[.*+?^${}()|[\]/g, '\const sensitivePrintf = (template, sensitiveWords) => {
     const escapeRegExp = (string) => {
-        return string.replace(/[.*+?^${}()|[\\]/g, '\\const sensitivePrintf = (template, sensitiveWords) => {
-    const escapeRegExp = (string) => {
-        return string.replace(/[.*+?^${}()|[\\]/g, '\\const sensitivePrintf = (template, sensitiveWords) => {
-    const escapeRegExp = (string) => {
-        return string.replace(/[.*+?^${}()|[\\]/g, '\\const sensitivePrintf = (template, sensitiveWords) => {
-    const escapeRegExp = (string) => {
-        return string.replace(/[.*+?^${}()|[\\]/g, '\\const sensitivePrintf = (template, sensitiveWords) => {
-    const escapeRegExp = (string) => {
-        return string.replace(/[.*+?^${}()|[\\]/g, '\return string.replace(/[.*+?^${}()|[\\]/g, '\return string.replace(/[.*+?^${}()|[\\]/g, '\\$&');');');
-    }
-    return winston.format.printf(info => {
-        let message = template(info);
-        for (const word of sensitiveWords) {
-            if (typeof word === 'string' && message.includes(word)) {
-                const escapedWord = escapeRegExp(word);
-                message = message.replace(new RegExp(escapedWord, 'g'), '*'.repeat(word.length));
-            }
-        }
-        return message;
-    });
-};');
-    }
-    return winston.format.printf(info => {
-        let message = template(info);
-        for (const word of sensitiveWords) {
-            if (typeof word === 'string' && message.includes(word)) {
-                const escapedWord = escapeRegExp(word);
-                message = message.replace(new RegExp(escapedWord, 'g'), '*'.repeat(word.length));
-            }
-        }
-        return message;
-    });
-};');
-    }
-    return winston.format.printf(info => {
-        let message = template(info);
-        for (const word of sensitiveWords) {
-            if (typeof word === 'string' && message.includes(word)) {
-                const escapedWord = escapeRegExp(word);
-                message = message.replace(new RegExp(escapedWord, 'g'), '*'.repeat(word.length));
-            }
-        }
-        return message;
-    });
-};');
-    }
-    return winston.format.printf(info => {
-        let message = template(info);
-        for (const word of sensitiveWords) {
-            if (typeof word === 'string' && message.includes(word)) {
-                const escapedWord = escapeRegExp(word);
-                message = message.replace(new RegExp(escapedWord, 'g'), '*'.repeat(word.length));
-            }
-        }
-        return message;
-    });
-};');
+        return string.replace(/[.*+?^${}()|[\\]/g, '\\return string.replace(/[.*+?^${}()|[\]/g, '\$&');');
     }
     return winston.format.printf(info => {
         let message = template(info);
@@ -1967,10 +1911,6 @@ class TradingAnalyzer {
                 } else if (volume_delta.lt(volume_delta_threshold.neg())) { // Strong selling pressure
                     vol_delta_contrib = -weight;
                     this.logger.debug(`${chalk.blue("Volume Delta: Strong selling pressure detected.")}${chalk.reset()}`);
-                } else if (volume_delta.gt(0)) { // Moderate buying pressure
-                    vol_delta_contrib = weight * 0.3;
-                } else if (volume_delta.lt(0)) { // Moderate selling pressure
-                    vol_delta_contrib = -weight * 0.3;
                 }
                 signal_breakdown_contrib["Volume Delta"] = vol_delta_contrib;
             }
@@ -2651,7 +2591,8 @@ async function main() {
                 } else {
                     logger.info(`${chalk.blue("Signal below threshold (")}${config.signal_score_threshold.toFixed(2)}${chalk.blue("). Holding. Score: ")}${signal_score.toFixed(2)}${chalk.reset()}`);
                 }
-            } else {
+            }
+            else {
                 logger.info(`${chalk.blue("No strong trading signal. Holding. Score: ")}${signal_score.toFixed(2)}${chalk.reset()}`);
             }
 

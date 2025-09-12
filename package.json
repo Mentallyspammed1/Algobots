@@ -4,5 +4,13 @@
   "private": true,
   "workspaces": [
     "geminibb"
-  ]
+  ],
+  "dependencies": {
+    "decimal.js": "^10.6.0",
+    "lodash": "^4.17.21",
+    "node-fetch": "^3.3.2",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0",
+    "ws": "^8.18.3"
+  }
 }
