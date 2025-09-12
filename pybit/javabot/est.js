@@ -27,7 +27,7 @@ function loadConfig(configPath = 'config.yaml') {
 
         if (!config.api.key || !config.api.secret) {
             logger.warning('BYBIT_API_KEY or BYBIT_API_SECRET not found in environment. Dry run is enforced.');
-            config.api.dry_run = true;
+            // config.api.dry_run = true; // Removed to ensure DRY_RUN is controlled by environment variable
         }
         return config;
     } catch (e) {

@@ -5,10 +5,10 @@ export const BOT_CONFIG = {
     // --- API Configuration ---
     // API_KEY and API_SECRET are primarily read from environment variables (e.g., in a .env file).
     // These defaults are placeholders for illustration. DO NOT hardcode sensitive keys here in production.
-    API_KEY: process.env.BYBIT_API_KEY || 'YOUR_BYBIT_API_KEY',
-    API_SECRET: process.env.BYBIT_API_SECRET || 'YOUR_BYBIT_API_SECRET',
+    API_KEY: process.env.BYBIT_API_KEY,
+    API_SECRET: process.env.BYBIT_API_SECRET,
     TESTNET: false, // Set to true for Bybit Testnet, false for Mainnet
-    DRY_RUN: true, // Set to true to simulate trades without real execution (requires no API keys if true)
+    
 
     // --- Logging ---
     // Valid levels: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"

@@ -11,10 +11,10 @@ bot:
 api:
   # API_KEY and API_SECRET are primarily read from environment variables (e.g., in a .env file).
   # These are placeholders for illustration. DO NOT hardcode sensitive keys here in production.
-  key: YOUR_BYBIT_API_KEY_OR_ENV # Will be overridden by process.env.BYBIT_API_KEY
-  secret: YOUR_BYBIT_API_SECRET_OR_ENV # Will be overridden by process.env.BYBIT_API_SECRET
+  key: null # Will be overridden by process.env.BYBIT_API_KEY
+  secret: null # Will be overridden by process.env.BYBIT_API_SECRET
   testnet: false # Set to true for Bybit Testnet, false for Mainnet
-  dry_run: true # Set to true to simulate trades without real execution (requires no API keys if true)
+  
 
 trading:
   trading_symbols: ["BTCUSDT", "ETHUSDT"] # List of symbols to trade (e.g., ["BTCUSDT", "SOLUSDT"])

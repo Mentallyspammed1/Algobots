@@ -7,8 +7,6 @@ const CryptoJS = require('crypto-js');
 const { calculateEhlSupertrendIndicators } = require('./stindicators.js');
 const { DateTime, Settings } = require('luxon');
 const { randomUUID } = require('crypto');
-require('dotenv').config();
-require('dotenv').config();
 
 const colors = {
     GREEN: '\x1b[32m',
@@ -89,6 +87,7 @@ function loadConfig(configPath = "config.yaml") {
 
     if (!apiKey || !apiSecret) {
         logger.warning(`${colors.YELLOW}BYBIT_API_KEY or BYBIT_API_SECRET not found in the environment. Dry run is enforced.${colors.RESET}`);
+        config.api.dry_run = true;
     }
 
     config.api.key = apiKey;
@@ -462,32 +461,6 @@ class Bybit {
         } catch (err) {
             logger.error(`${colors.RED}Exception getting order status for ${orderId}: ${err.message}${colors.RESET}`);
             return null;
-        }
-    }
-
-    async syncTime() {
-        try {
-            const start = Date.now();
-            const response = await axios.get(`${this.baseURL}/v3/public/time`);
-            const end = Date.now();
-            const serverTime = response.data.time; // Use top-level 'time' field (milliseconds)
-            this.timeOffset = serverTime - ((start + end) / 2);
-            logger.info(`${colors.GREEN}Time synchronized with Bybit server. Offset: ${this.timeOffset.toFixed(2)}ms${colors.RESET}`);
-        } catch (err) {
-            logger.error(`${colors.RED}Failed to sync time with Bybit server: ${err.message}${colors.RESET}`);
-        }
-    }
-
-    async syncTime() {
-        try {
-            const start = Date.now();
-            const response = await axios.get(`${this.baseURL}/v3/public/time`);
-            const end = Date.now();
-            const serverTime = response.data.time; // Use top-level 'time' field (milliseconds)
-            this.timeOffset = serverTime - ((start + end) / 2);
-            logger.info(`${colors.GREEN}Time synchronized with Bybit server. Offset: ${this.timeOffset.toFixed(2)}ms${colors.RESET}`);
-        } catch (err) {
-            logger.error(`${colors.RED}Failed to sync time with Bybit server: ${err.message}${colors.RESET}`);
         }
     }
 
