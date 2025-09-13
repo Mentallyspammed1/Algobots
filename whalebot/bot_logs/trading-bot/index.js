@@ -13,21 +13,19 @@ import { logger } from './lib/utils.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-// Centralized Configuration Vessel
 const config = {
   geminiApiKey: process.env.GEMINI_API_KEY,
   tradingSymbol: process.env.TRADING_SYMBOL || 'POPCATUSDT',
-  liveDataMode: process.env.LIVE_DATA_MODE === 'true',
+  liveDataMode: true,
   bybitApiKey: process.env.BYBIT_API_KEY,
   bybitApiSecret: process.env.BYBIT_API_SECRET,
   outputPath: process.env.OUTPUT_PATH || path.join(__dirname, 'output/signals.json'),
-  logFilePath: process.env.LOG_FILE_PATH || path.join(__dirname, 'logs/whalebotx.log'),
+  logFilePath: process.env.LOG_FILE_PATH || path.join(__dirname, '..', 'unanimous.log'),
   refreshIntervalMs: parseInt(process.env.REFRESH_INTERVAL_MS || '5000', 10),
   cronSchedule: process.env.CRON_SCHEDULE || '*/5 * * * *',
   signalHistoryLimit: parseInt(process.env.SIGNAL_HISTORY_LIMIT || '100', 10),
-  // New indicator settings from whalebot.py config.json
   indicatorSettings: {
     atr_period: 12,
     ema_short_period: 8,
@@ -147,7 +145,7 @@ class TradingBot {
           currentPrice: fetchedPriceData.currentPrice,
           symbol: fetchedPriceData.symbol,
           klines: fetchedKlineData,
-          indicatorSettings: config.indicatorSettings, // Pass indicator settings
+          indicatorSettings: config.indicatorSettings,
         };
 
       } else {
@@ -164,9 +162,7 @@ class TradingBot {
           logger.warn(chalk.yellow('No current price data available from logs.'));
           return;
         }
-        // In log mode, klines and indicator settings are assumed to be part of the parsed log data if needed by GeminiAnalyzer
-        // For now, we'll just pass the existing latestData structure.
-        latestData.indicatorSettings = config.indicatorSettings; // Ensure settings are passed even in log mode
+        latestData.indicatorSettings = config.indicatorSettings;
       }
 
       logger.info(chalk.blue('🧠 Consulting the Gemini AI oracle for trend analysis...'));

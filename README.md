@@ -138,12 +138,34 @@ pyrmethus-scalper-bot/
 ├── color_codex.py
 ├── .env
 ├── requirements.txt
+├── gemini_api_tagger.py
+├── git_helper.py
+├── git_pull_rebase.py
+├── git_clean_branches.py
+├── git_log_summary.py
 └── strategies/
     ├── stochrsi_fib_ob_strategy.py
     ├── marketmakingstrategy.py
     ├── sma_crossover_strategy.py
     └── strategy_template.py
 ```
+
+## 🚀 Development & Git Utilities
+
+This repository includes several utility scripts to streamline development workflows and manage Git operations:
+
+*   **`gemini_api_tagger.py`**: A Python script that interacts with the Gemini API to generate tags for given text inputs. Useful for categorizing trading signals, market news, or other textual data.
+*   **`git_helper.py`**: A command-line utility for common Git operations, including:
+    *   **Versioning**: Create and push annotated Git tags (e.g., `python git_helper.py tag v1.0.0 "Initial release"`).
+    *   **Status**: Check the current Git repository status (`python git_helper.py status`).
+    *   **Latest Tag**: Retrieve the most recent Git tag (`python git_helper.py latest_tag`).
+*   **`git_pull_rebase.py`**: Automatically pulls the latest changes from the remote repository and rebases the current branch. Helps maintain a clean, linear Git history.
+*   **`git_clean_branches.py`**: Deletes local Git branches that have already been merged into the current branch (excluding `main`/`master`). Keeps your local branch list tidy.
+*   **`git_log_summary.py`**: Provides a concise summary of recent Git commits, showing hash, author, relative date, and commit message (`python git_log_summary.py -n 10`).
+
+### Automated Daily Execution
+
+For continuous integration and repository maintenance, these scripts can be scheduled to run automatically (e.g., once a day) using tools like `cron` on Linux/Termux. Refer to the `GEMINI.md` for detailed instructions on setting up cron jobs for these utilities.
 
 ## 📊 Logging and Metrics
 

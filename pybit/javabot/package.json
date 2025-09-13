@@ -1,47 +1,49 @@
 {
-  "name": "pybit-javabot-scalper",
-  "version": "1.1.0",
-  "description": "A sophisticated scalping bot for Bybit",
-  "main": "wb1.1.js",
+  "name": "javabot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
   "scripts": {
-    "start": "node wb1.1.js"
+    "test": "jest"
   },
-  "keywords": [
-    "bybit",
-    "trading",
-    "bot",
-    "scalping"
-  ],
+  "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "axios": "^1.11.0",
-    "bybit-api": "^4.3.0",
-    "chalk": "^4.1.2",
+    "axios": "^1.7.2",
+    "bybit-api": "^3.1.0",
+    "chalk": "^5.3.0",
+    "crypto-js": "^4.2.0",
     "csv-writer": "^1.6.0",
     "dataframe-js": "^1.4.4",
-    "decimal.js": "^10.6.0",
-    "dotenv": "^16.6.1",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "js-yaml": "^4.1.0",
     "lodash": "^4.17.21",
-    "luxon": "^3.7.2",
-    "moment": "^2.30.1",
-    "moment-timezone": "^0.6.0",
-    "node-fetch": "^2.7.0",
+    "luxon": "^3.4.4",
+    "moment-timezone": "^0.5.45",
+    "node-fetch": "^3.3.2",
     "socket.io": "^4.7.5",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
-    "supertrend-indicator": "^1.0.6",
-    "technicalindicators": "^3.1.0",
-    "warnings": "^1.0.1",
-    "winston": "^3.17.0",
+    "uuid": "^9.0.1",
+    "winston": "^3.13.0",
     "winston-daily-rotate-file": "^5.0.0",
     "ws": "^8.17.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.35.0",
-    "eslint": "^9.35.0",
-    "globals": "^16.4.0"
+    "@babel/core": "^7.24.7",
+    "@babel/preset-env": "^7.24.7",
+    "babel-jest": "^30.1.3",
+    "jest": "^30.1.3"
+  },
+  "jest": {
+    "transform": {
+      "^.+\\.js$": "<rootDir>/node_modules/babel-jest"
+    },
+    "testMatch": ["**/tests/**/*.test.js"],
+    "testRunner": "jest-circus",
+    "testEnvironment": "node"
   }
 }

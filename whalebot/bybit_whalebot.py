@@ -300,59 +300,7 @@ def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) 
             _ensure_config_keys(config[key], default_value)
 
 
-# --- Logging Setup ---
-class SensitiveFormatter(logging.Formatter):
-    """Formatter that redacts API keys from log records."""
-
-    SENSITIVE_WORDS: ClassVar[list[str]] = ["API_KEY", "API_SECRET"]
-
-    def __init__(self, fmt=None, datefmt=None, style="%"):
-        """Initializes the SensitiveFormatter."""
-        super().__init__(fmt, datefmt, style)
-        self._fmt = fmt if fmt else self.default_fmt()
-
-    def default_fmt(self):
-        """Returns the default log format string."""
-        return "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-    def format(self, record):
-        """Formats the log record, redacting sensitive words."""
-        original_message = super().format(record)
-        redacted_message = original_message
-        for word in self.SENSITIVE_WORDS:
-            if word in redacted_message:
-                redacted_message = redacted_message.replace(word, "*" * len(word))
-        return redacted_message
-
-
-def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
-    """Configure and return a logger with file and console handlers."""
-    logger = logging.getLogger(log_name)
-    logger.setLevel(level)
-    logger.propagate = False
-
-    # Ensure handlers are not duplicated
-    if not logger.handlers:
-        # Console Handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(
-            SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
-        )
-        logger.addHandler(console_handler)
-
-        # File Handler
-        log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
-        )
-        file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        )
-        logger.addHandler(file_handler)
-
-    return logger
+from unanimous_logger import setup_logger
 
 # --- Advanced Orderbook Data Structures (from pybittemplate.md) ---
 
@@ -892,6 +840,7 @@ class BybitClient:
         )
         if response and response.get("result"):
             self.logger.info(f"{NEON_GREEN}Order placed: {response['result']}{RESET}")
+            self.logger.info("Order placed", extra=response.get("result"))
             return response["result"]
         return None
 
@@ -2924,6 +2873,7 @@ class PerformanceTracker:
         self.logger.info(
             f"{NEON_CYAN}Trade recorded. Current Total PnL: {self.total_pnl:.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}"
         )
+        self.logger.info("Trade recorded", extra=trade_record)
 
     def get_summary(self) -> dict:
         """Return a summary of all recorded trades."""
@@ -3283,4 +3233,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger = setup_logger("wgwhalex_bot_main") # Ensure logger exists even if main fails early
         logger.critical(f"{NEON_RED}Critical error during bot startup or top-level execution: {e}{RESET}", exc_info=True)
+
+up or top-level execution: {e}{RESET}", exc_info=True)
 

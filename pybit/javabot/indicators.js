@@ -1,1191 +1,1027 @@
-// indicators.js — Upgraded Technical Indicators for unified_whalebot.js
-// Fully Decimal.js compatible, NaN-safe, index-aligned, production-ready
+import { Decimal } from 'decimal.js';
+import { CONFIG } from './config.js';
+import { logger } from './logger.js';
 
-const { Supertrend, RSI, SMA, FisherTransform, ATR } = require('technicalindicators');
-const { Decimal } = require('decimal.js');
+Decimal.set({ precision: 28, rounding: Decimal.ROUND_HALF_UP });
 
-/**
- * Centralized indicator calculator using external library (for EhlSupertrend strategy)
- * @param {Array<Object>} klines - Raw kline data
- * @param {Object} config - Strategy config
- * @param {Object} logger - Logger instance
- * @returns {Array<Object>} Klines with indicators attached
- */
-function calculateEhlSupertrendIndicators(klines, config, logger) {
-    if (!klines || klines.length === 0) return [];
-
-    const processedKlines = klines.map(kline => ({
-        ...kline,
-        open: parseFloat(kline.open) || 0,
-        high: parseFloat(kline.high) || 0,
-        low: parseFloat(kline.low) || 0,
-        close: parseFloat(kline.close) || 0,
-        volume: parseFloat(kline.volume) || 0
-    }));
-
-    const input = {
-        open: processedKlines.map(k => k.open),
-        high: processedKlines.map(k => k.high),
-        low: processedKlines.map(k => k.low),
-        close: processedKlines.map(k => k.close),
-        volume: processedKlines.map(k => k.volume)
-    };
-
-    let df_with_indicators = processedKlines.map(kline => ({ ...kline }));
-
-    try {
-        const stFastConfig = config.strategy.est_fast;
-        const stFastResult = Supertrend.calculate({
-            high: input.high,
-            low: input.low,
-            close: input.close,
-            period: stFastConfig.length,
-            multiplier: stFastConfig.multiplier
-        });
-        df_with_indicators.forEach((k, i) => {
-            k.st_fast_line = stFastResult[i]?.supertrend || 0;
-            k.st_fast_direction = stFastResult[i]?.direction || 0;
-        });
-    } catch (e) {
-        logger.error(`Error calculating fast Supertrend: ${e.message}`);
-        df_with_indicators.forEach(k => { k.st_fast_line = 0; k.st_fast_direction = 0; });
-    }
-
-    try {
-        const stSlowConfig = config.strategy.est_slow;
-        const stSlowResult = Supertrend.calculate({
-            high: input.high,
-            low: input.low,
-            close: input.close,
-            period: stSlowConfig.length,
-            multiplier: stSlowConfig.multiplier
-        });
-        df_with_indicators.forEach((k, i) => {
-            k.st_slow_line = stSlowResult[i]?.supertrend || 0;
-            k.st_slow_direction = stSlowResult[i]?.direction || 0;
-        });
-    } catch (e) {
-        logger.error(`Error calculating slow Supertrend: ${e.message}`);
-        df_with_indicators.forEach(k => { k.st_slow_line = 0; k.st_slow_direction = 0; });
-    }
-
-    try {
-        const rsiResult = RSI.calculate({
-            values: input.close,
-            period: config.strategy.rsi.period
-        });
-        const rsiOffset = df_with_indicators.length - rsiResult.length;
-        df_with_indicators.forEach((k, i) => { 
-            k.rsi = i >= rsiOffset ? rsiResult[i - rsiOffset] : 0;
-        });
-    } catch (e) {
-        logger.error(`Error calculating RSI: ${e.message}`);
-        df_with_indicators.forEach(k => { k.rsi = 0; });
-    }
-
-    try {
-        const volumeMASeries = SMA.calculate({
-            values: input.volume,
-            period: config.strategy.volume.ma_period
-        });
-        const volMaOffset = df_with_indicators.length - volumeMASeries.length;
-        df_with_indicators.forEach((k, i) => {
-            k.volume_ma = i >= volMaOffset ? volumeMASeries[i - volMaOffset] : 0;
-            k.volume_spike = k.volume_ma > 0 && (k.volume / k.volume_ma) > config.strategy.volume.threshold_multiplier;
-        });
-    } catch (e) {
-        logger.error(`Error calculating Volume MA: ${e.message}`);
-        df_with_indicators.forEach(k => { k.volume_ma = 0; k.volume_spike = false; });
-    }
-
-    try {
-        const fisherConfig = config.strategy.ehlers_fisher;
-        const fisherResult = FisherTransform.calculate({
-            high: input.high,
-            low: input.low,
-            period: fisherConfig.period
-        });
-        df_with_indicators.forEach((k, i) => {
-            k.fisher = fisherResult[i]?.value || 0;
-            k.fisher_signal = fisherResult[i]?.signal || 0;
-        });
-    } catch (e) {
-        logger.error(`Error calculating Fisher Transform: ${e.message}`);
-        df_with_indicators.forEach(k => { k.fisher = 0; k.fisher_signal = 0; });
-    }
-
-    try {
-        const atrResult = ATR.calculate({
-            high: input.high,
-            low: input.low,
-            close: input.close,
-            period: config.strategy.atr.period
-        });
-        const atrOffset = df_with_indicators.length - atrResult.length;
-        df_with_indicators.forEach((k, i) => { 
-            k.atr = i >= atrOffset ? atrResult[i - atrOffset] : 0;
-        });
-    } catch (e) {
-        logger.error(`Error calculating ATR: ${e.message}`);
-        df_with_indicators.forEach(k => { k.atr = 0; });
-    }
-    
-    // Forward-fill zeros for continuity
-    for (let i = 1; i < df_with_indicators.length; i++) {
-        for (const key of ['st_fast_line', 'st_fast_direction', 'st_slow_line', 'st_slow_direction', 'rsi', 'volume_ma', 'fisher', 'fisher_signal', 'atr']) {
-            if (df_with_indicators[i][key] === 0 && df_with_indicators[i-1][key] !== undefined) {
-                df_with_indicators[i][key] = df_with_indicators[i-1][key];
-            }
-        }
-    }
-
-    return df_with_indicators;
+// --- Helper Functions for Decimal.js operations ---
+function sum(arr) {
+    return arr.reduce((acc, val) => acc.plus(val), new Decimal(0));
 }
 
-/**
- * Custom Exponential Weighted Mean
- * @param {number[]} series - Input values
- * @param {number} span - EMA span
- * @param {number} minPeriods - Minimum periods before output
- * @returns {Decimal[]}
- */
-function ewmMeanCustom(series, span, minPeriods = 0) {
-    const seriesDecimals = series.map(x => new Decimal(x));
-    if (seriesDecimals.length < minPeriods) return new Array(seriesDecimals.length).fill(new Decimal(NaN));
-    
-    const alpha = new Decimal(2).dividedBy(new Decimal(span).plus(1));
-    const result = new Array(seriesDecimals.length).fill(new Decimal(NaN));
-    let ema = new Decimal(0);
-    let count = 0;
-    
-    for (let i = 0; i < seriesDecimals.length; i++) {
-        const value = seriesDecimals[i];
-        if (value.isNaN()) {
-            result[i] = new Decimal(NaN);
-            continue;
-        }
-        
-        if (count === 0) {
-            ema = value;
-        } else {
-            ema = value.times(alpha).plus(ema.times(new Decimal(1).minus(alpha)));
-        }
-        
-        count++;
-        if (count >= minPeriods) {
-            result[i] = ema;
-        }
-    }
-    
-    return result;
+function avg(arr) {
+    if (arr.length === 0) return new Decimal(NaN);
+    return sum(arr).dividedBy(arr.length);
 }
 
-/**
- * Calculate Average True Range
- * @param {Decimal[]} high
- * @param {Decimal[]} low
- * @param {Decimal[]} close
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculateATR(high, low, close, period) {
-    if (high.length < period + 1) return new Array(high.length).fill(new Decimal(NaN));
+function stdDev(arr, mean) {
+    if (arr.length < 2) return new Decimal(0);
+    const variance = arr.reduce((acc, val) => acc.plus(val.minus(mean).pow(2)), new Decimal(0)).dividedBy(arr.length);
+    return variance.sqrt();
+}
+
+// --- Core Moving Averages ---
+export function calculateSMA(data, period) {
+    if (data.length < period) return new Array(data.length).fill(new Decimal(NaN));
+    const sma = [];
+    for (let i = 0; i <= data.length - period; i++) {
+        const slice = data.slice(i, i + period);
+        sma.push(avg(slice));
+    }
+    return new Array(period - 1).fill(new Decimal(NaN)).concat(sma);
+}
+
+export function calculateEMA(data, period) {
+    if (data.length < period) return new Array(data.length).fill(new Decimal(NaN));
+    const ema = [];
+    let multiplier = new Decimal(2).dividedBy(new Decimal(period).plus(1));
+    
+    // Initial SMA for the first EMA value
+    let initialSum = new Decimal(0);
+    for (let i = 0; i < period; i++) {
+        initialSum = initialSum.plus(data[i]);
+    }
+    ema[period - 1] = initialSum.dividedBy(period);
+
+    for (let i = period; i < data.length; i++) {
+        ema[i] = data[i].minus(ema[i - 1]).times(multiplier).plus(ema[i - 1]);
+    }
+    return new Array(period - 1).fill(new Decimal(NaN)).concat(ema.slice(period - 1));
+}
+
+export function calculateDEMA(data, period) {
+    const ema1 = calculateEMA(data, period);
+    const ema2 = calculateEMA(ema1.filter(d => !d.isNaN()), period); // EMA of EMA
+
+    const dema = ema1.map((val, i) => {
+        if (val.isNaN() || ema2[i].isNaN()) return new Decimal(NaN);
+        return new Decimal(2).times(val).minus(ema2[i]);
+    });
+    return dema;
+}
+
+// --- Volatility Indicators ---
+export function calculateATR(high, low, close, period) {
+    if (high.length < period) return new Array(high.length).fill(new Decimal(NaN));
     const tr = [];
-    for (let i = 1; i < high.length; i++) {
-        const h = high[i]; const l = low[i]; const cPrev = close[i - 1];
-        tr.push(Decimal.max(h.minus(l), h.minus(cPrev).abs(), l.minus(cPrev).abs()));
-    }
-    return ewmMeanCustom(tr, period, period);
-}
-
-/**
- * Calculate Relative Strength Index
- * @param {Decimal[]} close
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculateRSI(close, period) {
-    if (close.length <= period) return new Array(close.length).fill(new Decimal(NaN));
-    
-    const delta = close.map((c, i) => i > 0 ? c.minus(close[i-1]) : new Decimal(0));
-    const gain = delta.map(d => Decimal.max(0, d));
-    const loss = delta.map(d => Decimal.max(0, d.neg()));
-
-    const avgGain = ewmMeanCustom(gain, period, period);
-    const avgLoss = ewmMeanCustom(loss, period, period);
-    
-    const rsi = new Array(close.length).fill(new Decimal(NaN));
-    
-    for (let i = 0; i < close.length; i++) {
-        if (!avgGain[i].isNaN() && !avgLoss[i].isNaN()) {
-            if (avgLoss[i].isZero()) {
-                rsi[i] = new Decimal(100);
-            } else {
-                const rs = avgGain[i].dividedBy(avgLoss[i]);
-                rsi[i] = new Decimal(100).minus(new Decimal(100).dividedBy(new Decimal(1).plus(rs)));
-            }
-        }
-    }
-    return rsi.map(val => val.isNaN() ? new Decimal(50) : val);
-}
-
-/**
- * Rolling Mean (SMA)
- * @param {Decimal[]} series
- * @param {number} window
- * @returns {Decimal[]}
- */
-function rollingMean(series, window) {
-    const seriesDecimals = series.map(x => new Decimal(x));
-    if (seriesDecimals.length < window) return new Array(seriesDecimals.length).fill(new Decimal(NaN));
-    
-    const result = new Array(seriesDecimals.length).fill(new Decimal(NaN));
-    for (let i = window - 1; i < seriesDecimals.length; i++) {
-        const sum = seriesDecimals.slice(i - window + 1, i + 1).reduce((a, b) => a.plus(b), new Decimal(0));
-        result[i] = sum.dividedBy(window);
-    }
-    return result;
-}
-
-/**
- * Stochastic RSI
- * @param {Decimal[]} close
- * @param {number} period
- * @param {number} kPeriod
- * @param {number} dPeriod
- * @returns {[Decimal[], Decimal[]]} [k, d]
- */
-function calculateStochRSI(close, period, kPeriod, dPeriod) {
-    if (close.length <= period + dPeriod) {
-        return [new Array(close.length).fill(new Decimal(NaN)), new Array(close.length).fill(new Decimal(NaN))];
-    }
-    
-    const rsi = calculateRSI(close, period);
-    const lowestRsi = new Array(close.length).fill(new Decimal(NaN));
-    const highestRsi = new Array(close.length).fill(new Decimal(NaN));
-    
-    for (let i = period - 1; i < close.length; i++) {
-        const rsiWindow = rsi.slice(i - period + 1, i + 1).filter(val => !val.isNaN());
-        if (rsiWindow.length > 0) {
-            lowestRsi[i] = Decimal.min(...rsiWindow);
-            highestRsi[i] = Decimal.max(...rsiWindow);
-        }
-    }
-    
-    const stochRsiK = new Array(close.length).fill(new Decimal(NaN));
-    for (let i = 0; i < close.length; i++) {
-        if (!rsi[i].isNaN() && !lowestRsi[i].isNaN() && !highestRsi[i].isNaN()) {
-            const denominator = highestRsi[i].minus(lowestRsi[i]);
-            if (denominator.isZero()) {
-                stochRsiK[i] = new Decimal(50);
-            } else {
-                stochRsiK[i] = (rsi[i].minus(lowestRsi[i])).dividedBy(denominator).times(100);
-            }
-        }
-    }
-    
-    const stochRsiD = ewmMeanCustom(stochRsiK, dPeriod, dPeriod);
-    
-    return [stochRsiK, stochRsiD];
-}
-
-/**
- * Bollinger Bands
- * @param {Decimal[]} close
- * @param {number} period
- * @param {number} stdDev
- * @returns {[Decimal[], Decimal[], Decimal[]]} [upper, middle, lower]
- */
-function calculateBollingerBands(close, period, stdDev) {
-    if (close.length < period) {
-        return [new Array(close.length).fill(new Decimal(NaN)), new Array(close.length).fill(new Decimal(NaN)), new Array(close.length).fill(new Decimal(NaN))];
-    }
-    
-    const middleBand = rollingMean(close, period);
-    const std = new Array(close.length).fill(new Decimal(NaN));
-    
-    for (let i = period - 1; i < close.length; i++) {
-        const window = close.slice(i - period + 1, i + 1);
-        const mean = middleBand[i];
-        const sumOfSquares = window.reduce((acc, val) => acc.plus(val.minus(mean).pow(2)), new Decimal(0));
-        std[i] = (sumOfSquares.dividedBy(period)).sqrt();
-    }
-    
-    const upperBand = middleBand.map((mb, i) => mb.plus(std[i].times(stdDev)));
-    const lowerBand = middleBand.map((mb, i) => mb.minus(std[i].times(stdDev)));
-    
-    return [upperBand, middleBand, lowerBand];
-}
-
-/**
- * Volume Weighted Average Price
- * @param {Decimal[]} high
- * @param {Decimal[]} low
- * @param {Decimal[]} close
- * @param {Decimal[]} volume
- * @returns {Decimal[]}
- */
-function calculateVWAP(high, low, close, volume) {
-    if (high.length === 0) return new Array(high.length).fill(new Decimal(NaN));
-    
-    const typicalPrice = high.map((h, i) => (h.plus(low[i]).plus(close[i])).dividedBy(3));
-    const tpVol = typicalPrice.map((tp, i) => tp.times(volume[i]));
-    
-    const cumulativeTpVol = new Array(high.length).fill(new Decimal(NaN));
-    const cumulativeVol = new Array(high.length).fill(new Decimal(NaN));
-    const vwap = new Array(high.length).fill(new Decimal(NaN));
-    
-    let sumTpVol = new Decimal(0);
-    let sumVol = new Decimal(0);
-    
     for (let i = 0; i < high.length; i++) {
-        sumTpVol = sumTpVol.plus(tpVol[i]);
-        sumVol = sumVol.plus(volume[i]);
-        cumulativeTpVol[i] = sumTpVol;
-        cumulativeVol[i] = sumVol;
-        
-        if (sumVol.gt(0)) {
-            vwap[i] = sumTpVol.dividedBy(sumVol);
+        const h = high[i];
+        const l = low[i];
+        const cPrev = i > 0 ? close[i - 1] : close[i];
+        tr.push(Decimal.max(h.minus(l).abs(), h.minus(cPrev).abs(), l.minus(cPrev).abs()));
+    }
+    const atr = calculateEMA(tr, period);
+    return atr;
+}
+
+// --- Momentum Indicators ---
+export function calculateRSI(close, period) {
+    if (close.length < period + 1) return new Array(close.length).fill(new Decimal(NaN));
+    const rsi = new Array(close.length).fill(new Decimal(NaN));
+    const gains = new Array(close.length).fill(new Decimal(0));
+    const losses = new Array(close.length).fill(new Decimal(0));
+
+    for (let i = 1; i < close.length; i++) {
+        const diff = close[i].minus(close[i - 1]);
+        if (diff.gt(0)) {
+            gains[i] = diff;
         } else {
-            vwap[i] = new Decimal(NaN);
+            losses[i] = diff.abs();
         }
     }
-    
-    return vwap;
+
+    let avgGain = avg(gains.slice(1, period + 1));
+    let avgLoss = avg(losses.slice(1, period + 1));
+
+    if (avgLoss.isZero()) {
+        rsi[period] = new Decimal(100);
+    } else {
+        const rs = avgGain.dividedBy(avgLoss);
+        rsi[period] = new Decimal(100).minus(new Decimal(100).dividedBy(new Decimal(1).plus(rs)));
+    }
+
+    for (let i = period + 1; i < close.length; i++) {
+        avgGain = avgGain.times(period - 1).plus(gains[i]).dividedBy(period);
+        avgLoss = avgLoss.times(period - 1).plus(losses[i]).dividedBy(period);
+
+        if (avgLoss.isZero()) {
+            rsi[i] = new Decimal(100);
+        } else {
+            const rs = avgGain.dividedBy(avgLoss);
+            rsi[i] = new Decimal(100).minus(new Decimal(100).dividedBy(new Decimal(1).plus(rs)));
+        }
+    }
+    return rsi;
 }
 
-/**
- * MACD
- * @param {Decimal[]} close
- * @param {number} fastPeriod
- * @param {number} slowPeriod
- * @param {number} signalPeriod
- * @returns {[Decimal[], Decimal[], Decimal[]]} [macdLine, signalLine, histogram]
- */
-function calculateMACD(close, fastPeriod, slowPeriod, signalPeriod) {
-    if (close.length < slowPeriod + signalPeriod) {
-        return [new Array(close.length).fill(new Decimal(NaN)), new Array(close.length).fill(new Decimal(NaN)), new Array(close.length).fill(new Decimal(NaN))];
+export function calculateStochasticOscillator(high, low, close, kPeriod, dPeriod, smoothing) {
+    if (close.length < kPeriod) return [new Array(close.length).fill(new Decimal(NaN)), new Array(close.length).fill(new Decimal(NaN))];
+
+    const percentK = [];
+    for (let i = 0; i < close.length; i++) {
+        const startIndex = Math.max(0, i - kPeriod + 1);
+        const periodHigh = Decimal.max(...high.slice(startIndex, i + 1));
+        const periodLow = Decimal.min(...low.slice(startIndex, i + 1));
+
+        if (periodHigh.minus(periodLow).isZero()) {
+            percentK[i] = new Decimal(0);
+        } else {
+            percentK[i] = close[i].minus(periodLow).dividedBy(periodHigh.minus(periodLow)).times(100);
+        }
     }
-    
-    const emaFast = ewmMeanCustom(close, fastPeriod, fastPeriod);
-    const emaSlow = ewmMeanCustom(close, slowPeriod, slowPeriod);
-    const macdLine = emaFast.map((fast, i) => fast.minus(emaSlow[i] || new Decimal(NaN)));
-    const signalLine = ewmMeanCustom(macdLine, signalPeriod, signalPeriod);
-    const histogram = macdLine.map((macd, i) => macd.minus(signalLine[i] || new Decimal(NaN)));
-    
-    return [macdLine, signalLine, histogram];
+
+    const smoothedK = calculateSMA(percentK, smoothing);
+    const percentD = calculateSMA(smoothedK.filter(d => !d.isNaN()), dPeriod);
+
+    return [percentK, percentD];
 }
 
-/**
- * ADX, +DI, -DI
- * @param {Decimal[]} high
- * @param {Decimal[]} low
- * @param {Decimal[]} close
- * @param {number} period
- * @returns {[Decimal[], Decimal[], Decimal[]]} [adx, plusDI, minusDI]
- */
-function calculateADX(high, low, close, period) {
-    if (high.length < period * 2) {
-        return [new Array(high.length).fill(new Decimal(NaN)), new Array(high.length).fill(new Decimal(NaN)), new Array(high.length).fill(new Decimal(NaN))];
-    }
-    
-    const tr = calculateATR(high, low, close, period);
-    
-    const plusDM = new Array(high.length).fill(new Decimal(0));
-    const minusDM = new Array(high.length).fill(new Decimal(0));
-    
-    for (let i = 1; i < high.length; i++) {
+export function calculateMACD(close, fastPeriod, slowPeriod, signalPeriod) {
+    const emaFast = calculateEMA(close, fastPeriod);
+    const emaSlow = calculateEMA(close, slowPeriod);
+
+    const macdLine = emaFast.map((val, i) => {
+        if (val.isNaN() || emaSlow[i].isNaN()) return new Decimal(NaN);
+        return val.minus(emaSlow[i]);
+    });
+    const signalLine = calculateEMA(macdLine.filter(d => !d.isNaN()), signalPeriod);
+    const histogram = macdLine.map((val, i) => {
+        if (val.isNaN() || signalLine[i].isNaN()) return new Decimal(NaN);
+        return val.minus(signalLine[i]);
+    });
+
+    return { macd_line: macdLine, signal_line: signalLine, histogram: histogram };
+}
+
+export function calculateADX(high, low, close, period) {
+    const plusDM = [];
+    const minusDM = [];
+    const tr = [];
+
+    for (let i = 1; i < close.length; i++) {
         const upMove = high[i].minus(high[i - 1]);
         const downMove = low[i - 1].minus(low[i]);
+
         plusDM[i] = (upMove.gt(downMove) && upMove.gt(0)) ? upMove : new Decimal(0);
         minusDM[i] = (downMove.gt(upMove) && downMove.gt(0)) ? downMove : new Decimal(0);
-    }
-    
-    const smoothedPlusDM = ewmMeanCustom(plusDM, period, period);
-    const smoothedMinusDM = ewmMeanCustom(minusDM, period, period);
 
-    const plusDI = smoothedPlusDM.map((val, i) => 
-        (!val.isNaN() && !tr[i].isNaN() && tr[i].gt(0)) ? val.dividedBy(tr[i]).times(100) : new Decimal(NaN)
-    );
-    const minusDI = smoothedMinusDM.map((val, i) => 
-        (!val.isNaN() && !tr[i].isNaN() && tr[i].gt(0)) ? val.dividedBy(tr[i]).times(100) : new Decimal(NaN)
-    );
-    
-    const dx = new Array(high.length).fill(new Decimal(NaN));
-    for (let i = 0; i < high.length; i++) {
-        if (!plusDI[i].isNaN() && !minusDI[i].isNaN()) {
-            const diDiff = plusDI[i].minus(minusDI[i]).abs();
-            const diSum = plusDI[i].plus(minusDI[i]);
-            dx[i] = (diSum.isZero()) ? new Decimal(0) : diDiff.dividedBy(diSum).times(100);
-        }
+        tr[i] = Decimal.max(high[i].minus(low[i]).abs(), high[i].minus(close[i - 1]).abs(), low[i].minus(close[i - 1]).abs());
     }
-    
-    const adx = ewmMeanCustom(dx, period, period);
-    
-    return [adx, plusDI, minusDI];
+    plusDM[0] = new Decimal(0); minusDM[0] = new Decimal(0); tr[0] = new Decimal(0);
+
+    const smoothPlusDM = calculateEMA(plusDM, period);
+    const smoothMinusDM = calculateEMA(minusDM, period);
+    const smoothTR = calculateEMA(tr, period);
+
+    const plusDI = smoothPlusDM.map((val, i) => {
+        if (val.isNaN() || smoothTR[i].isZero()) return new Decimal(NaN);
+        return val.dividedBy(smoothTR[i]).times(100);
+    });
+    const minusDI = smoothMinusDM.map((val, i) => {
+        if (val.isNaN() || smoothTR[i].isZero()) return new Decimal(NaN);
+        return val.dividedBy(smoothTR[i]).times(100);
+    });
+
+    const dx = plusDI.map((val, i) => {
+        if (val.isNaN() || minusDI[i].isNaN() || val.plus(minusDI[i]).isZero()) return new Decimal(NaN);
+        return val.minus(minusDI[i]).abs().dividedBy(val.plus(minusDI[i])).times(100);
+    });
+    const adx = calculateEMA(dx.filter(d => !d.isNaN()), period);
+
+    return { adx: adx, plus_di: plusDI, minus_di: minusDI };
 }
 
-/**
- * Simple Moving Average
- * @param {Object} df - DataFrame-like with .close
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_sma(df, period) {
-    return rollingMean(df.close, period);
-}
+export function calculateBollingerBands(close, period, stdDevMultiplier) {
+    const sma = calculateSMA(close, period);
+    const upperBand = [];
+    const lowerBand = [];
 
-/**
- * Exponential Moving Average
- * @param {Object} df
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_ema(df, period) {
-    return ewmMeanCustom(df.close, period, period);
-}
-
-/**
- * On-Balance Volume + EMA
- * @param {Object} df
- * @param {number} emaPeriod
- * @returns {{obv: Decimal[], obv_ema: Decimal[]}}
- */
-function calculate_obv(df, emaPeriod) {
-    if (df.close.length === 0) return null;
-    const obv = [new Decimal(0)];
-    for (let i = 1; i < df.close.length; i++) {
-        if (df.close[i].gt(df.close[i - 1])) {
-            obv.push(obv[i - 1].plus(df.volume[i]));
-        } else if (df.close[i].lt(df.close[i - 1])) {
-            obv.push(obv[i - 1].minus(df.volume[i]));
-        } else {
-            obv.push(obv[i - 1]);
-        }
-    }
-    const obvEma = ewmMeanCustom(obv, emaPeriod, emaPeriod);
-    return { obv, obv_ema: obvEma };
-}
-
-/**
- * Chaikin Money Flow
- * @param {Object} df
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_cmf(df, period) {
-    if (df.close.length < period) return [];
-    const mfv = [];
-    for (let i = 0; i < df.close.length; i++) {
-        const clv = df.close[i].equals(df.high[i]) && df.close[i].equals(df.low[i])
-            ? new Decimal(0)
-            : df.close[i].minus(df.low[i]).minus(df.high[i].minus(df.close[i]))
-                .dividedBy(df.high[i].minus(df.low[i]));
-        mfv.push(clv.times(df.volume[i]));
-    }
-
-    const cmf = [];
-    for (let i = 0; i < df.close.length; i++) {
+    for (let i = 0; i < close.length; i++) {
         if (i < period - 1) {
-            cmf.push(new Decimal(NaN));
-        } else {
-            const sumMfv = mfv.slice(i - period + 1, i + 1).reduce((a, b) => a.plus(b), new Decimal(0));
-            const sumVol = df.volume.slice(i - period + 1, i + 1).reduce((a, b) => a.plus(b), new Decimal(0));
-            cmf.push(sumVol.isZero() ? new Decimal(0) : sumMfv.dividedBy(sumVol));
-        }
-    }
-    return cmf;
-}
-
-/**
- * Ichimoku Cloud
- * @param {Object} df
- * @param {number} tenkan
- * @param {number} kijun
- * @param {number} senkouBPeriod
- * @param {number} chikouOffset
- * @returns {{tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span}}
- */
-function calculate_ichimoku_cloud(df, tenkan, kijun, senkouBPeriod, chikouOffset) {
-    const tenkanSen = [], kijunSen = [], senkouSpanA = [], senkouSpanB = [], chikouSpan = [];
-
-    for (let i = 0; i < df.close.length; i++) {
-        // Tenkan-sen
-        if (i < tenkan - 1) {
-            tenkanSen.push(new Decimal(NaN));
-        } else {
-            const windowHigh = Decimal.max(...df.high.slice(i - tenkan + 1, i + 1));
-            const windowLow = Decimal.min(...df.low.slice(i - tenkan + 1, i + 1));
-            tenkanSen.push(windowHigh.plus(windowLow).dividedBy(2));
-        }
-
-        // Kijun-sen
-        if (i < kijun - 1) {
-            kijunSen.push(new Decimal(NaN));
-        } else {
-            const windowHigh = Decimal.max(...df.high.slice(i - kijun + 1, i + 1));
-            const windowLow = Decimal.min(...df.low.slice(i - kijun + 1, i + 1));
-            kijunSen.push(windowHigh.plus(windowLow).dividedBy(2));
-        }
-
-        // Senkou Span A
-        if (i + chikouOffset < df.close.length) {
-            senkouSpanA.push(tenkanSen[i].plus(kijunSen[i]).dividedBy(2));
-        } else {
-            senkouSpanA.push(new Decimal(NaN));
-        }
-
-        // Senkou Span B
-        if (i < senkouBPeriod - 1) {
-            senkouSpanB.push(new Decimal(NaN));
-        } else {
-            const windowHigh = Decimal.max(...df.high.slice(i - senkouBPeriod + 1, i + 1));
-            const windowLow = Decimal.min(...df.low.slice(i - senkouBPeriod + 1, i + 1));
-            senkouSpanB.push(windowHigh.plus(windowLow).dividedBy(2));
-        }
-
-        // Chikou Span
-        if (i >= chikouOffset) {
-            chikouSpan.push(df.close[i - chikouOffset]);
-        } else {
-            chikouSpan.push(new Decimal(NaN));
-        }
-    }
-
-    // Shift forward
-    for (let i = 0; i < chikouOffset; i++) {
-        senkouSpanA.unshift(new Decimal(NaN));
-        senkouSpanB.unshift(new Decimal(NaN));
-    }
-    senkouSpanA.splice(df.close.length);
-    senkouSpanB.splice(df.close.length);
-
-    return { tenkan_sen: tenkanSen, kijun_sen: kijunSen, senkou_span_a: senkouSpanA, senkou_span_b: senkouSpanB, chikou_span: chikouSpan };
-}
-
-/**
- * Parabolic SAR
- * @param {Object} df
- * @param {number} acceleration
- * @param {number} maxAcceleration
- * @returns {{psar: Decimal[], direction: number[]}}
- */
-function calculate_psar(df, acceleration, maxAcceleration) {
-    if (df.close.length < 2) return null;
-    const psar = [df.low[0]];
-    const direction = [1];
-    let acc = acceleration;
-    let ep = df.high[0];
-
-    for (let i = 1; i < df.close.length; i++) {
-        let nextPsar = psar[i - 1].plus(acc.times(ep.minus(psar[i - 1])));
-        let nextDir = direction[i - 1];
-        let nextAcc = acc;
-        let nextEp = ep;
-
-        if (nextDir === 1) {
-            if (df.low[i] < nextPsar) {
-                nextDir = -1;
-                nextPsar = ep;
-                nextAcc = acceleration;
-                nextEp = df.low[i];
-            } else {
-                if (df.high[i] > ep) {
-                    nextEp = df.high[i];
-                    nextAcc = Math.min(acc + acceleration, maxAcceleration);
-                }
-                if (df.low[i - 1] < nextPsar) nextPsar = df.low[i - 1];
-                if (i > 1 && df.low[i - 2] < nextPsar) nextPsar = df.low[i - 2];
-            }
-        } else {
-            if (df.high[i] > nextPsar) {
-                nextDir = 1;
-                nextPsar = ep;
-                nextAcc = acceleration;
-                nextEp = df.high[i];
-            } else {
-                if (df.low[i] < ep) {
-                    nextEp = df.low[i];
-                    nextAcc = Math.min(acc + acceleration, maxAcceleration);
-                }
-                if (df.high[i - 1] > nextPsar) nextPsar = df.high[i - 1];
-                if (i > 1 && df.high[i - 2] > nextPsar) nextPsar = df.high[i - 2];
-            }
-        }
-
-        psar.push(nextPsar);
-        direction.push(nextDir);
-        acc = nextAcc;
-        ep = nextEp;
-    }
-
-    return { psar, direction };
-}
-
-/**
- * Ehlers SuperTrend (Custom Implementation)
- * @param {Object} df
- * @param {number} period
- * @param {number} multiplier
- * @returns {{supertrend: Decimal[], direction: number[]}}
- */
-function calculate_ehlers_supertrend(df, period, multiplier) {
-    if (df.close.length < period * 2) return null;
-
-    const src = df.close;
-    const supertrend = [];
-    const direction = [];
-
-    // Super Smoother Filter
-    const smooth = [];
-    const a1 = Math.exp(-1.414 * Math.PI / period);
-    const b1 = 2 * a1 * Math.cos(1.414 * Math.PI / period);
-    const coeff2 = b1;
-    const coeff3 = -a1 * a1;
-    const coeff1 = 1 - coeff2 - coeff3;
-
-    for (let i = 0; i < src.length; i++) {
-        if (i < 2) {
-            smooth.push(src[i]);
-        } else {
-            smooth.push(
-                new Decimal(coeff1).times(src[i])
-                    .plus(new Decimal(coeff2).times(smooth[i - 1]))
-                    .plus(new Decimal(coeff3).times(smooth[i - 2]))
-            );
-        }
-    }
-
-    // Median Price
-    const median = [];
-    for (let i = 0; i < src.length; i++) {
-        median.push(src[i].plus(df.high[i]).plus(df.low[i]).dividedBy(3));
-    }
-
-    // Trend Logic
-    const trendUp = [], trendDown = [];
-    for (let i = 0; i < src.length; i++) {
-        if (i < period) {
-            trendUp.push(new Decimal(Infinity));
-            trendDown.push(new Decimal(-Infinity));
-            supertrend.push(smooth[i]);
-            direction.push(1);
-        } else {
-            const atr = calculateATR(df.high, df.low, smooth, period)[i];
-            const up = median[i].minus(atr.times(multiplier));
-            const dn = median[i].plus(atr.times(multiplier));
-
-            let finalUp = up.lt(trendUp[i - 1]) || src[i - 1].gt(trendUp[i - 1]) ? up : trendUp[i - 1];
-            let finalDn = dn.gt(trendDown[i - 1]) || src[i - 1].lt(trendDown[i - 1]) ? dn : trendDown[i - 1];
-
-            let dir = direction[i - 1];
-            let st = supertrend[i - 1];
-
-            if (dir === -1 && src[i] > finalDn) {
-                dir = 1;
-                st = finalUp;
-            } else if (dir === 1 && src[i] < finalUp) {
-                dir = -1;
-                st = finalDn;
-            } else {
-                st = dir === 1 ? finalUp : finalDn;
-            }
-
-            trendUp.push(finalUp);
-            trendDown.push(finalDn);
-            supertrend.push(st);
-            direction.push(dir);
-        }
-    }
-
-    return { supertrend, direction };
-}
-
-/**
- * Kaufman Adaptive Moving Average
- * @param {Object} df
- * @param {number} period
- * @param {number} fastPeriod
- * @param {number} slowPeriod
- * @returns {Decimal[]}
- */
-function calculate_kaufman_ama(df, period, fastPeriod, slowPeriod) {
-    if (df.close.length < period + 1) return [];
-    const er = [];
-    for (let i = period; i < df.close.length; i++) {
-        const change = df.close[i].minus(df.close[i - period]).abs();
-        const volatility = df.close.slice(i - period + 1, i + 1)
-            .map((c, idx, arr) => idx === 0 ? new Decimal(0) : c.minus(arr[idx - 1]).abs())
-            .reduce((sum, val) => sum.plus(val), new Decimal(0));
-        er.push(volatility.isZero() ? new Decimal(1) : change.dividedBy(volatility));
-    }
-
-    const fastAlpha = new Decimal(2).dividedBy(new Decimal(fastPeriod).plus(1));
-    const slowAlpha = new Decimal(2).dividedBy(new Decimal(slowPeriod).plus(1));
-    const sc = er.map(e =>
-        slowAlpha.plus(e.times(fastAlpha.minus(slowAlpha))).pow(2)
-    );
-
-    const kama = [];
-    for (let i = 0; i < df.close.length; i++) {
-        if (i < period) {
-            kama.push(df.close[i]);
-        } else {
-            const idx = i - period;
-            kama.push(
-                kama[i - 1].plus(sc[idx].times(df.close[i].minus(kama[i - 1])))
-            );
-        }
-    }
-    return kama;
-}
-
-/**
- * Double Exponential Moving Average
- * @param {Decimal[]} series
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_dema(series, period) {
-    const ema1 = ewmMeanCustom(series, period, period);
-    const ema2 = ewmMeanCustom(ema1, period, period);
-    return ema1.map((e, i) => e.times(2).minus(ema2[i]));
-}
-
-/**
- * Keltner Channels
- * @param {Object} df
- * @param {number} period
- * @param {number} atrMult
- * @param {number} atrPeriod
- * @returns {{upper, middle, lower}}
- */
-function calculate_keltner_channels(df, period, atrMult, atrPeriod) {
-    const middle = ewmMeanCustom(df.close, period, period);
-    const atr = calculateATR(df.high, df.low, df.close, atrPeriod);
-    const upper = middle.map((m, i) => m.plus(atr[i].times(atrMult)));
-    const lower = middle.map((m, i) => m.minus(atr[i].times(atrMult)));
-    return { upper, middle, lower };
-}
-
-/**
- * Rate of Change
- * @param {Object} df
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_roc(df, period) {
-    const roc = [];
-    for (let i = 0; i < df.close.length; i++) {
-        if (i < period) {
-            roc.push(new Decimal(NaN));
-        } else {
-            roc.push(df.close[i].dividedBy(df.close[i - period]).minus(1).times(100));
-        }
-    }
-    return roc;
-}
-
-/**
- * Detect Candlestick Patterns
- * @param {Object} df
- * @returns {string[]}
- */
-function detect_candlestick_patterns(df) {
-    const patterns = [];
-    for (let i = 1; i < df.close.length; i++) {
-        const prev = df.iloc(i - 1);
-        const curr = df.iloc(i);
-
-        if (curr.close.gt(curr.open) && prev.close.lt(prev.open) &&
-            curr.open.lt(prev.close) && curr.close.gt(prev.open)) {
-            patterns.push("Bullish Engulfing");
-        } else if (curr.close.lt(curr.open) && prev.close.gt(prev.open) &&
-                   curr.open.gt(prev.close) && curr.close.lt(prev.open)) {
-            patterns.push("Bearish Engulfing");
-        } else if (curr.close.gt(curr.open) &&
-                   curr.open.minus(curr.low).dividedBy(curr.close.minus(curr.open)).gt(2) &&
-                   curr.high.minus(curr.close).dividedBy(curr.close.minus(curr.open)).lt(1)) {
-            patterns.push("Hammer");
-        } else if (curr.close.lt(curr.open) &&
-                   curr.high.minus(curr.open).dividedBy(curr.open.minus(curr.close)).gt(2) &&
-                   curr.close.minus(curr.low).dividedBy(curr.open.minus(curr.close)).lt(1)) {
-            patterns.push("Shooting Star");
-        } else {
-            patterns.push("None");
-        }
-    }
-    return patterns;
-}
-
-/**
- * Fibonacci Retracement Levels
- * @param {Object} df
- * @param {number} window
- * @returns {Object|null}
- */
-function calculate_fibonacci_levels(df, window) {
-    if (df.close.length < window) return null;
-    const recent = df.close.slice(-window);
-    const high = Decimal.max(...recent);
-    const low = Decimal.min(...recent);
-    const diff = high.minus(low);
-
-    return {
-        "0.0%": high,
-        "23.6%": high.minus(diff.times(0.236)),
-        "38.2%": high.minus(diff.times(0.382)),
-        "50.0%": high.minus(diff.times(0.5)),
-        "61.8%": high.minus(diff.times(0.618)),
-        "78.6%": high.minus(diff.times(0.786)),
-        "100.0%": low
-    };
-}
-
-/**
- * Fibonacci Pivot Points
- * @param {Object} df
- * @returns {{pivot, r1, r2, s1, s2}} or null
- */
-function calculate_fibonacci_pivot_points(df) {
-    if (df.close.length < 2) return null;
-    const prev = df.iloc(df.length - 2);
-    const pivot = prev.high.plus(prev.low).plus(prev.close).dividedBy(3);
-    const range = prev.high.minus(prev.low);
-
-    return {
-        pivot: pivot,
-        r1: pivot.plus(range.times(0.382)),
-        r2: pivot.plus(range.times(0.618)),
-        s1: pivot.minus(range.times(0.382)),
-        s2: pivot.minus(range.times(0.618))
-    };
-}
-
-/**
- * Volatility Index (StdDev of Returns)
- * @param {Object} df
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_volatility_index(df, period) {
-    if (df.close.length < period + 1) return [];
-    const returns = [];
-    for (let i = 1; i < df.close.length; i++) {
-        returns.push(df.close[i].dividedBy(df.close[i - 1]).minus(1));
-    }
-
-    const vi = [];
-    for (let i = 0; i < returns.length; i++) {
-        if (i < period - 1) {
-            vi.push(new Decimal(NaN));
-        } else {
-            const window = returns.slice(i - period + 1, i + 1);
-            const mean = window.reduce((sum, val) => sum.plus(val), new Decimal(0)).dividedBy(period);
-            const variance = window.reduce((sum, val) => sum.plus(val.minus(mean).pow(2)), new Decimal(0)).dividedBy(period);
-            vi.push(Decimal.sqrt(variance).times(100));
-        }
-    }
-    return vi;
-}
-
-/**
- * Volume Weighted Moving Average
- * @param {Object} df
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_vwma(df, period) {
-    if (df.close.length < period) return [];
-    const vwma = [];
-    for (let i = 0; i < df.close.length; i++) {
-        if (i < period - 1) {
-            vwma.push(new Decimal(NaN));
-        } else {
-            const prices = df.close.slice(i - period + 1, i + 1);
-            const volumes = df.volume.slice(i - period + 1, i + 1);
-            const pvSum = prices.reduce((sum, p, idx) => sum.plus(p.times(volumes[idx])), new Decimal(0));
-            const vSum = volumes.reduce((sum, v) => sum.plus(v), new Decimal(0));
-            vwma.push(vSum.isZero() ? prices[prices.length - 1] : pvSum.dividedBy(vSum));
-        }
-    }
-    return vwma;
-}
-
-/**
- * Volume Delta Proxy
- * @param {Object} df
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_volume_delta(df, period) {
-    const delta = df.close.map((c, i) =>
-        i === 0 ? new Decimal(0) : c.gt(df.close[i - 1]) ? df.volume[i] : c.lt(df.close[i - 1]) ? df.volume[i].negated() : new Decimal(0)
-    );
-    return rollingMean(delta, period);
-}
-
-/**
- * Relative Volume
- * @param {Object} df
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_relative_volume(df, period) {
-    const avgVol = rollingMean(df.volume, period);
-    return df.volume.map((v, i) => avgVol[i].isZero() ? new Decimal(1) : v.dividedBy(avgVol[i]));
-}
-
-/**
- * Market Structure Trend (HH/HL Detection)
- * @param {Object} df
- * @param {number} lookback
- * @returns {number[]}
- */
-function calculate_market_structure(df, lookback) {
-    const trend = [];
-    for (let i = 0; i < df.close.length; i++) {
-        if (i < lookback * 2) {
-            trend.push(0);
+            upperBand.push(new Decimal(NaN));
+            lowerBand.push(new Decimal(NaN));
             continue;
         }
+        const slice = close.slice(i - period + 1, i + 1);
+        const currentSMA = sma[i];
+        const currentStdDev = stdDev(slice, currentSMA);
 
-        let higherHighs = 0, lowerLows = 0;
-        for (let j = i - lookback; j < i; j++) {
-            if (df.high[j] > df.high[j - 1]) higherHighs++;
-            if (df.low[j] < df.low[j - 1]) lowerLows++;
-        }
-
-        if (higherHighs > lookback * 0.6) {
-            trend.push(1);
-        } else if (lowerLows > lookback * 0.6) {
-            trend.push(-1);
-        } else {
-            trend.push(0);
-        }
+        upperBand.push(currentSMA.plus(currentStdDev.times(stdDevMultiplier)));
+        lowerBand.push(currentSMA.minus(currentStdDev.times(stdDevMultiplier)));
     }
-    return trend;
+    return { upper: upperBand, middle: sma, lower: lowerBand };
 }
 
-/**
- * Momentum (Price Difference over N periods)
- * @param {Decimal[]} close
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_momentum(close, period) {
-    if (close.length < period) return new Array(close.length).fill(new Decimal(NaN));
-    const momentum = new Array(close.length).fill(new Decimal(NaN));
-    for (let i = period - 1; i < close.length; i++) {
-        momentum[i] = close[i].minus(close[i - period]);
-    }
-    return momentum;
-}
+export function calculateCCI(high, low, close, period) {
+    const typicalPrice = high.map((h, i) => h.plus(low[i]).plus(close[i]).dividedBy(3));
+    const smaTP = calculateSMA(typicalPrice, period);
+    const meanDeviation = [];
 
-/**
- * Williams %R
- * @param {Decimal[]} high
- * @param {Decimal[]} low
- * @param {Decimal[]} close
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_williams_r(high, low, close, period) {
-    if (high.length < period) return new Array(high.length).fill(new Decimal(NaN));
-    const williamsR = [];
-    for (let i = 0; i < high.length; i++) {
+    for (let i = 0; i < typicalPrice.length; i++) {
         if (i < period - 1) {
-            williamsR.push(new Decimal(NaN));
-        } else {
-            const windowHigh = Decimal.max(...high.slice(i - period + 1, i + 1));
-            const windowLow = Decimal.min(...low.slice(i - period + 1, i + 1));
-            if (windowHigh.minus(windowLow).isZero()) {
-                williamsR.push(new Decimal(-50));
-            } else {
-                williamsR.push(
-                    close[i].minus(windowHigh)
-                        .dividedBy(windowHigh.minus(windowLow))
-                        .times(100)
-                );
-            }
+            meanDeviation.push(new Decimal(NaN));
+            continue;
         }
+        const sliceTP = typicalPrice.slice(i - period + 1, i + 1);
+        const currentSmaTP = smaTP[i];
+        const md = sliceTP.reduce((acc, val) => acc.plus(val.minus(currentSmaTP).abs()), new Decimal(0)).dividedBy(period);
+        meanDeviation.push(md);
     }
-    return williamsR;
-}
 
-/**
- * Commodity Channel Index
- * @param {Decimal[]} high
- * @param {Decimal[]} low
- * @param {Decimal[]} close
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_cci(high, low, close, period) {
-    if (high.length < period) return new Array(high.length).fill(new Decimal(NaN));
-    const tp = high.map((h, i) => h.plus(low[i]).plus(close[i]).dividedBy(3));
-    const smaTp = ewmMeanCustom(tp, period, period);
-    const mad = new Array(high.length).fill(new Decimal(NaN));
-    
-    for (let i = period - 1; i < high.length; i++) {
-        const tpWindow = tp.slice(i - period + 1, i + 1);
-        const meanTp = smaTp[i];
-        const absDevSum = tpWindow.reduce((acc, val) => acc.plus(val.minus(meanTp).abs()), new Decimal(0));
-        mad[i] = absDevSum.dividedBy(period);
-    }
-    
-    const cci = new Array(high.length).fill(new Decimal(NaN));
-    for (let i = 0; i < high.length; i++) {
-        if (!tp[i].isNaN() && !smaTp[i].isNaN() && !mad[i].isNaN()) {
-            if (mad[i].isZero()) {
-                cci[i] = new Decimal(0);
-            } else {
-                cci[i] = (tp[i].minus(smaTp[i])).dividedBy(new Decimal(0.015).times(mad[i]));
-            }
-        }
-    }
+    const cci = typicalPrice.map((tp, i) => {
+        if (tp.isNaN() || smaTP[i].isNaN() || meanDeviation[i].isNaN() || meanDeviation[i].isZero()) return new Decimal(NaN);
+        return tp.minus(smaTP[i]).dividedBy(new Decimal(0.015).times(meanDeviation[i]));
+    });
     return cci;
 }
 
-/**
- * Money Flow Index
- * @param {Decimal[]} high
- * @param {Decimal[]} low
- * @param {Decimal[]} close
- * @param {Decimal[]} volume
- * @param {number} period
- * @returns {Decimal[]}
- */
-function calculate_mfi(high, low, close, volume, period) {
-    if (high.length <= period) return new Array(high.length).fill(new Decimal(NaN));
-    const typicalPrice = high.map((h, i) => h.plus(low[i]).plus(close[i]).dividedBy(3));
-    const moneyFlow = typicalPrice.map((tp, i) => tp.times(volume[i]));
-    
-    const positiveFlow = new Array(high.length).fill(new Decimal(0));
-    const negativeFlow = new Array(high.length).fill(new Decimal(0));
-    
-    for (let i = 1; i < high.length; i++) {
-        if (typicalPrice[i].gt(typicalPrice[i - 1])) {
-            positiveFlow[i] = moneyFlow[i];
-        } else if (typicalPrice[i].lt(typicalPrice[i - 1])) {
-            negativeFlow[i] = moneyFlow[i];
+export function calculateWilliamsR(high, low, close, period) {
+    const wr = [];
+    for (let i = 0; i < close.length; i++) {
+        if (i < period - 1) {
+            wr.push(new Decimal(NaN));
+            continue;
+        }
+        const startIndex = i - period + 1;
+        const periodHigh = Decimal.max(...high.slice(startIndex, i + 1));
+        const periodLow = Decimal.min(...low.slice(startIndex, i + 1));
+
+        if (periodHigh.minus(periodLow).isZero()) {
+            wr.push(new Decimal(NaN)); // Avoid division by zero
+        } else {
+            wr.push(close[i].minus(periodHigh).dividedBy(periodHigh.minus(periodLow)).times(-100));
         }
     }
-    
-    const positiveMfSum = new Array(high.length).fill(new Decimal(NaN));
-    const negativeMfSum = new Array(high.length).fill(new Decimal(NaN));
-    
-    for (let i = period - 1; i < high.length; i++) {
-        positiveMfSum[i] = positiveFlow.slice(i - period + 1, i + 1).reduce((a, b) => a.plus(b), new Decimal(0));
-        negativeMfSum[i] = negativeFlow.slice(i - period + 1, i + 1).reduce((a, b) => a.plus(b), new Decimal(0));
+    return wr;
+}
+
+export function calculateMFI(high, low, close, volume, period) {
+    const typicalPrice = high.map((h, i) => h.plus(low[i]).plus(close[i]).dividedBy(3));
+    const moneyFlow = typicalPrice.map((tp, i) => tp.times(volume[i]));
+
+    const positiveMoneyFlow = [];
+    const negativeMoneyFlow = [];
+
+    for (let i = 1; i < typicalPrice.length; i++) {
+        if (typicalPrice[i].gt(typicalPrice[i - 1])) {
+            positiveMoneyFlow.push(moneyFlow[i]);
+            negativeMoneyFlow.push(new Decimal(0));
+        } else if (typicalPrice[i].lt(typicalPrice[i - 1])) {
+            positiveMoneyFlow.push(new Decimal(0));
+            negativeMoneyFlow.push(moneyFlow[i]);
+        } else {
+            positiveMoneyFlow.push(new Decimal(0));
+            negativeMoneyFlow.push(new Decimal(0));
+        }
     }
-    
-    const mfi = new Array(high.length).fill(new Decimal(NaN));
-    for (let i = 0; i < high.length; i++) {
-        if (!positiveMfSum[i].isNaN() && !negativeMfSum[i].isNaN()) {
-            const mfRatio = (negativeMfSum[i].isZero()) ? (positiveMfSum[i].isZero() ? new Decimal(0) : new Decimal(Infinity)) : positiveMfSum[i].dividedBy(negativeMfSum[i]);
-            mfi[i] = new Decimal(100).minus(new Decimal(100).dividedBy(new Decimal(1).plus(mfRatio)));
+    positiveMoneyFlow.unshift(new Decimal(0)); // Align length
+    negativeMoneyFlow.unshift(new Decimal(0)); // Align length
+
+    const mfi = [];
+    for (let i = 0; i < typicalPrice.length; i++) {
+        if (i < period - 1) {
+            mfi.push(new Decimal(NaN));
+            continue;
+        }
+        const startIndex = i - period + 1;
+        const periodPositiveMF = sum(positiveMoneyFlow.slice(startIndex, i + 1));
+        const periodNegativeMF = sum(negativeMoneyFlow.slice(startIndex, i + 1));
+
+        if (periodNegativeMF.isZero()) {
+            mfi.push(new Decimal(100));
+        } else {
+            const moneyRatio = periodPositiveMF.dividedBy(periodNegativeMF);
+            mfi.push(new Decimal(100).minus(new Decimal(100).dividedBy(new Decimal(1).plus(moneyRatio))));
         }
     }
     return mfi;
 }
 
-/**
- * Price Oscillator (Percentage)
- * @param {Decimal[]} close
- * @param {number} fastPeriod
- * @param {number} slowPeriod
- * @returns {Decimal[]}
- */
-function calculate_price_oscillator(close, fastPeriod, slowPeriod) {
-    if (close.length < slowPeriod) return new Array(close.length).fill(new Decimal(NaN));
-    const emaFast = ewmMeanCustom(close, fastPeriod, fastPeriod);
-    const emaSlow = ewmMeanCustom(close, slowPeriod, slowPeriod);
-    return emaFast.map((fast, i) => {
-        if (!fast.isNaN() && !emaSlow[i].isNaN() && emaSlow[i].gt(0)) {
-            return (fast.minus(emaSlow[i])).dividedBy(emaSlow[i]).times(100);
+export function calculateOBV(close, volume) {
+    const obv = [new Decimal(0)];
+    for (let i = 1; i < close.length; i++) {
+        if (close[i].gt(close[i - 1])) {
+            obv.push(obv[i - 1].plus(volume[i]));
+        } else if (close[i].lt(close[i - 1])) {
+            obv.push(obv[i - 1].minus(volume[i]));
+        } else {
+            obv.push(obv[i - 1]);
         }
-        return new Decimal(NaN);
+    }
+    return obv;
+}
+
+export function calculateCMF(high, low, close, volume, period) {
+    const cmf = [];
+    for (let i = 0; i < close.length; i++) {
+        if (i < period - 1) {
+            cmf.push(new Decimal(NaN));
+            continue;
+        }
+        const startIndex = i - period + 1;
+        const periodHigh = high.slice(startIndex, i + 1);
+        const periodLow = low.slice(startIndex, i + 1);
+        const periodClose = close.slice(startIndex, i + 1);
+        const periodVolume = volume.slice(startIndex, i + 1);
+
+        let sumMFV = new Decimal(0);
+        let sumVolume = new Decimal(0);
+
+        for (let j = 0; j < period; j++) {
+            const mf = (periodHigh[j].minus(periodLow[j]).isZero()) ? new Decimal(0) : 
+                       (periodClose[j].minus(periodLow[j]).minus(periodHigh[j].minus(periodClose[j]))).dividedBy(periodHigh[j].minus(periodLow[j]));
+            sumMFV = sumMFV.plus(mf.times(periodVolume[j]));
+            sumVolume = sumVolume.plus(periodVolume[j]);
+        }
+        if (sumVolume.isZero()) {
+            cmf.push(new Decimal(NaN));
+        } else {
+            cmf.push(sumMFV.dividedBy(sumVolume));
+        }
+    }
+    return cmf;
+}
+
+export function calculateIchimokuCloud(high, low, close, tenkanPeriod, kijunPeriod, senkouSpanBPeriod, chikouSpanOffset) {
+    const tenkanSen = [];
+    const kijunSen = [];
+    const senkouSpanA = [];
+    const senkouSpanB = [];
+    const chikouSpan = [];
+
+    for (let i = 0; i < close.length; i++) {
+        // Tenkan Sen
+        if (i < tenkanPeriod - 1) {
+            tenkanSen.push(new Decimal(NaN));
+        } else {
+            const sliceHigh = high.slice(i - tenkanPeriod + 1, i + 1);
+            const sliceLow = low.slice(i - tenkanPeriod + 1, i + 1);
+            tenkanSen.push(Decimal.max(...sliceHigh).plus(Decimal.min(...sliceLow)).dividedBy(2));
+        }
+
+        // Kijun Sen
+        if (i < kijunPeriod - 1) {
+            kijunSen.push(new Decimal(NaN));
+        } else {
+            const sliceHigh = high.slice(i - kijunPeriod + 1, i + 1);
+            const sliceLow = low.slice(i - kijunPeriod + 1, i + 1);
+            kijunSen.push(Decimal.max(...sliceHigh).plus(Decimal.min(...sliceLow)).dividedBy(2));
+        }
+
+        // Senkou Span A (leading span 1)
+        if (i < kijunPeriod - 1) {
+            senkouSpanA.push(new Decimal(NaN));
+        } else {
+            const val = tenkanSen[i].plus(kijunSen[i]).dividedBy(2);
+            senkouSpanA.push(val);
+        }
+
+        // Senkou Span B (leading span 2)
+        if (i < senkouSpanBPeriod - 1) {
+            senkouSpanB.push(new Decimal(NaN));
+        } else {
+            const sliceHigh = high.slice(i - senkouSpanBPeriod + 1, i + 1);
+            const sliceLow = low.slice(i - senkouSpanBPeriod + 1, i + 1);
+            senkouSpanB.push(Decimal.max(...sliceHigh).plus(Decimal.min(...sliceLow)).dividedBy(2));
+        }
+
+        // Chikou Span (lagging span)
+        if (i - chikouSpanOffset >= 0) {
+            chikouSpan.push(close[i - chikouSpanOffset]);
+        } else {
+            chikouSpan.push(new Decimal(NaN));
+        }
+    }
+
+    // Shift Senkou Spans forward
+    const shiftedSenkouSpanA = new Array(chikouSpanOffset).fill(new Decimal(NaN)).concat(senkouSpanA.slice(0, senkouSpanA.length - chikouSpanOffset));
+    const shiftedSenkouSpanB = new Array(chikouSpanOffset).fill(new Decimal(NaN)).concat(senkouSpanB.slice(0, senkouSpanB.length - chikouSpanOffset));
+
+    return {
+        tenkan_sen: tenkanSen,
+        kijun_sen: kijunSen,
+        senkou_span_a: shiftedSenkouSpanA,
+        senkou_span_b: shiftedSenkouSpanB,
+        chikou_span: chikouSpan
+    };
+}
+
+export function calculatePSAR(high, low, acceleration, maxAcceleration) {
+    const psar = [];
+    const direction = []; // 1 for uptrend, -1 for downtrend
+    const extremePoint = [];
+    const accelerationFactor = [];
+
+    // Initial values
+    psar.push(low[0]);
+    direction.push(1); // Assume initial uptrend
+    extremePoint.push(high[0]);
+    accelerationFactor.push(acceleration);
+
+    for (let i = 1; i < high.length; i++) {
+        let currentPsar = psar[i - 1];
+        let currentDirection = direction[i - 1];
+        let currentEP = extremePoint[i - 1];
+        let currentAF = accelerationFactor[i - 1];
+
+        if (currentDirection === 1) { // Uptrend
+            currentPsar = currentPsar.plus(currentAF.times(currentEP.minus(currentPsar)));
+            if (low[i].lt(currentPsar)) { // Trend reversal
+                currentDirection = -1;
+                currentPsar = extremePoint[i - 1];
+                currentEP = low[i];
+                currentAF = acceleration;
+            } else {
+                if (high[i].gt(currentEP)) {
+                    currentEP = high[i];
+                    currentAF = Decimal.min(maxAcceleration, currentAF.plus(acceleration));
+                }
+            }
+        } else { // Downtrend
+            currentPsar = currentPsar.minus(currentAF.times(currentPsar.minus(currentEP)));
+            if (high[i].gt(currentPsar)) { // Trend reversal
+                currentDirection = 1;
+                currentPsar = extremePoint[i - 1];
+                currentEP = high[i];
+                currentAF = acceleration;
+            } else {
+                if (low[i].lt(currentEP)) {
+                    currentEP = low[i];
+                    currentAF = Decimal.min(maxAcceleration, currentAF.plus(acceleration));
+                }
+            }
+        }
+
+        psar.push(currentPsar);
+        direction.push(currentDirection);
+        extremePoint.push(currentEP);
+        accelerationFactor.push(currentAF);
+    }
+
+    return { psar: psar, direction: direction };
+}
+
+export function calculateVWAP(high, low, close, volume) {
+    const typicalPrice = high.map((h, i) => h.plus(low[i]).plus(close[i]).dividedBy(3));
+    const cumulativeTPxV = [];
+    const cumulativeVolume = [];
+    const vwap = [];
+
+    let currentCumulativeTPxV = new Decimal(0);
+    let currentCumulativeVolume = new Decimal(0);
+
+    for (let i = 0; i < typicalPrice.length; i++) {
+        currentCumulativeTPxV = currentCumulativeTPxV.plus(typicalPrice[i].times(volume[i]));
+        currentCumulativeVolume = currentCumulativeVolume.plus(volume[i]);
+
+        cumulativeTPxV.push(currentCumulativeTPxV);
+        cumulativeVolume.push(currentCumulativeVolume);
+
+        if (currentCumulativeVolume.isZero()) {
+            vwap.push(new Decimal(NaN));
+        } else {
+            vwap.push(currentCumulativeTPxV.dividedBy(currentCumulativeVolume));
+        }
+    }
+    return vwap;
+}
+
+export function calculateVolatilityIndex(high, low, close, period) {
+    const returns = close.map((c, i) => i > 0 ? c.minus(close[i - 1]).dividedBy(close[i - 1]) : new Decimal(0));
+    const volatility = [];
+
+    for (let i = 0; i < returns.length; i++) {
+        if (i < period - 1) {
+            volatility.push(new Decimal(NaN));
+            continue;
+        }
+        const sliceReturns = returns.slice(i - period + 1, i + 1);
+        const meanReturn = avg(sliceReturns);
+        const std = stdDev(sliceReturns, meanReturn);
+        volatility.push(std);
+    }
+    return volatility;
+}
+
+export function calculateVWMA(close, volume, period) {
+    const vwma = [];
+    for (let i = 0; i < close.length; i++) {
+        if (i < period - 1) {
+            vwma.push(new Decimal(NaN));
+            continue;
+        }
+        const startIndex = i - period + 1;
+        const sliceClose = close.slice(startIndex, i + 1);
+        const sliceVolume = volume.slice(startIndex, i + 1);
+
+        let sumCloseTimesVolume = new Decimal(0);
+        let sumVolume = new Decimal(0);
+
+        for (let j = 0; j < period; j++) {
+            sumCloseTimesVolume = sumCloseTimesVolume.plus(sliceClose[j].times(sliceVolume[j]));
+            sumVolume = sumVolume.plus(sliceVolume[j]);
+        }
+        if (sumVolume.isZero()) {
+            vwma.push(new Decimal(NaN));
+        } else {
+            vwma.push(sumCloseTimesVolume.dividedBy(sumVolume));
+        }
+    }
+    return vwma;
+}
+
+export function calculateVolumeDelta(close, volume, period) {
+    const volumeDelta = [];
+    for (let i = 0; i < close.length; i++) {
+        if (i < period - 1) {
+            volumeDelta.push(new Decimal(NaN));
+            continue;
+        }
+        const startIndex = i - period + 1;
+        const sliceClose = close.slice(startIndex, i + 1);
+        const sliceVolume = volume.slice(startIndex, i + 1);
+
+        let buyingVolume = new Decimal(0);
+        let sellingVolume = new Decimal(0);
+
+        for (let j = 1; j < period; j++) {
+            if (sliceClose[j].gt(sliceClose[j - 1])) {
+                buyingVolume = buyingVolume.plus(sliceVolume[j]);
+            } else if (sliceClose[j].lt(sliceClose[j - 1])) {
+                sellingVolume = sellingVolume.plus(sliceVolume[j]);
+            }
+        }
+        volumeDelta.push(buyingVolume.minus(sellingVolume));
+    }
+    return volumeDelta;
+}
+
+export function calculateKaufmanAMA(close, period, fastPeriod, slowPeriod) {
+    const kama = [];
+    const er = []; // Efficiency Ratio
+    const sc = []; // Smoothing Constant
+
+    const fastEmaConst = new Decimal(2).dividedBy(new Decimal(fastPeriod).plus(1));
+    const slowEmaConst = new Decimal(2).dividedBy(new Decimal(slowPeriod).plus(1));
+
+    for (let i = 0; i < close.length; i++) {
+        if (i < period) {
+            kama.push(new Decimal(NaN));
+            er.push(new Decimal(NaN));
+            sc.push(new Decimal(NaN));
+            continue;
+        }
+
+        const change = close[i].minus(close[i - period].abs());
+        let volatility = new Decimal(0);
+        for (let j = i - period + 1; j <= i; j++) {
+            volatility = volatility.plus(close[j].minus(close[j - 1]).abs());
+        }
+
+        if (volatility.isZero()) {
+            er.push(new Decimal(0));
+        } else {
+            er.push(change.dividedBy(volatility));
+        }
+
+        const currentER = er[er.length - 1];
+        sc.push(currentER.times(fastEmaConst.minus(slowEmaConst)).plus(slowEmaConst).pow(2));
+
+        const currentSC = sc[sc.length - 1];
+        if (kama[i - 1].isNaN()) {
+            kama.push(close[i]); // First valid KAMA is current close
+        } else {
+            kama.push(kama[i - 1].plus(currentSC.times(close[i].minus(kama[i - 1]))));
+        }
+    }
+    return kama;
+}
+
+export function calculateRelativeVolume(volume, period) {
+    const relativeVolume = [];
+    const avgVolume = calculateSMA(volume, period);
+
+    for (let i = 0; i < volume.length; i++) {
+        if (avgVolume[i].isZero()) {
+            relativeVolume.push(new Decimal(NaN));
+        } else {
+            relativeVolume.push(volume[i].dividedBy(avgVolume[i]));
+        }
+    }
+    return relativeVolume;
+}
+
+export function calculateMarketStructure(high, low, lookbackPeriod) {
+    const trend = []; // 1 for uptrend, -1 for downtrend, 0 for sideways
+
+    for (let i = 0; i < high.length; i++) {
+        if (i < lookbackPeriod) {
+            trend.push(new Decimal(0)); // Not enough data
+            continue;
+        }
+
+        const sliceHigh = high.slice(i - lookbackPeriod, i + 1);
+        const sliceLow = low.slice(i - lookbackPeriod, i + 1);
+
+        const highestHigh = Decimal.max(...sliceHigh);
+        const lowestLow = Decimal.min(...sliceLow);
+
+        const currentHigh = high[i];
+        const currentLow = low[i];
+
+        if (currentHigh.gt(highestHigh.minus(highestHigh.times(0.01))) && currentLow.gt(lowestLow.plus(lowestLow.times(0.01)))) {
+            trend.push(new Decimal(1)); // Higher High, Higher Low (Uptrend)
+        } else if (currentHigh.lt(highestHigh.plus(highestHigh.times(0.01))) && currentLow.lt(lowestLow.minus(lowestLow.times(0.01)))) {
+            trend.push(new Decimal(-1)); // Lower High, Lower Low (Downtrend)
+        } else {
+            trend.push(new Decimal(0)); // Sideways
+        }
+    }
+    return trend;
+}
+
+export function calculateKeltnerChannels(high, low, close, period, atrMultiplier) {
+    const middleBand = calculateEMA(close, period);
+    const atr = calculateATR(high, low, close, period);
+
+    const upperBand = middleBand.map((mb, i) => {
+        if (mb.isNaN() || atr[i].isNaN()) return new Decimal(NaN);
+        return mb.plus(atr[i].times(atrMultiplier));
     });
+    const lowerBand = middleBand.map((mb, i) => {
+        if (mb.isNaN() || atr[i].isNaN()) return new Decimal(NaN);
+        return mb.minus(atr[i].times(atrMultiplier));
+    });
+
+    return { upper: upperBand, middle: middleBand, lower: lowerBand };
 }
 
-// Utility Functions
-function diff(series) {
-    const seriesDecimals = series.map(x => new Decimal(x));
-    if (seriesDecimals.length < 1) return [];
-    const result = [new Decimal(NaN)];
-    for (let i = 1; i < seriesDecimals.length; i++) { result.push(seriesDecimals[i].minus(seriesDecimals[i - 1])); }
-    return result;
-}
+export function calculateROC(close, period) {
+    const roc = [];
+    for (let i = 0; i < close.length; i++) {
+        if (i < period) {
+            roc.push(new Decimal(NaN));
+            continue;
+        }
+        const currentClose = close[i];
+        const pastClose = close[i - period];
 
-function pctChange(series) {
-    const seriesDecimals = series.map(x => new Decimal(x));
-    if (seriesDecimals.length < 1) return [];
-    const result = [new Decimal(NaN)];
-    for (let i = 1; i < seriesDecimals.length; i++) {
-        if (seriesDecimals[i - 1].gt(0)) { result.push(seriesDecimals[i].minus(seriesDecimals[i - 1]).dividedBy(seriesDecimals[i - 1]).times(100)); }
-        else { result.push(new Decimal(NaN)); }
+        if (pastClose.isZero()) {
+            roc.push(new Decimal(NaN));
+        } else {
+            roc.push(currentClose.minus(pastClose).dividedBy(pastClose).times(100));
+        }
     }
-    return result;
+    return roc;
 }
 
-function std(series, window) {
-    const seriesDecimals = series.map(x => new Decimal(x));
-    if (seriesDecimals.length < window) { return new Array(seriesDecimals.length).fill(new Decimal(NaN)); }
-    const result = new Array(seriesDecimals.length).fill(new Decimal(NaN));
-    for (let i = window - 1; i < seriesDecimals.length; i++) {
-        const currentWindow = seriesDecimals.slice(i - window + 1, i + 1);
-        const mean = currentWindow.reduce((a, b) => a.plus(b), new Decimal(0)).dividedBy(window);
-        const variance = currentWindow.reduce((sum, val) => sum.plus(val.minus(mean).pow(2)), new Decimal(0)).dividedBy(window);
-        result[i] = variance.sqrt();
+export function detectCandlestickPatterns(df) {
+    const patterns = [];
+    for (let i = 0; i < df.length; i++) {
+        if (i < 1) {
+            patterns.push("NONE");
+            continue;
+        }
+
+        const current = df.iloc(i);
+        const prev = df.iloc(i - 1);
+
+        const isBullish = current.close.gt(current.open);
+        const isBearish = current.close.lt(current.open);
+
+        // Simple Bullish Engulfing
+        if (isBullish && prev.isBearish && current.open.lt(prev.close) && current.close.gt(prev.open)) {
+            patterns.push("BULLISH_ENGULFING");
+        } 
+        // Simple Bearish Engulfing
+        else if (isBearish && prev.isBullish && current.open.gt(prev.close) && current.close.lt(prev.open)) {
+            patterns.push("BEARISH_ENGULFING");
+        }
+        // Doji
+        else if (current.close.minus(current.open).abs().dividedBy(current.high.minus(current.low)).lt(0.1)) {
+            patterns.push("DOJI");
+        }
+        else {
+            patterns.push("NONE");
+        }
     }
-    return result;
+    return patterns;
 }
 
-// Export All
-module.exports = {
-    // External Strategy Calculator
-    calculateEhlSupertrendIndicators,
+export function calculateFibonacciLevels(df, lookbackPeriod) {
+    if (df.length < lookbackPeriod) return null;
 
-    // Core Indicators
-    calculate_sma,
-    calculate_ema,
-    calculate_atr: calculateATR,
-    calculate_rsi: calculateRSI,
-    calculate_stoch_rsi: calculateStochRSI,
-    calculate_bollinger_bands: calculateBollingerBands,
-    calculate_vwap: calculateVWAP,
-    calculate_macd: calculateMACD,
-    calculate_adx: calculateADX,
-    calculate_obv,
-    calculate_cmf,
-    calculate_ichimoku_cloud,
-    calculate_psar,
-    calculate_ehlers_supertrend,
-    calculate_kaufman_ama,
-    calculate_dema,
-    calculate_keltner_channels,
-    calculate_roc,
-    detect_candlestick_patterns,
-    calculate_fibonacci_levels,
-    calculate_fibonacci_pivot_points,
+    const sliceHigh = df.high.slice(df.length - lookbackPeriod, df.length);
+    const sliceLow = df.low.slice(df.length - lookbackPeriod, df.length);
 
-    // Secondary Indicators
-    calculate_volatility_index,
-    calculate_vwma,
-    calculate_volume_delta,
-    calculate_relative_volume,
-    calculate_market_structure,
-    calculate_momentum,
-    calculate_williams_r,
-    calculate_cci,
-    calculate_mfi,
-    calculate_price_oscillator,
+    const highestHigh = Decimal.max(...sliceHigh);
+    const lowestLow = Decimal.min(...sliceLow);
+    const range = highestHigh.minus(lowestLow);
 
-    // Utilities
-    ewmMeanCustom,
-    rollingMean,
-    diff,
-    pctChange,
-    std
-};
+    const levels = {
+        "0%": highestHigh,
+        "23.6%": highestHigh.minus(range.times(0.236)),
+        "38.2%": highestHigh.minus(range.times(0.382)),
+        "50%": highestHigh.minus(range.times(0.5)),
+        "61.8%": highestHigh.minus(range.times(0.618)),
+        "78.6%": highestHigh.minus(range.times(0.786)),
+        "100%": lowestLow,
+    };
+    return levels;
+}
+
+export function calculateFibonacciPivotPoints(df) {
+    if (df.length < 1) return null;
+
+    const lastClose = df.close[df.close.length - 1];
+    const lastHigh = df.high[df.high.length - 1];
+    const lastLow = df.low[df.low.length - 1];
+
+    const pivot = lastHigh.plus(lastLow).plus(lastClose).dividedBy(3);
+    const r1 = pivot.plus(lastHigh.minus(lastLow).times(0.382));
+    const r2 = pivot.plus(lastHigh.minus(lastLow));
+    const s1 = pivot.minus(lastHigh.minus(lastLow).times(0.382));
+    const s2 = pivot.minus(lastHigh.minus(lastLow));
+
+    return { pivot, r1, r2, s1, s2 };
+}
+
+// Ehlers Supertrend specific calculations (from stindicators.js)
+export function calculateEhlSupertrendIndicators(klines, config) {
+    if (!klines || klines.length === 0) {
+        return [];
+    }
+
+    const highPrices = klines.map(k => new Decimal(k.high));
+    const lowPrices = klines.map(k => new Decimal(k.low));
+    const closePrices = klines.map(k => new Decimal(k.close));
+    const volumes = klines.map(k => new Decimal(k.volume));
+
+    // ATR
+    const atr = calculateATR(highPrices, lowPrices, closePrices, config.ATR_PERIOD);
+
+    // Ehlers Fisher Transform
+    const fisher = calculateFisherTransform(highPrices, lowPrices, config.EHLERS_FISHER_PERIOD);
+    const fisherSignal = calculateSMA(fisher.filter(d => !d.isNaN()), 1); // Simple 1-period SMA for signal
+
+    // Supertrend Fast
+    const [stFastLine, stFastDirection] = calculateSupertrend(highPrices, lowPrices, closePrices, config.EST_FAST_LENGTH, config.EST_FAST_MULTIPLIER);
+
+    // Supertrend Slow
+    const [stSlowLine, stSlowDirection] = calculateSupertrend(highPrices, lowPrices, closePrices, config.EST_SLOW_LENGTH, config.EST_SLOW_MULTIPLIER);
+
+    // RSI
+    const rsi = calculateRSI(closePrices, config.RSI_PERIOD);
+
+    // ADX
+    const adx = calculateADX(highPrices, lowPrices, closePrices, config.ADX_PERIOD);
+
+    // Volume Spike
+    const volumeMa = calculateSMA(volumes, config.VOLUME_MA_PERIOD);
+    const volumeSpike = volumes.map((vol, i) => (volumeMa[i].gt(0) && vol.dividedBy(volumeMa[i]).gt(config.VOLUME_THRESHOLD_MULTIPLIER)));
+
+    // Combine into a DataFrame-like structure (array of objects)
+    const indicators = klines.map((kline, i) => ({
+        ...kline,
+        atr: atr[i] || new Decimal(NaN),
+        fisher: fisher[i] || new Decimal(NaN),
+        fisher_signal: fisherSignal[i] || new Decimal(NaN),
+        st_fast_line: stFastLine[i] || new Decimal(NaN),
+        st_fast_direction: stFastDirection[i] || new Decimal(NaN),
+        st_slow_line: stSlowLine[i] || new Decimal(NaN),
+        st_slow_direction: stSlowDirection[i] || new Decimal(NaN),
+        rsi: rsi[i] || new Decimal(NaN),
+        adx: adx.adx[i] || new Decimal(NaN),
+        volume_ma: volumeMa[i] || new Decimal(NaN),
+        volume_spike: volumeSpike[i] || false,
+    }));
+
+    return indicators;
+}
+
+export function calculateFisherTransform(high, low, period) {
+    const fisher = [];
+    const prevMaxH = [];
+    const prevMinL = [];
+
+    for (let i = 0; i < high.length; i++) {
+        const startIndex = Math.max(0, i - period + 1);
+        prevMaxH[i] = Decimal.max(...high.slice(startIndex, i + 1));
+        prevMinL[i] = Decimal.min(...low.slice(startIndex, i + 1));
+
+        let val = new Decimal(0);
+        if (!prevMaxH[i].minus(prevMinL[i]).isZero()) {
+            val = new Decimal(0.33).times(high[i].plus(low[i]).dividedBy(2).minus(prevMinL[i]).dividedBy(prevMaxH[i].minus(prevMinL[i])).times(2).minus(1)).plus(new Decimal(0.67).times(i > 0 ? fisher[i - 1] : new Decimal(0)));
+        }
+        fisher.push(val);
+    }
+
+    const transformedFisher = fisher.map(val => {
+        if (val.isNaN()) return new Decimal(NaN);
+        const tanhArg = new Decimal(0.999).times(val); // Clip to avoid tanh(x) for x >= 1
+        return new Decimal(0.5).times(tanhArg.plus(1).dividedBy(new Decimal(1).minus(tanhArg)).log());
+    });
+    return transformedFisher;
+}
+
+export function calculateSupertrend(high, low, close, period, multiplier) {
+    const atr = calculateATR(high, low, close, period);
+    const basicUpperBand = high.map((h, i) => h.plus(low[i]).dividedBy(2).plus(multiplier.times(atr[i])));
+    const basicLowerBand = low.map((l, i) => h.plus(l).dividedBy(2).minus(multiplier.times(atr[i])));
+
+    const finalUpperBand = [];
+    const finalLowerBand = [];
+    const supertrend = [];
+    const direction = []; // 1 for uptrend, -1 for downtrend
+
+    for (let i = 0; i < close.length; i++) {
+        if (i === 0) {
+            finalUpperBand.push(basicUpperBand[i]);
+            finalLowerBand.push(basicLowerBand[i]);
+            supertrend.push(new Decimal(NaN)); // No trend yet
+            direction.push(new Decimal(0));
+            continue;
+        }
+
+        // Calculate final bands
+        let currentFinalUpper = basicUpperBand[i];
+        if (basicUpperBand[i].lt(finalUpperBand[i - 1]) || close[i - 1].gt(finalUpperBand[i - 1])) {
+            currentFinalUpper = basicUpperBand[i];
+        } else {
+            currentFinalUpper = finalUpperBand[i - 1];
+        }
+        finalUpperBand.push(currentFinalUpper);
+
+        let currentFinalLower = basicLowerBand[i];
+        if (basicLowerBand[i].gt(finalLowerBand[i - 1]) || close[i - 1].lt(finalLowerBand[i - 1])) {
+            currentFinalLower = basicLowerBand[i];
+        } else {
+            currentFinalLower = finalLowerBand[i - 1];
+        }
+        finalLowerBand.push(currentFinalLower);
+
+        // Determine Supertrend value and direction
+        let currentSupertrend;
+        let currentDirection;
+
+        if (supertrend[i - 1].isNaN()) { // First valid Supertrend point
+            currentSupertrend = close[i].gt(currentFinalUpper) ? currentFinalLower : currentFinalUpper;
+            currentDirection = close[i].gt(currentFinalUpper) ? new Decimal(1) : new Decimal(-1);
+        } else if (supertrend[i - 1].eq(finalUpperBand[i - 1])) { // Previous was downtrend
+            if (close[i].gt(currentFinalUpper)) {
+                currentSupertrend = currentFinalLower;
+                currentDirection = new Decimal(1);
+            } else {
+                currentSupertrend = currentFinalUpper;
+                currentDirection = new Decimal(-1);
+            }
+        } else { // Previous was uptrend
+            if (close[i].lt(currentFinalLower)) {
+                currentSupertrend = currentFinalUpper;
+                currentDirection = new Decimal(-1);
+            } else {
+                currentSupertrend = currentFinalLower;
+                currentDirection = new Decimal(1);
+            }
+        }
+
+        supertrend.push(currentSupertrend);
+        direction.push(currentDirection);
+    }
+
+    return [supertrend, direction];
+}
+
+export function buildAllIndicators(klines) {
+    if (!klines || klines.length === 0) {
+        return new DataFrame([]);
+    }
+
+    // Convert klines array of objects to DataFrame
+    let df = new DataFrame(klines);
+
+    // Ensure OHLCV columns are numbers and handle NaNs (ffill then fill 0)
+    const ohlcvColumns = ['open', 'high', 'low', 'close', 'volume'];
+    for (const col of ohlcvColumns) {
+        df = df.cast(col, Number);
+        let colData = df.toArray(col);
+        for(let i = 0; i < colData.length; i++) {
+            if (isNaN(colData[i]) || colData[i] === null) {
+                colData[i] = i > 0 ? colData[i-1] : new Decimal(0); // ffill then fill initial NaNs with 0
+            }
+        }
+        df = df.withColumn(col, (row, i) => colData[i]);
+    }
+
+    const highPrices = df.toArray('high');
+    const lowPrices = df.toArray('low');
+    const closePrices = df.toArray('close');
+    const volumes = df.toArray('volume');
+
+    // ATR
+    const atrSeries = calculateATR(highPrices, lowPrices, closePrices, CONFIG.ATR_PERIOD);
+    df = df.withColumn('atr', (row, i) => atrSeries[i]);
+
+    // Chandelier Exit related calculations
+    const highestHigh = [];
+    const lowestLow = [];
+    for (let i = 0; i < highPrices.length; i++) {
+        const startIndex = Math.max(0, i - CONFIG.ATR_PERIOD + 1);
+        highestHigh[i] = Decimal.max(...highPrices.slice(startIndex, i + 1));
+        lowestLow[i] = Decimal.min(...lowPrices.slice(startIndex, i + 1));
+    }
+    df = df.withColumn('highest_high', (row, i) => highestHigh[i]);
+    df = df.withColumn('lowest_low', (row, i) => lowestLow[i]);
+
+    const volatilityLookback = CONFIG.VOLATILITY_LOOKBACK;
+    const pricePctChange = [];
+    for (let i = 1; i < closePrices.length; i++) {
+        pricePctChange.push(closePrices[i].minus(closePrices[i-1]).dividedBy(closePrices[i-1]));
+    }
+    const priceStd = [];
+    for (let i = 0; i < pricePctChange.length; i++) {
+        const window = pricePctChange.slice(Math.max(0, i - volatilityLookback + 1), i + 1);
+        const mean = avg(window);
+        const std = stdDev(window, mean);
+        priceStd.push(std);
+    }
+    
+    let dynamicMultiplier = new Array(df.count()).fill(new Decimal(CONFIG.CHANDELIER_MULTIPLIER));
+    if (df.count() >= volatilityLookback && priceStd.length > 0) {
+        const meanPriceStd = avg(priceStd);
+        if (meanPriceStd.gt(0)) {
+            for (let i = 0; i < priceStd.length; i++) {
+                dynamicMultiplier[i+1] = Decimal.min(
+                    new Decimal(CONFIG.MAX_ATR_MULTIPLIER),
+                    Decimal.max(new Decimal(CONFIG.MIN_ATR_MULTIPLIER), new Decimal(CONFIG.CHANDELIER_MULTIPLIER).times(priceStd[i].dividedBy(meanPriceStd)))
+                );
+            }
+        }
+    }
+    df = df.withColumn('dynamic_multiplier', (row, i) => dynamicMultiplier[i]);
+
+    const chLong = df.toArray('highest_high').map((val, i) => val.minus(atrSeries[i].times(dynamicMultiplier[i])));
+    const chShort = df.toArray('lowest_low').map((val, i) => val.plus(atrSeries[i].times(dynamicMultiplier[i])));
+    df = df.withColumn('ch_long', (row, i) => chLong[i]);
+    df = df.withColumn('ch_short', (row, i) => chShort[i]);
+    
+    // EMAs
+    const trendEma = calculateEMA(closePrices, CONFIG.TREND_EMA_PERIOD);
+    const emaS = calculateEMA(closePrices, CONFIG.EMA_SHORT_PERIOD);
+    const emaL = calculateEMA(closePrices, CONFIG.EMA_LONG_PERIOD);
+    df = df.withColumn('trend_ema', (row, i) => trendEma[i]);
+    df = df.withColumn('ema_s', (row, i) => emaS[i]);
+    df = df.withColumn('ema_l', (row, i) => emaL[i]);
+
+    // RSI
+    const rsi = calculateRSI(closePrices, CONFIG.RSI_PERIOD);
+    df = df.withColumn('rsi', (row, i) => rsi[i]);
+
+    // Volume MA and Spike
+    const volumeMa = calculateSMA(volumes, CONFIG.VOLUME_MA_PERIOD);
+    const volSpike = volumes.map((vol, i) => (volumeMa[i].gt(0) && vol.dividedBy(volumeMa[i]).gt(CONFIG.VOLUME_THRESHOLD_MULTIPLIER)));
+    df = df.withColumn('vol_ma', (row, i) => volumeMa[i]);
+    df = df.withColumn('vol_spike', (row, i) => volSpike[i]);
+    
+    // Ehlers Supertrend (from stindicators.js logic)
+    const [stSlowLine, stSlowDirection] = calculateSupertrend(highPrices, lowPrices, closePrices, CONFIG.EST_SLOW_LENGTH, new Decimal(CONFIG.EST_SLOW_MULTIPLIER));
+    df = df.withColumn('est_slow', (row, i) => stSlowDirection[i]); // Store direction as est_slow
+
+    // Fisher Transform
+    const fisher = calculateFisherTransform(highPrices, lowPrices, CONFIG.EHLERS_FISHER_PERIOD);
+    df = df.withColumn('fisher', (row, i) => fisher[i]);
+
+    // Stochastic Oscillator
+    if (CONFIG.USE_STOCH_FILTER) {
+        const [stochK, stochD] = calculateStochasticOscillator(highPrices, lowPrices, closePrices, CONFIG.STOCH_K_PERIOD, CONFIG.STOCH_D_PERIOD, CONFIG.STOCH_SMOOTHING);
+        df = df.withColumn('stoch_k', (row, i) => stochK[i]);
+        df = df.withColumn('stoch_d', (row, i) => stochD[i]);
+    }
+    
+    // MACD
+    if (CONFIG.USE_MACD_FILTER) {
+        const macd = calculateMACD(closePrices, CONFIG.MACD_FAST_PERIOD, CONFIG.MACD_SLOW_PERIOD, CONFIG.MACD_SIGNAL_PERIOD);
+        df = df.withColumn('macd_line', (row, i) => macd.macd_line[i]);
+        df = df.withColumn('macd_signal', (row, i) => macd.signal_line[i]);
+        df = df.withColumn('macd_hist', (row, i) => macd.histogram[i]);
+    }
+
+    // ADX
+    if (CONFIG.USE_ADX_FILTER) {
+        const adx = calculateADX(highPrices, lowPrices, closePrices, CONFIG.ADX_PERIOD);
+        df = df.withColumn('adx', (row, i) => adx.adx[i]);
+    }
+
+    // Final ffill and fillna(0) for all new columns
+    for (const col of df.listColumns()) {
+        let colData = df.toArray(col);
+        for(let i = 0; i < colData.length; i++) {
+            if (colData[i] === null || (colData[i] instanceof Decimal && colData[i].isNaN())) {
+                colData[i] = i > 0 ? colData[i-1] : new Decimal(0); // ffill then fill initial NaNs with 0
+            }
+        }
+        df = df.withColumn(col, (row, i) => colData[i]);
+    }
+
+    return df;
+}

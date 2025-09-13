@@ -16,7 +16,7 @@ from pybit.unified_trading import HTTP, WebSocket
 
 # Import local modules
 from config import Config
-from logger_setup import setup_logger # Redundant here, but good for context
+from unanimous_logger import setup_logger # Redundant here, but good for context
 from precision_manager import PrecisionManager
 from order_sizing import OrderSizingCalculator
 from trailing_stop import TrailingStopManager
@@ -505,6 +505,7 @@ class BybitTradingBot:
         await self.pnl_manager.update_all_positions_pnl(current_prices={self.config.SYMBOL: self.current_market_price})
         total_pnl_summary = await self.pnl_manager.get_total_account_pnl_summary()
         self.logger.info(f"Current PnL: Realized={total_pnl_summary['total_realized_pnl_usd']:.2f}, Unrealized={total_pnl_summary['total_unrealized_pnl_usd']:.2f}, Total Account PnL={total_pnl_summary['overall_total_pnl_usd']:.2f}")
+        self.logger.info("PnL updated", extra=total_pnl_summary)
         
         # 6. Daily Drawdown Check (Suggestion 2: Drawdown Management)
         await self._check_daily_drawdown(total_pnl_summary)
@@ -928,3 +929,5 @@ class BybitTradingBot:
         self.trade_metrics_tracker.export_daily_metrics_to_csv(self.config.DAILY_METRICS_CSV)
         
         self.logger.info("Bot shutdown complete.")
+lete.")
+gger.info("Bot shutdown complete.")

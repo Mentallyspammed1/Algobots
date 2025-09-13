@@ -321,49 +321,7 @@ def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) 
             _ensure_config_keys(config[key], default_value)
 
 
-class SensitiveFormatter(logging.Formatter):
-    SENSITIVE_WORDS: ClassVar[list[str]] = ["API_KEY", "API_SECRET"]
-
-    def __init__(self, fmt=None, datefmt=None, style="%"):
-        super().__init__(fmt, datefmt, style)
-        self._fmt = fmt if fmt else self.default_fmt()
-
-    def default_fmt(self):
-        return "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-    def format(self, record):
-        original_message = super().format(record)
-        redacted_message = original_message
-        for word in self.SENSITIVE_WORDS:
-            if word in redacted_message:
-                redacted_message = redacted_message.replace(word, "*" * len(word))
-        return redacted_message
-
-
-def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
-    logger = logging.getLogger(log_name)
-    logger.setLevel(level)
-    logger.propagate = False
-
-    if not logger.handlers:
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(
-            SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
-        )
-        logger.addHandler(console_handler)
-
-        log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
-        )
-        file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        )
-        logger.addHandler(file_handler)
-
-    return logger
+from unanimous_logger import setup_logger
 
 
 class BybitClient:
@@ -665,6 +623,7 @@ class PositionManager:
         self.logger.info(
             f"{NEON_GREEN}[{self.symbol}] Opened {signal} position: {position}{RESET}"
         )
+        self.logger.info("Position opened", extra=position)
         return position
 
     def _check_and_close_position(
@@ -2804,8 +2763,12 @@ def display_indicator_values_and_price(
 
 
 def main() -> None:
-    logger = setup_logger("wgwhalex_bot")
-    config = load_config(CONFIG_FILE, logger)
+    config = Config()
+    logger = setup_logger(config, log_name="wgwhalex_bot", json_log_file="unanimous.log")
+    config_data = load_config(CONFIG_FILE, logger)
+    # You might want to update your config object with data from the file if necessary
+    # For now, we assume the Config object initialized from env vars is sufficient.
+
     alert_system = AlertSystem(logger)
     bybit_client = BybitClient(API_KEY, API_SECRET, BASE_URL, logger)
 
@@ -2813,78 +2776,78 @@ def main() -> None:
         "1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M",
     ]
 
-    if config["interval"] not in valid_bybit_intervals:
-        logger.error(f"{NEON_RED}Invalid primary interval '{config['interval']}' in config.json. Please use Bybit's valid string formats (e.g., '15', '60', 'D'). Exiting.{RESET}")
+    if config.KLINES_INTERVAL not in valid_bybit_intervals:
+        logger.error(f"{NEON_RED}Invalid primary interval '{config.KLINES_INTERVAL}' in config.json. Please use Bybit's valid string formats (e.g., '15', '60', 'D'). Exiting.{RESET}")
         sys.exit(1)
 
-    for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
+    for htf_interval in config.MTF_ANALYSIS["higher_timeframes"]:
         if htf_interval not in valid_bybit_intervals:
             logger.error(f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}' in config.json. Please use Bybit's valid string formats (e.g., '60', '240'). Exiting.{RESET}")
             sys.exit(1)
 
     logger.info(f"{NEON_GREEN}--- Whalebot Trading Bot Initialized ---{RESET}")
-    logger.info(f"Symbol: {config['symbol']}, Interval: {config['interval']}")
-    logger.info(f"Trade Management Enabled: {config['trade_management']['enabled']}")
+    logger.info(f"Symbol: {config.SYMBOL}, Interval: {config.KLINES_INTERVAL}")
+    logger.info(f"Trade Management Enabled: {config.TRADE_MANAGEMENT['enabled']}")
 
-    position_manager = PositionManager(config, logger, config["symbol"])
-    performance_tracker = PerformanceTracker(logger, config)
+    position_manager = PositionManager(config_data, logger, config.SYMBOL)
+    performance_tracker = PerformanceTracker(logger, config_data)
 
     while True:
         try:
             logger.info(f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
-            current_price = bybit_client.fetch_current_price(config["symbol"])
+            current_price = bybit_client.fetch_current_price(config.SYMBOL)
 
             trading_signal = "HOLD"
             signal_score = 0.0
             signal_breakdown = {}
             if current_price is None:
-                alert_system.send_alert(f"[{config['symbol']}] Failed to fetch current price. Skipping loop.", "WARNING")
-                time.sleep(config["loop_delay"])
+                alert_system.send_alert(f"[{config.SYMBOL}] Failed to fetch current price. Skipping loop.", "WARNING")
+                time.sleep(config.LOOP_DELAY_SECONDS)
                 continue
 
-            df = bybit_client.fetch_klines(config["symbol"], config["interval"], 1000)
+            df = bybit_client.fetch_klines(config.SYMBOL, config.KLINES_INTERVAL, 1000)
             if df is None or df.empty:
-                alert_system.send_alert(f"[{config['symbol']}] Failed to fetch primary klines or DataFrame is empty. Skipping loop.", "WARNING")
-                time.sleep(config["loop_delay"])
+                alert_system.send_alert(f"[{config.SYMBOL}] Failed to fetch primary klines or DataFrame is empty. Skipping loop.", "WARNING")
+                time.sleep(config.LOOP_DELAY_SECONDS)
                 continue
 
             orderbook_data = None
-            if config["indicators"].get("orderbook_imbalance", False):
-                orderbook_data = bybit_client.fetch_orderbook(config["symbol"], config["orderbook_limit"])
+            if config.INDICATORS.get("orderbook_imbalance", False):
+                orderbook_data = bybit_client.fetch_orderbook(config.SYMBOL, config.ORDERBOOK_LIMIT)
 
             mtf_trends: dict[str, str] = {}
-            if config["mtf_analysis"]["enabled"]:
-                for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
+            if config.MTF_ANALYSIS["enabled"]:
+                for htf_interval in config.MTF_ANALYSIS["higher_timeframes"]:
                     logger.debug(f"Fetching klines for MTF interval: {htf_interval}")
-                    htf_df = bybit_client.fetch_klines(config["symbol"], htf_interval, 1000)
+                    htf_df = bybit_client.fetch_klines(config.SYMBOL, htf_interval, 1000)
                     if htf_df is not None and not htf_df.empty:
-                        for trend_ind in config["mtf_analysis"]["trend_indicators"]:
-                            temp_analyzer = TradingAnalyzer(htf_df, config, logger, config["symbol"])
+                        for trend_ind in config.MTF_ANALYSIS["trend_indicators"]:
+                            temp_analyzer = TradingAnalyzer(htf_df, config_data, logger, config.SYMBOL)
                             trend = temp_analyzer._get_mtf_trend(temp_analyzer.df, trend_ind)
                             mtf_trends[f"{htf_interval}_{trend_ind}"] = trend
                             logger.debug(f"MTF Trend ({htf_interval}, {trend_ind}): {trend}")
                     else:
                         logger.warning(f"{NEON_YELLOW}Could not fetch klines for higher timeframe {htf_interval} or it was empty. Skipping MTF trend for this TF.{RESET}")
-                    time.sleep(config["mtf_analysis"]["mtf_request_delay_seconds"])
+                    time.sleep(config.MTF_ANALYSIS["mtf_request_delay_seconds"])
 
-            analyzer = TradingAnalyzer(df, config, logger, config["symbol"])
+            analyzer = TradingAnalyzer(df, config_data, logger, config.SYMBOL)
 
             if analyzer.df.empty:
-                alert_system.send_alert(f"[{config['symbol']}] TradingAnalyzer DataFrame is empty after indicator calculations. Cannot generate signal.", "WARNING")
-                time.sleep(config["loop_delay"])
+                alert_system.send_alert(f"[{config.SYMBOL}] TradingAnalyzer DataFrame is empty after indicator calculations. Cannot generate signal.", "WARNING")
+                time.sleep(config.LOOP_DELAY_SECONDS)
                 continue
 
             trading_signal, signal_score, signal_breakdown = analyzer.generate_trading_signal(current_price, orderbook_data, mtf_trends)
             atr_value = Decimal(str(analyzer._get_indicator_value("ATR", Decimal("0.01"))))
 
-            display_indicator_values_and_price(config, logger, current_price, analyzer, orderbook_data, mtf_trends, signal_breakdown)
+            display_indicator_values_and_price(config_data, logger, current_price, analyzer, orderbook_data, mtf_trends, signal_breakdown)
 
             position_manager.manage_positions(current_price, performance_tracker)
 
-            if trading_signal == "BUY" and signal_score >= config["signal_score_threshold"]:
+            if trading_signal == "BUY" and signal_score >= config.SIGNAL_SCORE_THRESHOLD:
                 logger.info(f"{NEON_GREEN}Strong BUY signal detected! Score: {signal_score:.2f}{RESET}")
                 position_manager.open_position("BUY", current_price, atr_value)
-            elif trading_signal == "SELL" and signal_score <= -config["signal_score_threshold"]:
+            elif trading_signal == "SELL" and signal_score <= -config.SIGNAL_SCORE_THRESHOLD:
                 logger.info(f"{NEON_RED}Strong SELL signal detected! Score: {signal_score:.2f}{RESET}")
                 position_manager.open_position("SELL", current_price, atr_value)
             else:
@@ -2901,14 +2864,16 @@ def main() -> None:
             perf_summary = performance_tracker.get_summary()
             logger.info(f"{NEON_YELLOW}Performance Summary: Total PnL: {perf_summary['total_pnl'].normalize():.2f}, Wins: {perf_summary['wins']}, Losses: {perf_summary['losses']}, Win Rate: {perf_summary['win_rate']}{RESET}")
 
-            logger.info(f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {config['loop_delay']}s ---{RESET}")
-            time.sleep(config["loop_delay"])
+            logger.info(f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {config.LOOP_DELAY_SECONDS}s ---{RESET}")
+            time.sleep(config.LOOP_DELAY_SECONDS)
 
         except Exception as e:
-            alert_system.send_alert(f"[{config['symbol']}] An unhandled error occurred in the main loop: {e}", "ERROR")
+            alert_system.send_alert(f"[{config.SYMBOL}] An unhandled error occurred in the main loop: {e}", "ERROR")
             logger.exception(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
-            time.sleep(config["loop_delay"] * 2)
+            time.sleep(config.LOOP_DELAY_SECONDS * 2)
 
 
 if __name__ == "__main__":
+    main()
+ "__main__":
     main()

@@ -24,8 +24,11 @@ def git_clean_branches():
         current_branch = run_git_command(["git", "rev-parse", "--abbrev-ref", "HEAD"])
 
         branches_to_delete = []
-        for branch in merged_branches.splitlines():
-            branch = branch.strip()
+        for branch_line in merged_branches.splitlines():
+            branch = branch_line.strip()
+            if branch.startswith('* '):
+                branch = branch[2:] # Remove '* '
+
             if branch and branch != current_branch and branch != "main" and branch != "master":
                 branches_to_delete.append(branch)
 
