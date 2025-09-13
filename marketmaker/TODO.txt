@@ -1,0 +1,225 @@
+# TODO.txt for /home/user/Algobots/marketmaker/
+
+## Project Overview
+This directory contains a comprehensive market-making bot for Bybit, including its core logic, configuration, backtesting framework, and optimization tools. It leverages Pybit for API interaction and Optuna for hyperparameter tuning.
+
+## I. Project Structure & Consolidation
+
+### 1. Consolidate Market Maker Variants
+- **Problem**: Numerous files (`market_maker.py`, `market1.0.0.py`, `marketlw.py`, `marketmaker1_0.py`, `marketmakerx.py`, etc.) suggest code duplication and lack of clear versioning. This hinders maintainability and introduces inconsistencies.
+- **Action**: Merge all `market_maker` variants into a single, modular `market_maker.py`. Implement a strategy pattern to allow different market-making approaches (e.g., simple spread, inventory-aware) to be loaded dynamically.
+  - **Code Snippet (Conceptual `market_maker.py` refactoring)**:
+    ```python
+    # marketmaker/market_maker.py
+    from .core.bybit_client import BybitRest, PublicWS, PrivateWS
+    from .core.quoter import Quoter
+    from .core.protection import Protection
+    from .strategies.base_strategy import BaseMarketMakingStrategy
+    from .config import Config
+
+    class MarketMaker:
+        def __init__(self, config: Config, strategy: BaseMarketMakingStrategy):
+            self.config = config
+            self.strategy = strategy
+            self.rest = BybitRest(config)
+            self.public_ws = PublicWS(config)
+            self.private_ws = PrivateWS(config)
+            self.quoter = Quoter(config, self.rest) # Quoter might need rest client
+            self.protection = Protection(config, self.rest)
+            # ... other initializations
+
+        async def run(self):
+            # Main loop orchestrating strategy, quoting, and protection
+            pass
+    ```
+  - **Code Snippet (Conceptual `strategies/base_strategy.py`)**:
+    ```python
+    # marketmaker/strategies/base_strategy.py
+    from abc import ABC, abstractmethod
+    from ..config import Config
+
+    class BaseMarketMakingStrategy(ABC):
+        def __init__(self, config: Config):
+            self.config = config
+
+        @abstractmethod
+        async def generate_quotes(self, market_data: dict, current_position: dict) -> tuple[list, list]:
+            """Generates bid and ask orders based on market conditions and current position."""
+            pass
+
+        @abstractmethod
+        async def manage_position(self, market_data: dict, current_position: dict):
+            """Manages existing positions, e.g., adjusting TP/SL."""
+            pass
+    ```
+
+### 2. Extract Core Components into Dedicated Modules
+- **Problem**: `market_maker.py` (and its variants) likely contains tightly coupled logic for API interaction, quoting, and protection.
+- **Action**: Create dedicated modules for `BybitRest`, `PublicWS`, `PrivateWS`, `Quoter`, and `Protection` to improve modularity, testability, and reusability.
+  - **Proposed Structure**:
+    ```
+    marketmaker/
+    ├── clients/
+    │   ├── bybit_rest.py
+    │   ├── public_ws.py
+    │   └── private_ws.py
+    ├── core/
+    │   ├── quoter.py
+    │   └── protection.py
+    └── strategies/
+        └── ... (various strategy implementations)
+    ```
+
+### 3. Consolidate Backtesting Framework
+- **Problem**: Multiple backtesting files (`backtest.py`, `backtester_old.py`, `strategy_backtester.py`) suggest fragmented development.
+- **Action**: Create a unified `backtesting/backtester.py` module that provides a single interface for running backtests, supporting different fill models and reporting mechanisms.
+  - **Code Snippet (Conceptual `backtesting/backtester.py`)**:
+    ```python
+    # marketmaker/backtesting/backtester.py
+    from ..config import Config, BacktestParams
+    from .fill_engine import FillEngine
+    from .historical_data import BybitHistoricalData
+    from ..market_maker import MarketMaker # The consolidated MarketMaker
+
+    class UnifiedMarketMakerBacktester:
+        def __init__(self, params: BacktestParams, config: Config):
+            self.params = params
+            self.config = config
+            self.data_loader = BybitHistoricalData(params)
+            self.fill_engine = FillEngine(params)
+            # ...
+
+        async def run_backtest(self, strategy_instance: BaseMarketMakingStrategy):
+            # Orchestrate data loading, market maker simulation, and fill engine
+            pass
+    ```
+
+### 4. Consolidate Optimization Tools
+- **Problem**: Many optimizer scripts (`bot_optimizer.py`, `profit_optimizer.py`, `optimizer.py`, etc.) indicate a lack of a unified optimization interface.
+- **Action**: Create a single `optimization/optimizer.py` module that can leverage `optuna` or perform grid searches based on configuration, allowing users to select the target metric (PnL, Sharpe, etc.).
+
+## II. Configuration Management
+
+### 1. Unify Configuration Source
+- **Problem**: `config.py`, `config_definitions.py`, and `config.json` suggest fragmented configuration.
+- **Action**: Consolidate all configuration into a single `config.py` using Python `dataclasses` for type safety and clarity, loading values from environment variables (`.env`) and potentially a single `config.yaml` for complex structures.
+  - **Code Snippet (Conceptual `config.py`)**:
+    ```python
+    # marketmaker/config.py
+    import os
+    from dataclasses import dataclass, field
+    from dotenv import load_dotenv
+
+    load_dotenv() # Load .env at the top
+
+    @dataclass
+    class APIConfig:
+        KEY: str = os.getenv("BYBIT_API_KEY", "")
+        SECRET: str = os.getenv("BYBIT_API_SECRET", "")
+        TESTNET: bool = os.getenv("BYBIT_TESTNET", "False").lower() == "true"
+
+    @dataclass
+    class TradingConfig:
+        SYMBOL: str = "BTCUSDT"
+        CATEGORY: str = "linear"
+        # ... other trading parameters
+
+    @dataclass
+    class MarketMakingConfig:
+        BASE_SPREAD_BPS: float = 10.0
+        MIN_SPREAD_TICKS: int = 1
+        # ... other market making parameters
+
+    @dataclass
+    class Config:
+        api: APIConfig = field(default_factory=APIConfig)
+        trading: TradingConfig = field(default_factory=TradingConfig)
+        market_making: MarketMakingConfig = field(default_factory=MarketMakingConfig)
+        # ... other config sections
+
+    # Global config instance
+    APP_CONFIG = Config()
+    ```
+
+## III. Readability & Maintainability
+
+### 1. Implement Comprehensive Type Hinting
+- **Action**: Add type hints to all function arguments, return values, and class attributes across the entire codebase for improved static analysis and developer understanding.
+
+### 2. Add/Enhance Docstrings
+- **Action**: Ensure all public classes, methods, and functions have clear, concise docstrings explaining their purpose, arguments, and return values.
+
+### 3. Refactor Complex Logic
+- **Action**: Identify and refactor overly complex functions or methods (e.g., in `FillEngine`, `Quoter`, `Protection`) into smaller, more manageable units with single responsibilities.
+
+## IV. Robustness & Error Handling
+
+### 1. Granular API Error Handling
+- **Action**: Implement specific error handling for different Bybit API `retCode` values in `BybitRest` and WebSocket clients, rather than generic `try-except` blocks.
+  - **Code Snippet (Conceptual `bybit_rest.py` error handling)**:
+    ```python
+    # marketmaker/clients/bybit_rest.py
+    import logging
+    from pybit.unified_trading import HTTP
+
+    class BybitRest:
+        def __init__(self, config: Config):
+            self.session = HTTP(testnet=config.api.TESTNET, api_key=config.api.KEY, api_secret=config.api.SECRET)
+            self.logger = logging.getLogger(__name__)
+
+        def get_kline(self, symbol: str, interval: str, limit: int):
+            try:
+                response = self.session.get_kline(category="linear", symbol=symbol, interval=interval, limit=limit)
+                if response["retCode"] == 0:
+                    return response["result"]["list"]
+                elif response["retCode"] == 10001: # Example: Account type error
+                    self.logger.error(f"API Error 10001: Account type not supported. Details: {response['retMsg']}")
+                    raise ValueError("Unsupported account type")
+                else:
+                    self.logger.error(f"Bybit API Error {response['retCode']}: {response['retMsg']}")
+                    raise RuntimeError(f"Bybit API Error: {response['retMsg']}")
+            except Exception as e:
+                self.logger.exception(f"Exception during get_kline for {symbol}: {e}")
+                raise
+    ```
+
+### 2. Implement Retry Logic with Exponential Backoff
+- **Action**: Apply `tenacity` (or similar) for retries on transient network/API errors across all API interaction points.
+
+### 3. Ensure Consistent Decimal Usage
+- **Action**: Audit all financial calculations (prices, quantities, PnL, spreads) to ensure `Decimal` objects are used consistently to prevent floating-point inaccuracies.
+
+### 4. Graceful Shutdown
+- **Action**: Implement signal handlers (e.g., `SIGINT`, `SIGTERM`) to ensure WebSocket connections are closed and resources are released cleanly upon bot termination.
+
+## V. Testing
+
+### 1. Expand Unit Tests
+- **Action**: Create/enhance unit tests for:
+    - `clients/bybit_rest.py`: Mock `pybit.unified_trading.HTTP` to test API call wrappers, error handling, and data parsing.
+    - `clients/public_ws.py`, `clients/private_ws.py`: Mock WebSocket connections and test message parsing, data updates, and reconnection logic.
+    - `core/quoter.py`: Test quote generation logic under various market conditions and inventory states.
+    - `core/protection.py`: Test stop-loss/take-profit activation and adjustment logic.
+    - `backtesting/fill_engine.py`: Test order fill simulation accuracy.
+    - `config.py`: Test configuration loading and validation.
+
+### 2. Create Integration Tests
+- **Action**: Develop integration tests that simulate the interaction between `MarketMaker` and its core components (mocking only the external Bybit API calls) to verify end-to-end flows.
+- **Action**: Create integration tests for the `UnifiedMarketMakerBacktester` to ensure it correctly simulates trading and calculates performance metrics.
+
+## VI. Future Enhancements
+
+### 1. Complete `LiveSimulator`
+- **Action**: Implement the `LiveSimulator` component (currently missing) to provide a full live trading simulation environment, allowing strategies to be tested against real-time data without actual trading.
+
+### 2. Advanced Risk Management
+- **Action**: Implement more sophisticated risk controls such as daily loss limits, max drawdown limits, and circuit breakers to automatically pause trading under adverse conditions.
+
+### 3. Layered Quoting
+- **Action**: Enhance the `Quoter` to support multiple price levels for bids and asks, allowing for more nuanced market-making strategies.
+
+### 4. Dynamic Parameter Adjustment
+- **Action**: Develop logic to dynamically adjust market-making parameters (spreads, quantities, order levels) based on real-time market volatility, order book depth, or inventory skew.
+
+### 5. Improve Logging & Monitoring
+- **Action**: Integrate a more advanced logging system (e.g., structured logging) and consider external monitoring/alerting capabilities (e.g., Prometheus, Grafana, Telegram alerts).

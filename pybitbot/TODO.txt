@@ -1,0 +1,284 @@
+# TODO.txt for /home/user/Algobots/pybitbot/
+
+## Project Overview
+This directory contains multiple versions of a Python-based Supertrend trading bot for the Bybit exchange. The goal is to consolidate these versions into a single, modular, and robust trading system with enhanced features, testing, and maintainability.
+
+## I. Project Structure & Consolidation
+
+### 1. Consolidate Bot Versions
+- **Problem**: Numerous bot versions (`ehlers_st.py`, `ehlers_st1.4.py`, `ehlers_stcx.py`, `supertrend_bot.py`, etc.) lead to significant code duplication, inconsistencies, and difficulty in maintenance.
+- **Action**: Consolidate all existing bot logic into a single, unified `pybitbot/core/trading_bot.py`. This central bot class should be configurable to run different strategies.
+  - **Code Snippet (Conceptual `pybitbot/core/trading_bot.py`)**:
+    ```python
+    # pybitbot/core/trading_bot.py
+    import asyncio
+    from pybitbot.clients.bybit_client import BybitClient
+    from pybitbot.persistence.state_manager import BotStateManager
+    from pybitbot.strategies.base_strategy import BaseStrategy
+    from pybitbot.config import Config
+    from pybitbot.utils.logger import get_logger
+
+    class TradingBot:
+        def __init__(self, config: Config, strategy: BaseStrategy):
+            self.config = config
+            self.logger = get_logger(__name__, config.log_level)
+            self.bybit_client = BybitClient(config)
+            self.state_manager = BotStateManager(config)
+            self.strategy = strategy
+            # ... other initializations
+
+        async def run(self):
+            self.logger.info("Trading bot starting...")
+            await self.state_manager.load_state()
+            await self.bybit_client.connect_websocket(self.config.symbol, self.config.timeframe)
+
+            while True:
+                # Main trading loop
+                klines = await self.bybit_client.get_klines(self.config.symbol, self.config.timeframe, self.config.min_klines_for_strategy)
+                if not klines:
+                    self.logger.warning("Not enough klines. Skipping cycle.")
+                    await asyncio.sleep(self.config.loop_interval_seconds)
+                    continue
+
+                signal, sl_price, tp_price, reasoning = self.strategy.generate_signal(klines)
+
+                if signal != "none":
+                    self.logger.info(f"Signal: {signal} | Reason: {reasoning}")
+                    # Execute trade logic (place order, manage position)
+                    # ...
+
+                await self.state_manager.save_state()
+                await asyncio.sleep(self.config.loop_interval_seconds)
+    ```
+
+### 2. Extract Common Functionalities into Separate Modules
+- **Problem**: Current bot versions likely have duplicated code for API interaction, risk management, order management, and state persistence.
+- **Action**: Create dedicated modules for these functionalities to improve modularity, testability, and reusability.
+  - **Proposed Structure**:
+    ```
+    pybitbot/
+    ├── clients/                # Bybit API interaction (REST and WebSocket)
+    │   └── bybit_client.py
+    ├── config/                 # Centralized configuration
+    │   └── config.py
+    ├── core/                   # Main bot logic
+    │   └── trading_bot.py
+    ├── indicators/             # Technical indicator calculations
+    │   └── indicators.py
+    ├── models/                 # Data models (Trade, Position)
+    │   └── models.py
+    ├── order_management/       # Order placement, cancellation, amendment
+    │   └── order_manager.py
+    ├── persistence/            # State persistence (e.g., bot_state.pkl, SQLite)
+    │   └── state_manager.py
+    ├── risk_management/        # Risk calculation, position sizing, emergency stops
+    │   └── risk_manager.py
+    ├── strategies/             # Trading strategy implementations
+    │   ├── base_strategy.py
+    │   ├── ehlers_supertrend.py
+    │   └── simple_supertrend.py
+    ├── utils/                  # Utility functions (logging, math helpers)
+    │   └── logger.py
+    │   └── helpers.py
+    └── main.py                 # Entry point
+    ```
+
+### 3. Implement Strategy Pattern
+- **Problem**: Different Supertrend variants are implemented as separate bot files.
+- **Action**: Define a `BaseStrategy` abstract class and implement concrete strategy classes (e.g., `EhlersSupertrendStrategy`, `SimpleSupertrendStrategy`) that adhere to this interface. The `TradingBot` should accept any `BaseStrategy` instance.
+  - **Code Snippet (Conceptual `pybitbot/strategies/base_strategy.py`)**:
+    ```python
+    # pybitbot/strategies/base_strategy.py
+    from abc import ABC, abstractmethod
+    from typing import List, Dict, Tuple
+    from pybitbot.config import Config
+
+    class BaseStrategy(ABC):
+        def __init__(self, config: Config):
+            self.config = config
+
+        @abstractmethod
+        def generate_signal(self, klines: List[Dict]) -> Tuple[str, float, float, str]:
+            """Generates a trading signal (buy/sell/none), SL, TP, and reasoning."""
+            pass
+
+        @abstractmethod
+        def calculate_indicators(self, klines: List[Dict]) -> List[Dict]:
+            """Calculates and attaches indicators to kline data."""
+            pass
+    ```
+
+## II. Configuration Management
+
+### 1. Centralized and Robust Configuration
+- **Problem**: Configuration might be scattered across different bot versions or hardcoded.
+- **Action**: Create a single `pybitbot/config/config.py` using Python `dataclasses` for type safety and clarity. Load sensitive information from environment variables (`.env`).
+  - **Code Snippet (Conceptual `pybitbot/config/config.py`)**:
+    ```python
+    # pybitbot/config/config.py
+    import os
+    from dataclasses import dataclass, field
+    from dotenv import load_dotenv
+
+    load_dotenv() # Load .env at the top of your main entry point or config module
+
+    @dataclass
+    class APIConfig:
+        KEY: str = os.getenv("BYBIT_API_KEY", "")
+        SECRET: str = os.getenv("BYBIT_API_SECRET", "")
+        TESTNET: bool = os.getenv("BYBIT_TESTNET", "False").lower() == "true"
+
+    @dataclass
+    class StrategySettings:
+        SUPERTREND_PERIOD: int = 10
+        SUPERTREND_MULTIPLIER: float = 3.0
+        EHLERS_FISHER_PERIOD: int = 14
+        # ... other strategy specific settings
+
+    @dataclass
+    class Config:
+        api: APIConfig = field(default_factory=APIConfig)
+        strategy_settings: StrategySettings = field(default_factory=StrategySettings)
+        SYMBOL: str = "BTCUSDT"
+        TIMEFRAME: str = "15"
+        LOOP_INTERVAL_SECONDS: int = 30
+        LOG_LEVEL: str = "INFO"
+        MIN_KLINES_FOR_STRATEGY: int = 200
+        # ... other global bot settings
+
+    # Global config instance (can be loaded once at startup)
+    # APP_CONFIG = Config()
+    ```
+
+## III. Readability & Maintainability
+
+### 1. Implement Comprehensive Type Hinting
+- **Action**: Add type hints to all function arguments, return values, and class attributes across the entire codebase for improved static analysis and developer understanding.
+
+### 2. Add/Enhance Docstrings
+- **Action**: Ensure all public classes, methods, and functions have clear, concise docstrings explaining their purpose, arguments, and return values.
+
+### 3. Ensure Consistent Naming Conventions (PEP 8)
+- **Action**: Review the entire codebase to ensure adherence to PEP 8 naming conventions (e.g., `snake_case` for functions and variables, `PascalCase` for classes).
+
+### 4. Refactor Complex Functions
+- **Action**: Identify and refactor overly complex functions or methods (e.g., in strategy logic, order management) into smaller, more manageable units with single responsibilities. Reduce nesting depth where possible.
+
+## IV. Robustness & Error Handling
+
+### 1. Granular API Error Handling & Retry Mechanisms
+- **Problem**: Generic error handling might mask specific issues or fail to recover from transient errors.
+- **Action**: Implement specific error handling for different Bybit API `retCode` values in `BybitClient`. Use `tenacity` (or similar) for automatic retries with exponential backoff on transient network/API errors.
+  - **Code Snippet (Conceptual `pybitbot/clients/bybit_client.py` with `tenacity`)**:
+    ```python
+    # pybitbot/clients/bybit_client.py
+    from pybit.unified_trading import HTTP
+    from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+    from pybitbot.config import Config
+    from pybitbot.utils.logger import get_logger
+
+    class BybitAPIError(Exception): pass
+    class BybitRateLimitError(BybitAPIError): pass
+    class BybitAccountError(BybitAPIError): pass
+
+    @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=4, max=60),
+           retry=retry_if_exception_type(BybitAPIError))
+    async def _make_api_call(self, method_name, *args, **kwargs):
+        try:
+            response = getattr(self.session, method_name)(*args, **kwargs)
+            if response["retCode"] == 0:
+                return response
+            elif response["retCode"] == 10001: # Account error
+                raise BybitAccountError(response["retMsg"])
+            elif response["retCode"] == 10006: # Rate limit
+                raise BybitRateLimitError(response["retMsg"])
+            else:
+                raise BybitAPIError(f"Code: {response['retCode']}, Msg: {response['retMsg']}")
+        except Exception as e:
+            self.logger.error(f"API call {method_name} failed: {e}")
+            raise # Re-raise for tenacity
+
+    async def get_klines(self, symbol: str, interval: str, limit: int):
+        response = await self._make_api_call("get_kline", category="linear", symbol=symbol, interval=interval, limit=limit)
+        return response["result"]["list"]
+    ```
+
+### 2. Improve WebSocket Handling
+- **Action**: Implement robust WebSocket reconnection logic with exponential backoff. Add data integrity checks for incoming messages (e.g., handling missing kline data, out-of-order messages).
+
+### 3. Implement Graceful Shutdown
+- **Action**: Ensure all resources (WebSocket connections, database connections) are closed cleanly when the bot is terminated (e.g., via `SIGINT`).
+
+### 4. Consistent Decimal Usage
+- **Action**: Audit all financial calculations (prices, quantities, PnL, spreads) to ensure Python's `decimal.Decimal` objects are used consistently to prevent floating-point inaccuracies.
+
+## V. Testing
+
+### 1. Expand Unit Tests
+- **Action**: Create/enhance unit tests for:
+    - `clients/bybit_client.py`: Mock `pybit` library to test API call wrappers, error handling, and WebSocket data processing.
+    - `order_management/order_manager.py`: Test order placement, cancellation, and amendment logic.
+    - `risk_management/risk_manager.py`: Test position sizing, emergency stop, and PnL calculation logic.
+    - `persistence/state_manager.py`: Test state loading/saving and database interactions (using an in-memory SQLite for tests).
+    - `strategies/` (all concrete strategies): Test indicator calculations and signal generation logic under various market conditions.
+    - `utils/helpers.py`: Test utility functions (e.g., rounding, precision handling).
+
+### 2. Create Integration Tests
+- **Action**: Develop integration tests that simulate the interaction between `TradingBot` and its core components (mocking only the external Bybit API calls) to verify end-to-end trading flows.
+- **Action**: Use a test framework like `pytest` with `pytest-asyncio` for asynchronous tests.
+  - **Code Snippet (Conceptual `pybitbot/tests/clients/test_bybit_client.py`)**:
+    ```python
+    # pybitbot/tests/clients/test_bybit_client.py
+    import pytest
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from pybitbot.clients.bybit_client import BybitClient, BybitAPIError, BybitRateLimitError
+    from pybitbot.config import Config, APIConfig
+
+    @pytest.fixture
+    def mock_config():
+        return Config(api=APIConfig(KEY="test", SECRET="test", TESTNET=True))
+
+    @pytest.fixture
+    def bybit_client(mock_config):
+        with patch('pybit.unified_trading.HTTP') as mock_http_class,
+             patch('pybit.unified_trading.WebSocket') as mock_ws_class:
+            client = BybitClient(mock_config)
+            client.session = mock_http_class.return_value # Ensure session is the mock instance
+            client.ws_client = mock_ws_class.return_value # Ensure ws_client is the mock instance
+            yield client
+
+    @pytest.mark.asyncio
+    async def test_get_klines_success(bybit_client):
+        bybit_client.session.get_kline.return_value = {
+            "retCode": 0,
+            "result": {"list": [["1678886400000", "30000", "30100", "29900", "30050", "100", "1000"]]}
+        }
+        klines = await bybit_client.get_klines("BTCUSDT", "1", 1)
+        assert len(klines) == 1
+        assert klines[0][4] == "30050" # Close price
+
+    @pytest.mark.asyncio
+    async def test_get_klines_rate_limit_error(bybit_client):
+        bybit_client.session.get_kline.side_effect = BybitRateLimitError("Too many requests")
+        with pytest.raises(BybitRateLimitError):
+            await bybit_client.get_klines("BTCUSDT", "1", 1)
+    ```
+
+## VI. Logging & Monitoring
+
+### 1. Standardize Logging
+- **Action**: Implement a consistent logging approach across all modules using Python's `logging` module, configured via `pybitbot/utils/logger.py`.
+
+### 2. Manage Log Files
+- **Action**: Ensure log files are properly rotated and old logs are archived or cleaned up to prevent excessive disk usage.
+
+### 3. Basic Monitoring
+- **Action**: Implement basic in-memory tracking or output to console for key metrics like current PnL, open positions, and trade count.
+
+## VII. Documentation
+
+### 1. Update README.md
+- **Action**: Update `pybitbot/README.md` to reflect the consolidated and refactored project structure, providing clear instructions for setup and running the bot.
+
+### 2. Create GEMINI.md
+- **Action**: Create a `pybitbot/GEMINI.md` with detailed architectural insights, component descriptions, and development roadmap for AI agents and new developers.

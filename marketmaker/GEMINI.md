@@ -1,103 +1,133 @@
-# Algobots/marketmaker Project Overview
+# Algobots/marketmaker - Bybit Market Making Bot (GEMINI.md)
 
-This project, `Algobots/marketmaker`, is a comprehensive suite of Python tools designed for developing, backtesting, optimizing, and running a market-making bot on the Bybit exchange. It leverages the Pybit library for interacting with Bybit's V5 API, utilizing both REST and WebSocket protocols for real-time market data, order management, and position tracking.
+This document provides a comprehensive overview of the `Algobots/marketmaker` project, detailing its architecture, components, technical considerations, and development roadmap. It is intended for AI agents and developers seeking an in-depth understanding of the project.
 
-## Core Components
+## 1. Project Overview
 
-### 1. Market Maker Core (`market_maker.py`)
-This is the heart of the market-making bot. It encapsulates the core logic for quoting, order management, and position protection.
+The `Algobots/marketmaker` project is a sophisticated suite of Python tools designed for automated market making on the Bybit exchange. It aims to provide a robust, configurable, and optimizable framework for deploying market-making strategies, leveraging real-time data and advanced backtesting capabilities.
 
-- **BybitRest**: Handles all HTTP REST API interactions, including fetching instrument information, placing/amending/canceling batch orders, and setting trailing stops or stop-loss orders.
-- **PublicWS**: Manages public WebSocket connections to receive real-time order book data (depth 50) and calculate mid-price and microprice.
-- **PrivateWS**: Manages private WebSocket connections for real-time updates on positions, orders, and executions.
-- **Quoter**: Computes optimal bid and ask prices based on configured spreads and current market conditions. It uses batch endpoints to efficiently place and manage limit orders (PostOnly by default).
-- **Protection**: Implements risk management strategies, including trailing stop-loss and break-even stop-loss, which activate based on position PnL.
-- **MarketMaker (formerly App)**: The main class orchestrating the market-making operations, connecting all sub-components and running the main loop for quoting and protection.
+**Key Objectives:**
+-   Implement efficient and reliable market-making strategies.
+-   Provide a flexible and extensible architecture for strategy development and testing.
+-   Enable comprehensive backtesting and hyperparameter optimization.
+-   Ensure high precision in financial calculations.
+-   Maintain robust connectivity and error handling with the Bybit V5 API.
 
-### 2. Configuration (`config.py`)
-This file defines all configurable parameters for the bot, loaded from environment variables (via `.env`) and set as dataclass attributes. It includes:
+## 2. Architecture
 
-- **API Settings**: `API_KEY`, `API_SECRET`, `TESTNET`.
-- **Trading Parameters**: `SYMBOL`, `CATEGORY`.
-- **Market Making Parameters**: `BASE_SPREAD_BPS`, `MIN_SPREAD_TICKS`, `QUOTE_SIZE`, `REPLACE_THRESHOLD_TICKS`, `REFRESH_MS`, `POST_ONLY`.
-- **Inventory/Risk**: `MAX_POSITION`, `MAX_NOTIONAL`.
-- **Protection Mode**: `PROTECT_MODE` ("trailing", "breakeven", "off"), `TRAILING_DISTANCE`, `TRAILING_ACTIVATE_PROFIT_BPS`, `BE_TRIGGER_BPS`, `BE_OFFSET_TICKS`.
-- **Logging**: `LOG_EVERY_SECS`, `WS_PING_SECS`.
-- **Backtester Settings**: `INITIAL_CAPITAL`, `START_DATE`, `END_DATE`, `INTERVAL`, `MAKER_FEE`, `TAKER_FEE`, `SLIPPAGE`, `USE_ORDERBOOK`, `ORDERBOOK_DEPTH`, `USE_WEBSOCKET`.
+The project follows a modular architecture, with distinct components handling specific responsibilities. The core `MarketMaker` orchestrates these components.
 
-### 3. Main Execution (`main.py`)
-This is the primary entry point for running the bot. It determines whether to run the market maker in live mode (using WebSockets) or in backtest mode.
+```mermaid
+graph TD
+    A[main.py - Entry Point] --> B(MarketMaker - Orchestration)
+    B --> C{clients/bybit_rest.py - REST API}
+    B --> D{clients/public_ws.py - Public WS}
+    B --> E{clients/private_ws.py - Private WS}
+    B --> F{core/quoter.py - Quoting Logic}
+    B --> G{core/protection.py - Risk Management}
+    B --> H{strategies/ - Market Making Strategy}
+    I[config.py - Configuration] --> B
+    I --> C
+    I --> D
+    I --> E
+    I --> F
+    I --> G
+    J[backtesting/backtester.py - Backtesting Framework] --> B
+    K[optimization/optimizer.py - Optimization Tools] --> B
+    C -- API Calls --> L[Bybit Exchange]
+    D -- Real-time Data --> L
+    E -- Real-time Updates --> L
+```
 
-- **Live Mode**: Instantiates `MarketMaker` and calls its `run()` method, which handles real-time operations.
-- **Backtest Mode**: Configures `BacktestParams` and uses `MarketMakerBacktester` to simulate the bot's performance over historical data.
+**Core Components:**
 
-## Backtesting Framework (`backtest.py`)
-This module provides a robust framework for backtesting the `MarketMaker` bot against historical kline data from Bybit.
+### 2.1. `main.py`
+-   **Role**: The primary entry point for the bot. It initializes the `MarketMaker` and determines whether to run in live mode (with WebSockets) or backtest mode.
 
-- **BacktestParams**: Dataclass defining parameters for a backtest run (symbol, interval, date range, fees, fill model).
-- **BybitHistoricalData**: Fetches historical klines from Bybit's V5 API, handling pagination.
-- **FillEngine**: Simulates order fills within historical candles, considering intra-candle price paths and volume capacity. It also emulates SL/TP based on `Config` parameters.
-- **MarketMakerBacktester**: Orchestrates the backtesting process, running the `MarketMaker` logic step-by-step over historical data and calculating performance metrics like net PnL, max drawdown, and Sharpe ratio.
+### 2.2. `market_maker.py` (Consolidated)
+-   **Role**: The central orchestrator of the market-making operations. It connects all sub-components and runs the main loop for quoting, order management, and protection.
+-   **Key Responsibilities**:
+    -   Initialize and manage `BybitRest`, `PublicWS`, `PrivateWS` clients.
+    -   Utilize `Quoter` to compute and place optimal bid/ask orders.
+    -   Employ `Protection` for risk management (e.g., trailing stop-loss).
+    -   Integrate with a specific `MarketMakingStrategy` to adapt behavior.
 
-## Optimization Tools
+### 2.3. `clients/` (e.g., `bybit_rest.py`, `public_ws.py`, `private_ws.py`)
+-   **Role**: Encapsulates all interactions with the Bybit V5 API.
+-   **`bybit_rest.py`**: Handles HTTP REST API calls (e.g., fetching instrument info, placing/amending/canceling orders).
+-   **`public_ws.py`**: Manages public WebSocket connections for real-time market data (order book, klines).
+-   **`private_ws.py`**: Manages private WebSocket connections for real-time updates on positions, orders, and executions.
 
-### 1. Optuna-based Optimizers (`bot_optimizer.py`, `profit_optimizer.py`)
-These modules use the `optuna` library for hyperparameter optimization of the market maker bot.
+### 2.4. `core/` (e.g., `quoter.py`, `protection.py`)
+-   **Role**: Contains core market-making logic.
+-   **`quoter.py`**: Computes optimal bid and ask prices based on configured spreads, market conditions, and inventory. Responsible for placing and managing limit orders.
+-   **`protection.py`**: Implements risk management strategies, such as trailing stop-loss and break-even stop-loss, activating based on position PnL.
 
-- **`bot_optimizer.py`**: A simpler Optuna integration that suggests parameters for spreads, order management, risk, and volatility, then runs backtests to optimize for net PnL.
-- **`profit_optimizer.py`**: A more advanced Optuna optimizer. It pre-fetches historical data once, allows tuning of a wider range of market maker parameters (including detailed spread, order ladder, inventory, volatility, and risk settings), and optimizes based on net PnL (with risk penalty) or Sharpe ratio. It supports parallel execution and saves detailed trial results and equity curves.
+### 2.5. `strategies/`
+-   **Role**: Houses different market-making strategy implementations. These strategies define how quotes are generated and positions are managed based on various market conditions.
 
-### 2. Grid Search Optimizer (`optimizer.py`)
-This module provides a generic grid search optimization approach.
+### 2.6. `config.py`
+-   **Role**: Defines all configurable parameters for the bot. It loads settings from environment variables and uses Python `dataclasses` for structured configuration.
+-   **Key Features**:
+    -   API settings (`API_KEY`, `API_SECRET`, `TESTNET`).
+    -   Trading parameters (`SYMBOL`, `CATEGORY`).
+    -   Market-making parameters (`BASE_SPREAD_BPS`, `QUOTE_SIZE`, `REPLACE_THRESHOLD_TICKS`).
+    -   Risk parameters (`MAX_POSITION`, `PROTECT_MODE`).
+    -   Backtester settings.
 
-- **Optimizer**: Iterates through predefined combinations of parameters, runs a backtest for each, and identifies the best-performing sets based on PnL and return percentage.
+### 2.7. `backtesting/` (e.g., `backtester.py`, `fill_engine.py`, `historical_data.py`)
+-   **Role**: Provides a robust framework for backtesting the `MarketMaker` bot.
+-   **`backtester.py`**: Orchestrates the backtesting process, running the `MarketMaker` logic over historical data and calculating performance metrics.
+-   **`fill_engine.py`**: Simulates order fills within historical candles, considering price paths and volume capacity.
+-   **`historical_data.py`**: Fetches and manages historical kline data from Bybit.
 
-## Live Data & Simulation
+### 2.8. `optimization/` (e.g., `optimizer.py`, `profit_optimizer.py`)
+-   **Role**: Contains tools for hyperparameter optimization of the market maker bot.
+-   Utilizes libraries like `optuna` to suggest and test various parameter combinations, optimizing for metrics like net PnL or Sharpe ratio.
 
-### 1. Live Data Generator (`live_data_generator.py`)
-This module provides a way to stream real-time market data.
+### 2.9. `statistics.py`
+-   **Role**: Provides functionality to calculate and display various trading statistics.
 
-- **LiveDataGenerator**: Uses Pybit WebSockets to subscribe to order book and trade streams, putting incoming messages into a queue for consumption.
+## 3. Key Technologies
 
-### 2. Live Trader (`live_trader.py`)
-This file appears to be an entry point for a live trading *simulation*.
+-   **Python 3.8+**: Primary development language.
+-   **`pybit`**: Python client for Bybit V5 API.
+-   **`pandas`, `numpy`**: For data manipulation and numerical operations.
+-   **`optuna`**: For hyperparameter optimization.
+-   **`python-dotenv`**: For loading environment variables.
+-   **`asyncio`**: For asynchronous operations, especially with WebSockets.
+-   **`dataclasses`**: For structured configuration.
+-   **`pytest`**: Python testing framework.
+-   **`unittest.mock`**: For mocking dependencies in tests.
 
-- It uses `LiveDataGenerator` to feed real-time data into a `LiveSimulator` (which is not defined in the provided files, suggesting it might be a separate or missing component).
+## 4. Current Status & TODOs
 
-## Utilities & Statistics
+The project is functional but has significant areas for improvement, as detailed in `Algobots/marketmaker/TODO.txt`. Key areas include:
 
-### 1. Basic Profit Optimizer (`basic_profit_optimizer.py`)
-This file contains a generic linear programming example using `pulp` for profit optimization. It's a standalone example and not directly integrated with the market maker bot's parameters.
+-   **Consolidation**: Merging numerous `market_maker` variants into a single, modular codebase.
+-   **Refactoring**: Extracting core components into dedicated modules (`clients/`, `core/`, `strategies/`).
+-   **Configuration**: Unifying configuration management into a single, robust system.
+-   **Testing**: Expanding unit and integration test coverage for all new and refactored components.
+-   **Error Handling**: Enhancing API error handling and implementing retry logic.
+-   **Documentation**: Improving docstrings and type hinting across the codebase.
 
-### 2. Statistics (`statistics.py`)
-This module provides functionality to calculate and display various trading statistics for the market maker bot, such as runtime, total trades, current position, PnL (realized and unrealized), average spread, and volatility.
+Refer to `Algobots/marketmaker/TODO.txt` for a detailed list of tasks and code snippets.
 
-## Dependencies
+## 5. Testing Strategy
 
-Key Python libraries used in this project include:
-- `pybit`: For Bybit API interaction (REST and WebSockets).
-- `pandas`, `numpy`: For data manipulation and numerical operations, especially in backtesting.
-- `optuna`: For hyperparameter optimization.
-- `python-dotenv`: For loading environment variables.
-- `pulp`: For linear programming (in `basic_profit_optimizer.py`).
-- `asyncio`: For asynchronous operations, particularly with WebSockets.
+-   **Unit Tests**: Located in `Algobots/marketmaker/tests/`. Uses `pytest` and `unittest.mock` to test individual modules in isolation (e.g., `bybit_rest.py`, `quoter.py`, `fill_engine.py`). Mocks external dependencies (like `pybit` API calls) to ensure tests are fast and reliable.
+-   **Integration Tests**: Planned tests will simulate interactions between core components (e.g., `MarketMaker` with `Quoter` and `Protection`), mocking only the external Bybit API layer.
+-   **Backtesting Validation**: The backtesting framework itself serves as a form of integration testing for strategies against historical data.
 
-## Setup & Usage
+## 6. Adherence to Pyrmethus's Codex
 
-1.  **Clone the repository**.
-2.  **Install dependencies**: `pip install -r requirements.txt` (assuming `requirements.txt` lists all necessary packages).
-3.  **Configure**: Create a `.env` file in the project root with your `BYBIT_API_KEY`, `BYBIT_API_SECRET`, and `BYBIT_TESTNET` (e.g., `BYBIT_TESTNET=True` for testnet).
-4.  **Run Live Bot**: Execute `python main.py` with `USE_WEBSOCKET = True` in `config.py`.
-5.  **Run Backtest**: Execute `python main.py` with `USE_WEBSOCKET = False` in `config.py` and configure `START_DATE`, `END_DATE`, etc., in `config.py`.
-6.  **Optimize Parameters**: Run `python bot_optimizer.py` or `python profit_optimizer.py` (configure arguments as needed).
+This project strives to align with the principles outlined in Pyrmethus's Expanded Codex:
 
-## Future Enhancements/Considerations
+-   **Readability & Maintainability**: Strong emphasis on type hinting, comprehensive docstrings, and consistent naming conventions. The consolidation efforts directly address code duplication.
+-   **Robustness & Error Handling**: Focus on granular API error handling, retry mechanisms, and graceful shutdowns. Consistent use of `Decimal` for financial calculations is a core tenet.
+-   **Modularity & Reusability**: The refactoring plan prioritizes extracting components into separate modules with clear API boundaries, promoting dependency injection.
+-   **Efficiency & Performance**: Backtesting performance is a consideration, with potential for `numba` integration. Optimization tools are central to the project.
+-   **Security**: API keys are loaded from environment variables, adhering to best practices.
+-   **Testing**: A dedicated `tests` directory and `pytest` setup are in place, with a clear roadmap for expanded test coverage.
 
-- **Complete `LiveSimulator`**: Implement the `LiveSimulator` for a full live trading simulation environment.
-- **Advanced Risk Management**: Implement more sophisticated risk controls (e.g., daily loss limits, circuit breakers).
-- **Layered Quoting**: Enhance the `Quoter` to support multiple price levels for bids and asks, as hinted in `config.py`'s `ORDER_LEVELS`.
-- **Dynamic Parameter Adjustment**: Implement logic to dynamically adjust market-making parameters (spreads, quantities) based on real-time market volatility or inventory skew.
-- **Logging & Monitoring**: Improve logging detail and add external monitoring/alerting capabilities.
-- **Error Handling**: Enhance error handling and reconnection logic for robustness.
-
-This `GEMINI.md` provides a comprehensive overview of the `Algobots/marketmaker` project, its components, and functionalities. It serves as a guide for understanding, using, and further developing the market-making bot and its associated tools.
+This `GEMINI.md` will be updated as the project evolves, reflecting new features, architectural changes, and completed tasks from the `TODO.txt`.
