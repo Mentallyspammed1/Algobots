@@ -1,0 +1,150 @@
+# TODO.txt for /home/user/Algobots/
+
+## Directory Overview
+This is the root directory of the Algobots project, containing core components for a Bybit trading bot. It includes the main bot logic, configuration, indicator calculations, and strategy definitions.
+
+## Relevant Code Files
+- PSG.py: Main bot implementation (Pyrmethus's Ultra Scalper Bot).
+- main.py: Entry point for the trading bot.
+- config.py: Centralized configuration for API credentials, trading parameters, and strategy settings.
+- indicators.py: Contains functions for calculating various technical indicators (ATR, StochRSI, SMA, Ehlers Fisher, Super Smoother, Supertrend, Fibonacci Pivots, etc.).
+- strategy.py: Placeholder for entry and exit signal generation logic.
+- Other Python files: algobots_types.py, bot_a.py, bot_logger.py, bybit_api.py, bybit_trader.py, chanexit.py, color_codex.py, marketmake.py, Ob.py, Obv1.py, order_manager.py, PivotScalper.py, pscalp2.1.py, pscalp2.py, pyrmtest.py, supertrendbot.py, trade_metrics.py, unitrader.py, utils.py, Whalebot_v1.py, whalebot.py, whaleboty.py.
+- Shell scripts: gfix.sh, pyrmsetv1.sh.
+
+## Extracted Code Snippets
+
+### From PSG.py
+```python
+class PyrmethusBot:
+    """
+    The core trading bot logic, encapsulating state, API interactions,
+    and trading decisions. It manages its own state, retrieves market data,
+    generates trading signals, and executes orders.
+    """
+    def __init__(self):
+        self.bot_logger = setup_logging()
+        self.trade_metrics = TradeMetrics()
+        self.bybit_client: BybitContractAPI | None = None
+
+        # --- Bot State Variables (using Decimal for precision) ---
+        # `inventory` is the single source of truth for the bot's position.
+        # >0 for long, <0 for short, 0 for no position.
+        self.inventory: Decimal = Decimal('0')
+        self.entry_price: Decimal = Decimal('0') # Average entry price of the current open position
+        self.unrealized_pnl: Decimal = Decimal('0') # Current unrealized PnL of the open position
+```
+
+```python
+    async def run(self):
+        """Main execution loop for the trading bot."""
+        self.bot_logger.info("Starting Pyrmethus's Ultra Scalper Bot.")
+
+        print(f"{PYRMETHUS_PURPLE}{COLOR_BOLD}\n🚀 Pyrmethus's Ultra Scalper Bot - Awakened{COLOR_RESET}")
+        print(f"{PYRMETHUS_PURPLE}{COLOR_BOLD}=========================================={COLOR_RESET}")
+        print(f"{PYRMETHUS_ORANGE}\n⚡ Initializing scalping engine and calibrating sensors...{COLOR_RESET}")
+```
+
+### From main.py
+```python
+def main():
+    """
+    Initializes and runs the trading bot.
+    """
+    logger.info("Initializing trading bot...")
+    try:
+        trader = BybitTrader(strategy_path=STRATEGY_FILE)
+        trader.start()
+    except Exception as e:
+        logger.critical(f"Failed to start the bot: {e}", exc_info=True)
+```
+
+### From config.py
+```python
+# --- API Configuration ---
+API_KEY = os.getenv("BYBIT_API_KEY", "YOUR_API_KEY_HERE")
+API_SECRET = os.getenv("BYBIT_API_SECRET", "YOUR_API_SECRET_HERE")
+TESTNET = os.getenv("BYBIT_TESTNET", "True").lower() in ('true', '1', 't')
+BYBIT_API_ENDPOINT = "https://api-testnet.bybit.com" if TESTNET else "https://api.bybit.com"
+```
+
+### From indicators.py
+```python
+def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
+    """
+    Calculates the Average True Range (ATR), a measure of market volatility.
+    """
+    if not all(col in df.columns for col in ['high', 'low', 'close']):
+        indicators_logger.error(Fore.RED + "DataFrame must contain 'high', 'low', 'close' columns for ATR." + Style.RESET_ALL)
+        return pd.Series(dtype='object')
+```
+
+```python
+def handle_websocket_kline_data(df: pd.DataFrame, message: dict[str, Any]) -> pd.DataFrame:
+    """
+    Processes one or more kline data messages from a WebSocket stream, ensuring robustness.
+    """
+    dtype_mapping = {
+        'open': object,
+        'high': object,
+        'low': object,
+        'close': object,
+        'volume': object,
+    }
+```
+
+### From strategy.py
+```python
+def generate_signals(
+    klines_df: pd.DataFrame,
+    pivot_resistance_levels: dict[str, Decimal],
+    pivot_support_levels: dict[str, Decimal],
+    active_bull_obs: list[dict[str, Any]],
+    active_bear_obs: list[dict[str, Any]],
+    stoch_k_period: int,
+    stoch_d_period: int,
+    overbought: int,
+    oversold: int,
+    use_crossover: bool,
+    enable_fib_pivot_actions: bool,
+    fib_entry_confirm_percent: float
+) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
+    """
+    Placeholder for generating entry signals based on market data and indicators.
+    This function needs to be implemented with actual trading logic.
+    """
+    return []
+```
+
+### gfix.sh
+-   **Task**: Update `gfix.sh` to use `nvm` (Node Version Manager) for more flexible Node.js version management instead of `n`.
+-   **Task**: Add a check for `termux-api` package and app installation if SMS alerts are intended to be used by other Python scripts.
+-   **Task**: Enhance error handling to provide more specific guidance for common installation failures (e.g., network issues, permission problems).
+-   **Test Suggestion**: Create a test script that runs `gfix.sh` in a clean Termux environment (or a Docker container simulating Termux) and verifies successful installation of Node.js, NPM, NDK, and Gemini CLI.
+
+## General Coding Practice Suggestions (Alchemist's Codex)
+
+### Readability & Maintainability
+-   **Type Hinting**: Ensure all functions and variables consistently use type hints for improved clarity and static analysis. (Already well-applied in many files, but review for full coverage).
+-   **Consistent Naming**: Verify consistent naming conventions across all files (e.g., `snake_case` for functions/variables, `PascalCase` for classes).
+-   **Avoid Magic Numbers/Strings**: Replace hardcoded values (e.g., `10`, `20`, `80` for indicator levels) with named constants from `config.py` or within the relevant module.
+-   **Docstrings**: Ensure all functions and classes have clear, concise docstrings explaining their purpose, arguments, and return values.
+
+### Robustness & Error Handling
+-   **Specific Exception Handling**: Catch specific exceptions rather than broad `Exception` types where possible, especially in API interactions and data processing.
+-   **Input Validation**: Implement robust validation for all inputs, especially data coming from external sources (e.g., WebSocket messages, API responses).
+-   **Decimal Precision**: Continue to use `Decimal` for all financial calculations to avoid floating-point inaccuracies. (Already well-implemented).
+-   **Resource Cleanup**: Ensure proper cleanup of resources (e.g., WebSocket connections) on graceful shutdown or error.
+
+### Modularity & Reusability
+-   **Single Responsibility Principle**: Review modules and functions to ensure each has a single, well-defined responsibility.
+-   **Clear Public API**: Explicitly define what functions/classes are part of a module's public API.
+-   **Dependency Injection**: Consider passing dependencies (e.g., `bybit_client`, `bot_logger`) to classes/functions rather than importing them globally where appropriate, to improve testability and flexibility.
+
+### Efficiency & Performance
+-   **Profiling**: Use profiling tools to identify performance bottlenecks, especially in indicator calculations or high-frequency loops.
+-   **Asynchronous Operations**: Leverage `asyncio` effectively for all I/O-bound tasks (API calls, WebSocket handling) to prevent blocking. (Already well-applied).
+
+### Security
+-   **API Key Handling**: Ensure API keys and secrets are loaded securely from environment variables and never hardcoded. (Already implemented in `config.py`).
+

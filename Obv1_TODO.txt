@@ -1,0 +1,84 @@
+# TODO.txt for /home/user/Algobots/Obv1.py
+
+## File Overview
+`Obv1.py` implements a trading bot named "Pyrmethus" that specializes in scalping based on Order Book Volume (OBV) analysis and Volume Weighted Average Price (VWAP). It leverages `ccxt` for exchange interactions, loads configuration from a YAML file, and includes functionalities for order book analysis, signal generation, dynamic order placement, position management, and backtesting.
+
+## Key Components & Code Snippets
+
+### Configuration (`load_config`)
+```python
+    def load_config(self, config_file):
+        """Loads configuration from YAML file."""
+        # ...
+```
+-   **Task**: Implement a default configuration within `load_config` so that the bot can run even if `config.yaml` is missing, instead of raising `FileNotFoundError`.
+-   **Task**: Add validation for configuration parameters (e.g., `stop_loss_percentage`, `take_profit_percentage` should be positive floats).
+-   **Test Suggestion**: Write unit tests for `load_config` to verify:
+    *   Correct loading of a valid YAML file.
+    *   Graceful handling of `FileNotFoundError` (once default config is implemented).
+    *   Error handling for `yaml.YAMLError`.
+
+### API Interaction (`fetch_order_book`, `calculate_position_size`, `place_order`, `close_position`, `cancel_order`, `get_open_orders`)
+```python
+    def fetch_order_book(self, symbol):
+        # ...
+    def place_order(self, symbol, side, order_type, qty, price=None, stop_loss_price=None, take_profit_price=None):
+        # ...
+```
+-   **Task**: Implement retry logic with exponential backoff for all `ccxt` API calls to handle transient network issues and rate limits.
+-   **Task**: Ensure all financial calculations use `Decimal` for precision instead of `float` (e.g., in `calculate_position_size`, `place_order`).
+-   **Task**: Refine `place_order` to handle order precision (price and quantity) dynamically based on exchange rules.
+-   **Test Suggestion**: Mock `self.exchange` methods (e.g., `fetch_order_book`, `fetch_balance`, `fetch_ticker`, `create_order`, `fetch_positions`, `cancel_order`, `fetch_open_orders`) and write unit tests for each API interaction function to verify:
+    *   Correct parameter passing.
+    *   Proper handling of successful and error responses (e.g., `ccxt.NetworkError`, `ccxt.ExchangeError`, `ccxt.InsufficientFunds`).
+
+### Order Book Analysis (`calculate_vwap`, `analyze_order_book`)
+```python
+    def calculate_vwap(self, orders, depth):
+        # ...
+    def analyze_order_book(self, order_book):
+        # ...
+```
+-   **Task**: Enhance `analyze_order_book` to consider different depths of the order book or weighted averages of bids/asks for more nuanced analysis.
+-   **Task**: Implement a real-time order book update mechanism using WebSockets instead of polling via REST API for `fetch_order_book`.
+-   **Test Suggestion**: Write unit tests for `calculate_vwap` with various order lists and depths.
+-   **Test Suggestion**: Write unit tests for `analyze_order_book` with various order book structures (including empty or malformed) to verify correct calculations and error handling.
+
+### Signal Generation (`generate_signals`)
+```python
+    def generate_signals(self, analysis):
+        """Generates trading signals based on order book analysis."""
+        # ...
+```
+-   **Task**: Refine the signal generation logic to incorporate more dynamic thresholds for VWAP and order book ratio, possibly adapting to market volatility.
+-   **Task**: Add a cooldown mechanism to prevent rapid, successive trades based on fleeting signals.
+-   **Test Suggestion**: Write unit tests for `generate_signals` with various `analysis` inputs to test different market conditions and ensure correct signal output (`long`, `short`, `hold`).
+
+### Backtesting (`backtest`)
+```python
+    def backtest(self, symbol, start_date, end_date):
+        """Backtests the strategy using historical data and calculates performance metrics."""
+        # ...
+```
+-   **Task**: Enhance the backtesting engine to support more realistic order execution models (e.g., slippage, partial fills, maker/taker fees).
+-   **Task**: Implement more comprehensive performance metrics (e.g., max drawdown, Sharpe ratio, profit factor) and display them clearly.
+-   **Task**: Allow the backtesting to use a specific strategy (e.g., by passing a strategy object) rather than the bot's live strategy.
+-   **Test Suggestion**: Write unit tests for `backtest` with mocked historical data and verify the calculated performance metrics.
+
+### Main Execution Flow (`main` method in `Pyrmethus` class, and top-level `main` function)
+```python
+    def main(self, symbol):
+        # ...
+def main():
+    # ...
+```
+-   **Task**: Implement state persistence for the bot (e.g., `position`, trade history) to allow for seamless restarts.
+-   **Task**: Add a graceful shutdown mechanism to ensure all open positions are managed before exiting.
+-   **Task**: Implement comprehensive logging for all bot activities, including data fetching, signal generation, and trade execution.
+-   **Test Suggestion**: Write an integration test for the `main` function that mocks API calls and simulates market data to verify the end-to-end flow of the bot.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Modularity**: Consider further separating concerns (e.g., API interaction, order book analysis, signal generation) into distinct modules or classes.
+-   **Error Handling**: Improve error handling throughout the bot to provide more informative messages and prevent crashes.

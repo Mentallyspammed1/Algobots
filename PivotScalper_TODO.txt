@@ -1,0 +1,98 @@
+# TODO.txt for /home/user/Algobots/PivotScalper.py
+
+## File Overview
+`PivotScalper.py` is a scalping bot designed for the Bybit exchange, leveraging pivot point detection and Stochastic RSI for trade signal generation. It includes features for time synchronization on Termux, interactive configuration, direct Bybit API communication, and basic order execution.
+
+## Key Components & Code Snippets
+
+### Time Synchronization (`synchronize_time`)
+```python
+def synchronize_time():
+    """Sync system time using NTP in Termux environment"""
+    # ...
+```
+-   **Task**: Implement a more robust time synchronization mechanism that periodically checks and corrects time drift, especially crucial for API requests.
+-   **Task**: Add logging for time synchronization attempts and results.
+-   **Test Suggestion**: Mock `subprocess.run` and test `synchronize_time` for successful sync, failed sync, and scenarios with small/large time offsets.
+
+### Configuration & User Input (`get_user_input`)
+```python
+def get_user_input(prompt, default, input_type=float, validation=None):
+    """Generic prompt with validation and default handling"""
+    # ...
+```
+-   **Task**: Externalize configuration parameters into a `config.json` or `config.yaml` file to avoid requiring user input on every run and to enable automated deployment.
+-   **Task**: Implement more comprehensive validation for user inputs (e.g., `symbol` format, `interval` validity).
+-   **Test Suggestion**: Write unit tests for `get_user_input` to verify correct input parsing, default handling, and validation.
+
+### API Interaction (`generate_signature`, `bybit_request`, `fetch_klines`)
+```python
+def generate_signature(secret, params):
+    """HMAC-SHA256 signature with parameter validation"""
+    # ...
+def bybit_request(method, endpoint, params=None, data=None):
+    """Generic authenticated request handler"""
+    # ...
+def fetch_klines(symbol, interval, limit=200):
+    """Fetch OHLCV data from Bybit"""
+    # ...
+```
+-   **Task**: Implement retry logic with exponential backoff for `bybit_request` to handle transient network issues and rate limits.
+-   **Task**: Add proper error handling for `bybit_request` to log specific Bybit error codes and messages.
+-   **Task**: Ensure all API calls use `Decimal` for financial calculations to avoid floating-point inaccuracies.
+-   **Test Suggestion**: Mock `requests.get` and `requests.post` and test `bybit_request` for various scenarios: successful response, API errors, network errors, and timeouts.
+-   **Test Suggestion**: Test `generate_signature` with known parameters and secret to ensure correct HMAC SHA256 generation.
+-   **Test Suggestion**: Test `fetch_klines` with mocked data to ensure correct DataFrame creation, type conversion, and chronological ordering.
+
+### Pivot Detection (`detect_pivot_points`)
+```python
+def detect_pivot_points(df, pivot_left=2, pivot_right=1):
+    """Detect pivot points for scalping strategy"""
+    # ...
+```
+-   **Task**: Enhance `detect_pivot_points` to identify different types of pivots (e.g., major vs. minor) or to use more adaptive lookback periods.
+-   **Test Suggestion**: Write unit tests for `detect_pivot_points` using small, known datasets with clear pivot points and verifying the output `resistance` and `support` lists.
+
+### Signal Generation (`generate_signals`)
+```python
+def generate_signals(df, resistance, support, stoch_k=14, stoch_d=3):
+    """Generate trading signals with StochRSI confirmation"""
+    # ...
+```
+-   **Task**: Refine the signal generation logic to incorporate more sophisticated entry and exit conditions, possibly considering volume confirmation or price action around pivots.
+-   **Task**: Add a cooldown mechanism to prevent rapid, successive trades based on fleeting signals.
+-   **Test Suggestion**: Write unit tests for `generate_signals` with mocked `df`, `resistance`, and `support` data to test different market conditions and ensure correct signal output.
+
+### Order Management (`execute_trade`)
+```python
+def execute_trade(signal, symbol, quantity):
+    """Execute trade with risk management"""
+    # ...
+```
+-   **Task**: Implement immediate Stop Loss (SL) and Take Profit (TP) order placement after a market order is filled. The current `pass` placeholder is a critical missing feature.
+-   **Task**: Handle order precision (price and quantity) dynamically based on exchange rules.
+-   **Task**: Implement a mechanism to track open positions and manage their SL/TP (e.g., trailing stop, break-even).
+-   **Test Suggestion**: Mock `bybit_request` and test `execute_trade` for successful order placement and error handling.
+
+### Main Execution Flow
+```python
+if __name__ == "__main__":
+    # ...
+    while True:
+        try:
+            # ...
+        except KeyboardInterrupt:
+            # ...
+        except Exception as e:
+            # ...
+```
+-   **Task**: Implement state persistence for the bot (e.g., open positions, trade history) to allow for seamless restarts.
+-   **Task**: Add a graceful shutdown mechanism to ensure all open positions are managed before exiting.
+-   **Task**: Implement comprehensive logging for all bot activities, including data fetching, signal generation, and trade execution.
+-   **Test Suggestion**: Write an integration test for the main loop that mocks API calls and simulates market data to verify the end-to-end flow of the bot.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Modularity**: Consider refactoring the bot into a class-based structure to encapsulate state and methods, improving organization and testability.
+-   **Error Handling**: Improve error handling throughout the bot to provide more informative messages and prevent crashes.

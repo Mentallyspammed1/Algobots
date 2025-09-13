@@ -1,0 +1,119 @@
+# TODO.txt for /home/user/Algobots/chanexit.py
+
+## File Overview
+`chanexit.py` implements a Bybit scalping bot that leverages Heikin Ashi candles, Zero Lag Simple Moving Average (ZLSMA), and Chandelier Exit (CE) for generating trading signals. It features robust position sizing, dynamic trailing stops, a circuit breaker for consecutive losses, and comprehensive logging and trade history management.
+
+## Key Components & Code Snippets
+
+### Configuration & Initialization (`BybitScalpingBot.__init__`, `_initialize_bybit_client`)
+```python
+class BybitScalpingBot:
+    def __init__(self, api_key: str = None, api_secret: str = None, testnet: bool = True, ...):
+        # ...
+    def _initialize_bybit_client(self):
+        """Initializes the Bybit API client and validates connectivity."""
+        # ...
+```
+-   **Task**: Externalize the bot's configuration parameters into a separate `config.yaml` or `config.json` file to allow for easier modification and management without altering the code.
+-   **Task**: Implement more robust validation for all configuration parameters (e.g., `take_profit_percent`, `stop_loss_percent` should be positive).
+-   **Test Suggestion**: Write unit tests for `_initialize_bybit_client` to verify:
+    *   Correct initialization of `BybitV5` client.
+    *   Proper handling of missing API keys.
+    *   Successful connection and balance parsing.
+    *   Error handling for API connection failures.
+
+### Data Structures (`Position`, `Signal`)
+```python
+@dataclass
+class Position:
+    # ...
+@dataclass
+class Signal:
+    # ...
+```
+-   **Task**: Consider adding `Decimal` types for all financial fields in `Position` and `Signal` dataclasses to ensure precision in calculations, similar to `pscalp2.py`.
+-   **Test Suggestion**: Write unit tests for `Position.unrealized_pnl` and `Position.pnl_percentage` with various entry/current prices and quantities.
+
+### Data Fetching & Processing (`fetch_klines`, `calculate_heikin_ashi`, `calculate_zlsma`, `calculate_chandelier_exit`)
+```python
+    def fetch_klines(self) -> pd.DataFrame:
+        # ...
+    def calculate_heikin_ashi(self, df: pd.DataFrame) -> pd.DataFrame:
+        # ...
+    def calculate_zlsma(self, series: pd.Series, length: int) -> pd.Series:
+        # ...
+    def calculate_chandelier_exit(self, ha_df: pd.DataFrame, period: int, multiplier: float) -> Tuple[pd.Series, pd.Series, pd.Series]:
+        # ...
+```
+-   **Task**: Implement retry logic with exponential backoff for `fetch_klines` to handle transient network issues or rate limits.
+-   **Task**: Ensure all indicator calculations handle `NaN` values and insufficient data gracefully.
+-   **Test Suggestion**: Write comprehensive unit tests for `calculate_heikin_ashi`, `calculate_zlsma`, and `calculate_chandelier_exit` using small, known datasets and verifying the output DataFrames/Series.
+
+### Signal Generation (`calculate_signal_strength`, `generate_trading_signals`)
+```python
+    def calculate_signal_strength(self, ha_df: pd.DataFrame, signal_type: str) -> float:
+        # ...
+    def generate_trading_signals(self, ha_df: pd.DataFrame, raw_df: pd.DataFrame) -> Signal:
+        # ...
+```
+-   **Task**: Refine the `calculate_signal_strength` logic to be more adaptive to market conditions and to incorporate more factors.
+-   **Task**: Enhance `generate_trading_signals` to include more sophisticated entry and exit conditions, potentially using additional indicators or price action patterns.
+-   **Test Suggestion**: Write unit tests for `calculate_signal_strength` with various HA candle characteristics.
+-   **Test Suggestion**: Write unit tests for `generate_trading_signals` with mocked `ha_df` and `raw_df` data to test different market conditions and ensure correct signal output.
+
+### Position Sizing & Order Execution (`calculate_position_size`, `place_order`, `close_position`)
+```python
+    def calculate_position_size(self, current_price: float) -> float:
+        # ...
+    def place_order(self, side: str, quantity: float, take_profit: float, stop_loss: float, current_price: float) -> Optional[str]:
+        # ...
+    def close_position(self) -> bool:
+        # ...
+```
+-   **Task**: Ensure all financial calculations use `Decimal` for precision instead of `float`.
+-   **Task**: Refine `place_order` to handle order precision (price and quantity) dynamically based on exchange rules.
+-   **Task**: Implement a mechanism to track the status of placed orders (e.g., filled, partially filled) and update the local `current_position` accordingly.
+-   **Test Suggestion**: Mock `self.client` methods and write unit tests for `calculate_position_size`, `place_order`, and `close_position` to verify:
+    *   Correct position size calculation and adherence to exchange rules.
+    *   Correct order parameters are passed to `place_order`.
+    *   Proper handling of insufficient funds or order placement failures.
+
+### Position Management & Synchronization (`update_trailing_stop`, `check_position_status`)
+```python
+    def update_trailing_stop(self, current_price: float):
+        # ...
+    def check_position_status(self):
+        """Periodically queries Bybit for active positions and synchronizes local bot state."""
+        # ...
+```
+-   **Task**: Refine `update_trailing_stop` to be more robust and to handle edge cases (e.g., rapid price movements).
+-   **Task**: Enhance `check_position_status` to use WebSocket position updates for real-time synchronization, falling back to REST only if WS data is unavailable or stale.
+-   **Test Suggestion**: Mock `self.client` methods and write unit tests for `update_trailing_stop` with various price movements and position states.
+-   **Test Suggestion**: Write integration tests for `check_position_status` that simulate exchange responses to verify correct local state synchronization.
+
+### Trade History & Performance (`save_trade_history`, `_log_trade_exit_stats`)
+```python
+    def save_trade_history(self):
+        # ...
+    def _log_trade_exit_stats(self, closed_position_data: Position, final_exit_price: float):
+        # ...
+```
+-   **Task**: Implement persistence for `total_pnl`, `total_trades`, `winning_trades`, and `consecutive_losses` to maintain statistics across bot restarts.
+-   **Task**: Add more advanced performance metrics (e.g., Sharpe Ratio, Max Drawdown, Profit Factor) to `_log_trade_exit_stats`.
+-   **Test Suggestion**: Write unit tests for `save_trade_history` to ensure correct CSV file creation and data saving.
+-   **Test Suggestion**: Write unit tests for `_log_trade_exit_stats` to verify correct PnL calculation and statistics updates.
+
+### Main Loop (`run_bot`)
+```python
+    def run_bot(self):
+        # ...
+```
+-   **Task**: Implement a graceful shutdown mechanism that ensures all open positions are managed and trade history is saved before exiting.
+-   **Task**: Add a command-line interface (CLI) for `run_bot` to allow for easier control (start/stop, dry-run, specify config file).
+-   **Test Suggestion**: Write an integration test for `run_bot` that mocks API calls and simulates market data to verify the end-to-end flow of the bot.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Error Handling**: Implement robust error handling throughout the bot to provide more informative messages and prevent crashes.
+-   **Modularity**: Consider further refactoring the code into smaller, more focused modules and classes to improve maintainability and testability.

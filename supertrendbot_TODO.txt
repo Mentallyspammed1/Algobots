@@ -1,0 +1,75 @@
+# TODO.txt for /home/user/Algobots/supertrendbot.py
+
+## File Overview
+`supertrendbot.py` implements a Supertrend-based trading bot for Bybit, incorporating EMA, Volume, and RSI as filtering and confirmation indicators. It utilizes the `pybit.unified_trading` library for API interactions and includes various position management strategies such as time-based exits, partial profit taking, adaptive stop-loss (break-even), and trailing stops.
+
+## Key Components & Code Snippets
+
+### Configuration
+```python
+API_KEY = os.environ.get("BYBIT_API_KEY")
+API_SECRET = os.environ.get("BYBIT_API_SECRET")
+TESTNET = True
+# ... other parameters
+```
+-   **Task**: Centralize all configuration parameters into a single `config.py` or `config.json` file, similar to other bots, to improve maintainability and allow for easier parameter tuning without modifying the code.
+-   **Task**: Implement robust validation for all configuration parameters (e.g., `RISK_PER_TRADE_PERCENT` should be between 0 and 100).
+-   **Test Suggestion**: Write unit tests for configuration loading (once externalized) to ensure defaults are applied and overrides work correctly.
+
+### Logging
+```python
+def log_message(message, level="INFO"):
+    """Logs messages to console and a file."""
+    # ...
+```
+-   **Task**: Replace the custom `log_message` function with Python's standard `logging` module, configured with file and console handlers, and potentially a `SensitiveFormatter` to redact API keys. This will align with other bot implementations and provide more flexible logging levels.
+-   **Test Suggestion**: Write a test for the logging setup to ensure messages are correctly formatted and written to both console and file.
+
+### API Interaction (`get_klines`, `get_account_balance`, `get_current_price`, `place_order`, `get_open_positions`, `amend_stop_loss_take_profit`)
+```python
+def get_klines(symbol, interval, limit=200):
+    """Fetches kline data from Bybit."""
+    # ...
+def place_order(symbol, side, qty, order_type="Market", stop_loss=None, take_profit=None):
+    """Places a market order with optional Stop Loss and Take Profit."""
+    # ...
+```
+-   **Task**: Implement comprehensive error handling and retry logic with exponential backoff for all API calls to improve robustness against network issues and rate limits.
+-   **Task**: Ensure all API calls use `Decimal` for financial calculations to avoid floating-point inaccuracies.
+-   **Task**: Refine `place_order` to handle order precision (price and quantity) dynamically based on exchange `market_info`.
+-   **Test Suggestion**: Mock the `pybit.unified_trading.HTTP` session and write unit tests for each API interaction function to verify:
+    *   Correct parameter passing to the Bybit API.
+    *   Proper handling of successful and error responses.
+    *   Correct data extraction and type conversion (e.g., `get_klines` returning a `pd.DataFrame`).
+
+### Indicator Calculation (`calculate_indicators`)
+```python
+def calculate_indicators(df):
+    """Calculates technical indicators for a given DataFrame."""
+    # ...
+```
+-   **Task**: Ensure all indicator calculations handle `NaN` values and insufficient data gracefully.
+-   **Task**: Add docstrings to `calculate_indicators` and clearly define the output columns.
+-   **Test Suggestion**: Write unit tests for `calculate_indicators` using small, known datasets and verifying the output DataFrame columns and values for each indicator (EMA, Supertrend, Volume MA, RSI, ATR).
+
+### Main Trading Logic (`run_bot`)
+```python
+def run_bot():
+    """
+    Main function to run the trading bot.
+    """
+    global current_trade_state
+    # ...
+```
+-   **Task**: Implement state persistence for `current_trade_state` (e.g., saving to a file or database) to ensure the bot can resume operations accurately after a restart. The current in-memory state is a critical vulnerability.
+-   **Task**: Refine the entry conditions to be more dynamic and adaptive to market conditions (e.g., using volatility filters).
+-   **Task**: Improve the position management logic, especially the trailing stop and break-even mechanisms, to be more precise and less prone to premature exits.
+-   **Task**: Implement a more robust order management system that tracks individual orders (entry, SL, TP) and their statuses.
+-   **Test Suggestion**: Write integration tests for `run_bot` that mock API calls and simulate market data to verify the end-to-end flow of signal generation, order placement, and position management under various scenarios (e.g., entry, partial profit, SL hit, TP hit).
+-   **Test Suggestion**: Test the state synchronization logic (`if exchange_position and not current_trade_state['position']:` etc.) to ensure it correctly handles bot restarts and external position changes.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Modularity**: Consider refactoring the bot into a class-based structure (e.g., `SupertrendBot` class) to encapsulate state and methods, improving organization and testability.
+-   **Error Handling**: Enhance error handling throughout the bot to provide more informative messages and prevent crashes.

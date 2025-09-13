@@ -1,0 +1,135 @@
+# TODO.txt for /home/user/Algobots/pscalp2.py
+
+## File Overview
+`pscalp2.py` is a sophisticated market-making bot for the Bybit exchange, designed for high precision and robustness. It features a modular architecture with Pydantic-based configuration, real-time WebSocket data integration, a custom retry mechanism for API calls, comprehensive trade and position management (including dynamic spreads, inventory skew, and advanced TP/SL/TSL logic), and detailed performance tracking with persistence. It also includes Termux-specific notifications and extensive colorized logging.
+
+## Key Components & Code Snippets
+
+### Configuration Management (`GlobalConfig`, `SymbolConfig`, `ConfigManager`)
+```python
+class GlobalConfig(BaseModel):
+    # ...
+class SymbolConfig(BaseModel):
+    # ...
+class ConfigManager:
+    @classmethod
+    def load_config(cls) -> Tuple[GlobalConfig, List[SymbolConfig]]:
+        # ...
+```
+-   **Task**: Enhance `ConfigManager.load_config` to support loading configurations from multiple sources (e.g., a base config file, then an override file, then environment variables, then CLI arguments).
+-   **Task**: Implement a mechanism to dynamically update `SymbolConfig` parameters at runtime without restarting the bot (e.g., via a command or a watched file).
+-   **Test Suggestion**: Write comprehensive unit tests for `GlobalConfig`, `SymbolConfig`, and `ConfigManager.load_config` to verify:
+    *   Correct parsing and validation of all fields, including nested models and lists.
+    *   Proper handling of default values and environment variable overrides.
+    *   Error handling for invalid configuration data (e.g., missing required fields, incorrect types).
+
+### Logging & Utilities (`setup_logger`, `termux_notify`, `retry_api_call`, `JsonDecimalEncoder`, `json_loads_decimal`)
+```python
+def setup_logger(name_suffix: str) -> logging.Logger:
+    # ...
+def termux_notify(message: str, title: str = "Pyrmethus Bot", is_error: bool = False):
+    # ...
+def retry_api_call(attempts: int = API_RETRY_ATTEMPTS, ...):
+    # ...
+```
+-   **Task**: Implement a centralized alert system that can send notifications via multiple channels (e.g., Telegram, email, webhooks) based on configurable thresholds and events, building upon `termux_notify`.
+-   **Task**: Enhance `retry_api_call` to include more sophisticated backoff strategies (e.g., jitter) and to handle specific API error codes that might require different retry behaviors.
+-   **Test Suggestion**: Write unit tests for `setup_logger` to ensure correct log file creation, rotation, and console output formatting.
+-   **Test Suggestion**: Mock `subprocess.run` and test `termux_notify` for correct command execution and error handling.
+-   **Test Suggestion**: Write unit tests for `retry_api_call` by mocking a function that raises exceptions, verifying correct retry attempts, delays, and re-raising of fatal exceptions.
+-   **Test Suggestion**: Write unit tests for `JsonDecimalEncoder` and `json_loads_decimal` to ensure correct serialization and deserialization of Decimal objects.
+
+### Exchange & Market Data (`initialize_exchange`, `fcp`, `fkc`, `fobc`)
+```python
+def initialize_exchange(logger: logging.Logger) -> Optional[ccxt.Exchange]:
+    # ...
+@retry_api_call()
+def fcp(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> Optional[Decimal]:
+    # ...
+```
+-   **Task**: Implement a mechanism to periodically refresh exchange market information (`_fetch_symbol_info`) to ensure the bot always uses the latest precision, limits, and contract details.
+-   **Task**: Enhance `fcp` to use WebSocket ticker data for real-time price updates, falling back to REST only if WS data is unavailable or stale.
+-   **Test Suggestion**: Mock `ccxt` methods and test `initialize_exchange` for successful connection, sandbox mode handling, and error scenarios.
+-   **Test Suggestion**: Write unit tests for `fcp`, `fkc`, and `fobc` with mocked exchange responses, verifying correct data parsing, error handling, and retry behavior.
+
+### Technical Analysis (`TA` class)
+```python
+class TA:
+    def __init__(self, data_frame: pd.DataFrame, ...):
+        # ...
+    def _cai(self):
+        """Calculate All Indicators"""
+        # ...
+    def gts(self, current_price: Decimal, orderbook_data: Optional[Dict]) -> str:
+        """Generate Trade Signal"""
+        # ...
+```
+-   **Task**: Refine the `gts` (Generate Trade Signal) method to incorporate more sophisticated signal confirmation and filtering rules, potentially using machine learning models or adaptive thresholds.
+-   **Task**: Implement a mechanism to dynamically adjust indicator parameters (e.g., period lengths) based on market volatility or other adaptive measures.
+-   **Test Suggestion**: Write comprehensive unit tests for all indicator calculation methods within `TA` (`_cai`, `_uliv`, `cfl`, `_cea`, `_cm`, `_cvc`, `_csr`, `_cr`, `_cc`, `_cwr`, `_cpsar`, `_csma`, `_cv`, `_cmfi`, `_cbb`, `_cob`, `_ceft`) using known input data and verifying expected outputs.
+-   **Test Suggestion**: Write unit tests for `gts` with various combinations of indicator scores and order book data to ensure correct signal generation and scoring.
+
+### Position Sizing & Order Execution (`cps`, `pt`, `spp`, `stsl`)
+```python
+@retry_api_call()
+def cps(balance: Decimal, risk_per_trade: Decimal, ...):
+    """Calculate Position Size"""
+    # ...
+@retry_api_call()
+def pt(exchange: ccxt.Exchange, symbol: str, trade_side: str, ...):
+    """Place Trade"""
+    # ...
+@retry_api_call()
+def spp(exchange: ccxt.Exchange, symbol: str, market_info: Dict, ...):
+    """Set Protection Parameters (Bybit V5)"""
+    # ...
+@retry_api_call()
+def stsl(exchange: ccxt.Exchange, symbol: str, market_info: Dict, ...):
+    """Set TP/SL/TSL (Bybit V5 direct API)"""
+    # ...
+```
+-   **Task**: Implement more sophisticated position sizing strategies (e.g., fixed fractional, optimal f) that consider account equity and volatility.
+-   **Task**: Enhance `pt` to handle partial fills more robustly and to automatically manage order lifecycle (e.g., cancel remaining quantity after partial fill).
+-   **Task**: Refine `stsl` to handle all possible scenarios for setting/clearing TP/SL/TSL, including edge cases where the exchange might return unexpected responses.
+-   **Test Suggestion**: Write comprehensive unit tests for `cps` with various inputs (balance, risk, prices, market info) to ensure correct position size calculation and adherence to exchange limits.
+-   **Test Suggestion**: Mock `ccxt` methods and test `pt` for successful order placement, error handling, and correct parameter formatting.
+-   **Test Suggestion**: Mock `_bybit_v5_request` and test `spp` and `stsl` for correct parameter generation and handling of various protection scenarios (fixed SL, fixed TP, TSL, clearing protections).
+
+### Trade & Position Management (`Tr`, `TMT`, `_mp`, `_tbe`, `_cbe`, `_coo`)
+```python
+@dataclass
+class Tr:
+    # ...
+class TMT:
+    # ...
+    def _mp(self, current_price: Decimal) -> bool:
+        """Manage Position"""
+        # ...
+```
+-   **Task**: Implement a more robust state persistence mechanism for `TMT` and `Tr` objects, potentially using a database (e.g., SQLite) for better query capabilities and data integrity.
+-   **Task**: Enhance `_mp` to handle more complex position management scenarios, such as scaling in/out of positions, or hedging.
+-   **Task**: Refine `_tbe` (Time-Based Exit) and `_cbe` (Check Break-Even) to be more adaptive to market conditions, rather than fixed time/ATR multiples.
+-   **Test Suggestion**: Write unit tests for `Tr` (serialization/deserialization) and `TMT` (add/close trades, save/load state, calculate metrics).
+-   **Test Suggestion**: Write integration tests for `_mp`, `_tbe`, `_cbe`, and `_coo` that simulate market data and exchange responses to verify correct position management and order cancellation.
+
+### Main Bot Orchestration (`MainBot`, `run_symbol_logic`)
+```python
+class MainBot:
+    # ...
+    def run(self):
+        # ...
+class PB: # Per-Symbol Bot
+    def run_symbol_logic(self):
+        # ...
+```
+-   **Task**: Implement a graceful shutdown mechanism for `MainBot` that ensures all open positions are closed or managed before exiting.
+-   **Task**: Add a command-line interface (CLI) for `MainBot` to allow for easier control (start/stop, status, config reload) without modifying the code.
+-   **Task**: Implement a more sophisticated scheduling mechanism for `run_symbol_logic` to ensure optimal execution frequency for each symbol based on its configured interval and market conditions.
+-   **Test Suggestion**: Write integration tests for `MainBot` and `PB` that simulate the entire trading loop, mocking external dependencies (exchange, WebSockets) and verifying end-to-end behavior.
+
+## General Improvements
+-   **Type Hinting**: Ensure all functions and methods have comprehensive type hints.
+-   **Docstrings**: Add or improve docstrings for all functions, classes, and complex methods.
+-   **Error Handling**: Implement robust error handling throughout the application, providing specific and actionable feedback to the user.
+-   **Modularity**: Further refactor the code into smaller, more focused modules and classes to improve maintainability and testability.
+-   **Concurrency**: Review the threading model to ensure thread safety for all shared data structures and to prevent race conditions.

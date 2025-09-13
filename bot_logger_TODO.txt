@@ -1,0 +1,48 @@
+# TODO.txt for /home/user/Algobots/bot_logger.py
+
+## File Overview
+`bot_logger.py` centralizes the logging configuration for the trading bot. It provides functions to set up a logger with both console and file handlers, and includes specialized functions for logging exceptions, key metrics, and trade-specific information, ensuring comprehensive and structured logging.
+
+## Key Components & Code Snippets
+
+### Logging Setup (`setup_logging`)
+```python
+def setup_logging():
+    """Configures and returns a logger instance."""
+    logger = logging.getLogger("BybitTradingBot")
+    logger.setLevel(LOG_LEVEL)
+    # ...
+```
+-   **Task**: Enhance `setup_logging` to support:
+    *   Log rotation (e.g., using `logging.handlers.RotatingFileHandler`) to prevent log files from growing indefinitely.
+    *   Custom formatters with colorama integration for console output, similar to other bot implementations.
+    *   Redaction of sensitive information (e.g., API keys, account balances) from logs.
+-   **Task**: Allow `LOG_FILE` and `LOG_LEVEL` to be configurable via a `config.py` or `config.json` file, rather than being imported directly.
+-   **Test Suggestion**: Write unit tests for `setup_logging` to verify:
+    *   Logger instance is correctly configured with specified level.
+    *   Both stream and file handlers are added.
+    *   Handlers are not duplicated on subsequent calls.
+
+### Specialized Logging Functions (`log_exception`, `log_metrics`, `log_trade`)
+```python
+def log_exception(logger_instance: logging.Logger, message: str, exc: Exception):
+    """Logs an exception with a custom message and traceback."""
+    # ...
+def log_metrics(logger_instance: logging.Logger, title: str, metrics: Dict[str, Any]):
+    """Logs a dictionary of metrics with a title."""
+    # ...
+def log_trade(logger_instance: logging.Logger, title: str, trade_info: Dict[str, Any]):
+    """Logs trade information."""
+    # ...
+```
+-   **Task**: Enhance `log_metrics` and `log_trade` to use a more structured logging format (e.g., JSON) for easier parsing and analysis by external tools.
+-   **Task**: Add more specific parameters to `log_trade` to capture all relevant trade details (e.g., entry price, exit price, PnL, fees).
+-   **Test Suggestion**: Write unit tests for `log_exception`, `log_metrics`, and `log_trade` to verify:
+    *   Messages are correctly formatted and passed to the logger instance.
+    *   Exceptions are logged with traceback.
+    *   Metrics and trade info are correctly represented in the log output.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions.
+-   **Docstrings**: Add or improve docstrings for all functions.
+-   **Modularity**: Consider making the logger instance a class attribute if `bot_logger.py` were to become a class-based logger manager.

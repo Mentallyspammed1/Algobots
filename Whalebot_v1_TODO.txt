@@ -1,0 +1,78 @@
+# TODO.txt for /home/user/Algobots/Whalebot_v1.py
+
+## File Overview
+`Whalebot_v1.py` is a comprehensive trading bot for Bybit, focusing on a wide array of technical indicators and a configurable weighting system for signal generation. It includes custom logging, direct API interaction via `requests`, and a `TradingAnalyzer` class that performs extensive market analysis, including Fibonacci retracements and pivot points.
+
+## Key Components & Code Snippets
+
+### Configuration (`load_config`)
+```python
+def load_config(filepath: str) -> dict:
+    default_config = {
+        # ...
+    }
+    # ...
+```
+-   **Task**: Implement more robust validation for all configuration parameters, including range checks for numerical values and format checks for strings.
+-   **Task**: Consider allowing configuration overrides via environment variables or command-line arguments for greater flexibility.
+-   **Test Suggestion**: Write unit tests for `load_config` to verify:
+    *   Correct loading and merging of configuration from `config.json`.
+    *   Proper handling of `FileNotFoundError` and `json.JSONDecodeError`.
+    *   Correct validation of `interval` and `analysis_interval`.
+
+### Logging (`setup_symbol_logger`)
+```python
+def setup_symbol_logger(symbol: str) -> logging.Logger:
+    # ...
+```
+-   **Task**: Enhance `setup_symbol_logger` to include log rotation (e.g., `RotatingFileHandler`) to prevent log files from growing indefinitely.
+-   **Task**: Integrate a `SensitiveFormatter` to redact API keys and other sensitive information from logs.
+-   **Test Suggestion**: Write unit tests for `setup_symbol_logger` to verify correct log file creation and logger configuration.
+
+### API Interaction (`bybit_request`, `fetch_current_price`, `fetch_klines`, `fetch_order_book`)
+```python
+def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, params: dict = None, logger: logging.Logger = None) -> dict | None:
+    # ...
+def fetch_klines(symbol: str, interval: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 200) -> pd.DataFrame:
+    # ...
+```
+-   **Task**: Implement more specific error handling for different `retCode` values from Bybit API responses.
+-   **Task**: Ensure all financial data (prices, quantities) are converted to `Decimal` for precision immediately upon fetching from the API.
+-   **Test Suggestion**: Mock `requests.request` and write unit tests for `bybit_request` to verify:
+    *   Correct request construction and signature generation.
+    *   Proper handling of successful responses and various error types (HTTP errors, rate limits, request exceptions).
+-   **Test Suggestion**: Write unit tests for `fetch_klines` and `fetch_order_book` with mocked API responses to verify correct data parsing and DataFrame/dictionary creation.
+
+### Trading Analysis (`TradingAnalyzer` class)
+```python
+class TradingAnalyzer:
+    def __init__(self, df: pd.DataFrame, config: dict, symbol_logger: logging.Logger, symbol: str, interval: str):
+        # ...
+    def _select_weight_set(self):
+        # ...
+    def analyze(self, current_price: Decimal, timestamp: str):
+        # ...
+    def generate_trading_signal(self, indicator_values: dict, current_price: Decimal) -> tuple[str | None, float, list[str]]:
+        # ...
+```
+-   **Task**: Ensure all indicator calculations consistently use `Decimal` for all intermediate and final values to maintain precision.
+-   **Task**: Refine the `_select_weight_set` logic to use more dynamic criteria for volatility assessment.
+-   **Task**: Enhance `generate_trading_signal` to incorporate more sophisticated signal confirmation and filtering rules, potentially using machine learning models or adaptive thresholds.
+-   **Test Suggestion**: Write comprehensive unit tests for all indicator calculation methods within `TradingAnalyzer` (e.g., `_calculate_sma`, `_calculate_ema_alignment`, `_calculate_momentum`, `_calculate_cci`, `_calculate_williams_r`, `_calculate_mfi`, `calculate_fibonacci_retracement`, `calculate_pivot_points`, `find_nearest_levels`, `_calculate_atr`, `_calculate_rsi`, `_calculate_stoch_rsi`, `_calculate_macd`, `detect_macd_divergence`, `determine_trend_momentum`, `_calculate_adx`, `_calculate_obv`, `_calculate_adi`, `_calculate_psar`, `_calculate_fve`, `_calculate_volume_confirmation`) using known input data and verifying expected outputs.
+-   **Test Suggestion**: Write unit tests for `generate_trading_signal` with various combinations of indicator values to ensure correct signal generation, confidence scoring, and conditions met.
+
+### Main Loop (`main` function)
+```python
+def main():
+    # ...
+```
+-   **Task**: Implement actual order placement and position management logic, integrating with the `bybit_request` function.
+-   **Task**: Add state persistence for the bot (e.g., open positions, trade history, total PnL) to allow for seamless restarts.
+-   **Task**: Implement a graceful shutdown mechanism that ensures all open positions are managed before exiting.
+-   **Test Suggestion**: Write an integration test for the `main` function that mocks API calls and simulates market data to verify the end-to-end flow of the bot.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Error Handling**: Implement robust error handling throughout the module to provide more informative messages and prevent crashes.
+-   **Modularity**: Consider refactoring the `TradingAnalyzer` into smaller, more focused modules or classes to improve maintainability and testability.

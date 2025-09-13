@@ -1,0 +1,203 @@
+# TODO.txt for /home/user/Algobots/pyrmterm.py
+
+## File Overview
+`pyrmterm.py` is a feature-rich, terminal-based trading application for Bybit, built with `ccxt`. It provides real-time market data visualization, extensive technical indicator calculations, interactive order placement and management, account monitoring, multi-timeframe analysis, advanced order types (TWAP, Iceberg), ML-driven signal generation, backtesting, and a comprehensive alert system with multiple notification channels.
+
+## Key Components & Code Snippets
+
+### Configuration
+```python
+CONFIG = {
+    "API_KEY": os.environ.get("BYBIT_API_KEY"),
+    "API_SECRET": os.environ.get("BYBIT_API_SECRET"),
+    # ... many other parameters
+}
+```
+-   **Task**: Implement a more robust configuration loading mechanism that allows for multiple named profiles (e.g., `config_dev.json`, `config_prod.json`) and supports overriding environment variables with command-line arguments.
+-   **Task**: Add validation for all configuration parameters to ensure they are of the correct type and within valid ranges.
+-   **Test Suggestion**: Write unit tests for configuration loading, ensuring correct defaults, environment variable overrides, and validation.
+
+### Terminal Display & Utilities (`print_color`, `termux_toast`, `format_decimal`, `display_*`)
+```python
+def print_color(text, color=Fore.WHITE, style=Style.NORMAL, end='\n', **kwargs):
+    # ...
+def termux_toast(message, duration="short"):
+    # ...
+def format_decimal(value, reported_precision, min_display_precision=None):
+    # ...
+def display_header(symbol, timestamp, balance, config):
+    # ...
+```
+-   **Task**: Enhance `termux_toast` to handle longer messages by truncating or splitting them if necessary.
+-   **Task**: Improve `format_decimal` to handle edge cases like very small numbers (scientific notation) or very large numbers more gracefully.
+-   **Task**: Refactor display functions to use a more modular approach, potentially passing a display object that handles all formatting and printing, rather than direct `print_color` calls.
+-   **Test Suggestion**: Write unit tests for `format_decimal` with various inputs (floats, Decimals, different precisions) to ensure correct formatting and rounding.
+-   **Test Suggestion**: Mock `subprocess.run` and test `termux_toast` to ensure it's called with correct arguments.
+
+### Market Info & Data Fetching (`get_market_info`, `fetch_market_data`)
+```python
+def get_market_info(exchange, symbol):
+    # ...
+def fetch_market_data(exchange, symbol, config):
+    # ...
+```
+-   **Task**: Implement a caching mechanism for `get_market_info` to avoid repeated API calls for static market data.
+-   **Task**: Enhance `fetch_market_data` to handle partial data fetches more gracefully and to provide clearer error messages when data is missing.
+-   **Test Suggestion**: Mock `ccxt` methods (`load_markets`, `market`, `fetch_ticker`, `fetch_ohlcv`, etc.) and test `get_market_info` and `fetch_market_data` for various scenarios, including successful fetches, API errors, and network issues.
+
+### Indicator Calculations (`calculate_sma`, `calculate_ema`, etc.)
+```python
+def calculate_sma(closes, period):
+    # ...
+def calculate_rsi(closes, period):
+    # ...
+def calculate_stoch_rsi(rsi_values, k_period, d_period):
+    # ...
+```
+-   **Task**: Ensure all indicator calculations handle `NaN` values and insufficient data gracefully, returning `Decimal` types consistently.
+-   **Task**: Consider using a dedicated technical analysis library (like `pandas_ta` or `ta-lib`) for more robust and optimized indicator calculations, if not already fully integrated.
+-   **Test Suggestion**: Write comprehensive unit tests for all indicator calculation functions using known input data and verifying the expected outputs.
+
+### Order Book Analysis (`analyze_orderbook_volume`, `OrderBookAnalyzer`)
+```python
+def analyze_orderbook_volume(exchange, symbol, market_info, config):
+    # ...
+class OrderBookAnalyzer:
+    def calculate_order_flow_imbalance(self, orderbook):
+        # ...
+```
+-   **Task**: Enhance `OrderBookAnalyzer` to provide more granular insights into order book liquidity and potential spoofing/layering.
+-   **Task**: Implement a real-time order book update mechanism using WebSockets instead of polling via REST API for `analyze_orderbook_volume`.
+-   **Test Suggestion**: Write unit tests for `analyze_orderbook_volume` and `OrderBookAnalyzer` methods with various order book structures to verify correct calculations and wall detection.
+
+### Order Placement & Management (`place_market_order`, `place_limit_order`, `manage_close_position`, `manage_cancel_order`, `set_leverage`)
+```python
+def place_market_order(exchange, symbol, side, amount_str, market_info):
+    # ...
+def manage_close_position(exchange, symbol, positions, market_info):
+    # ...
+```
+-   **Task**: Implement comprehensive error handling for all order placement and management functions, providing specific feedback to the user.
+-   **Task**: Add support for more advanced order types (e.g., Post-Only, Reduce-Only, Trailing Stop) directly in the interactive interface.
+-   **Task**: Implement a mechanism to track the status of placed orders (e.g., filled, partially filled, canceled) and update the display accordingly.
+-   **Test Suggestion**: Mock `ccxt` methods (`create_market_order`, `create_limit_order`, `cancel_order`, `cancel_all_orders`, `set_leverage`) and test all order management functions for successful execution and error handling.
+
+### Risk Management (`RiskManager`)
+```python
+class RiskManager:
+    def __init__(self, max_risk_percent=2, max_positions=3):
+        # ...
+    def auto_stop_loss(self, exchange, symbol, position, atr_multiplier=2):
+        # ...
+```
+-   **Task**: Fully implement `RiskManager` with features like daily loss limits, maximum open exposure, and dynamic position sizing based on volatility.
+-   **Task**: Integrate `auto_stop_loss` and other risk management functions into the main trading loop.
+-   **Test Suggestion**: Write unit tests for `RiskManager` methods, including `calculate_position_size` and `auto_stop_loss` (mocking `ccxt` calls).
+
+### WebSocket Management (`BybitWebSocketManager`)
+```python
+class BybitWebSocketManager:
+    def __init__(self, symbol, callbacks=None):
+        # ...
+    async def connect(self):
+        # ...
+```
+-   **Task**: Fully integrate `BybitWebSocketManager` to provide real-time market data (tickers, order book, klines) and private data (positions, orders, balance) to the main application, replacing polling where possible.
+-   **Task**: Implement robust reconnection logic with exponential backoff for WebSocket connections.
+-   **Test Suggestion**: Write integration tests for `BybitWebSocketManager` that connect to a mock WebSocket server and verify correct message handling and callback execution.
+
+### Smart Order Execution (`SmartOrderExecutor`)
+```python
+class SmartOrderExecutor:
+    async def execute_twap(self, side, total_amount, duration_minutes, num_slices=10):
+        # ...
+    def create_iceberg_order(self, side, total_amount, visible_amount, price=None):
+        # ...
+```
+-   **Task**: Fully integrate `SmartOrderExecutor` into the interactive command line, allowing users to place TWAP, Iceberg, and conditional orders.
+-   **Task**: Implement comprehensive error handling and status reporting for these advanced order types.
+-   **Test Suggestion**: Mock `ccxt` methods and test `execute_twap`, `create_iceberg_order`, and `create_conditional_order` for correct order slicing, timing, and error handling.
+
+### Trading Analytics (`TradingAnalytics`)
+```python
+class TradingAnalytics:
+    def add_trade(self, trade):
+        # ...
+    def calculate_metrics(self):
+        # ...
+    def display_analytics(self):
+        # ...
+```
+-   **Task**: Integrate `TradingAnalytics` to record all executed trades and display comprehensive performance metrics.
+-   **Task**: Implement persistence for `TradingAnalytics` data (e.g., saving to a database or file) to maintain historical performance.
+-   **Test Suggestion**: Write unit tests for `TradingAnalytics` methods, including `add_trade`, `calculate_metrics` (especially Sharpe Ratio and Max Drawdown), and `display_analytics`.n
+### Multi-Timeframe Analysis (`MultiTimeframeAnalyzer`)
+```python
+class MultiTimeframeAnalyzer:
+    def analyze_all_timeframes():
+        # ...
+    def get_confluence_signal():
+        # ...
+```
+-   **Task**: Fully integrate `MultiTimeframeAnalyzer` into the main analysis cycle to provide higher-timeframe trend confluence for signal generation.
+-   **Task**: Enhance the `analyze_timeframe` method to use more diverse indicators for trend determination.
+-   **Test Suggestion**: Write unit tests for `MultiTimeframeAnalyzer` methods, especially `analyze_timeframe` and `get_confluence_signal`, with mocked historical data.
+
+### Alert System (`AlertSystem`)
+```python
+class AlertSystem:
+    def setup_price_alert(self, symbol, condition, price_level, alert_type='once'):
+        # ...
+    def send_alert(self, message, priority='normal'):
+        # ...
+```
+-   **Task**: Fully integrate `AlertSystem` to allow users to set and manage various types of alerts (price, volume, indicator-based).
+-   **Task**: Implement persistence for `alert_conditions` to ensure alerts are maintained across restarts.
+-   **Test Suggestion**: Write unit tests for `AlertSystem` methods, including `setup_price_alert`, `check_alerts`, and `send_alert` (mocking `requests.post` and `smtplib`).
+
+### Trading Database (`TradingDatabase`)
+```python
+class TradingDatabase:
+    def initialize_tables():
+        # ...
+    def record_trade(self, trade_data):
+        # ...
+```
+-   **Task**: Fully integrate `TradingDatabase` to store all trading activities, market data, and performance metrics persistently.
+-   **Task**: Implement methods for querying and reporting historical data from the database.
+-   **Test Suggestion**: Write unit tests for `TradingDatabase` methods, ensuring correct table creation, data insertion, and retrieval.
+
+### Backtest Engine (`BacktestEngine`)
+```python
+class BacktestEngine:
+    def run_backtest(self, start_date, end_date, timeframe='1h'):
+        # ...
+    def calculate_backtest_metrics(self, trades, final_balance, equity_curve):
+        # ...
+```
+-   **Task**: Fully integrate `BacktestEngine` to allow users to run backtests with different strategies and parameters.
+-   **Task**: Enhance the backtesting engine to support more realistic order execution models (e.g., slippage, partial fills).
+-   **Test Suggestion**: Write unit tests for `BacktestEngine` methods, especially `run_backtest` and `calculate_backtest_metrics`, with mocked historical data and strategy signals.
+
+### ML Trading Bot (`MLTradingBot`)
+```python
+class MLTradingBot:
+    def _load_model(self, path):
+        # ...
+    def generate_ml_signal(self, ohlcv_data):
+        # ...
+    def train_model(self, historical_data_labeled, model_path='ml_model.joblib'):
+        # ...
+```
+-   **Task**: Fully integrate `MLTradingBot` to allow users to train and deploy machine learning models for signal generation.
+-   **Task**: Provide tools for data labeling and feature engineering to support ML model training.
+-   **Test Suggestion**: Write unit tests for `MLTradingBot` methods, including `_prepare_features`, `generate_ml_signal`, and `train_model` (mocking `joblib` and `RandomForestClassifier`).
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions, classes, and complex methods.
+-   **Error Handling**: Implement robust error handling throughout the application, providing specific and actionable feedback to the user.
+-   **Modularity**: Further refactor the code into smaller, more focused modules and classes to improve maintainability and testability.
+-   **Concurrency**: Explore using `asyncio` more extensively for concurrent API calls and WebSocket handling to improve performance.
+
+```

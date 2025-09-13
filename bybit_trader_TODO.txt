@@ -1,0 +1,79 @@
+# TODO.txt for /home/user/Algobots/bybit_trader.py
+
+## File Overview
+`bybit_trader.py` defines the `BybitTrader` class, which serves as the central orchestrator for the trading bot. It handles API connections (REST and WebSocket), dynamically loads trading strategies, processes real-time market data, and manages order execution and basic position tracking.
+
+## Key Components & Code Snippets
+
+### Initialization & Strategy Loading (`__init__`, `_load_strategy_from_file`)
+```python
+class BybitTrader:
+    def __init__(self, strategy_path: str):
+        self.strategy: BaseStrategy = self._load_strategy_from_file(strategy_path)
+        # ...
+    def _load_strategy_from_file(self, file_path: str) -> BaseStrategy:
+        """Dynamically loads a strategy class from a Python file."""
+        # ...
+```
+-   **Task**: Implement more robust error handling for `_load_strategy_from_file` to provide clearer messages when the strategy file is invalid or the strategy class is not found.
+-   **Task**: Consider adding a mechanism to validate the loaded strategy against a defined interface or schema.
+-   **Test Suggestion**: Write unit tests for `_load_strategy_from_file` to verify:
+    *   Successful loading of a valid strategy file.
+    *   Correct error handling for non-existent files, invalid Python syntax, or missing `BaseStrategy` subclasses.
+
+### Data Handling (`_handle_kline_message`, `get_historical_klines`)
+```python
+    def _handle_kline_message(self, message: dict):
+        """Callback function to process incoming kline data from WebSocket."""
+        # ...
+    def get_historical_klines(self, symbol: str, interval: str = "1"):
+        """Fetches historical kline data to bootstrap the bot."""
+        # ...
+```
+-   **Task**: Implement more robust error handling for `_handle_kline_message` to gracefully handle malformed or incomplete WebSocket messages.
+-   **Task**: Ensure `kline_data` uses `Decimal` for price and volume columns to maintain precision.
+-   **Test Suggestion**: Write unit tests for `_handle_kline_message` with various WebSocket message formats (including edge cases like empty data or missing fields).
+-   **Test Suggestion**: Mock `self.session.get_kline` and test `get_historical_klines` for successful data fetching and DataFrame creation.
+
+### Strategy Execution (`run_strategy`)
+```python
+    def run_strategy(self):
+        """Runs the loaded strategy and executes trades based on signals."""
+        # ...
+```
+-   **Task**: Implement a more sophisticated signal processing mechanism that considers signal strength, confidence, and risk management rules before executing a trade.
+-   **Task**: Add a mechanism to log the generated signals and the bot's decision (e.g., "BUY signal, but cooldown active, skipping").
+-   **Test Suggestion**: Mock `self.strategy.generate_signals` and `self.place_order` and write unit tests for `run_strategy` to verify correct signal processing and order placement logic.
+
+### Order Placement (`place_order`)
+```python
+    def place_order(self, side: str):
+        """Places an order on Bybit."""
+        # ...
+```
+-   **Task**: Implement comprehensive order management, including:
+    *   Placing Stop Loss (SL) and Take Profit (TP) orders immediately after entry.
+    *   Handling order precision (price and quantity) dynamically based on exchange rules.
+    *   Managing open orders (e.g., amending, canceling).
+    *   Tracking order status (filled, partially filled, canceled).
+-   **Task**: Refine the cooldown mechanism to be more dynamic (e.g., based on volatility or recent trade activity).
+-   **Test Suggestion**: Mock `self.session.place_order` and write unit tests for `place_order` to verify:
+    *   Correct order parameters are passed to the Bybit API.
+    *   Proper handling of cooldown period.
+    *   Error handling for order placement failures.
+
+### Main Loop (`start`)
+```python
+    def start(self):
+        """Starts the WebSocket connection and the bot's main loop."""
+        # ...
+```
+-   **Task**: Implement a graceful shutdown mechanism that ensures all open positions are managed and WebSocket connections are closed before exiting.
+-   **Task**: Add a command-line interface (CLI) for `start` to allow for easier control (e.g., dry-run mode, specify config file).
+-   **Test Suggestion**: Write an integration test for `start` that mocks API calls and WebSocket connections to verify the end-to-end flow of the bot.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Error Handling**: Implement robust error handling throughout the module to provide more informative messages and prevent crashes.
+-   **Modularity**: Consider separating API interaction logic into a dedicated `BybitClient` class to improve modularity.

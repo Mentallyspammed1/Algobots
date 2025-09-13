@@ -1,0 +1,97 @@
+# TODO.txt for /home/user/Algobots/pyrmtest.py
+
+## File Overview
+`pyrmtest.py` implements a `ScalpingEngine` designed for high-frequency trading on Bybit using the `ccxt` library. It integrates market data fetching, a custom set of scalping indicators (momentum, StochRSI, VWAP, order book imbalance), a weighted signal generation system, and basic risk management.
+
+## Key Components & Code Snippets
+
+### ScalpingEngine Class
+```python
+class ScalpingEngine:
+    def __init__(self, config: dict):
+        self.config = config
+        self.exchange = ccxt.bybit({
+            'apiKey': config['api_key'],
+            'secret': config['api_secret'],
+            'enableRateLimit': True,
+            'options': {'defaultType': 'spot'}
+        })
+        self.position = None
+        self.ob_analysis = OrderBookAnalyzer()
+        self.risk_mgr = RiskManager(config)
+    # ...
+```
+-   **Task**: Implement state persistence for `ScalpingEngine` (e.g., `position`, `trade_count` from `RiskManager`) to allow for seamless restarts and accurate risk tracking.
+-   **Task**: Enhance the `ccxt` exchange initialization to handle different account types (e.g., Unified Trading Account for Bybit) and categories (e.g., `linear` for perpetual futures).
+-   **Test Suggestion**: Write unit tests for `ScalpingEngine` initialization, ensuring `ccxt` exchange object is correctly configured and sub-components (`OrderBookAnalyzer`, `RiskManager`) are instantiated.
+
+### Market Data & Indicators (`get_market_data`, `calculate_scalping_indicators`)
+```python
+    def get_market_data(self) -> pd.DataFrame:
+        """Fetch high-frequency tick data"""
+        # ...
+    def calculate_scalping_indicators(self, df: pd.DataFrame) -> dict:
+        """Calculate scalping-specific technical indicators"""
+        # ...
+```
+-   **Task**: Implement robust error handling for `get_market_data` to handle API failures or empty responses gracefully.
+-   **Task**: Ensure all indicator calculations handle `NaN` values and insufficient data gracefully.
+-   **Test Suggestion**: Mock `self.exchange.fetch_ohlcv` and `self.exchange.fetch_order_book` and test `get_market_data` and `calculate_scalping_indicators` with various data scenarios to verify correct DataFrame creation and indicator calculation.
+
+### Signal Generation (`generate_signal`, `_resolve_signals`)
+```python
+    def generate_signal(self, indicators: dict) -> str | None:
+        """Scalping signal logic with multiple confirmation"""
+        # ...
+    def _resolve_signals(self, signals: list[str]) -> str | None:
+        """Weighted signal resolution"""
+        # ...
+```
+-   **Task**: Refine the signal generation logic to include more dynamic thresholds or adaptive weighting based on market volatility.
+-   **Task**: Add a cooldown mechanism to prevent rapid, successive trades based on fleeting signals.
+-   **Test Suggestion**: Write unit tests for `generate_signal` and `_resolve_signals` with various combinations of indicator values to ensure correct signal output (`BUY`, `SELL`, `None`).
+
+### Trade Execution (`execute_scalp`, `_place_stop_orders`)
+```python
+    def execute_scalp(self, signal: str):
+        """Execute scalping trade with risk management"""
+        # ...
+    def _place_stop_orders(self, order: dict):
+        """Place OCO stop orders after fill"""
+        # ...
+```
+-   **Task**: Implement comprehensive error handling for `create_order` calls, including specific handling for rate limits, insufficient funds, or invalid parameters.
+-   **Task**: Ensure order precision (price and quantity) is handled dynamically based on exchange rules.
+-   **Task**: Implement a more robust way to track and manage open orders and positions, especially for OCO (One-Cancels-the-Other) orders.
+-   **Test Suggestion**: Mock `self.exchange.fetch_ticker` and `self.exchange.create_order` and test `execute_scalp` and `_place_stop_orders` for various scenarios: successful order placement, partial fills, and error conditions.
+
+### OrderBookAnalyzer Class
+```python
+class OrderBookAnalyzer:
+    """Real-time order book analysis for scalping"""
+    def calculate_imbalance(self, order_book: dict) -> float:
+        # ...
+```
+-   **Task**: Enhance `calculate_imbalance` to consider different depths of the order book or weighted averages of bids/asks.
+-   **Test Suggestion**: Write unit tests for `calculate_imbalance` with various order book structures to verify correct imbalance calculation.
+
+### RiskManager Class
+```python
+class RiskManager:
+    """Scalping-specific risk management"""
+    def __init__(self, config: dict):
+        # ...
+    def approve_trade(self) -> bool:
+        # ...
+    def calculate_position_size(self, price: float) -> float:
+        # ...
+```
+-   **Task**: Implement more sophisticated risk management rules, such as daily loss limits, maximum open exposure, or dynamic position sizing based on volatility.
+-   **Task**: Track `trade_count` and `max_daily_loss` persistently across bot restarts.
+-   **Test Suggestion**: Write unit tests for `approve_trade` and `calculate_position_size` with various configurations and trade counts.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Logging**: Integrate Python's standard `logging` module for more flexible and configurable logging.
+-   **Modularity**: Consider separating indicator calculations into a dedicated module.

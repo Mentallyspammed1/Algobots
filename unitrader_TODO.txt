@@ -1,0 +1,90 @@
+# TODO.txt for /home/user/Algobots/unitrader.py
+
+## File Overview
+`unitrader.py` implements a "Unified Trading Bot" with a focus on simplicity and direct API interaction. It includes basic configuration, logging, Bybit API request handling, fundamental technical indicators (EMA, RSI), a signal generation mechanism combining these indicators, and a simulated paper trading mode.
+
+## Key Components & Code Snippets
+
+### Configuration & Initialization
+```python
+CONFIG = {
+    "api_endpoint": "https://api.bybit.com",
+    "symbol": os.getenv("TRADING_SYMBOL", "TRUMPUSDT"),
+    "interval": "15m",
+    "risk_per_trade": 0.01,
+    "sl_pct": 0.03,
+    "tp_pct": 0.05,
+    "max_orders": 5,
+    "weights": {
+        "high_volatility": {"ema": 1.5, "rsi": 1.2, "macd": 1.3},
+        "low_volatility": {"ema": 1.0, "rsi": 1.0, "macd": 1.0}
+    }
+}
+
+class UnifiedTrader:
+    def __init__(self, paper_mode: bool = False):
+        # ...
+```
+-   **Task**: Externalize the `CONFIG` dictionary into a separate `config.json` or `config.yaml` file, similar to other bots, to allow easier modification without code changes.
+-   **Task**: Implement more robust validation for configuration parameters (e.g., `sl_pct` and `tp_pct` should be positive).
+-   **Test Suggestion**: Write unit tests for the configuration loading (once externalized) to ensure defaults are applied and overrides work correctly.
+
+### API Interaction (`generate_signature`, `api_request`)
+```python
+    def generate_signature(self, params: dict) -> str:
+        # ...
+    def api_request(self, method: str, endpoint: str, params: dict = None) -> dict:
+        # ...
+```
+-   **Task**: Update `api_request` to use the Bybit V5 API signature method, which is different from the V3/V4 method currently implemented (e.g., `X-BAPI-API-KEY`, `X-BAPI-TIMESTAMP`, `X-BAPI-SIGN`). Refer to Bybit V5 API documentation.
+-   **Task**: Implement retry logic with exponential backoff for API requests, similar to `whaleboty.py`, to handle transient network issues or rate limits.
+-   **Task**: Add proper error handling for `api_request` to log specific Bybit error codes and messages.
+-   **Test Suggestion**: Mock `requests.get` and `requests.post` and test `api_request` for successful responses, API errors, and network errors.
+-   **Test Suggestion**: Test `generate_signature` with known parameters and API secret to ensure correct signature generation for the *current* Bybit API version it's targeting.
+
+### Technical Indicators (`calculate_ema`, `calculate_rsi`)
+```python
+    @staticmethod
+    def calculate_ema(df: pd.DataFrame, period: int) -> pd.Series:
+        # ...
+    @staticmethod
+    def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
+        # ...
+```
+-   **Task**: Add more technical indicators (e.g., MACD, Bollinger Bands, ATR) to enrich the signal generation capabilities.
+-   **Task**: Ensure all indicator calculations handle `NaN` values and insufficient data gracefully.
+-   **Test Suggestion**: Write unit tests for `calculate_ema` and `calculate_rsi` using small, known datasets and verifying the output series.
+
+### Signal Generation (`generate_signal`)
+```python
+    def generate_signal(self, df: pd.DataFrame) -> str:
+        # ...
+```
+-   **Task**: Implement a more sophisticated signal scoring and weighting system, potentially using the `weights` defined in `CONFIG`.
+-   **Task**: Add logic to prevent overtrading by introducing a cooldown period after a trade is executed or a signal is generated.
+-   **Test Suggestion**: Write unit tests for `generate_signal` with various mocked `pd.DataFrame` inputs to test different market conditions and ensure correct signal output (`BUY`, `SELL`, `HOLD`).
+
+### Order Management (`execute_trade`)
+```python
+    def execute_trade(self, signal: str, quantity: float):
+        # ...
+```
+-   **Task**: Implement actual order placement with Stop Loss (SL) and Take Profit (TP) orders, using the `sl_pct` and `tp_pct` from `CONFIG`.
+-   **Task**: Add logic to manage open positions (e.g., trailing stop loss, amending TP/SL).
+-   **Task**: Handle order precision (price and quantity) based on exchange rules.
+-   **Test Suggestion**: Mock the `api_request` method and test `execute_trade` in both paper mode and live mode (simulated) to ensure correct order parameters are sent.
+
+### Main Loop (`run`)
+```python
+    def run(self):
+        # ...
+```
+-   **Task**: Implement state persistence for `UnifiedTrader` (e.g., saving `balance`, `position`, `orders` to a file) to allow for seamless restarts.
+-   **Task**: Add a graceful shutdown mechanism to ensure open positions are managed before the bot exits.
+-   **Test Suggestion**: Write an integration test for the `run` method that mocks API calls and verifies the bot's behavior over several cycles, including signal generation and (simulated) trade execution.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Modularity**: Consider separating API interaction, indicator calculations, and signal generation into distinct modules or classes for better organization.
+-   **Error Handling**: Improve error handling throughout the bot to provide more informative messages and prevent crashes.

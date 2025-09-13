@@ -1,0 +1,78 @@
+# TODO.txt for /home/user/Algobots/whalebot.py
+
+## File Overview
+`whalebot.py` is a sophisticated Bybit trading bot that performs technical analysis, generates trading signals, and manages API interactions. It features a dynamic configuration system, robust logging with sensitive data redaction, and a `TradingAnalyzer` class that calculates a wide array of indicators, including custom ones like "Fictional Value Estimate" (FVE), and analyzes order book walls.
+
+## Key Components & Code Snippets
+
+### Configuration Management (`load_config`)
+```python
+def load_config(filepath: str) -> dict:
+    """
+    Loads configuration from a JSON file, merging with default values.
+    If the file is not found or is invalid, it creates one with default settings.
+    """
+    # ...
+```
+-   **Task**: Implement a mechanism to allow for multiple named configurations (e.g., `config_scalping.json`, `config_swing.json`) that can be selected via command-line arguments.
+-   **Task**: Enhance configuration validation to ensure all necessary parameters are present and have valid types/ranges.
+-   **Test Suggestion**: Write unit tests for `load_config` to verify correct loading, default creation, and merging behavior, especially for nested dictionaries.
+
+### API Interaction (`bybit_request`, `fetch_klines`, etc.)
+```python
+def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, params: dict[str, Any] = None, logger: logging.Logger = None) -> dict | None:
+    """
+    Sends a signed request to the Bybit API with retry logic.
+    """
+    # ...
+```
+-   **Task**: Implement a more precise timestamp synchronization with Bybit's server to minimize `X-BAPI-TIMESTAMP` errors, potentially by fetching server time at startup.
+-   **Task**: Introduce a global rate limiter for `bybit_request` to prevent exceeding Bybit's API limits, especially for public endpoints.
+-   **Test Suggestion**: Mock `requests.request` and test `bybit_request` for various API responses: success, different error codes (including retryable ones), network issues, and timeouts.
+-   **Test Suggestion**: Test `fetch_klines` with mocked data to ensure correct DataFrame creation, type conversion, and sorting.
+
+### Trading Analysis (`TradingAnalyzer`)
+```python
+class TradingAnalyzer:
+    """
+    Performs technical analysis on candlestick data and generates trading signals.
+    """
+    # ...
+    def analyze(self, current_price: Decimal, timestamp: str, order_book: dict[str, Any]):
+        """
+        Performs comprehensive analysis, calculates indicators, and logs the findings.
+        """
+        # ...
+    def generate_trading_signal(self, current_price: Decimal) -> tuple[str | None, float, list[str], dict[str, Decimal]]:
+        """
+        Generates a trading signal (buy/sell) based on indicator values and configuration.
+        """
+        # ...
+```
+-   **Task**: Refine the `_select_weight_set` logic to use more dynamic criteria for volatility assessment (e.g., historical ATR percentile, VIX equivalent for crypto).
+-   **Task**: Improve the `detect_macd_divergence` function to be more robust, considering multiple peaks/troughs and different timeframes.
+-   **Task**: Enhance the `analyze_order_book_walls` to consider not just the largest walls but also the cumulative volume at different price levels.
+-   **Task**: Implement a more sophisticated signal confirmation mechanism, requiring multiple indicators to align before a signal is generated.
+-   **Test Suggestion**: Write comprehensive unit tests for all indicator calculation methods within `TradingAnalyzer` (e.g., `_calculate_atr`, `_calculate_rsi`, `_calculate_stoch_rsi`, `_calculate_macd`, `_calculate_psar`, `_calculate_fve`) using known input data and verifying expected outputs.
+-   **Test Suggestion**: Test `generate_trading_signal` with various combinations of indicator states to ensure correct signal generation, confidence scoring, and SL/TP level calculation.
+-   **Test Suggestion**: Test `analyze_order_book_walls` with different order book structures to verify correct wall detection.
+
+### Main Execution Logic (`main`)
+```python
+def main():
+    """
+    Main function to run the trading analysis bot.
+    Handles user input, data fetching, analysis, and signal generation loop.
+    """
+    # ...
+```
+-   **Task**: Replace the `input()` calls for symbol and interval with `argparse` for non-interactive execution.
+-   **Task**: Implement actual order placement and position management logic, integrating with the `bybit_request` function.
+-   **Task**: Add a state persistence mechanism (e.g., saving open positions, PnL, last signal time) to a file or database to allow for bot restarts without losing critical state.
+-   **Test Suggestion**: Write an integration test for the `main` function that mocks all external API calls and verifies the end-to-end flow of data fetching, analysis, signal generation, and (simulated) order management.
+
+## General Improvements
+-   **Type Hinting**: Review and ensure comprehensive type hinting across all functions and methods for better code clarity and maintainability.
+-   **Docstrings**: Add or improve docstrings for all functions, classes, and complex methods, explaining their purpose, arguments, and return values.
+-   **Error Handling**: Enhance error handling throughout the bot, especially for external API calls and data processing, to ensure graceful degradation and informative logging.
+-   **Modularity**: Consider extracting the `TradingAnalyzer`'s indicator calculations into a separate module (e.g., `indicators.py`) to improve modularity and reusability.

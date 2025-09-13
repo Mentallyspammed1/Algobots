@@ -1,0 +1,68 @@
+# TODO.txt for /home/user/Algobots/trade_metrics.py
+
+## File Overview
+`trade_metrics.py` provides the `TradeMetrics` class, a dedicated utility for calculating and tracking various performance metrics of trading activities. It handles fee calculation, PnL tracking, win/loss rates, and maintains a history of all closed trades, ensuring financial calculations are precise using `Decimal` types.
+
+## Key Components & Code Snippets
+
+### TradeMetrics Class
+```python
+class TradeMetrics:
+    """
+    Calculates fees and tracks various trade metrics such as PnL, win rate, etc.
+    """
+    def __init__(self, maker_fee: float = 0.0002, taker_fee: float = 0.0007):
+        self.maker_fee = Decimal(str(maker_fee))
+        self.taker_fee = Decimal(str(taker_fee))
+        self.total_realized_pnl = Decimal('0')
+        self.total_trades = 0
+        self.winning_trades = 0
+        self.losing_trades = 0
+        self.trade_history = [] # Stores details of each closed trade
+        # ...
+```
+-   **Task**: Implement persistence for `TradeMetrics` (e.g., save `total_realized_pnl`, `trade_history` to a file) to maintain statistics across bot restarts.
+-   **Task**: Add more advanced metrics such as Sharpe Ratio, Max Drawdown, Profit Factor, and Average Win/Loss.
+-   **Task**: Allow `maker_fee` and `taker_fee` to be configurable via a `config.py` or `config.json` file, rather than hardcoded defaults.
+-   **Test Suggestion**: Write unit tests for `TradeMetrics` initialization to ensure fees are correctly set as `Decimal` objects.
+
+### Fee Calculation (`calculate_fee`)
+```python
+    def calculate_fee(self, quantity: Decimal, price: Decimal, is_maker: bool) -> Decimal:
+        """
+        Calculates the trading fee for a given trade.
+        # ...
+```
+-   **Task**: Consider different fee structures (e.g., tiered fees, volume-based discounts) if the bot is intended for high-volume trading.
+-   **Test Suggestion**: Write unit tests for `calculate_fee` with various `quantity`, `price`, and `is_maker` combinations to ensure accurate fee calculation and rounding.
+
+### Trade Recording (`record_trade`)
+```python
+    def record_trade(self, entry_price: Decimal, exit_price: Decimal, quantity: Decimal, side: str,
+                     entry_fee: Decimal, exit_fee: Decimal, timestamp: Any):
+        """
+        Records a completed trade and updates PnL and trade statistics.
+        # ...
+```
+-   **Task**: Validate input parameters for `record_trade` (e.g., `entry_price`, `exit_price`, `quantity` should be positive `Decimal`s).
+-   **Task**: Store more detailed information in `trade_history`, such as the symbol, order IDs, and strategy used for the trade.
+-   **Test Suggestion**: Write unit tests for `record_trade` to verify:
+    *   Correct PnL calculation (gross and net) for both BUY and SELL trades.
+    *   Accurate updating of `total_realized_pnl`, `total_trades`, `winning_trades`, and `losing_trades`.
+    *   Correct storage of trade details in `trade_history`.
+
+### Statistics Retrieval (`get_win_rate`, `get_total_realized_pnl`, `get_trade_statistics`)
+```python
+    def get_win_rate(self) -> Decimal:
+        # ...
+    def get_total_realized_pnl(self) -> Decimal:
+        # ...
+    def get_trade_statistics(self) -> dict[str, Any]:
+        # ...
+```
+-   **Test Suggestion**: Write unit tests for `get_win_rate` and `get_trade_statistics` for scenarios with no trades, only winning trades, only losing trades, and a mix of both.
+
+## General Improvements
+-   **Type Hinting**: Ensure all functions and methods have comprehensive type hints.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Logging**: Ensure consistent and informative logging throughout the class, especially for critical events like trade recording.

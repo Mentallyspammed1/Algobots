@@ -1,0 +1,71 @@
+# TODO.txt for /home/user/Algobots/bybit_api_old.py
+
+## File Overview
+`bybit_api_old.py` defines a `BybitClient` class that wraps the `pybit` library for interacting with the Bybit API. It provides methods for various API functionalities, including data fetching (klines, tickers, order book), account management (balance, positions, fees), and order management (placing, canceling, setting leverage).
+
+## Key Components & Code Snippets
+
+### BybitClient Initialization (`__init__`)
+```python
+class BybitClient:
+    def __init__(self, api_endpoint: str, category: str,
+                 retries: int = 5, backoff_factor: float = 0.5,
+                 use_websocket: bool = False, ws_callbacks: dict[str, Callable] | None = None, recv_window: int = 10000):
+        # ...
+```
+-   **Task**: Ensure `recv_window` is passed correctly to `WebSocket` initialization.
+-   **Task**: Implement a more robust way to determine `testnet` status for `HTTP` and `WebSocket` sessions, possibly from a dedicated configuration.
+-   **Test Suggestion**: Write unit tests for `BybitClient` initialization to verify:
+    *   Correct loading of API keys from environment variables.
+    *   Proper initialization of `HTTP` and `WebSocket` sessions.
+    *   Error handling for missing API keys.
+
+### WebSocket Management (`subscribe_to_ws_topics`)
+```python
+    def subscribe_to_ws_topics(self, topics: list, callback: Callable):
+        """
+        Subscribes to a list of WebSocket topics using the new stream methods.
+        # ...
+```
+-   **Task**: Implement a more comprehensive WebSocket management system that handles:
+    *   Automatic reconnection with exponential backoff.
+    *   Authentication for private topics.
+    *   Ping/pong heartbeat messages.
+    *   Routing messages to specific callbacks based on topic and symbol.
+-   **Test Suggestion**: Mock `self.ws_session` methods and write unit tests for `subscribe_to_ws_topics` to verify correct subscription calls for various topics.
+
+### Data Fetching (`fetch_klines`, `get_positions`, `get_wallet_balance`, `get_tickers`, `get_orderbook`, etc.)
+```python
+    def fetch_klines(self, symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
+        # ...
+    def get_positions(self, symbol: str) -> dict[str, Any] | None:
+        # ...
+```
+-   **Task**: Implement retry logic with exponential backoff for all API calls to handle transient network issues and rate limits.
+-   **Task**: Ensure all financial data (prices, quantities, balances) are converted to `Decimal` for precision immediately upon fetching from the API.
+-   **Task**: Add more specific error handling for different `retCode` values from Bybit API responses.
+-   **Test Suggestion**: Mock `self.session` methods and write unit tests for each data fetching function to verify:
+    *   Correct parameter passing to `pybit` methods.
+    *   Proper handling of successful and error responses.
+    *   Correct data parsing and type conversion (e.g., `fetch_klines` returning a `pd.DataFrame`).
+
+### Order Management (`place_order`, `cancel_order`, `cancel_all_orders`, `set_leverage`)
+```python
+    def place_order(self, symbol: str, side: str, usdt_amount: float, ...) -> bool:
+        # ...
+    def cancel_order(self, symbol: str, order_id: str | None = None, order_link_id: str | None = None) -> bool:
+        # ...
+```
+-   **Task**: Refine `place_order` to handle order precision (price and quantity) dynamically based on instrument info, ensuring compliance with exchange rules.
+-   **Task**: Implement a mechanism to track the status of placed orders (e.g., using `order_link_id`) and update their status.
+-   **Task**: Add support for more advanced order types (e.g., Post-Only, Reduce-Only, Trailing Stop) directly in `place_order`.
+-   **Test Suggestion**: Mock `self.session` methods and write unit tests for `place_order`, `cancel_order`, `cancel_all_orders`, and `set_leverage` to verify:
+    *   Correct parameter passing.
+    *   Proper handling of successful and error responses.
+    *   Correct quantity and price calculations for `place_order`.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Error Handling**: Implement robust error handling throughout the module to provide more informative messages and prevent crashes.
+-   **Modularity**: Consider separating the `BybitClient` into smaller, more focused classes (e.g., `BybitMarketDataClient`, `BybitAccountClient`, `BybitOrderClient`) to improve modularity and maintainability.

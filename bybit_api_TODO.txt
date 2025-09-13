@@ -1,0 +1,68 @@
+# TODO.txt for /home/user/Algobots/bybit_api.py
+
+## File Overview
+`bybit_api.py` provides `BybitContractAPI`, an asynchronous client for interacting with the Bybit V5 API. It supports both REST and WebSocket protocols, featuring custom error handling, rate limiting, and robust connection management with exponential backoff for retries and reconnections. This module is a foundational component for any trading bot built on Bybit.
+
+## Key Components & Code Snippets
+
+### Initialization (`__init__`)
+```python
+class BybitContractAPI:
+    def __init__(self, testnet: bool = False):
+        # ...
+```
+-   **Task**: Implement a more robust way to load API keys and secrets, potentially allowing them to be passed directly or from a secure configuration manager, rather than relying solely on environment variables.
+-   **Task**: Ensure `httpx.AsyncClient` is properly closed when the `BybitContractAPI` instance is no longer needed (e.g., using `async with` or a `__del__` method).
+-   **Test Suggestion**: Write unit tests for `BybitContractAPI` initialization to verify:
+    *   Correct loading of API keys and secrets.
+    *   Proper setting of `base_rest_url`, `ws_private_url`, and `ws_public_url` based on `testnet` flag.
+    *   Error handling for missing API keys.
+
+### REST API Requests (`_make_request`, `_generate_signature`)
+```python
+    async def _make_request(self, method, endpoint, params=None, signed=True):
+        # ...
+    def _generate_signature(self, timestamp, payload):
+        # ...
+```
+-   **Task**: Implement more specific error handling for different `retCode` values from Bybit API responses, raising custom exceptions for known error types (e.g., `InsufficientFundsError`, `InvalidOrderError`).
+-   **Task**: Refine the `RateLimiter` to handle different rate limits for various API endpoints (e.g., market data vs. order placement).
+-   **Test Suggestion**: Mock `httpx.AsyncClient` methods and write unit tests for `_make_request` to verify:
+    *   Correct request construction (headers, parameters, URL).
+    *   Proper signature generation for signed requests.
+    *   Correct handling of successful responses and various error types (HTTP errors, `BybitAPIError`, network errors).
+    *   Rate limiting and exponential backoff behavior.
+-   **Test Suggestion**: Write unit tests for `_generate_signature` with known inputs to ensure correct HMAC SHA256 generation.
+
+### WebSocket Management (`_websocket_handler`, `start_websocket_listener`, `subscribe_ws_private_topic`, `subscribe_ws_public_topic`)
+```python
+    async def _websocket_handler(self, url, ws_state, subscriptions, callback, is_private):
+        # ...
+    def start_private_websocket_listener(self, callback) -> asyncio.Task:
+        # ...
+```
+-   **Task**: Implement a more robust message parsing and routing mechanism within `_websocket_handler` to efficiently dispatch messages to registered callbacks based on topic and symbol.
+-   **Task**: Add logic to handle WebSocket authentication failures more gracefully, potentially re-attempting authentication or alerting the user.
+-   **Task**: Implement a mechanism to track active WebSocket subscriptions and automatically re-subscribe on reconnection.
+-   **Test Suggestion**: Mock `websockets.connect` and simulate WebSocket messages to write integration tests for `_websocket_handler` and `start_websocket_listener` to verify:
+    *   Correct connection and reconnection logic.
+    *   Proper authentication for private streams.
+    *   Correct subscription message sending.
+    *   Accurate message parsing and callback invocation.
+
+### Specific API Endpoints (e.g., `get_kline_rest_fallback`, `get_positions`)
+```python
+    async def get_kline_rest_fallback(self, **kwargs):
+        # ...
+    async def get_positions(self, **kwargs):
+        # ...
+```
+-   **Task**: Implement all necessary Bybit V5 API endpoints (e.g., order placement, amendment, cancellation, account info, wallet balance, instrument info) as methods within `BybitContractAPI`, leveraging `_make_request`.
+-   **Task**: Ensure all data returned from these methods is consistently converted to `Decimal` for financial values.
+-   **Test Suggestion**: Write unit tests for each implemented API endpoint method, mocking `_make_request` and verifying correct parameter passing and response handling.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Error Handling**: Implement robust error handling throughout the module to provide more informative messages and prevent crashes.
+-   **Modularity**: Consider separating the WebSocket client logic into a dedicated class to improve modularity.

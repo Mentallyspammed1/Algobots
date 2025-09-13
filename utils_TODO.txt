@@ -1,0 +1,103 @@
+# TODO.txt for /home/user/Algobots/utils.py
+
+## File Overview
+`utils.py` provides a collection of utility functions and classes essential for the trading bot ecosystem. This includes order book management, robust timezone handling, sensitive data redaction in logging, exchange-specific precision and quantity calculations, and safe JSON serialization for Decimal objects.
+
+## Key Components & Code Snippets
+
+### OrderBook Class
+```python
+class OrderBook:
+    def __init__(self, logger):
+        self.bids = {}
+        self.asks = {}
+        self.last_seq = 0
+        self.logger = logger
+
+    def handle_snapshot(self, data):
+        # ...
+    def apply_delta(self, data):
+        # ...
+    def get_imbalance(self) -> Decimal:
+        # ...
+```
+-   **Task**: Enhance `OrderBook` to maintain sorted bids and asks for faster access to best bid/ask and to calculate depth at various price levels. Consider using `SortedDict` or `heapq`.
+-   **Task**: Add a method to `OrderBook` to calculate the mid-price or spread.
+-   **Test Suggestion**: Write unit tests for `OrderBook` to verify:
+    *   Correct initialization from a snapshot.
+    *   Accurate application of deltas (add, modify, delete entries).
+    *   Correct handling of out-of-order or stale sequence numbers.
+    *   Accurate calculation of `get_imbalance`.
+
+### Timezone Handling (`set_timezone`, `get_timezone`, `FallbackZoneInfo`)
+```python
+def set_timezone(tz_str: str) -> None:
+    """
+    Sets the global timezone for the application.
+    # ...
+def get_timezone() -> dt.tzinfo:
+    """
+    Retrieves the global timezone object.
+    # ...
+class FallbackZoneInfo(dt.tzinfo):
+    """
+    A basic, UTC-only fallback implementation for timezone handling.
+    # ...
+```
+-   **Task**: Consider integrating `pytz` as an alternative or supplementary library for timezone handling, especially for older Python versions where `zoneinfo` might not be fully available or performant.
+-   **Test Suggestion**: Write unit tests for `set_timezone` and `get_timezone` to ensure:
+    *   Correct setting and retrieval of valid timezones.
+    *   Graceful fallback to UTC when an invalid timezone is provided or `zoneinfo` is unavailable.
+    *   Correct behavior of `FallbackZoneInfo` (e.g., `utcoffset`, `dst`, `tzname`).
+
+### SensitiveFormatter
+```python
+class SensitiveFormatter(logging.Formatter):
+    # ...
+    @classmethod
+    def set_sensitive_data(cls, api_key: str | None, api_secret: str | None) -> None:
+        # ...
+```
+-   **Task**: Extend `SensitiveFormatter` to allow dynamic registration of sensitive patterns (regex) beyond just API keys/secrets, for greater flexibility.
+-   **Test Suggestion**: Write unit tests for `SensitiveFormatter` to confirm that API keys and secrets are correctly redacted from log messages, including cases where they appear partially or in different contexts.
+
+### Exchange Precision & Quantity (`get_price_precision`, `get_min_tick_size`, `calculate_order_quantity`)
+```python
+def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> int:
+    # ...
+def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> Decimal:
+    # ...
+def calculate_order_quantity(
+    usdt_amount: Decimal,
+    current_price: Decimal,
+    min_qty: Decimal,
+    qty_step: Decimal,
+    min_order_value: Decimal,
+    logger: logging.Logger
+) -> Decimal:
+    # ...
+```
+-   **Task**: Refine `get_price_precision` and `get_min_tick_size` to handle more variations in exchange `market_info` structures, as different exchanges might represent these values differently.
+-   **Task**: Add a function to calculate quantity precision (number of decimal places for order quantity).
+-   **Test Suggestion**: Write comprehensive unit tests for `get_price_precision` and `get_min_tick_size` with various `market_info` dictionaries (simulating different exchange responses) to ensure accurate precision and tick size determination.
+-   **Test Suggestion**: Write extensive unit tests for `calculate_order_quantity` covering:
+    *   Normal calculation.
+    *   Quantity below `min_qty`.
+    *   Order value below `min_order_value`.
+    *   Edge cases with `qty_step` (e.g., `qty_step` is 0 or very small).
+    *   Invalid inputs (e.g., `usdt_amount` or `current_price` <= 0).
+
+### Other Utilities
+```python
+def round_decimal(value: float, precision: int) -> Decimal:
+    # ...
+def json_decimal_default(obj: Any) -> Any:
+    # ...
+```
+-   **Test Suggestion**: Write unit tests for `round_decimal` with various float inputs and precisions to ensure correct rounding.
+-   **Test Suggestion**: Write unit tests for `json_decimal_default` to confirm it correctly serializes Decimal objects and raises `TypeError` for unsupported types.
+
+## General Improvements
+-   **Type Hinting**: Ensure all functions and methods have comprehensive type hints.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Error Handling**: Enhance error handling within utility functions to provide more specific and actionable error messages.

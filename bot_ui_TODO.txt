@@ -1,0 +1,50 @@
+# TODO.txt for /home/user/Algobots/bot_ui.py
+
+## File Overview
+`bot_ui.py` contains functions responsible for rendering market information, technical indicators, pivot levels, and trading signals to the console. It leverages color codes for improved readability and aims to provide a clear, concise overview of the bot's current market perception and decision-making.
+
+## Key Components & Code Snippets
+
+### Formatting Helpers (`_format_indicator`, `_get_latest`)
+```python
+def _format_indicator(value: Any, default: str = "N/A", precision: int = 4) -> str:
+    # ...
+def _get_latest(df: pd.DataFrame, col: str, precision: int) -> str:
+    # ...
+```
+-   **Task**: Enhance `_format_indicator` to handle percentage values (e.g., for RSI, StochRSI) with appropriate formatting (e.g., adding a '%' sign).
+-   **Task**: Ensure `_format_indicator` consistently handles `Decimal` objects for all numerical values to maintain precision throughout the display.
+-   **Test Suggestion**: Write unit tests for `_format_indicator` with various inputs (Decimal, float, None, NaN, different precisions) to ensure correct formatting and error handling.
+-   **Test Suggestion**: Write unit tests for `_get_latest` with DataFrames containing different data types and missing values.
+
+### Market Info Display (`display_market_info`)
+```python
+def display_market_info(
+    klines_df: pd.DataFrame | None,
+    current_price: Decimal,
+    symbol: str,
+    pivot_resistance_levels: dict[str, Decimal],
+    pivot_support_levels: dict[str, Decimal],
+    bot_logger: Any, # Assuming bot_logger is passed for warnings
+    order_book_imbalance: Decimal | None = None,
+    last_signal: dict[str, Any] | None = None # New parameter for last signal
+):
+    """
+    Prints current market information to the console with enhanced formatting and clarity.
+    # ...
+```
+-   **Task**: Implement a dynamic display for indicators, showing only those that are enabled in the bot's configuration.
+-   **Task**: Add more visual cues for indicator values (e.g., color-coding StochRSI based on overbought/oversold levels).
+-   **Task**: Refine the display of pivot levels to highlight the closest levels to the current price more prominently.
+-   **Task**: Implement a clear/refresh mechanism for the console output to provide a real-time, updating display rather than just appending new lines.
+-   **Test Suggestion**: Write unit tests for `display_market_info` by mocking `klines_df`, `current_price`, `pivot_resistance_levels`, `pivot_support_levels`, `order_book_imbalance`, and `last_signal` to verify:
+    *   Correct formatting and display of all elements.
+    *   Proper handling of missing or invalid data.
+    *   Correct color-coding based on price movement and indicator values.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions.
+-   **Error Handling**: Improve error handling within display functions to prevent crashes due to unexpected data formats.
+-   **Modularity**: Consider creating a `UI` class to encapsulate display logic and manage console output more effectively.
+-   **Dependencies**: Ensure `color_codex.py` is properly imported or its constants are defined directly if it's a standalone file.

@@ -1,0 +1,79 @@
+# TODO.txt for /home/user/Algobots/order_manager.py
+
+## File Overview
+`order_manager.py` encapsulates the core order execution logic for the trading bot. It provides the `OrderManager` class responsible for interacting with the Bybit API to place entry and exit orders, manage order sizing, and dynamically adjust limit orders to maintain competitiveness.
+
+## Key Components & Code Snippets
+
+### OrderManager Class
+```python
+class OrderManager:
+    def __init__(self, bybit_client: BybitContractAPI, bot_instance):
+        self.bybit_client = bybit_client
+        self.bot = bot_instance
+        self.logger = bot_instance.bot_logger
+    # ...
+```
+-   **Task**: Implement a mechanism to track the status of all open orders placed by the `OrderManager` (e.g., using a dictionary `self.open_orders`) to avoid redundant API calls and improve state management.
+-   **Test Suggestion**: Write unit tests for `OrderManager` initialization, ensuring `bybit_client` and `bot_instance` are correctly assigned.
+
+### Instrument Info & Balance (`_get_instrument_info`, `_get_usdt_balance`, `_get_current_execution_price`)
+```python
+    async def _get_instrument_info(self, symbol: str) -> dict[str, Decimal] | None:
+        # ...
+    async def _get_usdt_balance(self) -> Decimal:
+        # ...
+    async def _get_current_execution_price(self, symbol: str) -> Decimal:
+        # ...
+```
+-   **Task**: Implement caching for `_get_instrument_info` as instrument details are relatively static and don't need to be fetched frequently.
+-   **Task**: Enhance error handling in these functions to provide more specific messages for different API errors (e.g., rate limits, authentication issues).
+-   **Test Suggestion**: Mock `self.bybit_client` methods and write unit tests for `_get_instrument_info`, `_get_usdt_balance`, and `_get_current_execution_price` to verify:
+    *   Correct data extraction from API responses.
+    *   Proper handling of empty or malformed API responses.
+    *   Error handling for `BybitAPIError` and other exceptions.
+
+### Entry Order Execution (`execute_entry`)
+```python
+    async def execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: dict[str, Any]) -> bool:
+        """Handles the complete logic for executing an entry order."""
+        # ...
+```
+-   **Task**: Implement a more robust order placement strategy that considers slippage and liquidity, potentially using limit orders with a small offset from the market price.
+-   **Task**: Add logic to handle order placement failures (e.g., retry with a different order type, log and alert).
+-   **Task**: Ensure that `positionIdx` is correctly handled for both `UNIFIED` and `ISOLATED` margin modes, and for `HEDGE_MODE` if applicable.
+-   **Test Suggestion**: Mock `self.bybit_client` methods and `utils.calculate_order_quantity` and write unit tests for `execute_entry` to verify:
+    *   Correct order sizing based on configuration.
+    *   Correct order parameters are passed to `create_order`.
+    *   Proper handling of insufficient balance or invalid instrument info.
+
+### Exit Order Execution (`execute_exit`)
+```python
+    async def execute_exit(self, inventory: Decimal, exit_type: str, exit_price: Decimal, exit_timestamp: Any, exit_info: dict[str, Any]) -> bool:
+        """Handles the complete logic for executing a market exit order."""
+        # ...
+```
+-   **Task**: Implement a more robust exit strategy that considers market conditions (e.g., using limit orders for better execution if liquidity allows).
+-   **Task**: Add logic to handle partial fills of exit orders.
+-   **Test Suggestion**: Mock `self.bybit_client` methods and write unit tests for `execute_exit` to verify:
+    *   Correct order parameters are passed to `create_order` for closing positions.
+    *   Proper handling of zero inventory or order placement failures.
+
+### Limit Order Chasing (`chase_limit_order`)
+```python
+    async def chase_limit_order(self, order_id: str, symbol: str, side: str, chase_aggressiveness: float = 0.0005):
+        """Monitors and amends a limit order to keep it competitive."""
+        # ...
+```
+-   **Task**: Implement a more sophisticated chasing algorithm that considers order book depth and volatility to determine the optimal price to amend to.
+-   **Task**: Add a mechanism to cancel the order if it's not filled after a certain number of amendments or a specified time.
+-   **Test Suggestion**: Mock `self.bybit_client` methods and simulate order book changes to write unit tests for `chase_limit_order` to verify:
+    *   Correct amendment of order price.
+    *   Proper handling of order status changes (filled, canceled).
+    *   Graceful handling of API errors during chasing.
+
+## General Improvements
+-   **Type Hinting**: Add comprehensive type hints to all functions and methods.
+-   **Docstrings**: Add or improve docstrings for all functions and classes.
+-   **Error Handling**: Improve error handling throughout the module to provide more informative messages and prevent crashes.
+-   **Modularity**: Consider extracting the color constants into a separate `colors.py` module if they are used across multiple files.

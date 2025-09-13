@@ -1,0 +1,102 @@
+# TODO.txt for /home/user/Algobots/whaleboty.py
+
+## File Overview
+`whaleboty.py` is a comprehensive Bybit trading bot implementation. It integrates configuration management, logging, Bybit API interaction, position management, performance tracking, an alert system, and a sophisticated `TradingAnalyzer` that calculates numerous technical indicators, including Ehlers SuperTrend and performs Multi-Timeframe (MTF) analysis to generate trading signals.
+
+## Key Components & Code Snippets
+
+### Configuration Management
+```python
+def load_config(filepath: str) -> Dict[str, Any]:
+    """Load configuration from JSON file, creating a default if not found."""
+    # ...
+```
+-   **Task**: Enhance `load_config` to support environment variable overrides for nested configuration parameters, not just top-level ones.
+-   **Test Suggestion**: Write unit tests for `load_config` to ensure it correctly loads, creates default, and merges configurations, including nested structures.
+
+### Logging Setup
+```python
+class SensitiveFormatter(logging.Formatter):
+    """Formatter that redacts API keys from log records."""
+    # ...
+def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
+    """Configures and returns a logger with file and console handlers."""
+    # ...
+```
+-   **Task**: Integrate `SensitiveFormatter` more broadly to redact other sensitive information (e.g., account balances, specific order IDs) if they appear in logs.
+-   **Test Suggestion**: Write a test for `SensitiveFormatter` to confirm that API keys and other defined sensitive words are correctly redacted from log messages.
+
+### Bybit API Interaction
+```python
+def bybit_request(
+    method: str, endpoint: str, params: Optional[Dict] = None,
+    signed: bool = False, logger: logging.Logger = setup_logger("bybit_api")
+) -> Optional[Dict]:
+    """Sends a request to the Bybit API."""
+    # ...
+```
+-   **Task**: Implement a more robust timestamp synchronization mechanism with Bybit's server time to prevent `X-BAPI-TIMESTAMP` errors.
+-   **Task**: Add rate-limiting logic to `bybit_request` to respect Bybit's API limits and prevent IP bans.
+-   **Test Suggestion**: Mock `requests.Session` and test `bybit_request` for various scenarios: successful response, API errors (`retCode != 0`), HTTP errors, connection errors, and timeouts.
+-   **Test Suggestion**: Test `generate_signature` with known payloads and secrets to ensure correct HMAC SHA256 generation.
+
+### Position Management (`PositionManager`)
+```python
+class PositionManager:
+    """Manages open positions, stop-loss, and take-profit levels."""
+    # ...
+    def open_position(self, signal: str, current_price: Decimal, atr_value: Decimal) -> Optional[Dict]:
+        """
+        Opens a new position if conditions allow.
+        Returns the new position details or None.
+        """
+        # ...
+    def manage_positions(self, current_price: Decimal, performance_tracker: Any) -> None:
+        """
+        Checks and manages all open positions (SL/TP).
+        In a real bot, this would interact with exchange orders.
+        """
+        # ...
+```
+-   **Task**: Integrate actual Bybit order placement/amendment/cancellation calls into `open_position` and `manage_positions` instead of just simulating. This will require `bybit_request` calls.
+-   **Task**: Implement dynamic position sizing based on available margin and current market conditions, not just fixed risk per trade.
+-   **Task**: Handle partial fills and order modifications more gracefully.
+-   **Test Suggestion**: Write unit tests for `PositionManager`'s `_calculate_order_size` with various inputs for `current_price`, `atr_value`, and config settings.
+-   **Test Suggestion**: Test `open_position` and `manage_positions` with mocked `bybit_request` calls to simulate order execution and SL/TP triggers.
+
+### Trading Analysis (`TradingAnalyzer`)
+```python
+class TradingAnalyzer:
+    """Analyzes trading data and generates signals with MTF and Ehlers SuperTrend."""
+    # ...
+    def _calculate_all_indicators(self) -> None:
+        """Calculate all enabled technical indicators, including Ehlers SuperTrend."""
+        # ...
+    def generate_trading_signal(
+        self, current_price: Decimal, orderbook_data: Optional[Dict],
+        mtf_trends: Dict[str, str]
+    ) -> Tuple[str, float]:
+        """Generates a signal using confluence of indicators, including Ehlers SuperTrend."""
+        # ...
+```
+-   **Task**: Refine the `generate_trading_signal` logic to incorporate more sophisticated weighting and confluence rules, possibly using machine learning (if `ML_ENHANCEMENT` is enabled in the future).
+-   **Task**: Implement a mechanism to dynamically adjust indicator parameters based on market volatility or other adaptive measures.
+-   **Test Suggestion**: Write extensive unit tests for `TradingAnalyzer`'s indicator calculation methods (e.g., `calculate_super_smoother`, `calculate_ehlers_supertrend`, `calculate_rsi`, `calculate_stoch_rsi`, etc.) using known historical data and expected outputs.
+-   **Test Suggestion**: Test `generate_trading_signal` with various combinations of indicator values and MTF trends to ensure correct signal generation and scoring.
+
+### Main Execution Logic (`main`)
+```python
+def main() -> None:
+    """Main function to orchestrate the bot's operation."""
+    # ...
+```
+-   **Task**: Implement a command-line interface (CLI) using `argparse` for `main.py` to control bot behavior (e.g., start/stop, dry-run, backtest mode, specify config file).
+-   **Task**: Add a mechanism for real-time monitoring of bot status, open positions, and performance metrics (e.g., a simple web interface or a TUI).
+-   **Test Suggestion**: Write an integration test for the `main` function that runs a simplified bot loop with mocked API calls and verifies that signals are generated and positions are managed as expected.
+
+## General Improvements
+-   **Type Hinting**: Review and ensure comprehensive type hinting across all functions and methods for better code clarity and maintainability.
+-   **Docstrings**: Add or improve docstrings for all functions, classes, and complex methods, explaining their purpose, arguments, and return values.
+-   **Error Handling**: Enhance error handling throughout the bot, especially for external API calls and data processing, to ensure graceful degradation and informative logging.
+-   **Modularity**: Consider further breaking down `TradingAnalyzer` into smaller, more focused indicator modules if it becomes too large.
+-   **Configuration**: Implement a more robust configuration system that allows for multiple profiles (e.g., for different symbols or strategies) without modifying the code).
