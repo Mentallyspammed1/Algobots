@@ -2,6 +2,11 @@
     "symbol": "BTCUSDT",
     "interval": "15",
     "loop_delay": 15,
+    "orderbook_limit": 50,
+    "signal_score_threshold": 2,
+    "cooldown_sec": 60,
+    "hysteresis_ratio": 0.85,
+    "volume_confirmation_multiplier": 1.5,
     "trade_management": {
         "enabled": true,
         "account_balance": "1000",
@@ -14,21 +19,6 @@
         "slippage_percent": "0.001",
         "trading_fee_percent": "0.0005"
     },
-    "martingale": {
-        "enabled": false,
-        "multiplier": 2,
-        "max_levels": 5
-    },
-    "dashboard": {
-        "enabled": true,
-        "port": 3000,
-        "update_interval_ms": 1000
-    },
-    "orderbook_limit": 50,
-    "signal_score_threshold": 2,
-    "cooldown_sec": 60,
-    "hysteresis_ratio": 0.85,
-    "volume_confirmation_multiplier": 1.5,
     "risk_guardrails": {
         "enabled": true,
         "max_day_loss_pct": 3,
@@ -273,5 +263,15 @@
                 "interval_ms": 5000
             }
         }
+    },
+    "martingale": {
+        "enabled": false,
+        "multiplier": 2,
+        "max_levels": 5
+    },
+    "dashboard": {
+        "enabled": true,
+        "port": 3000,
+        "update_interval_ms": 1000
     }
 }

@@ -535,19 +535,19 @@ process.on('unhandledRejection', (reason) => {
 // ====================== 
 // STARTUP
 // ====================== 
-async function startBot() {
+async function startBot(strategyConfig) { // Added strategyConfig parameter
   logger.info(neon.info('🚀 Starting Neon Market Maker Bot...'), {
     version: '3.7.0',
-    symbol: SYMBOL,
-    testnet: IS_TESTNET,
-    dryRun: DRY_RUN,
+    symbol: strategyConfig.SYMBOL || SYMBOL, // Use strategyConfig for symbol
+    testnet: strategyConfig.TESTNET || IS_TESTNET, // Use strategyConfig for testnet
+    dryRun: strategyConfig.DRY_RUN || DRY_RUN, // Use strategyConfig for dryRun
     dataSource: 'Live Bybit API',
-    maxPosition: MAX_NET_POSITION,
-    volatilityWindow: VOLATILITY_WINDOW,
-    smsAlerts: USE_TERMUX_SMS ? SMS_PHONE_NUMBER : 'disabled',
+    maxPosition: strategyConfig.MAX_NET_POSITION || MAX_NET_POSITION, // Use strategyConfig
+    volatilityWindow: strategyConfig.VOLATILITY_WINDOW || VOLATILITY_WINDOW, // Use strategyConfig
+    smsAlerts: (strategyConfig.USE_TERMUX_SMS || USE_TERMUX_SMS) ? (strategyConfig.SMS_PHONE_NUMBER || SMS_PHONE_NUMBER) : 'disabled', // Use strategyConfig
   });
 
-  if (DRY_RUN) {
+  if (strategyConfig.DRY_RUN || DRY_RUN) { // Use strategyConfig for dryRun
     console.log('\n' + neon.header('🔥 DRY RUN MODE — SIMULATING TRADES WITH LIVE MARKET DATA 🔥'));
     console.log(neon.dim('💡 Tip: Bot is resilient to empty books, rate limits, and crashes.') + '\n');
   }
@@ -556,7 +556,7 @@ async function startBot() {
   startHeartbeat();
   setupWebSocket();
   await refreshOrders();
-  setInterval(refreshOrders, REFRESH_INTERVAL);
+  setInterval(refreshOrders, strategyConfig.REFRESH_INTERVAL || REFRESH_INTERVAL); // Use strategyConfig
 }
 
 // === LAUNCH ===

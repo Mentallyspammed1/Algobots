@@ -24,6 +24,7 @@ const MARKET_MAKER_DEFAULTS = {
     STOP_ON_LARGE_POS: false,
     LOG_TO_FILE: false,
     LOG_LEVEL: 'info',
+    DEBUG_MODE: false, // New debug flag
     PNL_CSV_PATH: './logs/pnl.csv',
     USE_TERMUX_SMS: false,
     SMS_PHONE_NUMBER: '',
@@ -66,6 +67,36 @@ const BOT_DEFAULTS = {
     TRAILING_STOP_ACTIVE: true,
     FIXED_PROFIT_TARGET_PCT: 0.0,
     TRADING_SYMBOLS: ['BTCUSDT', 'ETHUSDT'],
+
+    // Orchestrator settings
+    // ACTIVE_STRATEGIES: [], // e.g., ['ehlst', 'whale'] - Replaced by STRATEGIES object
+    STRATEGIES: {
+        ehlst: {
+            enabled: false,
+            // Add Ehlers Supertrend specific settings here if they are not already in BOT_DEFAULTS
+            // For example:
+            // EST_FAST_LENGTH: 10,
+            // EST_FAST_MULTIPLIER: 2.0,
+            // ...
+        },
+        whale: {
+            enabled: false,
+            // Add Whale strategy specific settings here
+        },
+        market_maker: {
+            enabled: false,
+            // Add Market Maker strategy specific settings here
+        },
+        chanexit: {
+            enabled: false,
+            // Add ChanExit strategy specific settings here
+        },
+        wbglm: {
+            enabled: true,
+            // Add wbglm specific settings here if needed
+        },
+        // Add other strategies as needed
+    },
 
     // Indicator specific settings (from chanexit.js and ehlst.js)
     ATR_PERIOD: 14,
@@ -377,6 +408,7 @@ class ConfigManager {
             SYMBOL: process.env.SYMBOL || fileConfig.SYMBOL || MARKET_MAKER_DEFAULTS.SYMBOL, // Specific to market-maker
             LOG_LEVEL: process.env.LOG_LEVEL || fileConfig.LOG_LEVEL || BOT_DEFAULTS.LOG_LEVEL,
             LOG_TO_FILE: process.env.LOG_TO_FILE === 'true' || fileConfig.LOG_TO_FILE || BOT_DEFAULTS.LOG_TO_FILE,
+            DEBUG_MODE: process.env.DEBUG_MODE === 'true' || fileConfig.DEBUG_MODE || BOT_DEFAULTS.DEBUG_MODE, // Load debug mode
             USE_TERMUX_SMS: process.env.USE_TERMUX_SMS === 'true' || fileConfig.USE_TERMUX_SMS || BOT_DEFAULTS.USE_TERMUX_SMS,
             SMS_PHONE_NUMBER: process.env.SMS_PHONE_NUMBER || fileConfig.SMS_PHONE_NUMBER || BOT_DEFAULTS.SMS_PHONE_NUMBER,
             BYBIT_BASE_URL: process.env.BYBIT_BASE_URL || fileConfig.BYBIT_BASE_URL || WHALE_BOT_DEFAULTS.BYBIT_BASE_URL,
@@ -410,6 +442,12 @@ class ConfigManager {
             }
         };
         ensureBooleans(this.config);
+
+        // Override LOG_LEVEL if DEBUG_MODE is true
+        if (this.config.DEBUG_MODE) {
+            this.config.LOG_LEVEL = 'debug';
+            console.log("DEBUG_MODE is enabled. Setting LOG_LEVEL to 'debug'.");
+        }
 
         // Validate required API keys for non-dry-run
         if (!this.config.DRY_RUN && (!this.config.API_KEY || !this.config.API_SECRET)) {

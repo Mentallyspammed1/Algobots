@@ -4,6 +4,7 @@ import { CONFIG } from './config.js';
 import { logger, neon } from './logger.js';
 import { bybitClient } from './bybit_api_client.js';
 import { calculateEhlSupertrendIndicators } from './indicators.js';
+import { spawnSync } from 'child_process';
 
 // ====================== 
 // CONFIGURATION (now from config.js) 
@@ -58,7 +59,6 @@ function isMarketOpen(localTime, openHour, closeHour) {
 function sendTermuxToast(message) {
     if (process.platform === 'linux' && process.env.TERMUX_VERSION) {
         try {
-            const { spawnSync } = require('child_process');
             spawnSync('termux-toast', [message], { stdio: 'inherit' });
         } catch (e) {
             logger.warn(neon.warn(`Could not send Termux toast: ${e.message}`));
@@ -73,13 +73,29 @@ function calculatePnl(side, entryPrice, exitPrice, qty) {
 // ====================== 
 // SIGNAL GENERATION 
 // ====================== 
-function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyPrecision) {
+function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyPrecision, strategyConfig) { // Added strategyConfig
+    logger.debug(`generateEhlSupertrendSignals: Generating signals with config: ${JSON.stringify(strategyConfig)}`);
+    // Extract relevant config from strategyConfig or fall back to global CONFIG
+    const MIN_KLINES_FOR_STRATEGY = strategyConfig.MIN_KLINES_FOR_STRATEGY || CONFIG.MIN_KLINES_FOR_STRATEGY;
+    const RSI_CONFIRM_LONG_THRESHOLD = strategyConfig.RSI_CONFIRM_LONG_THRESHOLD || CONFIG.RSI_CONFIRM_LONG_THRESHOLD;
+    const RSI_OVERBOUGHT = strategyConfig.RSI_OVERBOUGHT || CONFIG.RSI_OVERBOUGHT;
+    const RSI_OVERSOLD = strategyConfig.RSI_OVERSOLD || CONFIG.RSI_OVERSOLD;
+    const RSI_CONFIRM_SHORT_THRESHOLD = strategyConfig.RSI_CONFIRM_SHORT_THRESHOLD || CONFIG.RSI_CONFIRM_SHORT_THRESHOLD;
+    const ADX_THRESHOLD = strategyConfig.ADX_THRESHOLD || CONFIG.ADX_THRESHOLD;
+    const USE_ATR_FOR_TP_SL = strategyConfig.USE_ATR_FOR_TP_SL || CONFIG.USE_ATR_FOR_TP_SL;
+    const TP_ATR_MULTIPLIER = strategyConfig.TP_ATR_MULTIPLIER || CONFIG.TP_ATR_MULTIPLIER;
+    const SL_ATR_MULTIPLIER = strategyConfig.SL_ATR_MULTIPLIER || CONFIG.SL_ATR_MULTIPLIER;
+    const REWARD_RISK_RATIO = strategyConfig.REWARD_RISK_RATIO || CONFIG.REWARD_RISK_RATIO;
+
+
     if (!klines || klines.length < MIN_KLINES_FOR_STRATEGY) {
+        logger.debug(`generateEhlSupertrendSignals: Not enough klines (${klines ? klines.length : 0}) for strategy. Required: ${MIN_KLINES_FOR_STRATEGY}`);
         return ['none', null, null, null, [], false];
     }
 
-    const dfIndicators = calculateEhlSupertrendIndicators(klines, CONFIG);
+    const dfIndicators = calculateEhlSupertrendIndicators(klines, strategyConfig); // Pass strategyConfig
     if (!dfIndicators || dfIndicators.length < MIN_KLINES_FOR_STRATEGY) {
+        logger.debug(`generateEhlSupertrendSignals: Not enough indicator data (${dfIndicators ? dfIndicators.length : 0}) for strategy. Required: ${MIN_KLINES_FOR_STRATEGY}`);
         return ['none', null, null, null, dfIndicators, false];
     }
 
@@ -97,13 +113,13 @@ function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyP
     const fastCrossesBelowSlow = prevRow.st_fast_line >= prevRow.st_slow_line && lastRow.st_fast_line < lastRow.st_slow_line;
     
     const fisherConfirmLong = lastRow.fisher > lastRow.fisher_signal;
-    const rsiConfirmLong = CONFIG.RSI_CONFIRM_LONG_THRESHOLD < lastRow.rsi && lastRow.rsi < CONFIG.RSI_OVERBOUGHT;
+    const rsiConfirmLong = RSI_CONFIRM_LONG_THRESHOLD < lastRow.rsi && lastRow.rsi < RSI_OVERBOUGHT;
     
     const fisherConfirmShort = lastRow.fisher < lastRow.fisher_signal;
-    const rsiConfirmShort = CONFIG.RSI_OVERSOLD < lastRow.rsi && lastRow.rsi < CONFIG.RSI_CONFIRM_SHORT_THRESHOLD;
+    const rsiConfirmShort = RSI_OVERSOLD < lastRow.rsi && lastRow.rsi < RSI_CONFIRM_SHORT_THRESHOLD;
     
     const volumeConfirm = lastRow.volume_spike || prevRow.volume_spike;
-    const adxConfirm = lastRow.adx > CONFIG.ADX_THRESHOLD;
+    const adxConfirm = lastRow.adx > ADX_THRESHOLD;
     
     let signal = 'none';
     let riskDistance = null;
@@ -153,9 +169,25 @@ function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyP
 // ====================== 
 // MAIN BOT LOGIC 
 // ====================== 
-async function main() {
+async function main(strategyConfig) { // Added strategyConfig parameter
     logger.info(neon.header('Pyrmethus awakens the Ehlers Supertrend Cross Strategy!'));
+    logger.debug(`ehlst_strategy: Initializing with config: ${JSON.stringify(strategyConfig)}`);
     
+    // Extract strategy-specific config, falling back to global CONFIG if not provided
+    const SYMBOL = strategyConfig.SYMBOL || CONFIG.SYMBOL;
+    const TRADING_SYMBOLS = strategyConfig.TRADING_SYMBOLS || CONFIG.TRADING_SYMBOLS;
+    const TIMEFRAME = strategyConfig.TIMEFRAME || CONFIG.TIMEFRAME;
+    const MIN_KLINES_FOR_STRATEGY = strategyConfig.MIN_KLINES_FOR_STRATEGY || CONFIG.MIN_KLINES_FOR_STRATEGY;
+    const MAX_POSITIONS = strategyConfig.MAX_POSITIONS || CONFIG.MAX_POSITIONS;
+    const RISK_PER_TRADE_PCT = strategyConfig.RISK_PER_TRADE_PCT || CONFIG.RISK_PER_TRADE_PCT;
+    const ORDER_QTY_USDT = strategyConfig.ORDER_QTY_USDT || CONFIG.ORDER_QTY_USDT;
+    const LEVERAGE = strategyConfig.LEVERAGE || CONFIG.LEVERAGE;
+    const MARGIN_MODE = strategyConfig.MARGIN_MODE || CONFIG.MARGIN_MODE;
+    const REWARD_RISK_RATIO = strategyConfig.REWARD_RISK_RATIO || CONFIG.REWARD_RISK_RATIO;
+    const USE_ATR_FOR_TP_SL = strategyConfig.USE_ATR_FOR_TP_SL || CONFIG.USE_ATR_FOR_TP_SL;
+    const TP_ATR_MULTIPLIER = strategyConfig.TP_ATR_MULTIPLIER || CONFIG.TP_ATR_MULTIPLIER;
+    const SL_ATR_MULTIPLIER = strategyConfig.SL_ATR_MULTIPLIER || CONFIG.SL_ATR_MULTIPLIER;
+
     const symbols = TRADING_SYMBOLS;
     if (!symbols || symbols.length === 0) {
         logger.info(neon.warn('No symbols in config.yaml. Exiting.'));
@@ -204,7 +236,7 @@ async function main() {
             const currentPrice = klines[klines.length - 1].close;
             const [pricePrecision, qtyPrecision, minOrderQty] = await bybitClient.getPrecisions(symbol);
             
-            const [signal, risk, tp, sl, dfIndicators, volConfirm] = generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyPrecision);
+            const [signal, risk, tp, sl, dfIndicators, volConfirm] = generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyPrecision, strategyConfig);
 
             if (dfIndicators && dfIndicators.length > 1) {
                 const lastRow = dfIndicators[dfIndicators.length - 1];
@@ -232,19 +264,19 @@ async function main() {
                 if (signal === 'Buy') {
                     reasoning.push(`SlowST is Up (${prevRow.st_slow_line.toFixed(4)})`);
                     reasoning.push(`FastST crossed above SlowST (${prevRow.st_fast_line.toFixed(4)} -> ${lastRow.st_fast_line.toFixed(4)})`);
-                    reasoning.push(`ADX > ${CONFIG.ADX_THRESHOLD} (${lastRow.adx.toFixed(2)})`);
+                    reasoning.push(`ADX > ${ADX_THRESHOLD} (${lastRow.adx.toFixed(2)})`);
                     const confirmations = [];
                     if (lastRow.fisher > lastRow.fisher_signal) confirmations.push(`Fisher (${lastRow.fisher.toFixed(2)} > ${lastRow.fisher_signal.toFixed(2)})`);
-                    if (CONFIG.RSI_CONFIRM_LONG_THRESHOLD < lastRow.rsi && lastRow.rsi < CONFIG.RSI_OVERBOUGHT) confirmations.push(`RSI (${lastRow.rsi.toFixed(2)})`);
+                    if (RSI_CONFIRM_LONG_THRESHOLD < lastRow.rsi && lastRow.rsi < RSI_OVERBOUGHT) confirmations.push(`RSI (${lastRow.rsi.toFixed(2)})`);
                     if (volConfirm) confirmations.push("Volume Spike");
                     reasoning.push(`Confirms (${confirmations.length}/2): ${confirmations.join(', ')}`);
                 } else {
                     reasoning.push(`SlowST is Down (${prevRow.st_slow_line.toFixed(4)})`);
                     reasoning.push(`FastST crossed below SlowST (${prevRow.st_fast_line.toFixed(4)} -> ${lastRow.st_fast_line.toFixed(4)})`);
-                    reasoning.push(`ADX > ${CONFIG.ADX_THRESHOLD} (${lastRow.adx.toFixed(2)})`);
+                    reasoning.push(`ADX > ${ADX_THRESHOLD} (${lastRow.adx.toFixed(2)})`);
                     const confirmations = [];
                     if (lastRow.fisher < lastRow.fisher_signal) confirmations.push(`Fisher (${lastRow.fisher.toFixed(2)} < ${lastRow.fisher_signal.toFixed(2)})`);
-                    if (CONFIG.RSI_OVERSOLD < lastRow.rsi && lastRow.rsi < CONFIG.RSI_CONFIRM_SHORT_THRESHOLD) confirmations.push(`RSI (${lastRow.rsi.toFixed(2)})`);
+                    if (RSI_OVERSOLD < lastRow.rsi && lastRow.rsi < RSI_CONFIRM_SHORT_THRESHOLD) confirmations.push(`RSI (${lastRow.rsi.toFixed(2)})`);
                     if (volConfirm) confirmations.push("Volume Spike");
                     reasoning.push(`Confirms (${confirmations.length}/2): ${confirmations.join(', ')}`);
                 }
@@ -319,7 +351,7 @@ async function main() {
 // ====================== 
 (async () => {
     try {
-        await main();
+        await main(CONFIG);
     } catch (err) {
         logger.critical(neon.error(`Unhandled error in main loop: ${err.message}`), err);
         process.exit(1);

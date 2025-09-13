@@ -12,6 +12,7 @@
     - [ ] Identify and remove redundant `.bak` files (`ehlst.bak.js`, `market-maker.bak.js`, `market-maker.bak1.js`).
     - [ ] Extract common utilities (logging, API interaction, math helpers) into shared modules.
     - [ ] Create a clear module structure for strategies, indicators, risk management, etc.
+- [ ] Convert all CommonJS `require` statements to ES module `import` statements across the codebase to align with `"type": "module"` in `package.json`.
 - [ ] Implement a consistent logging approach across all modules, potentially using a single logger instance.
 - [ ] Review and update `package.json` dependencies for latest stable versions.
     - [ ] Run `npm audit` and `npm outdated` to identify and address dependency vulnerabilities and updates.

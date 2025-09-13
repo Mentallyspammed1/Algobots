@@ -295,6 +295,39 @@ def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) 
 
 from unanimous_logger import setup_logger
 
+# --- Logger Setup ---
+# A simple class to adapt the config dict to what setup_logger expects
+class UnanimousLoggerConfig:
+    def __init__(self, config_dict):
+        # Extract log level from config, default to INFO
+        self.LOG_LEVEL = config_dict.get("log_level", "INFO").upper()
+        
+        # Construct log file path from constants defined in the script
+        log_filename = config_dict.get("log_filename", "wb.log")
+        self.LOG_FILE_PATH = os.path.join(LOG_DIRECTORY, log_filename)
+        
+        # Pass color codes
+        self.NEON_BLUE = NEON_BLUE
+        self.RESET = RESET
+
+# Create a temporary basic logger for the initial config loading
+temp_logger = logging.getLogger("config_loader")
+temp_logger.setLevel(logging.INFO)
+if not temp_logger.handlers:
+    temp_logger.addHandler(logging.StreamHandler(sys.stdout))
+
+# Load the main configuration using the temporary logger
+config = load_config(CONFIG_FILE, temp_logger)
+
+# Create the config object for the unanimous logger
+logger_config = UnanimousLoggerConfig(config)
+
+# Set up the main application logger using the loaded configuration
+logger = setup_logger(logger_config, log_name="wb", json_log_file="wb.json.log")
+# --- End Logger Setup ---
+
+
+
 
 # --- API Interaction ---
 def create_session() -> requests.Session:
@@ -2365,7 +2398,7 @@ def display_indicator_values_and_price(
 # --- Main Execution Logic ---
 def main() -> None:
     """Orchestrate the bot's operation."""
-    logger = setup_logger("wgwhalex_bot")
+    # The logger is now initialized globally.
     config = load_config(CONFIG_FILE, logger)
     alert_system = AlertSystem(logger)
 

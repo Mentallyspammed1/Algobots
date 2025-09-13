@@ -341,14 +341,14 @@ export default class SignalGenerator {
     const setup = {
       entry: this.roundPrice(entry),
       stopLoss: this.roundPrice(stopLoss),
-      takeProfit: this.roundPrice(takeProfits.level), // Primary TP for compatibility
+      takeProfit: this.roundPrice(takeProfits[0].level), // Primary TP for compatibility
       takeProfits: takeProfits.map(tp => ({
         ...tp,
         level: this.roundPrice(tp.level)
       })),
-      riskReward: riskReward.toFixed(2),
-      slPercentage: slPercentage.toFixed(2),
-      tpPercentage: tpPercentages.returnPercent.toFixed(2),
+      riskReward: riskReward,
+      slPercentage: slPercentage,
+      tpPercentage: tpPercentages[0].returnPercent,
       tpPercentages,
       positionSize,
       entryStrategy: this.enhanceEntryStrategy(aiAnalysis.entryStrategy, marketData),

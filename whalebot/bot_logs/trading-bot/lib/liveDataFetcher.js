@@ -257,7 +257,7 @@ export default class LiveDataFetcher {
           const response = await this.axiosInstance.get(endpoint, { params });
 
           if (response.data && response.data.retCode === 0 && response.data.result.list.length > 0) {
-            const ticker = response.data.result.list;
+            const ticker = response.data.result.list[0];
             const currentPrice = parseFloat(ticker.lastPrice);
             
             // Validate price
