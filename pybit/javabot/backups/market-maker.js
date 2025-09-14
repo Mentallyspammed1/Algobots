@@ -19,7 +19,7 @@ const neon = {
   warn: chalk.hex('#FFAA00').bold,
   error: chalk.hex('#FF0000').bold,
   price: chalk.hex('#00FFAA').bold,
-  pnl: (val) => (val >= 0 ? chalk.hex('#00FF00').bold : chalk.hex('#FF0000').bold)(val.toFixed(6)),
+  pnl: (val) => (val >= 0 ? chalk.hex('#00FF00').bold : chalk.hex('#FF0000').bold)(val.toFixed(QTY_DISPLAY_PRECISION)),
   bid: chalk.hex('#00AAFF').bold,
   ask: chalk.hex('#FF55FF').bold,
   header: chalk.hex('#FFFFFF').bgHex('#001122').bold,
@@ -69,6 +69,9 @@ const SLIPPAGE_FACTOR = parseFloat(process.env.SLIPPAGE_FACTOR) || 0.0001;
 const GRID_SPACING_BASE = parseFloat(process.env.GRID_SPACING_BASE) || 0.00015;
 const IMBALANCE_SPREAD_FACTOR = parseFloat(process.env.IMBALANCE_SPREAD_FACTOR) || 0.2;
 const IMBALANCE_ORDER_SIZE_FACTOR = parseFloat(process.env.IMBALANCE_ORDER_SIZE_FACTOR) || 0.5;
+
+const PRICE_DISPLAY_PRECISION = parseInt(process.env.PRICE_DISPLAY_PRECISION) || 4;
+const QTY_DISPLAY_PRECISION = parseInt(process.env.QTY_DISPLAY_PRECISION) || 8;
 
 const BASE_URL = IS_TESTNET ? 'https://api-testnet.bybit.com' : 'https://api.bybit.com';
 
@@ -349,11 +352,11 @@ function analyzeOrderBook(bids, asks) {
 function displayOrderBook(bids, asks, midPrice, analysis) {
   const safeMid = Number.isFinite(midPrice) ? midPrice : 0;
   const imbStr = Number.isFinite(analysis.imbalance) ? (analysis.imbalance * 100).toFixed(2) : '0.00';
-  const depthBidsStr = Number.isFinite(analysis.depth.bids) ? analysis.depth.bids.toFixed(4) : '0.0000';
-  const depthAsksStr = Number.isFinite(analysis.depth.asks) ? analysis.depth.asks.toFixed(4) : '0.0000';
+  const depthBidsStr = Number.isFinite(analysis.depth.bids) ? analysis.depth.bids.toFixed(QTY_DISPLAY_PRECISION) : '0.0000';
+  const depthAsksStr = Number.isFinite(analysis.depth.asks) ? analysis.depth.asks.toFixed(QTY_DISPLAY_PRECISION) : '0.0000';
   const depthRatioStr = Number.isFinite(analysis.depth.ratio) ? analysis.depth.ratio.toFixed(2) : '1.00';
   console.log('\n' + neon.header('📊 LIVE ORDER BOOK ANALYSIS'));
-  console.log(`${neon.dim('Mid Price:')} ${neon.price(`$${safeMid.toFixed(2)}`)}`);
+  console.log(`${neon.dim('Mid Price:')} ${neon.price(`${safeMid.toFixed(PRICE_DISPLAY_PRECISION)}`)}`);
   console.log(`${neon.dim('Imbalance:')} ${analysis.imbalance >= 0 ? neon.bid('BUY ') : neon.ask('SELL ')} ${imbStr}%`);
   console.log(`${neon.dim('Depth:')} ${neon.bid('Bid')} ${depthBidsStr} | ${neon.ask('Ask')} ${depthAsksStr} | Ratio: ${depthRatioStr}`);
   console.log('\n' + neon.bid('BIDS') + neon.dim(' (Heat %)') + ' | ' + neon.ask('ASKS') + neon.dim(' (Heat %)'));
@@ -363,9 +366,9 @@ function displayOrderBook(bids, asks, midPrice, analysis) {
     const ask = analysis.askHeat[i];
     if (bid) cumulativeBid += bid.size;
     if (ask) cumulativeAsk += ask.size;
-    const bidLine = bid ? `${neon.bid(`$${bid.price.toFixed(2)}`)} ${neon.dim(`${bid.size.toFixed(4)}`)} ${neon.dim(`(${cumulativeBid.toFixed(4)})`)}` : ''.padEnd(36);
+    const bidLine = bid ? `${neon.bid(`${bid.price.toFixed(PRICE_DISPLAY_PRECISION)}`)} ${neon.dim(`${bid.size.toFixed(QTY_DISPLAY_PRECISION)}`)} ${neon.dim(`(${cumulativeBid.toFixed(QTY_DISPLAY_PRECISION)})`)}` : ''.padEnd(36);
     const bidHeatStr = bid ? neon.bid(`${(bid.heat || 0).toFixed(1)}%`) : ''.padEnd(8);
-    const askLine = ask ? `${neon.ask(`$${ask.price.toFixed(2)}`)} ${neon.dim(`${ask.size.toFixed(4)}`)} ${neon.dim(`(${cumulativeAsk.toFixed(4)})`)}` : ''.padEnd(36);
+    const askLine = ask ? `${neon.ask(`${ask.price.toFixed(PRICE_DISPLAY_PRECISION)}`)} ${neon.dim(`${ask.size.toFixed(QTY_DISPLAY_PRECISION)}`)} ${neon.dim(`(${cumulativeAsk.toFixed(QTY_DISPLAY_PRECISION)})`)}` : ''.padEnd(36);
     const askHeatStr = ask ? neon.ask(`${(ask.heat || 0).toFixed(1)}%`) : ''.padEnd(8);
     console.log(`${bidLine.padEnd(36)} ${bidHeatStr.padEnd(8)} | ${askLine.padEnd(36)} ${askHeatStr}`);
   }
@@ -385,7 +388,7 @@ function updatePnL(side, qty, price) {
     const closePnl = (price - botState.averageEntryPrice) * -oldPos;
     botState.realizedPnL += closePnl;
     botState.tradeCount += 1;
-    log('info', `[PnL] 💰 Realized ${closePnl.toFixed(6)}`, { side, closeQty: closeQty.toFixed(6) });
+    log('info', `[PnL] 💰 Realized ${closePnl.toFixed(QTY_DISPLAY_PRECISION)}`, { side, closeQty: closeQty.toFixed(QTY_DISPLAY_PRECISION) });
   }
 
   if (newPos === 0) {

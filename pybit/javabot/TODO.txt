@@ -31,13 +31,13 @@
 - [ ] Ensure proper cleanup of resources (e.g., database connections, WebSocket connections) on bot shutdown or error.
 
 ## Trading Logic & Strategy
+- [ ] Implement a robust position reconciliation mechanism to ensure local state matches exchange state.
 - [ ] Refine signal generation logic across all strategies for consistency and performance.
 - [ ] Improve precision and dynamic adjustment of Stop-Loss (SL) and Take-Profit (TP) orders.
     - [ ] Fetch price and quantity precision from exchange info dynamically.
 - [ ] Review and standardize indicator implementations (e.g., remove "Mock" or "Placeholder" indicators in `indicators.js`).
-- [ ] Implement a robust position reconciliation mechanism to ensure local state matches exchange state.
-- [ ] Consider adding more advanced risk management features (e.g., daily loss limits, max drawdown, consecutive loss limits).
 - [ ] Implement a unified position tracking and PnL management system across all bot instances.
+- [ ] Consider adding more advanced risk management features (e.g., daily loss limits, max drawdown, consecutive loss limits).
 - [ ] Explore implementing a backtesting framework to test strategies against historical data.
 
 ## Documentation & Testing
