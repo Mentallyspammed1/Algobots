@@ -472,6 +472,61 @@ class BybitClient:
             return self._handle_api_response(response)
         return None
 
+    def amend_order(
+        self, 
+        category: str, 
+        symbol: str, 
+        order_id: str, 
+        new_stop_loss: Decimal | None = None, 
+        new_take_profit: Decimal | None = None
+    ) -> dict | None:
+        endpoint = "/v5/order/amend"
+        params = {
+            "category": category,
+            "symbol": symbol,
+            "orderId": order_id,
+        }
+        if new_stop_loss is not None:
+            params["stopLoss"] = str(new_stop_loss)
+        if new_take_profit is not None:
+            params["takeProfit"] = str(new_take_profit)
+
+        if not new_stop_loss and not new_take_profit:
+            self.logger.warning(f"{NEON_YELLOW}No new stop loss or take profit provided for order amendment.{RESET}")
+            return None
+
+        self.logger.info(f"{NEON_BLUE}Attempting to amend order {order_id} for {symbol} with SL: {new_stop_loss}, TP: {new_take_profit}{RESET}")
+        return self.bybit_request("POST", endpoint, params, signed=True)
+
+    def place_order(
+        self,
+        category: str,
+        symbol: str,
+        side: Literal["Buy", "Sell"],
+        order_type: Literal["Market", "Limit"],
+        qty: Decimal,
+        price: Decimal | None = None,
+        stop_loss: Decimal | None = None,
+        take_profit: Decimal | None = None,
+    ) -> dict | None:
+        endpoint = "/v5/order/create"
+        params = {
+            "category": category,
+            "symbol": symbol,
+            "side": side,
+            "orderType": order_type,
+            "qty": str(qty),
+        }
+        if price is not None:
+            params["price"] = str(price)
+        if stop_loss is not None:
+            params["stopLoss"] = str(stop_loss)
+        if take_profit is not None:
+            params["takeProfit"] = str(take_profit)
+
+        self.logger.info(f"{NEON_BLUE}Attempting to place {side} order for {qty} {symbol} (SL: {stop_loss}, TP: {take_profit}){RESET}")
+        return self.bybit_request("POST", endpoint, params, signed=True)
+
     def fetch_current_price(self, symbol: str) -> Decimal | None:
         endpoint = "/v5/market/tickers"
         params = {"category": "linear", "symbol": symbol}
@@ -540,7 +595,7 @@ class BybitClient:
 
 
 class PositionManager:
-    def __init__(self, config: dict[str, Any], logger: logging.Logger, symbol: str):
+    def __init__(self, config: dict[str, Any], logger: logging.Logger, symbol: str, bybit_client: BybitClient):
         self.config = config
         self.logger = logger
         self.symbol = symbol
@@ -553,6 +608,7 @@ class PositionManager:
             str(config["trade_management"].get("slippage_percent", 0.0))
         )
         self.account_balance = Decimal(str(config["trade_management"]["account_balance"]))
+        self.bybit_client = bybit_client
 
     def _get_current_balance(self) -> Decimal:
         return self.account_balance
@@ -593,7 +649,7 @@ class PositionManager:
         return order_qty
 
     def open_position(
-        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal, order_id: str
     ) -> dict | None:
         if not self.trade_management_enabled:
             self.logger.info(
@@ -651,6 +707,7 @@ class PositionManager:
                 Decimal(price_precision_str), rounding=ROUND_DOWN
             ),
             "status": "OPEN",
+            "order_id": order_id,
         }
         self.open_positions.append(position)
         self.logger.info(
@@ -740,6 +797,26 @@ class PositionManager:
             for i, pos in enumerate(self.open_positions)
             if i not in positions_to_close
         ]
+
+        # Check for SL/TP amendments (e.g., for trailing stop loss)
+        for position in self.open_positions:
+            if position["status"] == "OPEN":
+                # In a real scenario, you'd compare current SL/TP on exchange with calculated ones.
+                # For simplicity, we assume if the position's SL/TP changed, it needs amending.
+                # This part would be triggered by a trailing stop loss update, for example.
+                # For now, we just demonstrate the call.
+                if "order_id" in position and position["order_id"]:
+                    # Example: If a trailing stop loss logic updates position["stop_loss"]
+                    # or position["take_profit"] dynamically, this would trigger the amendment.
+                    # We need to ensure we only amend if the values are actually different from the last sent.
+                    # For this example, we'll just call it if the position is open.
+                    self.bybit_client.amend_order(
+                        category="linear", # Assuming linear for now
+                        symbol=self.symbol,
+                        order_id=position["order_id"],
+                        new_stop_loss=position["stop_loss"],
+                        new_take_profit=position["take_profit"],
+                    )
 
     def get_open_positions(self) -> list[dict]:
         return [pos for pos in self.open_positions if pos["status"] == "OPEN"]
@@ -2822,7 +2899,7 @@ def main() -> None:
     logger.info(f"Symbol: {config.SYMBOL}, Interval: {config.KLINES_INTERVAL}")
     logger.info(f"Trade Management Enabled: {config.TRADE_MANAGEMENT['enabled']}")
 
-    position_manager = PositionManager(config_data, logger, config.SYMBOL)
+    position_manager = PositionManager(config_data, logger, config.SYMBOL, bybit_client)
     performance_tracker = PerformanceTracker(logger, config_data)
 
     while True:
@@ -2879,10 +2956,49 @@ def main() -> None:
 
             if trading_signal == "BUY" and signal_score >= config.SIGNAL_SCORE_THRESHOLD:
                 logger.info(f"{NEON_GREEN}Strong BUY signal detected! Score: {signal_score:.2f}{RESET}")
-                position_manager.open_position("BUY", current_price, atr_value)
+                take_profit_price, stop_loss_price = analyzer.calculate_entry_tp_sl(current_price, atr_value, "BUY")
+                order_qty = position_manager._calculate_order_size(current_price, atr_value)
+
+                if order_qty > 0:
+                    order_response = bybit_client.place_order(
+                        category="linear",
+                        symbol=config.SYMBOL,
+                        side="Buy",
+                        order_type="Market",
+                        qty=order_qty,
+                        stop_loss=stop_loss_price,
+                        take_profit=take_profit_price,
+                    )
+                    if order_response and order_response.get("retCode") == 0:
+                        order_id = order_response["result"]["orderId"]
+                        position_manager.open_position("BUY", current_price, atr_value, order_id)
+                    else:
+                        logger.error(f"{NEON_RED}Failed to place BUY order: {order_response}{RESET}")
+                else:
+                    logger.warning(f"{NEON_YELLOW}Calculated BUY order quantity is zero. Skipping order placement.{RESET}")
+
             elif trading_signal == "SELL" and signal_score <= -config.SIGNAL_SCORE_THRESHOLD:
                 logger.info(f"{NEON_RED}Strong SELL signal detected! Score: {signal_score:.2f}{RESET}")
-                position_manager.open_position("SELL", current_price, atr_value)
+                take_profit_price, stop_loss_price = analyzer.calculate_entry_tp_sl(current_price, atr_value, "SELL")
+                order_qty = position_manager._calculate_order_size(current_price, atr_value)
+
+                if order_qty > 0:
+                    order_response = bybit_client.place_order(
+                        category="linear",
+                        symbol=config.SYMBOL,
+                        side="Sell",
+                        order_type="Market",
+                        qty=order_qty,
+                        stop_loss=stop_loss_price,
+                        take_profit=take_profit_price,
+                    )
+                    if order_response and order_response.get("retCode") == 0:
+                        order_id = order_response["result"]["orderId"]
+                        position_manager.open_position("SELL", current_price, atr_value, order_id)
+                    else:
+                        logger.error(f"{NEON_RED}Failed to place SELL order: {order_response}{RESET}")
+                else:
+                    logger.warning(f"{NEON_YELLOW}Calculated SELL order quantity is zero. Skipping order placement.{RESET}")
             else:
                 logger.info(f"{NEON_BLUE}No strong trading signal. Holding. Score: {signal_score:.2f}{RESET}")
 

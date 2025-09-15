@@ -8,7 +8,7 @@ pybit
 pandas
 
 # For technical indicators
-TA-Lib
+pandas_ta
 
 # For environment variables
 python-dotenv
