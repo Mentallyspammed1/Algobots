@@ -112,7 +112,7 @@ class BybitClient {
 }
 
 // --- 4. Indicator Calculation ---
-// TODO: Add your technical indicator calculations here.
+// Populates the DataFrame with various technical indicators.
 function calculateIndicators(klines) {
     const closePrices = klines.map(k => k.close);
 
@@ -124,15 +124,34 @@ function calculateIndicators(klines) {
     const smaInput = { values: closePrices, period: 20 };
     const sma = ta.SMA.calculate(smaInput);
 
+    // MACD
+    const macdInput = { 
+        values: closePrices, 
+        fastPeriod: 12, 
+        slowPeriod: 26, 
+        signalPeriod: 9, 
+        SimpleMAOscillator: false, 
+        SimpleMASignal: false
+    };
+    const macd = ta.MACD.calculate(macdInput);
+
+    // Bollinger Bands
+    const bbInput = { period: 20, values: closePrices, stdDev: 2 };
+    const bb = ta.BollingerBands.calculate(bbInput);
+
     // Combine indicators with klines data
     // Note: Indicator arrays might be shorter than klines array.
     const df = klines.map((k, i) => {
         const rsiOffset = klines.length - rsi.length;
         const smaOffset = klines.length - sma.length;
+        const macdOffset = klines.length - macd.length;
+        const bbOffset = klines.length - bb.length;
         return {
             ...k,
             rsi: i >= rsiOffset ? rsi[i - rsiOffset] : null,
             sma: i >= smaOffset ? sma[i - smaOffset] : null,
+            macd: i >= macdOffset ? macd[i - macdOffset] : null,
+            bb: i >= bbOffset ? bb[i - bbOffset] : null,
         };
     });
 
@@ -140,7 +159,7 @@ function calculateIndicators(klines) {
 }
 
 // --- 5. Signal Generation ---
-// TODO: Implement your trading strategy logic here.
+// Generates a trading signal based on the calculated indicators.
 function generateSignal(df) {
     const last = df[df.length - 1];
     const prev = df[df.length - 2];

@@ -150,6 +150,28 @@ class BybitTradingBot {
     this.indicators = new BybitIndicatorModule(apiKey, apiSecret, symbol, timeframe);
   }
 
+  async placeBuyOrder(symbol, amount) {
+    try {
+      const order = await this.indicators.exchange.createMarketBuyOrderWithCost(symbol, amount);
+      console.log('Buy order placed:', order);
+      return order;
+    } catch (error) {
+      console.error('Error placing buy order:', error.message);
+      return null;
+    }
+  }
+
+  async placeSellOrder(symbol, amount) {
+    try {
+      const order = await this.indicators.exchange.createMarketSellOrder(symbol, amount);
+      console.log('Sell order placed:', order);
+      return order;
+    } catch (error) {
+      console.error('Error placing sell order:', error.message);
+      return null;
+    }
+  }
+
   async run() {
     // Fetch indicators from 'trading-signals'
     const rsi = await this.indicators.getRSI(14);
@@ -175,10 +197,10 @@ class BybitTradingBot {
     // --- Example Strategy ---
     if (rsi < 30 && macd.histogram > 0 && lastSupertrend.direction > 0 && lastFisher.fisher > lastFisher.signal) {
       console.log('Strong Buy Signal Detected!');
-      // TODO: Place buy order logic
+      await this.placeBuyOrder(this.indicators.symbol, 10); // Example: Buy 10 USDT worth of BTC
     } else if (rsi > 70 && macd.histogram < 0 && lastSupertrend.direction < 0 && lastFisher.fisher < lastFisher.signal) {
       console.log('Strong Sell Signal Detected!');
-      // TODO: Place sell order logic
+      await this.placeSellOrder(this.indicators.symbol, 0.001); // Example: Sell 0.001 BTC
     }
   }
 }

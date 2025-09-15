@@ -103,6 +103,128 @@ class TestBacktester(unittest.TestCase):
     # - Trailing stop loss simulation
     # - Edge cases (e.g., zero balance, very small qty)
 
+    def test_run_backtest_sl_hit(self):
+        # Simulate a scenario where a long position is opened and then the price drops to hit the stop loss.
+        self.test_config["stopLossPct"] = 5  # 5% stop loss
+
+        # Create a specific set of klines for this test
+        klines = [
+            {"timestamp": 1678886400000, "open": 100, "high": 105, "low": 98, "close": 102, "volume": 1000},
+            {"timestamp": 1678890000000, "open": 102, "high": 108, "low": 101, "close": 106, "volume": 1100}, # Buy signal here
+            {"timestamp": 1678893600000, "open": 106, "high": 110, "low": 95, "close": 96, "volume": 1200},   # Price drops, SL should be hit
+            {"timestamp": 1678897200000, "open": 96, "high": 100, "low": 94, "close": 98, "volume": 1300},
+        ]
+        # Pad with enough data for indicators
+        for i in range(len(klines), 250):
+            klines.append({
+                "timestamp": klines[-1]["timestamp"] + 3600000, "open": klines[-1]["close"],
+                "high": klines[-1]["close"] + 1, "low": klines[-1]["close"] - 1,
+                "close": klines[-1]["close"], "volume": 1000
+            })
+
+        with patch('backtester.calculate_indicators') as mock_calculate_indicators:
+            # Mock indicators to generate a buy signal on the second kline
+            mock_calculate_indicators.side_effect = [
+                {'supertrend': {'direction': 0}, 'rsi': 50, 'fisher': 0, 'macd': {'macd_line': 0, 'signal_line': 0, 'histogram': 0}, 'bollinger_bands': {'middle_band': 0, 'upper_band': 0, 'lower_band': 0}},
+                {'supertrend': {'direction': 1}, 'rsi': 40, 'fisher': 1.0, 'macd': {'macd_line': 1, 'signal_line': 0.5, 'histogram': 0.5}, 'bollinger_bands': {'middle_band': 100, 'upper_band': 105, 'lower_band': 95}},
+            ] + [
+                {'supertrend': {'direction': 0}, 'rsi': 50, 'fisher': 0, 'macd': {'macd_line': 0, 'signal_line': 0, 'histogram': 0}, 'bollinger_bands': {'middle_band': 0, 'upper_band': 0, 'lower_band': 0}}
+            ] * (len(klines) - 2)
+
+            result = run_backtest(klines, self.test_config)
+
+            self.assertEqual(result['num_trades'], 1)
+            self.assertEqual(result['num_wins'], 0)
+            self.assertEqual(result['num_losses'], 1)
+            self.assertLess(result['total_pnl'], 0) # PnL should be negative
+            # The loss should be around 5% of the position size, plus fees
+            entry_price = klines[1]['close']
+            sl_price = entry_price * (1 - self.test_config['stopLossPct'] / 100)
+            position_size_usdt = self.test_config['initial_balance'] * (self.test_config['riskPct'] / 100) * self.test_config['leverage']
+            position_size_coin = position_size_usdt / entry_price
+            expected_loss = (sl_price - entry_price) * position_size_coin
+            fee = (position_size_usdt * 2) * self.test_config['fee_rate'] # Entry and exit fees
+            self.assertAlmostEqual(result['total_pnl'], expected_loss - fee, delta=1)
+
+    def test_run_backtest_tp_hit(self):
+        # Simulate a scenario where a long position is opened and then the price rises to hit the take profit.
+        self.test_config["takeProfitPct"] = 5  # 5% take profit
+
+        klines = [
+            {"timestamp": 1678886400000, "open": 100, "high": 105, "low": 98, "close": 102, "volume": 1000},
+            {"timestamp": 1678890000000, "open": 102, "high": 108, "low": 101, "close": 106, "volume": 1100}, # Buy signal here
+            {"timestamp": 1678893600000, "open": 106, "high": 112, "low": 105, "close": 111.3, "volume": 1200}, # Price rises, TP should be hit (106 * 1.05 = 111.3)
+            {"timestamp": 1678897200000, "open": 111.3, "high": 115, "low": 110, "close": 112, "volume": 1300},
+        ]
+        for i in range(len(klines), 250):
+            klines.append({
+                "timestamp": klines[-1]["timestamp"] + 3600000, "open": klines[-1]["close"],
+                "high": klines[-1]["close"] + 1, "low": klines[-1]["close"] - 1,
+                "close": klines[-1]["close"], "volume": 1000
+            })
+
+        with patch('backtester.calculate_indicators') as mock_calculate_indicators:
+            mock_calculate_indicators.side_effect = [
+                {'supertrend': {'direction': 0}, 'rsi': 50, 'fisher': 0, 'macd': {'macd_line': 0, 'signal_line': 0, 'histogram': 0}, 'bollinger_bands': {'middle_band': 0, 'upper_band': 0, 'lower_band': 0}},
+                {'supertrend': {'direction': 1}, 'rsi': 40, 'fisher': 1.0, 'macd': {'macd_line': 1, 'signal_line': 0.5, 'histogram': 0.5}, 'bollinger_bands': {'middle_band': 100, 'upper_band': 105, 'lower_band': 95}},
+            ] + [
+                {'supertrend': {'direction': 0}, 'rsi': 50, 'fisher': 0, 'macd': {'macd_line': 0, 'signal_line': 0, 'histogram': 0}, 'bollinger_bands': {'middle_band': 0, 'upper_band': 0, 'lower_band': 0}}
+            ] * (len(klines) - 2)
+
+            result = run_backtest(klines, self.test_config)
+
+            self.assertEqual(result['num_trades'], 1)
+            self.assertEqual(result['num_wins'], 1)
+            self.assertEqual(result['num_losses'], 0)
+            self.assertGreater(result['total_pnl'], 0)
+            entry_price = klines[1]['close']
+            tp_price = entry_price * (1 + self.test_config['takeProfitPct'] / 100)
+            position_size_usdt = self.test_config['initial_balance'] * (self.test_config['riskPct'] / 100) * self.test_config['leverage']
+            position_size_coin = position_size_usdt / entry_price
+            expected_profit = (tp_price - entry_price) * position_size_coin
+            fee = (position_size_usdt * 2) * self.test_config['fee_rate']
+            self.assertAlmostEqual(result['total_pnl'], expected_profit - fee, delta=1)
+
+    def test_run_backtest_trailing_stop_hit(self):
+        # Simulate a scenario where a long position's trailing stop is hit.
+        self.test_config["trailingStopPct"] = 2  # 2% trailing stop
+        self.test_config["takeProfitPct"] = 10 # Set a high TP to ensure it's not hit
+
+        klines = [
+            {"timestamp": 1678886400000, "open": 100, "high": 105, "low": 98, "close": 102, "volume": 1000},
+            {"timestamp": 1678890000000, "open": 102, "high": 108, "low": 101, "close": 106, "volume": 1100}, # Buy signal
+            {"timestamp": 1678893600000, "open": 106, "high": 110, "low": 105, "close": 109, "volume": 1200}, # Price rises, peak is 110
+            {"timestamp": 1678897200000, "open": 109, "high": 109, "low": 107, "close": 107.5, "volume": 1300},# Price falls, TSL should hit at 110 * (1 - 0.02) = 107.8
+        ]
+        for i in range(len(klines), 250):
+            klines.append({
+                "timestamp": klines[-1]["timestamp"] + 3600000, "open": klines[-1]["close"],
+                "high": klines[-1]["close"] + 1, "low": klines[-1]["close"] - 1,
+                "close": klines[-1]["close"], "volume": 1000
+            })
+
+        with patch('backtester.calculate_indicators') as mock_calculate_indicators:
+            mock_calculate_indicators.side_effect = [
+                {'supertrend': {'direction': 0}, 'rsi': 50, 'fisher': 0, 'macd': {'macd_line': 0, 'signal_line': 0, 'histogram': 0}, 'bollinger_bands': {'middle_band': 0, 'upper_band': 0, 'lower_band': 0}},
+                {'supertrend': {'direction': 1}, 'rsi': 40, 'fisher': 1.0, 'macd': {'macd_line': 1, 'signal_line': 0.5, 'histogram': 0.5}, 'bollinger_bands': {'middle_band': 100, 'upper_band': 105, 'lower_band': 95}},
+            ] + [
+                {'supertrend': {'direction': 0}, 'rsi': 50, 'fisher': 0, 'macd': {'macd_line': 0, 'signal_line': 0, 'histogram': 0}, 'bollinger_bands': {'middle_band': 0, 'upper_band': 0, 'lower_band': 0}}
+            ] * (len(klines) - 2)
+
+            result = run_backtest(klines, self.test_config)
+
+            self.assertEqual(result['num_trades'], 1)
+            self.assertEqual(result['num_wins'], 1) # TSL hit is a win if above entry
+            self.assertGreater(result['total_pnl'], 0)
+            entry_price = klines[1]['close']
+            peak_price = klines[2]['high']
+            tsl_price = peak_price * (1 - self.test_config['trailingStopPct'] / 100)
+            position_size_usdt = self.test_config['initial_balance'] * (self.test_config['riskPct'] / 100) * self.test_config['leverage']
+            position_size_coin = position_size_usdt / entry_price
+            expected_profit = (tsl_price - entry_price) * position_size_coin
+            fee = (position_size_usdt * 2) * self.test_config['fee_rate']
+            self.assertAlmostEqual(result['total_pnl'], expected_profit - fee, delta=1)
+
     @patch('backtester.run_backtest')
     def test_optimize_strategy(self, mock_run_backtest):
         mock_run_backtest.side_effect = [

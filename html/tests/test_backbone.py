@@ -176,5 +176,113 @@ class TestBackbone(unittest.TestCase):
     # TODO: Add tests for trading_bot_loop logic (requires extensive mocking of session.get_kline, session.get_positions, session.place_order, session.amend_order)
     # This would involve setting up complex side_effects for mock objects to simulate market conditions and bot actions.
 
+    @patch('backbone.time.sleep', return_value=None) # Mock sleep to speed up test
+    @patch('backbone.calculate_indicators')
+    @patch('backbone.HTTP')
+    def test_trading_bot_loop_buy_signal(self, mock_http, mock_calculate_indicators, mock_sleep):
+        # Setup mocks
+        mock_session = MagicMock()
+        mock_http.return_value = mock_session
+        BOT_STATE["bybit_session"] = mock_session
+
+        # Mock API responses
+        mock_session.get_kline.return_value = {'retCode': 0, 'result': {'list': [['1678886400000', '100', '105', '98', '102', '1000']]}}
+        mock_session.get_positions.return_value = {'retCode': 0, 'result': {'list': []}} # No open positions
+        mock_session.place_order.return_value = {'retCode': 0, 'result': {'orderId': 'test_order_id'}}
+
+        # Mock indicator calculation to return a buy signal
+        mock_calculate_indicators.return_value = {
+            'supertrend': {'direction': 1}, 'rsi': 30, 'fisher': 0.5,
+            'macd': {'macd_line': 1, 'signal_line': 0.5, 'histogram': 0.5},
+            'bollinger_bands': {'middle_band': 100, 'upper_band': 105, 'lower_band': 95}
+        }
+
+        # Set config for the bot
+        BOT_STATE["config"] = {
+            "symbol": "BTCUSDT", "interval": "60", "leverage": 10, "riskPct": 1,
+            "stopLossPct": 2, "takeProfitPct": 5, "trailingStopPct": 1,
+            "price_precision": 2, "qty_precision": 3,
+            "supertrend_length": 10, "supertrend_multiplier": 3.0, "rsi_length": 14, "ef_period": 10,
+            "macd_fast_period": 12, "macd_slow_period": 26, "macd_signal_period": 9,
+            "bb_period": 20, "bb_std_dev": 2.0
+        }
+        BOT_STATE["running"] = True
+
+        # Import the loop function here to use the mocked environment
+        from backbone import trading_bot_loop
+
+        # Run the loop once
+        trading_bot_loop()
+
+        # Assertions
+        mock_session.get_kline.assert_called_once()
+        mock_session.get_positions.assert_called_once()
+        mock_session.place_order.assert_called_once()
+
+        # Check the arguments of the place_order call
+        call_args = mock_session.place_order.call_args[0][0]
+        self.assertEqual(call_args['category'], 'linear')
+        self.assertEqual(call_args['symbol'], 'BTCUSDT')
+        self.assertEqual(call_args['side'], 'Buy')
+        self.assertEqual(call_args['orderType'], 'Market')
+        self.assertIn('stopLoss', call_args)
+        self.assertIn('takeProfit', call_args)
+
+        BOT_STATE["running"] = False # Stop the loop for cleanup
+
+    @patch('backbone.time.sleep', return_value=None)
+    @patch('backbone.calculate_indicators')
+    @patch('backbone.HTTP')
+    def test_trading_bot_loop_sell_signal(self, mock_http, mock_calculate_indicators, mock_sleep):
+        # Setup mocks
+        mock_session = MagicMock()
+        mock_http.return_value = mock_session
+        BOT_STATE["bybit_session"] = mock_session
+
+        # Mock API responses
+        mock_session.get_kline.return_value = {'retCode': 0, 'result': {'list': [['1678886400000', '100', '105', '98', '102', '1000']]}}
+        mock_session.get_positions.return_value = {'retCode': 0, 'result': {'list': []}} # No open positions
+        mock_session.place_order.return_value = {'retCode': 0, 'result': {'orderId': 'test_order_id'}}
+
+        # Mock indicator calculation to return a sell signal
+        mock_calculate_indicators.return_value = {
+            'supertrend': {'direction': -1}, 'rsi': 70, 'fisher': -0.5,
+            'macd': {'macd_line': -1, 'signal_line': -0.5, 'histogram': -0.5},
+            'bollinger_bands': {'middle_band': 100, 'upper_band': 105, 'lower_band': 95}
+        }
+
+        # Set config for the bot
+        BOT_STATE["config"] = {
+            "symbol": "BTCUSDT", "interval": "60", "leverage": 10, "riskPct": 1,
+            "stopLossPct": 2, "takeProfitPct": 5, "trailingStopPct": 1,
+            "price_precision": 2, "qty_precision": 3,
+            "supertrend_length": 10, "supertrend_multiplier": 3.0, "rsi_length": 14, "ef_period": 10,
+            "macd_fast_period": 12, "macd_slow_period": 26, "macd_signal_period": 9,
+            "bb_period": 20, "bb_std_dev": 2.0
+        }
+        BOT_STATE["running"] = True
+
+        # Import the loop function here to use the mocked environment
+        from backbone import trading_bot_loop
+
+        # Run the loop once
+        trading_bot_loop()
+
+        # Assertions
+        mock_session.get_kline.assert_called_once()
+        mock_session.get_positions.assert_called_once()
+        mock_session.place_order.assert_called_once()
+
+        # Check the arguments of the place_order call
+        call_args = mock_session.place_order.call_args[0][0]
+        self.assertEqual(call_args['category'], 'linear')
+        self.assertEqual(call_args['symbol'], 'BTCUSDT')
+        self.assertEqual(call_args['side'], 'Sell')
+        self.assertEqual(call_args['orderType'], 'Market')
+        self.assertIn('stopLoss', call_args)
+        self.assertIn('takeProfit', call_args)
+
+        BOT_STATE["running"] = False # Stop the loop for cleanup
+
 if __name__ == '__main__':
     unittest.main()
