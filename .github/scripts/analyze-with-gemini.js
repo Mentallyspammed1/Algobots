@@ -56,9 +56,9 @@ async function analyzeCode() {
   fs.writeFileSync(outputFile, JSON.stringify(analysisResults, null, 2));
 
   if (process.env.GITHUB_OUTPUT) {
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `has-fixes=${analysisResults.suggestedFixes.length > 0}n`);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `changes-summary=${analysisResults.summary.replace(/n/g, '%0A')}n`);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `files-changed=${analysisResults.suggestedFixes.map(f => f.file).join(', ')}n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, "has-fixes=" + (analysisResults.suggestedFixes.length > 0) + "\n");
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, "changes-summary=" + analysisResults.summary.replace(/\n/g, '%0A') + "\n");
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, "files-changed=" + analysisResults.suggestedFixes.map(f => f.file).join(', ') + "\n");
   }
 }
 

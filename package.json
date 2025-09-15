@@ -2,12 +2,15 @@
   "name": "algobots-root",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "workspaces": [
     "geminibb"
   ],
   "dependencies": {
+    "@eslint/js": "^9.35.0",
     "decimal.js": "^10.6.0",
     "firebase": "^12.2.1",
+    "globals": "^16.4.0",
     "lodash": "^4.17.21",
     "node-fetch": "^3.3.2",
     "winston": "^3.17.0",
