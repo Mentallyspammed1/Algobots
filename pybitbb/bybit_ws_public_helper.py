@@ -1,11 +1,12 @@
 # bybit_ws_public_helper.py
 import logging
-import time
 import threading
-from typing import Dict, Any, Optional, Callable, List, Tuple
+import time
+from collections.abc import Callable
+from typing import Any
 
-from pybit.unified_trading import WebSocket
 from pybit.exceptions import BybitWebsocketError
+from pybit.unified_trading import WebSocket
 
 # Configure logging for the module
 logging.basicConfig(
@@ -15,14 +16,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BybitWsPublicHelper:
-    """
-    A helper class for managing various public WebSocket data streams from Bybit,
+    """A helper class for managing various public WebSocket data streams from Bybit,
     including tickers, klines, and trades.
     """
 
     def __init__(self, category: str, testnet: bool = False):
-        """
-        Initializes the BybitWsPublicHelper.
+        """Initializes the BybitWsPublicHelper.
 
         :param category: The product category for the streams (e.g., "linear", "spot", "inverse", "option").
         :param testnet: Set to True to connect to the Bybit testnet, False for mainnet.
@@ -33,16 +32,15 @@ class BybitWsPublicHelper:
 
         self.category = category
         self.testnet = testnet
-        self.websocket_client: Optional[WebSocket] = None
+        self.websocket_client: WebSocket | None = None
         self._connection_lock = threading.Lock()
         self._is_connected_event = threading.Event() # Event to signal connection status
-        self._subscriptions: Dict[str, Tuple[Callable[[Dict[str, Any]], None], Dict[str, Any]]] = {} # {topic: (callback, kwargs)}
+        self._subscriptions: dict[str, tuple[Callable[[dict[str, Any]], None], dict[str, Any]]] = {} # {topic: (callback, kwargs)}
 
         logger.info(f"BybitWsPublicHelper initialized for category '{self.category}'. Testnet: {self.testnet}")
 
-    def _on_message(self, message: Dict[str, Any]) -> None:
-        """
-        Internal callback to process incoming WebSocket messages.
+    def _on_message(self, message: dict[str, Any]) -> None:
+        """Internal callback to process incoming WebSocket messages.
         It dispatches messages to the appropriate user-defined callback based on the topic.
         """
         if not message:
@@ -53,9 +51,9 @@ class BybitWsPublicHelper:
         if not topic:
             logger.debug(f"[{self.category}] Received WebSocket message without topic: {message}")
             return
-        
+
         # Extract base topic for matching subscriptions (e.g., 'kline.1.BTCUSDT' -> 'kline')
-        base_topic = topic.split('.')[0] 
+        base_topic = topic.split('.')[0]
 
         # Find the specific subscription matching the topic
         # Iterate through subscriptions to find a match, as topics can be dynamic (e.g., kline.1m.BTCUSDT)
@@ -69,7 +67,7 @@ class BybitWsPublicHelper:
             # For topics like 'kline.1.BTCUSDT', the subscription key should ideally be 'kline.1.BTCUSDT'
             # If a user subscribes to 'kline', they might expect all klines.
             # Pybit's WS client handles topic mapping, so we just need to ensure our subscription keys match.
-            
+
         if matched_callback:
             try:
                 matched_callback(message)
@@ -113,8 +111,7 @@ class BybitWsPublicHelper:
             logger.warning(f"[{self.category}] Cannot re-subscribe: WebSocket client not connected.")
 
     def connect(self, wait_for_connection: bool = True, timeout: int = 10) -> bool:
-        """
-        Establishes the WebSocket connection.
+        """Establishes the WebSocket connection.
 
         :param wait_for_connection: If True, blocks until connection is established or timeout.
         :param timeout: Maximum seconds to wait for connection if `wait_for_connection` is True.
@@ -135,7 +132,7 @@ class BybitWsPublicHelper:
                     on_disconnect=self._on_disconnect,
                     on_error=self._on_error
                 )
-                
+
                 if wait_for_connection:
                     if not self._is_connected_event.wait(timeout=timeout):
                         logger.error(f"[{self.category}] Timeout waiting for WebSocket connection.")
@@ -150,8 +147,7 @@ class BybitWsPublicHelper:
                 return False
 
     def disconnect(self) -> None:
-        """
-        Closes the WebSocket connection.
+        """Closes the WebSocket connection.
         """
         with self._connection_lock:
             if self.websocket_client:
@@ -163,20 +159,18 @@ class BybitWsPublicHelper:
                 logger.info(f"[{self.category}] WebSocket connection closed.")
             else:
                 logger.info(f"[{self.category}] WebSocket client not active for category '{self.category}'.")
-    
+
     def is_connected(self) -> bool:
-        """
-        Checks if the WebSocket client is currently connected.
+        """Checks if the WebSocket client is currently connected.
         """
         return self._is_connected_event.is_set()
 
-    def subscribe_to_stream(self, 
-                            stream_type: str, 
-                            callback: Callable[[Dict[str, Any]], None], 
-                            symbol: str, 
+    def subscribe_to_stream(self,
+                            stream_type: str,
+                            callback: Callable[[dict[str, Any]], None],
+                            symbol: str,
                             **kwargs) -> bool:
-        """
-        Subscribes to a specific public WebSocket stream.
+        """Subscribes to a specific public WebSocket stream.
 
         :param stream_type: The type of stream to subscribe to (e.g., "ticker", "kline", "trade", "orderbook").
         :param callback: A callable function to process messages from this specific stream.
@@ -208,7 +202,7 @@ class BybitWsPublicHelper:
             logger.warning(f"[{self.category}] 'liquidation' stream is deprecated. Consider using 'all_liquidation_stream'.")
             topic = f"liquidation.{symbol}"
         elif stream_type == "all_liquidation":
-            topic = f"liquidation" # This topic is for all symbols
+            topic = "liquidation" # This topic is for all symbols
             symbol = "ALL" # Mark symbol as ALL for internal tracking
         else:
             logger.error(f"[{self.category}] Unsupported stream_type: {stream_type}. Cannot subscribe.")
@@ -216,7 +210,7 @@ class BybitWsPublicHelper:
 
         if topic in self._subscriptions:
             logger.warning(f"[{self.category}] Already subscribed to topic: {topic}. Updating callback.")
-            
+
         # Store the user's specific callback and original kwargs
         # The _on_message will then dispatch to this specific callback if topic matches
         self._subscriptions[topic] = (callback, kwargs)
@@ -235,7 +229,7 @@ class BybitWsPublicHelper:
                 self.websocket_client.liquidation_stream(symbol=symbol, callback=self._on_message)
             elif stream_type == "all_liquidation":
                 self.websocket_client.all_liquidation_stream(callback=self._on_message)
-            
+
             logger.info(f"[{self.category}] Successfully initiated subscription to {topic}.")
             return True
         except BybitWebsocketError as e:
@@ -248,8 +242,7 @@ class BybitWsPublicHelper:
             return False
 
     def unsubscribe_from_stream(self, stream_type: str, symbol: str, **kwargs) -> bool:
-        """
-        Unsubscribes from a specific public WebSocket stream.
+        """Unsubscribes from a specific public WebSocket stream.
 
         :param stream_type: The type of stream (e.g., "ticker", "kline").
         :param symbol: The trading symbol.
@@ -277,7 +270,7 @@ class BybitWsPublicHelper:
         elif stream_type == "liquidation":
             topic = f"liquidation.{symbol}"
         elif stream_type == "all_liquidation":
-            topic = f"liquidation"
+            topic = "liquidation"
             symbol = "ALL"
         else:
             logger.error(f"[{self.category}] Unsupported stream_type: {stream_type}. Cannot unsubscribe.")
@@ -306,32 +299,32 @@ class BybitWsPublicHelper:
 # Example Usage
 if __name__ == "__main__":
     # For public streams, API key/secret are not strictly needed, but can be passed.
-    USE_TESTNET = True 
+    USE_TESTNET = True
     CATEGORY = "linear" # Change as needed, e.g., "spot", "inverse", "option"
     SYMBOL = "BTCUSDT"
 
     public_ws_helper = BybitWsPublicHelper(category=CATEGORY, testnet=USE_TESTNET)
 
     # --- Define callback functions for different streams ---
-    def handle_ticker_update(message: Dict[str, Any]) -> None:
+    def handle_ticker_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             ticker = data[0]
             logger.info(f"[{ticker.get('symbol')}] Ticker Update: Last Price={ticker.get('lastPrice')}, Volume={ticker.get('volume24h')}")
 
-    def handle_kline_update(message: Dict[str, Any]) -> None:
+    def handle_kline_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             kline = data[0]
             logger.info(f"[{kline.get('symbol')}] Kline {kline.get('interval')} Update: Close={kline.get('close')}, Volume={kline.get('volume')}")
 
-    def handle_trade_update(message: Dict[str, Any]) -> None:
+    def handle_trade_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             trade = data[0]
             logger.info(f"[{trade.get('s')}] Trade: Price={trade.get('p')}, Qty={trade.get('v')}, Side={trade.get('S')}")
 
-    def handle_liquidation_update(message: Dict[str, Any]) -> None:
+    def handle_liquidation_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             liquidation = data[0]
@@ -352,7 +345,7 @@ if __name__ == "__main__":
             # Subscribe to Trade stream
             public_ws_helper.subscribe_to_stream("trade", handle_trade_update, SYMBOL)
             time.sleep(1)
-            
+
             # Subscribe to All Liquidation stream (no specific symbol needed for 'all_liquidation')
             public_ws_helper.subscribe_to_stream("all_liquidation", handle_liquidation_update, symbol="ALL")
             time.sleep(1)
@@ -368,7 +361,7 @@ if __name__ == "__main__":
         else:
             logger.error("Failed to connect to Public WebSocket. Skipping subscriptions.")
 
-    except Exception as e:
+    except Exception:
         logger.exception("An error occurred in the main execution block.")
     finally:
         public_ws_helper.disconnect()

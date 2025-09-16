@@ -2,8 +2,7 @@ import math
 
 
 def calculate_indicators(klines: list, config: dict) -> dict | None:
-    """
-    Calculates Supertrend, RSI, Ehlers-Fisher Transform, MACD, and Bollinger Bands from a list of kline data.
+    """Calculates Supertrend, RSI, Ehlers-Fisher Transform, MACD, and Bollinger Bands from a list of kline data.
     """
     # Determine the maximum lookback period required by any indicator
     max_lookback = max(

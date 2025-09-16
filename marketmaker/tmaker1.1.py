@@ -43,20 +43,19 @@ Instructions for Termux (ARM64):
 """
 
 import asyncio
-import json
 import logging
 import os
-import sys
-import aiofiles
 import pickle
-import time # For orderLinkId
-import aiosqlite
-from dataclasses import dataclass, field, asdict
+import sys
+import time  # For orderLinkId
+from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal, ROUND_DOWN, getcontext
-from typing import Dict, List, Optional, Any, Tuple
-from pybit.unified_trading import HTTP, WebSocket
+from decimal import ROUND_DOWN, Decimal, getcontext
+
+import aiofiles
+import aiosqlite
 from dotenv import load_dotenv
+from pybit.unified_trading import HTTP, WebSocket
 
 # Set high precision for Decimal calculations to avoid floating-point inaccuracies
 getcontext().prec = 28
@@ -77,7 +76,7 @@ class TradeMetrics:
     losses: int = 0
     win_rate: float = 0.0
     # Add more detailed metrics as needed
-    
+
     def update_win_rate(self):
         if self.total_trades > 0:
             self.win_rate = self.wins / self.total_trades * 100.0
@@ -94,29 +93,29 @@ class StrategyConfig:
 @dataclass
 class Config:
     """Comprehensive bot configuration settings."""
-    
+
     # API Credentials & Environment
     api_key: str = field(default_factory=lambda: os.getenv("BYBIT_API_KEY", ""))
     api_secret: str = field(default_factory=lambda: os.getenv("BYBIT_API_SECRET", ""))
     testnet: bool = os.getenv("BYBIT_TESTNET", "true").lower() == "true"
     trading_mode: str = "DRY_RUN" # "LIVE", "DRY_RUN", "TESTNET" (TESTNET implies testnet=True)
-    
+
     # Trading Parameters
     symbol: str = "BTCUSDT"
     category: str = "linear"  # 'linear' for USDT perpetual, 'spot' for spot trading
     base_currency: str = "BTC"
     quote_currency: str = "USDT" # Currency used for balance tracking and order value calculation
-    
+
     # Strategy Settings
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
-    
+
     # Execution Parameters
     order_type: str = "Limit"
     time_in_force: str = "GTC"  # 'GTC', 'IOC', 'FOK'
     post_only: bool = True # Ensures orders are placed as 'PostOnly' to avoid taker fees
     min_order_value_usd: Decimal = Decimal('10') # Minimum notional value for an order (Bybit specific)
     max_order_size_pct: Decimal = Decimal('0.1') # Max percentage of total balance for a single order
-    
+
     # System & Logging
     loop_interval_sec: int = 1  # Main loop check interval in seconds
     order_refresh_interval_sec: int = 5 # How often to check/replace orders (independent of loop_interval)
@@ -124,7 +123,7 @@ class Config:
     log_file: str = "market_maker.log"
     state_file: str = "market_maker_state.pkl"
     db_file: str = "market_maker.db" # SQLite database file for historical data
-    
+
     # Performance Tracking
     metrics: TradeMetrics = field(default_factory=TradeMetrics)
 
@@ -152,7 +151,7 @@ def setup_logger(config: Config) -> logging.Logger:
     """Configures and returns the logger."""
     logger = logging.getLogger('MarketMakerBot')
     logger.setLevel(getattr(logging, config.log_level.upper()))
-    
+
     # Ensure handlers are not duplicated on re-init
     if not logger.handlers:
         # Console handler
@@ -160,15 +159,15 @@ def setup_logger(config: Config) -> logging.Logger:
         ch.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         ch.setFormatter(formatter)
-        
+
         # File handler
         fh = logging.FileHandler(config.log_file)
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(formatter)
-        
+
         logger.addHandler(ch)
         logger.addHandler(fh)
-    
+
     return logger
 
 # =====================================================================
@@ -176,12 +175,12 @@ def setup_logger(config: Config) -> logging.Logger:
 # =====================================================================
 class StateManager:
     """Handles saving and loading the bot's state."""
-    
+
     def __init__(self, file_path: str):
         self.file_path = file_path
         self.logger = logging.getLogger('StateManager')
-    
-    async def save_state(self, state: Dict):
+
+    async def save_state(self, state: dict):
         """Saves the bot's state to a file."""
         try:
             async with aiofiles.open(self.file_path, 'wb') as f:
@@ -189,8 +188,8 @@ class StateManager:
             self.logger.info("Bot state saved successfully.")
         except Exception as e:
             self.logger.error(f"Error saving state: {e}")
-            
-    async def load_state(self) -> Optional[Dict]:
+
+    async def load_state(self) -> dict | None:
         """Loads the bot's state from a file."""
         if not os.path.exists(self.file_path):
             self.logger.warning("State file not found. Starting with a fresh state.")
@@ -211,7 +210,7 @@ class DBManager:
     """Manages SQLite database operations for logging."""
     def __init__(self, db_file: str):
         self.db_file = db_file
-        self.conn: Optional[aiosqlite.Connection] = None
+        self.conn: aiosqlite.Connection | None = None
         self.logger = logging.getLogger('DBManager')
 
     async def connect(self):
@@ -234,7 +233,7 @@ class DBManager:
         """Creates necessary tables if they don't exist."""
         if not self.conn:
             await self.connect()
-        
+
         await self.conn.execute("""
             CREATE TABLE IF NOT EXISTS order_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -290,7 +289,7 @@ class DBManager:
         await self.conn.commit()
         self.logger.info("Database tables checked/created.")
 
-    async def log_order_event(self, order_data: Dict, message: Optional[str] = None):
+    async def log_order_event(self, order_data: dict, message: str | None = None):
         """Logs an order event to the database."""
         if not self.conn: await self.connect()
         timestamp = datetime.now().isoformat()
@@ -303,7 +302,7 @@ class DBManager:
         )
         await self.conn.commit()
 
-    async def log_trade_fill(self, trade_data: Dict):
+    async def log_trade_fill(self, trade_data: dict):
         """Logs a trade fill to the database."""
         if not self.conn: await self.connect()
         timestamp = datetime.now().isoformat()
@@ -316,7 +315,7 @@ class DBManager:
         )
         await self.conn.commit()
 
-    async def log_balance_update(self, currency: str, wallet_balance: Decimal, available_balance: Optional[Decimal] = None):
+    async def log_balance_update(self, currency: str, wallet_balance: Decimal, available_balance: Decimal | None = None):
         """Logs a balance update to the database."""
         if not self.conn: await self.connect()
         timestamp = datetime.now().isoformat()
@@ -326,7 +325,7 @@ class DBManager:
             (timestamp, currency, str(wallet_balance), str(available_balance) if available_balance else None)
         )
         await self.conn.commit()
-    
+
     async def log_bot_metrics(self, metrics: TradeMetrics):
         """Logs current bot metrics to the database."""
         if not self.conn: await self.connect()
@@ -344,19 +343,19 @@ class DBManager:
 # =====================================================================
 class BybitMarketMaker:
     """Main market maker bot class."""
-    
+
     def __init__(self, config: Config):
         self.config = config
         self.logger = setup_logger(config)
         self.state_manager = StateManager(config.state_file)
         self.db_manager = DBManager(config.db_file)
-        
+
         # Determine if running on testnet
         if self.config.trading_mode == "TESTNET":
             self.config.testnet = True
         elif self.config.trading_mode == "LIVE":
             self.config.testnet = False
-        
+
         # Initialize HTTP and WebSocket sessions
         self.http_session = HTTP(
             testnet=self.config.testnet,
@@ -369,36 +368,36 @@ class BybitMarketMaker:
             api_key=self.config.api_key,
             api_secret=self.config.api_secret
         )
-        
+
         # Market data and state
-        self.market_info: Optional[MarketInfo] = None
+        self.market_info: MarketInfo | None = None
         self.mid_price = Decimal('0')
         self.current_balance = Decimal('0')
-        self.active_orders: Dict[str, Dict] = {} # {order_id: {side, price, qty, status, orderLinkId}}
+        self.active_orders: dict[str, dict] = {} # {order_id: {side, price, qty, status, orderLinkId}}
         self.is_running = False
         self.last_order_management_time = 0
-        
+
         # Locks for thread-safe operations
         self.market_data_lock = asyncio.Lock()
         self.active_orders_lock = asyncio.Lock()
-        
+
         self.logger.info(f"Market Maker Bot Initialized. Trading Mode: {self.config.trading_mode}")
         if self.config.testnet:
             self.logger.info("Running on Bybit Testnet.")
 
-    async def _fetch_market_info(self) -> Optional[MarketInfo]:
+    async def _fetch_market_info(self) -> MarketInfo | None:
         """Fetches market precision and step sizes from Bybit."""
         try:
             response = self.http_session.get_instruments_info(
                 category=self.config.category,
                 symbol=self.config.symbol
             )
-            
+
             if response['retCode'] == 0 and response['result']['list']:
                 info = response['result']['list'][0]
                 price_filter = info['priceFilter']
                 lot_size_filter = info['lotSizeFilter']
-                
+
                 self.market_info = MarketInfo(
                     symbol=self.config.symbol,
                     price_precision=Decimal(price_filter['tickSize']),
@@ -408,15 +407,15 @@ class BybitMarketMaker:
                 )
                 self.logger.info(f"Market info fetched for {self.config.symbol}: {self.market_info}")
                 return self.market_info
-            
+
             self.logger.error(f"Failed to fetch market info: {response.get('retMsg', 'Unknown error')}")
             return None
-            
+
         except Exception as e:
             self.logger.error(f"Error fetching market info: {e}")
             return None
-            
-    async def _update_balance(self) -> Optional[Decimal]:
+
+    async def _update_balance(self) -> Decimal | None:
         """Updates the bot's current balance."""
         if self.config.trading_mode == "DRY_RUN":
             # For dry run, simulate a balance
@@ -424,7 +423,7 @@ class BybitMarketMaker:
                 self.current_balance = Decimal('10000') # Start with a simulated balance
                 self.logger.info(f"DRY_RUN: Initial simulated balance: {self.current_balance} {self.config.quote_currency}")
             return self.current_balance
-            
+
         try:
             response = self.http_session.get_wallet_balance(
                 accountType=self.config.category.upper() if self.config.category == 'spot' else "UNIFIED"
@@ -445,14 +444,14 @@ class BybitMarketMaker:
             self.logger.error(f"Error updating balance: {e}")
             return None
 
-    def _handle_orderbook_update(self, message: Dict):
+    def _handle_orderbook_update(self, message: dict):
         """Processes real-time orderbook updates from WebSocket."""
         try:
             if 'data' in message and message['topic'] == f"orderbook.1.{self.config.symbol}":
                 data = message['data']
                 bids = data['b']
                 asks = data['a']
-                
+
                 if not bids or not asks:
                     return
 
@@ -461,8 +460,8 @@ class BybitMarketMaker:
 
         except Exception as e:
             self.logger.error(f"Error handling orderbook update: {e}")
-    
-    async def _update_mid_price(self, bids: List, asks: List):
+
+    async def _update_mid_price(self, bids: list, asks: list):
         """Updates the mid-price based on the top of the order book."""
         async with self.market_data_lock:
             best_bid = Decimal(bids[0][0])
@@ -470,29 +469,29 @@ class BybitMarketMaker:
             self.mid_price = (best_bid + best_ask) / Decimal('2')
             self.logger.debug(f"Mid-price updated to: {self.mid_price}")
 
-    async def _handle_order_update(self, message: Dict):
+    async def _handle_order_update(self, message: dict):
         """Processes real-time order updates from WebSocket."""
         try:
             if 'data' in message:
                 for order_data in message['data']:
                     order_id = order_data['orderId']
                     status = order_data['orderStatus']
-                    
+
                     self.logger.info(f"Order {order_id} status update: {status} (Order Link ID: {order_data.get('orderLinkId')})")
                     asyncio.create_task(self.db_manager.log_order_event(order_data))
 
                     async with self.active_orders_lock:
                         if order_id in self.active_orders:
                             self.active_orders[order_id]['status'] = status
-                            
+
                             if status == 'Filled':
                                 self.logger.info(f"Order {order_id} FILLED: Price={order_data.get('execPrice')}, Qty={order_data.get('execQty')}, Fee={order_data.get('execFee')}")
                                 asyncio.create_task(self.db_manager.log_trade_fill(order_data))
-                                
+
                                 # Update metrics
                                 self.config.metrics.total_trades += 1
                                 self.config.metrics.total_fees += Decimal(order_data.get('execFee', '0'))
-                                
+
                                 # Simple PnL calculation (for market making, this is usually tracked per pair)
                                 # This assumes a simple buy-then-sell or sell-then-buy cycle
                                 # For true market making, PnL is often tracked through inventory management.
@@ -523,7 +522,7 @@ class BybitMarketMaker:
         except Exception as e:
             self.logger.error(f"Error handling order update: {e}")
 
-    async def _cancel_order(self, order_id: str, order_link_id: Optional[str] = None):
+    async def _cancel_order(self, order_id: str, order_link_id: str | None = None):
         """Cancels a single order."""
         self.logger.info(f"Attempting to cancel order {order_id} (Link ID: {order_link_id})...")
         try:
@@ -536,7 +535,7 @@ class BybitMarketMaker:
                 params["orderLinkId"] = order_link_id
 
             response = self.http_session.cancel_order(**params)
-            
+
             if response['retCode'] == 0:
                 self.logger.info(f"Order {order_id} successfully canceled.")
                 async with self.active_orders_lock:
@@ -546,7 +545,7 @@ class BybitMarketMaker:
             else:
                 self.logger.warning(f"Failed to cancel order {order_id}: {response.get('retMsg', 'Unknown error')}")
                 return False
-        
+
         except Exception as e:
             self.logger.error(f"Error canceling order {order_id}: {e}")
             return False
@@ -559,7 +558,7 @@ class BybitMarketMaker:
                 category=self.config.category,
                 symbol=self.config.symbol
             )
-            
+
             if response['retCode'] == 0:
                 async with self.active_orders_lock:
                     self.active_orders.clear()
@@ -568,7 +567,7 @@ class BybitMarketMaker:
             else:
                 self.logger.error(f"Failed to cancel all orders: {response.get('retMsg', 'Unknown error')}")
                 return False
-        
+
         except Exception as e:
             self.logger.error(f"Error canceling all orders: {e}")
             return False
@@ -583,7 +582,7 @@ class BybitMarketMaker:
 
         # 1. Base order value in quote currency (e.g., USDT)
         qty_in_quote = self.current_balance * self.config.strategy.risk_per_trade_pct
-        
+
         # 2. Apply max order size percentage
         max_qty_in_quote = self.current_balance * self.config.max_order_size_pct
         qty_in_quote = min(qty_in_quote, max_qty_in_quote)
@@ -597,7 +596,7 @@ class BybitMarketMaker:
             if qty_in_base < self.market_info.min_order_qty:
                 self.logger.warning(f"Calculated quantity {qty_in_base} is less than min order qty {self.market_info.min_order_qty}. Returning 0.")
                 return Decimal('0')
-            
+
             # 5. Check against minimum notional value
             notional_value = qty_in_base * price
             if notional_value < self.market_info.min_notional_value:
@@ -609,7 +608,7 @@ class BybitMarketMaker:
 
         return qty_in_base
 
-    async def _place_limit_order(self, side: str, price: Decimal, quantity: Decimal) -> Optional[Dict]:
+    async def _place_limit_order(self, side: str, price: Decimal, quantity: Decimal) -> dict | None:
         """Places a single limit order."""
         if self.config.trading_mode == "DRY_RUN":
             self.logger.info(f"DRY_RUN: Would place {side} order: Price={price}, Qty={quantity}")
@@ -629,7 +628,7 @@ class BybitMarketMaker:
             if qty_formatted == Decimal('0') or price_formatted == Decimal('0'):
                 self.logger.warning(f"Attempted to place order with zero quantity or price: Qty={qty_formatted}, Price={price_formatted}. Skipping.")
                 return None
-            
+
             params = {
                 "category": self.config.category,
                 "symbol": self.config.symbol,
@@ -641,14 +640,14 @@ class BybitMarketMaker:
                 "orderLinkId": f"mm_{side}_{int(time.time() * 1000)}", # Unique client order ID
                 "postOnly": 1 if self.config.post_only else 0
             }
-            
+
             response = self.http_session.place_order(**params)
-            
+
             if response['retCode'] == 0:
                 order_id = response['result']['orderId']
                 order_link_id = params['orderLinkId']
                 self.logger.info(f"Placed {side} order: ID={order_id}, Price={price_formatted}, Qty={qty_formatted}, LinkID={order_link_id}")
-                
+
                 # Add order to our active orders tracker
                 async with self.active_orders_lock:
                     self.active_orders[order_id] = {
@@ -659,12 +658,12 @@ class BybitMarketMaker:
                     'side': side, 'orderType': self.config.order_type, 'price': str(price_formatted),
                     'qty': str(qty_formatted), 'orderStatus': 'New'
                 }, message="Order placed successfully"))
-                
+
                 return response['result']
-            
+
             self.logger.error(f"Failed to place {side} order: {response.get('retMsg', 'Unknown error')}")
             return None
-            
+
         except Exception as e:
             self.logger.error(f"Error placing order: {e}")
             return None
@@ -724,7 +723,7 @@ class BybitMarketMaker:
                         'side': order_info['side'], 'orderType': self.config.order_type, 'price': str(order_info['price']),
                         'qty': str(order_info['qty']), 'orderStatus': order_info['status']
                     }, message="Reconciled: Found on exchange, added to local state"))
-        
+
         self.logger.info(f"Order reconciliation complete. {len(self.active_orders)} active orders in state.")
 
     async def _manage_orders(self):
@@ -743,15 +742,15 @@ class BybitMarketMaker:
 
             target_bid_price = self.mid_price * (Decimal('1') - self.config.strategy.spread_pct)
             target_ask_price = self.mid_price * (Decimal('1') + self.config.strategy.spread_pct)
-            
+
             # Format prices to the correct precision
             target_bid_price = self.market_info.format_price(target_bid_price) if self.market_info else target_bid_price
             target_ask_price = self.market_info.format_price(target_ask_price) if self.market_info else target_ask_price
 
         # Track existing orders
-        current_bid_order: Optional[Dict] = None
-        current_ask_order: Optional[Dict] = None
-        
+        current_bid_order: dict | None = None
+        current_ask_order: dict | None = None
+
         orders_to_cancel = []
 
         async with self.active_orders_lock:
@@ -772,7 +771,7 @@ class BybitMarketMaker:
                     else:
                         self.logger.info(f"Ask order {order_id} at {order_info['price']} is stale or a duplicate. Marking for cancellation. (Target: {target_ask_price})")
                         orders_to_cancel.append((order_id, order_info.get('orderLinkId')))
-        
+
         # Execute cancellations
         for order_id, order_link_id in orders_to_cancel:
             await self._cancel_order(order_id, order_link_id)
@@ -793,11 +792,11 @@ class BybitMarketMaker:
             self.logger.info(f"No valid ask order found. Placing new ask at {target_ask_price} with Qty {order_qty}.")
             await self._place_limit_order("Sell", target_ask_price, order_qty)
             await asyncio.sleep(0.1)
-            
+
     async def run(self):
         """Main asynchronous bot loop."""
         self.is_running = True
-        
+
         # Connect to DB and create tables
         await self.db_manager.connect()
         await self.db_manager.create_tables()
@@ -820,7 +819,7 @@ class BybitMarketMaker:
             self.active_orders = state.get('active_orders', {})
             self.config.metrics = state.get('metrics', self.config.metrics)
             self.logger.info(f"Loaded state with {len(self.active_orders)} active orders.")
-        
+
         # Reconcile local orders with exchange orders
         await self._reconcile_orders_on_startup()
 
@@ -834,28 +833,28 @@ class BybitMarketMaker:
             callback=self._handle_order_update
         )
         self.logger.info("Subscribed to orderbook and order streams.")
-        
+
         try:
             # Main loop
             while self.is_running:
                 await self._manage_orders()
                 await asyncio.sleep(self.config.loop_interval_sec)
-                
+
         except (asyncio.CancelledError, KeyboardInterrupt):
             self.logger.info("Bot execution cancelled by user (Ctrl+C).")
         except Exception as e:
             self.logger.critical(f"An unhandled error occurred in the main loop: {e}", exc_info=True)
         finally:
             await self.stop()
-            
+
     async def stop(self):
         """Performs graceful shutdown procedures."""
         if not self.is_running:
             return
-        
+
         self.is_running = False
         self.logger.info("Initiating graceful shutdown...")
-        
+
         if self.config.trading_mode != "DRY_RUN":
             self.logger.info("Cancelling all active orders on the exchange...")
             await self._cancel_all_orders()
@@ -868,16 +867,16 @@ class BybitMarketMaker:
             'metrics': self.config.metrics
         }
         await self.state_manager.save_state(state)
-        
+
         self.logger.info("Logging final metrics to database...")
         await self.db_manager.log_bot_metrics(self.config.metrics)
 
         self.logger.info("Closing WebSocket connection...")
         self.ws_session.exit()
-        
+
         self.logger.info("Closing database connection...")
         await self.db_manager.close()
-        
+
         self.logger.info("Bot shut down successfully.")
 
 # =====================================================================
@@ -885,10 +884,10 @@ class BybitMarketMaker:
 # =====================================================================
 if __name__ == "__main__":
     config = Config()
-    
+
     # Create and run the bot instance
     bot = BybitMarketMaker(config)
-    
+
     # Run the main asynchronous loop
     try:
         asyncio.run(bot.run())

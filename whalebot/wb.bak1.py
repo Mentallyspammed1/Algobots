@@ -1628,7 +1628,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             period = self.config["mtf_analysis"]["trend_period"]
             if len(higher_tf_df) < period:
                 self.logger.debug(
@@ -1646,7 +1646,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             # Temporarily create an analyzer for the higher timeframe data to calculate its ST
             # Pass the logger and symbol to the temporary analyzer
             temp_analyzer = TradingAnalyzer(

@@ -1,24 +1,25 @@
-import os
 import asyncio
 import logging
-import orjson as json
-import time
-import uuid
+import os
 import signal
 import statistics
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass, field
+import time
+import uuid
 from collections import deque
-from decimal import (
-    Decimal,
-    ROUND_HALF_UP,
-    ROUND_FLOOR,
-    ROUND_CEILING,
-    InvalidOperation,
-    DivisionByZero,
-)
+from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import (
+    ROUND_CEILING,
+    ROUND_FLOOR,
+    ROUND_HALF_UP,
+    Decimal,
+    DivisionByZero,
+    InvalidOperation,
+)
+from pathlib import Path
+from typing import Any
+
+import orjson as json
 
 # --- Optional TA deps (pandas + pandas_ta) ---
 try:
@@ -35,9 +36,8 @@ from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
 from rich.console import Console
 from rich.live import Live
-from rich.table import Table
 from rich.logging import RichHandler
-
+from rich.table import Table
 
 # =========================
 # Logging setup (with symbol context)
@@ -120,12 +120,12 @@ class InstrumentInfo:
 
 @dataclass
 class BotState:
-    instrument_info: Optional[InstrumentInfo] = None
+    instrument_info: InstrumentInfo | None = None
     recent_prices: deque = field(default_factory=lambda: deque(maxlen=240))  # last ~4 minutes @1s
     consecutive_api_failures: int = 0
     is_circuit_breaker_active: bool = False
-    last_mid_price: Optional[Decimal] = None
-    last_quote_prices: Dict[str, Decimal] = field(default_factory=dict)
+    last_mid_price: Decimal | None = None
+    last_quote_prices: dict[str, Decimal] = field(default_factory=dict)
 
 
 # =========================
@@ -143,12 +143,12 @@ class PositionManager:
     def _safe_decimal(self, value: Any, default: str = "0.0") -> Decimal:
         return to_decimal(value, default)
 
-    def update_position(self, data: Dict):
+    def update_position(self, data: dict):
         self.size = self._safe_decimal(data.get('size'))
         self.avg_entry_price = self._safe_decimal(data.get('avgPrice'))
         self.unrealized_pnl = self._safe_decimal(data.get('unrealisedPnl'))
 
-    def process_real_fill(self, trade: Dict):
+    def process_real_fill(self, trade: dict):
         closed_pnl = self._safe_decimal(trade.get('closedPnl'))
         if closed_pnl != Decimal("0"):
             self.realized_pnl += closed_pnl
@@ -265,9 +265,9 @@ class EnhancedBybitMarketMaker:
 
         self.api = self
         self.position_manager = PositionManager(config, self)
-        self.orderbook: Dict[str, Dict[Decimal, Decimal]] = {"bids": {}, "asks": {}}
-        self.active_orders: Dict[str, dict] = {}
-        self.virtual_orders: Dict[str, dict] = {}
+        self.orderbook: dict[str, dict[Decimal, Decimal]] = {"bids": {}, "asks": {}}
+        self.active_orders: dict[str, dict] = {}
+        self.virtual_orders: dict[str, dict] = {}
         self.last_reprice_time = 0.0
 
         # Repricing sensitivity with defaults
@@ -291,7 +291,7 @@ class EnhancedBybitMarketMaker:
         self.ta_enabled = bool(self.ta_cfg.get("enabled") and PANDAS_TA_AVAILABLE)
         if self.ta_cfg.get("enabled") and not PANDAS_TA_AVAILABLE:
             logger.warning("TA enabled in config but pandas/pandas_ta not installed. TA features disabled.")
-        self.ta_state: Dict[str, Optional[float]] = {
+        self.ta_state: dict[str, float | None] = {
             "rsi": None,
             "ema_fast": None,
             "ema_slow": None,
@@ -306,11 +306,11 @@ class EnhancedBybitMarketMaker:
         self._max_backoff_sec = 30.0
 
         # Hold references to pybit websockets
-        self.ws_public: Optional[WebSocket] = None
-        self.ws_private: Optional[WebSocket] = None
+        self.ws_public: WebSocket | None = None
+        self.ws_private: WebSocket | None = None
 
         # Will be set in run()
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self.loop: asyncio.AbstractEventLoop | None = None
 
     # ------------- REST call wrapper -------------
     async def _api_call(self, method, **kwargs):
@@ -370,7 +370,7 @@ class EnhancedBybitMarketMaker:
         else:
             logger.error(f"Failed to fetch instrument info for {self.config['symbol']}")
 
-    async def place_and_cancel_orders_batch(self, orders_to_place: List[dict], orders_to_cancel: List[str]):
+    async def place_and_cancel_orders_batch(self, orders_to_place: list[dict], orders_to_cancel: list[str]):
         if self.config['dry_run']:
             self.virtual_orders.clear()
             for order in orders_to_place:
@@ -628,7 +628,7 @@ class EnhancedBybitMarketMaker:
             q = self.state.instrument_info.min_order_size
         return q
 
-    def _quotes_significantly_changed(self, current: List, new: List) -> bool:
+    def _quotes_significantly_changed(self, current: list, new: list) -> bool:
         if not self.state.instrument_info:
             return True
 
@@ -642,7 +642,7 @@ class EnhancedBybitMarketMaker:
         current_sorted = sorted(current, key=lambda x: (x[2], x[0], x[1]))
         new_sorted = sorted(new, key=lambda x: (x[2], x[0], x[1]))
 
-        for (cp, cq, cs), (np, nq, ns) in zip(current_sorted, new_sorted):
+        for (cp, cq, cs), (np, nq, ns) in zip(current_sorted, new_sorted, strict=False):
             if cs != ns:
                 return True
             if not approx_equal(cp, np, price_tol):
@@ -654,7 +654,7 @@ class EnhancedBybitMarketMaker:
                 return True
         return False
 
-    def _calculate_tiered_quotes(self) -> Tuple[List[dict], List[dict]]:
+    def _calculate_tiered_quotes(self) -> tuple[list[dict], list[dict]]:
         bids = self.orderbook['bids']
         asks = self.orderbook['asks']
 

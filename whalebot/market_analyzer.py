@@ -1,13 +1,13 @@
 # market_analyzer.py
 
-import pandas as pd
-import pandas_ta as ta
-from typing import Dict, Any
 import logging
+from typing import Any
+
+import pandas as pd
+
 
 class MarketAnalyzer:
-    """
-    Analyzes market data to determine current conditions such as trend and volatility.
+    """Analyzes market data to determine current conditions such as trend and volatility.
     This helps in dynamically adapting trading strategies.
     """
 
@@ -20,14 +20,13 @@ class MarketAnalyzer:
         self.adx_period: int = kwargs.get('adx_period', 14)
         self.adx_trend_strong_threshold: int = kwargs.get('adx_trend_strong_threshold', 25)
         self.adx_trend_weak_threshold: int = kwargs.get('adx_trend_weak_threshold', 20)
-        
+
         self.recent_atr_avg: float = 0.0 # To track average ATR for volatility comparison
 
         self.logger.info("MarketAnalyzer initialized.")
 
-    def analyze_market_conditions(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Analyzes the market DataFrame to determine trend and volatility.
+    def analyze_market_conditions(self, df: pd.DataFrame) -> dict[str, Any]:
+        """Analyzes the market DataFrame to determine trend and volatility.
 
         Args:
             df: DataFrame containing OHLCV data.
@@ -35,7 +34,7 @@ class MarketAnalyzer:
         Returns:
             A dictionary with current market conditions (e.g., 'trend', 'volatility', 'trend_strength', 'market_phase').
         """
-        conditions: Dict[str, Any] = {
+        conditions: dict[str, Any] = {
             'trend': 'UNKNOWN', # UPTREND, DOWNTREND, RANGING
             'volatility': 'NORMAL', # HIGH, NORMAL, LOW
             'trend_strength': 'NEUTRAL', # STRONG, MODERATE, WEAK
@@ -57,11 +56,11 @@ class MarketAnalyzer:
         df_cleaned.ta.ema(length=self.trend_detection_period, append=True, col_names=(f'EMA_{self.trend_detection_period}',))
         df_cleaned.ta.adx(length=self.adx_period, append=True)
         df_cleaned.ta.atr(length=self.volatility_detection_atr_period, append=True, col_names=(f'ATR_{self.volatility_detection_atr_period}',))
-        
+
         # Ensure indicators are calculated and not NaN for the latest row
         df_cleaned.fillna(method='ffill', inplace=True)
         df_cleaned.fillna(0, inplace=True) # Fill any remaining with 0
-        
+
         if df_cleaned.empty:
             self.logger.warning("DataFrame became empty after indicator calculation and NaN handling in MarketAnalyzer.")
             return conditions
@@ -72,7 +71,7 @@ class MarketAnalyzer:
         latest_plus_di = df_cleaned[f'DMP_{self.adx_period}'].iloc[-1] # +DI
         latest_minus_di = df_cleaned[f'DMN_{self.adx_period}'].iloc[-1] # -DI
         latest_atr = df_cleaned[f'ATR_{self.volatility_detection_atr_period}'].iloc[-1]
-        
+
         # --- Trend Direction (EMA & DI Crossover) ---
         if latest_close > latest_ema:
             conditions['trend'] = 'UPTREND'

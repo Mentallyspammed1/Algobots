@@ -20,7 +20,6 @@ from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-
 # Whalebot: An advanced cryptocurrency trading bot for Bybit.
 #
 # This bot integrates various technical indicators, including Ehlers SuperTrend,
@@ -449,20 +448,20 @@ def _send_signed_request(
         )
         logger.debug(f"GET Request: {url}?{query_string}")
         return session.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
-    else:  # POST
-        json_params = json.dumps(params) if params else ""
-        param_str = timestamp + API_KEY + recv_window + json_params
-        signature = generate_signature(param_str, API_SECRET)
-        headers.update(
-            {
-                "X-BAPI-API-KEY": API_KEY,
-                "X-BAPI-TIMESTAMP": timestamp,
-                "X-BAPI-SIGN": signature,
-                "X-BAPI-RECV-WINDOW": recv_window,
-            }
-        )
-        logger.debug(f"POST Request: {url} with payload {json_params}")
-        return session.post(url, json=params, headers=headers, timeout=REQUEST_TIMEOUT)
+    # POST
+    json_params = json.dumps(params) if params else ""
+    param_str = timestamp + API_KEY + recv_window + json_params
+    signature = generate_signature(param_str, API_SECRET)
+    headers.update(
+        {
+            "X-BAPI-API-KEY": API_KEY,
+            "X-BAPI-TIMESTAMP": timestamp,
+            "X-BAPI-SIGN": signature,
+            "X-BAPI-RECV-WINDOW": recv_window,
+        }
+    )
+    logger.debug(f"POST Request: {url} with payload {json_params}")
+    return session.post(url, json=params, headers=headers, timeout=REQUEST_TIMEOUT)
 
 
 def _handle_api_response(
@@ -2048,7 +2047,7 @@ class TradingAnalyzer:
         ):
             return "Bullish Engulfing"
         # Bearish Engulfing
-        elif (
+        if (
             current_bar["open"] > prev_bar["close"]
             and current_bar["close"] < prev_bar["open"]
             and current_bar["close"] < current_bar["open"]
@@ -2057,7 +2056,7 @@ class TradingAnalyzer:
             return "Bearish Engulfing"
         # Hammer (check specific characteristics like small body, long lower shadow, no or small upper shadow)
         # Assuming body is 10-20% of total range, lower shadow is 2x body, upper shadow is < 0.5x body
-        elif (
+        if (
             current_bar["close"] > current_bar["open"]  # Bullish candle
             and abs(current_bar["close"] - current_bar["open"])
             <= (current_bar["high"] - current_bar["low"]) * 0.3  # Small body (30% max of range)
@@ -2068,7 +2067,7 @@ class TradingAnalyzer:
         ):
             return "Bullish Hammer"
         # Shooting Star (similar to Hammer, but inverted for bearish)
-        elif (
+        if (
             current_bar["close"] < current_bar["open"]  # Bearish candle
             and abs(current_bar["close"] - current_bar["open"])
             <= (current_bar["high"] - current_bar["low"]) * 0.3  # Small body (30% max of range)
@@ -2173,7 +2172,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"[{self.symbol}] MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -2190,7 +2189,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             temp_analyzer = TradingAnalyzer(
                 higher_tf_df, self.config, self.logger, self.symbol
             )

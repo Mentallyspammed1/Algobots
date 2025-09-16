@@ -47,8 +47,7 @@ logger = logging.getLogger(__name__)
 
 # --- WebSocket Manager ---
 class BybitWebSocketManager:
-    """
-    Manages WebSocket connections for Bybit public and private streams.
+    """Manages WebSocket connections for Bybit public and private streams.
     Stores real-time market data, positions, and orders.
     """
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
@@ -308,8 +307,7 @@ class BybitWebSocketManager:
 
 # --- Trading Bot Core ---
 class BybitTradingBot:
-    """
-    Core Bybit trading bot functionality, integrating HTTP API and WebSocket data.
+    """Core Bybit trading bot functionality, integrating HTTP API and WebSocket data.
     """
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
         self.session = HTTP(
@@ -328,8 +326,7 @@ class BybitTradingBot:
         logger.info(f"Bybit Trading Bot initialized. Testnet: {testnet}, Category: {self.category}")
 
     async def _http_call(self, method: Callable, max_retries: int = 3, initial_delay: float = 0.5, **kwargs) -> dict | None:
-        """
-        Runs a blocking pybit HTTP call in a thread and retries on failure.
+        """Runs a blocking pybit HTTP call in a thread and retries on failure.
         """
         for attempt in range(1, max_retries + 1):
             try:
@@ -372,8 +369,7 @@ class BybitTradingBot:
             logger.error(f"Error fetching instrument info: {e}", exc_info=True)
 
     def set_strategy(self, strategy_func: Callable[[dict, dict, HTTP, Any, list[str]], None]):
-        """
-        Sets the trading strategy function.
+        """Sets the trading strategy function.
         The strategy function should accept (market_data, account_info, http_client, bot_instance, symbols) as arguments.
         """
         self.strategy = strategy_func
@@ -402,8 +398,7 @@ class BybitTradingBot:
         return (price / tick_size).to_integral_value(rounding=ROUND_DOWN) * tick_size
 
     async def get_market_data(self, symbol: str) -> dict | None:
-        """
-        Retrieve current market data for a symbol.
+        """Retrieve current market data for a symbol.
         Prioritizes WebSocket data if available and fresh, falls back to REST API.
         """
         # Check WebSocket data first
@@ -448,32 +443,28 @@ class BybitTradingBot:
                     "ticker": normalized_tk,
                     "last_trade": [] # Placeholder if not fetched via REST
                 }
-            else:
-                logger.warning(f"Failed to get market data for {symbol} via REST. Orderbook ret: {orderbook_resp.get('retMsg') if orderbook_resp else 'None'}, Ticker ret: {ticker_resp.get('retMsg') if ticker_resp else 'None'}")
-                return None
+            logger.warning(f"Failed to get market data for {symbol} via REST. Orderbook ret: {orderbook_resp.get('retMsg') if orderbook_resp else 'None'}, Ticker ret: {ticker_resp.get('retMsg') if ticker_resp else 'None'}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching market data for {symbol} via REST: {e}", exc_info=True)
             return None
 
     async def get_account_info(self, account_type: str = "UNIFIED") -> dict | None:
-        """
-        Retrieve account balance information.
+        """Retrieve account balance information.
         Prioritizes WebSocket data if available, falls back to REST API.
         """
         try:
             balance = await self._http_call(self.session.get_wallet_balance, accountType=account_type)
             if balance and balance.get('retCode') == 0:
                 return balance.get('result', {})
-            else:
-                logger.warning(f"Failed to get account balance. Response: {balance.get('retMsg') if balance else 'No response'}")
-                return None
+            logger.warning(f"Failed to get account balance. Response: {balance.get('retMsg') if balance else 'No response'}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching account balance: {e}", exc_info=True)
             return None
 
     async def calculate_position_size(self, symbol: str, capital_percentage: float, price: Decimal, account_info: dict) -> Decimal:
-        """
-        Calculates the position size based on a percentage of available capital.
+        """Calculates the position size based on a percentage of available capital.
         Returns the quantity as a Decimal, rounded to the symbol's qtyStep.
         """
         if symbol not in self.symbol_info:
@@ -533,9 +524,8 @@ class BybitTradingBot:
             )
             if klines and klines.get('retCode') == 0:
                 return klines
-            else:
-                logger.warning(f"Failed to get historical klines for {symbol} ({interval}). Response: {klines.get('retMsg') if klines else 'No response'}")
-                return None
+            logger.warning(f"Failed to get historical klines for {symbol} ({interval}). Response: {klines.get('retMsg') if klines else 'No response'}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching historical klines for {symbol} ({interval}): {e}", exc_info=True)
             return None
@@ -550,8 +540,8 @@ class BybitTradingBot:
         return count
 
     async def place_order(self, symbol: str, side: str, order_type: str, qty: Decimal, price: Decimal | None = None, stop_loss_price: Decimal | None = None, take_profit_price: Decimal | None = None, trigger_by: str = "LastPrice", time_in_force: str = "GTC", **kwargs) -> dict | None:
-        """
-        Place an order on Bybit.
+        """Place an order on Bybit.
+
         Args:
             symbol (str): Trading pair (e.g., "BTCUSDT").
             side (str): "Buy" or "Sell".
@@ -563,6 +553,7 @@ class BybitTradingBot:
             trigger_by (str): Trigger type for stop/take profit orders ("LastPrice", "IndexPrice", "MarkPrice").
             time_in_force (str): "GTC", "IOC", "FOK".
             **kwargs: Additional parameters for the order (e.g., "orderLinkId").
+
         Returns:
             Optional[Dict]: The order response from Bybit if successful, else None.
         """
@@ -626,9 +617,8 @@ class BybitTradingBot:
                 result = order_response.get('result', {})
                 logger.info(f"Order placed successfully for {symbol} ({side} {order_type}) Qty={qty}, Price={params.get('price')} -> {result}")
                 return result
-            else:
-                logger.error(f"Failed to place order for {symbol}: {order_response.get('retMsg') if order_response else 'No response'}")
-                return None
+            logger.error(f"Failed to place order for {symbol}: {order_response.get('retMsg') if order_response else 'No response'}")
+            return None
         except Exception as e:
             logger.error(f"Error placing order for {symbol}: {e}", exc_info=True)
             return None
@@ -649,9 +639,8 @@ class BybitTradingBot:
             if cancel_response and cancel_response.get('retCode') == 0:
                 logger.info(f"Order cancelled successfully for {symbol}: {cancel_response.get('result')}")
                 return True
-            else:
-                logger.error(f"Failed to cancel order for {symbol}: {cancel_response.get('retMsg') if cancel_response else 'No response'}")
-                return False
+            logger.error(f"Failed to cancel order for {symbol}: {cancel_response.get('retMsg') if cancel_response else 'No response'}")
+            return False
         except Exception as e:
             logger.error(f"Error cancelling order for {symbol}: {e}", exc_info=True)
             return False

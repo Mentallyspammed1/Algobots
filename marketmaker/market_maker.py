@@ -1,12 +1,12 @@
+import logging
 import os
 import sys
 import time
 import uuid
-import logging
 from decimal import ROUND_DOWN, Decimal
-from typing import Any, Dict, List, Optional, Tuple
-from dotenv import load_dotenv
+from typing import Any
 
+from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
 
 # Load environment variables from .env file
@@ -111,7 +111,7 @@ class BybitRest:
             logger.critical(f"Failed to load instrument details: {e}")
             sys.exit(1)
 
-    def place_batch_order(self, orders: List[Dict[str, Any]]) -> Dict:
+    def place_batch_order(self, orders: list[dict[str, Any]]) -> dict:
         """Place batch orders."""
         try:
             response = self.client.place_batch_order(
@@ -125,7 +125,7 @@ class BybitRest:
             logger.error(f"Failed to place batch order: {e}")
             raise
 
-    def amend_batch_order(self, orders: List[Dict[str, Any]]) -> Dict:
+    def amend_batch_order(self, orders: list[dict[str, Any]]) -> dict:
         """Amend batch orders."""
         try:
             response = self.client.amend_batch_order(
@@ -139,7 +139,7 @@ class BybitRest:
             logger.error(f"Failed to amend batch order: {e}")
             raise
 
-    def cancel_batch_order(self, orders: List[Dict[str, Any]]) -> Dict:
+    def cancel_batch_order(self, orders: list[dict[str, Any]]) -> dict:
         """Cancel batch orders."""
         try:
             response = self.client.cancel_batch_order(
@@ -153,7 +153,7 @@ class BybitRest:
             logger.error(f"Failed to cancel batch order: {e}")
             raise
 
-    def set_trading_stop(self, params: Dict[str, Any]) -> Dict:
+    def set_trading_stop(self, params: dict[str, Any]) -> dict:
         """Set trading stop (TP/SL/Trailing)."""
         try:
             response = self.client.set_trading_stop(params)
@@ -214,7 +214,7 @@ class PublicWS:
         )
         logger.info("Public WebSocket initialized")
 
-    def on_orderbook(self, message: Dict):
+    def on_orderbook(self, message: dict):
         """Handle order book updates."""
         try:
             data = message.get("data", [])
@@ -245,11 +245,11 @@ class PrivateWS:
         self.position = Decimal("0")
         self.entry_price = Decimal("0")
         self.ws.position_stream(callback=self.on_position)
-        self.orders: Dict[str, Dict] = {}
+        self.orders: dict[str, dict] = {}
         self.ws.order_stream(callback=self.on_order)
         logger.info("Private WebSocket initialized")
 
-    def on_position(self, message: Dict):
+    def on_position(self, message: dict):
         """Handle position updates."""
         try:
             data = message.get("data", [])
@@ -262,7 +262,7 @@ class PrivateWS:
         except Exception as e:
             logger.error(f"Error processing position update: {e}")
 
-    def on_order(self, message: Dict):
+    def on_order(self, message: dict):
         """Handle order updates."""
         try:
             data = message.get("data", [])
@@ -295,7 +295,7 @@ class MarketMaker:
         self.working_ask = None
         logger.info("Market Maker initialized")
 
-    def compute_quotes(self) -> Tuple[Decimal, Decimal]:
+    def compute_quotes(self) -> tuple[Decimal, Decimal]:
         """Compute bid and ask prices."""
         try:
             mid = self.public_ws.mid_price()

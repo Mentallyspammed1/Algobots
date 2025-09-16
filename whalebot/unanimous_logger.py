@@ -1,14 +1,15 @@
 # unanimous_logger.py
 
+import json
 import logging
 import os
 import sys
-import json
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import ClassVar
 
 from config import Config
+
 
 class SensitiveFormatter(logging.Formatter):
     """Formatter that redacts API keys from log records."""
@@ -37,8 +38,7 @@ class SensitiveFormatter(logging.Formatter):
         return redacted_message
 
 class JSONFormatter(logging.Formatter):
-    """
-    Formatter that outputs log records as a JSON string.
+    """Formatter that outputs log records as a JSON string.
     """
     def format(self, record):
         log_record = {
@@ -52,8 +52,7 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_record)
 
 class TradingBotFormatter(logging.Formatter):
-    """
-    Formatter that outputs log records in a format that the trading-bot can parse.
+    """Formatter that outputs log records in a format that the trading-bot can parse.
     """
     def format(self, record):
         message = record.getMessage()

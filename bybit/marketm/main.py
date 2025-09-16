@@ -256,9 +256,8 @@ class BybitTradingBot:
                             if not found:
                                 logger.warning(f"Symbol {symbol} not found in instruments list response.")
                             break
-                        else:
-                            logger.warning(f"Attempt {attempt+1}/{MAX_RETRIES} for {symbol}: API returned error code {response.get('retCode')}: {response.get('retMsg')}")
-                            await asyncio.sleep(2 ** attempt)
+                        logger.warning(f"Attempt {attempt+1}/{MAX_RETRIES} for {symbol}: API returned error code {response.get('retCode')}: {response.get('retMsg')}")
+                        await asyncio.sleep(2 ** attempt)
                     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, urllib3.exceptions.MaxRetryError, urllib3.exceptions.NewConnectionError, socket.gaierror) as e:
                         logger.warning(f"Attempt {attempt+1}/{MAX_RETRIES} for {symbol}: Network/Connection error occurred: {e}")
                         await asyncio.sleep(2 ** attempt)
@@ -303,9 +302,8 @@ class BybitTradingBot:
                     "last_trade": ws_data.get("last_trade") if ws_data else [],
                     "timestamp": time.time() * 1000
                 }
-            else:
-                logger.warning(f"Failed to get market data for {symbol} via REST. Orderbook: {orderbook_resp.get('retMsg')}, Ticker: {ticker_resp.get('retMsg')}")
-                return None
+            logger.warning(f"Failed to get market data for {symbol} via REST. Orderbook: {orderbook_resp.get('retMsg')}, Ticker: {ticker_resp.get('retMsg')}")
+            return None
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, urllib3.exceptions.MaxRetryError, urllib3.exceptions.NewConnectionError, socket.gaierror) as e:
             logger.error(f"Error fetching market data for {symbol} via REST: {e}", exc_info=True)
             return None
@@ -315,9 +313,8 @@ class BybitTradingBot:
             balance_response = await asyncio.to_thread(self.session.get_wallet_balance, accountType=account_type)
             if balance_response.get('retCode') == 0:
                 return balance_response.get('result', {})
-            else:
-                logger.warning(f"Failed to get account balance. API Response: {balance_response.get('retMsg')}")
-                return None
+            logger.warning(f"Failed to get account balance. API Response: {balance_response.get('retMsg')}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching account balance: {e}", exc_info=True)
             return None
@@ -365,9 +362,8 @@ class BybitTradingBot:
                                              limit=limit)
             if klines_response.get('retCode') == 0:
                 return klines_response
-            else:
-                logger.warning(f"Failed to get historical klines for {symbol}. API Response: {klines_response.get('retMsg')}")
-                return None
+            logger.warning(f"Failed to get historical klines for {symbol}. API Response: {klines_response.get('retMsg')}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching historical klines for {symbol}: {e}", exc_info=True)
             return None
@@ -411,11 +407,10 @@ class BybitTradingBot:
                 order_result = order_response.get('result', {})
                 logger.info(f"Order placed successfully for {symbol}: OrderID={order_result.get('orderId')}")
                 return order_result
-            else:
-                error_msg = order_response.get('retMsg', 'Unknown error')
-                logger.error(f"Failed to place order for {symbol}: {error_msg}")
-                send_email_alert("Order Placement Failure", f"For {symbol} ({order_type} {side} {qty}): {error_msg}")
-                return None
+            error_msg = order_response.get('retMsg', 'Unknown error')
+            logger.error(f"Failed to place order for {symbol}: {error_msg}")
+            send_email_alert("Order Placement Failure", f"For {symbol} ({order_type} {side} {qty}): {error_msg}")
+            return None
         except Exception as e:
             logger.error(f"Exception occurred while placing order for {symbol}: {e}", exc_info=True)
             return None
@@ -426,10 +421,9 @@ class BybitTradingBot:
             if response.get('retCode') == 0:
                 logger.info(f"All open orders cancelled for {symbol}.")
                 return True
-            else:
-                error_msg = response.get('retMsg', 'Unknown error')
-                logger.error(f"Failed to cancel all orders for {symbol}: {error_msg}")
-                return False
+            error_msg = response.get('retMsg', 'Unknown error')
+            logger.error(f"Failed to cancel all orders for {symbol}: {error_msg}")
+            return False
         except Exception as e:
             logger.error(f"Exception occurred while cancelling all orders for {symbol}: {e}", exc_info=True)
             return False

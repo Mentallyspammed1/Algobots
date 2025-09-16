@@ -1,12 +1,8 @@
 import re
-import json
-import os
-from datetime import datetime
-import zoneinfo # For timezone info in log
+
 
 def analyze_trade_logs(log_file_path: str) -> list:
-    """
-    Analyzes a trading bot log file to extract currently open scalp trade details,
+    """Analyzes a trading bot log file to extract currently open scalp trade details,
     including execution timestamps and status.
 
     Args:
@@ -27,7 +23,7 @@ def analyze_trade_logs(log_file_path: str) -> list:
     timestamp_regex = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})")
 
     try:
-        with open(log_file_path, 'r', encoding='utf-8') as f:
+        with open(log_file_path, encoding='utf-8') as f:
             for line in f:
                 timestamp_match = timestamp_regex.match(line)
                 if timestamp_match:
@@ -88,8 +84,7 @@ def analyze_trade_logs(log_file_path: str) -> list:
 
                     trade_id = f"{symbol}_{entry_time_str}"
 
-                    if trade_id in active_trades:
-                        del active_trades[trade_id] # Remove from active trades
+                    active_trades.pop(trade_id, None) # Remove from active trades
                     # else:
                         # print(f"Warning: Closed trade found but no matching open trade: {clean_line}")
 
@@ -103,8 +98,7 @@ def analyze_trade_logs(log_file_path: str) -> list:
     return list(active_trades.values()) # Return only currently active trades
 
 def suggest_trades(current_signals: list, confidence_threshold: float = 1.5) -> list:
-    """
-    Suggests new trades based on current open signals and a confidence threshold.
+    """Suggests new trades based on current open signals and a confidence threshold.
 
     Args:
         current_signals (list): A list of currently open trade signals.

@@ -20,6 +20,11 @@
 - [ ] Break down overly large files/functions into smaller, single-responsibility modules/functions.
 - [ ] Ensure consistent use of `Decimal.js` for all financial calculations to prevent floating-point inaccuracies.
 - [ ] Standardize data structures used for kline data (e.g., always use `Decimal.js` for OHLCV values within kline objects).
+- [ ] **Refactor `wbglm.js` into smaller, single-purpose ES modules (e.g., `constants.js`, `utils.js`, `api_client.js`, `config_manager.js`, `position_manager.js`, `performance_tracker.js`, `alert_system.js`, `trading_analyzer.js`, `main.js`).**
+- [ ] **Encapsulate global constants within relevant classes or a dedicated `constants.js` module.**
+- [ ] **Replace hardcoded magic numbers/strings with named constants, ideally from `config.json` or a `constants.js` module.**
+- [ ] **Consider migrating to TypeScript for enhanced type safety and improved code quality.**
+- [ ] **Implement ESLint with a consistent style guide and Prettier for automatic code formatting.**
 
 ## Error Handling & Robustness
 - [ ] Enhance API error handling to be more specific than generic `catch` blocks. Implement retry logic with exponential backoff where appropriate.
@@ -29,6 +34,8 @@
 - [ ] Add comprehensive input validation for all external data (API responses, config values).
 - [ ] Implement robust WebSocket reconnection and data integrity checks (e.g., handle missing kline data, out-of-order messages).
 - [ ] Ensure proper cleanup of resources (e.g., database connections, WebSocket connections) on bot shutdown or error.
+- [ ] **Add explicit checks for zero denominators before division in calculations.**
+- [ ] **Define custom error classes for specific application errors (e.g., `ApiError`, `ConfigurationError`, `InsufficientDataError`) and use them for more granular error handling.**
 
 ## Trading Logic & Strategy
 - [ ] Implement a robust position reconciliation mechanism to ensure local state matches exchange state.
@@ -47,3 +54,6 @@
 - [ ] Document the overall architecture and how different modules interact.
 - [ ] Implement input sanitization for any user-provided inputs (if applicable).
 - [ ] Review all external dependencies for known vulnerabilities (`npm audit`).
+- [ ] **Implement comprehensive unit tests for each module/class, especially for indicator calculations, signal generation, and position management logic.**
+- [ ] **Add JSDoc comments for functions, classes, and complex logic.**
+- [ ] **Create a `README.md` explaining the bot's architecture, setup, and usage.**

@@ -1,43 +1,50 @@
-import os
 import asyncio
 import logging
-import orjson as json
-import time
-import uuid
+import os
 import signal
 import statistics
+import time
+import uuid
 import warnings
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple, Literal, Deque
-from dataclasses import dataclass, field
 from collections import deque
+from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import (
-    Decimal,
-    ROUND_HALF_UP,
-    ROUND_FLOOR,
     ROUND_CEILING,
-    InvalidOperation,
+    ROUND_FLOOR,
+    ROUND_HALF_UP,
+    Decimal,
     DivisionByZero,
-    getcontext
+    InvalidOperation,
+    getcontext,
 )
-from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Literal
+
+import orjson as json
 
 # --- Third-party deps ---
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from rich.console import Console
 from rich.live import Live
-from rich.table import Table
 from rich.logging import RichHandler
+from rich.table import Table
 from tenacity import (
-    retry,
-    wait_exponential,
-    stop_after_attempt,
-    retry_if_exception_type,
-    before_sleep_log,
     AsyncRetrying,
+    before_sleep_log,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
 )
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator, ConfigDict
 
 # --- Optional TA deps (pandas + pandas_ta) ---
 try:
@@ -244,11 +251,11 @@ class InstrumentInfo:
 
 @dataclass
 class BotState:
-    instrument_info: Optional[InstrumentInfo] = None
-    recent_prices: Deque[Tuple[Decimal, float]] = field(default_factory=lambda: deque(maxlen=10000)) # (price, timestamp)
-    last_mid_price: Optional[Decimal] = None
-    last_known_best_bid: Optional[Decimal] = None
-    last_known_best_ask: Optional[Decimal] = None
+    instrument_info: InstrumentInfo | None = None
+    recent_prices: deque[tuple[Decimal, float]] = field(default_factory=lambda: deque(maxlen=10000)) # (price, timestamp)
+    last_mid_price: Decimal | None = None
+    last_known_best_bid: Decimal | None = None
+    last_known_best_ask: Decimal | None = None
     daily_pnl_start_balance: Decimal = Decimal("0") # For daily loss tracking
     session_start_time: float = field(default_factory=time.time)
     daily_pnl_snapshot_time: datetime = field(default_factory=datetime.now)
@@ -261,7 +268,7 @@ class OrderTracker:
     side: Literal["Buy", "Sell"]
     is_virtual: bool = False
     timestamp: float = field(default_factory=time.time)
-    order_link_id: Optional[str] = None # To link place_batch_order responses
+    order_link_id: str | None = None # To link place_batch_order responses
 
 # =========================
 # Bybit API Client (HTTP)
@@ -307,7 +314,7 @@ class BybitHTTPClient:
                     now = time.time()
                     if (now - self.last_api_call_time) < self.min_api_call_interval:
                         await asyncio.sleep(self.min_api_call_interval - (now - self.last_api_call_time))
-                    
+
                     async with self.api_call_semaphore:
                         response = await asyncio.to_thread(method, *args, **kwargs)
                         self.last_api_call_time = time.time()
@@ -356,7 +363,7 @@ class BybitHTTPClient:
                 self.circuit_breaker_active = False
                 logger.info("[bold green]Circuit breaker reset. Resuming.[/bold green]")
 
-    async def get_instrument_info(self) -> Optional[InstrumentInfo]:
+    async def get_instrument_info(self) -> InstrumentInfo | None:
         """Fetches and parses instrument trading rules."""
         result = await self._safe_api_call(self.session.get_instruments_info, category='linear', symbol=self.symbol)
         if result and result.get('list'):
@@ -371,11 +378,11 @@ class BybitHTTPClient:
         logger.error(f"Failed to fetch instrument info for {self.symbol}")
         return None
 
-    async def place_batch_orders(self, orders: List[Dict]) -> List[Dict]:
+    async def place_batch_orders(self, orders: list[dict]) -> list[dict]:
         """Places a batch of orders."""
         if not orders:
             return []
-        
+
         # Assign orderLinkId if not present
         for o in orders:
             if 'orderLinkId' not in o:
@@ -404,7 +411,7 @@ class BybitHTTPClient:
             return successes
         return []
 
-    async def cancel_batch_orders(self, order_ids: List[str]) -> List[str]:
+    async def cancel_batch_orders(self, order_ids: list[str]) -> list[str]:
         """Cancels a batch of orders."""
         if not order_ids:
             return []
@@ -453,8 +460,8 @@ class BybitHTTPClient:
             return True
         logger.error("Failed to cancel all orders.")
         return False
-    
-    async def get_wallet_balance(self, coin: str = "USDT") -> Optional[Decimal]:
+
+    async def get_wallet_balance(self, coin: str = "USDT") -> Decimal | None:
         """Fetches wallet balance for a specific coin."""
         result = await self._safe_api_call(self.session.get_wallet_balance, accountType='UNIFIED', coin=coin)
         if result and result.get('list'):
@@ -474,12 +481,12 @@ class BybitWebSocketManager:
         self.symbol = self.config.market.symbol
         self.testnet = self.config.market.testnet
         self.message_handler = message_handler
-        self.public_ws: Optional[WebSocket] = None
-        self.private_ws: Optional[WebSocket] = None
-        self.main_event_loop: Optional[asyncio.AbstractEventLoop] = None
+        self.public_ws: WebSocket | None = None
+        self.private_ws: WebSocket | None = None
+        self.main_event_loop: asyncio.AbstractEventLoop | None = None
         self._reconnect_lock = asyncio.Lock()
-        self._public_monitor_task: Optional[asyncio.Task] = None
-        self._private_monitor_task: Optional[asyncio.Task] = None
+        self._public_monitor_task: asyncio.Task | None = None
+        self._private_monitor_task: asyncio.Task | None = None
 
     def _ws_callback(self, message: dict):
         """
@@ -593,7 +600,7 @@ class BybitWebSocketManager:
 class TAManager:
     def __init__(self, config: TAConfig):
         self.config = config
-        self.ta_state: Dict[str, Optional[float]] = {
+        self.ta_state: dict[str, float | None] = {
             "rsi": None,
             "ema_fast": None,
             "ema_slow": None,
@@ -604,7 +611,7 @@ class TAManager:
         }
         self.enabled = config.enabled
 
-    def update_ta(self, prices_with_timestamps: Deque[Tuple[Decimal, float]]):
+    def update_ta(self, prices_with_timestamps: deque[tuple[Decimal, float]]):
         """Computes technical indicators from a deque of (price, timestamp) tuples."""
         if not self.enabled or not PANDAS_TA_AVAILABLE:
             return
@@ -678,12 +685,12 @@ class OrderManager:
         self.http_client = http_client
         self.instrument_info = instrument_info
 
-        self.active_orders: Dict[str, OrderTracker] = {}
-        self.virtual_orders: Dict[str, OrderTracker] = {}
+        self.active_orders: dict[str, OrderTracker] = {}
+        self.virtual_orders: dict[str, OrderTracker] = {}
         self.last_reprice_time: float = 0.0
 
     @property
-    def current_orders(self) -> Dict[str, OrderTracker]:
+    def current_orders(self) -> dict[str, OrderTracker]:
         return self.virtual_orders if self.config.market.dry_run else self.active_orders
 
     def _format_price(self, p: Decimal) -> Decimal:
@@ -693,7 +700,7 @@ class OrderManager:
         q = floor_to_increment(q, self.instrument_info.step_size)
         return max(q, self.instrument_info.min_order_size)
 
-    def _quotes_significantly_changed(self, current_quotes: List[Tuple[Decimal, Decimal, str]], new_quotes: List[Dict], mid_price: Decimal, last_known_mid: Decimal) -> bool:
+    def _quotes_significantly_changed(self, current_quotes: list[tuple[Decimal, Decimal, str]], new_quotes: list[dict], mid_price: Decimal, last_known_mid: Decimal) -> bool:
         """Determines if the new set of quotes differs significantly from the current ones."""
         if len(current_quotes) != len(new_quotes):
             return True
@@ -714,7 +721,7 @@ class OrderManager:
         current_sorted = sorted(current_quotes, key=lambda x: (x[2], x[0], x[1]))
         new_sorted = sorted(new_quotes_tuple, key=lambda x: (x[2], x[0], x[1]))
 
-        for (cp, cq, cs), (np, nq, ns) in zip(current_sorted, new_sorted):
+        for (cp, cq, cs), (np, nq, ns) in zip(current_sorted, new_sorted, strict=False):
             if cs != ns: # Should not happen if sorting is correct, but good safety
                 return True
             if not approx_equal(cp, np, price_tol):
@@ -723,7 +730,7 @@ class OrderManager:
                 return True
         return False
 
-    async def manage_orders(self, desired_buy_orders: List[Dict], desired_sell_orders: List[Dict], mid_price: Decimal, last_known_mid: Decimal):
+    async def manage_orders(self, desired_buy_orders: list[dict], desired_sell_orders: list[dict], mid_price: Decimal, last_known_mid: Decimal):
         """Compares desired orders with current open orders and updates accordingly."""
         now = time.time()
         if (now - self.last_reprice_time) < (self.config.order_management.min_order_reprice_interval_ms / 1000):
@@ -755,7 +762,7 @@ class OrderManager:
         # Apply max outstanding orders per side limit
         current_buy_orders = [o for o in self.current_orders.values() if o.side == 'Buy']
         current_sell_orders = [o for o in self.current_orders.values() if o.side == 'Sell']
-        
+
         max_orders = self.config.order_management.max_outstanding_orders_per_side
 
         # Filter orders to place if limits would be exceeded
@@ -780,7 +787,7 @@ class OrderManager:
                 await self._execute_live_orders(orders_to_cancel_ids, filtered_orders_to_place)
             self.last_reprice_time = now
 
-    def _execute_virtual_orders(self, orders_to_cancel_ids: List[str], orders_to_place_data: List[Dict]):
+    def _execute_virtual_orders(self, orders_to_cancel_ids: list[str], orders_to_place_data: list[dict]):
         """Simulates order placement and cancellation for dry run."""
         if orders_to_cancel_ids or orders_to_place_data:
             logger.info(f"[DRY RUN] Orders: Cancelling {len(orders_to_cancel_ids)}, Placing {len(orders_to_place_data)}")
@@ -799,7 +806,7 @@ class OrderManager:
                 order_link_id=order_data.get('orderLinkId') # Preserve if present
             )
 
-    async def _execute_live_orders(self, orders_to_cancel_ids: List[str], orders_to_place_data: List[Dict]):
+    async def _execute_live_orders(self, orders_to_cancel_ids: list[str], orders_to_place_data: list[dict]):
         """Executes actual order placement and cancellation on the exchange."""
         if orders_to_cancel_ids or orders_to_place_data:
             logger.info(f"Executing: Cancelling {len(orders_to_cancel_ids)} orders, Placing {len(orders_to_place_data)} orders.")
@@ -837,7 +844,7 @@ class OrderManager:
             if await self.http_client.cancel_all_orders():
                 self.active_orders.clear()
 
-    def update_from_websocket(self, order_data: Dict):
+    def update_from_websocket(self, order_data: dict):
         """Updates active orders based on WebSocket messages."""
         oid = order_data.get('orderId')
         status = order_data.get('orderStatus')
@@ -880,7 +887,7 @@ class PositionManager:
         self.avg_entry_price: Decimal = Decimal("0")
         self.unrealized_pnl: Decimal = Decimal("0")
         self.realized_pnl: Decimal = Decimal("0")
-        self.initial_balance: Optional[Decimal] = None # To track daily loss
+        self.initial_balance: Decimal | None = None # To track daily loss
         self.last_balance_check_time: float = 0.0
 
     async def initialize_balance(self):
@@ -915,7 +922,7 @@ class PositionManager:
             else:
                 logger.warning("Failed to get current balance for daily PnL snapshot update.")
 
-    def update_position(self, data: Dict):
+    def update_position(self, data: dict):
         """Updates position details from WebSocket (live) or simulates (dry-run)."""
         # Bybit's WS provides 'liqPrice', 'positionIdx' etc. but we only need core PnL info
         self.size = to_decimal(data.get('size'))
@@ -923,7 +930,7 @@ class PositionManager:
         self.unrealized_pnl = to_decimal(data.get('unrealisedPnl'))
         logger.debug(f"Position updated: Size={self.size}, AvgPrice={self.avg_entry_price}, UPNL={self.unrealized_pnl}")
 
-    def process_real_fill(self, trade: Dict):
+    def process_real_fill(self, trade: dict):
         """Processes real trade executions from WebSocket."""
         closed_pnl = to_decimal(trade.get('closedPnl'))
         if closed_pnl != Decimal("0"):
@@ -939,7 +946,7 @@ class PositionManager:
         current_value = self.size * self.avg_entry_price if self.size != 0 else Decimal("0")
         direction_factor = Decimal("1") if side == "Buy" else Decimal("-1")
         fill_value = direction_factor * qty * price
-        
+
         # Calculate new_position_size carefully, accounting for direction
         if self.size == 0:
             new_position_size = direction_factor * qty
@@ -954,7 +961,7 @@ class PositionManager:
                 pnl_realized_part = (price - self.avg_entry_price) * qty if self.size > 0 else (self.avg_entry_price - price) * qty
                 self.realized_pnl += pnl_realized_part
                 new_position_size = self.size + (qty if side == "Buy" else -qty)
-        
+
         # Update avg_entry_price
         if new_position_size == 0:
             self.avg_entry_price = Decimal("0")
@@ -977,7 +984,7 @@ class PositionManager:
             return
         self.unrealized_pnl = (mid - self.avg_entry_price) * self.size
 
-    async def check_and_manage_risk(self, current_mid_price: Optional[Decimal]) -> bool:
+    async def check_and_manage_risk(self, current_mid_price: Decimal | None) -> bool:
         """Checks position PnL against stop-loss/take-profit and acts if triggered."""
         if not current_mid_price:
             logger.warning("Cannot manage risk, no current mid price available.")
@@ -986,15 +993,15 @@ class PositionManager:
         # Daily Loss Check
         await self.update_daily_pnl_snapshot()
         current_wallet_balance = await self.http_client.get_wallet_balance(coin=self.config.market.symbol[:-4]) or await self.http_client.get_wallet_balance(coin="USDT")
-        
+
         if self.initial_balance is not None and self.initial_balance > 0 and current_wallet_balance is not None:
             # Need to consider unrealized PnL for accurate current balance for daily loss
             # This is a simplification; a full calculation involves current capital, initial margin, etc.
             # For this context, we will use total PnL relative to initial balance
-            
+
             # Estimate current equity (simplistic for futures)
             estimated_current_equity = self.bot_state.daily_pnl_start_balance + self.realized_pnl + self.unrealized_pnl
-            
+
             if self.bot_state.daily_pnl_start_balance > 0:
                 daily_loss_pct = (self.bot_state.daily_pnl_start_balance - estimated_current_equity) / self.bot_state.daily_pnl_start_balance
                 if daily_loss_pct >= self.config.risk_management.max_daily_loss_pct:
@@ -1049,13 +1056,13 @@ class EnhancedBybitMarketMaker:
         self.websocket_manager = BybitWebSocketManager(self.config, self._handle_websocket_message)
         self.ta_manager = TAManager(self.config.ta)
 
-        self.order_manager: Optional[OrderManager] = None
-        self.position_manager: Optional[PositionManager] = None
+        self.order_manager: OrderManager | None = None
+        self.position_manager: PositionManager | None = None
 
-        self.orderbook: Dict[str, Dict[Decimal, Decimal]] = {"bids": {}, "asks": {}}
+        self.orderbook: dict[str, dict[Decimal, Decimal]] = {"bids": {}, "asks": {}}
 
         logger.addFilter(ContextFilter(self.config.market.symbol))
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self.loop: asyncio.AbstractEventLoop | None = None
 
     async def _handle_websocket_message(self, msg: dict):
         """Processes incoming messages from Bybit WebSocket."""
@@ -1099,7 +1106,7 @@ class EnhancedBybitMarketMaker:
                         if trade.get('execType') == 'Trade' and trade.get('symbol') == self.config.market.symbol:
                             self.position_manager.process_real_fill(trade)
 
-    def _calculate_tiered_quotes(self) -> Tuple[List[Dict], List[Dict]]:
+    def _calculate_tiered_quotes(self) -> tuple[list[dict], list[dict]]:
         """Calculates buy and sell quotes based on strategy and TA."""
         bids = self.orderbook['bids']
         asks = self.orderbook['asks']
@@ -1121,7 +1128,7 @@ class EnhancedBybitMarketMaker:
         volatility = Decimal("0")
         current_time = time.time()
         vol_data_points = [(p, t) for p, t in self.bot_state.recent_prices if current_time - t <= self.config.technical.vol_window_seconds]
-        
+
         if len(vol_data_points) >= self.config.technical.vol_window_seconds // 5: # Require a reasonable number of points
             try:
                 prices_f = [float(p) for p, _ in vol_data_points]
@@ -1138,7 +1145,7 @@ class EnhancedBybitMarketMaker:
 
         # ---- TA-driven adjustments ----
         signal = Decimal("0") # Main signal in [-1, 1]
-        
+
         if self.ta_manager.enabled:
             rsi = self.ta_manager.ta_state["rsi"]
             ema_f = self.ta_manager.ta_state["ema_fast"]
@@ -1154,7 +1161,7 @@ class EnhancedBybitMarketMaker:
                     signal = Decimal("1") * (self.config.ta.rsi_oversold_threshold - to_decimal(rsi)) / self.config.ta.rsi_oversold_threshold
                 else:
                     signal = clamp_decimal(to_decimal((rsi - 50.0) / 50.0), Decimal("-1"), Decimal("1"))
-                
+
                 # Further adjustment for strong RSI reversal points
                 if (rsi >= float(self.config.ta.rsi_overbought_threshold) and self.bot_state.last_mid_price > mid_price) or \
                    (rsi <= float(self.config.ta.rsi_oversold_threshold) and self.bot_state.last_mid_price < mid_price):
@@ -1178,7 +1185,7 @@ class EnhancedBybitMarketMaker:
                     total_spread_pct += bbw_dec * self.config.ta.bb_spread_mult
                 except Exception:
                     pass
-        
+
         # Aggressiveness multiplier applied to spread
         total_spread_pct /= self.config.strategy.aggressiveness_multiplier
 
@@ -1194,7 +1201,7 @@ class EnhancedBybitMarketMaker:
             # If we are short (ratio < 0), fair_value is pushed up to incentivize buying.
             inv_skew_factor = Decimal("1") - ratio * skew_intensity
             fair_value = fair_value * inv_skew_factor
-        
+
         # Ensure fair_value is not negative or zero
         if fair_value <= 0:
             logger.warning(f"Calculated fair value {fair_value} is invalid. Resetting to mid_price.")
@@ -1233,7 +1240,7 @@ class EnhancedBybitMarketMaker:
                 trend_down_signal = True
             if macd_hist is not None and macd_hist < 0:
                 trend_down_signal = True
-            
+
             # Map combined signal to bias (signal is already in [-1,1])
             if trend_up_signal and not trend_down_signal:
                 buy_bias_factor = Decimal("1") + qty_bias_max * abs(signal)
@@ -1241,7 +1248,7 @@ class EnhancedBybitMarketMaker:
             elif trend_down_signal and not trend_up_signal:
                 sell_bias_factor = Decimal("1") + qty_bias_max * abs(signal)
                 buy_bias_factor = Decimal("1") - qty_bias_max * abs(signal) * Decimal("0.5") # Reduce buying
-            
+
             # Ensure biases are not negative or excessively small
             buy_bias_factor = max(Decimal("0.1"), buy_bias_factor)
             sell_bias_factor = max(Decimal("0.1"), sell_bias_factor)
@@ -1253,7 +1260,7 @@ class EnhancedBybitMarketMaker:
 
         for i in range(tiers):
             tier_adj = (Decimal(i) * tier_spread_bps) / Decimal("10000")
-            
+
             bid_price_raw = fair_value * (Decimal("1") - total_spread_pct - tier_adj)
             ask_price_raw = fair_value * (Decimal("1") + total_spread_pct + tier_adj)
 
@@ -1349,7 +1356,7 @@ class EnhancedBybitMarketMaker:
             real_color = "green" if self.position_manager.realized_pnl >= 0 else "red"
             table.add_row("Unrealized PnL", f"[{unreal_color}]{self.position_manager.unrealized_pnl:.4f}[/{unreal_color}]")
             table.add_row("Realized PnL", f"[{real_color}]{self.position_manager.realized_pnl:.4f}[/{real_color}]")
-            
+
             if self.position_manager.initial_balance is not None and self.position_manager.initial_balance > 0:
                 # This estimation is complex, for display simplicity, we use total_pnl vs start_balance
                 daily_pnl = self.position_manager.realized_pnl + self.position_manager.unrealized_pnl
@@ -1440,7 +1447,7 @@ class EnhancedBybitMarketMaker:
             while (not self.orderbook['bids'] or not self.orderbook['asks'] or not self.bot_state.last_mid_price) and \
                   (time.time() - timeout_start < 30):
                 await asyncio.sleep(0.5)
-            
+
             if not self.bot_state.last_mid_price:
                 logger.critical("Failed to receive initial market data within timeout. Exiting.")
                 return
@@ -1469,7 +1476,7 @@ class EnhancedBybitMarketMaker:
                             logger.critical(f"Critical error from risk manager: {e}", exc_info=True)
                             # If daily loss is hit, propagate shutdown
                             raise asyncio.CancelledError("Bot shutdown due to critical risk event.")
-                    
+
                     if self.config.market.dry_run:
                         await self._simulate_fills()
 
@@ -1495,11 +1502,11 @@ class EnhancedBybitMarketMaker:
                         continue
 
                     await self.order_manager.manage_orders(
-                        buy_orders, sell_orders, 
-                        self.bot_state.last_mid_price, 
+                        buy_orders, sell_orders,
+                        self.bot_state.last_mid_price,
                         self.bot_state.last_mid_price # Pass current mid as last_known_mid for current cycle
                     )
-                    
+
                     await asyncio.sleep(0.1)
 
                 except asyncio.CancelledError:

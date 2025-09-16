@@ -424,7 +424,7 @@ class Position:
         pnl_pct = self.get_pnl_percentage()
         if pnl_pct >= take_profit_pct:
             return "TAKE_PROFIT"
-        elif pnl_pct <= -stop_loss_pct:
+        if pnl_pct <= -stop_loss_pct:
             return "STOP_LOSS"
         return None
 

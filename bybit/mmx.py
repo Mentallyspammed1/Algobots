@@ -1,5 +1,4 @@
-"""
-MMPYRM 1.0 - Ultra-Enhanced Bybit Market-Making Bot
+"""MMPYRM 1.0 - Ultra-Enhanced Bybit Market-Making Bot
 --------------------------------------------------
 Author: AI Assistant
 Original: Pyrmethus
@@ -304,9 +303,8 @@ class SymbolInfo:
                 cost_sum += remaining_qty * price
                 filled_qty += remaining_qty
                 break
-            else:
-                cost_sum += qty_at_level * price
-                filled_qty += qty_at_level
+            cost_sum += qty_at_level * price
+            filled_qty += qty_at_level
 
         if filled_qty == Decimal("0"):
             return Decimal("0") # Cannot estimate if no liquidity
@@ -1908,7 +1906,7 @@ class EnhancedBybitClient:
                 if new_qty is not None: self.market_state.open_orders[order_id]['qty'] = new_qty
                 self.market_state.open_orders[order_id]['timestamp'] = time.time() # Reset age
             return True
-        elif response and response.get('retCode') == 110001: # Order does not exist (already cancelled or filled)
+        if response and response.get('retCode') == 110001: # Order does not exist (already cancelled or filled)
             self.log.info(f"Order {order_id} already non-existent/cancelled. Treating as successful amendment (WS).", order_id=order_id)
             self.market_state.open_orders.pop(order_id, None)
             return True
@@ -1924,7 +1922,7 @@ class EnhancedBybitClient:
                 if new_qty is not None: self.market_state.open_orders[order_id]['qty'] = new_qty
                 self.market_state.open_orders[order_id]['timestamp'] = time.time()
             return True
-        elif http_response and http_response.get('retCode') == 110001:
+        if http_response and http_response.get('retCode') == 110001:
             self.log.info(f"Order {order_id} already non-existent/cancelled. Treating as successful amendment (HTTP).", order_id=order_id)
             self.market_state.open_orders.pop(order_id, None)
             return True
@@ -1956,7 +1954,7 @@ class EnhancedBybitClient:
             self.market_state.open_orders.pop(order_id, None) # Remove from local state
             self.session_stats.orders_cancelled += 1
             return True
-        elif response and response.get('retCode') == 110001: # Order does not exist (already cancelled or filled)
+        if response and response.get('retCode') == 110001: # Order does not exist (already cancelled or filled)
             self.log.info(f"Order {order_id} already non-existent/cancelled. Treating as successful cancellation (WS).", order_id=order_id)
             self.market_state.open_orders.pop(order_id, None) # Ensure removal from local state
             return True

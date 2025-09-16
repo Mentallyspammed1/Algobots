@@ -1,8 +1,10 @@
 import asyncio
 import logging
-from config import Config
+
 from bybit_trading_bot import BybitTradingBot
+from config import Config
 from unanimous_logger import setup_logger
+
 
 async def main():
     # Load configuration

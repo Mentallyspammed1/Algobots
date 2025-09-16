@@ -96,9 +96,8 @@ def get_klines(symbol, interval, limit=200):
                 df[col] = pd.to_numeric(df[col])
             df = df.set_index('start_time')
             return df.sort_index() # Ensure ascending order by time
-        else:
-            log_message(f"Error fetching klines for {symbol}, {interval}: {response}", "ERROR")
-            return None
+        log_message(f"Error fetching klines for {symbol}, {interval}: {response}", "ERROR")
+        return None
     except Exception as e:
         log_message(f"Exception fetching klines: {e}", "ERROR")
         return None
@@ -143,9 +142,8 @@ def get_account_balance(coin="USDT"):
                         # Use availableToWithdraw for capital available for trading
                         return float(c['availableToWithdraw'])
             return 0.0
-        else:
-            log_message(f"Error getting account balance: {response}", "ERROR")
-            return 0.0
+        log_message(f"Error getting account balance: {response}", "ERROR")
+        return 0.0
     except Exception as e:
         log_message(f"Exception getting account balance: {e}", "ERROR")
         return 0.0
@@ -156,9 +154,8 @@ def get_current_price(symbol):
         response = session.get_tickers(category=CATEGORY, symbol=symbol)
         if response and response['retCode'] == 0:
             return float(response['result']['list'][0]['lastPrice'])
-        else:
-            log_message(f"Error getting current price for {symbol}: {response}", "ERROR")
-            return None
+        log_message(f"Error getting current price for {symbol}: {response}", "ERROR")
+        return None
     except Exception as e:
         log_message(f"Exception getting current price: {e}", "ERROR")
         return None
@@ -185,9 +182,8 @@ def place_order(symbol, side, qty, order_type="Market", stop_loss=None, take_pro
         if response and response['retCode'] == 0:
             log_message(f"Order placed successfully: {response['result']}", "INFO")
             return response['result']['orderId']
-        else:
-            log_message(f"Error placing order: {response}", "ERROR")
-            return None
+        log_message(f"Error placing order: {response}", "ERROR")
+        return None
     except Exception as e:
         log_message(f"Exception placing order: {e}", "ERROR")
         return None
@@ -218,9 +214,8 @@ def get_open_positions(symbol):
                         'position_value': float(pos['positionValue'])
                     }
             return None
-        else:
-            log_message(f"Error getting open positions: {response}", "ERROR")
-            return None
+        log_message(f"Error getting open positions: {response}", "ERROR")
+        return None
     except Exception as e:
         log_message(f"Exception getting open positions: {e}", "ERROR")
         return None
@@ -246,9 +241,8 @@ def amend_stop_loss_take_profit(symbol, order_id, stop_loss=None, take_profit=No
         if response and response['retCode'] == 0:
             log_message(f"SL/TP amended successfully for order {order_id}: {response['result']}", "INFO")
             return True
-        else:
-            log_message(f"Error amending SL/TP for order {order_id}: {response}", "ERROR")
-            return False
+        log_message(f"Error amending SL/TP for order {order_id}: {response}", "ERROR")
+        return False
     except Exception as e:
         log_message(f"Exception amending SL/TP: {e}", "ERROR")
         return False

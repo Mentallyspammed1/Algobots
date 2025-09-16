@@ -17,7 +17,6 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from algobots_types import OrderBlock
-
 from strategies.marketmakingstrategy import MarketMakingStrategy
 
 # A mock logger that can be used in tests
@@ -25,8 +24,7 @@ strategy_logger = logging.getLogger('test_market_making_strategy')
 
 @pytest.fixture
 def market_scenario_factory():
-    """
-    A pytest fixture factory to create configurable market scenarios for testing the strategy.
+    """A pytest fixture factory to create configurable market scenarios for testing the strategy.
     This allows tests to easily set up different conditions (e.g., market price,
     bot position, S/R levels) to verify the strategy's behavior.
     """
@@ -42,8 +40,7 @@ def market_scenario_factory():
         active_bull_obs: list[OrderBlock] = None,
         active_bear_obs: list[OrderBlock] = None
     ):
-        """
-        Creates a market scenario dictionary for a test.
+        """Creates a market scenario dictionary for a test.
 
         Args:
             current_price (str): The current market price.
@@ -103,8 +100,7 @@ def market_scenario_factory():
 
 
 def test_generate_signals_in_neutral_state(market_scenario_factory):
-    """
-    Tests the basic signal generation when the bot has no position.
+    """Tests the basic signal generation when the bot has no position.
     It should generate one BUY and one SELL limit order symmetrically
     around a skewed mid-price.
     """
@@ -176,8 +172,7 @@ def test_generate_signals_in_neutral_state(market_scenario_factory):
 
 
 def test_generate_signals_with_long_inventory_skew(market_scenario_factory):
-    """
-    Tests that when holding a long position, the strategy skews its bid and ask
+    """Tests that when holding a long position, the strategy skews its bid and ask
     prices downwards to encourage selling and discourage further buying.
     This test disables hedging to isolate the skewing logic.
     """
@@ -245,8 +240,7 @@ def test_generate_signals_with_long_inventory_skew(market_scenario_factory):
 
 
 def test_exit_signal_for_stop_loss_trigger(market_scenario_factory):
-    """
-    Tests that a "panic exit" signal is generated when the price breaches
+    """Tests that a "panic exit" signal is generated when the price breaches
     the dynamic ATR-based stop-loss for a long position.
     """
     # Arrange
@@ -290,8 +284,7 @@ def test_exit_signal_for_stop_loss_trigger(market_scenario_factory):
 
 
 def test_exit_signal_for_rebalance_trigger(market_scenario_factory):
-    """
-    Tests that a rebalance signal is generated when the position size
+    """Tests that a rebalance signal is generated when the position size
     exceeds the rebalance_threshold.
     """
     # Arrange

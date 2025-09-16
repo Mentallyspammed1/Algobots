@@ -1,6 +1,15 @@
 import { CONFIG } from './config.js';
 import { logger, neon } from './logger.js';
 
+/**
+ * @async
+ * @function startStrategy
+ * @description Dynamically imports and executes a trading strategy module.
+ * It expects the strategy module to export either a `main` or `run_bot` async function.
+ * @param {string} strategyName - The name of the strategy to start (e.g., "ehlst_strategy").
+ * @param {Object} strategyConfig - The configuration object for the specific strategy.
+ * @returns {Promise<void>} A promise that resolves when the strategy has finished execution or rejects if an error occurs.
+ */
 async function startStrategy(strategyName, strategyConfig) {
     logger.debug(`startStrategy: Attempting to start strategy: ${strategyName} with config: ${JSON.stringify(strategyConfig)}`);
     try {
@@ -29,6 +38,14 @@ async function startStrategy(strategyName, strategyConfig) {
     }
 }
 
+/**
+ * @async
+ * @function main
+ * @description The main orchestration function for the bot. It identifies enabled strategies
+ * from the `CONFIG` and initiates their execution concurrently.
+ * Logs warnings if no strategies are enabled.
+ * @returns {Promise<void>} A promise that resolves when all enabled strategies have been processed.
+ */
 async function main() {
     logger.info(neon.header('Bot Orchestrator Initiated!'));
     logger.debug('main: Bot Orchestrator main function started.');
@@ -60,6 +77,10 @@ async function main() {
     logger.debug('main: Bot Orchestrator main function finished.');
 }
 
+/**
+ * @description Immediately invoked async function to run the main orchestrator logic.
+ * Handles any unhandled errors during the orchestration process.
+ */
 (async () => {
     try {
         await main();

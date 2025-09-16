@@ -110,8 +110,7 @@ class HistoricalDataFetcher:
                                interval: str,
                                start_time: datetime,
                                end_time: datetime) -> pd.DataFrame:
-        """
-        Fetch historical klines from Bybit
+        """Fetch historical klines from Bybit
         
         Args:
             symbol: Trading symbol (e.g., 'BTCUSDT')
@@ -227,8 +226,7 @@ class Backtester:
                     df: pd.DataFrame,
                     config: dict[str, Any],
                     progress_callback=None) -> BacktestResult:
-        """
-        Run backtest on historical data
+        """Run backtest on historical data
         
         Args:
             df: DataFrame with OHLCV data
@@ -286,8 +284,7 @@ class Backtester:
         return self._calculate_statistics(config)
 
     def _generate_signal(self, indicators: dict, config: dict) -> int:
-        """
-        Generate trading signal based on indicators
+        """Generate trading signal based on indicators
         Returns: 1 for buy, -1 for sell, 0 for no signal
         """
         st = indicators.get('supertrend', {})
@@ -313,7 +310,6 @@ class Backtester:
     def _execute_trade(self, signal: int, candle: pd.Series,
                       config: dict, indicators: dict):
         """Execute a trade based on signal"""
-
         # Close opposite position if exists
         if self.current_position:
             if (signal == 1 and self.current_position.side == 'Sell') or \
@@ -469,7 +465,6 @@ class Backtester:
 
     def _calculate_statistics(self, config: dict) -> BacktestResult:
         """Calculate backtest statistics"""
-
         # Basic statistics
         total_trades = len(self.trades)
 
@@ -622,8 +617,7 @@ class StrategyOptimizer:
                    base_config: dict[str, Any],
                    metric: str = 'sharpe_ratio',
                    n_jobs: int = -1) -> list[tuple[dict, BacktestResult]]:
-        """
-        Perform grid search optimization
+        """Perform grid search optimization
         
         Args:
             param_grid: Dictionary of parameter names and their values to test
@@ -683,8 +677,7 @@ class StrategyOptimizer:
                      n_trials: int = 100,
                      metric: str = 'sharpe_ratio',
                      n_jobs: int = -1) -> list[tuple[dict, BacktestResult]]:
-        """
-        Perform random search optimization
+        """Perform random search optimization
         
         Args:
             param_ranges: Dictionary of parameter names and their (min, max) ranges
@@ -882,7 +875,6 @@ class BacktestVisualizer:
 
 def main():
     """Example usage of the backtester and optimizer"""
-
     # Configuration
     symbol = 'BTCUSDT'
     interval = '15'  # 15 minute candles

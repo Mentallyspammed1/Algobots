@@ -187,7 +187,7 @@ const indicators = {
     },
     
     calculate_stoch_rsi: function(df, rsiPeriod, kPeriod, dPeriod) {
-        const rsi = this.calculate_rsi(df, rsiPeriod);
+        const rsi = indicators.calculate_rsi(df, rsiPeriod);
         const stochRsi = [];
         
         for (let i = rsiPeriod - 1; i < rsi.length; i++) {
@@ -214,7 +214,7 @@ const indicators = {
     },
     
     calculate_bollinger_bands: function(df, period, stdDev) {
-        const sma = this.calculate_sma(df, period);
+        const sma = indicators.calculate_sma(df, period);
         const upper = [];
         const lower = [];
         
@@ -237,7 +237,7 @@ const indicators = {
             tp.push(df.high[i].plus(df.low[i]).plus(df.close[i]).dividedBy(3));
         }
         
-        const sma = this.calculate_sma({ close: tp }, period);
+        const sma = indicators.calculate_sma({ close: tp }, period);
         const mad = [];
         
         for (let i = 0; i < sma.length; i++) {
@@ -316,7 +316,7 @@ const indicators = {
             }
         }
         
-        const obvEma = this.calculate_ema({ close: obv }, period);
+        const obvEma = indicators.calculate_ema({ close: obv }, period);
         return { obv, obv_ema: obvEma };
     },
     
@@ -457,7 +457,7 @@ const indicators = {
     },
     
     calculate_ehlers_supertrend: function(df, period, multiplier) {
-        const atr = this.calculate_atr(df, 14);
+        const atr = indicators.calculate_atr(df, 14);
         const close = df.close.slice(14);
         const supertrend = [];
         const direction = [];
@@ -496,15 +496,15 @@ const indicators = {
     },
     
     calculate_macd: function(df, fastPeriod, slowPeriod, signalPeriod) {
-        const fastEma = this.calculate_ema(df, fastPeriod);
-        const slowEma = this.calculate_ema(df, slowPeriod);
+        const fastEma = indicators.calculate_ema(df, fastPeriod);
+        const slowEma = indicators.calculate_ema(df, slowPeriod);
         
         const macdLine = [];
         for (let i = 0; i < fastEma.length; i++) {
             macdLine.push(fastEma[i].minus(slowEma[i]));
         }
         
-        const signalLine = this.calculate_ema({ close: macdLine }, signalPeriod);
+        const signalLine = indicators.calculate_ema({ close: macdLine }, signalPeriod);
         const histogram = [];
         
         for (let i = 0; i < signalLine.length; i++) {
@@ -550,7 +550,7 @@ const indicators = {
             }
         }
         
-        const atr = this.calculate_atr(df, period);
+        const atr = indicators.calculate_atr(df, period);
         const plusDI = [];
         const minusDI = [];
         const dx = [];
@@ -731,8 +731,8 @@ const indicators = {
     },
     
     calculate_dema: function(df, period) {
-        const ema1 = this.calculate_ema(df, period);
-        const ema2 = this.calculate_ema({ close: ema1 }, period);
+        const ema1 = indicators.calculate_ema(df, period);
+        const ema2 = indicators.calculate_ema({ close: ema1 }, period);
         
         const dema = [];
         for (let i = 0; i < ema1.length; i++) {
@@ -747,8 +747,8 @@ const indicators = {
     },
     
     calculate_keltner_channels: function(df, period, multiplier, atrPeriod) {
-        const ema = this.calculate_ema(df, period);
-        const atr = this.calculate_atr(df, atrPeriod);
+        const ema = indicators.calculate_ema(df, period);
+        const atr = indicators.calculate_atr(df, atrPeriod);
         
         const upper = [];
         const lower = [];
@@ -1611,7 +1611,7 @@ class PositionManager {
                         : (position.entry_price.minus(adjusted_close_price)).times(position.qty);
                     
                     performance_tracker.record_trade(position, pnl);
-                    this.logger.info(`${chalk.purple("Closed ")}${position.side} position by ${closed_by}: ${JSON.stringify(position)}. PnL: ${pnl.normalize().toFixed(2)}${chalk.reset()}`);
+                    this.logger.info(`${chalk.magenta("Closed ")}${position.side} position by ${closed_by}: ${JSON.stringify(position)}. PnL: ${pnl.normalize().toFixed(2)}${chalk.reset()}`);
                     
                     // Cancel any open orders for this position if live
                     if (this.config.execution.use_pybit && this.pybit && this.pybit.enabled) {
@@ -3413,7 +3413,7 @@ function display_indicator_values_and_price(config, logger, current_price, analy
     }
     
     // Concise Trend Summary
-    logger.info(`${chalk.purple("---")}${chalk.reset()}Current Trend Summary${chalk.purple("---")}${chalk.reset()}`);
+    logger.info(`${chalk.magenta("---")}${chalk.reset()}Current Trend Summary${chalk.magenta("---")}${chalk.reset()}`);
     const trend_summary_lines = [];
     
     // EMA Alignment
@@ -3541,7 +3541,7 @@ async function main() {
     while (true) {
         const loop_start_time = Date.now();
         try {
-            logger.info(`${chalk.purple("---")}${chalk.reset()}New Analysis Loop Started (${new Date().toISOString()}${chalk.purple(") ---")}${chalk.reset()}`);
+            logger.info(`${chalk.magenta("---")}${chalk.reset()}New Analysis Loop Started (${new Date().toISOString()}${chalk.magenta(") ---")}${chalk.reset()}`);
             
             // --- GUARDRAILS & FILTERS ---
             const guard = config.risk_guardrails;
@@ -3668,7 +3668,7 @@ async function main() {
             const perf_summary = performance_tracker.get_summary();
             logger.info(`${chalk.yellow("Performance Summary: Total Net PnL: ")}${perf_summary.total_pnl.normalize().toFixed(2)}, Wins: ${perf_summary.wins}, Losses: ${perf_summary.losses}, Win Rate: ${perf_summary.win_rate}, Max Drawdown: ${perf_summary.max_drawdown.normalize().toFixed(2)}${chalk.reset()}`);
             
-            logger.info(`${chalk.purple("---")}${chalk.reset()}Analysis Loop Finished. Waiting ${config.loop_delay}${chalk.purple("s ---")}${chalk.reset()}`);
+            logger.info(`${chalk.magenta("---")}${chalk.reset()}Analysis Loop Finished. Waiting ${config.loop_delay}${chalk.magenta("s ---")}${chalk.reset()}`);
             
         } catch (e) {
             alert_system.send_alert(`[${config.symbol}] An unhandled error occurred in the main loop: ${e.message}`, "ERROR");

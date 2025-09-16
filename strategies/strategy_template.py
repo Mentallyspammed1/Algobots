@@ -1,5 +1,4 @@
-"""
-Strategy Template: A template for creating custom trading strategies.
+"""Strategy Template: A template for creating custom trading strategies.
 
 This file provides a clear structure for implementing your own strategy.
 Duplicate this file, rename it, and implement your logic in the
@@ -7,13 +6,11 @@ Duplicate this file, rename it, and implement your logic in the
 """
 import pandas as pd
 import talib
-
 from strategies.base_strategy import BaseStrategy
 
 
 class MyAwesomeStrategy(BaseStrategy):
-    """
-    An example strategy that uses RSI to generate trading signals.
+    """An example strategy that uses RSI to generate trading signals.
     """
     def __init__(self):
         super().__init__("MyAwesomeStrategy")
@@ -22,8 +19,7 @@ class MyAwesomeStrategy(BaseStrategy):
         self.rsi_overbought = 70
 
     def generate_signals(self, dataframe: pd.DataFrame) -> pd.DataFrame:
-        """
-        Generates trading signals based on the Relative Strength Index (RSI).
+        """Generates trading signals based on the Relative Strength Index (RSI).
 
         Args:
             dataframe (pd.DataFrame): DataFrame with OHLCV data.

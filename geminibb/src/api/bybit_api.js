@@ -87,7 +87,14 @@ export default class BybitAPI {
         );
 
         this.symbolInfo = {}; // IMPROVEMENT 8: Cache symbol info
+        this.klineCache = new Map(); // Stores kline data: Map<cacheKey, {timestamp: number, data: any}>
+        this.accountBalanceCache = { data: null, timestamp: 0 };
+        this.positionCache = new Map(); // Stores position data: Map<symbol, {timestamp: number, data: any}>
         this.loadSymbolInfo(); // Load on startup
+    }
+
+    _getKlineCacheKey(symbol, interval, limit) {
+        return `${symbol}-${interval}-${limit}`;
     }
 
     // NEW: Internal request method with retry logic
@@ -212,27 +219,60 @@ export default class BybitAPI {
     }
 
     async getHistoricalMarketData(symbol, interval, limit = 200) {
+        const cacheKey = this._getKlineCacheKey(symbol, interval, limit);
+        const cachedData = this.klineCache.get(cacheKey);
+        const CACHE_DURATION_MS = 60 * 1000; // Cache for 1 minute
+
+        if (cachedData && (Date.now() - cachedData.timestamp < CACHE_DURATION_MS)) {
+            logger.debug(`Returning cached kline data for ${symbol}-${interval}`);
+            return cachedData.data;
+        }
+
+        logger.debug(`Fetching fresh kline data for ${symbol}-${interval}`);
         // IMPROVEMENT 3: Dynamically use category
-        return this._request('GET', '/v5/market/kline', { category: config.bybit.category, symbol, interval, limit }, false);
+        const result = await this._request('GET', '/v5/market/kline', { category: config.bybit.category, symbol, interval, limit }, false);
+        this.klineCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
     }
 
     async getAccountBalance() {
+        const CACHE_DURATION_MS = 30 * 1000; // Cache for 30 seconds
+        if (this.accountBalanceCache.data && (Date.now() - this.accountBalanceCache.timestamp < CACHE_DURATION_MS)) {
+            logger.debug('Returning cached account balance.');
+            return this.accountBalanceCache.data;
+        }
+
+        logger.debug('Fetching fresh account balance.');
         // IMPROVEMENT 3: Configurable accountType
         const result = await this._request('GET', '/v5/account/wallet-balance', { accountType: config.bybit.accountType });
         const usdtBalance = result?.list?.[0]?.coin?.find(c => c.coin === 'USDT');
-        return usdtBalance ? parseFloat(usdtBalance.walletBalance) : null;
+        const balance = usdtBalance ? parseFloat(usdtBalance.walletBalance) : null;
+
+        this.accountBalanceCache = { data: balance, timestamp: Date.now() };
+        return balance;
     }
 
     async getCurrentPosition(symbol) {
+        const CACHE_DURATION_MS = 15 * 1000; // Cache for 15 seconds
+        const cachedPosition = this.positionCache.get(symbol);
+
+        if (cachedPosition && (Date.now() - cachedPosition.timestamp < CACHE_DURATION_MS)) {
+            logger.debug(`Returning cached position for ${symbol}.`);
+            return cachedPosition.data;
+        }
+
+        logger.debug(`Fetching fresh position for ${symbol}.`);
         // IMPROVEMENT 8: Dynamically use category from config
         const result = await this._request('GET', '/v5/position/list', { category: config.bybit.category, symbol });
         const position = result?.list?.find(p => p.symbol === symbol && parseFloat(p.size) > 0); // Ensure size > 0
+
+        this.positionCache.set(symbol, { data: position || null, timestamp: Date.now() });
         return position || null;
     }
 
     async placeOrder(order) {
         // ... (existing validation) ...
-        const validatedOrder = validationResult.data;
+        const validatedOrder = PlaceOrderSchema.parse(order);
 
         const { symbol, side, qty, takeProfit, stopLoss, orderType, price } = validatedOrder;
         
@@ -430,3 +470,4 @@ export default class BybitAPI {
             throw error;
         }
     }
+}

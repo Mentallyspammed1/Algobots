@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import json
 import logging
 import os
@@ -8,7 +6,7 @@ import sys
 import threading
 import time
 from collections import defaultdict
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -21,8 +19,7 @@ from dotenv import load_dotenv
 
 # Pybit specific imports
 from pybit.exceptions import FailedRequestError, InvalidRequestError
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket as UnifiedWebSocket
+from pybit.unified_trading import HTTP, WebSocket as UnifiedWebSocket
 
 # Scikit-learn is explicitly excluded as per user request.
 SKLEARN_AVAILABLE = False
@@ -1953,7 +1950,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"[{self.symbol}] MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -1970,7 +1967,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             # For MTF, we need to ensure the TradingAnalyzer can be initialized correctly with the MTF df
             # This creates a temporary analyzer instance just for this purpose.
             temp_analyzer = TradingAnalyzer(

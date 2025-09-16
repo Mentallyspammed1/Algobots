@@ -199,8 +199,7 @@ def generate_signature(api_secret: str, params: dict) -> str:
     return hmac.new(api_secret.encode(), param_str.encode(), hashlib.sha256).hexdigest()
 
 def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, params: dict[str, Any] = None, logger: logging.Logger = None) -> dict | None:
-    """
-    Sends a signed request to the Bybit API with retry logic.
+    """Sends a signed request to the Bybit API with retry logic.
     """
     params = params or {}
     params['timestamp'] = str(int(time.time() * 1000))
@@ -746,8 +745,7 @@ class TradingAnalyzer:
         self.log.info("─" * (42 + len(self.symbol) + len(self.interval)))
 
     def generate_trading_signal(self, current_price: Decimal) -> TradeSignal:
-        """
-        Combines indicator scores and other analysis to generate a final trade signal.
+        """Combines indicator scores and other analysis to generate a final trade signal.
         """
         raw_score = Decimal('0.0')
         conditions_met = []

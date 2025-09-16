@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-MMXCEL v3.1 – Enhanced Bybit Hedge-Mode Market-Making Bot
+"""MMXCEL v3.1 – Enhanced Bybit Hedge-Mode Market-Making Bot
 Improved version with better error handling, performance optimizations, and new features
 Author: Enhanced by AI Assistant, Original by Pyrmethus
 """
@@ -875,8 +874,7 @@ class EnhancedMarketMakingStrategy:
                 await self.client.cancel_all_orders()
                 self.emergency_stop_triggered = True
             return
-        else:
-            self.emergency_stop_triggered = False
+        self.emergency_stop_triggered = False
 
         # Skip if we have enough orders
         if len(market_state.open_orders) >= config.MAX_OPEN_ORDERS:
@@ -1155,7 +1153,7 @@ async def handle_user_input(strategy: EnhancedMarketMakingStrategy):
                     _SHUTDOWN_REQUESTED = True
                     break
 
-                elif key == 'c':
+                if key == 'c':
                     logger.info("User requested cancel all orders")
                     await strategy.client.cancel_all_orders()
                     send_toast("All orders cancelled by user", "orange", "white")

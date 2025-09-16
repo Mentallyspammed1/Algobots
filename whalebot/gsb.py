@@ -1,30 +1,30 @@
+import base64
 import hashlib
+import hmac
 import io
 import json
 import logging
-import time
-import base64
-import hmac
 import os
 import sys
+import time
 import urllib.parse
-from datetime import datetime, date
-from decimal import Decimal, ROUND_DOWN, getcontext
+from datetime import date, datetime
+from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
+import google.generativeai as genai
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import requests
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
+from google.generativeai.types import GenerateContentResponse, Part
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import matplotlib.pyplot as plt
-import google.generativeai as genai
-from google.generativeai.types import GenerateContentResponse, Part
 
 # Scikit-learn is explicitly excluded as per user request.
 SKLEARN_AVAILABLE = False
@@ -108,7 +108,7 @@ ADX_WEAK_TREND_THRESHOLD = 20
 class GeminiSignalAnalyzer:
     """Advanced signal analysis using Google's Gemini AI."""
 
-    def __init__(self, api_key: str, logger: logging.Logger, model: str = "gemini-1.5-flash-latest", config: Dict[str, Any] = None):
+    def __init__(self, api_key: str, logger: logging.Logger, model: str = "gemini-1.5-flash-latest", config: dict[str, Any] = None):
         """Initialize the Gemini Signal Analyzer."""
         self.logger = logger
         self.model = model
@@ -124,7 +124,7 @@ class GeminiSignalAnalyzer:
             raise
 
         # --- Caching ---
-        self._analysis_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        self._analysis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._cache_ttl = self.config.get("cache_ttl_seconds", 300)  # Default 5 minutes
 
         # --- Performance Metrics Tracking ---
@@ -157,7 +157,7 @@ class GeminiSignalAnalyzer:
         self.daily_api_calls += 1
         return True
 
-    def _get_cache_key(self, market_summary: Dict[str, Any]) -> str:
+    def _get_cache_key(self, market_summary: dict[str, Any]) -> str:
         """Generate a stable cache key from relevant market data."""
         # Use a subset of the summary for the cache key to allow for slight variations
         # without invalidating cache too frequently (e.g., ignore timestamp)
@@ -172,13 +172,12 @@ class GeminiSignalAnalyzer:
     def analyze_market_context(
         self,
         df: pd.DataFrame,
-        indicator_values: Dict[str, Any],
+        indicator_values: dict[str, Any],
         current_price: Decimal,
         symbol: str,
-        mtf_trends: Dict[str, str]
-    ) -> Dict[str, Any]:
-        """
-        Analyze market context using Gemini AI for comprehensive signal generation, with caching.
+        mtf_trends: dict[str, str]
+    ) -> dict[str, Any]:
+        """Analyze market context using Gemini AI for comprehensive signal generation, with caching.
         """
         if not self._check_api_limits():
             self.performance_metrics['api_errors'] += 1
@@ -268,13 +267,12 @@ class GeminiSignalAnalyzer:
     def _prepare_market_summary(
         self,
         df: pd.DataFrame,
-        indicator_values: Dict[str, Any],
+        indicator_values: dict[str, Any],
         current_price: Decimal,
         symbol: str,
-        mtf_trends: Dict[str, str]
-    ) -> Dict[str, Any]:
+        mtf_trends: dict[str, str]
+    ) -> dict[str, Any]:
         """Prepare a comprehensive market summary for AI analysis."""
-
         safe_df = df.copy()
         if safe_df.empty:
             self.logger.warning("DataFrame is empty, cannot prepare market summary.")
@@ -285,7 +283,7 @@ class GeminiSignalAnalyzer:
             "current": float(current_price),
             "24h_high": float(safe_df["high"].tail(96).max()) if len(safe_df) >= 96 else float(safe_df["high"].max()),
             "24h_low": float(safe_df["low"].tail(96).min()) if len(safe_df) >= 96 else float(safe_df["low"].min()),
-            "24h_change_pct": float(((current_price - Decimal(str(safe_df["close"].iloc[-96]))) / Decimal(str(safe_df["close"].iloc[-96])) * 100)) if len(safe_df) >= 96 else 0.0,
+            "24h_change_pct": float((current_price - Decimal(str(safe_df["close"].iloc[-96]))) / Decimal(str(safe_df["close"].iloc[-96])) * 100) if len(safe_df) >= 96 else 0.0,
             "volume_24h": float(safe_df["volume"].tail(96).sum()) if len(safe_df) >= 96 else float(safe_df["volume"].sum()),
             "avg_volume": float(safe_df["volume"].tail(96).mean()) if len(safe_df) >= 96 else float(safe_df["volume"].mean())
         }
@@ -322,7 +320,7 @@ class GeminiSignalAnalyzer:
             "market_conditions": self._detect_market_conditions(safe_df, formatted_indicators)
         }
 
-    def _detect_market_conditions(self, df: pd.DataFrame, indicator_values: Dict[str, Any]) -> Dict[str, Any]:
+    def _detect_market_conditions(self, df: pd.DataFrame, indicator_values: dict[str, Any]) -> dict[str, Any]:
         """Detect specific market conditions based on indicators."""
         conditions = {
             "volatility": "NORMAL",
@@ -369,7 +367,7 @@ class GeminiSignalAnalyzer:
 
         return conditions
 
-    def _format_market_data(self, market_summary: Dict[str, Any]) -> str:
+    def _format_market_data(self, market_summary: dict[str, Any]) -> str:
         """Helper to format market data for the prompt."""
         data_str = f"""
         Symbol: {market_summary.get('symbol', 'N/A')}
@@ -393,9 +391,8 @@ class GeminiSignalAnalyzer:
         """
         return data_str
 
-    def _create_analysis_prompt(self, market_summary: Dict[str, Any]) -> str:
+    def _create_analysis_prompt(self, market_summary: dict[str, Any]) -> str:
         """Create a detailed prompt for Gemini analysis with few-shot examples."""
-
         # Few-shot examples for better consistency
         few_shot_examples = """
         Example 1:
@@ -456,15 +453,14 @@ class GeminiSignalAnalyzer:
     def generate_advanced_signal(
         self,
         df: pd.DataFrame,
-        indicator_values: Dict[str, Any],
+        indicator_values: dict[str, Any],
         current_price: Decimal,
         symbol: str,
-        mtf_trends: Dict[str, str],
+        mtf_trends: dict[str, str],
         existing_signal: str,
         existing_score: float
-    ) -> Tuple[str, float, Dict[str, Any]]:
-        """
-        Generate an advanced signal combining AI analysis with existing technical signals.
+    ) -> tuple[str, float, dict[str, Any]]:
+        """Generate an advanced signal combining AI analysis with existing technical signals.
         """
         ai_analysis = self.analyze_market_context(
             df, indicator_values, current_price, symbol, mtf_trends
@@ -501,10 +497,9 @@ class GeminiSignalAnalyzer:
         self,
         technical_signal: str,
         technical_score: float,
-        ai_analysis: Dict[str, Any]
-    ) -> Tuple[str, float]:
-        """
-        Combine technical and AI signals with weighted scoring.
+        ai_analysis: dict[str, Any]
+    ) -> tuple[str, float]:
+        """Combine technical and AI signals with weighted scoring.
         """
         TECHNICAL_WEIGHT = self.config.get("signal_weights", {}).get("technical", 0.6)
         AI_WEIGHT = self.config.get("signal_weights", {}).get("ai", 0.4)
@@ -546,7 +541,7 @@ class GeminiSignalAnalyzer:
 
         return final_signal, combined_score
 
-    def _log_signal_details(self, signal_details: Dict[str, Any]) -> None:
+    def _log_signal_details(self, signal_details: dict[str, Any]) -> None:
         """Log detailed signal information."""
         self.logger.info(f"{NEON_PURPLE}=== GEMINI AI SIGNAL ANALYSIS ==={RESET}")
         self.logger.info(f"{NEON_CYAN}Final Signal: {signal_details['final_signal']} (Score: {signal_details['final_score']:.2f}){RESET}")
@@ -568,7 +563,7 @@ class GeminiSignalAnalyzer:
                 self.logger.info(f"  {NEON_GREEN}Suggested TP: {levels['take_profit']:.2f}{RESET}")
         self.logger.info(f"{NEON_PURPLE}----------------------------------{RESET}")
 
-    def track_signal_performance(self, signal: str, actual_outcome: Optional[str] = None):
+    def track_signal_performance(self, signal: str, actual_outcome: str | None = None):
         """Track AI signal performance. 'actual_outcome' should be 'WIN', 'LOSS', 'BREAKEVEN'."""
         if signal not in self.performance_metrics['signal_accuracy']:
             self.performance_metrics['signal_accuracy'][signal] = {'WIN': 0, 'LOSS': 0, 'BREAKEVEN': 0, 'total': 0}
@@ -583,13 +578,12 @@ class GeminiSignalAnalyzer:
 
     def calculate_position_sizing(
         self,
-        ai_analysis: Dict[str, Any],
+        ai_analysis: dict[str, Any],
         account_balance: Decimal,
         risk_per_trade_percent: Decimal,  # From bot config
         min_stop_loss_distance: Decimal  # To prevent division by zero or too small stops
-    ) -> Optional[Dict[str, Decimal]]:
+    ) -> dict[str, Decimal] | None:
         """Calculate optimal position size based on AI risk assessment and suggested levels."""
-
         risk_multipliers = {
             'LOW': Decimal('1.0'),
             'MEDIUM': Decimal('0.7'),
@@ -633,7 +627,7 @@ class GeminiSignalAnalyzer:
             'adjusted_risk_percentage': adjusted_risk_ratio * 100
         }
 
-    def _generate_chart_for_analysis(self, df: pd.DataFrame) -> Optional[str]:
+    def _generate_chart_for_analysis(self, df: pd.DataFrame) -> str | None:
         """Generate a chart image (base64 encoded PNG) for Gemini Vision analysis."""
         if df.empty or len(df) < 50:  # Need enough data to make a meaningful chart
             self.logger.warning("Not enough data to generate chart for AI Vision.")
@@ -688,9 +682,8 @@ class GeminiSignalAnalyzer:
         self.logger.debug("Chart image generated successfully for AI Vision.")
         return image_base64
 
-    def analyze_chart_image(self, df: pd.DataFrame, timeframe: str) -> Dict[str, Any]:
-        """
-        Analyze a chart image using Gemini's multimodal capabilities (Vision model).
+    def analyze_chart_image(self, df: pd.DataFrame, timeframe: str) -> dict[str, Any]:
+        """Analyze a chart image using Gemini's multimodal capabilities (Vision model).
         """
         if not self._check_api_limits():
             self.performance_metrics['api_errors'] += 1
@@ -1202,7 +1195,7 @@ class PositionManager:
         current_price: Decimal,
         atr_value: Decimal,
         signal: str,
-        ai_position_sizing_info: Optional[Dict[str, Decimal]] = None,
+        ai_position_sizing_info: dict[str, Decimal] | None = None,
     ) -> Decimal:
         """Calculate order size based on risk per trade and ATR, or AI suggestions."""
         if not self.trade_management_enabled:
@@ -1228,7 +1221,7 @@ class PositionManager:
                 # Use AI calculated risk amount and stop distance directly if available
                 risk_amount = ai_risk_amount
                 stop_loss_distance = ai_stop_distance
-                self.logger.debug(f"Using AI-suggested stop distance and risk amount.")
+                self.logger.debug("Using AI-suggested stop distance and risk amount.")
             else:
                 self.logger.warning("AI position sizing info invalid, falling back to ATR-based calculation.")
 
@@ -1271,7 +1264,7 @@ class PositionManager:
         signal: str,
         current_price: Decimal,
         atr_value: Decimal,
-        ai_suggested_levels: Optional[Dict[str, Decimal]] = None
+        ai_suggested_levels: dict[str, Decimal] | None = None
     ) -> dict | None:
         """Open a new position if conditions allow.
 
@@ -1375,7 +1368,7 @@ class PositionManager:
         return position
 
     def manage_positions(
-        self, current_price: Decimal, performance_tracker: Any, gemini_analyzer: Optional[Any] = None
+        self, current_price: Decimal, performance_tracker: Any, gemini_analyzer: Any | None = None
     ) -> None:
         """Check and manage all open positions (SL/TP).
 
@@ -2412,7 +2405,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             period = self.config["mtf_analysis"]["trend_period"]
             if len(higher_tf_df) < period:
                 self.logger.debug(
@@ -2430,7 +2423,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             temp_analyzer = TradingAnalyzer(
                 higher_tf_df, self.config, self.logger, self.symbol
             )
@@ -2902,9 +2895,7 @@ def display_indicator_values_and_price(
     logger.info(f"{NEON_CYAN}--- Indicator Values ---{RESET}")
     for indicator_name, value in analyzer.indicator_values.items():
         color = INDICATOR_COLORS.get(indicator_name, NEON_YELLOW)
-        if isinstance(value, Decimal):
-            logger.info(f"  {color}{indicator_name}: {value:.8f}{RESET}")
-        elif isinstance(value, float):
+        if isinstance(value, Decimal) or isinstance(value, float):
             logger.info(f"  {color}{indicator_name}: {value:.8f}{RESET}")
         else:
             logger.info(f"  {color}{indicator_name}: {value}{RESET}")
@@ -2967,7 +2958,7 @@ def main() -> None:
     performance_tracker = PerformanceTracker(logger)
 
     # --- Initialize Gemini AI if enabled ---
-    gemini_analyzer: Optional[GeminiSignalAnalyzer] = None
+    gemini_analyzer: GeminiSignalAnalyzer | None = None
     if config["gemini_ai"]["enabled"]:
         gemini_api_key = os.getenv(config["gemini_ai"]["api_key_env"])
         if gemini_api_key:
@@ -3068,8 +3059,8 @@ def main() -> None:
 
             final_trading_signal = technical_signal
             final_signal_score = technical_score
-            ai_signal_details: Optional[Dict[str, Any]] = None
-            ai_position_sizing_info: Optional[Dict[str, Decimal]] = None
+            ai_signal_details: dict[str, Any] | None = None
+            ai_position_sizing_info: dict[str, Decimal] | None = None
 
             # --- Enhance with Gemini AI if available and enabled ---
             if gemini_analyzer and config["gemini_ai"]["enabled"]:

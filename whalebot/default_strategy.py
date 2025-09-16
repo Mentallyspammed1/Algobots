@@ -1,23 +1,20 @@
 # default_strategy.py
 
-import pandas as pd
-import pandas_ta as ta # For technical analysis indicators
-from typing import Dict, List, Any
-import numpy as np
 import logging
+from typing import Any
 
+import pandas as pd
 from strategy_interface import BaseStrategy, Signal
 
 
 class DefaultStrategy(BaseStrategy):
-    """
-    A default trading strategy using a combination of EMA crossover, RSI, and MACD.
+    """A default trading strategy using a combination of EMA crossover, RSI, and MACD.
     Inherits from BaseStrategy.
     """
 
     def __init__(self, logger: logging.Logger, **kwargs):
         super().__init__("DefaultStrategy", logger, **kwargs)
-        
+
         # Default indicator parameters (can be overridden via kwargs)
         self.ema_fast_period: int = kwargs.get('STRATEGY_EMA_FAST_PERIOD', 9)
         self.ema_slow_period: int = kwargs.get('STRATEGY_EMA_SLOW_PERIOD', 21)
@@ -35,13 +32,12 @@ class DefaultStrategy(BaseStrategy):
         # Signal aggregation thresholds
         self.buy_score_threshold: float = kwargs.get('STRATEGY_BUY_SCORE_THRESHOLD', 1.0)
         self.sell_score_threshold: float = kwargs.get('STRATEGY_SELL_SCORE_THRESHOLD', -1.0)
-        
+
         self.logger.info(f"DefaultStrategy initialized with params: EMA({self.ema_fast_period},{self.ema_slow_period}), RSI({self.rsi_period}), MACD({self.macd_fast_period},{self.macd_slow_period},{self.macd_signal_period}), BB({self.bb_period},{self.bb_std}), ATR({self.atr_period}), ADX({self.adx_period})")
 
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calculates and adds all necessary technical indicators to the DataFrame.
+        """Calculates and adds all necessary technical indicators to the DataFrame.
         Uses pandas_ta for indicator calculations.
         """
         if df.empty:
@@ -57,17 +53,17 @@ class DefaultStrategy(BaseStrategy):
         if df.empty:
             self.logger.warning("DataFrame became empty after dropping NaN 'close' values.")
             return df
-        
+
         # EMA
         df.ta.ema(length=self.ema_fast_period, append=True, col_names=(f'EMA_{self.ema_fast_period}',))
         df.ta.ema(length=self.ema_slow_period, append=True, col_names=(f'EMA_{self.ema_slow_period}',))
 
         # RSI
         df.ta.rsi(length=self.rsi_period, append=True, col_names=(f'RSI_{self.rsi_period}',))
-        
+
         # MACD
         df.ta.macd(fast=self.macd_fast_period, slow=self.macd_slow_period, signal=self.macd_signal_period, append=True)
-        
+
         # Bollinger Bands
         df.ta.bbands(length=self.bb_period, std=self.bb_std, append=True)
 
@@ -101,9 +97,8 @@ class DefaultStrategy(BaseStrategy):
         self.logger.debug("Indicators calculated for DefaultStrategy.")
         return df
 
-    def generate_signal(self, df: pd.DataFrame, current_market_price: float, market_conditions: Dict[str, Any]) -> Signal:
-        """
-        Generates a trading signal based on calculated indicators and market conditions.
+    def generate_signal(self, df: pd.DataFrame, current_market_price: float, market_conditions: dict[str, Any]) -> Signal:
+        """Generates a trading signal based on calculated indicators and market conditions.
         
         Args:
             df: DataFrame containing OHLCV data and calculated indicators.
@@ -181,15 +176,15 @@ class DefaultStrategy(BaseStrategy):
         elif latest['RSI'] > self.rsi_overbought and previous['RSI'] <= self.rsi_overbought:
             signal_score -= rsi_weight * 1.5 # RSI entering overbought
             reasons.append(f"RSI Entering Overbought ({latest['RSI']:.2f})")
-        
+
         # 3. MACD Crossover
         if latest['MACD_Line'] > latest['MACD_Signal'] and previous['MACD_Line'] <= previous['MACD_Signal']:
             signal_score += macd_weight * 1.5 # MACD bullish cross
-            reasons.append(f"MACD Bullish Crossover")
+            reasons.append("MACD Bullish Crossover")
         elif latest['MACD_Line'] < latest['MACD_Signal'] and previous['MACD_Line'] >= previous['MACD_Signal']:
             signal_score -= macd_weight * 1.5 # MACD bearish cross
-            reasons.append(f"MACD Bearish Crossover")
-        
+            reasons.append("MACD Bearish Crossover")
+
         # 4. Bollinger Bands (Breakout / Mean Reversion)
         if current_market_price < latest['BB_Lower'] and previous['close'] >= previous['BB_Lower']:
             signal_score += bb_weight * 1.0 # Price breaking below lower band (oversold/potential bounce)
@@ -199,10 +194,10 @@ class DefaultStrategy(BaseStrategy):
             reasons.append(f"Price Break Above BB_Upper ({current_market_price:.2f})")
         elif current_market_price < latest['BB_Middle'] and latest['BB_Middle'] > previous['BB_Middle']: # Below middle, but middle band rising (weak bullish)
              signal_score += bb_weight * 0.2
-             reasons.append(f"Price Below BB_Middle, Middle Rising")
+             reasons.append("Price Below BB_Middle, Middle Rising")
         elif current_market_price > latest['BB_Middle'] and latest['BB_Middle'] < previous['BB_Middle']: # Above middle, but middle band falling (weak bearish)
              signal_score -= bb_weight * 0.2
-             reasons.append(f"Price Above BB_Middle, Middle Falling")
+             reasons.append("Price Above BB_Middle, Middle Falling")
 
 
         # Apply volatility multiplier
@@ -219,21 +214,20 @@ class DefaultStrategy(BaseStrategy):
         self.logger.debug(f"DefaultStrategy Score: {signal_score:.2f}, Type: {signal_type}, Reasons: {reasons}")
         return Signal(type=signal_type, score=signal_score, reasons=reasons)
 
-    def get_indicator_values(self, df: pd.DataFrame) -> Dict[str, float]:
-        """
-        Extracts the latest values of key indicators after calculation.
+    def get_indicator_values(self, df: pd.DataFrame) -> dict[str, float]:
+        """Extracts the latest values of key indicators after calculation.
         These values are passed to other modules (e.g., TrailingStopManager).
         """
         if df.empty:
             return {}
-        
+
         latest_row = df.iloc[-1]
         indicators = {}
-        
+
         # Ensure indicator columns exist and are not NaN
         for col in [
-            'close', 'open', 'high', 'low', 'volume', 'ATR', 'RSI', 
-            'MACD_Line', 'MACD_Hist', 'MACD_Signal', 
+            'close', 'open', 'high', 'low', 'volume', 'ATR', 'RSI',
+            'MACD_Line', 'MACD_Hist', 'MACD_Signal',
             'BB_Lower', 'BB_Middle', 'BB_Upper', 'ADX', 'PlusDI', 'MinusDI' # Added ADX components
         ]:
             if col in latest_row and pd.notna(latest_row[col]):

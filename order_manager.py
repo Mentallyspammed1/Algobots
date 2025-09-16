@@ -27,8 +27,7 @@ PYRMETHUS_CYAN = COLOR_CYAN
 
 
 class OrderManager:
-    """
-    Manages all aspects of order execution, including placing, amending, and exiting trades.
+    """Manages all aspects of order execution, including placing, amending, and exiting trades.
     This class abstracts the order logic away from the main bot loop.
     """
     def __init__(self, bybit_client: BybitContractAPI, bot_instance):
@@ -151,9 +150,8 @@ class OrderManager:
                 if order_id:
                     asyncio.create_task(self.chase_limit_order(order_id, config.SYMBOL, side))
                 return True
-            else:
-                self.logger.error(f"{COLOR_RED}Order placement failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
-                return False
+            self.logger.error(f"{COLOR_RED}Order placement failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
+            return False
         except BybitAPIError as e:
             await self.bot._handle_api_error(e, "order placement")
             return False
@@ -189,9 +187,8 @@ class OrderManager:
                 self.logger.info(f"{PYRMETHUS_GREEN}Successfully placed exit order.{COLOR_RESET}")
                 # The main bot loop will handle the position state reset via WebSocket updates.
                 return True
-            else:
-                self.logger.error(f"{COLOR_RED}Exit order failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
-                return False
+            self.logger.error(f"{COLOR_RED}Exit order failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
+            return False
         except BybitAPIError as e:
             await self.bot._handle_api_error(e, "exit order placement")
             return False

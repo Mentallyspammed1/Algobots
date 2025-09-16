@@ -473,7 +473,7 @@ class Position:
         pnl_pct = self.get_pnl_percentage()
         if pnl_pct >= take_profit_pct:
             return "TAKE_PROFIT"
-        elif pnl_pct <= -stop_loss_pct:
+        if pnl_pct <= -stop_loss_pct:
             return "STOP_LOSS"
         return None
 
@@ -1336,10 +1336,9 @@ class AdvancedBybitTradingBot:
                 logger.info(f"Order placed: {order_id} - {order.symbol} {order.side.value} {order.qty} @ {order.price or 'MARKET'}")
                 self.performance.total_trades += 1 # Increment total trades here
                 return order
-            else:
-                logger.error(f"Order placement failed, no orderId in response: {result}")
-                self.performance.failed_trades += 1
-                return None
+            logger.error(f"Order placement failed, no orderId in response: {result}")
+            self.performance.failed_trades += 1
+            return None
 
         except Exception as e:
             logger.error(f"Order placement failed for {order.symbol}: {e}", exc_info=True)

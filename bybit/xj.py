@@ -498,15 +498,15 @@ class EnhancedCircuitBreaker:
         with self._lock:
             if self.state == "CLOSED":
                 return True
-            elif self.state == "OPEN":
+            if self.state == "OPEN":
                 if time.time() - self.last_failure_time > self.recovery_timeout:
                     self.state = "HALF_OPEN"
                     self.success_count = 0
                     logger.info(Fore.CYAN + "  # Circuit breaker entering HALF_OPEN state. Testing API health..." + Style.RESET_ALL)
                     return True
                 return False
-            else:  # HALF_OPEN
-                return True
+            # HALF_OPEN
+            return True
 
 # (Pyrmethus's Insight #41) Market Microstructure Analyzer
 class MarketMicrostructureAnalyzer:
@@ -913,15 +913,14 @@ class UltimateBybitTradingBot:
                 if response and response.get('retCode') == 0:
                     self.circuit_breaker.call_succeeded()
                     return response
-                else:
-                    error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
-                    self.circuit_breaker.call_failed(f"{endpoint}: {error_msg}")
+                error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
+                self.circuit_breaker.call_failed(f"{endpoint}: {error_msg}")
 
-                    # Handle specific error codes
-                    if response and response.get('retCode') == 10003:  # Rate limit error
-                        raise RateLimitExceeded(f"Rate limit exceeded: {error_msg}")
+                # Handle specific error codes
+                if response and response.get('retCode') == 10003:  # Rate limit error
+                    raise RateLimitExceeded(f"Rate limit exceeded: {error_msg}")
 
-                    return response
+                return response
 
             except asyncio.TimeoutError:
                 logger.warning(Fore.YELLOW + f"  # {endpoint} timed out (attempt {attempt+1}/3)" + Style.RESET_ALL)
@@ -1104,11 +1103,10 @@ class UltimateBybitTradingBot:
                 self.metrics.total_volume_traded += qty * price
 
                 return result
-            else:
-                error_msg = order_response.get('retMsg') if order_response else 'No response'
-                logger.error(Fore.RED + f"  # Order placement failed: {error_msg}" + Style.RESET_ALL)
-                self.metrics.failed_orders += 1
-                raise OrderPlacementError(f"Order placement failed: {error_msg}")
+            error_msg = order_response.get('retMsg') if order_response else 'No response'
+            logger.error(Fore.RED + f"  # Order placement failed: {error_msg}" + Style.RESET_ALL)
+            self.metrics.failed_orders += 1
+            raise OrderPlacementError(f"Order placement failed: {error_msg}")
 
         except Exception:
             self.metrics.failed_orders += 1

@@ -7,8 +7,7 @@ logger = logging.getLogger(__name__)
 
 # --- Technical Indicator Functions ---
 def calculate_ema(prices: list[float], period: int) -> list[float]:
-    """
-    Calculates Exponential Moving Average (EMA).
+    """Calculates Exponential Moving Average (EMA).
     This is a standard EMA, used as an "Ehlers-like" MA for this strategy.
     """
     if not prices or len(prices) < period:
@@ -36,8 +35,7 @@ _last_signal: dict[str, str | None] = {}
 _current_position: dict[str, str | None] = {}
 
 async def ehlers_ma_cross_strategy(market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any, symbols_to_trade: list[str]):
-    """
-    Ehlers Moving Average Cross Strategy.
+    """Ehlers Moving Average Cross Strategy.
     This strategy uses two standard EMAs (fast and slow) as "Ehlers-like" MAs.
     It generates buy/sell signals based on their crosses.
     

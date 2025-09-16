@@ -56,8 +56,7 @@ getcontext().prec = 50
 
 # --- Helpers: rounding to exchange step sizes ---
 def round_to_step(value: Decimal, step: Decimal, rounding=ROUND_DOWN) -> Decimal:
-    """
-    Round a value to the nearest step multiple down/up as per rounding argument.
+    """Round a value to the nearest step multiple down/up as per rounding argument.
     e.g., value=123.456, step=0.01 -> 123.45 (ROUND_DOWN)
     """
     if step == 0:
@@ -463,7 +462,7 @@ class Position:
         pnl_pct = self.get_pnl_percentage()
         if pnl_pct >= take_profit_pct:
             return "TAKE_PROFIT"
-        elif pnl_pct <= -stop_loss_pct:
+        if pnl_pct <= -stop_loss_pct:
             return "STOP_LOSS"
         return None
 
@@ -1240,9 +1239,8 @@ class AdvancedBybitTradingBot:
                 order.order_id = order_id
                 logger.info(f"Order placed: {order_id} - {order.symbol} {order.side.value} {order.qty} @ {order.price or 'MARKET'}")
                 return order
-            else:
-                logger.error(f"Order placement failed, no orderId in response: {result}")
-                return None
+            logger.error(f"Order placement failed, no orderId in response: {result}")
+            return None
         except Exception as e:
             logger.error(f"Order placement failed for {order.symbol}: {e}", exc_info=True)
             return None

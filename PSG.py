@@ -76,8 +76,7 @@ from utils import calculate_order_quantity
 
 
 class PyrmethusBot:
-    """
-    The core trading bot logic, encapsulating state, API interactions,
+    """The core trading bot logic, encapsulating state, API interactions,
     and trading decisions. It manages its own state, retrieves market data,
     generates trading signals, and executes orders.
     """
@@ -116,7 +115,7 @@ class PyrmethusBot:
         """Returns the side of the current open position ('Buy', 'Sell', or None)."""
         if self.inventory > Decimal('0'):
             return 'Buy'
-        elif self.inventory < Decimal('0'):
+        if self.inventory < Decimal('0'):
             return 'Sell'
         return None
 
@@ -130,8 +129,7 @@ class PyrmethusBot:
         self.bot_logger.debug(f"{PYRMETHUS_GREY}Position state reset.{COLOR_RESET}")
 
     def _identify_and_manage_order_blocks(self):
-        """
-        Identifies new Pivot High/Low based Order Blocks and manages existing ones.
+        """Identifies new Pivot High/Low based Order Blocks and manages existing ones.
         This function should be called after `klines_df` is updated with the latest candle.
         It uses the last *complete* candle for pivot identification.
         """
@@ -239,8 +237,7 @@ class PyrmethusBot:
         self.bot_logger.debug(f"Active OBs after management: Bull={len(self.active_bull_obs)}, Bear={len(self.active_bear_obs)}")
 
     async def _handle_position_update(self, message: dict[str, Any]):
-        """
-        Asynchronous handler for WebSocket position updates.
+        """Asynchronous handler for WebSocket position updates.
         This is the single source of truth for the bot's open position state,
         synchronizing `self.inventory` and related metrics.
         """
@@ -375,8 +372,7 @@ class PyrmethusBot:
                 log_exception(self.bot_logger, f"Failed to set TP/SL for {SYMBOL}: {e}", e)
 
     async def _handle_kline_update(self, message: dict[str, Any]):
-        """
-        Asynchronous handler for WebSocket kline updates.
+        """Asynchronous handler for WebSocket kline updates.
         Updates the internal `klines_df` and derived indicators in real-time.
         """
         if message.get("topic") != f"kline.{INTERVAL}.{SYMBOL}" or not message.get("data"):
@@ -414,8 +410,7 @@ class PyrmethusBot:
             self.bot_logger.warning(f"{COLOR_YELLOW}Failed to update klines_df from WebSocket message: {message}{COLOR_RESET}")
 
     async def _initial_kline_fetch(self) -> bool:
-        """
-        Fetches initial historical kline data to populate the DataFrame.
+        """Fetches initial historical kline data to populate the DataFrame.
         This ensures the bot has enough historical context for indicator calculations.
         """
         try:

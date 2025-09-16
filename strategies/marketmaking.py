@@ -114,9 +114,8 @@ class MockExchange:
                 logger.info(f"Canceled order {order_id}")
                 del self._open_orders[order_id]
                 return True
-            else:
-                logger.warning(f"Cannot cancel order {order_id} in status: {order.status}")
-                return False
+            logger.warning(f"Cannot cancel order {order_id} in status: {order.status}")
+            return False
         logger.warning(f"Order {order_id} not found for cancellation.")
         return False
 
@@ -219,9 +218,8 @@ class MarketMakingStrategy:
                 ask = order_book["ask"]
                 self.last_mid_price = (bid + ask) / 2
                 return bid, ask
-            else:
-                logger.warning("Could not retrieve order book.")
-                return None
+            logger.warning("Could not retrieve order book.")
+            return None
         except Exception as e:
             logger.error(f"Error getting market data: {e}")
             return None
@@ -232,8 +230,7 @@ class MarketMakingStrategy:
         logger.debug(f"Current {self.config.base_currency} position: {self.current_position_base:.4f}")
 
     def _calculate_target_prices(self, bid: float, ask: float) -> tuple[float, float]:
-        """
-        Calculates target buy and sell prices based on mid-price, spread,
+        """Calculates target buy and sell prices based on mid-price, spread,
         and inventory deviation.
         """
         mid_price = (bid + ask) / 2
@@ -266,8 +263,7 @@ class MarketMakingStrategy:
         return round(buy_price, 2), round(sell_price, 2)
 
     def _manage_orders(self, target_buy_price: float, target_sell_price: float):
-        """
-        Cancels stale orders and places new bid/ask orders.
+        """Cancels stale orders and places new bid/ask orders.
         """
         open_orders = self.exchange.get_open_orders(self.config.symbol)
 
@@ -311,8 +307,7 @@ class MarketMakingStrategy:
                 logger.warning(f"Insufficient {self.config.base_currency} balance ({self.exchange.get_balance(self.config.base_currency):.4f}) to place sell order for {self.config.order_size_base:.4f}.")
 
     def _check_risk_limits(self) -> bool:
-        """
-        Checks if any risk limits have been breached.
+        """Checks if any risk limits have been breached.
         Returns True if limits are safe, False otherwise.
         """
         # --- Max Exposure Check ---

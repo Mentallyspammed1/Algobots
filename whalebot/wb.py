@@ -15,9 +15,8 @@ import time
 import urllib.parse
 from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal, getcontext
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -295,17 +294,18 @@ def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) 
 
 from unanimous_logger import setup_logger
 
+
 # --- Logger Setup ---
 # A simple class to adapt the config dict to what setup_logger expects
 class UnanimousLoggerConfig:
     def __init__(self, config_dict):
         # Extract log level from config, default to INFO
         self.LOG_LEVEL = config_dict.get("log_level", "INFO").upper()
-        
+
         # Construct log file path from constants defined in the script
         log_filename = config_dict.get("log_filename", "wb.log")
         self.LOG_FILE_PATH = os.path.join(LOG_DIRECTORY, log_filename)
-        
+
         # Pass color codes
         self.NEON_BLUE = NEON_BLUE
         self.RESET = RESET
@@ -1803,7 +1803,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"[{self.symbol}] MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -1820,7 +1820,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             temp_analyzer = TradingAnalyzer(
                 higher_tf_df, self.config, self.logger, self.symbol
             )
@@ -2252,7 +2252,7 @@ class TradingAnalyzer:
                         # Could indicate consolidation, potentially reduce conviction of trend signals
                         if abs(signal_score) > 0: # If there's an existing signal, slightly reduce it
                              signal_score *= 0.8
-                
+
                 # Further logic could be to compare volatility to a historical average/bands
 
         # --- VWMA Cross Scoring ---

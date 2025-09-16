@@ -2,6 +2,7 @@
 
 import logging
 import subprocess
+
 from colorama import Fore, Style, init
 
 # Initialize colorama
@@ -11,13 +12,11 @@ NEON_RED = Fore.LIGHTRED_EX
 NEON_YELLOW = Fore.YELLOW
 
 class AlertSystem:
-    """
-    Handles sending alerts for critical bot events using Termux toast notifications.
+    """Handles sending alerts for critical bot events using Termux toast notifications.
     """
 
     def __init__(self, logger: logging.Logger):
-        """
-        Initializes the AlertSystem.
+        """Initializes the AlertSystem.
 
         Args:
             logger: The logger instance to use for logging.
@@ -25,8 +24,7 @@ class AlertSystem:
         self.logger = logger
 
     def send_alert(self, message: str, level: str = "INFO"):
-        """
-        Sends an alert using termux-toast.
+        """Sends an alert using termux-toast.
 
         Args:
             message: The alert message to display.

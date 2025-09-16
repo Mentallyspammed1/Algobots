@@ -1,26 +1,27 @@
-import os
 import asyncio
 import logging
-import orjson as json
+import os
+import signal
+import statistics  # UPGRADE: Import the statistics module for stdev
 import time
 import uuid
-import signal
-import statistics # UPGRADE: Import the statistics module for stdev
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field
 from collections import deque
-from decimal import Decimal, ROUND_HALF_UP
+from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
+
+import orjson as json
+import websockets
+import websockets.exceptions
 
 # --- Dependency Imports ---
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
 from rich.console import Console
 from rich.live import Live
-from rich.table import Table
 from rich.logging import RichHandler
-import websockets
-import websockets.exceptions
+from rich.table import Table
 
 # --- Setup for Rich Logging & UI ---
 logging.basicConfig(level="INFO", format="%(message)s", datefmt="[%X]", handlers=[RichHandler(markup=True, rich_tracebacks=True)])
@@ -51,7 +52,7 @@ class InstrumentInfo:
 
 @dataclass
 class BotState:
-    instrument_info: Optional[InstrumentInfo] = None
+    instrument_info: InstrumentInfo | None = None
     recent_prices: deque = field(default_factory=lambda: deque(maxlen=240)) # Stores last 4 minutes of 1s prices
     consecutive_api_failures: int = 0
     is_circuit_breaker_active: bool = False
@@ -74,13 +75,13 @@ class PositionManager:
         except Exception:
             return Decimal(default)
 
-    def update_position(self, data: Dict):
+    def update_position(self, data: dict):
         """Updates the bot's internal position state based on WebSocket data."""
         self.size = self._safe_decimal(data.get('size'))
         self.avg_entry_price = self._safe_decimal(data.get('avgPrice'))
         self.unrealized_pnl = self._safe_decimal(data.get('unrealisedPnl'))
 
-    def process_real_fill(self, trade: Dict):
+    def process_real_fill(self, trade: dict):
         """Processes a filled order from execution WebSocket stream."""
         closed_pnl = self._safe_decimal(trade.get('closedPnl'))
         if closed_pnl != Decimal("0"):
@@ -165,8 +166,8 @@ class EnhancedBybitMarketMaker:
         self.api = self # Self-reference for PositionManager to call bot's methods
         self.position_manager = PositionManager(config, self)
         self.orderbook = {"bids": {}, "asks": {}} # {price: qty}
-        self.active_orders: Dict[str, dict] = {} # {orderId: {price, side, qty}}
-        self.virtual_orders: Dict[str, dict] = {} # For dry run simulation
+        self.active_orders: dict[str, dict] = {} # {orderId: {price, side, qty}}
+        self.virtual_orders: dict[str, dict] = {} # For dry run simulation
         self.last_reprice_time = 0
 
         # Add symbol context filter to logger
@@ -363,7 +364,7 @@ class EnhancedBybitMarketMaker:
                 volatility = Decimal(statistics.stdev(self.state.recent_prices) / mid_price)
             except statistics.StatisticsError:
                 volatility = Decimal("0") # Not enough unique values for std dev
-        
+
         # Calculate dynamic spread
         total_spread_pct = Decimal(str(self.config['strategy']['base_spread_percentage'])) + volatility * Decimal(str(self.config['strategy']['volatility_spread_multiplier']))
 
@@ -386,11 +387,11 @@ class EnhancedBybitMarketMaker:
 
         for i in range(self.config['order_management']['order_tiers']):
             tier_spread_adj = Decimal(str(i)) * Decimal(str(self.config['order_management']['tier_spread_increase_bps'])) / Decimal("10000")
-            
+
             # Calculate bid and ask prices
             bid_price = self._format_price(fair_value * (Decimal("1") - total_spread_pct - tier_spread_adj))
             ask_price = self._format_price(fair_value * (Decimal("1") + total_spread_pct + tier_spread_adj))
-            
+
             # Adjust quantity for tiered orders
             qty = self._format_qty(base_order_size * Decimal(str(1 + i * self.config['order_management']['tier_qty_multiplier'])))
 
@@ -398,7 +399,7 @@ class EnhancedBybitMarketMaker:
             current_pos_abs = abs(self.position_manager.size)
             remaining_buy_capacity = max_pos_size - (current_pos_abs if self.position_manager.size > 0 else Decimal("0"))
             remaining_sell_capacity = max_pos_size - (current_pos_abs if self.position_manager.size < 0 else Decimal("0"))
-            
+
             # Ensure order quantity is above minimum
             if qty < self.state.instrument_info.min_order_size:
                 qty = self.state.instrument_info.min_order_size
@@ -410,7 +411,7 @@ class EnhancedBybitMarketMaker:
             # Place sell orders
             if self.position_manager.size - qty >= -max_pos_size:
                 sell_orders.append({'price': ask_price, 'qty': qty, 'side': 'Sell'})
-        
+
         # Sort orders to ensure consistent processing, useful for debugging
         buy_orders.sort(key=lambda x: x['price'], reverse=True) # Highest bid first
         sell_orders.sort(key=lambda x: x['price']) # Lowest ask first
@@ -483,8 +484,8 @@ class EnhancedBybitMarketMaker:
             f"{len([o for o in open_orders.values() if o['side'] == 'Buy'])} / {len([o for o in open_orders.values() if o['side'] == 'Sell'])}"
         )
         return table
-    
-    async def _websocket_stream_manager(self, ws_client: WebSocket, topics: List[str], stream_name: str):
+
+    async def _websocket_stream_manager(self, ws_client: WebSocket, topics: list[str], stream_name: str):
         """Manages a persistent WebSocket connection, handling reconnections and authentication."""
         url = ws_client.get_ws_url()
         while True:
@@ -546,7 +547,7 @@ class EnhancedBybitMarketMaker:
 
         # Cancel any existing open orders to ensure a clean start
         await self.cancel_all_orders()
-        
+
         # --- Start WebSocket Stream Managers ---
         public_ws_client = WebSocket(testnet=self.config['testnet'], channel_type="linear")
         public_topics = [
@@ -564,10 +565,10 @@ class EnhancedBybitMarketMaker:
             websocket_tasks.append(
                 asyncio.create_task(self._websocket_stream_manager(private_ws_client, private_topics, "private"))
             )
-        
+
         # Give some time for initial WebSocket connections and data to populate
         logger.info("Waiting for initial WebSocket data...")
-        await asyncio.sleep(5) 
+        await asyncio.sleep(5)
         if not self.state.recent_prices:
              logger.warning("No ticker data received yet, strategy might be less effective initially.")
         if not self.orderbook['bids'] or not self.orderbook['asks']:
@@ -594,7 +595,7 @@ class EnhancedBybitMarketMaker:
                     # Simulate fills in dry run mode
                     if self.config['dry_run']:
                         await self._simulate_fills()
-                    
+
                     now = time.time()
                     # Rate limit order repricing
                     if now - self.last_reprice_time < self.config['order_management']['order_reprice_delay_seconds']:
@@ -603,7 +604,7 @@ class EnhancedBybitMarketMaker:
 
                     # Calculate new orders
                     buy_orders, sell_orders = self._calculate_tiered_quotes()
-                    
+
                     # Determine current open orders for comparison
                     open_orders = self.virtual_orders if self.config['dry_run'] else self.active_orders
 
@@ -625,7 +626,7 @@ class EnhancedBybitMarketMaker:
                         self.last_reprice_time = now
                     else:
                         logger.debug("Quotes have not changed, no order action taken.")
-                    
+
                 except asyncio.CancelledError:
                     logger.info("Main loop cancelled.")
                     break # Exit the loop on cancellation
@@ -649,11 +650,11 @@ async def main():
     except json.JSONDecodeError as e:
         logger.critical(f"CRITICAL: Error parsing config.json: {e}. Please check your JSON syntax.")
         return
-    
+
     bot = EnhancedBybitMarketMaker(config)
     loop = asyncio.get_running_loop()
     main_task = asyncio.create_task(bot.run())
-    
+
     # Register signal handlers for graceful shutdown
     if hasattr(signal, 'SIGINT') and hasattr(signal, 'SIGTERM'):
         for sig in [signal.SIGINT, signal.SIGTERM]:

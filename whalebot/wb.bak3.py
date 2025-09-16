@@ -763,7 +763,7 @@ class PerformanceTracker:
         }
         self.trades.append(trade_record)
         self.total_pnl += pnl
-        
+
         # Deduct fees for both entry and exit
         entry_fee = position["entry_price"] * position["qty"] * self.trading_fee_percent
         exit_fee = position["exit_price"] * position["qty"] * self.trading_fee_percent
@@ -1770,7 +1770,7 @@ class TradingAnalyzer:
 
         # Calculate Pivot Point
         self.df["Pivot"] = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        
+
         # Calculate Range
         self.df["Range_HL"] = self.df["high"] - self.df["low"]
 
@@ -1795,7 +1795,7 @@ class TradingAnalyzer:
             self.indicator_values["R2"] = self.df["R2"].iloc[-1]
             self.indicator_values["S1"] = self.df["S1"].iloc[-1]
             self.indicator_values["S2"] = self.df["S2"].iloc[-1]
-        
+
         self.logger.debug(f"[{self.symbol}] Calculated Fibonacci Pivot Points.")
 
     def calculate_volatility_index(self, period: int) -> pd.Series:
@@ -1840,7 +1840,7 @@ class TradingAnalyzer:
             0, np.nan
         )
         return volume_delta.fillna(0)
-    
+
     def calculate_kaufman_ama(self, period: int, fast_period: int, slow_period: int) -> pd.Series:
         """Calculate Kaufman's Adaptive Moving Average (KAMA)."""
         if len(self.df) < period + slow_period:
@@ -1851,7 +1851,7 @@ class TradingAnalyzer:
 
         # Efficiency Ratio (ER)
         direction = np.abs(close_prices - np.roll(close_prices, period))
-        
+
         # Handle cases where volatility might be zero
         volatility_series = pd.Series(0.0, index=self.df.index)
         for i in range(period, len(self.df)):
@@ -1859,7 +1859,7 @@ class TradingAnalyzer:
 
         er_numerator = np.abs(close_prices - np.roll(close_prices, period))
         er_denominator = volatility_series.values # Use the calculated volatility series
-        
+
         # Ensure proper shifting for ER numerator and denominator
         er_numerator = pd.Series(close_prices).diff(period).abs().values
         er = np.full_like(close_prices, np.nan)
@@ -1876,7 +1876,7 @@ class TradingAnalyzer:
         fast_alpha = 2 / (fast_period + 1)
         slow_alpha = 2 / (slow_period + 1)
         sc = (er * (fast_alpha - slow_alpha) + slow_alpha)**2
-        
+
         # KAMA calculation
         # Initialize KAMA with a simple moving average or first valid price
         first_valid_idx = np.where(~np.isnan(sc))[0][0] if np.where(~np.isnan(sc))[0].size > 0 else period
@@ -1917,8 +1917,7 @@ class TradingAnalyzer:
         return float(imbalance)
 
     def calculate_support_resistance_from_orderbook(self, orderbook_data: dict) -> None:
-        """
-        Calculates support and resistance levels from orderbook data based on volume concentration.
+        """Calculates support and resistance levels from orderbook data based on volume concentration.
         Identifies the highest volume bid as support and highest volume ask as resistance.
         """
         bids = orderbook_data.get("b", [])
@@ -1974,7 +1973,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"[{self.symbol}] MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -1991,7 +1990,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             temp_analyzer = TradingAnalyzer(
                 higher_tf_df, self.config, self.logger, self.symbol
             )
@@ -2424,7 +2423,7 @@ class TradingAnalyzer:
                         # Could indicate consolidation, potentially reduce conviction of trend signals
                         if abs(signal_score) > 0: # If there's an existing signal, slightly reduce it
                              signal_score *= 0.8
-                
+
                 # Further logic could be to compare volatility to a historical average/bands
 
         # --- VWMA Cross Scoring ---

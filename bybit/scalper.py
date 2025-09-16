@@ -113,8 +113,7 @@ init(autoreset=True)
 
 
 def handle_exceptions(default_return: Any = None, message: str = "An error occurred"):
-    """
-    Decorator for handling exceptions in functions, logging them, and returning a default value.
+    """Decorator for handling exceptions in functions, logging them, and returning a default value.
     """
 
     def decorator(func):
@@ -150,8 +149,7 @@ load_dotenv()
 
 @handle_exceptions(default_return=(None, None), message="Error validating API keys")
 def _validate_api_keys(logger: logging.Logger) -> tuple[str | None, str | None]:
-    """
-    Validates that BYBIT_API_KEY and BYBIT_API_SECRET environment variables are set.
+    """Validates that BYBIT_API_KEY and BYBIT_API_SECRET environment variables are set.
     Logs a critical error and exits if they are not.
     """
     if os.getenv("JULES_TEST_MODE") == "true":
@@ -705,8 +703,7 @@ def display_recent_closed_trades(
 def send_sms_alert(
     message: str, recipient_number: str, logger: logging.Logger, config: dict[str, Any]
 ) -> bool:
-    """
-    Sends an SMS alert using Termux API if enabled in config.
+    """Sends an SMS alert using Termux API if enabled in config.
     Returns True if SMS was sent or alerts are disabled, False if sending failed.
     """
     if not config.get("enable_sms_alerts", False):
@@ -746,13 +743,12 @@ def send_sms_alert(
                 f"Message: '{sanitized_message}'{RST}"
             )
             return True
-        else:
-            error_output = result.stderr or result.stdout or "No output"
-            logger.error(
-                f"{NR}Failed to send SMS alert via Termux. Return code: "
-                f"{result.returncode}. Error: {error_output.strip()}{RST}"
-            )
-            return False
+        error_output = result.stderr or result.stdout or "No output"
+        logger.error(
+            f"{NR}Failed to send SMS alert via Termux. Return code: "
+            f"{result.returncode}. Error: {error_output.strip()}{RST}"
+        )
+        return False
     except FileNotFoundError:
         logger.error(
             f"{NR}Termux API command 'termux-sms-send' not found. "
@@ -903,8 +899,7 @@ def _validate_numeric_config_value(
 
 
 def load_config(file_path: Path) -> dict[str, Any]:
-    """
-    Load Config: Loads and validates the configuration from `config.json`.
+    """Load Config: Loads and validates the configuration from `config.json`.
     If the file doesn't exist or is invalid, it creates a default one.
     """
     # Default configuration values
@@ -1549,8 +1544,7 @@ QC: Final[str] = _initial_config_from_file.get("quote_currency", "USDT")
 
 
 def slg(name_suffix: str) -> logging.Logger:
-    """
-    Setup Logger: Configures and returns a logger with file and stream handlers.
+    """Setup Logger: Configures and returns a logger with file and stream handlers.
     File handler rotates logs, stream handler prints to console with custom formatter.
     """
     base_name = "pscalp2"
@@ -2029,9 +2023,8 @@ def fetch_current_price(exchange: ccxt.Exchange, symbol: str, logger: logging.Lo
 
     if price is not None and price > 0:
         return price
-    else:
-        error_msg = f"Failed to get valid price from ticker. Ticker: {ticker}. Scrying mirror clouded."
-        raise ccxt.ExchangeError(error_msg)
+    error_msg = f"Failed to get valid price from ticker. Ticker: {ticker}. Scrying mirror clouded."
+    raise ccxt.ExchangeError(error_msg)
 
 
 @retry_api_call()
@@ -2175,8 +2168,7 @@ def get_market_info(symbol: str, exchange: ccxt.Exchange, logger: logging.Logger
             f"The market's essence revealed.{RST}"
         )
         return market_info
-    else:
-        raise ccxt.ExchangeError(f"Market dictionary unexpectedly not found for validated symbol {symbol}. A void in the market's records!")
+    raise ccxt.ExchangeError(f"Market dictionary unexpectedly not found for validated symbol {symbol}. A void in the market's records!")
 
 
 @handle_exceptions(default_return=False, message='Error setting leverage')
@@ -2590,36 +2582,34 @@ def set_trade_stop_loss_take_profit(
         TradeTracker._save_trades()
         logger.info(f"{NG}set_trade_stop_loss_take_profit: TradeRecord for {symbol} updated. SL: {trade_record.stop_loss_price}, TP: {trade_record.take_profit_price}, TSL Active: {trade_record.trailing_stop_active}, TSL Dist: {trade_record.trailing_stop_distance}, TSL Act: {trade_record.tsl_activation_price}.{RST}")
         return True
-    else:
-        error_msg = api_response.get('retMsg', 'Unknown error')
-        error_code = api_response.get('retCode', -1)
-        logger.debug(f"set_trade_stop_loss_take_profit: Failed protection set for {symbol}. Original params sent: {json.dumps(payload, default=str)}")
+    error_msg = api_response.get('retMsg', 'Unknown error')
+    error_code = api_response.get('retCode', -1)
+    logger.debug(f"set_trade_stop_loss_take_profit: Failed protection set for {symbol}. Original params sent: {json.dumps(payload, default=str)}")
 
-        if error_code == 110061: # Bybit specific error for SL/TP order limit exceeded
-            logger.error(f"{NR}set_trade_stop_loss_take_profit: Failed to set protections for {symbol} due to SL/TP order limit exceeded (Error 110061). Msg: {error_msg}. Attempting to cancel existing StopOrders for the symbol as a corrective measure.{RST}")
-            try:
-                # Attempt to cancel all StopOrders for the symbol
-                cancel_params = {'category': payload['category'], 'symbol': payload['symbol'], 'orderFilter': 'StopOrder'}
-                cancel_path = '/v5/order/cancel-all' # Corrected path for cancelling all orders
-                logger.info(f"{NB}set_trade_stop_loss_take_profit: Attempting to cancel all StopOrders for {symbol} with params: {json.dumps(cancel_params, default=str)} via {cancel_path}{RST}")
+    if error_code == 110061: # Bybit specific error for SL/TP order limit exceeded
+        logger.error(f"{NR}set_trade_stop_loss_take_profit: Failed to set protections for {symbol} due to SL/TP order limit exceeded (Error 110061). Msg: {error_msg}. Attempting to cancel existing StopOrders for the symbol as a corrective measure.{RST}")
+        try:
+            # Attempt to cancel all StopOrders for the symbol
+            cancel_params = {'category': payload['category'], 'symbol': payload['symbol'], 'orderFilter': 'StopOrder'}
+            cancel_path = '/v5/order/cancel-all' # Corrected path for cancelling all orders
+            logger.info(f"{NB}set_trade_stop_loss_take_profit: Attempting to cancel all StopOrders for {symbol} with params: {json.dumps(cancel_params, default=str)} via {cancel_path}{RST}")
 
-                cancel_response = _bybit_v5_request(method="POST", path=cancel_path, params=cancel_params, api_key=AK, api_secret=AS, base_url=base_url, logger=logger)
+            cancel_response = _bybit_v5_request(method="POST", path=cancel_path, params=cancel_params, api_key=AK, api_secret=AS, base_url=base_url, logger=logger)
 
-                if cancel_response and cancel_response.get('retCode') == 0:
-                    cancelled_count = 0
-                    if isinstance(cancel_response.get(result_key, {}).get('list'), list):
-                        cancelled_count = len(cancel_response[result_key]['list'])
-                    logger.info(f"{NG}set_trade_stop_loss_take_profit: Successfully sent request to cancel all StopOrders for {symbol}. Orders cancelled/affected: {cancelled_count}. This is a corrective action for the next cycle. Msg: {cancel_response.get('retMsg')}{RST}")
-                else:
-                    cancel_msg = cancel_response.get('retMsg', 'Unknown cancel error') if cancel_response else 'No response from cancel call'
-                    cancel_code = cancel_response.get('retCode', -1) if cancel_response else -1
-                    logger.error(f"{NR}set_trade_stop_loss_take_profit: Failed to cancel all StopOrders for {symbol}. Code: {cancel_code}, Msg: {cancel_msg}. Full Cancel Response: {json.dumps(cancel_response, default=str)}{RST}")
-            except Exception as cancel_err:
-                logger.error(f"{NR}set_trade_stop_loss_take_profit: Exception occurred while attempting to cancel all StopOrders for {symbol}: {cancel_err}{RST}")
-            return False # Return False as protection setting failed
-        else:
-            logger.error(f"{NR}set_trade_stop_loss_take_profit: Failed to set protections for {symbol} via direct API. Code: {error_code}, Msg: {error_msg}. Full Response: {json.dumps(api_response, default=str)}{RST}")
-            return False
+            if cancel_response and cancel_response.get('retCode') == 0:
+                cancelled_count = 0
+                if isinstance(cancel_response.get(result_key, {}).get('list'), list):
+                    cancelled_count = len(cancel_response[result_key]['list'])
+                logger.info(f"{NG}set_trade_stop_loss_take_profit: Successfully sent request to cancel all StopOrders for {symbol}. Orders cancelled/affected: {cancelled_count}. This is a corrective action for the next cycle. Msg: {cancel_response.get('retMsg')}{RST}")
+            else:
+                cancel_msg = cancel_response.get('retMsg', 'Unknown cancel error') if cancel_response else 'No response from cancel call'
+                cancel_code = cancel_response.get('retCode', -1) if cancel_response else -1
+                logger.error(f"{NR}set_trade_stop_loss_take_profit: Failed to cancel all StopOrders for {symbol}. Code: {cancel_code}, Msg: {cancel_msg}. Full Cancel Response: {json.dumps(cancel_response, default=str)}{RST}")
+        except Exception as cancel_err:
+            logger.error(f"{NR}set_trade_stop_loss_take_profit: Exception occurred while attempting to cancel all StopOrders for {symbol}: {cancel_err}{RST}")
+        return False # Return False as protection setting failed
+    logger.error(f"{NR}set_trade_stop_loss_take_profit: Failed to set protections for {symbol} via direct API. Code: {error_code}, Msg: {error_msg}. Full Response: {json.dumps(api_response, default=str)}{RST}")
+    return False
 
 
 # --- Per-Symbol Bot Logic ---
@@ -2698,10 +2688,9 @@ class PerSymbolBot:
                 if self.symbol in TradeTracker.open_trades and TradeTracker.open_trades[self.symbol].status != "OPEN":
                     TradeTracker.open_trades.pop(self.symbol)
                 return False # Stop further logic for this symbol if position is closed/managed
-            else:
-                # If position is still open after management, skip new signal generation
-                self.logger.info(f"{NB}Position for {self.symbol} is still open. Skipping new signal generation.{RST}")
-                return True # Successfully managed existing position
+            # If position is still open after management, skip new signal generation
+            self.logger.info(f"{NB}Position for {self.symbol} is still open. Skipping new signal generation.{RST}")
+            return True # Successfully managed existing position
 
         # 4. Check for signal cooldown
         cooldown_candles = self.config.get('symbol_signal_cooldown_candles', 0)
@@ -2930,21 +2919,18 @@ class PerSymbolBot:
                             attempt_tsl=self.config.get('enable_trailing_stop', False)
                         )
                         return True
-                    else:
-                        self.logger.error(f"{NR}Trade record for {self.symbol} not found after order placement. This is unexpected.{RST}")
-                        return False
-                else:
-                    self.logger.error(f"{NR}Position for {self.symbol} not confirmed after {confirm_delay}s. Order might not have filled or an issue occurred.{RST}")
-                    # Mark trade as cancelled/failed if not confirmed
-                    updated_trade = TradeTracker.get_open_trade(self.symbol)
-                    if updated_trade:
-                        updated_trade.status = "CLOSED_CANCELLED"
-                        updated_trade.exit_reason = "ORDER_NOT_FILLED"
-                        TradeTracker.close_trade(self.symbol, current_price, datetime.now(TZ), TradeTracker.current_balance, "ORDER_NOT_FILLED")
+                    self.logger.error(f"{NR}Trade record for {self.symbol} not found after order placement. This is unexpected.{RST}")
                     return False
-            else:
-                self.logger.error(f"{NR}Order placement failed for {self.symbol}. No order ID returned.{RST}")
+                self.logger.error(f"{NR}Position for {self.symbol} not confirmed after {confirm_delay}s. Order might not have filled or an issue occurred.{RST}")
+                # Mark trade as cancelled/failed if not confirmed
+                updated_trade = TradeTracker.get_open_trade(self.symbol)
+                if updated_trade:
+                    updated_trade.status = "CLOSED_CANCELLED"
+                    updated_trade.exit_reason = "ORDER_NOT_FILLED"
+                    TradeTracker.close_trade(self.symbol, current_price, datetime.now(TZ), TradeTracker.current_balance, "ORDER_NOT_FILLED")
                 return False
+            self.logger.error(f"{NR}Order placement failed for {self.symbol}. No order ID returned.{RST}")
+            return False
         except Exception as e:
             self.logger.error(f"{NR}Error placing order for {self.symbol}: {e}. The market rejected the spell!{RST}", exc_info=True)
             return False
@@ -3160,14 +3146,12 @@ class PerSymbolBot:
                 TradeTracker.close_trade(self.symbol, current_price, datetime.now(TZ), current_balance, exit_reason)
                 self.logger.info(f"{NG}Position for {self.symbol} successfully closed on exchange and tracker updated.{RST}")
                 return True
-            else:
-                self.logger.error(f"{NR}Position for {self.symbol} still open on exchange after close order. Size: {position_info.get('contractsDecimal')}. Manual intervention may be required!{RST}")
-                open_trade.exit_order_status = "FAILED_TO_CLOSE"
-                TradeTracker._save_trades()
-                return False
-        else:
-            self.logger.error(f"{NR}Failed to place close order for {self.symbol}. No order ID returned.{RST}")
+            self.logger.error(f"{NR}Position for {self.symbol} still open on exchange after close order. Size: {position_info.get('contractsDecimal')}. Manual intervention may be required!{RST}")
+            open_trade.exit_order_status = "FAILED_TO_CLOSE"
+            TradeTracker._save_trades()
             return False
+        self.logger.error(f"{NR}Failed to place close order for {self.symbol}. No order ID returned.{RST}")
+        return False
 
     @handle_exceptions(default_return=False, message="Error checking break-even")
     def _check_break_even(self, current_price: Decimal, position_info: dict[str, Any]) -> bool:
@@ -3258,8 +3242,7 @@ class PerSymbolBot:
                     if success:
                         self.logger.info(f"{NG}_check_break_even: Break-Even SL for {self.symbol} (Long) successfully set via set_trade_stop_loss_take_profit.{RST}")
                         return True
-                    else:
-                        self.logger.warning(f"{NY}_check_break_even: Break-Even SL setting failed for {self.symbol} (Long) via set_trade_stop_loss_take_profit.{RST}")
+                    self.logger.warning(f"{NY}_check_break_even: Break-Even SL setting failed for {self.symbol} (Long) via set_trade_stop_loss_take_profit.{RST}")
                 else:
                     self.logger.debug(f"Break-Even for {self.symbol} (Long) triggered, but new SL {new_sl_price:.{price_precision}f} is not higher than current SL {current_sl_dec:.{price_precision}f}. No update needed. The shield is already advanced.{RST}")
         elif position_side == "short":
@@ -3299,8 +3282,7 @@ class PerSymbolBot:
                     if success:
                         self.logger.info(f"{NG}_check_break_even: Break-Even SL for {self.symbol} (Short) successfully set via set_trade_stop_loss_take_profit.{RST}")
                         return True
-                    else:
-                        self.logger.warning(f"{NY}_check_break_even: Break-Even SL setting failed for {self.symbol} (Short) via set_trade_stop_loss_take_profit.{RST}")
+                    self.logger.warning(f"{NY}_check_break_even: Break-Even SL setting failed for {self.symbol} (Short) via set_trade_stop_loss_take_profit.{RST}")
                 else:
                     self.logger.debug(f"Break-Even for {self.symbol} (Short) triggered, but new SL {new_sl_price:.{price_precision}f} is not lower than current SL {current_sl_dec:.{price_precision}f}. No update needed. The shield is already advanced.{RST}")
 
@@ -3336,9 +3318,8 @@ class PerSymbolBot:
             if result and result.get('list') is not None:
                 self.logger.info(f"{NG}Successfully cancelled {len(result['list'])} orders for {self.symbol}.{RST}")
                 return True
-            else:
-                self.logger.warning(f"{NY}No orders to cancel or cancellation response was unexpected for {self.symbol}. Result: {result}{RST}")
-                return False
+            self.logger.warning(f"{NY}No orders to cancel or cancellation response was unexpected for {self.symbol}. Result: {result}{RST}")
+            return False
         except Exception as e:
             self.logger.error(f"{NR}Error cancelling all orders for {self.symbol}: {e}.{RST}", exc_info=True)
             return False

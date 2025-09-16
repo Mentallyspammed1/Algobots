@@ -963,11 +963,10 @@ class PositionManager:
                 position_info  # Track the position locally
             )
             return position_info
-        else:
-            self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Failed to place {signal} order. Check API logs for details.{RESET}"
-            )
-            return None
+        self.logger.error(
+            f"{NEON_RED}[{self.symbol}] Failed to place {signal} order. Check API logs for details.{RESET}"
+        )
+        return None
 
     def manage_positions(
         self, current_price: Decimal, atr_value: Decimal, performance_tracker: Any
@@ -2480,7 +2479,7 @@ class TradingAnalyzer:
                 if last_close < sma:
                     return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -2493,7 +2492,7 @@ class TradingAnalyzer:
                 if last_close < ema:
                     return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             # Temporarily create an analyzer for the higher timeframe data to get ST direction
             temp_config = self.config.copy()
             temp_config["indicators"][

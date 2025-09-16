@@ -44,8 +44,7 @@ except ImportError:
     PYRMETHUS_GREY = COLOR_DIM
 
 def _format_indicator(value: Any, default: str = "N/A", precision: int = 4) -> str:
-    """
-    Helper function to format indicator values, handling Decimal, None, NaN,
+    """Helper function to format indicator values, handling Decimal, None, NaN,
     and potential formatting errors gracefully.
     """
     if value is None or pd.isna(value):
@@ -74,8 +73,7 @@ def display_market_info(
     order_book_imbalance: Decimal | None = None,
     last_signal: dict[str, Any] | None = None # New parameter for last signal
 ):
-    """
-    Prints current market information to the console with enhanced formatting and clarity.
+    """Prints current market information to the console with enhanced formatting and clarity.
     Improvements:
     - Uses a helper function for consistent indicator formatting.
     - Sorts and formats pivot levels for better readability.

@@ -91,6 +91,13 @@ if (!fs.existsSync(PNL_CSV_PATH)) {
 // ====================== 
 // STATE MANAGEMENT
 // ====================== 
+/**
+ * @function loadState
+ * @description Loads the bot's persistent state (net position, average entry price, realized PnL, trade count)
+ * from a JSON file specified by `STATE_FILE_PATH`.
+ * Logs a warning if the state file cannot be loaded.
+ * @returns {void}
+ */
 function loadState() {
   try {
     if (fs.existsSync(STATE_FILE_PATH)) {
@@ -110,6 +117,13 @@ function loadState() {
     logger.warn(neon.warn('Failed to load state'), { error: err.message });
   }
 }
+/**
+ * @function saveState
+ * @description Saves the bot's current persistent state (net position, average entry price, realized PnL, trade count)
+ * to a JSON file specified by `STATE_FILE_PATH`.
+ * Logs an error if the state cannot be saved.
+ * @returns {void}
+ */
 function saveState() {
   try {
     const data = {
@@ -129,6 +143,14 @@ function saveState() {
 // ====================== 
 // MARKET DATA (ALWAYS LIVE) - Using bybitClient
 // ====================== 
+/**
+ * @async
+ * @function getOrderBook
+ * @description Fetches the order book levels (best bid and ask) from the Bybit API.
+ * Includes retry logic and a fallback simulation if API calls fail.
+ * @param {number} [retries=3] - The number of retry attempts for fetching the order book.
+ * @returns {Promise<Object>} An object containing bids, asks, midPrice, and imbalance.
+ */
 async function getOrderBook(retries = 3) {
   try {
     const [bestBid, bestAsk] = await bybitClient.getOrderbookLevels(SYMBOL, 5);
@@ -185,6 +207,11 @@ async function getOrderBook(retries = 3) {
   }
 }
 
+/**
+ * @function getVolatility
+ * @description Calculates the market volatility based on recent price history.
+ * @returns {number} The calculated average percentage change in price over the `VOLATILITY_WINDOW`.
+ */
 function getVolatility() {
   if (botState.priceHistory.length < VOLATILITY_WINDOW) return 0.001;
   const recent = botState.priceHistory.slice(-VOLATILITY_WINDOW);
@@ -196,6 +223,13 @@ function getVolatility() {
 // ====================== 
 // ANALYSIS & DISPLAY
 // ====================== 
+/**
+ * @function analyzeOrderBook
+ * @description Analyzes the order book to calculate imbalance and depth.
+ * @param {Array<Object>} bids - An array of bid objects ({price, size}).
+ * @param {Array<Object>} asks - An array of ask objects ({price, size}).
+ * @returns {Object} An object containing imbalance, depth (bids, asks, ratio), bidHeat, and askHeat.
+ */
 function analyzeOrderBook(bids, asks) {
   const totalBidSize = bids.reduce((sum, b) => sum + b.size, 0);
   const totalAskSize = asks.reduce((sum, a) => sum + a.size, 0);
@@ -206,6 +240,15 @@ function analyzeOrderBook(bids, asks) {
   return { imbalance, depth, bidHeat, askHeat };
 }
 
+/**
+ * @function displayOrderBook
+ * @description Logs a formatted display of the current order book, mid-price, imbalance, and depth.
+ * @param {Array<Object>} bids - An array of bid objects ({price, size}).
+ * @param {Array<Object>} asks - An array of ask objects ({price, size}).
+ * @param {number} midPrice - The calculated mid-price.
+ * @param {Object} analysis - The analysis object from `analyzeOrderBook`.
+ * @returns {void}
+ */
 function displayOrderBook(bids, asks, midPrice, analysis) {
   const safeMid = Number.isFinite(midPrice) ? midPrice : 0;
   const imbStr = Number.isFinite(analysis.imbalance) ? (analysis.imbalance * 100).toFixed(2) : '0.00';
@@ -235,6 +278,15 @@ function displayOrderBook(bids, asks, midPrice, analysis) {
 // ====================== 
 // PNL & FILL SIMULATION
 // ====================== 
+/**
+ * @function updatePnL
+ * @description Updates the bot's net position, average entry price, and PnL (realized, unrealized, total).
+ * Also writes PnL events to a CSV file.
+ * @param {string} side - The side of the trade ("buy" or "sell").
+ * @param {number} qty - The quantity of the asset traded.
+ * @param {number} price - The price at which the trade occurred.
+ * @returns {void}
+ */
 function updatePnL(side, qty, price) {
   const oldPos = botState.netPosition;
   const tradeDelta = side === 'buy' ? qty : -qty;
@@ -275,6 +327,13 @@ function updatePnL(side, qty, price) {
   }]).catch(err => logger.error(neon.error('Failed to write PnL to CSV'), { error: err.message }));
 }
 
+/**
+ * @function simulateFillEvent
+ * @description Simulates a trade fill event in dry-run mode based on a `FILL_PROBABILITY`.
+ * Updates PnL and logs the simulated fill.
+ * @param {number} orderSize - The size of the order to simulate filling.
+ * @returns {void}
+ */
 function simulateFillEvent(orderSize) {
   if (!DRY_RUN) return;
   if (Math.random() > FILL_PROBABILITY) return;
@@ -291,6 +350,13 @@ function simulateFillEvent(orderSize) {
 // ====================== 
 // SMS ALERTS (TERMUX) 
 // ====================== 
+/**
+ * @function sendTermuxSMS
+ * @description Sends an SMS message via Termux:API if enabled and configured.
+ * Includes rate limiting to prevent spamming.
+ * @param {string} message - The message content to send.
+ * @returns {void}
+ */
 function sendTermuxSMS(message) {
   if (!USE_TERMUX_SMS || !SMS_PHONE_NUMBER) return;
   const now = Date.now();
@@ -312,6 +378,16 @@ function sendTermuxSMS(message) {
 // ====================== 
 // ORDER & RISK MANAGEMENT
 // ====================== 
+/**
+ * @async
+ * @function placeOrder
+ * @description Places a limit order on the Bybit exchange.
+ * In dry-run mode, simulates order placement.
+ * @param {string} side - The order side ("buy" or "sell").
+ * @param {number} price - The price for the limit order.
+ * @param {number} qty - The quantity of the asset to trade.
+ * @returns {Promise<string|null>} The order ID if successful, or null on failure.
+ */
 async function placeOrder(side, price, qty) {
   const displayPrice = Number.isFinite(price) ? price.toFixed(1) : String(price);
   const displayQty = Number.isFinite(qty) ? qty.toFixed(6) : String(qty);
@@ -340,6 +416,13 @@ async function placeOrder(side, price, qty) {
   }
 }
 
+/**
+ * @async
+ * @function cancelAllOrders
+ * @description Cancels all active open orders for the configured symbol.
+ * In dry-run mode, simulates order cancellation.
+ * @returns {Promise<boolean>} True if all orders were successfully cancelled or simulated, false otherwise.
+ */
 async function cancelAllOrders() {
   if (DRY_RUN) {
     const count = botState.activeOrders.size;
@@ -368,6 +451,13 @@ async function cancelAllOrders() {
   }
 }
 
+/**
+ * @function checkRiskLimits
+ * @description Checks if the bot's net position exceeds predefined risk limits.
+ * Pauses the bot if the limit is reached and resumes if the position reduces.
+ * Sends Termux SMS alerts for risk events.
+ * @returns {boolean} True if within risk limits (or resumed), false if paused.
+ */
 function checkRiskLimits() {
   if (STOP_ON_LARGE_POS && Math.abs(botState.netPosition) >= MAX_NET_POSITION) {
     if (!botState.isPaused) {
@@ -388,6 +478,12 @@ function checkRiskLimits() {
 // ====================== 
 // HEARTBEAT
 // ====================== 
+/**
+ * @function startHeartbeat
+ * @description Starts a periodic logging of the bot's status, including PnL, net position, and active orders.
+ * The interval is defined by `HEARTBEAT_INTERVAL`.
+ * @returns {void}
+ */
 function startHeartbeat() {
   setInterval(() => {
     console.log('\n' + neon.header('📈 STATUS HEARTBEAT'));
@@ -407,6 +503,12 @@ function startHeartbeat() {
 // ====================== 
 // WEBSOCKET (Ticker for price history)
 // ====================== 
+/**
+ * @function setupWebSocket
+ * @description Establishes and manages a WebSocket connection to Bybit for real-time ticker updates.
+ * Automatically reconnects on disconnection and updates `botState.lastPrice` and `botState.priceHistory`.
+ * @returns {void}
+ */
 function setupWebSocket() {
   const wssUrl = IS_TESTNET
     ? 'wss://stream-testnet.bybit.com/v5/public/linear'
@@ -445,6 +547,15 @@ function setupWebSocket() {
 // ====================== 
 // REFRESH CYCLE
 // ====================== 
+/**
+ * @async
+ * @function refreshOrders
+ * @description The core refresh cycle for the market maker. It fetches the order book,
+ * analyzes it, calculates new bid/ask spreads and order sizes based on volatility and imbalance,
+ * cancels all existing orders, and places a new grid of orders.
+ * Includes risk limit checks and simulated fill events.
+ * @returns {Promise<void>}
+ */
 async function refreshOrders() {
   if (botState.isShuttingDown || botState.isPaused) {
     logger.info(neon.info('Market maker paused or shutting down. Skipping refresh.'));
@@ -505,6 +616,14 @@ async function refreshOrders() {
 // ====================== 
 // GRACEFUL SHUTDOWN
 // ====================== 
+/**
+ * @async
+ * @function shutdown
+ * @description Handles the graceful shutdown of the bot. It cancels all open orders,
+ * saves the bot's state, sends a final SMS alert, and exits the process.
+ * @param {string} signal - The signal that triggered the shutdown (e.g., 'SIGINT', 'uncaughtException').
+ * @returns {Promise<void>}
+ */
 const shutdown = async (signal) => {
   if (botState.isShuttingDown) return;
   botState.isShuttingDown = true;
@@ -535,6 +654,14 @@ process.on('unhandledRejection', (reason) => {
 // ====================== 
 // STARTUP
 // ====================== 
+/**
+ * @async
+ * @function startBot
+ * @description The main entry point for the Market Maker strategy. Initializes the bot,
+ * loads state, sets up WebSocket connections, starts the heartbeat, and begins the order refreshing cycle.
+ * @param {Object} strategyConfig - The configuration object for this specific strategy instance.
+ * @returns {Promise<void>}
+ */
 async function startBot(strategyConfig) { // Added strategyConfig parameter
   logger.info(neon.info('🚀 Starting Neon Market Maker Bot...'), {
     version: '3.7.0',
@@ -560,7 +687,7 @@ async function startBot(strategyConfig) { // Added strategyConfig parameter
 }
 
 // === LAUNCH ===
-startBot().catch(err => {
+startBot(CONFIG).catch(err => {
   logger.error(neon.error('Bot failed to start'), { error: err.message, stack: err.stack });
   sendTermuxSMS(`[STARTUP FAIL] ${err.message.slice(0, 120)}`);
   process.exit(1);

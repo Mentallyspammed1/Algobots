@@ -25,8 +25,7 @@ PROFIT_LOCK_PERCENT = decimal.Decimal("0.015") # Lock in profit at 1.5%
 TRAILING_STOP_PERCENT = decimal.Decimal("0.005") # Trail the stop by 0.5%
 
 def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trade: list[str]):
-    """
-    Manages existing positions to lock in profits and trail stop losses.
+    """Manages existing positions to lock in profits and trail stop losses.
     This is a synchronous function.
     """
     for symbol in symbols_to_trade:
@@ -75,8 +74,7 @@ def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trade: lis
                 logger.error(f"Error adjusting stop-loss for {symbol}: {e}")
 
 def market_making_strategy(account_info: dict, http_client: HTTP, bot_instance: Any, symbols_to_trade: list[str]):
-    """
-    An enhanced market-making strategy with risk management and profit-locking.
+    """An enhanced market-making strategy with risk management and profit-locking.
     This is a synchronous function.
     """
     logger.info("Executing Enhanced Market Making Strategy...")

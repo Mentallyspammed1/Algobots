@@ -157,7 +157,7 @@ class RuneWeaver:
         required_columns = ['open', 'high', 'low', 'close', 'volume']
         if not all(col in data.columns for col in required_columns):
             self.logger.error(f"{NR}Data missing required columns: {required_columns}{RST}")
-            return None
+            return
         with self._lock:
             self.data = data.copy()
             self.logger.info(f"{NG}Data set with {len(data)} candles{RST}")

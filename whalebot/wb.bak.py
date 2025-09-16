@@ -11,10 +11,10 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
-from zoneinfo import ZoneInfo
 import urllib.parse
 from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -1214,7 +1214,7 @@ class TradingAnalyzer:
             if last_close > sma: return "UP"
             if last_close < sma: return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             period = self.config["mtf_analysis"]["trend_period"]
             if len(higher_tf_df) < period:
                 self.logger.debug(f"MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}.")
@@ -1223,7 +1223,7 @@ class TradingAnalyzer:
             if last_close > ema: return "UP"
             if last_close < ema: return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             # Temporarily create an analyzer for the higher timeframe data to calculate its ST
             # Pass the logger and symbol to the temporary analyzer
             temp_analyzer = TradingAnalyzer(higher_tf_df, self.config, self.logger, self.symbol)

@@ -18,8 +18,7 @@ def generate_signals(
     enable_fib_pivot_actions: bool,
     fib_entry_confirm_percent: float
 ) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
-    """
-    Placeholder for generating entry signals based on market data and indicators.
+    """Placeholder for generating entry signals based on market data and indicators.
     This function needs to be implemented with actual trading logic.
     """
     return []
@@ -38,8 +37,7 @@ def generate_exit_signals(
     fib_exit_warn_percent: float,
     fib_exit_action: str
 ) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
-    """
-    Placeholder for generating exit signals based on market data and indicators.
+    """Placeholder for generating exit signals based on market data and indicators.
     This function needs to be implemented with actual trading logic.
     """
     return []

@@ -200,7 +200,7 @@ def bybit_request(method: str, endpoint: str, api_key: str, api_secret: str, par
             response = requests.request(method, url, headers=headers, params=params if method == "GET" else None, json=params if method == "POST" else None, timeout=10)
             if response.status_code == 200:
                 return response.json()
-            elif response.status_code in RETRY_ERROR_CODES:
+            if response.status_code in RETRY_ERROR_CODES:
                 if logger:
                     logger.warning(f"{NEON_YELLOW}Rate limit or server error, retrying {retry + 1}/{MAX_API_RETRIES}...{RESET}")
                 time.sleep(RETRY_DELAY_SECONDS * (2**retry))
@@ -289,10 +289,9 @@ class TradingAnalyzer:
 
         if latest_short_ema > latest_long_ema and current_price > latest_short_ema: # Bullish alignment
             return 1.0 # Full bullish alignment
-        elif latest_short_ema < latest_long_ema and current_price < latest_short_ema: # Bearish alignment
+        if latest_short_ema < latest_long_ema and current_price < latest_short_ema: # Bearish alignment
             return -1.0 # Full bearish alignment
-        else:
-            return 0.0 # Neutral alignment
+        return 0.0 # Neutral alignment
 
 
     def _calculate_momentum(self, period: int = 10) -> pd.Series:
@@ -464,7 +463,7 @@ class TradingAnalyzer:
         macd_histogram = macd_df["histogram"]
         if prices.iloc[-2] > prices.iloc[-1] and macd_histogram.iloc[-2] < macd_histogram.iloc[-1]:
             return "bullish"
-        elif prices.iloc[-2] < prices.iloc[-1] and macd_histogram.iloc[-2] > macd_histogram.iloc[-1]:
+        if prices.iloc[-2] < prices.iloc[-1] and macd_histogram.iloc[-2] > macd_histogram.iloc[-1]:
             return "bearish"
         return None
 
@@ -811,63 +810,56 @@ def interpret_indicator(logger: logging.Logger, indicator_name: str, values: lis
         if indicator_name == "rsi":
             if values[-1] > 70:
                 return f"{NEON_RED}RSI:{RESET} Overbought ({values[-1]:.2f})"
-            elif values[-1] < 30:
+            if values[-1] < 30:
                 return f"{NEON_GREEN}RSI:{RESET} Oversold ({values[-1]:.2f})"
-            else:
-                return f"{NEON_YELLOW}RSI:{RESET} Neutral ({values[-1]:.2f})"
-        elif indicator_name == "mfi":
+            return f"{NEON_YELLOW}RSI:{RESET} Neutral ({values[-1]:.2f})"
+        if indicator_name == "mfi":
             if values[-1] > 80:
                 return f"{NEON_RED}MFI:{RESET} Overbought ({values[-1]:.2f})"
-            elif values[-1] < 20:
+            if values[-1] < 20:
                 return f"{NEON_GREEN}MFI:{RESET} Oversold ({values[-1]:.2f})"
-            else:
-                return f"{NEON_YELLOW}MFI:{RESET} Neutral ({values[-1]:.2f})"
-        elif indicator_name == "cci":
+            return f"{NEON_YELLOW}MFI:{RESET} Neutral ({values[-1]:.2f})"
+        if indicator_name == "cci":
             if values[-1] > 100:
                 return f"{NEON_RED}CCI:{RESET} Overbought ({values[-1]:.2f})"
-            elif values[-1] < -100:
+            if values[-1] < -100:
                 return f"{NEON_GREEN}CCI:{RESET} Oversold ({values[-1]:.2f})"
-            else:
-                return f"{NEON_YELLOW}CCI:{RESET} Neutral ({values[-1]:.2f})"
-        elif indicator_name == "wr":
+            return f"{NEON_YELLOW}CCI:{RESET} Neutral ({values[-1]:.2f})"
+        if indicator_name == "wr":
             if values[-1] < -80:
                 return f"{NEON_GREEN}Williams %R:{RESET} Oversold ({values[-1]:.2f})"
-            elif values[-1] > -20:
+            if values[-1] > -20:
                 return f"{NEON_RED}Williams %R:{RESET} Overbought ({values[-1]:.2f})"
-            else:
-                return f"{NEON_YELLOW}Williams %R:{RESET} Neutral ({values[-1]:.2f})"
-        elif indicator_name == "adx":
+            return f"{NEON_YELLOW}Williams %R:{RESET} Neutral ({values[-1]:.2f})"
+        if indicator_name == "adx":
             if values[0] > 25:
                 return f"{NEON_GREEN}ADX:{RESET} Trending ({values[0]:.2f})"
-            else:
-                return f"{NEON_YELLOW}ADX:{RESET} Ranging ({values[0]:.2f})"
-        elif indicator_name == "obv":
+            return f"{NEON_YELLOW}ADX:{RESET} Ranging ({values[0]:.2f})"
+        if indicator_name == "obv":
             return f"{NEON_BLUE}OBV:{RESET} {'Bullish' if values[-1] > values[-2] else 'Bearish' if values[-1] < values[-2] else 'Neutral'}"
-        elif indicator_name == "adi":
+        if indicator_name == "adi":
             return f"{NEON_BLUE}ADI:{RESET} {'Accumulation' if values[-1] > values[-2] else 'Distribution' if values[-1] < values[-2] else 'Neutral'}"
-        elif indicator_name == "mom":
+        if indicator_name == "mom":
             trend = values[0]["trend"]
             strength = values[0]["strength"]
             return f"{NEON_PURPLE}Momentum:{RESET} {trend} (Strength: {strength:.2f})"
-        elif indicator_name == "sma":
+        if indicator_name == "sma":
             return f"{NEON_YELLOW}SMA (10):{RESET} {values[0]:.2f}"
-        elif indicator_name == "psar":
+        if indicator_name == "psar":
             return f"{NEON_BLUE}PSAR:{RESET} {values[-1]:.4f} (Last Value)"
-        elif indicator_name == "fve":
+        if indicator_name == "fve":
             return f"{NEON_BLUE}FVE:{RESET} {values[-1]:.0f} (Last Value)"
-        elif indicator_name == "macd":
+        if indicator_name == "macd":
             macd_values = values[-1]
             if len(macd_values) == 3:
                 macd_line, signal_line, histogram = macd_values[0], macd_values[1], macd_values[2]
                 return f"{NEON_GREEN}MACD:{RESET} MACD={macd_line:.2f}, Signal={signal_line:.2f}, Histogram={histogram:.2f}"
-            else:
-                return f"{NEON_RED}MACD:{RESET} Calculation issue."
-        elif indicator_name == "stoch_rsi_vals": # Stoch RSI interpretation is handled directly in analyze function for K/D lines
+            return f"{NEON_RED}MACD:{RESET} Calculation issue."
+        if indicator_name == "stoch_rsi_vals": # Stoch RSI interpretation is handled directly in analyze function for K/D lines
             return None # Interpretation done directly in analyze function
-        elif indicator_name == "ema_alignment": # EMA Alignment interpretation is handled directly in analyze function
+        if indicator_name == "ema_alignment": # EMA Alignment interpretation is handled directly in analyze function
             return None
-        else:
-            return f"{NEON_YELLOW}{indicator_name.upper()}:{RESET} No interpretation available."
+        return f"{NEON_YELLOW}{indicator_name.upper()}:{RESET} No interpretation available."
     except (TypeError, IndexError) as e:
         logger.error(f"Error interpreting {indicator_name}: {e}")
         return f"{NEON_RED}{indicator_name.upper()}:{RESET} Interpretation error."

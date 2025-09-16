@@ -1,11 +1,10 @@
-"""
-Logger setup for the Bybit Trading Bot.
+"""Logger setup for the Bybit Trading Bot.
 
 This module provides a centralized logging configuration.
 """
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any
 
 from config import LOG_FILE, LOG_LEVEL
 
@@ -35,12 +34,12 @@ def log_exception(logger_instance: logging.Logger, message: str, exc: Exception)
     """Logs an exception with a custom message and traceback."""
     logger_instance.exception(f"{message}: {exc}")
 
-def log_metrics(logger_instance: logging.Logger, title: str, metrics: Dict[str, Any]):
+def log_metrics(logger_instance: logging.Logger, title: str, metrics: dict[str, Any]):
     """Logs a dictionary of metrics with a title."""
     metrics_str = ", ".join([f"{k}={v}" for k, v in metrics.items()])
     logger_instance.info(f"📊 {title}: {metrics_str}")
 
-def log_trade(logger_instance: logging.Logger, title: str, trade_info: Dict[str, Any]):
+def log_trade(logger_instance: logging.Logger, title: str, trade_info: dict[str, Any]):
     """Logs trade information."""
     trade_str = ", ".join([f"{k}={v}" for k, v in trade_info.items()])
     logger_instance.info(f"TRADE - {title}: {trade_str}")

@@ -2,11 +2,8 @@
 # config.py
 
 import os
-import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
-from datetime import timedelta # Used for kline offset calculation
-from zoneinfo import ZoneInfo # For consistent timezone objects
+
 
 @dataclass
 class Config:
@@ -24,7 +21,7 @@ class Config:
     LEVERAGE: float = 10.0               # Desired leverage for derivatives
     ORDER_SIZE_USD_VALUE: float = 100.0  # Desired order value in USD (e.g., 100 USDT). Used for market making or fixed size entry.
     SPREAD_PERCENTAGE: float = 0.0005    # 0.05% spread for market making (0.0005 for 0.05%)
-    
+
     # --- Risk Management ---
     RISK_PER_TRADE_PERCENT: float = 1.0  # 1% of account balance risked per trade
     MAX_POSITION_SIZE_QUOTE_VALUE: float = 5000.0 # Max allowed absolute position size in quote currency value (e.g., USDT)
@@ -73,7 +70,7 @@ class Config:
     # --- Logger Settings ---
     LOG_LEVEL: str = "INFO"                      # DEBUG, INFO, WARNING, ERROR, CRITICAL
     LOG_FILE_PATH: str = "bot_logs/trading_bot.log"
-    
+
     # --- Advanced Data Structures ---
     USE_SKIP_LIST_FOR_ORDERBOOK: bool = True # True for OptimizedSkipList, False for EnhancedHeap
 
@@ -83,7 +80,7 @@ class Config:
     # --- Performance Metrics Export ---
     TRADE_HISTORY_CSV: str = "bot_logs/trade_history.csv"
     DAILY_METRICS_CSV: str = "bot_logs/daily_metrics.csv"
-    
+
     # --- UI/Colorama Settings ---
     NEON_GREEN: str = '\033[92m'
     NEON_BLUE: str = '\033[96m'
@@ -92,7 +89,7 @@ class Config:
     NEON_RED: str = '\033[91m'
     NEON_CYAN: str = '\033[96m'
     RESET: str = '\033[0m'
-    INDICATOR_COLORS: Dict[str, str] = field(default_factory=lambda: {
+    INDICATOR_COLORS: dict[str, str] = field(default_factory=lambda: {
         "SMA_10": '\033[94m', "SMA_Long": '\033[34m', "EMA_Short": '\033[95m',
         "EMA_Long": '\033[35m', "ATR": '\033[93m', "RSI": '\033[92m',
         "StochRSI_K": '\033[96m', "StochRSI_D": '\033[36m', "BB_Upper": '\033[91m',
@@ -115,7 +112,7 @@ class Config:
     GEMINI_RATE_LIMIT_DELAY_SECONDS: float = 1.0
     GEMINI_CACHE_TTL_SECONDS: int = 300
     GEMINI_DAILY_API_LIMIT: int = 1000
-    GEMINI_SIGNAL_WEIGHTS: Dict[str, float] = field(default_factory=lambda: {"technical": 0.6, "ai": 0.4})
+    GEMINI_SIGNAL_WEIGHTS: dict[str, float] = field(default_factory=lambda: {"technical": 0.6, "ai": 0.4})
     GEMINI_LOW_AI_CONFIDENCE_THRESHOLD: int = 20
     GEMINI_CHART_IMAGE_ANALYSIS_ENABLED: bool = False # Requires matplotlib and can be API intensive
     GEMINI_CHART_IMAGE_FREQUENCY_LOOPS: int = 100 # Analyze every N loops

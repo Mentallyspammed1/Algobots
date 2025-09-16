@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Bybit Supertrend Trading Bot - Streamlined Version (v2.0)
+"""Bybit Supertrend Trading Bot - Streamlined Version (v2.0)
 
 This script is a self-contained, asynchronous trading bot for Bybit that
 implements a Supertrend strategy. It is designed for clarity and ease of
@@ -33,9 +32,8 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_DOWN, getcontext
+from decimal import ROUND_DOWN, Decimal, getcontext
 from enum import Enum
-from typing import Dict, List, Optional, Any
 
 import numpy as np
 import pandas as pd
@@ -83,7 +81,7 @@ class SupertrendBot:
         self.config = config
         self.session = HTTP(testnet=config.testnet, api_key=config.api_key, api_secret=config.api_secret)
         self.ws = WebSocket(testnet=config.testnet, channel_type=config.category, api_key=config.api_key, api_secret=config.api_secret)
-        
+
         self.market_info = None
         self.market_data = pd.DataFrame()
         self.position = None
@@ -168,10 +166,10 @@ class SupertrendBot:
                     df.iloc[current, df.columns.get_loc('lowerband')] = df.iloc[previous]['lowerband']
                 if not df.iloc[current]['in_uptrend'] and df.iloc[current]['upperband'] > df.iloc[previous]['upperband']:
                     df.iloc[current, df.columns.get_loc('upperband')] = df.iloc[previous]['upperband']
-        
+
         df['supertrend'] = np.where(df['in_uptrend'], df['lowerband'], df['upperband'])
 
-    async def place_order(self, side: OrderSide, quantity: float, stop_loss: Optional[float] = None):
+    async def place_order(self, side: OrderSide, quantity: float, stop_loss: float | None = None):
         """Places a market order."""
         try:
             qty_str = str(Decimal(str(quantity)).quantize(self.market_info['lot_size'], rounding=ROUND_DOWN))
@@ -182,7 +180,7 @@ class SupertrendBot:
             if stop_loss:
                 params["stopLoss"] = str(Decimal(str(stop_loss)).quantize(self.market_info['tick_size'], rounding=ROUND_DOWN))
                 params["slTriggerBy"] = "LastPrice"
-            
+
             logger.info(f"Placing order: {params}")
             resp = self.session.place_order(**params)
             if resp['retCode'] == 0:
@@ -225,7 +223,7 @@ class SupertrendBot:
         if self.is_processing_signal:
             return
         self.is_processing_signal = True
-        
+
         try:
             self._calculate_supertrend()
             if len(self.market_data) < 2:
@@ -233,7 +231,7 @@ class SupertrendBot:
 
             current = self.market_data.iloc[-1]
             previous = self.market_data.iloc[-2]
-            
+
             signal_action = None
             stop_loss = None
 
@@ -269,15 +267,15 @@ class SupertrendBot:
         try:
             data = message['data'][0]
             new_candle = pd.DataFrame([{'time': pd.to_datetime(int(data['start']), unit='ms'),
-                                        'open': float(data['open']), 'high': float(data['high']), 
-                                        'low': float(data['low']), 'close': float(data['close']), 
+                                        'open': float(data['open']), 'high': float(data['high']),
+                                        'low': float(data['low']), 'close': float(data['close']),
                                         'volume': float(data['volume']), 'turnover': float(data['turnover'])}]).set_index('time')
-            
+
             if new_candle.index[0] in self.market_data.index:
                 self.market_data.loc[new_candle.index[0]] = new_candle.iloc[0]
             else:
                 self.market_data = pd.concat([self.market_data, new_candle]).iloc[-self.config.lookback_periods:]
-            
+
             if data['confirm']: # Only run on confirmed candles
                 asyncio.create_task(self.run_strategy_cycle())
         except Exception as e:
@@ -292,11 +290,11 @@ class SupertrendBot:
         """Start the trading bot."""
         self.is_running = True
         await self.initialize()
-        
+
         self.ws.kline_stream(callback=self._handle_kline, symbol=self.config.symbol, interval=self.config.timeframe)
         self.ws.position_stream(callback=self._handle_private)
         self.ws.wallet_stream(callback=self._handle_private)
-        
+
         logger.info("Bot started. Waiting for signals...")
         while self.is_running:
             await asyncio.sleep(1)

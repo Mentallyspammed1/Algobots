@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
 
-import pandas as pd
-import pandas_ta as ta
+import datetime
+import json
 import logging
 import os
-import datetime
-import pytz
-import numpy as np
-import uuid
-import sys
-import json
-import sqlite3
 import pickle
-from typing import Optional, Tuple, Dict, Any, List, Union
-from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, asdict
-from enum import Enum
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import TimeSeriesSplit
-import optuna
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import sqlite3
+import uuid
 import warnings
+from dataclasses import asdict, dataclass
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from enum import Enum
+from typing import Any
+
+import matplotlib.pyplot as plt
+import numpy as np
+import optuna
+import pandas as pd
+import pandas_ta as ta
+from sklearn.model_selection import TimeSeriesSplit
 
 # --- Suppress common warnings for cleaner output ---
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -47,15 +44,14 @@ from config import BOT_CONFIG
 
 # Import necessary components from ehlerssupertrend.py
 from ehlerssupertrend import (
-    ColoredFormatter,
     Bybit,
-    get_current_time,
-    is_market_open,
-    send_termux_toast,
-    calculate_pnl,
+    ColoredFormatter,
     calculate_ehl_supertrend_indicators,
-    generate_ehl_supertrend_signals
+    calculate_pnl,
+    generate_ehl_supertrend_signals,
+    send_termux_toast,
 )
+
 
 # --- Enhanced Logging Setup ---
 class OptimizationLogger:
@@ -152,7 +148,7 @@ class OptimizationDatabase:
         with self.conn:
             self.conn.execute("CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, symbol TEXT, timeframe TEXT, start TEXT, end TEXT, params TEXT, metrics TEXT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
             self.conn.execute("CREATE TABLE IF NOT EXISTS backtests (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, params TEXT, metrics TEXT, FOREIGN KEY (run_id) REFERENCES runs (id))")
-    def save_run(self, data: Dict) -> str:
+    def save_run(self, data: dict) -> str:
         run_id = str(uuid.uuid4())
         with self.conn:
             self.conn.execute("INSERT INTO runs (id, symbol, timeframe, start, end, params, metrics) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -163,7 +159,7 @@ class OptimizationDatabase:
 class AdvancedBacktester:
     def __init__(self, initial_capital: float = 10000, commission_rate: float = 0.0006, slippage_pct: float = 0.0005):
         self.initial_capital = initial_capital; self.commission_rate = commission_rate; self.slippage_pct = slippage_pct
-    def calculate_metrics(self, trades: List[Dict], equity_curve: List[float]) -> PerformanceMetrics:
+    def calculate_metrics(self, trades: list[dict], equity_curve: list[float]) -> PerformanceMetrics:
         if not trades: return PerformanceMetrics(*[0]*25)
         pnls = np.array([t['pnl'] for t in trades]); wins = pnls[pnls > 0]; losses = pnls[pnls < 0]
         num_trades = len(trades); win_rate = len(wins) / num_trades if num_trades > 0 else 0
@@ -193,7 +189,7 @@ class AdvancedBacktester:
             kelly_criterion=kelly, annual_return=annual_return, annual_volatility=np.std(returns) * np.sqrt(252) if len(returns) > 0 else 0,
             skewness=_calculate_skewness(returns), kurtosis=_calculate_kurtosis(returns)
         )
-    def run_backtest(self, df: pd.DataFrame, params: Dict, symbol: str, price_precision: int, qty_precision: int) -> Tuple[PerformanceMetrics, List[Dict], List[float]]:
+    def run_backtest(self, df: pd.DataFrame, params: dict, symbol: str, price_precision: int, qty_precision: int) -> tuple[PerformanceMetrics, list[dict], list[float]]:
         capital = self.initial_capital; equity_curve = [capital]; active_trades = {}; closed_trades = []
         temp_config = {**BOT_CONFIG, **params}
         min_candles = max(100, temp_config.get("EST_SLOW_LENGTH", 50))
@@ -228,7 +224,7 @@ class AdvancedBacktester:
 class OptimizationEngine:
     def __init__(self, backtester: AdvancedBacktester): self.backtester = backtester
     def _run_single(self, args): return self.backtester.run_backtest(*args)
-    def bayesian(self, df, space, symbol, pp, qp, objective='sharpe_ratio', n_trials=100) -> Tuple[Dict, PerformanceMetrics, List[Dict]]:
+    def bayesian(self, df, space, symbol, pp, qp, objective='sharpe_ratio', n_trials=100) -> tuple[dict, PerformanceMetrics, list[dict]]:
         def objective_func(trial):
             params = {p: trial.suggest_int(p, v[0], v[1]) if isinstance(v[0], int) else trial.suggest_float(p, v[0], v[1]) for p, v in space.items()}
             metrics, _, _ = self.backtester.run_backtest(df, params, symbol, pp, qp)
@@ -241,7 +237,7 @@ class OptimizationEngine:
 # --- 7. Walk-Forward Analysis ---
 class WalkForwardAnalyzer:
     def __init__(self, optimizer: OptimizationEngine): self.optimizer = optimizer
-    def analyze(self, df, param_grid, symbol, pp, qp, n_splits=5) -> List[Dict]:
+    def analyze(self, df, param_grid, symbol, pp, qp, n_splits=5) -> list[dict]:
         results = []; tscv = TimeSeriesSplit(n_splits=n_splits)
         for fold, (train_idx, test_idx) in enumerate(tscv.split(df)):
             opt_logger.info(f"Walk-forward fold {fold + 1}/{n_splits}")
@@ -253,7 +249,7 @@ class WalkForwardAnalyzer:
 
 # --- 8. Notification Manager ---
 class NotificationManager:
-    def format_html_report(self, run_data: Dict) -> str:
+    def format_html_report(self, run_data: dict) -> str:
         metrics = run_data['best_metrics']
         params = run_data['best_params']
         metrics_html = "".join([f"<tr><td style='padding: 5px; font-weight: bold;'>{k.replace('_', ' ').title()}</td><td style='padding: 5px;'>{v:.4f}</td></tr>" for k, v in asdict(metrics).items()])
@@ -279,7 +275,7 @@ class NotificationManager:
 # --- 9. Visualization Suite ---
 class VisualizationSuite:
     def __init__(self, report_dir="optimization_reports"): self.report_dir = report_dir; os.makedirs(report_dir, exist_ok=True)
-    def generate_report(self, run_data: Dict, equity_curve: List[float], trades: List[Dict]):
+    def generate_report(self, run_data: dict, equity_curve: list[float], trades: list[dict]):
         plt.style.use('cyberpunk')
         fig, axes = plt.subplots(2, 1, figsize=(15, 12), gridspec_kw={'height_ratios': [3, 1]})
         # Equity Curve
@@ -305,7 +301,7 @@ class MainOrchestrator:
     def _get_precisions(self):
         try: info = Bybit(symbol=self.symbol).get_instrument_info(); return info['price_scale'], info['qty_step']
         except: opt_logger.warning("Could not fetch precisions, using defaults."); return 2, 3
-    def run(self, mode: str, param_space: Dict, n_trials: int = 100):
+    def run(self, mode: str, param_space: dict, n_trials: int = 100):
         start_time = datetime.datetime.now()
         opt_logger.info(f"Starting {mode} optimization for {self.symbol}...")
         if mode == 'bayesian':
@@ -316,7 +312,7 @@ class MainOrchestrator:
             results = wf_analyzer.analyze(self.df, param_space, self.symbol, self.price_prec, self.qty_prec)
             opt_logger.info(f"Walk-forward results:\n{json.dumps(results, indent=2)}"); return
         else: raise ValueError("Invalid mode specified.")
-        
+
         run_data = {'symbol': self.symbol, 'timeframe': self.timeframe, 'start_date': self.df.index.min().isoformat(), 'end_date': self.df.index.max().isoformat(),
                     'best_params': best_params, 'best_metrics': best_metrics}
         self.db.save_run(run_data)
@@ -345,13 +341,13 @@ if __name__ == "__main__":
     try:
         if not os.path.exists(DATA_FILE_PATH):
             raise FileNotFoundError(f"Data file not found at {DATA_FILE_PATH}. Please download data first.")
-        
+
         orchestrator = MainOrchestrator(
             symbol=SYMBOL_TO_OPTIMIZE,
             timeframe=TIMEFRAME,
             data_path=DATA_FILE_PATH
         )
-        
+
         # --- CHOOSE YOUR OPTIMIZATION MODE ---
         # orchestrator.run(mode='bayesian', param_space=PARAMETER_SPACE, n_trials=200)
         orchestrator.run(mode='walk_forward', param_space=PARAMETER_SPACE)

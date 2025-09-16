@@ -20,7 +20,6 @@ from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-
 SKLEARN_AVAILABLE = False
 
 getcontext().prec = 28
@@ -415,20 +414,19 @@ class BybitClient:
             )
             self.logger.debug(f"GET Request: {url}?{query_string}")
             return self.session.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
-        else:
-            json_params = json.dumps(params) if params else ""
-            param_str = timestamp + self.api_key + recv_window + json_params
-            signature = self._generate_signature(param_str)
-            headers.update(
-                {
-                    "X-BAPI-API-KEY": self.api_key,
-                    "X-BAPI-TIMESTAMP": timestamp,
-                    "X-BAPI-SIGN": signature,
-                    "X-BAPI-RECV-WINDOW": recv_window,
-                }
-            )
-            self.logger.debug(f"POST Request: {url} with payload {json_params}")
-            return self.session.post(url, json=params, headers=headers, timeout=REQUEST_TIMEOUT)
+        json_params = json.dumps(params) if params else ""
+        param_str = timestamp + self.api_key + recv_window + json_params
+        signature = self._generate_signature(param_str)
+        headers.update(
+            {
+                "X-BAPI-API-KEY": self.api_key,
+                "X-BAPI-TIMESTAMP": timestamp,
+                "X-BAPI-SIGN": signature,
+                "X-BAPI-RECV-WINDOW": recv_window,
+            }
+        )
+        self.logger.debug(f"POST Request: {url} with payload {json_params}")
+        return self.session.post(url, json=params, headers=headers, timeout=REQUEST_TIMEOUT)
 
     def _handle_api_response(self, response: requests.Response) -> dict | None:
         try:
@@ -1850,14 +1848,14 @@ class TradingAnalyzer:
             and prev_bar["close"] < prev_bar["open"]
         ):
             return "Bullish Engulfing"
-        elif (
+        if (
             current_bar["open"] > prev_bar["close"]
             and current_bar["close"] < prev_bar["open"]
             and current_bar["close"] < current_bar["open"]
             and prev_bar["close"] > prev_bar["open"]
         ):
             return "Bearish Engulfing"
-        elif (
+        if (
             current_bar["close"] > current_bar["open"]
             and abs(current_bar["close"] - current_bar["open"])
             <= (current_bar["high"] - current_bar["low"]) * 0.3
@@ -1867,7 +1865,7 @@ class TradingAnalyzer:
             <= 0.5 * abs(current_bar["close"] - current_bar["open"])
         ):
             return "Bullish Hammer"
-        elif (
+        if (
             current_bar["close"] < current_bar["open"]
             and abs(current_bar["close"] - current_bar["open"])
             <= (current_bar["high"] - current_bar["low"]) * 0.3
@@ -1963,7 +1961,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"[{self.symbol}] MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -1980,7 +1978,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             temp_analyzer = TradingAnalyzer(
                 higher_tf_df, self.config, self.logger, self.symbol
             )

@@ -1,13 +1,14 @@
-import optuna
-import pandas as pd
-from datetime import datetime
 import logging
-import numpy as np
+from datetime import datetime
 from decimal import Decimal, getcontext
 
-# Assuming stupdated2.py and backtester.py are in the same directory
-from stupdated2 import EhlersSuperTrendBot, Config, OrderType
+import optuna
+import pandas as pd
+
 from backtester import BybitHistoricalDataDownloader
+
+# Assuming stupdated2.py and backtester.py are in the same directory
+from stupdated2 import Config, EhlersSuperTrendBot
 
 # Set precision for Decimal
 getcontext().prec = 28
@@ -24,7 +25,7 @@ class BotBacktester:
     def __init__(self, config: Config, historical_data: pd.DataFrame):
         self.config = config
         self.historical_data = historical_data
-        
+
         # --- Isolate the bot from the network ---
         self.bot = EhlersSuperTrendBot(config)
         self.bot.api_call = self.mock_api_call
@@ -48,7 +49,6 @@ class BotBacktester:
 
     def mock_load_all_instruments(self):
         logger.debug("Mocked loading of all instruments.")
-        pass
 
     def mock_get_specs(self, symbol):
         """Return mock instrument specs to avoid API calls."""
@@ -68,7 +68,7 @@ class BotBacktester:
 
         self.bot.market_data = self.historical_data
         self.bot.market_data = self.bot.calculate_indicators(self.bot.market_data)
-        
+
         if self.bot.market_data.empty:
             logger.error("Indicator calculation resulted in empty dataframe. Aborting backtest.")
             return 0.0
@@ -81,7 +81,7 @@ class BotBacktester:
 
             if not self.position:
                 self._check_entry_conditions(i)
-            
+
             self.equity_curve.append(self.capital)
 
         return self._calculate_performance()
@@ -99,7 +99,7 @@ class BotBacktester:
                 exit_price, exit_reason = self.position['stop_loss'], 'SL'
             elif candle['low'] <= float(self.position['take_profit']):
                 exit_price, exit_reason = self.position['take_profit'], 'TP'
-        
+
         if not exit_price and ( (self.position['side'] == 'Buy' and candle['supertrend_direction'] == -1) or (self.position['side'] == 'Sell' and candle['supertrend_direction'] == 1) ):
             exit_price, exit_reason = candle['close'], 'Signal Reversal'
 

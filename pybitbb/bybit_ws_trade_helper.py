@@ -1,11 +1,12 @@
 l# bybit_ws_trade_helper.py
 import logging
-import time
 import threading
-from typing import Dict, Any, Optional, Callable, List, Union
+import time
+from collections.abc import Callable
+from typing import Any
 
+from pybit.exceptions import BybitWebsocketError  # Specific WebSocket error
 from pybit.unified_trading import WebSocketTrading
-from pybit.exceptions import BybitWebsocketError # Specific WebSocket error
 
 # Configure logging for the module
 logging.basicConfig(
@@ -15,15 +16,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BybitWsTradeHelper:
-    """
-    A helper class for high-frequency trading operations (orders and positions)
+    """A helper class for high-frequency trading operations (orders and positions)
     via Pybit's WebSocket Trading interface. Offers lower latency compared to HTTP.
     All operations are asynchronous and rely on callback functions for responses.
     """
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = False, recv_window: int = 5000):
-        """
-        Initializes the BybitWsTradeHelper.
+        """Initializes the BybitWsTradeHelper.
 
         :param api_key: Your Bybit API key.
         :param api_secret: Your Bybit API secret.
@@ -39,13 +38,12 @@ class BybitWsTradeHelper:
         self.api_secret = api_secret
         self.testnet = testnet
         self.recv_window = recv_window
-        self.ws_trading_client: Optional[WebSocketTrading] = None
+        self.ws_trading_client: WebSocketTrading | None = None
         self._connection_lock = threading.Lock() # To manage connection state safely
         logger.info(f"BybitWsTradeHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
 
     def connect(self) -> bool:
-        """
-        Establishes the WebSocket Trading connection.
+        """Establishes the WebSocket Trading connection.
         This method is blocking until the connection is attempted.
 
         :return: True if the connection client was successfully initialized, False otherwise.
@@ -75,8 +73,7 @@ class BybitWsTradeHelper:
                 return False
 
     def disconnect(self) -> None:
-        """
-        Closes the WebSocket Trading connection.
+        """Closes the WebSocket Trading connection.
         """
         with self._connection_lock:
             if self.ws_trading_client:
@@ -88,20 +85,19 @@ class BybitWsTradeHelper:
                 logger.info("WebSocket Trading client not active.")
 
     def is_connected(self) -> bool:
-        """
-        Checks if the WebSocket Trading client is currently connected.
+        """Checks if the WebSocket Trading client is currently connected.
 
         :return: True if connected, False otherwise.
         """
         with self._connection_lock:
             return self.ws_trading_client is not None and self.ws_trading_client.is_connected()
 
-    def _validate_order_params(self, category: str, symbol: str, side: str, order_type: str, qty: str, price: Optional[str]) -> bool:
+    def _validate_order_params(self, category: str, symbol: str, side: str, order_type: str, qty: str, price: str | None) -> bool:
         """Internal validation for common order parameters."""
         if not all(isinstance(arg, str) and arg for arg in [category, symbol, side, order_type, qty]):
             logger.error(f"Invalid or empty string provided for required order parameters. Category: '{category}', Symbol: '{symbol}', Side: '{side}', OrderType: '{order_type}', Qty: '{qty}'")
             return False
-        
+
         try:
             float(qty)
             if price is not None:
@@ -115,20 +111,19 @@ class BybitWsTradeHelper:
             return False
         if order_type == 'Market' and price is not None:
             logger.warning("Price is ignored for Market orders but was provided.")
-        
+
         return True
 
     def place_ws_order(self,
-                       callback: Callable[[Dict[str, Any]], None],
+                       callback: Callable[[dict[str, Any]], None],
                        category: str,
                        symbol: str,
                        side: str,
                        order_type: str,
                        qty: str,
-                       price: Optional[str] = None,
+                       price: str | None = None,
                        **kwargs) -> None:
-        """
-        Places a new order via WebSocket. The response will be sent to the provided callback.
+        """Places a new order via WebSocket. The response will be sent to the provided callback.
 
         :param callback: A callable function (e.g., `def handle_response(message: Dict[str, Any]): ...`)
                          to process the API response.
@@ -146,8 +141,8 @@ class BybitWsTradeHelper:
         if not self._validate_order_params(category, symbol, side, order_type, qty, price):
             logger.error(f"Invalid parameters for placing WS order for {symbol}.")
             return
-        
-        request_params: Dict[str, Any] = {
+
+        request_params: dict[str, Any] = {
             'category': category,
             'symbol': symbol,
             'side': side,
@@ -167,16 +162,15 @@ class BybitWsTradeHelper:
             logger.exception(f"Unexpected error placing WS order for {symbol}: {e}")
 
     def amend_ws_order(self,
-                       callback: Callable[[Dict[str, Any]], None],
+                       callback: Callable[[dict[str, Any]], None],
                        category: str,
                        symbol: str,
-                       order_id: Optional[str] = None,
-                       order_link_id: Optional[str] = None,
-                       new_qty: Optional[str] = None,
-                       new_price: Optional[str] = None,
+                       order_id: str | None = None,
+                       order_link_id: str | None = None,
+                       new_qty: str | None = None,
+                       new_price: str | None = None,
                        **kwargs) -> None:
-        """
-        Amends an existing order via WebSocket by its `order_id` or `order_link_id`.
+        """Amends an existing order via WebSocket by its `order_id` or `order_link_id`.
         The response will be sent to the provided callback.
 
         :param callback: A callable function to process the API response.
@@ -207,7 +201,7 @@ class BybitWsTradeHelper:
             logger.error(f"Invalid numerical format for new_qty ('{new_qty}') or new_price ('{new_price}').")
             return
 
-        request_params: Dict[str, Any] = {
+        request_params: dict[str, Any] = {
             'category': category,
             'symbol': symbol,
         }
@@ -230,13 +224,12 @@ class BybitWsTradeHelper:
             logger.exception(f"Unexpected error amending WS order for {symbol}: {e}")
 
     def cancel_ws_order(self,
-                        callback: Callable[[Dict[str, Any]], None],
+                        callback: Callable[[dict[str, Any]], None],
                         category: str,
                         symbol: str,
-                        order_id: Optional[str] = None,
-                        order_link_id: Optional[str] = None) -> None:
-        """
-        Cancels an active order via WebSocket by its `order_id` or `order_link_id`.
+                        order_id: str | None = None,
+                        order_link_id: str | None = None) -> None:
+        """Cancels an active order via WebSocket by its `order_id` or `order_link_id`.
         The response will be sent to the provided callback.
 
         :param callback: A callable function to process the API response.
@@ -255,7 +248,7 @@ class BybitWsTradeHelper:
             logger.error("Either 'order_id' or 'order_link_id' must be provided to cancel an order.")
             return
 
-        request_params: Dict[str, Any] = {
+        request_params: dict[str, Any] = {
             'category': category,
             'symbol': symbol,
         }
@@ -273,11 +266,10 @@ class BybitWsTradeHelper:
             logger.exception(f"Unexpected error cancelling WS order for {symbol}: {e}")
 
     def place_batch_ws_order(self,
-                             callback: Callable[[Dict[str, Any]], None],
+                             callback: Callable[[dict[str, Any]], None],
                              category: str,
-                             requests: List[Dict[str, Any]]) -> None:
-        """
-        Places multiple orders in a single batch request via WebSocket.
+                             requests: list[dict[str, Any]]) -> None:
+        """Places multiple orders in a single batch request via WebSocket.
         Each item in 'requests' list should be a dictionary of order parameters.
         The response will be sent to the provided callback.
 
@@ -310,11 +302,10 @@ class BybitWsTradeHelper:
             logger.exception(f"Unexpected error placing WS batch orders: {e}")
 
     def amend_batch_ws_order(self,
-                             callback: Callable[[Dict[str, Any]], None],
+                             callback: Callable[[dict[str, Any]], None],
                              category: str,
-                             requests: List[Dict[str, Any]]) -> None:
-        """
-        Amends multiple orders in a single batch request via WebSocket.
+                             requests: list[dict[str, Any]]) -> None:
+        """Amends multiple orders in a single batch request via WebSocket.
         Each item in 'requests' list should be a dictionary with orderId/orderLinkId and new parameters.
         The response will be sent to the provided callback.
 
@@ -357,11 +348,10 @@ class BybitWsTradeHelper:
             logger.exception(f"Unexpected error amending WS batch orders: {e}")
 
     def cancel_batch_ws_order(self,
-                              callback: Callable[[Dict[str, Any]], None],
+                              callback: Callable[[dict[str, Any]], None],
                               category: str,
-                              requests: List[Dict[str, Any]]) -> None:
-        """
-        Cancels multiple orders in a single batch request via WebSocket.
+                              requests: list[dict[str, Any]]) -> None:
+        """Cancels multiple orders in a single batch request via WebSocket.
         Each item in 'requests' list should be a dictionary with orderId/orderLinkId.
         The response will be sent to the provided callback.
 
@@ -410,7 +400,6 @@ if __name__ == "__main__":
         logger.error("Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_ws_trade_helper.py example.")
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
-        pass
 
     ws_trade_helper = BybitWsTradeHelper(API_KEY, API_SECRET, testnet=USE_TESTNET)
 
@@ -418,7 +407,7 @@ if __name__ == "__main__":
     CATEGORY = "linear"
 
     # Define a callback function to handle responses from WebSocket trading operations
-    def handle_ws_response(message: Dict[str, Any]) -> None:
+    def handle_ws_response(message: dict[str, Any]) -> None:
         op = message.get('op')
         ret_code = message.get('retCode')
         ret_msg = message.get('retMsg')
@@ -487,7 +476,7 @@ if __name__ == "__main__":
             time.sleep(1) # Allow time for response
 
             # --- Cancel a batch of orders via WebSocket (using client_order_ids from the batch) ---
-            print(f"\n--- Cancelling Batch Orders via WS ---")
+            print("\n--- Cancelling Batch Orders via WS ---")
             cancel_batch_requests = [
                 {'symbol': SYMBOL, 'orderLinkId': batch_requests[0]['orderLinkId']},
                 {'symbol': SYMBOL, 'orderLinkId': batch_requests[1]['orderLinkId']}
@@ -498,7 +487,7 @@ if __name__ == "__main__":
         else:
             logger.error("Failed to connect to WebSocket Trading. Skipping operations.")
 
-    except Exception as e:
+    except Exception:
         logger.exception("An error occurred in the main execution block.")
     finally:
         ws_trade_helper.disconnect()

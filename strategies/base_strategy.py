@@ -1,5 +1,4 @@
-"""
-Base class for all trading strategies.
+"""Base class for all trading strategies.
 
 This abstract class defines the interface that all strategy classes must implement.
 """
@@ -9,16 +8,14 @@ import pandas as pd
 
 
 class BaseStrategy(ABC):
-    """
-    Abstract base class for a trading strategy.
+    """Abstract base class for a trading strategy.
     """
     def __init__(self, strategy_name: str):
         self.name = strategy_name
 
     @abstractmethod
     def generate_signals(self, dataframe: pd.DataFrame) -> pd.DataFrame:
-        """
-        Generates trading signals based on the input data.
+        """Generates trading signals based on the input data.
 
         Args:
             dataframe (pd.DataFrame): A DataFrame containing market data (OHLCV).

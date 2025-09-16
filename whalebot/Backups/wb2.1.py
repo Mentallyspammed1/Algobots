@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 import time
-import urllib.parse
 import warnings
 from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
@@ -24,9 +23,7 @@ import pandas as pd
 import pandas_ta as ta
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
-
 from pybit.unified_trading import HTTP
-from pybit.exceptions import FailedRequestError, InvalidRequestError
 
 # Suppress warnings from libraries like pandas_ta
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -628,7 +625,7 @@ async def set_trailing_stop(
         "positionIdx": position_idx,
         "triggerBy": trailing_stop_trigger_by,
     }
-    
+
     # We also need to specify a stopLoss here if we are setting a specific price based stop.
     # However, for trailing stop, we're usually updating a dynamic level.
     # Bybit API docs for set-trading-stop indicate 'trailingStop' directly.
@@ -832,10 +829,10 @@ class PositionManager:
         # Quantity = (Risk Amount / (ATR * ATR_Multiple)) / Price
         # Or more accurately, use (Risk Amount / Stop Loss Pips) * Leverage
         # Here we follow the simpler risk_amount / stop_loss_distance_usd approach for quantity.
-        
+
         # Calculate quantity based on risk amount and stop loss distance
         order_qty_base = risk_amount / stop_loss_distance_usd
-        
+
         # Adjust for leverage: the 'size' on Bybit is the actual quantity you're trading.
         # The margin required is what's affected by leverage.
         # So, the order_qty_base is the actual quantity to trade for the given risk.
@@ -972,11 +969,10 @@ class PositionManager:
             }
             self.open_positions[self.symbol] = position_info # Track the position locally
             return position_info
-        else:
-            self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Failed to place {signal} order. Check API logs for details.{RESET}"
-            )
-            return None
+        self.logger.error(
+            f"{NEON_RED}[{self.symbol}] Failed to place {signal} order. Check API logs for details.{RESET}"
+        )
+        return None
 
     async def _reconcile_positions_with_exchange(self, time_offset_ms: int = 0) -> None:
         """Reconcile locally tracked positions with actual open positions on the exchange."""
@@ -1014,9 +1010,9 @@ class PositionManager:
                         local_pos["current_trailing_sl"] = Decimal(ex_pos.get("trailingStop", str(local_pos["stop_loss"])))
                         if Decimal(ex_pos.get("trailingStop", "0")) > 0:
                             local_pos["is_trailing_activated"] = True
-                        
+
                         # Store bybit position ID if available, not the orderId from initial placement
-                        local_pos["bybit_position_id"] = ex_pos.get("positionId") 
+                        local_pos["bybit_position_id"] = ex_pos.get("positionId")
                         self.open_positions[symbol] = local_pos
                         break
                 if not found_on_exchange:
@@ -1051,7 +1047,7 @@ class PositionManager:
                     "bybit_position_id": ex_pos.get("positionId"),
                 }
                 self.open_positions[ex_pos["symbol"]] = new_pos_info
-        
+
         self.logger.info(f"[{self.symbol}] Positions reconciled. Currently tracking {len(self.open_positions)} open positions locally.")
 
 
@@ -1086,13 +1082,13 @@ class PositionManager:
                     unrealized_pnl = (current_price - entry_price) * qty
                 elif side == "SELL":
                     unrealized_pnl = (entry_price - current_price) * qty
-                
+
                 # Activate/Update Trailing Stop Logic (if enabled and profitable enough)
                 if self.config["trade_management"].get("trailing_stop_atr_multiple", 0) > 0:
                     trailing_stop_atr_multiple = Decimal(
                         str(self.config["trade_management"]["trailing_stop_atr_multiple"])
                     )
-                    
+
                     # Calculate profit percentage relative to entry price (assuming entry_price is not zero)
                     profit_percent = Decimal("0")
                     if entry_price != Decimal("0"):
@@ -1100,18 +1096,18 @@ class PositionManager:
 
                     if not is_trailing_activated and profit_percent >= self.trailing_stop_activation_percent * 100:
                         position["is_trailing_activated"] = True
-                        
+
                         # Calculate initial trailing stop price based on current price
                         new_trailing_sl_price = Decimal("0")
                         if side == "BUY":
                             new_trailing_sl_price = current_price - (atr_value * trailing_stop_atr_multiple)
                             # Ensure trailing SL doesn't go below initial SL
-                            new_trailing_sl_price = max(new_trailing_sl_price, stop_loss) 
+                            new_trailing_sl_price = max(new_trailing_sl_price, stop_loss)
                         else:  # SELL
                             new_trailing_sl_price = current_price + (atr_value * trailing_stop_atr_multiple)
                             # Ensure trailing SL doesn't go above initial SL
                             new_trailing_sl_price = min(new_trailing_sl_price, stop_loss)
-                        
+
                         position["current_trailing_sl"] = self.precision_manager.format_price(new_trailing_sl_price)
                         self.logger.info(
                             f"{NEON_GREEN}Trailing stop activated for {symbol} ({side}). Initial SL: {position['current_trailing_sl'].normalize()}{RESET}"
@@ -1145,7 +1141,7 @@ class PositionManager:
                                 potential_new_sl = self.precision_manager.format_price(potential_new_sl)
                                 position["current_trailing_sl"] = potential_new_sl
                                 moved_sl = True
-                        
+
                         if moved_sl:
                             self.logger.info(
                                 f"{NEON_GREEN}Updating trailing stop for {symbol} ({side}) to {position['current_trailing_sl'].normalize()}{RESET}"
@@ -1159,7 +1155,7 @@ class PositionManager:
                                 self.client,
                                 self.trailing_stop_trigger_by,
                             )
-                
+
                 # Check for local price crossing initial TP/SL (Bybit handles this on exchange, but for simulation/logging)
                 # This part is mostly for local logging/tracking consistency.
                 # Actual closure would be reported by reconcile, or via websockets in a real system.
@@ -1905,7 +1901,7 @@ class TradingAnalyzer:
         high_low = self.df["high"] - self.df["low"]
         high_prev_close = (self.df["high"] - self.df["close"].shift()).abs()
         low_prev_close = (self.df["low"] - self.df["close"].shift()).abs()
-        
+
         tr_series = pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(axis=1)
         return self._safe_series_op(tr_series, "TR")
 
@@ -2065,10 +2061,10 @@ class TradingAnalyzer:
         if stoch_rsi is None or stoch_rsi.empty:
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series
-        
+
         stoch_k = self._safe_series_op(stoch_rsi[f"STOCHRSIk_{period}_{period}_{k_period}_{d_period}"], "StochRSI_K").fillna(0).clip(0,100)
         stoch_d = self._safe_series_op(stoch_rsi[f"STOCHRSId_{period}_{period}_{k_period}_{d_period}"], "StochRSI_D").fillna(0).clip(0,100)
-        
+
         return stoch_k, stoch_d
 
     def calculate_adx(self, period: int) -> tuple[pd.Series, pd.Series, pd.Series]:
@@ -2248,7 +2244,7 @@ class TradingAnalyzer:
         if psar_result is None or psar_result.empty:
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series
-        
+
         # pandas_ta returns PSAR value and PSAR direction columns (long/short signal)
         psar_val_col = f"PSARr_{acceleration}_{max_acceleration}"
         psar_long_col = f"PSARl_{acceleration}_{max_acceleration}"
@@ -2265,12 +2261,12 @@ class TradingAnalyzer:
 
         # Determine direction based on long/short signals
         direction = pd.Series(0, index=self.df.index, dtype=int)
-        
+
         # 1 if in uptrend (PSAR_LONG is not NaN), -1 if in downtrend (PSAR_SHORT is not NaN)
         # Assuming PSAR_LONG and PSAR_SHORT are mutually exclusive
         direction[psar_result[psar_long_col].notna()] = 1
         direction[psar_result[psar_short_col].notna()] = -1
-        
+
         # Fill any remaining initial NaNs with 0
         direction.fillna(0, inplace=True)
         return psar_val, direction
@@ -2375,7 +2371,7 @@ class TradingAnalyzer:
                 "Orderbook manager not available for imbalance check. Returning 0.0."
             )
             return 0.0
-        
+
         self.logger.warning(
             f"{NEON_YELLOW}Orderbook imbalance calculation is a placeholder and not fully implemented. Returning 0.0.{RESET}"
         )
@@ -2419,7 +2415,7 @@ class TradingAnalyzer:
                 if last_close < sma.iloc[-1]:
                     return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             ema = temp_htf_analyzer._safe_calculate(
                 lambda: ta.ema(temp_htf_analyzer.df["close"], length=period),
                 f"MTF_EMA_{period}",
@@ -2431,7 +2427,7 @@ class TradingAnalyzer:
                 if last_close < ema.iloc[-1]:
                     return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             st_result = temp_htf_analyzer._safe_calculate(
                 temp_htf_analyzer.calculate_ehlers_supertrend,
                 "MTF_EhlersSuperTrend",
@@ -2699,7 +2695,7 @@ class TradingAnalyzer:
                 # Check if price is within a very small proximity of a Fibonacci level
                 # Use a small epsilon for floating point comparison with Decimal
                 epsilon = Decimal("0.0001") * level_price # 0.01%
-                
+
                 if level_name not in ["0.0%", "100.0%"] and (
                     (level_price - epsilon) <= current_price <= (level_price + epsilon)
                 ):
@@ -3604,12 +3600,12 @@ if __name__ == "__main__":
                     f"{NEON_RED}GEMINI_API_KEY not set, disabling Gemini AI analysis.{RESET}"
                 )
                 config["gemini_ai_analysis"]["enabled"] = False
-        
+
         # PositionManager needs the async client as well, it will be passed to main_async_loop
         # and then the client attribute will be set.
         # Initialize with a dummy client, it will be updated in main_async_loop
-        position_manager = PositionManager(config, logger, config["symbol"], None) 
-        
+        position_manager = PositionManager(config, logger, config["symbol"], None)
+
 
         # Start the asynchronous main loop
         asyncio.run(

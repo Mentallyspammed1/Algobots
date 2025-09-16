@@ -10,17 +10,17 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
+import indicators  # Import the new indicators module
 import numpy as np
 import pandas as pd
-import indicators  # Import the new indicators module
 from alert_system import AlertSystem
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
 
 # Guarded import for the live trading client
 try:
-    from pybit.unified_trading import HTTP as PybitHTTP
     import pybit.exceptions
+    from pybit.unified_trading import HTTP as PybitHTTP
 
     PYBIT_AVAILABLE = True
 except ImportError:
@@ -703,7 +703,7 @@ class TradingAnalyzer:
             if not np.isnan(es) and not np.isnan(el):
                 if es > el: score += w.get("ema_alignment", 0); notes_buy.append(f"EMA Bull +{w.get('ema_alignment',0):.2f}")
                 elif es < el: score -= w.get("ema_alignment", 0); notes_sell.append(f"EMA Bear -{w.get('ema_alignment',0):.2f}")
-        
+
         # ... (The full, detailed scoring logic from the previous response goes here)
         # This is a highly condensed version for brevity.
         # You should paste the full `generate_trading_signal` method from the previous response here.
@@ -722,7 +722,7 @@ class TradingAnalyzer:
         else:
             if score >= dyn_th: final_signal = "BUY"
             elif score <= -dyn_th: final_signal = "SELL"
-        
+
         cooldown = int(self.config.get("cooldown_sec", 0))
         now_ts, last_ts = int(time.time()), int(self.config.get("_last_signal_ts", 0))
         if cooldown > 0 and now_ts - last_ts < cooldown and final_signal != "HOLD":
@@ -781,7 +781,7 @@ def adapt_exit_params(pt: PerformanceTracker, cfg: dict) -> tuple[Decimal, Decim
 
 def random_tune_weights(cfg_path="config.json", k=50, jitter=0.2):
     print("Running random weight tuning...")
-    with open(cfg_path,"r",encoding="utf-8") as f: cfg=json.load(f)
+    with open(cfg_path,encoding="utf-8") as f: cfg=json.load(f)
     base = cfg["weight_sets"]["default_scalping"]
     best_cfg, best_score = base, -1e9
     for _ in range(k):
@@ -810,7 +810,7 @@ def main() -> None:
     while True:
         try:
             logger.info(f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
-            
+
             # --- GUARDRAILS & FILTERS ---
             guard = config.get("risk_guardrails", {})
             if guard.get("enabled", False):
@@ -822,7 +822,7 @@ def main() -> None:
                     logger.error(f"{NEON_RED}KILL SWITCH: Risk limits hit. Cooling down.{RESET}")
                     time.sleep(int(guard.get("cooldown_after_kill_min", 120)) * 60)
                     continue
-            
+
             if not in_allowed_session(config):
                 logger.info(f"{NEON_BLUE}Outside allowed session. Holding.{RESET}")
                 time.sleep(config["loop_delay"]); continue
@@ -830,7 +830,7 @@ def main() -> None:
             # --- DATA FETCHING ---
             current_price = pybit_client.fetch_current_price(config["symbol"])
             if current_price is None: time.sleep(config["loop_delay"]); continue
-            
+
             df = pybit_client.fetch_klines(config["symbol"], config["interval"], 1000)
             if df is None or df.empty: time.sleep(config["loop_delay"]); continue
 
@@ -841,7 +841,7 @@ def main() -> None:
                 if spread_bps > float(guard.get("spread_filter_bps", 5.0)):
                     logger.warning(f"{NEON_YELLOW}Spread too high ({spread_bps:.1f} bps). Holding.{RESET}")
                     time.sleep(config["loop_delay"]); continue
-            
+
             if guard.get("ev_filter_enabled", True) and expected_value(performance_tracker) <= 0:
                 logger.warning(f"{NEON_YELLOW}Negative EV detected. Holding.{RESET}")
                 time.sleep(config["loop_delay"]); continue
@@ -858,7 +858,7 @@ def main() -> None:
             # --- ANALYSIS & SIGNAL GENERATION ---
             analyzer = TradingAnalyzer(df, config, logger, config["symbol"])
             if analyzer.df.empty: time.sleep(config["loop_delay"]); continue
-            
+
             atr_value = Decimal(str(analyzer._get_indicator_value("ATR", Decimal("0.1"))))
             trading_signal, signal_score = analyzer.generate_trading_signal(current_price, orderbook_data, mtf_trends)
 

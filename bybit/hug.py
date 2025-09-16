@@ -15,8 +15,7 @@ NEON_YELLOW = Fore.YELLOW + Style.BRIGHT
 RESET = Style.RESET_ALL
 
 def main():
-    """
-    Main function to handle model pipeline and user interaction.
+    """Main function to handle model pipeline and user interaction.
     """
     # Create an argument parser for future enhancements
     parser = argparse.ArgumentParser(description=f"{NEON_CYAN}Advanced Text Generation with a specified model.{RESET}")

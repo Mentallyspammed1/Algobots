@@ -1,19 +1,17 @@
 # supertrend_cross_bot.py
-import os
-import time
 import logging
 import threading
-import pandas as pd
-from typing import Dict, Any, Optional, Tuple, Literal
+import time
+from typing import Any, Literal
+
+# Import the configuration
+import config
 
 # Import your helper modules
 from bybit_account_helper import BybitAccountHelper
 from bybit_sizing_helper import BybitSizingHelper
-from bybit_unified_order_manager import BybitUnifiedOrderManager, TradingMode
+from bybit_unified_order_manager import BybitUnifiedOrderManager
 from indicators import BybitIndicators
-
-# Import the configuration
-import config 
 
 # Configure logging for the bot
 logging.basicConfig(
@@ -25,7 +23,7 @@ logger = logging.getLogger(__name__)
 # --- Bot State ---
 PositionSide = Literal["long", "short", "flat"]
 current_bot_position: PositionSide = "flat"
-last_supertrend_signal: Optional[Literal["long", "short"]] = None
+last_supertrend_signal: Literal["long", "short"] | None = None
 last_processed_kline_timestamp: int = 0 # To avoid reprocessing the same kline
 
 # --- Bot Implementation ---
@@ -51,8 +49,8 @@ class SupertrendCrossBot:
         self.indicators_helper = BybitIndicators(testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret)
 
         self._running = threading.Event() # Event to control the main bot loop
-        self._main_loop_thread: Optional[threading.Thread] = None
-        
+        self._main_loop_thread: threading.Thread | None = None
+
         # Ensure sizing info is loaded
         self._load_sizing_info()
 
@@ -65,9 +63,8 @@ class SupertrendCrossBot:
             raise RuntimeError("Failed to load instrument sizing information.")
         logger.info(f"Sizing info loaded. Qty step: {self.sizing_helper.get_qty_step(config.CATEGORY, config.SYMBOL)}, Price tick: {self.sizing_helper.get_price_tick_size(config.CATEGORY, config.SYMBOL)}")
 
-    def _get_current_bybit_position(self) -> Tuple[PositionSide, float]:
-        """
-        Retrieves the current position from Bybit.
+    def _get_current_bybit_position(self) -> tuple[PositionSide, float]:
+        """Retrieves the current position from Bybit.
         :return: A tuple of (position_side, position_size).
         """
         positions = self.account_helper.get_positions(category=config.CATEGORY, symbol=config.SYMBOL)
@@ -77,8 +74,7 @@ class SupertrendCrossBot:
                     size = float(pos.get('size', 0))
                     if size > 0:
                         return "long" if pos.get('side') == 'Buy' else "short", size
-                    else:
-                        return "flat", 0.0
+                    return "flat", 0.0
         return "flat", 0.0
 
     def _calculate_order_quantity(self, current_price: float) -> str:
@@ -86,17 +82,17 @@ class SupertrendCrossBot:
         if current_price <= 0:
             logger.error("Current price is zero or negative, cannot calculate order quantity.")
             return "0"
-        
+
         raw_qty = config.ORDER_QTY_USDT_VALUE / current_price
         rounded_qty = self.sizing_helper.round_qty(config.CATEGORY, config.SYMBOL, raw_qty)
-        
+
         if not self.sizing_helper.is_valid_qty(config.CATEGORY, config.SYMBOL, rounded_qty):
             logger.error(f"Calculated quantity {rounded_qty} is not valid for {config.SYMBOL}. Raw: {raw_qty}")
             return "0"
-        
+
         return str(rounded_qty)
 
-    def _place_market_order(self, side: Literal["Buy", "Sell"], qty: str) -> Optional[Dict[str, Any]]:
+    def _place_market_order(self, side: Literal["Buy", "Sell"], qty: str) -> dict[str, Any] | None:
         """Places a market order and updates internal position."""
         logger.info(f"Attempting to place MARKET {side} order for {qty} {config.SYMBOL}...")
         response = self.order_manager.place_order(
@@ -110,19 +106,18 @@ class SupertrendCrossBot:
         if response and response.get('orderId'):
             logger.info(f"Market {side} order placed (ID: {response['orderId']}).")
             return response
-        else:
-            logger.error(f"Failed to place market {side} order.")
-            return None
+        logger.error(f"Failed to place market {side} order.")
+        return None
 
     def _close_position(self, current_side: PositionSide, current_size: float) -> bool:
         """Closes an existing position."""
         if current_side == "flat" or current_size == 0:
             logger.info("No position to close.")
             return True
-        
+
         opposite_side = "Sell" if current_side == "long" else "Buy"
         qty_to_close = self.sizing_helper.round_qty(config.CATEGORY, config.SYMBOL, current_size)
-        
+
         logger.info(f"Attempting to close {current_side} position of {qty_to_close} {config.SYMBOL} with a market {opposite_side} order.")
         response = self.order_manager.place_order(
             category=config.CATEGORY,
@@ -136,9 +131,8 @@ class SupertrendCrossBot:
             logger.info(f"Position close order placed (ID: {response['orderId']}). Waiting for fill...")
             time.sleep(2) # Give time for close order to process
             return True
-        else:
-            logger.error(f"Failed to place position close order for {current_side}.")
-            return False
+        logger.error(f"Failed to place position close order for {current_side}.")
+        return False
 
     def _main_bot_loop(self):
         """The main execution loop for the Supertrend cross bot."""
@@ -167,13 +161,13 @@ class SupertrendCrossBot:
                     logger.debug(f"No new closed kline to process. Last processed: {last_processed_kline_timestamp}")
                     time.sleep(5) # Check more frequently for new kline
                     continue
-                
+
                 last_processed_kline_timestamp = latest_kline_timestamp
 
                 # Get the latest Supertrend values
                 supertrend_column = f"SUPERT_{config.SUPERTREND_LENGTH}_{config.SUPERTREND_MULTIPLIER}"
                 supertrend_direction_column = f"SUPERTd_{config.SUPERTREND_LENGTH}_{config.SUPERTREND_MULTIPLIER}"
-                
+
                 if supertrend_column not in df.columns or supertrend_direction_column not in df.columns:
                     logger.error(f"Supertrend columns '{supertrend_column}' or '{supertrend_direction_column}' not found in DataFrame. Check pandas_ta version or indicator calculation.")
                     time.sleep(10)
@@ -186,12 +180,12 @@ class SupertrendCrossBot:
                 logger.info(f"[{config.SYMBOL}] Latest Close: {latest_close:.2f}, Supertrend: {latest_supertrend:.2f}, Direction: {latest_supertrend_direction}")
 
                 # 2. Generate Signals
-                signal: Optional[Literal["long", "short"]] = None
+                signal: Literal["long", "short"] | None = None
                 if latest_supertrend_direction == 1 and latest_close > latest_supertrend: # Uptrend confirmed
                     signal = "long"
                 elif latest_supertrend_direction == -1 and latest_close < latest_supertrend: # Downtrend confirmed
                     signal = "short"
-                
+
                 if signal is None:
                     logger.debug("No clear Supertrend cross signal detected.")
                     time.sleep(5)
@@ -201,7 +195,7 @@ class SupertrendCrossBot:
                     logger.debug(f"Signal is '{signal}', same as last signal. No new action.")
                     time.sleep(5)
                     continue
-                
+
                 logger.info(f"NEW SIGNAL DETECTED: {signal.upper()}!")
                 last_supertrend_signal = signal
 
@@ -215,7 +209,7 @@ class SupertrendCrossBot:
                     logger.error("Calculated order quantity is 0 or invalid. Skipping trade action.")
                     time.sleep(10)
                     continue
-                
+
                 # If signal is LONG
                 if signal == "long":
                     if bybit_position_side == "flat":
@@ -243,11 +237,11 @@ class SupertrendCrossBot:
                             current_bot_position = "short"
                     elif bybit_position_side == "short":
                         logger.info("Already SHORT, no action needed.")
-                
-                time.sleep(10) # Wait before next full cycle
-                
 
-            except Exception as e:
+                time.sleep(10) # Wait before next full cycle
+
+
+            except Exception:
                 logger.exception("Error in Supertrend bot main loop.")
                 time.sleep(15) # Longer sleep on error to avoid rapid API calls
 
@@ -258,12 +252,12 @@ class SupertrendCrossBot:
         global current_bot_position, last_supertrend_signal
 
         # API key validation is now done in __init__
-        
+
         logger.info("Starting Bybit Supertrend Cross Bot...")
-        
+
         # Start Unified Order Manager (handles its internal WS private listener)
         self.order_manager.start()
-        
+
         # Initial check of current position on Bybit
         bybit_pos_side, bybit_pos_size = self._get_current_bybit_position()
         current_bot_position = bybit_pos_side
@@ -287,16 +281,16 @@ class SupertrendCrossBot:
         # Ensure all pending orders are cancelled (if any)
         logger.info("Cancelling any remaining open orders...")
         self.order_manager.cancel_all_orders(category=config.CATEGORY, symbol=config.SYMBOL)
-        
+
         # Stop Unified Order Manager
         self.order_manager.stop()
-        
+
         logger.info("Bybit Supertrend Cross Bot stopped.")
 
 # --- Main Execution ---
 if __name__ == "__main__":
     # The bot class now reads config directly, so no need to pass parameters here.
-    bot = SupertrendCrossBot() 
+    bot = SupertrendCrossBot()
 
     try:
         bot.start_bot()
@@ -306,7 +300,7 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Ctrl+C detected. Stopping bot...")
-    except Exception as e:
+    except Exception:
         logger.exception("An unexpected error occurred in the main program.")
     finally:
         bot.stop_bot()

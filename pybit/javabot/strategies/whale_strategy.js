@@ -19,7 +19,18 @@ const HYSTERESIS_RATIO = CONFIG.HYSTERESIS_RATIO;
 const VOLUME_CONFIRMATION_MULTIPLIER = CONFIG.VOLUME_CONFIRMATION_MULTIPLIER;
 
 // --- Position Management ---
+/**
+ * @class PositionManager
+ * @description Manages open trading positions for the Whale strategy, including order sizing,
+ * stop loss/take profit calculation, pyramiding, and interaction with the Bybit API.
+ */
 class PositionManager {
+    /**
+     * @constructor
+     * @param {Object} config - The configuration object for the strategy.
+     * @param {string} symbol - The trading symbol this position manager is responsible for.
+     * @param {BybitAPIClient} pybit_client - An instance of the BybitAPIClient.
+     */
     constructor(config, symbol, pybit_client) {
         this.config = config;
         this.logger = logger;
@@ -35,6 +46,12 @@ class PositionManager {
         this._update_precision_from_exchange();
     }
 
+    /**
+     * @async
+     * @function _update_precision_from_exchange
+     * @description Updates the quantity and price precision (step sizes) based on exchange information.
+     * @returns {Promise<void>}
+     */
     async _update_precision_from_exchange() {
         const [pricePrec, qtyPrec, minOrderQty] = await this.pybit.getPrecisions(this.symbol);
         this.qty_step = new Decimal(10).pow(-qtyPrec);
@@ -43,11 +60,25 @@ class PositionManager {
         this.logger.info(neon.blue(`Updated precision for ${this.symbol}: qty_step=${this.qty_step}, order_precision=${this.order_precision}, price_precision=${this.price_precision}`));
     }
 
+    /**
+     * @function _get_current_balance
+     * @description Retrieves the current account balance (stubbed to use config value for now).
+     * In a real bot, this would fetch live balance.
+     * @returns {Decimal} The current account balance.
+     */
     _get_current_balance() {
         // In a real bot, this would fetch live balance. For now, use config value.
         return new Decimal(this.config.TRADE_MANAGEMENT.ACCOUNT_BALANCE);
     }
 
+    /**
+     * @function _calculate_order_size
+     * @description Calculates the appropriate order size based on risk percentage, current price, ATR, and conviction.
+     * @param {Decimal} current_price - The current market price.
+     * @param {Decimal} atr_value - The Average True Range value.
+     * @param {number} [conviction=1.0] - The conviction score of the signal (0 to 1).
+     * @returns {Decimal} The calculated order quantity.
+     */
     _calculate_order_size(current_price, atr_value, conviction = 1.0) {
         if (!this.trade_management_enabled) return new Decimal("0");
         const account_balance = this._get_current_balance();
@@ -68,6 +99,14 @@ class PositionManager {
         return round_qty(order_qty, this.qty_step);
     }
 
+    /**
+     * @function _compute_stop_loss_price
+     * @description Computes the Stop Loss price based on the configured scheme (ATR multiple or percentage).
+     * @param {string} side - The side of the trade ("BUY" or "SELL").
+     * @param {Decimal} entry_price - The entry price of the trade.
+     * @param {Decimal} atr_value - The Average True Range value.
+     * @returns {Decimal} The calculated Stop Loss price.
+     */
     _compute_stop_loss_price(side, entry_price, atr_value) {
         const sl_cfg = this.config.EXECUTION.SL_SCHEME;
         let sl;
@@ -81,12 +120,30 @@ class PositionManager {
         return round_price(sl, this.price_precision);
     }
 
+    /**
+     * @function _calculate_take_profit_price
+     * @description Calculates the Take Profit price based on ATR multiple.
+     * @param {string} signal - The trading signal ("BUY" or "SELL").
+     * @param {Decimal} current_price - The current market price.
+     * @param {Decimal} atr_value - The Average True Range value.
+     * @returns {Decimal} The calculated Take Profit price.
+     */
     _calculate_take_profit_price(signal, current_price, atr_value) {
         const tp_mult = new Decimal(this.config.TRADE_MANAGEMENT.TAKE_PROFIT_ATR_MULTIPLE);
         const tp = (signal === "BUY") ? current_price.plus(atr_value.times(tp_mult)) : current_price.minus(atr_value.times(tp_mult));
         return round_price(tp, this.price_precision);
     }
 
+    /**
+     * @async
+     * @function open_position
+     * @description Opens a new trading position, calculates order size, SL/TP, and places the order via Bybit API.
+     * @param {string} signal - The trading signal ("BUY" or "SELL").
+     * @param {Decimal} current_price - The current market price.
+     * @param {Decimal} atr_value - The Average True Range value.
+     * @param {number} conviction - The conviction score of the signal.
+     * @returns {Promise<Object|null>} The opened position object if successful, or null on failure.
+     */
     async open_position(signal, current_price, atr_value, conviction) {
         if (!this.trade_management_enabled || this.open_positions.length >= this.max_open_positions) {
             this.logger.info(neon.warn("Max positions reached or trade management disabled."));
@@ -137,6 +194,13 @@ class PositionManager {
         return position;
     }
 
+    /**
+     * @function _check_and_close_position
+     * @description Checks if an open position should be closed based on current price hitting SL/TP.
+     * @param {Object} position - The position object to check.
+     * @param {Decimal} current_price - The current market price.
+     * @returns {Object} An object indicating if the position is closed, the adjusted close price, and the reason.
+     */
     _check_and_close_position(position, current_price) {
         const side = position.side;
         const stop_loss = position.stop_loss;
@@ -170,6 +234,14 @@ class PositionManager {
         return { is_closed: false, adjusted_close_price: new Decimal("0"), closed_by: "" };
     }
 
+    /**
+     * @function manage_positions
+     * @description Iterates through open positions, checks for closure conditions (SL/TP),
+     * records trades, and removes closed positions.
+     * @param {Decimal} current_price - The current market price.
+     * @param {PerformanceTracker} performance_tracker - An instance of the PerformanceTracker.
+     * @returns {void}
+     */
     manage_positions(current_price, performance_tracker) {
         if (!this.trade_management_enabled) return;
 
@@ -209,6 +281,14 @@ class PositionManager {
         }
     }
 
+    /**
+     * @function trail_stop
+     * @description Trails the stop loss of an open position based on ATR.
+     * @param {Object} pos - The position object to trail the stop for.
+     * @param {Decimal} current_price - The current market price.
+     * @param {Decimal} atr_value - The Average True Range value.
+     * @returns {void}
+     */
     trail_stop(pos, current_price, atr_value) {
         if (!atr_value || !pos.best_price) return;
         const atr_mult = new Decimal(this.config.TRADE_MANAGEMENT.STOP_LOSS_ATR_MULTIPLE);
@@ -231,6 +311,14 @@ class PositionManager {
         }
     }
 
+    /**
+     * @async
+     * @function try_pyramid
+     * @description Attempts to add to an existing position (pyramiding) if conditions are met.
+     * @param {Decimal} current_price - The current market price.
+     * @param {Decimal} atr_value - The Average True Range value.
+     * @returns {Promise<void>}
+     */
     async try_pyramid(current_price, atr_value) {
         if (!this.config.PYRAMIDING.ENABLED) return;
 
@@ -269,6 +357,13 @@ class PositionManager {
         }
     }
 
+    /**
+     * @private
+     * @function _get_indicator_value
+     * @description Placeholder method for getting indicator values. In the main loop, ATR value should be passed from analyzer.
+     * @param {string} key - The indicator key.
+     * @returns {Decimal} A Decimal.js NaN value.
+     */
     _get_indicator_value(key) {
         // This method is a stub. In the main loop, ATR value should be passed from analyzer.
         return new Decimal(NaN);
@@ -276,7 +371,18 @@ class PositionManager {
 }
 
 // --- Trading Analyzer ---
+/**
+ * @class TradingAnalyzer
+ * @description Analyzes kline data and calculates various technical indicators.
+ * It also computes a signal score based on a weighted combination of these indicators.
+ */
 class TradingAnalyzer {
+    /**
+     * @constructor
+     * @param {Array<Object>} klines - An array of kline data.
+     * @param {Object} config - The configuration object for the strategy.
+     * @param {string} symbol - The trading symbol being analyzed.
+     */
     constructor(klines, config, symbol) {
         this.df = this._process_dataframe(klines);
         this.config = config;
@@ -297,6 +403,13 @@ class TradingAnalyzer {
         if (config.INDICATORS.FIBONACCI_PIVOT_POINTS) this.calculate_fibonacci_pivot_points();
     }
 
+    /**
+     * @private
+     * @function _process_dataframe
+     * @description Processes raw kline data into a DataFrame-like object with Decimal.js values.
+     * @param {Array<Object>} df_raw - Raw kline data array.
+     * @returns {Object} A DataFrame-like object with Decimal.js values.
+     */
     _process_dataframe(df_raw) {
         const processed = {
             start_time: [], open: [], high: [], low: [], close: [], volume: [], turnover: []
@@ -323,6 +436,16 @@ class TradingAnalyzer {
         return df_like;
     }
 
+    /**
+     * @private
+     * @function _safe_calculate
+     * @description Safely calculates an indicator, handling insufficient data and errors.
+     * @param {Function} func - The indicator calculation function.
+     * @param {string} name - The name of the indicator.
+     * @param {number} min_data_points - Minimum data points required for calculation.
+     * @param {...any} args - Arguments to pass to the indicator function.
+     * @returns {any|null} The calculated indicator result, or null if calculation fails or data is insufficient.
+     */
     _safe_calculate(func, name, min_data_points, ...args) {
         if (this.df.length < min_data_points) {
             this.logger.debug(neon.blue(`Skipping ${name}: Insufficient data (${this.df.length} < ${min_data_points})`));
@@ -341,6 +464,12 @@ class TradingAnalyzer {
         }
     }
 
+    /**
+     * @private
+     * @function _calculate_all_indicators
+     * @description Calculates all configured technical indicators and stores their latest values.
+     * @returns {void}
+     */
     _calculate_all_indicators() {
         const cfg = this.config.INDICATORS;
         const isd = this.indicator_settings;
@@ -546,11 +675,23 @@ class TradingAnalyzer {
         this.logger.debug(neon.blue(`Indicators calculated for ${this.symbol}`));
     }
 
+    /**
+     * @function calculate_fibonacci_levels
+     * @description Calculates Fibonacci retracement levels based on the provided kline data.
+     * Stores the results in `this.fib_levels`.
+     * @returns {void}
+     */
     calculate_fibonacci_levels() {
         const fib = indicators.calculateFibonacciLevels(this.df, this.config.INDICATOR_SETTINGS.FIBONACCI_WINDOW);
         if (fib) this.fib_levels = fib;
     }
 
+    /**
+     * @function calculate_fibonacci_pivot_points
+     * @description Calculates Fibonacci Pivot Points based on the provided kline data.
+     * Stores the results in `this.indicator_values`.
+     * @returns {void}
+     */
     calculate_fibonacci_pivot_points() {
         if (this.df.length < 2) return;
         const pivot = indicators.calculateFibonacciPivotPoints(this.df);
@@ -564,11 +705,25 @@ class TradingAnalyzer {
         }
     }
 
+    /**
+     * @function _get_indicator_value
+     * @description Retrieves the latest value of a specified indicator from `indicator_values`.
+     * @param {string} key - The key of the indicator.
+     * @param {Decimal} [def=new Decimal(NaN)] - The default value to return if the indicator is not found or is NaN.
+     * @returns {Decimal} The indicator value or the default value.
+     */
     _get_indicator_value(key, def = new Decimal(NaN)) {
         const val = this.indicator_values[key];
         return (val instanceof Decimal && !val.isNaN()) ? val : def;
     }
 
+    /**
+     * @private
+     * @function _check_orderbook
+     * @description Calculates order book imbalance.
+     * @param {Object} ob - The order book object with bids (b) and asks (a).
+     * @returns {number} The imbalance value.
+     */
     _check_orderbook(ob) {
         if (!ob?.b || !ob?.a) return 0;
         const bidVol = ob.b.reduce((sum, b) => sum.plus(new Decimal(b[1])), new Decimal(0));
@@ -577,6 +732,13 @@ class TradingAnalyzer {
         return bidVol.minus(askVol).dividedBy(bidVol.plus(askVol)).toNumber();
     }
 
+    /**
+     * @function calculate_support_resistance_from_orderbook
+     * @description Identifies significant support and resistance levels from the order book.
+     * Stores the results in `this.indicator_values`.
+     * @param {Object} ob - The order book object with bids (b) and asks (a).
+     * @returns {void}
+     */
     calculate_support_resistance_from_orderbook(ob) {
         if (!ob?.b || !ob?.a) return;
         let maxBid = new Decimal(0), support = new Decimal(0);
@@ -594,6 +756,14 @@ class TradingAnalyzer {
         if (resistance.gt(0)) this.indicator_values["Resistance_Level"] = resistance.toDecimalPlaces(pp, Decimal.ROUND_DOWN);
     }
 
+    /**
+     * @private
+     * @function _get_mtf_trend
+     * @description Determines the trend based on a higher timeframe using specified indicator types (SMA, EMA, Ehlers Supertrend).
+     * @param {Array<Object>} higher_tf_df_raw - Raw kline data for the higher timeframe.
+     * @param {string} indicator_type - The type of indicator to use for trend detection ("sma", "ema", "ehlers_supertrend").
+     * @returns {string} The trend direction ("UP", "DOWN", "SIDEWAYS", or "UNKNOWN").
+     */
     _get_mtf_trend(higher_tf_df_raw, indicator_type) {
         if (!higher_tf_df_raw || higher_tf_df_raw.length === 0) return "UNKNOWN";
         const df = this._process_dataframe(higher_tf_df_raw);
@@ -620,9 +790,13 @@ class TradingAnalyzer {
         return "UNKNOWN";
     }
 
-    // All scoring methods (_score_*) are implemented here — truncated for brevity in this response.
-    // See previous assistant response for full implementations of _score_adx, _score_ema_alignment, etc.
-
+    /**
+     * @function calculate_signal_score
+     * @description Calculates a composite signal score based on a weighted combination of various technical indicators.
+     * @param {Object} [orderbook_data=null] - Optional order book data for imbalance calculation.
+     * @param {Object} [higher_tf_signals={}] - Optional higher timeframe trend signals.
+     * @returns {Object} An object containing the total score, signal ("BUY", "SELL", "NEUTRAL"), conviction, and a breakdown of contributions.
+     */
     calculate_signal_score(orderbook_data = null, higher_tf_signals = {}) {
         if (this.df.length === 0) return { total_score: 0, signal: "NEUTRAL", conviction: 0, breakdown: {} };
 
@@ -692,34 +866,67 @@ class TradingAnalyzer {
     }
 
     // Placeholder _score_* methods (full implementations would be here)
+    /** @private @function _score_adx */
     _score_adx(tm) { return { adx_contrib: 0, trend_strength_multiplier_out: tm, breakdown: {} }; }
+    /** @private @function _score_ema_alignment */
     _score_ema_alignment() { return { ema_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_sma_trend_filter */
     _score_sma_trend_filter() { return { sma_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_momentum_indicators */
     _score_momentum_indicators() { return { momentum_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_bollinger_bands */
     _score_bollinger_bands() { return { bb_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_vwap */
     _score_vwap() { return { vwap_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_psar */
     _score_psar() { return { psar_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_obv */
     _score_obv() { return { obv_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_cmf */
     _score_cmf() { return { cmf_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_volatility_index */
     _score_volatility_index() { return { vi_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_vwma_cross */
     _score_vwma_cross() { return { vwma_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_volume_delta */
     _score_volume_delta() { return { vd_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_kaufman_ama_cross */
     _score_kaufman_ama_cross() { return { kama_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_relative_volume */
     _score_relative_volume() { return { rv_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_market_structure */
     _score_market_structure() { return { ms_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_dema_crossover */
     _score_dema_crossover() { return { dema_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_keltner_breakout */
     _score_keltner_breakout() { return { kc_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_roc */
     _score_roc() { return { roc_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_candlestick_patterns */
     _score_candlestick_patterns() { return { pattern_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_fibonacci_levels */
     _score_fibonacci_levels() { return { fib_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_fibonacci_pivot_points */
     _score_fibonacci_pivot_points() { return { fib_pivot_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_ehlers_supertrend */
     _score_ehlers_supertrend() { return { st_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_macd */
     _score_macd() { return { macd_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_ichimoku_cloud */
     _score_ichimoku_cloud() { return { ichimoku_contrib: 0, breakdown: {} }; }
+    /** @private @function _score_orderbook_imbalance */
     _score_orderbook_imbalance() { return { imbalance_contrib: 0, breakdown: {} }; }
 }
 
 // --- Main Bot Loop ---
+/**
+ * @async
+ * @function run_bot
+ * @description The main execution loop for the Whale strategy. It initializes alert system,
+ * position manager, and performance tracker. Continuously fetches kline data,
+ * analyzes it for trading signals, manages positions, and updates performance metrics.
+ * @returns {Promise<void>}
+ */
 async function run_bot() {
     const alertSystem = new AlertSystem();
 
@@ -788,6 +995,10 @@ async function run_bot() {
 }
 
 // Start Bot
+/**
+ * @description Immediately invoked async function to launch the Whale strategy.
+ * Handles top-level unhandled errors during the bot's execution.
+ */
 (async () => {
     try {
         await run_bot();

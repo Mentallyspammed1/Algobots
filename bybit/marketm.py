@@ -53,8 +53,7 @@ logging.basicConfig(
 )
 
 class MarketMaker:
-    """
-    A market making bot for Bybit Unified Trading Account, enhanced with
+    """A market making bot for Bybit Unified Trading Account, enhanced with
     Websocket for real-time data and advanced risk management.
     """
     def __init__(self, config: dict):
@@ -164,13 +163,12 @@ class MarketMaker:
             logging.debug(f"{action_name} successful: {response.get('retMsg')}")
             self.consecutive_errors = 0 # Reset error count on success
             return response.get('result')
-        else:
-            error_msg = response.get('retMsg', 'Unknown error')
-            logging.error(f"{action_name} failed: retCode={response.get('retCode')}, retMsg={error_msg}, data={response.get('result')}")
-            self.consecutive_errors += 1
-            if self.consecutive_errors >= self.config["MAX_CONSECUTIVE_ERRORS"]:
-                self.activate_circuit_breaker(f"Too many API errors during {action_name}: {error_msg}")
-            return None
+        error_msg = response.get('retMsg', 'Unknown error')
+        logging.error(f"{action_name} failed: retCode={response.get('retCode')}, retMsg={error_msg}, data={response.get('result')}")
+        self.consecutive_errors += 1
+        if self.consecutive_errors >= self.config["MAX_CONSECUTIVE_ERRORS"]:
+            self.activate_circuit_breaker(f"Too many API errors during {action_name}: {error_msg}")
+        return None
 
     def _on_orderbook_update(self, message: dict):
         """Callback for websocket order book updates."""
@@ -307,15 +305,13 @@ class MarketMaker:
 
                     logging.info(f"Instrument Info for {self.symbol}: Price Tick Size={self.price_tick_size}, Qty Step Size={self.qty_step_size}, Min Order Qty={self.min_order_qty}")
                     return True
-                else:
-                    logging.warning(f"Could not get instrument info. Retrying ({i+1}/{retries})...")
-                    time.sleep(2)
+                logging.warning(f"Could not get instrument info. Retrying ({i+1}/{retries})...")
+                time.sleep(2)
         self.activate_circuit_breaker("Failed to get instrument info after multiple retries.")
         return False
 
     def get_account_data(self):
-        """
-        Fetches initial account data (e.g., wallet balance, position).
+        """Fetches initial account data (e.g., wallet balance, position).
         This is typically done on startup.
         """
         with self.api_lock:
@@ -340,8 +336,7 @@ class MarketMaker:
                     self.current_inventory = Decimal("0")
 
     def get_price_info(self):
-        """
-        Fetch initial market data to get the mid-price.
+        """Fetch initial market data to get the mid-price.
         This is a fallback/initialization step, as websocket handles updates.
         """
         retries = 3
@@ -356,9 +351,8 @@ class MarketMaker:
                         self.mid_price = (bid + ask) / Decimal("2")
                     logging.info(f"Initial mid-price fetched: {self.mid_price}")
                     return
-                else:
-                    logging.warning(f"Could not get initial price info. Retrying ({i+1}/{retries})...")
-                    time.sleep(2)
+                logging.warning(f"Could not get initial price info. Retrying ({i+1}/{retries})...")
+                time.sleep(2)
         self.activate_circuit_breaker("Failed to get initial price info after multiple retries.")
 
     def cancel_all_bot_orders(self):
@@ -442,8 +436,7 @@ class MarketMaker:
         return desired_orders
 
     def manage_orders(self):
-        """
-        Manages existing orders and places new ones to maintain the desired market making strategy.
+        """Manages existing orders and places new ones to maintain the desired market making strategy.
         This function is called periodically.
         """
         with self.data_lock:
@@ -580,8 +573,7 @@ class MarketMaker:
             self.activate_circuit_breaker(f"Order management error: {e}")
 
     def activate_circuit_breaker(self, reason: str):
-        """
-        Activates the circuit breaker, cancels all orders, and halts trading.
+        """Activates the circuit breaker, cancels all orders, and halts trading.
         """
         if not self.circuit_breaker_active:
             self.circuit_breaker_active = True
@@ -602,9 +594,8 @@ class MarketMaker:
             if elapsed_time >= self.config["CIRCUIT_BREAKER_TIMEOUT_SEC"]:
                 self.deactivate_circuit_breaker()
                 return True
-            else:
-                logging.debug(f"Circuit breaker active. Time remaining: {self.config['CIRCUIT_BREAKER_TIMEOUT_SEC'] - elapsed_time:.0f}s")
-                return False
+            logging.debug(f"Circuit breaker active. Time remaining: {self.config['CIRCUIT_BREAKER_TIMEOUT_SEC'] - elapsed_time:.0f}s")
+            return False
         return True # Not active
 
     def deactivate_circuit_breaker(self):

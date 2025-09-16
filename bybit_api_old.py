@@ -23,16 +23,14 @@ if not bybit_logger.handlers:
     bybit_logger.addHandler(file_handler)
 
 class BybitClient:
-    """
-    A client for interacting with the Bybit API using the pybit library.
+    """A client for interacting with the Bybit API using the pybit library.
     Handles authentication, requests, and data parsing.
     """
 
     def __init__(self, api_endpoint: str, category: str,
                  retries: int = 5, backoff_factor: float = 0.5,
                  use_websocket: bool = False, ws_callbacks: dict[str, Callable] | None = None, recv_window: int = 10000):
-        """
-        Initializes the BybitClient.
+        """Initializes the BybitClient.
         API Key and Secret are loaded from environment variables for security.
 
         Args:
@@ -84,8 +82,8 @@ class BybitClient:
             bybit_logger.info("BybitClient initialized with pybit WebSocket session.")
 
     def subscribe_to_ws_topics(self, topics: list, callback: Callable):
-        """
-        Subscribes to a list of WebSocket topics using the new stream methods.
+        """Subscribes to a list of WebSocket topics using the new stream methods.
+
         Args:
             topics (list): List of topics to subscribe to (e.g., ["orderbook.50.BTCUSDT", "kline.5.BTCUSDT"])
             callback (Callable): The callback function to handle incoming messages.
@@ -117,8 +115,7 @@ class BybitClient:
 
 
     def fetch_klines(self, symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
-        """
-        Fetches historical kline data for a given symbol and interval using pybit.
+        """Fetches historical kline data for a given symbol and interval using pybit.
 
         Args:
             symbol (str): The trading pair (e.g., "BTCUSDT").
@@ -158,8 +155,7 @@ class BybitClient:
             return pd.DataFrame()
 
     def get_positions(self, symbol: str) -> dict[str, Any] | None:
-        """
-        Retrieves the open position for a given symbol using pybit.
+        """Retrieves the open position for a given symbol using pybit.
 
         Args:
             symbol (str): The trading pair.
@@ -187,8 +183,7 @@ class BybitClient:
             return None
 
     def get_wallet_balance(self, account_type: str = "UNIFIED", coin: str | None = None) -> dict[str, Any] | None:
-        """
-        Retrieves wallet balance for a given account type and optional coin using pybit.
+        """Retrieves wallet balance for a given account type and optional coin using pybit.
 
         Args:
             account_type (str): "UNIFIED", "CONTRACT", etc.
@@ -212,8 +207,7 @@ class BybitClient:
             return None
 
     def get_account_info(self) -> dict[str, Any] | None:
-        """
-        Fetches account details using pybit.
+        """Fetches account details using pybit.
 
         Returns:
             dict: Dictionary containing account details, or None on failure.
@@ -230,8 +224,7 @@ class BybitClient:
             return None
 
     def get_transaction_log(self, coin: str | None = None, limit: int = 50) -> dict[str, Any] | None:
-        """
-        Queries transaction history for a Contract account using pybit.
+        """Queries transaction history for a Contract account using pybit.
 
         Args:
             coin (Optional[str]): Optional: Filter by coin.
@@ -255,8 +248,7 @@ class BybitClient:
             return None
 
     def set_leverage(self, symbol: str, buy_leverage: str, sell_leverage: str) -> bool:
-        """
-        Sets leverage for a specific contract symbol using pybit.
+        """Sets leverage for a specific contract symbol using pybit.
 
         Args:
             symbol (str): The trading pair.
@@ -283,8 +275,7 @@ class BybitClient:
             return False
 
     def cancel_order(self, symbol: str, order_id: str | None = None, order_link_id: str | None = None) -> bool:
-        """
-        Cancels a specific order by order ID or orderLinkId using pybit.
+        """Cancels a specific order by order ID or orderLinkId using pybit.
 
         Args:
             symbol (str): The trading pair.
@@ -314,8 +305,7 @@ class BybitClient:
             return False
 
     def cancel_all_orders(self, symbol: str | None = None, settle_coin: str | None = None) -> bool:
-        """
-        Cancels all open orders for a specific contract type or symbol using pybit.
+        """Cancels all open orders for a specific contract type or symbol using pybit.
 
         Args:
             symbol (Optional[str]): Optional: Cancel for specific symbol.
@@ -340,8 +330,7 @@ class BybitClient:
             return False
 
     def get_tickers(self, symbol: str | None = None) -> dict[str, Any] | None:
-        """
-        Fetches the latest price, bid/ask, and 24h volume for a Contract using pybit.
+        """Fetches the latest price, bid/ask, and 24h volume for a Contract using pybit.
 
         Args:
             symbol (Optional[str]): The trading pair (e.g., "BTCUSDT"). If None, returns all tickers for the category.
@@ -364,8 +353,7 @@ class BybitClient:
             return None
 
     def get_orderbook(self, symbol: str, limit: int = 25) -> dict[str, Any] | None:
-        """
-        Fetches the current order book depth for a specific contract symbol using pybit.
+        """Fetches the current order book depth for a specific contract symbol using pybit.
 
         Args:
             symbol (str): The trading pair.
@@ -390,8 +378,7 @@ class BybitClient:
             return None
 
     def get_active_orders(self, symbol: str | None = None) -> dict[str, Any] | None:
-        """
-        Queries open or untriggered orders for a contract using pybit.
+        """Queries open or untriggered orders for a contract using pybit.
 
         Args:
             symbol (Optional[str]): The trading pair.
@@ -414,8 +401,7 @@ class BybitClient:
             return None
 
     def get_recent_trade(self, symbol: str, limit: int = 50) -> dict[str, Any] | None:
-        """
-        Retrieves recent trade execution data for a contract using pybit.
+        """Retrieves recent trade execution data for a contract using pybit.
 
         Args:
             symbol (str): The trading pair.
@@ -440,8 +426,7 @@ class BybitClient:
             return None
 
     def get_fee_rate(self, symbol: str) -> dict[str, Any] | None:
-        """
-        Retrieves your current trading fee rates for a symbol using pybit.
+        """Retrieves your current trading fee rates for a symbol using pybit.
 
         Args:
             symbol (str): The trading pair.
@@ -464,8 +449,7 @@ class BybitClient:
             return None
 
     def get_transfer_query_account_coins_balance(self, account_type: str, coin: str | None = None) -> dict[str, Any] | None:
-        """
-        Checks coin balances across accounts using pybit.
+        """Checks coin balances across accounts using pybit.
 
         Args:
             account_type (str): Account type (e.g., "UNIFIED", "CONTRACT").
@@ -489,8 +473,7 @@ class BybitClient:
             return None
 
     def get_instrument_info(self, symbol: str) -> dict[str, Any] | None:
-        """
-        Fetches instrument information for a given symbol.
+        """Fetches instrument information for a given symbol.
         """
         try:
             response = self.session.get_instruments_info(
@@ -509,8 +492,7 @@ class BybitClient:
     def place_order(self, symbol: str, side: str, usdt_amount: float,
                     order_type: str = "Market", price: float | None = None,
                     stop_loss_pct: float | None = None, take_profit_pct: float | None = None) -> bool:
-        """
-        Places an order with Stop Loss and Take Profit using pybit, with proper order sizing.
+        """Places an order with Stop Loss and Take Profit using pybit, with proper order sizing.
 
         Args:
             symbol (str): The trading pair.

@@ -1,5 +1,4 @@
-"""
-Configuration for Advanced Market Maker
+"""Configuration for Advanced Market Maker
 Use at your own risk.
 """
 

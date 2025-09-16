@@ -6,6 +6,7 @@ import pandas as pd
 # We need to import the class we want to test
 from whalebot import TradingAnalyzer, load_config
 
+
 # Mock the logger to prevent actual log file creation during tests
 # and to capture log messages for assertions
 class MockLogger:

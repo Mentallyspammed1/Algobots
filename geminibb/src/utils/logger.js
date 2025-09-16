@@ -29,6 +29,11 @@ const logger = {
             logToFile(errorStack);
         }
     },
+    debug: (message) => {
+        const formatted = `[DEBUG][${getTimestamp()}] ${message}`;
+        console.log(formatted);
+        logToFile(formatted);
+    },
     exception: (error) => {
         const message = `[EXCEPTION][${getTimestamp()}] An uncaught exception occurred:`
         console.error(message);

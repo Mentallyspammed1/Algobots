@@ -1,24 +1,22 @@
 # main.py
 
+import argparse  # For CLI arguments
 import asyncio
 import os
 import sys
-import argparse # For CLI arguments
-from datetime import timedelta # Used for CLI argument type conversion
 
 # Ensure project root is in PYTHONPATH if running from a subdirectory
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from bybit_trading_bot import BybitTradingBot
 from config import Config
 from logger_setup import setup_logger
-from bybit_trading_bot import BybitTradingBot
 
 
 async def main():
     """Main entry point for running the trading bot."""
-    
     # 1. Parse Command Line Arguments
     parser = argparse.ArgumentParser(description="Run Bybit Trading Bot.")
     parser.add_argument('--symbol', type=str, help=f"Trading symbol (e.g., BTCUSDT). Default: {Config.SYMBOL}")
@@ -71,7 +69,7 @@ async def main():
     if not config.BYBIT_API_SECRET:
         logger.critical("BYBIT_API_SECRET environment variable is NOT set. Please set it before running the bot.")
         sys.exit(1)
-    
+
     if config.GEMINI_AI_ENABLED and not config.GEMINI_API_KEY:
         logger.critical("GEMINI_AI_ENABLED is True, but GEMINI_API_KEY environment variable is NOT set. Please set it or disable AI in config.py.")
         sys.exit(1)
@@ -82,7 +80,7 @@ async def main():
 
     # 5. Create and Run Bot
     bot = BybitTradingBot(config)
-    
+
     try:
         await bot.start()
     except KeyboardInterrupt:

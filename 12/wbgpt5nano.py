@@ -396,8 +396,7 @@ class Indicators:
 
     @staticmethod
     def adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> float:
-        """
-        Robust ADX computation (Wilder smoothing).
+        """Robust ADX computation (Wilder smoothing).
         Returns a single float value (last value of ADX).
         """
         # Shifted previous values

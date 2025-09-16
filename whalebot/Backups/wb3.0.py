@@ -19,10 +19,8 @@ from alert_system import AlertSystem
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from performance_tracker import PerformanceTracker
-
 from pybit.exceptions import FailedRequestError, InvalidRequestError
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket as UnifiedWebSocket
+from pybit.unified_trading import HTTP, WebSocket as UnifiedWebSocket
 
 
 def create_pybit_client(testnet: bool = False) -> HTTP:
@@ -1806,7 +1804,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"[{self.symbol}] MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -1823,7 +1821,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             # For MTF, we need to ensure the TradingAnalyzer can be initialized correctly with the MTF df
             # This creates a temporary analyzer instance just for this purpose.
             temp_analyzer = TradingAnalyzer(

@@ -1,5 +1,4 @@
-"""
-Main entry point for the Bybit Trading Bot.
+"""Main entry point for the Bybit Trading Bot.
 
 This script initializes the BybitTrader and starts the bot.
 """
@@ -9,8 +8,7 @@ from config import STRATEGY_FILE
 
 
 def main():
-    """
-    Initializes and runs the trading bot.
+    """Initializes and runs the trading bot.
     """
     logger.info("Initializing trading bot...")
     try:

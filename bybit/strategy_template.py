@@ -6,8 +6,7 @@ from pybit.unified_trading import HTTP
 logger = logging.getLogger(__name__)
 
 async def my_custom_strategy(market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any):
-    """
-    This is a template for a custom trading strategy.
+    """This is a template for a custom trading strategy.
     
     Args:
         market_data: Dictionary containing current market data for subscribed symbols.

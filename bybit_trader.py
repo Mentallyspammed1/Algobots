@@ -1,5 +1,4 @@
-"""
-Core Trading Logic for the Bybit Trading Bot.
+"""Core Trading Logic for the Bybit Trading Bot.
 
 This module contains the main BybitTrader class that handles:
 - API connections (REST and WebSocket)
@@ -22,13 +21,11 @@ from config import (
     WS_HEARTBEAT,
 )
 from pybit.unified_trading import HTTP, WebSocket
-
 from strategies.base_strategy import BaseStrategy
 
 
 class BybitTrader:
-    """
-    The main class for the trading bot.
+    """The main class for the trading bot.
     """
     def __init__(self, strategy_path: str):
         self.strategy: BaseStrategy = self._load_strategy_from_file(strategy_path)

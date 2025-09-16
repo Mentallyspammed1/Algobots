@@ -11,8 +11,7 @@ from indicators import (
 
 
 class EhlersSupertrendStrategy:
-    """
-    Ehlers Supertrend Strategy for generating entry and exit signals.
+    """Ehlers Supertrend Strategy for generating entry and exit signals.
     This version is updated to use centralized indicator functions for consistency and robustness.
     """
     def __init__(self, logger,
@@ -32,8 +31,7 @@ class EhlersSupertrendStrategy:
         self.sma_period = sma_period
 
     def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calculates all necessary indicators for the strategy using centralized functions.
+        """Calculates all necessary indicators for the strategy using centralized functions.
         """
         df = calculate_ehlers_fisher_strategy(df, length=self.ehlers_period)
         df = calculate_supertrend(df, period=self.supertrend_period, multiplier=self.supertrend_multiplier)
@@ -47,8 +45,7 @@ class EhlersSupertrendStrategy:
                          active_bull_obs: list[OrderBlock],
                          active_bear_obs: list[OrderBlock],
                          **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
-        """
-        Generates entry signals based on the Ehlers Supertrend strategy.
+        """Generates entry signals based on the Ehlers Supertrend strategy.
         """
         signals = []
         if df.empty:
@@ -111,8 +108,7 @@ class EhlersSupertrendStrategy:
                               active_bull_obs: list[OrderBlock],
                               active_bear_obs: list[OrderBlock],
                               **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
-        """
-        Generates exit signals based on a change in the Supertrend direction or a Fisher Transform cross.
+        """Generates exit signals based on a change in the Supertrend direction or a Fisher Transform cross.
         """
         exit_signals = []
         if df.empty or current_position_side not in ['Buy', 'Sell']:

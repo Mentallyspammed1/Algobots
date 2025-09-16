@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+
 def run_git_command(command: list[str]) -> str:
     """Runs a git command and returns its output."""
     try:

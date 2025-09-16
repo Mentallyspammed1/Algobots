@@ -1,23 +1,23 @@
-import unittest
 import asyncio
-import pandas as pd
-import numpy as np
-from decimal import Decimal
-from unittest.mock import MagicMock, AsyncMock, patch
+import os
 
 # Add the bot's directory to the Python path
 import sys
-import os
+import unittest
+from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
+
+import numpy as np
+import pandas as pd
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from supertrend_bot import (
-    SupertrendStrategy,
     BybitTradingBot,
     Config,
+    Position,
     StrategySignal,
-    OrderSide,
-    MarketInfo,
-    Position
+    SupertrendStrategy,
 )
 
 # --- Test Data Fixtures ---
@@ -49,11 +49,11 @@ class TestSupertrendStrategy(unittest.TestCase):
     def test_calculate_indicators(self):
         """Test that indicators are calculated and added to the DataFrame."""
         market_data = {self.config.timeframe: self.test_data.copy()}
-        
+
         async def run_test():
             await self.strategy.calculate_indicators(market_data)
             df = self.strategy.indicators[self.config.timeframe]
-            
+
             self.assertIn('atr', df.columns)
             self.assertIn('supertrend', df.columns)
             self.assertIn('in_uptrend', df.columns)
@@ -68,9 +68,9 @@ class TestSupertrendStrategy(unittest.TestCase):
         df['supertrend'] = 31000
         df['in_uptrend'] = False
         df.iloc[-1, df.columns.get_loc('close')] = 31500 # Price crosses above supertrend
-        
+
         market_data = {self.config.timeframe: df}
-        
+
         # Mock calculate_indicators to control the data
         self.strategy.calculate_indicators = AsyncMock()
         self.strategy.indicators = market_data
@@ -90,13 +90,13 @@ class TestSupertrendStrategy(unittest.TestCase):
         df['supertrend'] = 29000
         df['in_uptrend'] = True
         df.iloc[-1, df.columns.get_loc('close')] = 28500 # Price crosses below supertrend
-        
+
         market_data = {self.config.timeframe: df}
-        
+
         # Mock calculate_indicators
         self.strategy.calculate_indicators = AsyncMock()
         self.strategy.indicators = market_data
-        
+
         # To make this test work, we need to simulate the state change
         # The logic is `if previous['in_uptrend'] and not current['in_uptrend']`
         # The mock doesn't run the real calculation, so we set the state manually
@@ -120,14 +120,14 @@ class TestBybitTradingBot(unittest.TestCase):
         """Set up a mock environment for the bot."""
         self.config = Config(testnet=True, symbol="BTCUSDT")
         self.strategy = SupertrendStrategy(symbol=self.config.symbol, config=self.config)
-        
+
         # Mock pybit clients
         self.mock_session = MagicMock()
         self.mock_ws = MagicMock()
-        
+
         # Configure mock responses
         self.mock_session.get_instruments_info.return_value = {
-            'retCode': 0, 'result': {'list': [{'symbol': 'BTCUSDT', 
+            'retCode': 0, 'result': {'list': [{'symbol': 'BTCUSDT',
             'priceFilter': {'tickSize': '0.1'}, 'lotSizeFilter': {'qtyStep': '0.001'}}]}
         }
         self.mock_session.get_kline.return_value = {
@@ -142,7 +142,7 @@ class TestBybitTradingBot(unittest.TestCase):
         self.mock_session.place_order = MagicMock(return_value={'retCode': 0, 'result': {'orderId': 'test-order-id-123'}})
 
         self.bot = BybitTradingBot(
-            config=self.config, 
+            config=self.config,
             strategy=self.strategy,
             session=self.mock_session,
             ws=self.mock_ws
@@ -167,7 +167,7 @@ class TestBybitTradingBot(unittest.TestCase):
         self.bot.balance = Decimal('10000') # Set balance for test
         self.config.risk_per_trade = 0.02 # 2%
         self.config.leverage = 10
-        
+
         size = self.bot._calculate_position_size(current_price=50000)
         # Expected: (10000 * 0.02) / 50000 * 10 = 0.04
         self.assertAlmostEqual(size, 0.04)
@@ -178,11 +178,11 @@ class TestBybitTradingBot(unittest.TestCase):
             await self.bot.initialize() # Initialize bot to get market_info etc.
             self.bot.position = None # Ensure no existing position
             self.bot.market_data[self.config.timeframe] = create_test_dataframe() # Ensure data exists
-            
+
             buy_signal = StrategySignal(action='BUY', symbol='BTCUSDT', stop_loss=29000)
-            
+
             await self.bot.process_signal(buy_signal)
-            
+
             self.mock_session.place_order.assert_called_once()
             call_args = self.mock_session.place_order.call_args[1]
             self.assertEqual(call_args['side'], 'Buy')
@@ -199,17 +199,17 @@ class TestBybitTradingBot(unittest.TestCase):
             self.bot.market_data[self.config.timeframe] = create_test_dataframe()
 
             buy_signal = StrategySignal(action='BUY', symbol='BTCUSDT', stop_loss=29000)
-            
+
             await self.bot.process_signal(buy_signal)
-            
+
             # Should be called twice: once to close, once to open
             self.assertEqual(self.mock_session.place_order.call_count, 2)
-            
+
             # First call is to close the short (i.e., a BUY order)
             first_call_args = self.mock_session.place_order.call_args_list[0].kwargs
             self.assertEqual(first_call_args['side'], 'Buy')
             self.assertEqual(first_call_args['qty'], '0.100') # Closing the exact size
-            
+
             # Second call is to open the new long position
             second_call_args = self.mock_session.place_order.call_args_list[1].kwargs
             self.assertEqual(second_call_args['side'], 'Buy')

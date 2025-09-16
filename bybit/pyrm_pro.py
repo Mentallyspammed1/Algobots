@@ -403,7 +403,7 @@ async def market_making_strategy(
                         logger.info(f"[TP] {symbol}: Long position PnL {pnl_pct:.4f} >= {take_profit_pct:.4f}. Closing position.")
                         await bot.place_order(symbol=symbol, side="Sell", order_type="Market", qty=str(position_size), reduce_only=True)
                         continue # Skip further order placement for this symbol
-                    elif stop_loss_pct > 0 and pnl_pct <= -stop_loss_pct:
+                    if stop_loss_pct > 0 and pnl_pct <= -stop_loss_pct:
                         logger.info(f"[SL] {symbol}: Long position PnL {pnl_pct:.4f} <= {-stop_loss_pct:.4f}. Closing position.")
                         await bot.place_order(symbol=symbol, side="Sell", order_type="Market", qty=str(position_size), reduce_only=True)
                         continue # Skip further order placement for this symbol
@@ -412,7 +412,7 @@ async def market_making_strategy(
                         logger.info(f"[TP] {symbol}: Short position PnL {pnl_pct:.4f} <= {-take_profit_pct:.4f}. Closing position.")
                         await bot.place_order(symbol=symbol, side="Buy", order_type="Market", qty=str(abs(position_size)), reduce_only=True)
                         continue # Skip further order placement for this symbol
-                    elif stop_loss_pct > 0 and pnl_pct >= stop_loss_pct: # For short, loss is positive PnL
+                    if stop_loss_pct > 0 and pnl_pct >= stop_loss_pct: # For short, loss is positive PnL
                         logger.info(f"[SL] {symbol}: Short position PnL {pnl_pct:.4f} >= {stop_loss_pct:.4f}. Closing position.")
                         await bot.place_order(symbol=symbol, side="Buy", order_type="Market", qty=str(abs(position_size)), reduce_only=True)
                         continue # Skip further order placement for this symbol

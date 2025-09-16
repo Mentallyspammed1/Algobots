@@ -1,8 +1,9 @@
 import json
 import logging
 import os
+from typing import Any
+
 import requests
-from typing import Any, Dict
 from colorama import Fore, Style, init
 
 init(autoreset=True)
@@ -23,7 +24,7 @@ class GeminiClient:
         self.logger = logger
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
 
-    def analyze_market_data(self, prompt: str) -> Dict[str, Any] | None:
+    def analyze_market_data(self, prompt: str) -> dict[str, Any] | None:
         headers = {
             "Content-Type": "application/json",
         }
@@ -45,14 +46,14 @@ class GeminiClient:
             self.logger.debug(f"{NEON_BLUE}Sending prompt to Gemini: {prompt[:200]}...{RESET}")
             response = requests.post(self.base_url, headers=headers, json=data, timeout=30)
             response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-            
+
             response_json = response.json()
             self.logger.debug(f"{NEON_BLUE}Received response from Gemini: {json.dumps(response_json)[:200]}...{RESET}")
 
-            if "candidates" in response_json and response_json["candidates"]:
+            if response_json.get("candidates"):
                 # Assuming the first candidate's text is the relevant part
                 gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
-                
+
                 # Attempt to parse the text as JSON
                 try:
                     analysis = json.loads(gemini_text)
@@ -79,8 +80,9 @@ class GeminiClient:
 
 if __name__ == "__main__":
     # Example Usage (for testing purposes)
-    from dotenv import load_dotenv
     import sys
+
+    from dotenv import load_dotenv
 
     # Setup a basic logger for testing
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -111,7 +113,7 @@ Bollinger Bands: Upper 102.00, Middle 99.00, Lower 96.00 (Price near Upper Band)
 Recommendation should include: "entry", "exit", "take_profit", "stop_loss", "confidence_level" (0-100).
 Example JSON: {"entry": "BUY", "exit": "N/A", "take_profit": 103.00, "stop_loss": 98.00, "confidence_level": 85}
 """
-    
+
     test_logger.info("Running Gemini API test...")
     analysis_result = gemini_client.analyze_market_data(test_prompt)
 

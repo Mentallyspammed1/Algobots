@@ -276,8 +276,7 @@ logger.addHandler(dh)
 
 # --- Helper for API Calls with Retry and Specific Error Handling ---
 def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, initial_delay=1):
-    """
-    Generic function to make Bybit API calls with retry logic and specific error handling.
+    """Generic function to make Bybit API calls with retry logic and specific error handling.
     Handles general Exceptions.
     """
     for attempt in range(max_retries):
@@ -292,11 +291,10 @@ def _make_api_call(api_client, method, endpoint, params=None, max_retries=3, ini
 
             if response.get('retCode') == 0:
                 return response
-            else:
-                ret_code = response.get('retCode')
-                ret_msg = response.get('retMsg')
-                log_message(f"Bybit API Error ({ret_code}): {ret_msg}. Retrying {endpoint} in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "warning")
-                time.sleep(initial_delay * (2**attempt)) # Exponential backoff
+            ret_code = response.get('retCode')
+            ret_msg = response.get('retMsg')
+            log_message(f"Bybit API Error ({ret_code}): {ret_msg}. Retrying {endpoint} in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "warning")
+            time.sleep(initial_delay * (2**attempt)) # Exponential backoff
         except Exception as e: # Catch any Pybit-related exceptions or other unexpected errors
             logging.error(f"API call error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})")
             time.sleep(initial_delay * (2**attempt)) # Exponential backoff

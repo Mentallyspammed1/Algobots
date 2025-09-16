@@ -5,7 +5,6 @@ import pandas as pd
 from algobots_types import OrderBlock
 from color_codex import COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_RESET, COLOR_YELLOW
 from config import SMA_PERIOD  # Assuming SMA_PERIOD is defined in config.py
-
 from strategies.strategy_template import StrategyTemplate
 
 

@@ -9,8 +9,7 @@
 # Pyrmethus - Unified Scalping Spell v12.0.0 (Asynchronous Opus)
 # A fully asynchronous, context-aware high-frequency trading bot for Bybit Futures.
 
-"""
-High-Frequency Trading Bot (Scalping) for Bybit USDT Futures
+"""High-Frequency Trading Bot (Scalping) for Bybit USDT Futures
 Version: 12.0.0 (Asynchronous Opus by Pyrmethus)
 
 **Disclaimer:**

@@ -1,24 +1,19 @@
 import logging
+import time  # Added for time.time()
 from collections import deque
-from copy import deepcopy
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal
+
 import numpy as np
 import pandas as pd
-import time # Added for time.time()
 
-from backtest import FillEngine, BacktestParams # Import FillEngine and BacktestParams
-
+from backtest import BacktestParams, FillEngine  # Import FillEngine and BacktestParams
 from config_definitions import (
     Config,
-    StrategyConfig,
-    InventoryStrategyConfig,
-    DynamicSpreadConfig,
-    CircuitBreakerConfig,
-    TradeMetrics,
-    FilesConfig, # Needed for setup_logger
+    MarketInfo,
+    TradingState,
+    setup_logger,
 )
-from config_definitions import MarketInfo, TradingState, setup_logger
 
 # Use the same logger as the main bot for consistency
 logger = logging.getLogger("MarketMakerBot")
@@ -28,7 +23,7 @@ class MarketMakingStrategy:
         self.config = config
         self.market_info = market_info
 
-    
+
 
     def _calculate_dynamic_spread(self, state: TradingState) -> Decimal:
         ds_config = self.config.strategy.dynamic_spread
@@ -247,7 +242,7 @@ class MarketMakingStrategy:
         mid_price_for_strategy = state.smoothed_mid_price
         pos_qty = state.metrics.current_asset_holdings
 
-        
+
 
         spread_pct = self._calculate_dynamic_spread(state)
 
@@ -263,7 +258,7 @@ class MarketMakingStrategy:
         target_bid_price = self.market_info.format_price(target_bid_price)
         target_ask_price = self.market_info.format_price(target_ask_price)
 
-        
+
 
         buy_qty = self._calculate_order_size("Buy", target_bid_price, state)
         sell_qty = self._calculate_order_size("Sell", target_ask_price, state)
@@ -397,7 +392,7 @@ class Backtester:
 
         # Update position and PnL using the new method
         metrics.update_position_and_pnl(side, qty, price)
-        
+
         # Update balance based on fill
         if side == "Buy":
             self.state.current_balance -= (qty * price) + exec_fee

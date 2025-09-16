@@ -26,10 +26,24 @@ const SL_ATR_MULTIPLIER = CONFIG.SL_ATR_MULTIPLIER;
 // ====================== 
 // UTILITIES 
 // ====================== 
+/**
+ * @async
+ * @function timeout
+ * @description Creates a promise that resolves after a specified number of milliseconds.
+ * @param {number} ms - The number of milliseconds to wait.
+ * @returns {Promise<void>}
+ */
 async function timeout(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * @function getCurrentTime
+ * @description Retrieves the current local time in the specified timezone and the current UTC time.
+ * Handles invalid timezones by defaulting to UTC.
+ * @param {string} timezoneStr - The timezone string (e.g., "America/New_York").
+ * @returns {Array<DateTime>} An array containing [localTime, utcTime] Luxon DateTime objects.
+ */
 function getCurrentTime(timezoneStr) {
     try {
         const localTime = DateTime.local().setZone(timezoneStr);
@@ -45,6 +59,14 @@ function getCurrentTime(timezoneStr) {
     }
 }
 
+/**
+ * @function isMarketOpen
+ * @description Checks if the current local time falls within the specified market open hours.
+ * @param {DateTime} localTime - The current local time Luxon DateTime object.
+ * @param {number} openHour - The hour when the market opens (0-23).
+ * @param {number} closeHour - The hour when the market closes (0-23).
+ * @returns {boolean} True if the market is considered open, false otherwise.
+ */
 function isMarketOpen(localTime, openHour, closeHour) {
     const currentHour = localTime.hour;
     const openHourInt = parseInt(openHour);
@@ -56,6 +78,12 @@ function isMarketOpen(localTime, openHour, closeHour) {
     }
 }
 
+/**
+ * @function sendTermuxToast
+ * @description Sends a toast notification using Termux:API if running in a Termux environment.
+ * @param {string} message - The message to display in the toast.
+ * @returns {void}
+ */
 function sendTermuxToast(message) {
     if (process.platform === 'linux' && process.env.TERMUX_VERSION) {
         try {
@@ -66,6 +94,15 @@ function sendTermuxToast(message) {
     }
 }
 
+/**
+ * @function calculatePnl
+ * @description Calculates the Profit and Loss (PnL) for a trade.
+ * @param {string} side - The side of the trade ("Buy" or "Sell").
+ * @param {number} entryPrice - The entry price of the trade.
+ * @param {number} exitPrice - The exit price of the trade.
+ * @param {number} qty - The quantity of the asset traded.
+ * @returns {number} The calculated PnL.
+ */
 function calculatePnl(side, entryPrice, exitPrice, qty) {
     return side === 'Buy' ? (exitPrice - entryPrice) * qty : (entryPrice - exitPrice) * qty;
 }
@@ -73,6 +110,16 @@ function calculatePnl(side, entryPrice, exitPrice, qty) {
 // ====================== 
 // SIGNAL GENERATION 
 // ====================== 
+/**
+ * @function generateEhlSupertrendSignals
+ * @description Generates trading signals (Buy/Sell/none) based on Ehlers Supertrend crosses, Fisher Transform, RSI, ADX, and volume spikes.
+ * @param {Array<Object>} klines - An array of kline data.
+ * @param {number} currentPrice - The current closing price.
+ * @param {number} pricePrecision - The price precision for formatting.
+ * @param {number} qtyPrecision - The quantity precision for formatting.
+ * @param {Object} strategyConfig - The configuration object for the specific strategy.
+ * @returns {Array<any>} An array containing [signal (string), riskDistance (number), tpPrice (number), slPrice (number), dfIndicators (Array<Object>), volumeConfirm (boolean)].
+ */
 function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyPrecision, strategyConfig) { // Added strategyConfig
     logger.debug(`generateEhlSupertrendSignals: Generating signals with config: ${JSON.stringify(strategyConfig)}`);
     // Extract relevant config from strategyConfig or fall back to global CONFIG
@@ -169,6 +216,15 @@ function generateEhlSupertrendSignals(klines, currentPrice, pricePrecision, qtyP
 // ====================== 
 // MAIN BOT LOGIC 
 // ====================== 
+/**
+ * @async
+ * @function main
+ * @description The main execution loop for the Ehlers Supertrend Cross strategy.
+ * It continuously fetches market data, generates trading signals, and places/manages orders.
+ * Includes market open checks, balance checks, and position management.
+ * @param {Object} strategyConfig - The configuration object for this specific strategy instance.
+ * @returns {Promise<void>}
+ */
 async function main(strategyConfig) { // Added strategyConfig parameter
     logger.info(neon.header('Pyrmethus awakens the Ehlers Supertrend Cross Strategy!'));
     logger.debug(`ehlst_strategy: Initializing with config: ${JSON.stringify(strategyConfig)}`);
@@ -349,6 +405,10 @@ async function main(strategyConfig) { // Added strategyConfig parameter
 // ====================== 
 // LAUNCH 
 // ====================== 
+/**
+ * @description Immediately invoked async function to launch the Ehlers Supertrend Cross strategy.
+ * Handles top-level unhandled errors during the bot's execution.
+ */
 (async () => {
     try {
         await main(CONFIG);

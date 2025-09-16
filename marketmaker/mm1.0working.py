@@ -1,8 +1,8 @@
 import asyncio
 import logging
+import math
 import os
 import pickle
-import math
 import sys
 import time
 from collections import deque
@@ -963,7 +963,7 @@ class BybitMarketMaker:
         price_change = oscillation_amplitude * Decimal(str(math.sin(float(time_factor) * 2 * math.pi)))
 
         new_mid_price = self.state.mid_price + price_change
-        
+
         # Ensure price doesn't go below a reasonable minimum
         if new_mid_price < Decimal('0.00001'):
             new_mid_price = Decimal('0.00001')
@@ -988,13 +988,11 @@ class BybitMarketMaker:
                 if order_id.startswith('DRY_'): # Only process mock orders
                     order_price = order_data['price']
                     side = order_data['side']
-                    
+
                     filled = False
-                    if side == 'Buy' and self.state.mid_price <= order_price:
+                    if (side == 'Buy' and self.state.mid_price <= order_price) or (side == 'Sell' and self.state.mid_price >= order_price):
                         filled = True
-                    elif side == 'Sell' and self.state.mid_price >= order_price:
-                        filled = True
-                    
+
                     if filled:
                         # For sell orders, ensure we have enough holdings in simulation
                         if side == 'Sell' and order_data['qty'] > self.state.metrics.current_asset_holdings:
@@ -1004,7 +1002,7 @@ class BybitMarketMaker:
 
             for order_id, order_data in orders_to_process:
                 self.logger.info(f"DRY_RUN: Simulating fill for order {order_id} (Side: {order_data['side']}, Price: {order_data['price']}) at current mid_price {self.state.mid_price}")
-                
+
                 # Construct mock order_data for _process_fill
                 mock_fill_data = {
                     'orderId': order_id,
@@ -1597,7 +1595,7 @@ class BybitMarketMaker:
             return Decimal('0')
 
         effective_capital = capital * self.config.leverage if self.config.category in ['linear', 'inverse'] else capital
-        
+
         base_order_value = effective_capital * self.config.strategy.base_order_size_pct_of_balance
         qty_from_base_pct = base_order_value / price
 

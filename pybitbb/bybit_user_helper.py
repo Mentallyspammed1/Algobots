@@ -1,9 +1,9 @@
 # bybit_user_helper.py
 import logging
-from typing import Dict, Any, Optional, List, Union
+from typing import Any
 
+from pybit.exceptions import BybitAPIError, BybitRequestError
 from pybit.unified_trading import HTTP
-from pybit.exceptions import BybitRequestError, BybitAPIError
 
 # Configure logging for the module
 logging.basicConfig(
@@ -13,15 +13,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BybitUserHelper:
-    """
-    A helper class for managing Bybit user-related functionalities,
+    """A helper class for managing Bybit user-related functionalities,
     including API key management, sub-account operations, and affiliate information.
     All functions require API key authentication.
     """
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = False):
-        """
-        Initializes the BybitUserHelper with API credentials and environment.
+        """Initializes the BybitUserHelper with API credentials and environment.
 
         :param api_key: Your Bybit API key.
         :param api_secret: Your Bybit API secret.
@@ -37,9 +35,8 @@ class BybitUserHelper:
         self.session = HTTP(testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret)
         logger.info(f"BybitUserHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
 
-    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Internal method to make an HTTP request to the Bybit API and handle responses.
+    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> dict[str, Any] | None:
+        """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
 
         :param method: The name of the method to call on the `self.session` object.
@@ -51,18 +48,17 @@ class BybitUserHelper:
         try:
             func = getattr(self.session, method)
             response = func(**kwargs)
-            
+
             if response and response.get('retCode') == 0:
                 logger.debug(f"[{endpoint_name}] Successfully called. Response: {response.get('result')}")
                 return response.get('result')
-            else:
-                ret_code = response.get('retCode', 'N/A')
-                error_msg = response.get('retMsg', 'Unknown error')
-                logger.error(
-                    f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
-                    f"Args: {kwargs}. Full Response: {response}"
-                )
-                return None
+            ret_code = response.get('retCode', 'N/A')
+            error_msg = response.get('retMsg', 'Unknown error')
+            logger.error(
+                f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
+                f"Args: {kwargs}. Full Response: {response}"
+            )
+            return None
         except (BybitRequestError, BybitAPIError) as e:
             logger.exception(
                 f"[{endpoint_name}] Pybit specific error during API call. "
@@ -77,17 +73,15 @@ class BybitUserHelper:
             return None
 
     # --- API Key Management ---
-    def get_api_key_info(self) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves information about the current API key.
+    def get_api_key_info(self) -> dict[str, Any] | None:
+        """Retrieves information about the current API key.
 
         :return: A dictionary containing API key details or None on failure.
         """
         return self._make_request('get_api_key_info', 'API Key Info')
 
-    def modify_master_api_key(self, read_only: int, ips: Optional[List[str]] = None, permissions: Optional[Dict[str, List[str]]] = None) -> Optional[Dict[str, Any]]:
-        """
-        Modifies permissions or IP restrictions for the master API key.
+    def modify_master_api_key(self, read_only: int, ips: list[str] | None = None, permissions: dict[str, list[str]] | None = None) -> dict[str, Any] | None:
+        """Modifies permissions or IP restrictions for the master API key.
         Use with extreme caution, as this modifies the key currently in use.
 
         :param read_only: 0 for read/write, 1 for read-only.
@@ -110,13 +104,12 @@ class BybitUserHelper:
             params['ips'] = ips
         if permissions:
             params['permissions'] = permissions
-        
+
         logger.warning("Attempting to modify the master API key. This is a sensitive operation.")
         return self._make_request('modify_master_api_key', 'Modify Master API Key', **params)
 
-    def delete_master_api_key(self) -> Optional[Dict[str, Any]]:
-        """
-        Deletes the master API key currently in use.
+    def delete_master_api_key(self) -> dict[str, Any] | None:
+        """Deletes the master API key currently in use.
         This will invalidate the current helper instance. Use with extreme caution.
 
         :return: A dictionary containing the deletion response or None on failure.
@@ -125,9 +118,8 @@ class BybitUserHelper:
         return self._make_request('delete_master_api_key', 'Delete Master API Key')
 
     # --- Sub-Account Management ---
-    def create_sub_uid(self, username: str, member_type: int = 1) -> Optional[Dict[str, Any]]:
-        """
-        Creates a new sub-UID (sub-account).
+    def create_sub_uid(self, username: str, member_type: int = 1) -> dict[str, Any] | None:
+        """Creates a new sub-UID (sub-account).
 
         :param username: The username for the new sub-account.
         :param member_type: Type of sub-account (1 for normal, 6 for Custodian). Defaults to 1.
@@ -143,17 +135,15 @@ class BybitUserHelper:
         params = {'username': username, 'memberType': member_type}
         return self._make_request('create_sub_uid', 'Create Sub-UID', **params)
 
-    def get_sub_uid_list(self) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves a list of all sub-UIDs (sub-accounts) under the master account.
+    def get_sub_uid_list(self) -> dict[str, Any] | None:
+        """Retrieves a list of all sub-UIDs (sub-accounts) under the master account.
 
         :return: A dictionary containing a list of sub-UIDs or None on failure.
         """
         return self._make_request('get_sub_uid_list', 'Get Sub-UID List')
 
-    def freeze_sub_uid(self, sub_uid: int, frozen: int) -> Optional[Dict[str, Any]]:
-        """
-        Freezes or unfreezes a sub-UID.
+    def freeze_sub_uid(self, sub_uid: int, frozen: int) -> dict[str, Any] | None:
+        """Freezes or unfreezes a sub-UID.
 
         :param sub_uid: The UID of the sub-account to freeze/unfreeze.
         :param frozen: 1 to freeze, 0 to unfreeze.
@@ -169,14 +159,13 @@ class BybitUserHelper:
         params = {'subuid': sub_uid, 'frozen': frozen}
         return self._make_request('freeze_sub_uid', 'Freeze Sub-UID', **params)
 
-    def create_sub_api_key(self, 
-                           sub_uid: int, 
-                           read_only: int, 
-                           ips: Optional[List[str]] = None, 
-                           permissions: Optional[Dict[str, List[str]]] = None,
-                           note: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Creates an API key for a specific sub-UID.
+    def create_sub_api_key(self,
+                           sub_uid: int,
+                           read_only: int,
+                           ips: list[str] | None = None,
+                           permissions: dict[str, list[str]] | None = None,
+                           note: str | None = None) -> dict[str, Any] | None:
+        """Creates an API key for a specific sub-UID.
 
         :param sub_uid: The UID of the sub-account.
         :param read_only: 0 for read/write, 1 for read-only.
@@ -210,9 +199,8 @@ class BybitUserHelper:
             params['note'] = note
         return self._make_request('create_sub_api_key', 'Create Sub-Account API Key', **params)
 
-    def get_all_sub_api_keys(self, sub_member_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves all API keys for a specific sub-UID or all sub-UIDs if `sub_member_id` is None.
+    def get_all_sub_api_keys(self, sub_member_id: int | None = None) -> dict[str, Any] | None:
+        """Retrieves all API keys for a specific sub-UID or all sub-UIDs if `sub_member_id` is None.
 
         :param sub_member_id: Optional. The UID of the sub-account.
         :return: A dictionary containing a list of sub-account API keys or None on failure.
@@ -225,9 +213,8 @@ class BybitUserHelper:
             params['subMemberId'] = sub_member_id
         return self._make_request('get_all_sub_api_keys', 'Get All Sub-Account API Keys', **params)
 
-    def delete_sub_api_key(self, api_key_to_delete: str) -> Optional[Dict[str, Any]]:
-        """
-        Deletes a specific sub-account API key.
+    def delete_sub_api_key(self, api_key_to_delete: str) -> dict[str, Any] | None:
+        """Deletes a specific sub-account API key.
 
         :param api_key_to_delete: The API key string of the sub-account to delete.
         :return: A dictionary containing the deletion response or None on failure.
@@ -241,9 +228,8 @@ class BybitUserHelper:
         return self._make_request('delete_sub_api_key', 'Delete Sub-Account API Key', **params)
 
     # --- Affiliate Information ---
-    def get_affiliate_user_info(self, uid: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves affiliate user information.
+    def get_affiliate_user_info(self, uid: int | None = None) -> dict[str, Any] | None:
+        """Retrieves affiliate user information.
 
         :param uid: Optional. User ID to query. If not provided, queries for the current API key's user.
         :return: A dictionary containing affiliate user information or None on failure.
@@ -270,7 +256,6 @@ if __name__ == "__main__":
         logger.error("Please replace YOUR_MASTER_API_KEY and YOUR_MASTER_API_SECRET with your actual credentials in bybit_user_helper.py example.")
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
-        pass
 
     user_helper = BybitUserHelper(API_KEY, API_SECRET, testnet=USE_TESTNET)
 
@@ -316,7 +301,7 @@ if __name__ == "__main__":
             print(f"  Freeze response: {freeze_response}")
         else:
             print("  Failed to freeze sub-UID.")
-            
+
         print(f"\n--- Unfreezing Sub-UID: {target_sub_uid} ---")
         unfreeze_response = user_helper.freeze_sub_uid(sub_uid=target_sub_uid, frozen=0)
         if unfreeze_response:

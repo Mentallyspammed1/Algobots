@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import (
@@ -20,7 +21,7 @@ from decimal import (
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Callable, Dict, Final, List, Optional, Tuple, Union
+from typing import Any, Final
 
 import ccxt
 import numpy as np
@@ -30,6 +31,7 @@ import requests
 import websocket  # pip install websocket-client
 from colorama import Fore, Style, init
 from pybit.unified_trading import HTTP
+
 
 class PybitAPIException(Exception):
     """Custom exception for Pybit API errors."""
@@ -55,8 +57,7 @@ init(autoreset=True)
 
 # Define a placeholder ZoneInfo class for fallback if zoneinfo/tzdata is not available.
 class _FallbackZoneInfo:
-    """
-    A fallback implementation for `zoneinfo.ZoneInfo` for environments
+    """A fallback implementation for `zoneinfo.ZoneInfo` for environments
     where `zoneinfo` (Python 3.9+) or `tzdata` is not available.
     It defaults to UTC and issues a warning upon first instantiation.
     """
@@ -139,8 +140,8 @@ NC: Final[str] = Fore.CYAN + Style.BRIGHT  # General neutral information
 RST: Final[str] = Style.RESET_ALL  # Reset all styles
 
 # Retrieve API keys from environment variables.
-AK: Final[Optional[str]] = os.getenv("BYBIT_API_KEY")
-AS: Final[Optional[str]] = os.getenv("BYBIT_API_SECRET")
+AK: Final[str | None] = os.getenv("BYBIT_API_KEY")
+AS: Final[str | None] = os.getenv("BYBIT_API_SECRET")
 if not AK or not AS:
     raise ValueError(
         f"{NR}BYBIT_API_KEY and BYBIT_API_SECRET must be set in your .env file. These are the keys to the exchange's digital gates!{RST}"
@@ -161,7 +162,7 @@ except Exception as tz_err:
 
 MAR: Final[int] = 3  # Max API retry attempts
 RDS: Final[int] = 5  # Retry delay in seconds
-VI: Final[List[str]] = [
+VI: Final[list[str]] = [
     "1",
     "3",
     "5",
@@ -174,7 +175,7 @@ VI: Final[List[str]] = [
     "W",
     "M",
 ]  # Valid intervals
-CIM: Final[Dict[str, str]] = {
+CIM: Final[dict[str, str]] = {
     "1": "1m",
     "3": "3m",
     "5": "5m",
@@ -187,10 +188,10 @@ CIM: Final[Dict[str, str]] = {
     "W": "1w",
     "M": "1M",
 }
-REC: Final[List[int]] = [429, 500, 502, 503, 504]  # HTTP response codes for retries
+REC: Final[list[int]] = [429, 500, 502, 503, 504]  # HTTP response codes for retries
 
 # Default Indicator Parameters (DIP) - using Decimal for precision
-DIP: Final[Dict[str, Union[int, Decimal]]] = {
+DIP: Final[dict[str, int | Decimal]] = {
     "atr_period": 14,
     "cci_window": 20,
     "williams_r_window": 14,
@@ -212,7 +213,7 @@ DIP: Final[Dict[str, Union[int, Decimal]]] = {
     "psar_max_af": Decimal("0.2"),
     "ehlers_fisher_length": 10,  # Added Ehlers Fisher default length
 }
-FL: Final[List[Decimal]] = [
+FL: Final[list[Decimal]] = [
     Decimal("0.0"),
     Decimal("0.236"),
     Decimal("0.382"),
@@ -256,7 +257,7 @@ def format_metric(
     label: str,
     value: Any,
     label_color: str,
-    value_color: Optional[str] = None,  # If None, uses label_color
+    value_color: str | None = None,  # If None, uses label_color
     label_width: int = 22,
     value_precision: int = 2,
     unit: str = "",
@@ -287,12 +288,12 @@ def format_metric(
         else:
             formatted_value = f"{actual_value_color}{value:,}{unit}{RST}"
     else:
-        formatted_value = f"{actual_value_color}{str(value)}{unit}{RST}"
+        formatted_value = f"{actual_value_color}{value!s}{unit}{RST}"
 
     return f"{formatted_label}: {formatted_value}"
 
 
-def print_table_header(columns: List[Tuple[str, int]], header_color: str = NB) -> None:
+def print_table_header(columns: list[tuple[str, int]], header_color: str = NB) -> None:
     """Prints a formatted table header. columns is a list of (name, width) tuples."""
     header_parts = []
     for name, width in columns:
@@ -311,12 +312,12 @@ def print_table_header(columns: List[Tuple[str, int]], header_color: str = NB) -
 
 
 def print_table_row(
-    row_data: List[Any],  # Can be any type, will be str() converted
-    column_widths: List[int],
-    cell_colors: Optional[List[str]] = None,
+    row_data: list[Any],  # Can be any type, will be str() converted
+    column_widths: list[int],
+    cell_colors: list[str] | None = None,
     default_color: str = NC,
     decimal_precision: int = 2,  # For formatting Decimals/floats in rows
-    pnl_columns: Optional[List[int]] = None,  # Indices of columns to treat as PnL
+    pnl_columns: list[int] | None = None,  # Indices of columns to treat as PnL
 ) -> None:
     """Prints a formatted table row."""
     if pnl_columns is None:
@@ -364,8 +365,7 @@ def clear_screen() -> None:
 
 
 class BybitUnifiedTrading:
-    """
-    Encapsulates Bybit Unified Trading Account API interactions using the pybit library.
+    """Encapsulates Bybit Unified Trading Account API interactions using the pybit library.
     Handles order management, position adjustments, and account queries.
     """
 
@@ -382,9 +382,8 @@ class BybitUnifiedTrading:
         self.logger.info(f"{NB}BybitUnifiedTrading session initialized. Testnet: {testnet}. The trading conduit is open!{RST}")
 
     @retry_api_call(catch_exceptions=(requests.exceptions.RequestException, PybitAPIException))
-    def query_api(self, method_name: str, **kwargs) -> Dict[str, Any]:
-        """
-        Generic method to call any pybit session method and handle its response.
+    def query_api(self, method_name: str, **kwargs) -> dict[str, Any]:
+        """Generic method to call any pybit session method and handle its response.
         """
         self.logger.debug(f"Calling Bybit API method '{method_name}' with params: {kwargs}")
         try:
@@ -393,11 +392,10 @@ class BybitUnifiedTrading:
             if response and response.get('retCode') == 0:
                 self.logger.debug(f"API call '{method_name}' successful. Response: {response}")
                 return response
-            else:
-                error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
-                ret_code = response.get('retCode', 'N/A') if response else 'N/A'
-                self.logger.error(f"{NR}Bybit API call '{method_name}' failed. Code: {ret_code}, Message: {error_msg}. Full response: {response}{RST}")
-                raise PybitAPIException(f"Bybit API error: {error_msg} (Code: {ret_code})")
+            error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
+            ret_code = response.get('retCode', 'N/A') if response else 'N/A'
+            self.logger.error(f"{NR}Bybit API call '{method_name}' failed. Code: {ret_code}, Message: {error_msg}. Full response: {response}{RST}")
+            raise PybitAPIException(f"Bybit API error: {error_msg} (Code: {ret_code})")
         except PybitAPIException:
             raise # Re-raise custom exception
         except requests.exceptions.RequestException as e:
@@ -407,35 +405,35 @@ class BybitUnifiedTrading:
             self.logger.error(f"{NR}An unexpected error occurred during Bybit API call '{method_name}': {e}{RST}", exc_info=True)
             raise
 
-    def place_order(self, **kwargs) -> Dict[str, Any]:
+    def place_order(self, **kwargs) -> dict[str, Any]:
         """Place a new order."""
         return self.query_api("place_order", **kwargs)
 
-    def cancel_order(self, **kwargs) -> Dict[str, Any]:
+    def cancel_order(self, **kwargs) -> dict[str, Any]:
         """Cancel an existing order."""
         return self.query_api("cancel_order", **kwargs)
 
-    def amend_order(self, **kwargs) -> Dict[str, Any]:
+    def amend_order(self, **kwargs) -> dict[str, Any]:
         """Modify an existing order."""
         return self.query_api("amend_order", **kwargs)
 
-    def cancel_all_orders(self, **kwargs) -> Dict[str, Any]:
+    def cancel_all_orders(self, **kwargs) -> dict[str, Any]:
         """Cancel all orders for a category or settleCoin."""
         return self.query_api("cancel_all_orders", **kwargs)
 
-    def set_trading_stop(self, **kwargs) -> Dict[str, Any]:
+    def set_trading_stop(self, **kwargs) -> dict[str, Any]:
         """Sets or modifies TP/SL for an existing position (Derivatives only)."""
         return self.query_api("set_trading_stop", **kwargs)
 
-    def get_wallet_balance(self, **kwargs) -> Dict[str, Any]:
+    def get_wallet_balance(self, **kwargs) -> dict[str, Any]:
         """Query wallet balance across different coin types."""
         return self.query_api("get_wallet_balance", **kwargs)
 
-    def get_account_info(self, **kwargs) -> Dict[str, Any]:
+    def get_account_info(self, **kwargs) -> dict[str, Any]:
         """Retrieve account information."""
         return self.query_api("get_account_info", **kwargs)
 
-    def get_fee_rates(self, **kwargs) -> Dict[str, Any]:
+    def get_fee_rates(self, **kwargs) -> dict[str, Any]:
         """Retrieve fee rates."""
         return self.query_api("get_fee_rates", **kwargs)
 
@@ -449,10 +447,10 @@ def clear_screen() -> None:
 
 
 def display_open_positions(
-    open_trades: Dict[str, 'Tr'],
-    market_infos: Dict[str, Dict],
-    current_prices: Dict[
-        str, Optional[Decimal]
+    open_trades: dict[str, 'Tr'],
+    market_infos: dict[str, dict],
+    current_prices: dict[
+        str, Decimal | None
     ],  # Keyed by Bybit Symbol ID (e.g., BTCUSDT)
     quote_currency: str,
     logger: logging.Logger,  # Pass a logger instance for uPnL calculation
@@ -644,8 +642,8 @@ def display_open_positions(
 
 
 def display_recent_closed_trades(
-    closed_trades: List['Tr'],
-    market_infos: Dict[str, Dict],
+    closed_trades: list['Tr'],
+    market_infos: dict[str, dict],
     quote_currency: str,
     logger: logging.Logger,  # For TA.gpp
     num_to_display: int = 5,
@@ -755,9 +753,8 @@ def display_recent_closed_trades(
 
 
 # --- SMS Alert Function ---
-def send_sms_alert(message: str, recipient_number: str, logger: logging.Logger, config: Dict[str, Any]) -> bool:
-    """
-    Sends an SMS alert using Termux API if enabled in config.
+def send_sms_alert(message: str, recipient_number: str, logger: logging.Logger, config: dict[str, Any]) -> bool:
+    """Sends an SMS alert using Termux API if enabled in config.
     Returns True if SMS was sent or alerts are disabled, False if sending failed.
     """
     if not config.get("enable_sms_alerts", False):
@@ -792,10 +789,9 @@ def send_sms_alert(message: str, recipient_number: str, logger: logging.Logger, 
         if result.returncode == 0:
             logger.info(f"{NG}SMS alert sent successfully to {recipient_number}. Message: '{sanitized_message}'{RST}")
             return True
-        else:
-            error_output = result.stderr or result.stdout or "No output"
-            logger.error(f"{NR}Failed to send SMS alert via Termux. Return code: {result.returncode}. Error: {error_output.strip()}{RST}")
-            return False
+        error_output = result.stderr or result.stdout or "No output"
+        logger.error(f"{NR}Failed to send SMS alert via Termux. Return code: {result.returncode}. Error: {error_output.strip()}{RST}")
+        return False
     except FileNotFoundError:
         logger.error(f"{NR}Termux API command 'termux-sms-send' not found. Is Termux API installed and configured?{RST}")
         return False
@@ -807,8 +803,7 @@ def send_sms_alert(message: str, recipient_number: str, logger: logging.Logger, 
         return False
 
 class SF(logging.Formatter):
-    """
-    Sensitive Formatter: A custom logging formatter that redacts API keys
+    """Sensitive Formatter: A custom logging formatter that redacts API keys
     from log messages for security.
     """
 
@@ -822,10 +817,9 @@ class SF(logging.Formatter):
 
 
 def _eck(
-    current_config: Dict[str, Any], default_config: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Extend Current Config: Recursively adds missing keys from default_config
+    current_config: dict[str, Any], default_config: dict[str, Any]
+) -> dict[str, Any]:
+    """Extend Current Config: Recursively adds missing keys from default_config
     to current_config, preserving existing values.
     """
     updated_config = current_config.copy()
@@ -840,8 +834,7 @@ def _eck(
 
 
 def _cdr(obj: Any, default_obj: Any) -> Any:
-    """
-    Convert Data Recursively: Attempts to convert data types in `obj` to match `default_obj`'s types,
+    """Convert Data Recursively: Attempts to convert data types in `obj` to match `default_obj`'s types,
     especially for Decimal, dict, and list, to ensure consistency with default config.
     """
     if isinstance(default_obj, Decimal):
@@ -868,17 +861,16 @@ def _cdr(obj: Any, default_obj: Any) -> Any:
 
 
 def _vncv(
-    config_data: Dict[str, Any],
+    config_data: dict[str, Any],
     key: str,
-    default_value: Union[int, float, Decimal, None],
-    min_value: Optional[Union[int, float, Decimal]] = None,
-    max_value: Optional[Union[int, float, Decimal]] = None,
+    default_value: int | float | Decimal | None,
+    min_value: int | float | Decimal | None = None,
+    max_value: int | float | Decimal | None = None,
     is_integer: bool = False,
     allow_none: bool = False,
     logger: logging.Logger = logging.getLogger(__name__),
 ) -> bool:
-    """
-    Validate Numeric Config Value: Validates a numeric configuration value,
+    """Validate Numeric Config Value: Validates a numeric configuration value,
     correcting its type or range if necessary, and logs warnings.
     Returns True if a correction was made, False otherwise.
     """
@@ -951,13 +943,12 @@ def _vncv(
     return False
 
 
-def lc(file_path: Path) -> Dict[str, Any]:
-    """
-    Load Config: Loads and validates the configuration from `config.json`.
+def lc(file_path: Path) -> dict[str, Any]:
+    """Load Config: Loads and validates the configuration from `config.json`.
     If the file doesn't exist or is invalid, it creates a default one.
     """
     # Default configuration values
-    default_config: Final[Dict[str, Any]] = {
+    default_config: Final[dict[str, Any]] = {
         "symbols_to_trade": ["BTC/USDT:USDT"],
         "interval": "5",
         "retry_delay": RDS,
@@ -1109,7 +1100,7 @@ def lc(file_path: Path) -> Dict[str, Any]:
                 f"{NY}Created default config file: {file_path}. A new scroll of destiny has been penned!{RST}"
             )
             return default_config
-        except IOError as e:
+        except OSError as e:
             logger.error(
                 f"{NR}Error creating default config file {file_path}: {e}. The quill broke!{RST}"
             )
@@ -1316,7 +1307,7 @@ def lc(file_path: Path) -> Dict[str, Any]:
                 logger.info(
                     f"{NY}Corrected invalid values and saved updated config file: {file_path}. The runes are now perfectly aligned!{RST}"
                 )
-            except IOError as e:
+            except OSError as e:
                 logger.error(
                     f"{NR}Error writing corrected config file {file_path}: {e}. The quill broke!{RST}"
                 )
@@ -1333,7 +1324,7 @@ def lc(file_path: Path) -> Dict[str, Any]:
             logger.info(
                 f"{NY}Created default config file: {file_path}. A new scroll, untainted, has been forged!{RST}"
             )
-        except IOError as e_create:
+        except OSError as e_create:
             logger.error(
                 f"{NR}Error creating default config file after load error: {e_create}. The forge is cold!{RST}"
             )
@@ -1345,8 +1336,7 @@ QC: Final[str] = _icfs.get("quote_currency", "USDT")
 
 
 def slg(name_suffix: str) -> logging.Logger:
-    """
-    Setup Logger: Configures and returns a logger with file and stream handlers.
+    """Setup Logger: Configures and returns a logger with file and stream handlers.
     File handler rotates logs, stream handler prints to console with custom formatter.
     """
     base_name = "pscalp2"
@@ -1392,7 +1382,7 @@ def slg(name_suffix: str) -> logging.Logger:
 def retry_api_call(
     max_retries: int = MAR,
     retry_delay: int = RDS,
-    catch_exceptions: Tuple = (
+    catch_exceptions: tuple = (
         ccxt.NetworkError,
         ccxt.RequestTimeout,
         requests.exceptions.ConnectionError,
@@ -1401,8 +1391,7 @@ def retry_api_call(
         PybitAPIException,
     ),
 ):  # Removed ccxt.ExchangeError from default
-    """
-    Decorator for retrying API calls.
+    """Decorator for retrying API calls.
     """
 
     def decorator(func):
@@ -1448,9 +1437,8 @@ def retry_api_call(
 
 
 @retry_api_call()
-def ie(config: Dict[str, Any], logger: logging.Logger) -> Tuple[Optional[ccxt.Exchange], Optional[BybitUnifiedTrading]]:
-    """
-    Initialize Exchange: Connects to the cryptocurrency exchange.
+def ie(config: dict[str, Any], logger: logging.Logger) -> tuple[ccxt.Exchange | None, BybitUnifiedTrading | None]:
+    """Initialize Exchange: Connects to the cryptocurrency exchange.
     Handles sandbox mode, market loading, and initial balance fetch to confirm connection.
     Returns a CCXT exchange instance or a BybitUnifiedTrading instance.
     """
@@ -1503,7 +1491,7 @@ def ie(config: Dict[str, Any], logger: logging.Logger) -> Tuple[Optional[ccxt.Ex
         f"{NB}CCXT exchange initialized ({ccxt_exchange.id}). Sandbox: {use_sandbox}. The connection is forged!{RST}"
     )
 
-    bybit_api_instance: Optional[BybitUnifiedTrading] = None
+    bybit_api_instance: BybitUnifiedTrading | None = None
     if exchange_id == "bybit":
         logger.info(f"{NB}Initializing Bybit Unified Trading API... Forging the Bybit connection!{RST}")
         try:
@@ -1545,9 +1533,8 @@ def ie(config: Dict[str, Any], logger: logging.Logger) -> Tuple[Optional[ccxt.Ex
 @retry_api_call()
 def fcp(
     exchange: ccxt.Exchange, symbol: str, logger: logging.Logger
-) -> Optional[Decimal]:
-    """
-    Fetch Current Price: Retrieves the current price for a given symbol,
+) -> Decimal | None:
+    """Fetch Current Price: Retrieves the current price for a given symbol,
     with retries and robust fallback logic for different price types (last, bid/ask midpoint).
     """
     logger.debug(f"Fetching ticker for {symbol}. Probing the market's pulse.")
@@ -1556,7 +1543,7 @@ def fcp(
         f"Raw ticker data for {symbol}: {ticker}. The market's heartbeat revealed."
     )
 
-    price: Optional[Decimal] = None
+    price: Decimal | None = None
     last_price = (
         Decimal(str(ticker.get("last"))) if ticker.get("last") is not None else None
     )
@@ -1592,10 +1579,9 @@ def fcp(
 
     if price is not None and price > 0:
         return price
-    else:
-        raise ccxt.ExchangeError(
-            f"Failed to get a valid price from ticker data. Ticker: {ticker}. The scrying mirror is clouded."
-        )
+    raise ccxt.ExchangeError(
+        f"Failed to get a valid price from ticker data. Ticker: {ticker}. The scrying mirror is clouded."
+    )
 
 
 @retry_api_call()
@@ -1606,8 +1592,7 @@ def fkc(
     limit: int = 250,
     logger: logging.Logger = None,
 ) -> pd.DataFrame:
-    """
-    Fetch Klines/Candles: Retrieves OHLCV data for a given symbol and timeframe.
+    """Fetch Klines/Candles: Retrieves OHLCV data for a given symbol and timeframe.
     Handles retries, rate limits, and robust data processing.
     """
     logger = logger or logging.getLogger(__name__)
@@ -1663,9 +1648,8 @@ def fkc(
 @retry_api_call()
 def fobc(
     exchange: ccxt.Exchange, symbol: str, limit: int, logger: logging.Logger
-) -> Optional[Dict]:
-    """
-    Fetch Order Book: Retrieves the order book for a given symbol.
+) -> dict | None:
+    """Fetch Order Book: Retrieves the order book for a given symbol.
     Handles retries and validates the structure of the returned data.
     """
     if not exchange.has["fetchOrderBook"]:
@@ -1705,8 +1689,7 @@ def fobc(
 
 
 class TA:
-    """
-    Technical Analysis: Manages indicator calculations and signal generation
+    """Technical Analysis: Manages indicator calculations and signal generation
     for a given symbol's DataFrame.
     """
 
@@ -1714,8 +1697,8 @@ class TA:
         self,
         data_frame: pd.DataFrame,
         logger: logging.Logger,
-        config: Dict[str, Any],
-        market_info: Dict[str, Any],
+        config: dict[str, Any],
+        market_info: dict[str, Any],
     ):
         self.d = data_frame
         self.lg = logger
@@ -1728,12 +1711,12 @@ class TA:
             self.lg.error(
                 f"{NR}Invalid interval '{self.i}' in config for {self.s}, cannot map to CCXT timeframe. Indicator calculations may be affected. The temporal alignment is off!{RST}"
             )
-        self.iv: Dict[str, Decimal] = {}  # Store all indicator values as Decimal
-        self.sig: Dict[str, int] = {"BUY": 0, "SELL": 0, "HOLD": 1}
+        self.iv: dict[str, Decimal] = {}  # Store all indicator values as Decimal
+        self.sig: dict[str, int] = {"BUY": 0, "SELL": 0, "HOLD": 1}
         self.aw_name = config.get("active_weight_set", "default")
         self.ws = config.get("weight_sets", {}).get(self.aw_name, {})
-        self.fld: Dict[str, Decimal] = {}
-        self.tcn: Dict[str, Optional[str]] = {}
+        self.fld: dict[str, Decimal] = {}
+        self.tcn: dict[str, str | None] = {}
         self.indicator_thresholds = self.cfg.get("indicator_thresholds", {})
 
         if not self.ws:
@@ -1745,9 +1728,8 @@ class TA:
         self._uliv()
         self.cfl()
 
-    def _gtcn(self, base_name: str, processed_df: pd.DataFrame) -> Optional[str]:
-        """
-        Get Technical Column Name: Helper to find the actual column name generated by pandas_ta
+    def _gtcn(self, base_name: str, processed_df: pd.DataFrame) -> str | None:
+        """Get Technical Column Name: Helper to find the actual column name generated by pandas_ta
         for a given indicator base name, considering various naming conventions.
         """
         params_config = {
@@ -1862,8 +1844,7 @@ class TA:
         return None
 
     def _cai(self):
-        """
-        Calculate All Indicators: Computes various technical indicators using pandas_ta
+        """Calculate All Indicators: Computes various technical indicators using pandas_ta
         and stores the generated column names.
         """
         if self.d.empty:
@@ -2126,8 +2107,7 @@ class TA:
             )
 
     def _uliv(self):
-        """
-        Update Latest Indicator Values: Extracts the most recent calculated indicator
+        """Update Latest Indicator Values: Extracts the most recent calculated indicator
         values and core OHLCV data from the DataFrame.
         """
         if self.d.empty:
@@ -2278,9 +2258,8 @@ class TA:
                 + ["Close", "Volume", "High", "Low", "Open"]
             }
 
-    def cfl(self, window: Optional[int] = None) -> Dict[str, Decimal]:
-        """
-        Calculate Fibonacci Levels: Computes Fibonacci retracement/extension levels
+    def cfl(self, window: int | None = None) -> dict[str, Decimal]:
+        """Calculate Fibonacci Levels: Computes Fibonacci retracement/extension levels
         based on the high and low prices within a specified window.
         """
         window = window or self.cfg.get("fibonacci_window", DIP["fib_window"])
@@ -2363,9 +2342,8 @@ class TA:
             return {}
 
     @staticmethod
-    def gpp(market_info: Dict[str, Any], logger: logging.Logger) -> int:
-        """
-        Get Price Precision: Determines the number of decimal places for price
+    def gpp(market_info: dict[str, Any], logger: logging.Logger) -> int:
+        """Get Price Precision: Determines the number of decimal places for price
         based on market information provided by the exchange.
         """
         symbol_name = market_info.get("symbol", "UNKNOWN")
@@ -2382,7 +2360,7 @@ class TA:
                         f"Using price precision (decimal places) from market_info.precision.price: {price_precision_value} for {symbol_name}. A clear decree from the market.{RST}"
                     )
                     return price_precision_value
-                elif isinstance(price_precision_value, (float, str)):
+                if isinstance(price_precision_value, (float, str)):
                     try:
                         tick_size = Decimal(str(price_precision_value))
                         if tick_size > 0:
@@ -2412,10 +2390,9 @@ class TA:
                             f"Inferred price precision from limits.price.min ({min_price_tick}): {precision_decimal_places} for {symbol_name}. A subtle hint from the market's boundaries.{RST}"
                         )
                         return precision_decimal_places
-                    else:
-                        logger.debug(
-                            f"limits.price.min ({min_price_tick}) for {symbol_name} seems too large for tick size, likely minimum order price. Ignoring for precision. This is not the tick we seek.{RST}"
-                        )
+                    logger.debug(
+                        f"limits.price.min ({min_price_tick}) for {symbol_name} seems too large for tick size, likely minimum order price. Ignoring for precision. This is not the tick we seek.{RST}"
+                    )
                 except (InvalidOperation, ValueError, TypeError) as e:
                     logger.warning(
                         f"{NY}Could not parse limits.price.min '{min_price_value}' for precision inference for {symbol_name}: {e}. The limit rune is ambiguous.{RST}"
@@ -2432,9 +2409,8 @@ class TA:
         return default_precision
 
     @staticmethod
-    def gmts(market_info: Dict[str, Any], logger: logging.Logger) -> Decimal:
-        """
-        Get Minimum Tick Size: Determines the smallest price increment allowed by the exchange.
+    def gmts(market_info: dict[str, Any], logger: logging.Logger) -> Decimal:
+        """Get Minimum Tick Size: Determines the smallest price increment allowed by the exchange.
         """
         symbol_name = market_info.get("symbol", "UNKNOWN")
         try:
@@ -2496,9 +2472,8 @@ class TA:
 
     def gnfl(
         self, current_price: Decimal, num_levels: int = 5
-    ) -> List[Tuple[str, Decimal]]:
-        """
-        Get Nearest Fibonacci Levels: Finds the closest Fibonacci levels to the current price.
+    ) -> list[tuple[str, Decimal]]:
+        """Get Nearest Fibonacci Levels: Finds the closest Fibonacci levels to the current price.
         """
         if not self.fld:
             self.lg.debug(
@@ -2539,8 +2514,7 @@ class TA:
             return []
 
     def _cea(self) -> Decimal:
-        """
-        Check EMA Alignment Score: Calculates a score based on the alignment of short,
+        """Check EMA Alignment Score: Calculates a score based on the alignment of short,
         long EMAs, and the current closing price.
         """
         ema_short = self.iv.get("EMA_Short")
@@ -2555,14 +2529,12 @@ class TA:
 
         if close_price > ema_short > ema_long:
             return Decimal("1.0")
-        elif close_price < ema_short < ema_long:
+        if close_price < ema_short < ema_long:
             return Decimal("-1.0")
-        else:
-            return Decimal("0.0")
+        return Decimal("0.0")
 
     def _cm(self) -> Decimal:
-        """
-        Check Momentum Score: Calculates a score based on the Momentum indicator,
+        """Check Momentum Score: Calculates a score based on the Momentum indicator,
         scaled relative to the closing price.
         """
         momentum_value = self.iv.get("Momentum")
@@ -2596,15 +2568,14 @@ class TA:
                     / (threshold_strong_positive - threshold_positive),
                 )
                 return score if score > 0 else Decimal("0.0")
-            elif momentum_percentage < -threshold_positive:
+            if momentum_percentage < -threshold_positive:
                 score = max(
                     Decimal("-1.0"),
                     (momentum_percentage + threshold_positive)
                     / (threshold_strong_positive - threshold_positive),
                 )
                 return score if score < 0 else Decimal("0.0")
-            else:
-                return Decimal("0.0")
+            return Decimal("0.0")
         except (InvalidOperation, ValueError, TypeError) as e:
             self.lg.warning(
                 f"{NY}Error during momentum check calculation for {self.s}: {e}. A numerical ripple!{RST}"
@@ -2612,8 +2583,7 @@ class TA:
             return Decimal(np.nan)
 
     def _cvc(self) -> Decimal:
-        """
-        Check Volume Confirmation Score: Assesses if current volume confirms price movement
+        """Check Volume Confirmation Score: Assesses if current volume confirms price movement
         by comparing it to a moving average of volume.
         """
         current_volume = self.iv.get("Volume")
@@ -2641,10 +2611,9 @@ class TA:
                     + ((volume_ratio - multiplier) / (multiplier * Decimal("2"))),
                 )
                 return score
-            elif volume_ratio < (Decimal(1) / multiplier):
+            if volume_ratio < (Decimal(1) / multiplier):
                 return Decimal("-0.4")
-            else:
-                return Decimal("0.0")
+            return Decimal("0.0")
         except (InvalidOperation, ValueError, TypeError) as e:
             self.lg.warning(
                 f"{NY}Error during volume confirmation check for {self.s}: {e}. A volumetric distortion!{RST}"
@@ -2652,8 +2621,7 @@ class TA:
             return Decimal(np.nan)
 
     def _csr(self) -> Decimal:
-        """
-        Check StochRSI Score: Evaluates StochRSI K and D lines for overbought/oversold
+        """Check StochRSI Score: Evaluates StochRSI K and D lines for overbought/oversold
         conditions and crossovers.
         """
         k_line = self.iv.get("StochRSI_K")
@@ -2699,8 +2667,7 @@ class TA:
         return score
 
     def _cr(self) -> Decimal:
-        """
-        Check RSI Score: Assesses RSI for overbought/oversold conditions and trend strength.
+        """Check RSI Score: Assesses RSI for overbought/oversold conditions and trend strength.
         """
         rsi_value = self.iv.get("RSI")
         if pd.isna(rsi_value):
@@ -2741,8 +2708,7 @@ class TA:
         return Decimal("0.0")
 
     def _cc(self) -> Decimal:
-        """
-        Check CCI Score: Evaluates CCI for overbought/oversold conditions and trend direction.
+        """Check CCI Score: Evaluates CCI for overbought/oversold conditions and trend direction.
         """
         cci_value = self.iv.get("CCI")
         if pd.isna(cci_value):
@@ -2781,8 +2747,7 @@ class TA:
         return Decimal("0.0")
 
     def _cwr(self) -> Decimal:
-        """
-        Check Williams %R Score: Assesses Williams %R for overbought/oversold conditions.
+        """Check Williams %R Score: Assesses Williams %R for overbought/oversold conditions.
         """
         wr_value = self.iv.get("Williams_R")
         if pd.isna(wr_value):
@@ -2814,8 +2779,7 @@ class TA:
         return Decimal("0.0")
 
     def _cpsar(self) -> Decimal:
-        """
-        Check PSAR Score: Determines trend direction based on Parabolic SAR.
+        """Check PSAR Score: Determines trend direction based on Parabolic SAR.
         """
         psar_long_active = self.iv.get("PSAR_long")
         psar_short_active = self.iv.get("PSAR_short")
@@ -2825,22 +2789,20 @@ class TA:
 
         if is_long_active and not is_short_active:
             return Decimal("1.0")
-        elif is_short_active and not is_long_active:
+        if is_short_active and not is_long_active:
             return Decimal("-1.0")
-        elif not is_long_active and not is_short_active:
+        if not is_long_active and not is_short_active:
             self.lg.debug(
                 f"PSAR check skipped for {self.s}: No active PSAR signal (both NaN). The parabolic path is undefined.{RST}"
             )
             return Decimal(np.nan)
-        else:
-            self.lg.warning(
-                f"{NY}PSAR check encountered unexpected state for {self.s}: Long={psar_long_active}, Short={psar_short_active}. Returning neutral. The paths diverge!{RST}"
-            )
-            return Decimal("0.0")
+        self.lg.warning(
+            f"{NY}PSAR check encountered unexpected state for {self.s}: Long={psar_long_active}, Short={psar_short_active}. Returning neutral. The paths diverge!{RST}"
+        )
+        return Decimal("0.0")
 
     def _csma(self) -> Decimal:
-        """
-        Check SMA10 Score: Compares current closing price to a 10-period Simple Moving Average.
+        """Check SMA10 Score: Compares current closing price to a 10-period Simple Moving Average.
         """
         sma10_value = self.iv.get("SMA10")
         last_close_decimal = self.iv.get("Close")
@@ -2855,14 +2817,12 @@ class TA:
 
         if last_close_decimal > sma10_value:
             return sma10_score
-        elif last_close_decimal < sma10_value:
+        if last_close_decimal < sma10_value:
             return -sma10_score
-        else:
-            return Decimal("0.0")
+        return Decimal("0.0")
 
     def _cv(self) -> Decimal:
-        """
-        Check VWAP Score: Compares current closing price to the Volume Weighted Average Price.
+        """Check VWAP Score: Compares current closing price to the Volume Weighted Average Price.
         """
         vwap_value = self.iv.get("VWAP")
         last_close_decimal = self.iv.get("Close")
@@ -2877,14 +2837,12 @@ class TA:
 
         if last_close_decimal > vwap_value:
             return vwap_score
-        elif last_close_decimal < vwap_value:
+        if last_close_decimal < vwap_value:
             return -vwap_score
-        else:
-            return Decimal("0.0")
+        return Decimal("0.0")
 
     def _cmfi(self) -> Decimal:
-        """
-        Check MFI Score: Evaluates Money Flow Index for overbought/oversold conditions.
+        """Check MFI Score: Evaluates Money Flow Index for overbought/oversold conditions.
         """
         mfi_value = self.iv.get("MFI")
         if pd.isna(mfi_value):
@@ -2912,8 +2870,7 @@ class TA:
         return Decimal("0.0")
 
     def _cbb(self) -> Decimal:
-        """
-        Check Bollinger Bands Score: Assesses price position relative to Bollinger Bands.
+        """Check Bollinger Bands Score: Assesses price position relative to Bollinger Bands.
         """
         bb_lower = self.iv.get("BB_Lower")
         bb_middle = self.iv.get("BB_Middle")
@@ -2952,9 +2909,8 @@ class TA:
             return score * bb_mid_score_multiplier
         return Decimal("0.0")
 
-    def _cob(self, orderbook_data: Optional[Dict], current_price: Decimal) -> Decimal:
-        """
-        Check Orderbook Score: Analyzes the imbalance between bids and asks in the order book.
+    def _cob(self, orderbook_data: dict | None, current_price: Decimal) -> Decimal:
+        """Check Orderbook Score: Analyzes the imbalance between bids and asks in the order book.
         """
         if not orderbook_data:
             self.lg.debug(
@@ -3014,8 +2970,7 @@ class TA:
             return Decimal(np.nan)
 
     def _ceft(self) -> Decimal:
-        """
-        Check Ehlers Fisher Transform Score: Evaluates Fisher Transform (fisher_t) and its signal line (fisher_s)
+        """Check Ehlers Fisher Transform Score: Evaluates Fisher Transform (fisher_t) and its signal line (fisher_s)
         for trading signals based on crossovers and threshold breaches.
         """
         fisher_t = self.iv.get("FISHERT")
@@ -3082,9 +3037,8 @@ class TA:
         )
         return score
 
-    def gts(self, current_price: Decimal, orderbook_data: Optional[Dict]) -> str:
-        """
-        Generate Trade Signal: Aggregates scores from various indicators to produce a BUY, SELL, or HOLD signal.
+    def gts(self, current_price: Decimal, orderbook_data: dict | None) -> str:
+        """Generate Trade Signal: Aggregates scores from various indicators to produce a BUY, SELL, or HOLD signal.
         """
         signal_threshold = self.cfg.get("signal_score_threshold", Decimal("1.5"))
         self.sig = {"BUY": 0, "SELL": 0, "HOLD": 1}
@@ -3265,9 +3219,8 @@ class TA:
 
     def cets(
         self, entry_price_estimate: Decimal, signal: str
-    ) -> Tuple[Optional[Decimal], Optional[Decimal], Optional[Decimal]]:
-        """
-        Calculate Entry, Take Profit, and Stop Loss prices based on ATR and signal direction.
+    ) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
+        """Calculate Entry, Take Profit, and Stop Loss prices based on ATR and signal direction.
         Returns (Entry Price, Take Profit Price, Stop Loss Price).
         """
         if signal not in ["BUY", "SELL"]:
@@ -3387,8 +3340,8 @@ class TA:
                 f"ATR_TP={atr_value_tp:.{price_precision + 2}f} (P:{atr_tp_period_config}, M:{atr_tp_multiplier_config}) for {self.s} {signal}."
             )
 
-            raw_take_profit_price: Optional[Decimal] = None
-            raw_stop_loss_price: Optional[Decimal] = None
+            raw_take_profit_price: Decimal | None = None
+            raw_stop_loss_price: Decimal | None = None
 
             if signal == "BUY":
                 raw_take_profit_price = entry_price_estimate + take_profit_offset
@@ -3397,8 +3350,8 @@ class TA:
                 raw_take_profit_price = entry_price_estimate - take_profit_offset
                 raw_stop_loss_price = entry_price_estimate + stop_loss_offset
 
-            quantized_take_profit_price: Optional[Decimal] = None
-            quantized_stop_loss_price: Optional[Decimal] = None
+            quantized_take_profit_price: Decimal | None = None
+            quantized_stop_loss_price: Decimal | None = None
 
             if raw_take_profit_price is not None:
                 if min_tick_size > 0:
@@ -3491,12 +3444,11 @@ class TA:
 @retry_api_call()
 def fb(
     ccxt_exchange: ccxt.Exchange,
-    bybit_api: Optional[BybitUnifiedTrading],
+    bybit_api: BybitUnifiedTrading | None,
     currency: str,
     logger: logging.Logger,
-) -> Optional[Decimal]:
-    """
-    Fetch Balance: Retrieves the available balance for a specified currency.
+) -> Decimal | None:
+    """Fetch Balance: Retrieves the available balance for a specified currency.
     Handles retries and exchange-specific balance fetching (e.g., Bybit V5).
     """
     if bybit_api and ccxt_exchange.id == "bybit":
@@ -3526,7 +3478,7 @@ def fb(
     # Fallback to CCXT for other exchanges or if BybitUnifiedTrading fails
     logger.debug(f"Fetching balance using CCXT for {currency}.")
     balance_info = None
-    available_balance_str: Optional[str] = None
+    available_balance_str: str | None = None
     account_types_to_try = []
     if ccxt_exchange.id == "bybit":
         account_types_to_try = ["CONTRACT", "UNIFIED"]
@@ -3582,7 +3534,7 @@ def fb(
                 available_balance_str is not None
             ):  # If found via Bybit V5 parsing, break from account type loop
                 break
-            elif (
+            if (
                 currency in balance_info
                 and balance_info[currency].get("free") is not None
             ):  # Standard CCXT format
@@ -3649,10 +3601,9 @@ def fb(
                     f"{NC}Available {currency} balance: {final_balance:.4f}. The essence of your holdings is revealed!{RST}"
                 )
                 return final_balance
-            else:
-                logger.error(
-                    f"{NR}Parsed balance for {currency} is negative ({final_balance}). A dark omen in the ledger!{RST}"
-                )
+            logger.error(
+                f"{NR}Parsed balance for {currency} is negative ({final_balance}). A dark omen in the ledger!{RST}"
+            )
         except (InvalidOperation, ValueError, TypeError) as e:
             logger.error(
                 f"{NR}Failed to convert balance string '{available_balance_str}' to Decimal for {currency}: {e}. The numerical rune is corrupted!{RST}"
@@ -3664,9 +3615,8 @@ def fb(
 
 def _gop_decimal_converter(
     value: Any, logger: logging.Logger, symbol: str, field_name: str
-) -> Optional[Decimal]:
-    """
-    Converts a value to Decimal for gop function, treating '0', empty strings, or None as None.
+) -> Decimal | None:
+    """Converts a value to Decimal for gop function, treating '0', empty strings, or None as None.
     """
     if value is None or str(value).strip() == "":
         return None
@@ -3683,9 +3633,8 @@ def _gop_decimal_converter(
 
 
 @retry_api_call()
-def gmi(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> Optional[Dict]:
-    """
-    Get Market Info: Retrieves detailed market information for a given symbol.
+def gmi(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> dict | None:
+    """Get Market Info: Retrieves detailed market information for a given symbol.
     Reloads markets if needed and provides hints for invalid symbols.
     """
     if not exchange.markets or symbol not in exchange.markets:
@@ -3749,10 +3698,9 @@ def gmi(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> Optiona
 
         market_data["is_contract"] = is_contract
         return market_data
-    else:
-        raise ccxt.ExchangeError(
-            f"Market dictionary unexpectedly not found for validated symbol {symbol}. A void in the market's records!"
-        )
+    raise ccxt.ExchangeError(
+        f"Market dictionary unexpectedly not found for validated symbol {symbol}. A void in the market's records!"
+    )
 
 
 @retry_api_call()
@@ -3761,12 +3709,11 @@ def cps(
     risk_per_trade: Decimal,
     initial_stop_loss_price: Decimal,
     entry_price: Decimal,
-    market_info: Dict,
+    market_info: dict,
     exchange: ccxt.Exchange,
-    logger: Optional[logging.Logger] = None,
-) -> Optional[Decimal]:
-    """
-    Calculate Position Size: Determines the appropriate trade size based on
+    logger: logging.Logger | None = None,
+) -> Decimal | None:
+    """Calculate Position Size: Determines the appropriate trade size based on
     available balance, risk per trade, stop loss distance, and market info.
     """
     logger = logger or logging.getLogger(__name__)
@@ -3817,7 +3764,7 @@ def cps(
         )
         contract_size = Decimal("1")
 
-    calculated_size: Optional[Decimal] = None
+    calculated_size: Decimal | None = None
     if market_info.get("linear", True) or not is_contract:
         denominator = stop_loss_distance * contract_size
         if denominator > 0:
@@ -3884,7 +3831,7 @@ def cps(
         )
         adjusted_size = max_amount
 
-    estimated_cost: Optional[Decimal] = None
+    estimated_cost: Decimal | None = None
     if market_info.get("linear", True) or not is_contract:
         estimated_cost = adjusted_size * entry_price * contract_size
     else:
@@ -3903,7 +3850,7 @@ def cps(
         logger.warning(
             f"{NY}Estimated cost {estimated_cost:.4f} is below min cost {min_cost}. Attempting to increase size. The offering is too small!{RST}"
         )
-        required_size_for_min_cost: Optional[Decimal] = None
+        required_size_for_min_cost: Decimal | None = None
         if market_info.get("linear", True) or not is_contract:
             denominator = entry_price * contract_size
             if denominator > 0:
@@ -3939,7 +3886,7 @@ def cps(
         logger.warning(
             f"{NY}Estimated cost {estimated_cost:.4f} exceeds max cost {max_cost}. Reducing size. The offering is too grand!{RST}"
         )
-        allowed_size_for_max_cost: Optional[Decimal] = None
+        allowed_size_for_max_cost: Decimal | None = None
         if market_info.get("linear", True) or not is_contract:
             denominator = entry_price * contract_size
             if denominator > 0:
@@ -3975,7 +3922,7 @@ def cps(
         )
         adjusted_size = allowed_size_for_max_cost
 
-    final_size: Optional[Decimal] = None
+    final_size: Decimal | None = None
     try:
         final_size = _pmap(adjusted_size, market_info, logger)
         if final_size is None:
@@ -3992,7 +3939,7 @@ def cps(
             f"Position size became zero or negative ({final_size}) after adjustments. Aborted. The spell's power dissipated!"
         )
 
-    final_cost: Optional[Decimal] = None
+    final_cost: Decimal | None = None
     if market_info.get("linear", True) or not is_contract:
         final_cost = final_size * entry_price * contract_size
     else:
@@ -4013,10 +3960,9 @@ def cps(
 
 
 def _pmap(
-    amount_decimal: Decimal, market_info: Dict, logger: logging.Logger
-) -> Optional[Decimal]:
-    """
-    Precision Map (Manual Amount Precision): A fallback function to manually apply
+    amount_decimal: Decimal, market_info: dict, logger: logging.Logger
+) -> Decimal | None:
+    """Precision Map (Manual Amount Precision): A fallback function to manually apply
     amount precision rules if CCXT's `amount_to_precision` fails or lacks desired features.
     """
     symbol = market_info.get("symbol", "UNKNOWN_SYMBOL")
@@ -4036,7 +3982,7 @@ def _pmap(
                 f"Manual amount precision (decimal places): {amount_decimal} -> {final_amount}. Truncating to the exact digit.{RST}"
             )
             return final_amount
-        elif isinstance(amount_precision_value, (float, str)):
+        if isinstance(amount_precision_value, (float, str)):
             amount_step_size = Decimal(str(amount_precision_value))
             if amount_step_size > 0:
                 # Determine the number of decimal places for the step size
@@ -4057,16 +4003,14 @@ def _pmap(
                     f"Manual amount precision (step size): {amount_decimal} -> {final_amount}. Aligning to the market's smallest step.{RST}"
                 )
                 return final_amount
-            else:
-                logger.warning(
-                    f"{NY}Manual amount precision: Amount step size is zero or invalid ({amount_step_size}) for {symbol}. Returning original amount. The step is immeasurable!{RST}"
-                )
-                return amount_decimal
-        else:
             logger.warning(
-                f"{NY}Manual amount precision: Unknown type for amountPrecision '{amount_precision_value}' for {symbol}. Returning original amount. The precision rune is of an unknown script!{RST}"
+                f"{NY}Manual amount precision: Amount step size is zero or invalid ({amount_step_size}) for {symbol}. Returning original amount. The step is immeasurable!{RST}"
             )
             return amount_decimal
+        logger.warning(
+            f"{NY}Manual amount precision: Unknown type for amountPrecision '{amount_precision_value}' for {symbol}. Returning original amount. The precision rune is of an unknown script!{RST}"
+        )
+        return amount_decimal
     except (InvalidOperation, ValueError, TypeError) as e:
         logger.error(
             f"{NR}Error during manual amount precision for {symbol}: {e}. Returning original amount. A numerical distortion in the shaping!{RST}",
@@ -4083,16 +4027,15 @@ def _pmap(
 
 @retry_api_call()
 def gop(
-    exchange: ccxt.Exchange, symbol: str, market_info: Dict, logger: logging.Logger
-) -> Optional[Dict]:
-    """
-    Get Open Position: Fetches and processes details of an active open position for a given symbol.
+    exchange: ccxt.Exchange, symbol: str, market_info: dict, logger: logging.Logger
+) -> dict | None:
+    """Get Open Position: Fetches and processes details of an active open position for a given symbol.
     Includes retry logic.
     """
     logger.debug(
         f"Fetching positions for symbol: {symbol}. Scrying for active stances."
     )
-    positions_list: List[Dict] = []
+    positions_list: list[dict] = []
 
     if not exchange.has.get("fetchPositions"):
         logger.error(
@@ -4249,11 +4192,10 @@ def gop(
                             market_info, logger
                         )  # Use price precision for size display clarity
                         return f"{abs(decimal_value):.{amount_precision_for_log}f}"
-                    elif is_price:
+                    if is_price:
                         price_prec = TA.gpp(market_info, logger)
                         return f"{decimal_value:.{price_prec}f}"
-                    else:
-                        return f"{decimal_value:.4f}"
+                    return f"{decimal_value:.4f}"
                 except:
                     return str(value_raw)
 
@@ -4312,11 +4254,10 @@ def slc(
     exchange: ccxt.Exchange,
     symbol: str,
     leverage: int,
-    market_info: Dict,
+    market_info: dict,
     logger: logging.Logger,
 ) -> bool:
-    """
-    Set Leverage: Attempts to set the leverage for a given symbol.
+    """Set Leverage: Attempts to set the leverage for a given symbol.
     Only applies to contract markets. Handles exchange-specific parameters.
     """
     is_contract = market_info.get("is_contract", False)
@@ -4337,10 +4278,9 @@ def slc(
                 f"{NR}Exchange {exchange.id} does not support setLeverage or setMarginMode via CCXT. Cannot set leverage. The exchange offers no amplification!{RST}"
             )
             return False
-        else:
-            logger.warning(
-                f"{NY}Exchange {exchange.id} might use setMarginMode for leverage. Proceeding with setLeverage which may internally map. A subtle difference in the amplification spell.{RST}"
-            )
+        logger.warning(
+            f"{NY}Exchange {exchange.id} might use setMarginMode for leverage. Proceeding with setLeverage which may internally map. A subtle difference in the amplification spell.{RST}"
+        )
 
     logger.info(
         f"{NB}Attempting to set leverage for {symbol} to {leverage}x... Amplifying market power!{RST}"
@@ -4397,12 +4337,11 @@ def slc(
                 f"{NY}Leverage for {symbol} is already set to {leverage}x (Exchange confirmed: {original_ret_msg}). No modification needed. The amplification is already active.{RST}"
             )
             return True  # Treat as success
-        else:
-            # For any other BadRequest, re-raise it for the retry_api_call decorator to handle
-            logger.warning(
-                f"{NY}Unhandled BadRequest in slc for {symbol}: {e}. Re-raising.{RST}"
-            )
-            raise
+        # For any other BadRequest, re-raise it for the retry_api_call decorator to handle
+        logger.warning(
+            f"{NY}Unhandled BadRequest in slc for {symbol}: {e}. Re-raising.{RST}"
+        )
+        raise
     except (
         ccxt.ExchangeError
     ) as e:  # Catch other exchange errors that are not BadRequest
@@ -4418,15 +4357,14 @@ def pt(
     symbol: str,
     trade_side: str,
     position_size: Decimal,
-    market_info: Dict,
-    logger: Optional[logging.Logger] = None,
+    market_info: dict,
+    logger: logging.Logger | None = None,
     order_type: str = "market",
-    limit_price: Optional[Decimal] = None,
+    limit_price: Decimal | None = None,
     reduce_only: bool = False,
-    extra_params: Optional[Dict] = None,
-) -> Optional[Dict]:
-    """
-    Place Trade: Executes a trade order (market or limit) on the exchange.
+    extra_params: dict | None = None,
+) -> dict | None:
+    """Place Trade: Executes a trade order (market or limit) on the exchange.
     Handles amount precision, price precision, and various error conditions.
     """
     logger = logger or logging.getLogger(__name__)
@@ -4443,7 +4381,7 @@ def pt(
             f"Trade aborted ({symbol} {side_lower} {action_description}): Invalid or non-positive position size ({position_size}). The quantity rune is void!"
         )
 
-    formatted_amount_float: Optional[float] = None
+    formatted_amount_float: float | None = None
     try:
         final_size_decimal = _pmap(position_size, market_info, logger)
         if final_size_decimal is None:
@@ -4457,7 +4395,7 @@ def pt(
             f"Trade aborted ({symbol} {side_lower} {action_description}): Position size became zero or negative after precision formatting ({formatted_amount_float}). Original: {position_size}. The quantity rune became void!"
         )
 
-    formatted_price_float: Optional[float] = None
+    formatted_price_float: float | None = None
     if order_type == "limit":
         if not isinstance(limit_price, Decimal) or limit_price <= 0:
             raise ValueError(
@@ -4495,7 +4433,7 @@ def pt(
     logger.info(f"{NB}  ReduceOnly: {reduce_only}{RST}")
     logger.info(f"{NB}  Params: {order_params}. The specific incantations.{RST}")
 
-    order_response: Optional[Dict] = None
+    order_response: dict | None = None
     if order_type == "market":
         order_response = exchange.create_order(
             symbol=symbol,
@@ -4577,33 +4515,31 @@ def pt(
             f"Raw order response ({symbol} {side_lower} {action_description}): {order_response}. The echo of the completed ritual.{RST}"
         )
         return order_response
-    else:
-        raise ccxt.ExchangeError(
-            f"Order placement call returned None without raising an exception for {symbol}. The spell yielded no result!"
-        )
+    raise ccxt.ExchangeError(
+        f"Order placement call returned None without raising an exception for {symbol}. The spell yielded no result!"
+    )
 
 
 @retry_api_call()
 def spp(
     exchange: ccxt.Exchange,
     symbol: str,
-    market_info: Dict,
-    position_info: Dict,
+    market_info: dict,
+    position_info: dict,
     logger: logging.Logger,
-    stop_loss_price: Optional[Decimal] = None,
-    take_profit_price: Optional[Decimal] = None,
-    trailing_stop_distance: Optional[Decimal] = None,
-    trailing_stop_activation_price: Optional[Decimal] = None,
-) -> Dict[str, Any]:
-    """
-    Revised spp: This function will NO LONGER attempt to set SL/TP orders for Bybit
+    stop_loss_price: Decimal | None = None,
+    take_profit_price: Decimal | None = None,
+    trailing_stop_distance: Decimal | None = None,
+    trailing_stop_activation_price: Decimal | None = None,
+) -> dict[str, Any]:
+    """Revised spp: This function will NO LONGER attempt to set SL/TP orders for Bybit
     if exchange.set_trading_stop() is considered unreliable/unavailable.
     Instead, it primarily acts as a parameter validation and structuring step.
     The actual setting of SL/TP/TSL for Bybit must be done via direct Bybit V5 API calls
     (e.g., using exchange.private_post_position_set_trading_stop), likely from stsl or _mp.
     This function will return the intended parameters for the caller to use.
     """
-    protection_result: Dict[str, Any] = {
+    protection_result: dict[str, Any] = {
         "success": False,  # Will be set to True if inputs are valid, but no orders placed by this func.
         "stopLoss": (
             stop_loss_price
@@ -4691,16 +4627,15 @@ def spp(
 def stsl(
     exchange: ccxt.Exchange,
     symbol: str,
-    market_info: Dict,
-    position_info: Dict,
-    config: Dict[str, Any],
+    market_info: dict,
+    position_info: dict,
+    config: dict[str, Any],
     logger: logging.Logger,
-    fixed_stop_loss_price: Optional[Decimal] = None,
-    take_profit_price_target: Optional[Decimal] = None,
+    fixed_stop_loss_price: Decimal | None = None,
+    take_profit_price_target: Decimal | None = None,
     attempt_tsl: bool = True,
 ) -> bool:
-    """
-    Consolidated protection setter for Bybit using direct API call POST /v5/position/trading-stop.
+    """Consolidated protection setter for Bybit using direct API call POST /v5/position/trading-stop.
     Sets TSL, Fixed SL, and/or Fixed TP based on provided parameters.
     - If attempt_tsl is True and TSL is enabled in config, TSL parameters are calculated and sent.
     - If attempt_tsl is False or TSL is disabled, fixed_stop_loss_price is used if provided.
@@ -4715,7 +4650,7 @@ def stsl(
 
     # Fetch Current Position Size
     current_position_size_raw = position_info.get("contractsDecimal")
-    current_position_size: Optional[Decimal] = None
+    current_position_size: Decimal | None = None
     if current_position_size_raw is not None:
         try:
             current_position_size = Decimal(str(current_position_size_raw))
@@ -4782,14 +4717,14 @@ def stsl(
     min_tick_size = TA.gmts(market_info, logger)
 
     # --- Define Quantized Prices ---
-    quantized_tp_price: Optional[Decimal] = None
+    quantized_tp_price: Decimal | None = None
     if take_profit_price_target and take_profit_price_target > 0:
         quantized_tp_price = take_profit_price_target.quantize(
             min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"),
             rounding=ROUND_HALF_EVEN
         )
 
-    quantized_fixed_sl_price: Optional[Decimal] = None
+    quantized_fixed_sl_price: Decimal | None = None
     if fixed_stop_loss_price and fixed_stop_loss_price > 0:
         quantized_fixed_sl_price = fixed_stop_loss_price.quantize(
             min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"),
@@ -4797,8 +4732,8 @@ def stsl(
         )
 
     # --- TSL Parameter Calculation ---
-    calculated_tsl_distance: Optional[Decimal] = None
-    calculated_tsl_activation_price: Optional[Decimal] = None
+    calculated_tsl_distance: Decimal | None = None
+    calculated_tsl_activation_price: Decimal | None = None
 
     # --- Take Profit Handling ---
     if take_profit_price_target and take_profit_price_target > 0:
@@ -4905,7 +4840,7 @@ def stsl(
 
     if initial_tsl_params_valid_for_processing: # If config and inputs for TSL were okay initially
         pos_side = position_info.get("side", trade_record.side)
-        quantized_initial_trigger_sl: Optional[Decimal] = None
+        quantized_initial_trigger_sl: Decimal | None = None
 
         if pos_side == "long":
             raw_initial_sl = calculated_tsl_activation_price - calculated_tsl_distance
@@ -5040,62 +4975,60 @@ def stsl(
             f"TSL Active: {trade_record.trailing_stop_active}, TSL Dist: {trade_record.trailing_stop_distance}, TSL Act: {trade_record.tsl_activation_price}.{RST}"
         )
         return True
-    else:
-        ret_msg = response.get("retMsg", "Unknown error")
-        ret_code = response.get("retCode", "N/A")
-        logger.debug(f"stsl: Failed protection set for {symbol}. Original params sent: {json.dumps(params_to_set, default=str)}") # Added debug log for params
+    ret_msg = response.get("retMsg", "Unknown error")
+    ret_code = response.get("retCode", "N/A")
+    logger.debug(f"stsl: Failed protection set for {symbol}. Original params sent: {json.dumps(params_to_set, default=str)}") # Added debug log for params
 
-        if ret_code == 110061: # Specific handling for SL/TP limit exceeded
-            logger.error(
-                f"{NR}stsl: Failed to set protections for {symbol} due to SL/TP order limit exceeded (Error 110061). Msg: {ret_msg}. Attempting to cancel existing StopOrders for the symbol as a corrective measure.{RST}"
+    if ret_code == 110061: # Specific handling for SL/TP limit exceeded
+        logger.error(
+            f"{NR}stsl: Failed to set protections for {symbol} due to SL/TP order limit exceeded (Error 110061). Msg: {ret_msg}. Attempting to cancel existing StopOrders for the symbol as a corrective measure.{RST}"
+        )
+        try:
+            cancel_all_sl_tp_params = {
+                "category": params_to_set["category"],
+                "symbol": params_to_set["symbol"],
+                "orderFilter": "StopOrder"
+            }
+            cancel_api_path = "/v5/order/cancel-all"
+            logger.info(f"{NB}stsl: Attempting to cancel all StopOrders for {symbol} with params: {json.dumps(cancel_all_sl_tp_params, default=str)} via {cancel_api_path}{RST}")
+
+            cancel_response = _bybit_v5_request(
+                method="POST",
+                path=cancel_api_path,
+                params=cancel_all_sl_tp_params,
+                api_key=AK,
+                api_secret=AS,
+                base_url=base_url, # base_url is defined earlier in stsl
+                logger=logger,
             )
-            try:
-                cancel_all_sl_tp_params = {
-                    "category": params_to_set["category"],
-                    "symbol": params_to_set["symbol"],
-                    "orderFilter": "StopOrder"
-                }
-                cancel_api_path = "/v5/order/cancel-all"
-                logger.info(f"{NB}stsl: Attempting to cancel all StopOrders for {symbol} with params: {json.dumps(cancel_all_sl_tp_params, default=str)} via {cancel_api_path}{RST}")
-
-                cancel_response = _bybit_v5_request(
-                    method="POST",
-                    path=cancel_api_path,
-                    params=cancel_all_sl_tp_params,
-                    api_key=AK,
-                    api_secret=AS,
-                    base_url=base_url, # base_url is defined earlier in stsl
-                    logger=logger,
+            if cancel_response and cancel_response.get("retCode") == 0:
+                cancelled_count = 0
+                if isinstance(cancel_response.get("result", {}).get("list"), list):
+                    cancelled_count = len(cancel_response["result"]["list"])
+                logger.info(
+                    f"{NG}stsl: Successfully sent request to cancel all StopOrders for {symbol}. Orders cancelled/affected: {cancelled_count}. This is a corrective action for the next cycle. Msg: {cancel_response.get('retMsg')}{RST}"
                 )
-                if cancel_response and cancel_response.get("retCode") == 0:
-                    cancelled_count = 0
-                    if isinstance(cancel_response.get("result", {}).get("list"), list):
-                        cancelled_count = len(cancel_response["result"]["list"])
-                    logger.info(
-                        f"{NG}stsl: Successfully sent request to cancel all StopOrders for {symbol}. Orders cancelled/affected: {cancelled_count}. This is a corrective action for the next cycle. Msg: {cancel_response.get('retMsg')}{RST}"
-                    )
-                else:
-                    cancel_err_msg = cancel_response.get('retMsg', 'Unknown cancel error') if cancel_response else "No response from cancel call"
-                    cancel_err_code = cancel_response.get('retCode', 'N/A') if cancel_response else "N/A"
-                    logger.error(
-                        f"{NR}stsl: Failed to cancel all StopOrders for {symbol}. Code: {cancel_err_code}, Msg: {cancel_err_msg}. Full Cancel Response: {json.dumps(cancel_response, default=str)}{RST}"
-                    )
-            except Exception as e_cancel:
+            else:
+                cancel_err_msg = cancel_response.get('retMsg', 'Unknown cancel error') if cancel_response else "No response from cancel call"
+                cancel_err_code = cancel_response.get('retCode', 'N/A') if cancel_response else "N/A"
                 logger.error(
-                    f"{NR}stsl: Exception occurred while attempting to cancel all StopOrders for {symbol}: {e_cancel}{RST}", exc_info=True
+                    f"{NR}stsl: Failed to cancel all StopOrders for {symbol}. Code: {cancel_err_code}, Msg: {cancel_err_msg}. Full Cancel Response: {json.dumps(cancel_response, default=str)}{RST}"
                 )
-            # Even after attempting cancellation, the original SL/TP set operation failed.
-            return False
-        else: # Handle other errors
+        except Exception as e_cancel:
             logger.error(
-                f"{NR}stsl: Failed to set protections for {symbol} via direct API. Code: {ret_code}, Msg: {ret_msg}. Full Response: {json.dumps(response, default=str)}{RST}"
+                f"{NR}stsl: Exception occurred while attempting to cancel all StopOrders for {symbol}: {e_cancel}{RST}", exc_info=True
             )
-            return False
+        # Even after attempting cancellation, the original SL/TP set operation failed.
+        return False
+    # Handle other errors
+    logger.error(
+        f"{NR}stsl: Failed to set protections for {symbol} via direct API. Code: {ret_code}, Msg: {ret_msg}. Full Response: {json.dumps(response, default=str)}{RST}"
+    )
+    return False
 
 @dataclass
 class Tr:
-    """
-    Trade Record: A dataclass to store details of an individual trade for tracking.
+    """Trade Record: A dataclass to store details of an individual trade for tracking.
     """
 
     symbol: str
@@ -5107,15 +5040,15 @@ class Tr:
     initial_capital: (
         Decimal  # Capital allocated to this trade (e.g., risk_amount * leverage)
     )
-    stop_loss_price: Optional[Decimal] = None
-    take_profit_price: Optional[Decimal] = None
+    stop_loss_price: Decimal | None = None
+    take_profit_price: Decimal | None = None
     trailing_stop_active: bool = False
-    trailing_stop_distance: Optional[Decimal] = None
-    tsl_activation_price: Optional[Decimal] = None
-    exit_price: Optional[Decimal] = None
-    exit_time: Optional[datetime] = None
-    pnl_quote: Optional[Decimal] = None
-    pnl_percentage: Optional[Decimal] = None
+    trailing_stop_distance: Decimal | None = None
+    tsl_activation_price: Decimal | None = None
+    exit_price: Decimal | None = None
+    exit_time: datetime | None = None
+    pnl_quote: Decimal | None = None
+    pnl_percentage: Decimal | None = None
     fees_in_quote: Decimal = Decimal("0")  # Track fees for this trade
     realized_pnl_quote: Decimal = Decimal("0")  # Realized PnL after fees
     status: str = "OPEN"
@@ -5133,7 +5066,7 @@ class Tr:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]):
+    def from_dict(cls, data: dict[str, Any]):
         """Creates a Trade Record instance from a dictionary (e.g., from JSON deserialization)."""
         # Convert string back to Decimal, ISO string back to datetime
         # Dataclass defaults will handle missing new fields like trailing_stop_active, etc.
@@ -5186,9 +5119,8 @@ class Tr:
 
         return cls(**data)
 
-    def upnl(self, current_price: Decimal, market_info: Dict, logger: logging.Logger):
-        """
-        Update Unrealized PnL: Calculates and updates the unrealized PnL for an open trade.
+    def upnl(self, current_price: Decimal, market_info: dict, logger: logging.Logger):
+        """Update Unrealized PnL: Calculates and updates the unrealized PnL for an open trade.
         """
         if self.status != "OPEN":
             return
@@ -5244,8 +5176,7 @@ class Tr:
 
 
 class TMT:
-    """
-    Trade Management Tracker: Manages a collection of open and closed trade records,
+    """Trade Management Tracker: Manages a collection of open and closed trade records,
     and calculates overall trading metrics.
     """
 
@@ -5253,26 +5184,26 @@ class TMT:
         self,
         quote_currency_symbol: str,
         logger: logging.Logger,
-        ccxt_exchange_ref: Optional[ccxt.Exchange] = None,
-        bybit_api_ref: Optional[BybitUnifiedTrading] = None,
+        ccxt_exchange_ref: ccxt.Exchange | None = None,
+        bybit_api_ref: BybitUnifiedTrading | None = None,
     ):
-        self.open_trades: Dict[str, Tr] = {}
-        self.closed_trades: List[Tr] = []
+        self.open_trades: dict[str, Tr] = {}
+        self.closed_trades: list[Tr] = []
         self.qc = quote_currency_symbol
-        self.ccxt_exchange_ref: Optional[ccxt.Exchange] = ccxt_exchange_ref
-        self.bybit_api_ref: Optional[BybitUnifiedTrading] = bybit_api_ref
+        self.ccxt_exchange_ref: ccxt.Exchange | None = ccxt_exchange_ref
+        self.bybit_api_ref: BybitUnifiedTrading | None = bybit_api_ref
         self.lg = logger
         self.total_pnl = Decimal("0")
         self.initial_balance = Decimal("0")
         self.current_balance = Decimal("0")
-        self.mi: Dict[str, Any] = {}
+        self.mi: dict[str, Any] = {}
         self._load_trades()
 
     def _load_trades(self):
         """Loads trade records from a JSON file."""
         if TRP.exists():
             try:
-                with open(TRP, "r", encoding="utf-8") as f:
+                with open(TRP, encoding="utf-8") as f:
                     data = json.load(f)
                     for trade_dict in data.get("closed_trades", []):
                         self.closed_trades.append(Tr.from_dict(trade_dict))
@@ -5349,7 +5280,7 @@ class TMT:
             self.lg.debug(
                 f"{NB}Saved trade records to {TRP}. The ledger is updated.{RST}"
             )
-        except IOError as e:
+        except OSError as e:
             self.lg.error(
                 f"{NR}Error saving trade records to {TRP}: {e}. The quill broke during inscription!{RST}"
             )
@@ -5370,7 +5301,7 @@ class TMT:
             f"{NY}All trade records have been reset. A new chapter begins.{RST}"
         )
 
-    def set_exchange_reference(self, exchange_instance: Union[ccxt.Exchange, BybitUnifiedTrading]):
+    def set_exchange_reference(self, exchange_instance: ccxt.Exchange | BybitUnifiedTrading):
         """Sets the exchange instance reference for the TMT."""
         self.ex_ref = exchange_instance
         self.lg.info(
@@ -5382,8 +5313,7 @@ class TMT:
         # where ex_ref was missing, that logic could be added here or called separately.
 
     def sib(self, balance: Decimal):
-        """
-        Set Initial Balance: Sets the initial account balance if not already set.
+        """Set Initial Balance: Sets the initial account balance if not already set.
         """
         if self.initial_balance == Decimal("0") and balance > 0:
             self.initial_balance = balance
@@ -5394,16 +5324,14 @@ class TMT:
             self._save_trades()
 
     def ub(self, new_balance: Decimal):
-        """
-        Update Balance: Updates the current account balance.
+        """Update Balance: Updates the current account balance.
         """
         if new_balance > 0:
             self.current_balance = new_balance
             self._save_trades()
 
     def aot(self, trade_record: Tr):
-        """
-        Add Open Trade: Adds a new trade record to the open trades dictionary.
+        """Add Open Trade: Adds a new trade record to the open trades dictionary.
         """
         self.open_trades[trade_record.symbol] = trade_record
         self.lg.info(
@@ -5419,8 +5347,7 @@ class TMT:
         current_balance: Decimal,
         fees_in_quote: Decimal = Decimal("0"),
     ):
-        """
-        Close Trade: Moves an open trade to the closed trades list, calculates its PnL,
+        """Close Trade: Moves an open trade to the closed trades list, calculates its PnL,
         and updates total PnL.
         """
         trade_record = self.open_trades.pop(symbol, None)
@@ -5473,8 +5400,7 @@ class TMT:
             )
 
     def dm(self):
-        """
-        Display Metrics: Prints a summary of all closed trades and overall performance.
+        """Display Metrics: Prints a summary of all closed trades and overall performance.
         """
         total_closed_trades = len(self.closed_trades)
         winning_trades = sum(
@@ -5783,10 +5709,9 @@ class TMT:
             seconds = int(avg_seconds % 60)
             if hours > 0:
                 return f"{hours}h {minutes}m {seconds}s"
-            elif minutes > 0:
+            if minutes > 0:
                 return f"{minutes}m {seconds}s"
-            else:
-                return f"{seconds}s"
+            return f"{seconds}s"
 
         avg_duration_str = format_duration(total_duration_seconds, trades_with_duration)
         avg_win_duration_str = format_duration(
@@ -5820,8 +5745,7 @@ tt: TMT = TMT(QC, slg("trade_tracker"), ccxt_exchange_ref=None, bybit_api_ref=No
 
 
 class BybitWebSocketClient:
-    """
-    Manages WebSocket connections to Bybit for real-time data.
+    """Manages WebSocket connections to Bybit for real-time data.
     Supports public (ticker) and private (order, position) streams.
     """
 
@@ -5846,25 +5770,25 @@ class BybitWebSocketClient:
             self.base_private_url = "wss://stream-testnet.bybit.com/v5/private"
             self.logger.warning(f"{NY}WebSocket client is configured for TESTNET.{RST}")
 
-        self.public_ws: Optional[websocket.WebSocketApp] = None
-        self.private_ws: Optional[websocket.WebSocketApp] = None
-        self.public_thread: Optional[threading.Thread] = None
-        self.private_thread: Optional[threading.Thread] = None
+        self.public_ws: websocket.WebSocketApp | None = None
+        self.private_ws: websocket.WebSocketApp | None = None
+        self.public_thread: threading.Thread | None = None
+        self.private_thread: threading.Thread | None = None
 
-        self.callbacks: Dict[str, List[Callable[[Dict], None]]] = {
+        self.callbacks: dict[str, list[Callable[[dict], None]]] = {
             "ticker": [],
             "order": [],
             "position": [],
         }
-        self.last_prices: Dict[str, Decimal] = (
+        self.last_prices: dict[str, Decimal] = (
             {}
         )  # Stores latest ticker price for each symbol (Bybit ID)
-        self.position_updates: Dict[str, Dict] = (
+        self.position_updates: dict[str, dict] = (
             {}
         )  # Stores latest position info for each symbol (Bybit ID)
 
-        self.public_subscriptions: List[str] = []
-        self.private_subscriptions: List[str] = []
+        self.public_subscriptions: list[str] = []
+        self.private_subscriptions: list[str] = []
 
         self.is_running = False
         self.auth_success = False
@@ -6101,7 +6025,7 @@ class BybitWebSocketClient:
         self.private_thread.start()
         self.logger.info(f"{NB}Started private WebSocket thread.{RST}")
 
-    def start(self, public_topics: List[str], private_topics: List[str]):
+    def start(self, public_topics: list[str], private_topics: list[str]):
         self.is_running = True
         self.public_subscriptions = public_topics
         self.private_subscriptions = private_topics
@@ -6121,7 +6045,7 @@ class BybitWebSocketClient:
             self.logger.info(f"{NB}Private WebSocket closed.{RST}")
         self.logger.info(f"{NG}Bybit WebSocket client stopped.{RST}")
 
-    def register_callback(self, stream_type: str, callback: Callable[[Dict], None]):
+    def register_callback(self, stream_type: str, callback: Callable[[dict], None]):
         if stream_type in self.callbacks:
             self.callbacks[stream_type].append(callback)
             self.logger.debug(f"{NB}Registered callback for {stream_type} stream.{RST}")
@@ -6130,18 +6054,17 @@ class BybitWebSocketClient:
                 f"{NY}Attempted to register callback for unknown stream type: {stream_type}{RST}"
             )
 
-    def get_last_price(self, bybit_symbol_id: str) -> Optional[Decimal]:
+    def get_last_price(self, bybit_symbol_id: str) -> Decimal | None:
         """Retrieves the last known price for a Bybit symbol ID from WebSocket cache."""
         return self.last_prices.get(bybit_symbol_id)
 
-    def get_latest_position_update(self, bybit_symbol_id: str) -> Optional[Dict]:
+    def get_latest_position_update(self, bybit_symbol_id: str) -> dict | None:
         """Retrieves the latest position update for a Bybit symbol ID from WebSocket cache."""
         return self.position_updates.get(bybit_symbol_id)
 
 
 class PB:
-    """
-    Per-Symbol Bot: Manages the trading logic for a single cryptocurrency symbol.
+    """Per-Symbol Bot: Manages the trading logic for a single cryptocurrency symbol.
     Handles data fetching, technical analysis, signal generation, and trade execution.
     """
 
@@ -6149,8 +6072,8 @@ class PB:
         self,
         symbol: str,
         ccxt_exchange: ccxt.Exchange,
-        bybit_api: Optional[BybitUnifiedTrading],
-        config: Dict[str, Any],
+        bybit_api: BybitUnifiedTrading | None,
+        config: dict[str, Any],
         logger: logging.Logger,
         ws_client: BybitWebSocketClient,
     ):
@@ -6160,9 +6083,9 @@ class PB:
         self.cfg = config
         self.lg = logger
         self.ws_client = ws_client  # WebSocket client instance
-        self.mi: Optional[Dict] = None
-        self.lct: Optional[pd.Timestamp] = None
-        self.ta_analyzer: Optional[TA] = None
+        self.mi: dict | None = None
+        self.lct: pd.Timestamp | None = None
+        self.ta_analyzer: TA | None = None
 
         self.mi = gmi(self.ex, self.s, self.lg)
         if not self.mi:
@@ -6209,12 +6132,12 @@ class PB:
         self.ws_client.register_callback("order", self._handle_order_update)
         self.ws_client.register_callback("position", self._handle_position_update)
 
-    def _handle_ticker_update(self, ticker_data: Dict):
+    def _handle_ticker_update(self, ticker_data: dict):
         """Callback for ticker updates from WebSocket."""
         if ticker_data.get("symbol_id") == self.bybit_symbol_id:
             pass  # Price is cached in ws_client.last_prices
 
-    def _handle_order_update(self, order_data: Dict):
+    def _handle_order_update(self, order_data: dict):
         """Callback for order updates from WebSocket."""
         # Bybit WS order topic sends updates for all orders, filter by symbol
         if order_data.get("symbol") == self.bybit_symbol_id:
@@ -6225,9 +6148,8 @@ class PB:
             # For example, if a TP/SL order is filled, you might trigger _cet directly
             # However, for simplicity and to avoid race conditions with main loop,
             # the main loop's position checks (_mp) will still be the primary driver.
-            pass
 
-    def _handle_position_update(self, position_data: Dict):
+    def _handle_position_update(self, position_data: dict):
         """Callback for position updates from WebSocket."""
         # Bybit WS position topic sends updates for all positions, filter by symbol
         if position_data.get("symbol") == self.bybit_symbol_id:
@@ -6237,11 +6159,9 @@ class PB:
             # This is crucial for real-time TSL and break-even adjustments.
             # The _mp function will use ws_client.get_latest_position_update()
             # which directly accesses the cache updated by this callback.
-            pass
 
     def _cfnc(self, kline_data: pd.DataFrame) -> bool:
-        """
-        Check For New Closed Candle: Determines if a new closed candle has formed
+        """Check For New Closed Candle: Determines if a new closed candle has formed
         since the last check.
         """
         if kline_data.empty:
@@ -6260,21 +6180,19 @@ class PB:
                 f"{NB}Initial last closed candle timestamp set for {self.s}: {self.lct}. Ready to detect new formations.{RST}"
             )
             return True
-        elif current_last_closed_candle_ts > self.lct:
+        if current_last_closed_candle_ts > self.lct:
             self.lg.info(
                 f"{NB}New closed candle detected for {self.s}: {current_last_closed_candle_ts}. A new temporal segment has arrived!{RST}"
             )
             self.lct = current_last_closed_candle_ts
             return True
-        else:
-            self.lg.debug(
-                f"No new closed candle for {self.s}. Last candle: {self.lct}, Current last closed: {current_last_closed_candle_ts}. Still awaiting the next temporal shift.{RST}"
-            )
-            return False
+        self.lg.debug(
+            f"No new closed candle for {self.s}. Last candle: {self.lct}, Current last closed: {current_last_closed_candle_ts}. Still awaiting the next temporal shift.{RST}"
+        )
+        return False
 
     def _cet(self, exit_reason: str, current_price: Decimal) -> bool:
-        """
-        Close Existing Trade: Executes the closing of an open position.
+        """Close Existing Trade: Executes the closing of an open position.
         """
         current_open_trade = tt.open_trades.get(self.s)
         if not current_open_trade:
@@ -6406,16 +6324,14 @@ class PB:
                         fees_in_quote=fees,
                     )
                     return True
-                else:
-                    self.lg.error(
-                        f"{NR}Position for {self.s} remains open after all attempts to close. Manual intervention may be required!{RST}"
-                    )
-                    return False
-            else:
                 self.lg.error(
-                    f"{NR}Failed to place close order for {self.s}. The closing spell failed to cast!{RST}"
+                    f"{NR}Position for {self.s} remains open after all attempts to close. Manual intervention may be required!{RST}"
                 )
                 return False
+            self.lg.error(
+                f"{NR}Failed to place close order for {self.s}. The closing spell failed to cast!{RST}"
+            )
+            return False
         except Exception as e:
             self.lg.error(
                 f"{NR}An unexpected error occurred while trying to close trade for {self.s}: {e}. A cosmic interference in sealing the trade!{RST}",
@@ -6424,8 +6340,7 @@ class PB:
             return False
 
     def _coo(self) -> bool:
-        """
-        Cancel Open Orders: Cancels all active orders for the current symbol.
+        """Cancel Open Orders: Cancels all active orders for the current symbol.
         """
         try:
             open_orders = self.ex.fetch_open_orders(self.s)
@@ -6472,9 +6387,8 @@ class PB:
             )
         return False
 
-    def _cbe(self, current_price: Decimal, position_info: Dict) -> bool:
-        """
-        Check Break-Even: Adjusts stop loss to break-even if price moves favorably.
+    def _cbe(self, current_price: Decimal, position_info: dict) -> bool:
+        """Check Break-Even: Adjusts stop loss to break-even if price moves favorably.
         """
         if not self.cfg.get("enable_break_even", False):
             self.lg.debug(
@@ -6495,7 +6409,7 @@ class PB:
         current_sl_raw = position_info.get(
             "stopLossPrice"
         )  # This might be None, '0', '', or a valid Decimal string
-        current_sl: Optional[Decimal] = None
+        current_sl: Decimal | None = None
 
         if (
             current_sl_raw is not None
@@ -6545,8 +6459,8 @@ class PB:
         break_even_offset_ticks = self.cfg.get("break_even_offset_ticks", 2)
         break_even_offset_amount = min_tick_size * Decimal(str(break_even_offset_ticks))
 
-        new_sl_price: Optional[Decimal] = None
-        trigger_price: Optional[Decimal] = None
+        new_sl_price: Decimal | None = None
+        trigger_price: Decimal | None = None
 
         if side == "long":
             trigger_price = entry_price + (current_atr * trigger_atr_multiple)
@@ -6605,15 +6519,13 @@ class PB:
                             f"{NG}_cbe: Break-Even SL for {self.s} (Long) successfully set via stsl.{RST}"
                         )
                         return True
-                    else:
-                        self.lg.warning(
-                            f"{NY}_cbe: Break-Even SL setting failed for {self.s} (Long) via stsl.{RST}"
-                        )
-                        return False
-                else:
-                    self.lg.debug(
-                        f"Break-Even for {self.s} (Long) triggered, but new SL {new_sl_price:.{price_precision}f} is not higher than current SL {current_sl:.{price_precision}f}. No update needed. The shield is already advanced.{RST}"
+                    self.lg.warning(
+                        f"{NY}_cbe: Break-Even SL setting failed for {self.s} (Long) via stsl.{RST}"
                     )
+                    return False
+                self.lg.debug(
+                    f"Break-Even for {self.s} (Long) triggered, but new SL {new_sl_price:.{price_precision}f} is not higher than current SL {current_sl:.{price_precision}f}. No update needed. The shield is already advanced.{RST}"
+                )
         elif side == "short":
             trigger_price = entry_price - (current_atr * trigger_atr_multiple)
             if current_price <= trigger_price:
@@ -6670,24 +6582,21 @@ class PB:
                             f"{NG}_cbe: Break-Even SL for {self.s} (Short) successfully set via stsl.{RST}"
                         )
                         return True
-                    else:
-                        self.lg.warning(
-                            f"{NY}_cbe: Break-Even SL setting failed for {self.s} (Short) via stsl.{RST}"
-                        )
-                        return False
-                else:
-                    self.lg.debug(
-                        f"Break-Even for {self.s} (Short) triggered, but new SL {new_sl_price:.{price_precision}f} is not lower than current SL {current_sl:.{price_precision}f}. No update needed. The shield is already advanced.{RST}"
+                    self.lg.warning(
+                        f"{NY}_cbe: Break-Even SL setting failed for {self.s} (Short) via stsl.{RST}"
                     )
+                    return False
+                self.lg.debug(
+                    f"Break-Even for {self.s} (Short) triggered, but new SL {new_sl_price:.{price_precision}f} is not lower than current SL {current_sl:.{price_precision}f}. No update needed. The shield is already advanced.{RST}"
+                )
 
         self.lg.debug(
             f"Break-Even not triggered for {self.s}. Current Price: {current_price:.{price_precision}f}, Trigger: {trigger_price:.{price_precision}f}. Still awaiting the threshold.{RST}"
         )
         return False
 
-    def _tbe(self, position_info: Dict) -> bool:
-        """
-        Time-Based Exit: Closes a trade if it has been open for longer than the configured duration.
+    def _tbe(self, position_info: dict) -> bool:
+        """Time-Based Exit: Closes a trade if it has been open for longer than the configured duration.
         """
         time_based_exit_minutes = self.cfg.get("time_based_exit_minutes")
         if time_based_exit_minutes is None or time_based_exit_minutes <= 0:
@@ -6720,8 +6629,7 @@ class PB:
         return False
 
     def _mp(self, current_price: Decimal) -> bool:
-        """
-        Manage Position: Checks for existing positions and applies TP/SL/TSL/Break-Even logic.
+        """Manage Position: Checks for existing positions and applies TP/SL/TSL/Break-Even logic.
         Returns True if an open position is found and managed, False otherwise.
         """
         # Prioritize WebSocket's latest position update
@@ -6739,7 +6647,7 @@ class PB:
 
                 def robust_decimal_convert(
                     key_name: str, is_protection_param: bool = False
-                ) -> Optional[Decimal]:
+                ) -> Decimal | None:
                     raw_val = raw_data_source.get(key_name)
                     if raw_val is None or str(raw_val).strip() == "":
                         return None
@@ -6761,8 +6669,8 @@ class PB:
                 raw_data_source = position_info.get("info", position_info)
 
                 def robust_decimal_convert(
-                    key_name: str, source_dict: Dict, is_protection_param: bool = False
-                ) -> Optional[Decimal]:
+                    key_name: str, source_dict: dict, is_protection_param: bool = False
+                ) -> Decimal | None:
                     raw_val = source_dict.get(key_name)
                     if raw_val is None or str(raw_val).strip() == "":
                         return None
@@ -7019,21 +6927,21 @@ class PB:
 
     def _check_and_set_fixed_protections(
         self,
-        position_info: Dict,
-        target_sl_price: Optional[Decimal],
-        target_tp_price: Optional[Decimal],
+        position_info: dict,
+        target_sl_price: Decimal | None,
+        target_tp_price: Decimal | None,
         current_trade_record: Tr,
         min_tick_size: Decimal,
     ):
         """Helper function to check and set fixed SL and TP.
-        DEPRECATED: Logic moved to stsl and _mp main flow."""
-        pass  # This function is no longer needed as its logic is integrated into _mp calling stsl.
+        DEPRECATED: Logic moved to stsl and _mp main flow.
+        """
+        # This function is no longer needed as its logic is integrated into _mp calling stsl.
 
     def _ot(
-        self, signal: str, current_price: Decimal, orderbook_data: Optional[Dict]
+        self, signal: str, current_price: Decimal, orderbook_data: dict | None
     ) -> bool:
-        """
-        Open Trade: Executes a new trade based on the generated signal.
+        """Open Trade: Executes a new trade based on the generated signal.
         """
         if not self.cfg.get("enable_trading", False):
             self.lg.info(
@@ -7102,7 +7010,7 @@ class PB:
             return False
 
         order_type = self.cfg.get("entry_order_type", "market")
-        limit_price: Optional[Decimal] = None
+        limit_price: Decimal | None = None
         if order_type == "limit":
             offset_multiplier = self.cfg.get(
                 (
@@ -7293,16 +7201,14 @@ class PB:
                 f"{NG}Trade opened successfully for {self.s}! The new quest is underway!{RST}"
             )
             return True
-        else:
-            self.lg.error(
-                f"{NR}Failed to open trade for {self.s}. The opening spell failed!{RST}"
-            )
-            self._coo()  # Attempt to cancel any lingering orders if trade failed
-            return False
+        self.lg.error(
+            f"{NR}Failed to open trade for {self.s}. The opening spell failed!{RST}"
+        )
+        self._coo()  # Attempt to cancel any lingering orders if trade failed
+        return False
 
     def run_symbol_logic(self):
-        """
-        Main logic loop for a single symbol. Fetches data, calculates indicators,
+        """Main logic loop for a single symbol. Fetches data, calculates indicators,
         generates signals, and manages trades.
         """
         self.lg.info(
@@ -7401,17 +7307,16 @@ class PB:
 
 
 class MainBot:
-    """
-    Main Bot orchestrator: Initializes exchanges, manages per-symbol bots,
+    """Main Bot orchestrator: Initializes exchanges, manages per-symbol bots,
     and runs the main trading loop.
     """
 
     def __init__(self):
         self.lg = slg("main")
         self.cfg = _icfs
-        self.ex: Optional[ccxt.Exchange] = None
-        self.per_symbol_bots: Dict[str, PB] = {}
-        self.ws_client: Optional[BybitWebSocketClient] = None
+        self.ex: ccxt.Exchange | None = None
+        self.per_symbol_bots: dict[str, PB] = {}
+        self.ws_client: BybitWebSocketClient | None = None
         self.is_running = False
         self.last_sms_report_time: float = 0.0
 

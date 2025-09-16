@@ -45,7 +45,7 @@ class Backtester:
         if self.position_size == 0:
             self.position_size = qty if side == 'Buy' else -qty
             self.avg_entry_price = price
-            return
+            return None
 
         if (self.position_size > 0 and side == 'Buy') or (self.position_size < 0 and side == 'Sell'):
             # Increasing position size

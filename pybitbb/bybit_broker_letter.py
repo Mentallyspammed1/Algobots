@@ -1,9 +1,9 @@
 # bybit_broker_helper.py
 import logging
-from typing import Dict, Any, Optional, List, Union
+from typing import Any
 
+from pybit.exceptions import BybitAPIError, BybitRequestError
 from pybit.unified_trading import HTTP
-from pybit.exceptions import BybitRequestError, BybitAPIError
 
 # Configure logging for the module
 logging.basicConfig(
@@ -13,16 +13,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BybitBrokerHelper:
-    """
-    A helper class for managing Bybit broker-related functionalities,
+    """A helper class for managing Bybit broker-related functionalities,
     including retrieving broker information, earnings, and sub-account details
     for users participating in the Bybit Broker program.
     All functions require API key authentication.
     """
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = False):
-        """
-        Initializes the BybitBrokerHelper with API credentials and environment.
+        """Initializes the BybitBrokerHelper with API credentials and environment.
 
         :param api_key: Your Bybit API key.
         :param api_secret: Your Bybit API secret.
@@ -38,9 +36,8 @@ class BybitBrokerHelper:
         self.session = HTTP(testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret)
         logger.info(f"BybitBrokerHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
 
-    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Internal method to make an HTTP request to the Bybit API and handle responses.
+    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> dict[str, Any] | None:
+        """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
 
         :param method: The name of the method to call on the `self.session` object.
@@ -52,18 +49,17 @@ class BybitBrokerHelper:
         try:
             func = getattr(self.session, method)
             response = func(**kwargs)
-            
+
             if response and response.get('retCode') == 0:
                 logger.debug(f"[{endpoint_name}] Successfully called. Response: {response.get('result')}")
                 return response.get('result')
-            else:
-                ret_code = response.get('retCode', 'N/A')
-                error_msg = response.get('retMsg', 'Unknown error')
-                logger.error(
-                    f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
-                    f"Args: {kwargs}. Full Response: {response}"
-                )
-                return None
+            ret_code = response.get('retCode', 'N/A')
+            error_msg = response.get('retMsg', 'Unknown error')
+            logger.error(
+                f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
+                f"Args: {kwargs}. Full Response: {response}"
+            )
+            return None
         except (BybitRequestError, BybitAPIError) as e:
             logger.exception(
                 f"[{endpoint_name}] Pybit specific error during API call. "
@@ -77,17 +73,15 @@ class BybitBrokerHelper:
             )
             return None
 
-    def get_broker_info(self) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves general information about the broker.
+    def get_broker_info(self) -> dict[str, Any] | None:
+        """Retrieves general information about the broker.
 
         :return: A dictionary containing broker information or None on failure.
         """
         return self._make_request('get_broker_info', 'Broker Info')
 
-    def get_broker_earnings(self, biz_type: Optional[str] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves broker earnings records.
+    def get_broker_earnings(self, biz_type: str | None = None, **kwargs) -> dict[str, Any] | None:
+        """Retrieves broker earnings records.
 
         :param biz_type: Optional. Business type (e.g., "SPOT", "LINEAR", "INVERSE", "OPTION").
                          If not provided, returns earnings for all business types.
@@ -97,16 +91,15 @@ class BybitBrokerHelper:
         if biz_type is not None and (not isinstance(biz_type, str) or not biz_type):
             logger.error("Invalid 'biz_type' provided for get_broker_earnings.")
             return None
-        
+
         params = {}
         if biz_type:
             params['bizType'] = biz_type
         params.update(kwargs)
         return self._make_request('get_broker_earnings', 'Broker Earnings', **params)
 
-    def get_broker_account_info(self, sub_member_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves sub-account information for a broker.
+    def get_broker_account_info(self, sub_member_id: int | None = None) -> dict[str, Any] | None:
+        """Retrieves sub-account information for a broker.
 
         :param sub_member_id: Optional. The UID of the sub-account. If not provided,
                               returns information for all sub-accounts.
@@ -134,7 +127,6 @@ if __name__ == "__main__":
         logger.error("Note: Broker functions are for accounts enrolled in the Bybit Broker program.")
         # For demonstration, we'll proceed but expect API calls to fail if not a broker account.
         # exit()
-        pass
 
     broker_helper = BybitBrokerHelper(API_KEY, API_SECRET, testnet=USE_TESTNET)
 

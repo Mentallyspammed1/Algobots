@@ -10,17 +10,17 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
+import indicators  # Import the new indicators module
 import numpy as np
 import pandas as pd
-import indicators  # Import the new indicators module
 from alert_system import AlertSystem
 from colorama import Fore, Style, init
 from dotenv import dotenv_values
 
 # Guarded import for the live trading client
 try:
-    from pybit.unified_trading import HTTP as PybitHTTP
     import pybit.exceptions
+    from pybit.unified_trading import HTTP as PybitHTTP
 
     PYBIT_AVAILABLE = True
 except ImportError:
@@ -240,7 +240,7 @@ class PybitTradingClient:
             self.session = None
             self.logger.error(f"{NEON_RED}API keys not found for PyBit.{RESET}")
             return
-        
+
         proxies = {}
         if self.cfg.get("execution", {}).get("proxies", {}).get("enabled", False):
             proxies = {
@@ -251,9 +251,9 @@ class PybitTradingClient:
 
         try:
             self.session = PybitHTTP(
-                api_key=API_KEY, 
-                api_secret=API_SECRET, 
-                testnet=self.testnet, 
+                api_key=API_KEY,
+                api_secret=API_SECRET,
+                testnet=self.testnet,
                 timeout=REQUEST_TIMEOUT,
                 proxies=proxies if proxies.get("http") or proxies.get("https") else None
             )
@@ -513,7 +513,7 @@ class PositionManager:
         if not self.trade_management_enabled or len(self.open_positions) >= self.max_open_positions:
             self.logger.info(f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}")
             return None
-        
+
         order_qty = self._calculate_order_size(current_price, atr_value, conviction)
         if order_qty <= 0:
             self.logger.warning(f"{NEON_YELLOW}Order quantity is zero. Cannot open position.{RESET}")
@@ -553,7 +553,7 @@ class PositionManager:
                         resp_tp = self.pybit.place_order(**payload)
                         if resp_tp and resp_tp.get("retCode") == 0: self.logger.info(f"{NEON_GREEN}Placed individual TP target: {payload.get('orderLinkId')}{RESET}")
                         else: self.logger.error(f"{NEON_RED}Failed to place TP target: {payload.get('orderLinkId')}. Error: {resp_tp.get('retMsg') if resp_tp else 'No response'}{RESET}")
-                
+
                 if self.config["execution"]["sl_scheme"]["use_conditional_stop"]:
                     sl_link = f"{position['link_prefix']}_sl"
                     sresp = self.pybit.place_order(
@@ -1171,7 +1171,7 @@ def adapt_exit_params(pt: PerformanceTracker, cfg: dict) -> tuple[Decimal, Decim
 
 def random_tune_weights(cfg_path="config.json", k=50, jitter=0.2):
     print("Running random weight tuning...")
-    with open(cfg_path,"r",encoding="utf-8") as f: cfg=json.load(f)
+    with open(cfg_path,encoding="utf-8") as f: cfg=json.load(f)
     base = cfg["weight_sets"]["default_scalping"]
     best_cfg, best_score = base, -1e9
     for _ in range(k):
@@ -1202,7 +1202,7 @@ def main() -> None:
     while True:
         try:
             logger.info(f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
-            
+
             guard = config.get("risk_guardrails", {})
             if guard.get("enabled", False):
                 equity = Decimal(str(config["trade_management"]["account_balance"])) + performance_tracker.total_pnl
@@ -1213,14 +1213,14 @@ def main() -> None:
                     logger.error(f"{NEON_RED}KILL SWITCH: Risk limits hit. Cooling down.{RESET}")
                     time.sleep(int(guard.get("cooldown_after_kill_min", 120)) * 60)
                     continue
-            
+
             if not in_allowed_session(config):
                 logger.info(f"{NEON_BLUE}Outside allowed session. Holding.{RESET}")
                 time.sleep(config["loop_delay"]); continue
 
             current_price = pybit_client.fetch_current_price(config["symbol"])
             if current_price is None: time.sleep(config["loop_delay"]); continue
-            
+
             df = pybit_client.fetch_klines(config["symbol"], config["interval"], 1000)
             if df is None or df.empty: time.sleep(config["loop_delay"]); continue
 
@@ -1231,7 +1231,7 @@ def main() -> None:
                 if spread_bps > float(guard.get("spread_filter_bps", 5.0)):
                     logger.warning(f"{NEON_YELLOW}Spread too high ({spread_bps:.1f} bps). Holding.{RESET}")
                     time.sleep(config["loop_delay"]); continue
-            
+
             if guard.get("ev_filter_enabled", True) and expected_value(performance_tracker) <= 0:
                 logger.warning(f"{NEON_YELLOW}Negative EV detected. Holding.{RESET}")
                 time.sleep(config["loop_delay"]); continue
@@ -1252,7 +1252,7 @@ def main() -> None:
 
             analyzer = TradingAnalyzer(df, config, logger, config["symbol"])
             if analyzer.df.empty: time.sleep(config["loop_delay"]); continue
-            
+
             atr_value = Decimal(str(analyzer._get_indicator_value("ATR", Decimal("0.1"))))
             config["_last_atr"] = str(atr_value)
             trading_signal, signal_score = analyzer.generate_trading_signal(current_price, orderbook_data, mtf_trends)

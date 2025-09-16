@@ -2,8 +2,7 @@ import math
 
 
 def calculate_indicators(klines: list, config: dict) -> dict | None:
-    """
-    Calculates Supertrend, RSI, and Ehlers-Fisher Transform from a list of kline data.
+    """Calculates Supertrend, RSI, and Ehlers-Fisher Transform from a list of kline data.
     """
     if not klines or len(klines) < max(config['supertrend_length'], config['rsi_length'], config['ef_period']) + 1:
         return None

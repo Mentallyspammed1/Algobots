@@ -47,6 +47,13 @@ const ADX_THRESHOLD = CONFIG.ADX_THRESHOLD;
 const DB_FILE = "scalper_positions.sqlite";
 let db; // Will hold the opened database instance
 
+/**
+ * @async
+ * @function _initDb
+ * @description Initializes and opens the SQLite database for tracking trades.
+ * Creates the `trades` table if it doesn't already exist.
+ * @returns {Promise<void>}
+ */
 async function _initDb() {
   db = await open({
     filename: DB_FILE,
@@ -76,12 +83,26 @@ async function _initDb() {
 // ====================== 
 // UTILITIES 
 // ====================== 
+/**
+ * @function getCurrentTime
+ * @description Retrieves the current local time in the specified timezone and the current UTC time.
+ * @param {string} tzStr - The timezone string (e.g., "America/New_York").
+ * @returns {Array<moment.Moment>} An array containing [localTime, utcTime] moment objects.
+ */
 function getCurrentTime(tzStr) {
   const localTime = moment().tz(tzStr);
   const utcTime = moment.utc();
   return [localTime, utcTime];
 }
 
+/**
+ * @function isMarketOpen
+ * @description Checks if the current local time falls within the specified market open hours.
+ * @param {moment.Moment} localTime - The current local time moment object.
+ * @param {number} openHour - The hour when the market opens (0-23).
+ * @param {number} closeHour - The hour when the market closes (0-23).
+ * @returns {boolean} True if the market is considered open, false otherwise.
+ */
 function isMarketOpen(localTime, openHour, closeHour) {
   const currentHour = localTime.hour();
   if (openHour < closeHour) {
@@ -93,6 +114,13 @@ function isMarketOpen(localTime, openHour, closeHour) {
 // ====================== 
 // HIGHER TF CONFIRMATION 
 // ====================== 
+/**
+ * @async
+ * @function higherTfTrend
+ * @description Determines the trend based on higher timeframe EMA crosses.
+ * @param {string} symbol - The trading pair symbol.
+ * @returns {Promise<string>} "long", "short", or "none".
+ */
 async function higherTfTrend(symbol) {
   const htf = CONFIG.HIGHER_TF_TIMEFRAME;
   const short = CONFIG.H_TF_EMA_SHORT_PERIOD;
@@ -116,6 +144,15 @@ async function higherTfTrend(symbol) {
 // SIGNAL GENERATOR 
 // ====================== 
 const lastSignalBar = {};
+/**
+ * @async
+ * @function generateSignal
+ * @description Generates a trading signal (Buy/Sell/none) based on various technical indicators and filters.
+ * Includes checks for EMA crosses, RSI, volume spikes, higher timeframe trend, and optional filters like EST, Stochastic, MACD, and ADX.
+ * @param {string} symbol - The trading pair symbol.
+ * @param {DataFrame} df - The DataFrame containing kline data.
+ * @returns {Promise<Array<any>>} An array containing [signal (string), currentPrice (number), slPrice (number), tpPrice (number), reason (string)].
+ */
 async function generateSignal(symbol, df) {
   let minRequiredKlines = Math.max(
     MIN_KLINES_FOR_STRATEGY, CONFIG.TREND_EMA_PERIOD,
@@ -264,6 +301,13 @@ async function generateSignal(symbol, df) {
 // EQUITY GUARD 
 // ====================== 
 let equityReference = null;
+/**
+ * @async
+ * @function emergencyStop
+ * @description Implements an emergency stop mechanism based on a percentage drawdown from initial equity.
+ * If the current equity falls below a configured threshold, the bot will initiate a shutdown.
+ * @returns {Promise<boolean>} True if an emergency stop is triggered, false otherwise.
+ */
 async function emergencyStop() {
   const currentEquity = await bybitClient.getBalance();
   if (equityReference === null) {
@@ -290,6 +334,15 @@ async function emergencyStop() {
 // ====================== 
 // MAIN LOOP 
 // ====================== 
+/**
+ * @async
+ * @function main
+ * @description The main execution loop for the Chandelier Exit strategy.
+ * It initializes the database, continuously fetches market data, manages positions,
+ * generates trading signals, and places/manages orders based on strategy logic.
+ * Includes market open checks, emergency stop, and position reconciliation.
+ * @returns {Promise<void>}
+ */
 async function main() {
   await _initDb(); // Initialize SQLite DB
 
@@ -388,6 +441,15 @@ async function main() {
   }
 }
 
+/**
+ * @async
+ * @function reconcilePositions
+ * @description Reconciles the open positions tracked in the database with the actual open positions on the exchange.
+ * Marks DB positions as closed if not found on exchange, and adds exchange positions to DB if not found in DB.
+ * @param {Object} exchangePositions - An object where keys are symbols and values are exchange position info.
+ * @param {moment.Moment} utcTime - The current UTC time moment object.
+ * @returns {Promise<void>}
+ */
 async function reconcilePositions(exchangePositions, utcTime) {
   const dbPositions = {};
   const rows = await db.all("SELECT id, order_id, symbol, side, status, entry_price FROM trades WHERE status = 'OPEN'");
@@ -422,6 +484,22 @@ async function reconcilePositions(exchangePositions, utcTime) {
   }
 }
 
+/**
+ * @async
+ * @function manageTradeExit
+ * @description Manages the exit conditions for an open trade, including fixed profit targets,
+ * trailing stop loss (Chandelier Exit), Fisher Transform flips, and time-based exits.
+ * @param {string} tradeId - The unique ID of the trade in the database.
+ * @param {string} symbol - The trading pair symbol.
+ * @param {string} side - The side of the trade ("Buy" or "Sell").
+ * @param {string} entryTimeStr - The entry time of the trade as an ISO string.
+ * @param {number} entryPrice - The entry price of the trade.
+ * @param {number} slDb - The Stop Loss price stored in the database.
+ * @param {number} tpDb - The Take Profit price stored in the database.
+ * @param {Object|null} positionInfo - Current position information from the exchange, or null if not found.
+ * @param {moment.Moment} utcTime - The current UTC time moment object.
+ * @returns {Promise<void>}
+ */
 async function manageTradeExit(tradeId, symbol, side, entryTimeStr, entryPrice, slDb, tpDb, positionInfo, utcTime) {
   if (!positionInfo) {
     logger.info(neon.info(`Position for ${symbol} not found on exchange while managing trade ${tradeId}. Marking as CLOSED in DB tracker.`));
@@ -525,6 +603,17 @@ async function manageTradeExit(tradeId, symbol, side, entryTimeStr, entryPrice, 
   }
 }
 
+/**
+ * @async
+ * @function processSymbolForSignal
+ * @description Fetches kline data, generates a trading signal, calculates order quantity based on risk,
+ * sets margin/leverage, and places an order (Market, Limit, or Conditional) if a signal is generated.
+ * Logs detailed indicator information for debugging.
+ * @param {string} symbol - The trading pair symbol to process.
+ * @param {number} balance - The current available balance for risk calculation.
+ * @param {moment.Moment} utcTime - The current UTC time moment object.
+ * @returns {Promise<void>}
+ */
 async function processSymbolForSignal(symbol, balance, utcTime) {
   const klines = await bybitClient.klines(symbol, TIMEFRAME, 200);
   if (!klines || klines.length < MIN_KLINES_FOR_STRATEGY) {
@@ -655,6 +744,10 @@ async function processSymbolForSignal(symbol, balance, utcTime) {
 // ====================== 
 // LAUNCH 
 // ====================== 
+/**
+ * @description Immediately invoked async function to launch the Chandelier Exit strategy.
+ * Handles top-level unhandled errors during the bot's execution.
+ */
 (async () => {
     try {
       await main();

@@ -11,7 +11,6 @@ from config import (
     PIVOT_TOLERANCE_PCT,
     SMA_PERIOD,
 )
-
 from strategies.strategy_template import StrategyTemplate
 
 strategy_logger = logging.getLogger('stochrsi_fib_ob_strategy')

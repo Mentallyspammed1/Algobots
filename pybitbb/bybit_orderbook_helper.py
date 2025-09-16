@@ -1,11 +1,12 @@
 # bybit_ws_private_helper.py
 import logging
-import time
 import threading
-from typing import Dict, Any, Optional, Callable, List, Tuple
+import time
+from collections.abc import Callable
+from typing import Any
 
-from pybit.unified_trading import WebSocket
 from pybit.exceptions import BybitWebsocketError
+from pybit.unified_trading import WebSocket
 
 # Configure logging for the module
 logging.basicConfig(
@@ -15,15 +16,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BybitWsPrivateHelper:
-    """
-    A helper class for managing various private WebSocket data streams from Bybit,
+    """A helper class for managing various private WebSocket data streams from Bybit,
     including wallet balance, position, order, and execution updates.
     These streams require API key authentication.
     """
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = False):
-        """
-        Initializes the BybitWsPrivateHelper.
+        """Initializes the BybitWsPrivateHelper.
 
         :param api_key: Your Bybit API key.
         :param api_secret: Your Bybit API secret.
@@ -36,36 +35,35 @@ class BybitWsPrivateHelper:
         self.api_key = api_key
         self.api_secret = api_secret
         self.testnet = testnet
-        self.websocket_client: Optional[WebSocket] = None
+        self.websocket_client: WebSocket | None = None
         self._connection_lock = threading.Lock()
         self._is_connected_event = threading.Event() # Event to signal connection status
         # Stores {topic: (callback, kwargs)} for re-subscription on reconnect
-        self._subscriptions: Dict[str, Tuple[Callable[[Dict[str, Any]], None], Dict[str, Any]]] = {} 
+        self._subscriptions: dict[str, tuple[Callable[[dict[str, Any]], None], dict[str, Any]]] = {}
 
         logger.info(f"BybitWsPrivateHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
 
-    def _on_message(self, message: Dict[str, Any]) -> None:
-        """
-        Internal callback to process incoming WebSocket messages.
+    def _on_message(self, message: dict[str, Any]) -> None:
+        """Internal callback to process incoming WebSocket messages.
         It dispatches messages to the appropriate user-defined callback based on the topic.
         """
         if not message:
-            logger.warning(f"Received empty WebSocket message.")
+            logger.warning("Received empty WebSocket message.")
             return
 
         topic = message.get('topic')
         if not topic:
             logger.debug(f"Received WebSocket message without topic: {message}")
             return
-        
+
         # Find the specific subscription matching the topic
         matched_callback = None
         for sub_topic, (callback, sub_kwargs) in self._subscriptions.items():
             # Private topics are usually exact matches (e.g., 'wallet', 'position.linear')
-            if sub_topic == topic: 
+            if sub_topic == topic:
                 matched_callback = callback
                 break
-            
+
         if matched_callback:
             try:
                 matched_callback(message)
@@ -76,14 +74,14 @@ class BybitWsPrivateHelper:
 
     def _on_connect(self) -> None:
         """Internal callback for WebSocket connection establishment."""
-        logger.info(f"WebSocket connected.")
+        logger.info("WebSocket connected.")
         self._is_connected_event.set()
         # Re-subscribe to all active subscriptions upon reconnection
         self._resubscribe_all()
 
     def _on_disconnect(self) -> None:
         """Internal callback for WebSocket disconnection."""
-        logger.warning(f"WebSocket disconnected.")
+        logger.warning("WebSocket disconnected.")
         self._is_connected_event.clear()
 
     def _on_error(self, error_message: str) -> None:
@@ -122,11 +120,10 @@ class BybitWsPrivateHelper:
                 except Exception as e:
                     logger.error(f"Error re-subscribing to private topic {topic}: {e}", exc_info=True)
         else:
-            logger.warning(f"Cannot re-subscribe: WebSocket client not connected.")
+            logger.warning("Cannot re-subscribe: WebSocket client not connected.")
 
     def connect(self, wait_for_connection: bool = True, timeout: int = 10) -> bool:
-        """
-        Establishes the WebSocket connection.
+        """Establishes the WebSocket connection.
 
         :param wait_for_connection: If True, blocks until connection is established or timeout.
         :param timeout: Maximum seconds to wait for connection if `wait_for_connection` is True.
@@ -134,7 +131,7 @@ class BybitWsPrivateHelper:
         """
         with self._connection_lock:
             if self.websocket_client and self.websocket_client.is_connected():
-                logger.warning(f"WebSocket client is already connected.")
+                logger.warning("WebSocket client is already connected.")
                 return True
 
             logger.info(f"Connecting to private WebSocket (Testnet: {self.testnet})...")
@@ -149,14 +146,14 @@ class BybitWsPrivateHelper:
                     on_disconnect=self._on_disconnect,
                     on_error=self._on_error
                 )
-                
+
                 if wait_for_connection:
                     if not self._is_connected_event.wait(timeout=timeout):
-                        logger.error(f"Timeout waiting for private WebSocket connection.")
+                        logger.error("Timeout waiting for private WebSocket connection.")
                         self.websocket_client.close() # Attempt to close if timeout
                         self.websocket_client = None
                         return False
-                logger.info(f"Private WebSocket client initiated.")
+                logger.info("Private WebSocket client initiated.")
                 return True
             except Exception as e:
                 logger.exception(f"Failed to initialize private WebSocket client: {e}")
@@ -164,43 +161,40 @@ class BybitWsPrivateHelper:
                 return False
 
     def disconnect(self) -> None:
-        """
-        Closes the WebSocket connection.
+        """Closes the WebSocket connection.
         """
         with self._connection_lock:
             if self.websocket_client:
-                logger.info(f"Closing private WebSocket connection...")
+                logger.info("Closing private WebSocket connection...")
                 self.websocket_client.close()
                 self.websocket_client = None
                 self._is_connected_event.clear()
                 self._subscriptions.clear() # Clear all subscriptions on disconnect
-                logger.info(f"Private WebSocket connection closed.")
+                logger.info("Private WebSocket connection closed.")
             else:
-                logger.info(f"Private WebSocket client not active.")
-    
+                logger.info("Private WebSocket client not active.")
+
     def is_connected(self) -> bool:
-        """
-        Checks if the WebSocket client is currently connected.
+        """Checks if the WebSocket client is currently connected.
         """
         return self._is_connected_event.is_set()
 
-    def subscribe_to_wallet_stream(self, callback: Callable[[Dict[str, Any]], None]) -> bool:
-        """
-        Subscribes to the real-time wallet balance update stream.
+    def subscribe_to_wallet_stream(self, callback: Callable[[dict[str, Any]], None]) -> bool:
+        """Subscribes to the real-time wallet balance update stream.
 
         :param callback: A callable function to process wallet updates.
         :return: True if subscription was successfully initiated, False otherwise.
         """
         if not self.is_connected():
-            logger.error(f"Cannot subscribe to wallet stream: WebSocket not connected.")
+            logger.error("Cannot subscribe to wallet stream: WebSocket not connected.")
             return False
         topic = "wallet"
         if topic in self._subscriptions:
-            logger.warning(f"Already subscribed to wallet stream. Updating callback.")
+            logger.warning("Already subscribed to wallet stream. Updating callback.")
         self._subscriptions[topic] = (callback, {})
         try:
             self.websocket_client.wallet_stream(callback=self._on_message)
-            logger.info(f"Successfully initiated subscription to wallet stream.")
+            logger.info("Successfully initiated subscription to wallet stream.")
             return True
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error subscribing to wallet stream: {e}")
@@ -211,24 +205,23 @@ class BybitWsPrivateHelper:
             del self._subscriptions[topic]
             return False
 
-    def subscribe_to_position_stream(self, callback: Callable[[Dict[str, Any]], None]) -> bool:
-        """
-        Subscribes to the real-time position update stream.
+    def subscribe_to_position_stream(self, callback: Callable[[dict[str, Any]], None]) -> bool:
+        """Subscribes to the real-time position update stream.
         This stream provides updates for all categories (linear, inverse, spot, option).
 
         :param callback: A callable function to process position updates.
         :return: True if subscription was successfully initiated, False otherwise.
         """
         if not self.is_connected():
-            logger.error(f"Cannot subscribe to position stream: WebSocket not connected.")
+            logger.error("Cannot subscribe to position stream: WebSocket not connected.")
             return False
         topic = "position"
         if topic in self._subscriptions:
-            logger.warning(f"Already subscribed to position stream. Updating callback.")
+            logger.warning("Already subscribed to position stream. Updating callback.")
         self._subscriptions[topic] = (callback, {})
         try:
             self.websocket_client.position_stream(callback=self._on_message)
-            logger.info(f"Successfully initiated subscription to position stream.")
+            logger.info("Successfully initiated subscription to position stream.")
             return True
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error subscribing to position stream: {e}")
@@ -239,24 +232,23 @@ class BybitWsPrivateHelper:
             del self._subscriptions[topic]
             return False
 
-    def subscribe_to_order_stream(self, callback: Callable[[Dict[str, Any]], None]) -> bool:
-        """
-        Subscribes to the real-time order update stream.
+    def subscribe_to_order_stream(self, callback: Callable[[dict[str, Any]], None]) -> bool:
+        """Subscribes to the real-time order update stream.
         This stream provides updates for all categories (linear, inverse, spot, option).
 
         :param callback: A callable function to process order updates.
         :return: True if subscription was successfully initiated, False otherwise.
         """
         if not self.is_connected():
-            logger.error(f"Cannot subscribe to order stream: WebSocket not connected.")
+            logger.error("Cannot subscribe to order stream: WebSocket not connected.")
             return False
         topic = "order"
         if topic in self._subscriptions:
-            logger.warning(f"Already subscribed to order stream. Updating callback.")
+            logger.warning("Already subscribed to order stream. Updating callback.")
         self._subscriptions[topic] = (callback, {})
         try:
             self.websocket_client.order_stream(callback=self._on_message)
-            logger.info(f"Successfully initiated subscription to order stream.")
+            logger.info("Successfully initiated subscription to order stream.")
             return True
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error subscribing to order stream: {e}")
@@ -267,24 +259,23 @@ class BybitWsPrivateHelper:
             del self._subscriptions[topic]
             return False
 
-    def subscribe_to_execution_stream(self, callback: Callable[[Dict[str, Any]], None]) -> bool:
-        """
-        Subscribes to the real-time execution update stream.
+    def subscribe_to_execution_stream(self, callback: Callable[[dict[str, Any]], None]) -> bool:
+        """Subscribes to the real-time execution update stream.
         This stream provides updates for all categories (linear, inverse, spot, option).
 
         :param callback: A callable function to process execution updates.
         :return: True if subscription was successfully initiated, False otherwise.
         """
         if not self.is_connected():
-            logger.error(f"Cannot subscribe to execution stream: WebSocket not connected.")
+            logger.error("Cannot subscribe to execution stream: WebSocket not connected.")
             return False
         topic = "execution"
         if topic in self._subscriptions:
-            logger.warning(f"Already subscribed to execution stream. Updating callback.")
+            logger.warning("Already subscribed to execution stream. Updating callback.")
         self._subscriptions[topic] = (callback, {})
         try:
             self.websocket_client.execution_stream(callback=self._on_message)
-            logger.info(f"Successfully initiated subscription to execution stream.")
+            logger.info("Successfully initiated subscription to execution stream.")
             return True
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error subscribing to execution stream: {e}")
@@ -295,9 +286,8 @@ class BybitWsPrivateHelper:
             del self._subscriptions[topic]
             return False
 
-    def subscribe_to_fast_execution_stream(self, callback: Callable[[Dict[str, Any]], None], categorised_topic: str) -> bool:
-        """
-        Subscribes to the real-time fast execution update stream for a specific category.
+    def subscribe_to_fast_execution_stream(self, callback: Callable[[dict[str, Any]], None], categorised_topic: str) -> bool:
+        """Subscribes to the real-time fast execution update stream for a specific category.
         This stream offers lower latency but with limited data fields.
 
         :param callback: A callable function to process fast execution updates.
@@ -305,12 +295,12 @@ class BybitWsPrivateHelper:
         :return: True if subscription was successfully initiated, False otherwise.
         """
         if not self.is_connected():
-            logger.error(f"Cannot subscribe to fast execution stream: WebSocket not connected.")
+            logger.error("Cannot subscribe to fast execution stream: WebSocket not connected.")
             return False
         if not isinstance(categorised_topic, str) or not categorised_topic:
-            logger.error(f"Invalid 'categorised_topic' provided for fast execution stream.")
+            logger.error("Invalid 'categorised_topic' provided for fast execution stream.")
             return False
-            
+
         topic = f"fast_execution.{categorised_topic}"
         if topic in self._subscriptions:
             logger.warning(f"Already subscribed to fast execution stream for {categorised_topic}. Updating callback.")
@@ -328,23 +318,22 @@ class BybitWsPrivateHelper:
             del self._subscriptions[topic]
             return False
 
-    def subscribe_to_greek_stream(self, callback: Callable[[Dict[str, Any]], None]) -> bool:
-        """
-        Subscribes to the real-time options Greeks data stream (Delta, Gamma, Theta, Vega).
+    def subscribe_to_greek_stream(self, callback: Callable[[dict[str, Any]], None]) -> bool:
+        """Subscribes to the real-time options Greeks data stream (Delta, Gamma, Theta, Vega).
 
         :param callback: A callable function to process Greeks updates.
         :return: True if subscription was successfully initiated, False otherwise.
         """
         if not self.is_connected():
-            logger.error(f"Cannot subscribe to Greeks stream: WebSocket not connected.")
+            logger.error("Cannot subscribe to Greeks stream: WebSocket not connected.")
             return False
         topic = "greeks"
         if topic in self._subscriptions:
-            logger.warning(f"Already subscribed to Greeks stream. Updating callback.")
+            logger.warning("Already subscribed to Greeks stream. Updating callback.")
         self._subscriptions[topic] = (callback, {})
         try:
             self.websocket_client.greek_stream(callback=self._on_message)
-            logger.info(f"Successfully initiated subscription to Greeks stream.")
+            logger.info("Successfully initiated subscription to Greeks stream.")
             return True
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error subscribing to Greeks stream: {e}")
@@ -357,8 +346,7 @@ class BybitWsPrivateHelper:
 
 
     def unsubscribe_from_stream(self, stream_type: str, **kwargs) -> bool:
-        """
-        Unsubscribes from a specific private WebSocket stream.
+        """Unsubscribes from a specific private WebSocket stream.
         Note: Pybit's WebSocket client typically handles unsubscription implicitly on close
         or by not re-subscribing. This method primarily removes the internal callback mapping.
 
@@ -370,7 +358,7 @@ class BybitWsPrivateHelper:
         if stream_type == "fast_execution":
             categorised_topic = kwargs.get('categorised_topic')
             if not isinstance(categorised_topic, str) or not categorised_topic:
-                logger.error(f"Invalid 'categorised_topic' for unsubscribing from fast execution stream.")
+                logger.error("Invalid 'categorised_topic' for unsubscribing from fast execution stream.")
                 return False
             topic = f"fast_execution.{categorised_topic}"
 
@@ -400,42 +388,41 @@ if __name__ == "__main__":
         logger.error("Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_ws_private_helper.py example.")
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
-        pass
 
     private_ws_helper = BybitWsPrivateHelper(API_KEY, API_SECRET, testnet=USE_TESTNET)
 
     # --- Define callback functions for different private streams ---
-    def handle_wallet_update(message: Dict[str, Any]) -> None:
+    def handle_wallet_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             for wallet_info in data:
                 logger.info(f"Wallet Update: Account={wallet_info.get('accountType')}, Equity={wallet_info.get('totalEquity')}, Coin='{wallet_info.get('coin', [{}])[0].get('coin')}', Available={wallet_info.get('coin', [{}])[0].get('availableToWithdraw')}")
 
-    def handle_position_update(message: Dict[str, Any]) -> None:
+    def handle_position_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             for position in data:
                 logger.info(f"Position Update: Symbol={position.get('symbol')}, Side={position.get('side')}, Size={position.get('size')}, PnL={position.get('unrealisedPnl')}")
 
-    def handle_order_update(message: Dict[str, Any]) -> None:
+    def handle_order_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             for order in data:
                 logger.info(f"Order Update: Symbol={order.get('symbol')}, Side={order.get('side')}, Type={order.get('orderType')}, Status={order.get('orderStatus')}, Price={order.get('price')}, Qty={order.get('qty')}")
 
-    def handle_execution_update(message: Dict[str, Any]) -> None:
+    def handle_execution_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             for execution in data:
                 logger.info(f"Execution Update: Symbol={execution.get('symbol')}, Price={execution.get('execPrice')}, Qty={execution.get('execQty')}, Side={execution.get('side')}, Fee={execution.get('execFee')}")
 
-    def handle_fast_execution_update(message: Dict[str, Any]) -> None:
+    def handle_fast_execution_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             for execution in data:
                 logger.debug(f"Fast Execution Update: Symbol={execution.get('s')}, Price={execution.get('p')}, Qty={execution.get('q')}")
 
-    def handle_greeks_update(message: Dict[str, Any]) -> None:
+    def handle_greeks_update(message: dict[str, Any]) -> None:
         data = message.get('data')
         if data:
             for greeks in data:
@@ -481,7 +468,7 @@ if __name__ == "__main__":
         else:
             logger.error("Failed to connect to Private WebSocket. Skipping subscriptions.")
 
-    except Exception as e:
+    except Exception:
         logger.exception("An error occurred in the main execution block.")
     finally:
         private_ws_helper.disconnect()

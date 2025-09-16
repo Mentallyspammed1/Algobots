@@ -1,6 +1,8 @@
 import os
-import google.generativeai as genai
 import sys
+
+import google.generativeai as genai
+
 
 def get_gemini_api_key():
     """Retrieves the Gemini API key from environment variables."""
@@ -11,8 +13,7 @@ def get_gemini_api_key():
     return api_key
 
 def generate_tag(text_to_tag: str) -> str:
-    """
-    Generates a tag for the given text using the Gemini API.
+    """Generates a tag for the given text using the Gemini API.
     In a real scenario, this would send the text to Gemini and get a tag.
     For this example, we'll simulate the interaction.
     """
@@ -28,10 +29,9 @@ def generate_tag(text_to_tag: str) -> str:
         # For now, we'll simulate a response
         if "trading" in text_to_tag.lower() or "market" in text_to_tag.lower():
             return "Trading"
-        elif "error" in text_to_tag.lower() or "issue" in text_to_tag.lower():
+        if "error" in text_to_tag.lower() or "issue" in text_to_tag.lower():
             return "Troubleshooting"
-        else:
-            return "General"
+        return "General"
     except Exception as e:
         print(f"Error interacting with Gemini API: {e}", file=sys.stderr)
         sys.exit(1)

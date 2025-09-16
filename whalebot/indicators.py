@@ -1,8 +1,9 @@
+import logging
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from decimal import Decimal, ROUND_DOWN, InvalidOperation
-from typing import Tuple, Dict, Any, Optional, List, Callable
-import logging
 
 # --- Constants ---
 MIN_DATA_POINTS_TR = 2
@@ -28,16 +29,16 @@ def _safe_divide_decimal(numerator: Decimal, denominator: Decimal, default: Deci
     except InvalidOperation:
         return default
 
-def _clean_series(series: Optional[pd.Series], df_index: pd.Index, default_val: Any = np.nan) -> pd.Series:
+def _clean_series(series: pd.Series | None, df_index: pd.Index, default_val: Any = np.nan) -> pd.Series:
     """Ensures a series is clean, re-indexed, and handles NaNs."""
     if series is None:
         return pd.Series(default_val, index=df_index)
-    
+
     cleaned = series.reindex(df_index) # Re-index to match original DataFrame
-    
+
     if not pd.isna(default_val): # Fill NaNs if a default is specified
         cleaned = cleaned.fillna(default_val)
-        
+
     return cleaned
 
 # --- Core Indicator Calculations ---
@@ -58,11 +59,11 @@ def calculate_true_range(df: pd.DataFrame) -> pd.Series:
     """Calculates the True Range (TR), a component for ATR."""
     if len(df) < MIN_DATA_POINTS_TR:
         return pd.Series(np.nan, index=df.index)
-    
+
     high_low = df["high"] - df["low"]
     high_prev_close = (df["high"] - df["close"].shift()).abs()
     low_prev_close = (df["low"] - df["close"].shift()).abs()
-    
+
     # Take the maximum of the three ranges
     tr = pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(axis=1)
     return _clean_series(tr, df.index)
@@ -71,11 +72,11 @@ def calculate_atr(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculates the Average True Range (ATR)."""
     if len(df) < period:
         return pd.Series(np.nan, index=df.index)
-    
+
     tr = calculate_true_range(df)
     if tr.isnull().all(): # If TR calculation failed or returned all NaNs
         return pd.Series(np.nan, index=df.index)
-        
+
     atr = tr.ewm(span=period, adjust=False).mean()
     return _clean_series(atr, df.index)
 
@@ -96,7 +97,7 @@ def calculate_super_smoother(df: pd.DataFrame, series: pd.Series, period: int) -
     c3 = a1**2
 
     filt = pd.Series(np.nan, index=series_clean.index) # Initialize with NaN
-    
+
     # Initialize first two points safely
     if len(series_clean) >= 1: filt.iloc[0] = series_clean.iloc[0]
     if len(series_clean) >= 2: filt.iloc[1] = (series_clean.iloc[0] + series_clean.iloc[1]) / 2
@@ -108,14 +109,14 @@ def calculate_super_smoother(df: pd.DataFrame, series: pd.Series, period: int) -
             + c2 * filt.iloc[i-1]
             - c3 * filt.iloc[i-2]
         )
-    
+
     return _clean_series(filt, df.index) # Re-index to original df index
 
 def calculate_ehlers_supertrend(
     df: pd.DataFrame,
     period: int,
     multiplier: float,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Calculates SuperTrend using Ehlers SuperSmoother for price and volatility."""
     required_len = period * 3 # Need sufficient data for smoothing and trend calculation
     # Ensure ATR is available and has valid data points
@@ -213,7 +214,7 @@ def calculate_macd(
     fast_period: int,
     slow_period: int,
     signal_period: int,
-) -> Tuple[pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculates MACD Line, Signal Line, and Histogram."""
     if len(df) < slow_period + signal_period:
         return (pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index),
@@ -233,7 +234,7 @@ def calculate_rsi(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculates the Relative Strength Index (RSI)."""
     if len(df) <= period:
         return pd.Series(np.nan, index=df.index)
-    
+
     delta = df["close"].diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
@@ -244,7 +245,7 @@ def calculate_rsi(df: pd.DataFrame, period: int) -> pd.Series:
     # Safe division for RS, handle zero loss case
     rs = _safe_divide_decimal(avg_gain, avg_loss.replace(0, Decimal("0")), default=Decimal("0"))
     rsi = 100 - (100 / (1 + rs))
-    
+
     return _clean_series(rsi, df.index)
 
 def calculate_stoch_rsi(
@@ -252,11 +253,11 @@ def calculate_stoch_rsi(
     period: int,
     k_period: int,
     d_period: int,
-) -> Tuple[pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series]:
     """Calculates the Stochastic RSI."""
     if len(df) <= period:
         return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
-    
+
     rsi = calculate_rsi(df, period)
     if rsi.isnull().all(): # If base RSI is all NaN, return NaNs
         return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
@@ -267,7 +268,7 @@ def calculate_stoch_rsi(
     # Handle zero denominator for Stochastic calculation
     denominator = highest_rsi - lowest_rsi
     denominator[denominator == 0] = np.nan # Replace zeros with NaN for safe division
-    
+
     stoch_rsi_k_raw = (_safe_divide(rsi - lowest_rsi, denominator)) * 100
     stoch_rsi_k_raw = stoch_rsi_k_raw.fillna(0).clip(0, 100) # Fill NaNs and clip to [0, 100]
 
@@ -276,7 +277,7 @@ def calculate_stoch_rsi(
 
     return _clean_series(stoch_rsi_k, df.index), _clean_series(stoch_rsi_d, df.index)
 
-def calculate_adx(df: pd.DataFrame, period: int) -> Tuple[pd.Series, pd.Series, pd.Series]:
+def calculate_adx(df: pd.DataFrame, period: int) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculates the Average Directional Index (ADX), +DI, and -DI."""
     if len(df) < period * 2: # Need sufficient history for ADX calculation
         return (pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index),
@@ -319,18 +320,18 @@ def calculate_bollinger_bands(
     df: pd.DataFrame,
     period: int,
     std_dev: float,
-) -> Tuple[pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculates Bollinger Bands (Upper, Middle, Lower)."""
     if len(df) < period:
         return (pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index),
                 pd.Series(np.nan, index=df.index))
-    
+
     middle_band = df["close"].rolling(window=period, min_periods=period).mean()
     std = df["close"].rolling(window=period, min_periods=period).std()
-    
+
     upper_band = middle_band + (std * std_dev)
     lower_band = middle_band - (std * std_dev)
-    
+
     return (_clean_series(upper_band, df.index), _clean_series(middle_band, df.index),
             _clean_series(lower_band, df.index))
 
@@ -338,11 +339,11 @@ def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     """Calculates the Volume Weighted Average Price (VWAP)."""
     if df.empty or "volume" not in df.columns or "close" not in df.columns:
         return pd.Series(np.nan, index=df.index)
-    
+
     df_temp = df.copy()
     df_temp["volume"] = pd.to_numeric(df_temp["volume"], errors='coerce').fillna(0)
     df_temp = df_temp[df_temp["volume"] > 0] # Filter for positive volume
-    
+
     if df_temp.empty: return pd.Series(np.nan, index=df.index)
 
     typical_price = (df_temp["high"] + df_temp["low"] + df_temp["close"]) / 3
@@ -350,39 +351,39 @@ def calculate_vwap(df: pd.DataFrame) -> pd.Series:
 
     cumulative_pv = pv.cumsum()
     cumulative_vol = df_temp["volume"].cumsum()
-    
+
     vwap = _safe_divide_decimal(cumulative_pv, cumulative_vol.replace(0, Decimal("0")))
-    
+
     return _clean_series(vwap, df.index)
 
 def calculate_cci(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculates the Commodity Channel Index (CCI)."""
     if len(df) < period:
         return pd.Series(np.nan, index=df.index)
-    
+
     tp = (df["high"] + df["low"] + df["close"]) / 3
     sma_tp = tp.rolling(window=period, min_periods=period).mean()
-    
+
     # Mean Absolute Deviation (MAD)
     mad = tp.rolling(window=period, min_periods=period).apply(lambda x: np.abs(x - x.mean()).mean(), raw=False)
-    
+
     # CCI calculation, safe division
     cci = _safe_divide_decimal((tp - sma_tp), (mad.replace(0, Decimal("0")) / Decimal("0.015")))
-    
+
     return _clean_series(cci, df.index)
 
 def calculate_williams_r(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculates Williams %R."""
     if len(df) < period:
         return pd.Series(np.nan, index=df.index)
-    
+
     highest_high = df["high"].rolling(window=period, min_periods=period).max()
     lowest_low = df["low"].rolling(window=period, min_periods=period).min()
-    
+
     denominator = highest_high - lowest_low
     # Safe division for Williams %R
     wr = -100 * _safe_divide_decimal((highest_high - df["close"]), denominator.replace(0, Decimal("0")))
-    
+
     return _clean_series(wr, df.index)
 
 def calculate_ichimoku_cloud(
@@ -391,7 +392,7 @@ def calculate_ichimoku_cloud(
     kijun_period: int,
     senkou_span_b_period: int,
     chikou_span_offset: int,
-) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
     """Calculates Ichimoku Cloud components: Tenkan-sen, Kijun-sen, Senkou Span A/B, Chikou Span."""
     required_len = max(tenkan_period, kijun_period, senkou_span_b_period) + chikou_span_offset
     if len(df) < required_len:
@@ -402,11 +403,11 @@ def calculate_ichimoku_cloud(
     # Calculate base lines (Tenkan, Kijun)
     tenkan_sen = ((df["high"].rolling(window=tenkan_period).max() + df["low"].rolling(window=tenkan_period).min()) / 2).shift(kijun_period)
     kijun_sen = ((df["high"].rolling(window=kijun_period).max() + df["low"].rolling(window=kijun_period).min()) / 2).shift(kijun_period)
-    
+
     # Calculate Senkou Spans (shifted forward)
     senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(kijun_period)
     senkou_span_b = ((df["high"].rolling(window=senkou_span_b_period).max() + df["low"].rolling(window=senkou_span_b_period).min()) / 2).shift(kijun_period)
-    
+
     # Calculate Chikou Span (shifted backward relative to current price)
     chikou_span = df["close"].shift(-chikou_span_offset)
 
@@ -416,7 +417,7 @@ def calculate_mfi(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculates the Money Flow Index (MFI)."""
     if len(df) <= period:
         return pd.Series(np.nan, index=df.index)
-    
+
     typical_price = (df["high"] + df["low"] + df["close"]) / 3
     money_flow = typical_price * df["volume"]
     price_diff = typical_price.diff()
@@ -431,10 +432,10 @@ def calculate_mfi(df: pd.DataFrame, period: int) -> pd.Series:
     # Calculate Money Flow Ratio, handling division by zero
     mf_ratio = _safe_divide_decimal(positive_mf_sum, negative_mf_sum.replace(0, Decimal("0")))
     mfi = 100 - (100 / (1 + mf_ratio))
-    
+
     return _clean_series(mfi, df.index)
 
-def calculate_obv(df: pd.DataFrame, ema_period: int) -> Tuple[pd.Series, pd.Series]:
+def calculate_obv(df: pd.DataFrame, ema_period: int) -> tuple[pd.Series, pd.Series]:
     """Calculates On-Balance Volume (OBV) and its EMA."""
     if len(df) < MIN_DATA_POINTS_OBV:
         return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
@@ -442,7 +443,7 @@ def calculate_obv(df: pd.DataFrame, ema_period: int) -> Tuple[pd.Series, pd.Seri
     # Calculate OBV direction change
     obv_direction = np.sign(df["close"].diff().fillna(0))
     obv = (obv_direction * df["volume"]).cumsum() # Cumulative sum for OBV
-    
+
     obv_ema = obv.ewm(span=ema_period, adjust=False).mean() # EMA of OBV
 
     return _clean_series(obv, df.index), _clean_series(obv_ema, df.index)
@@ -470,7 +471,7 @@ def calculate_psar(
     df: pd.DataFrame,
     acceleration: float,
     max_acceleration: float,
-) -> Tuple[pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series]:
     """Calculates the Parabolic SAR (Stop and Reverse) and trend direction."""
     if len(df) < MIN_DATA_POINTS_PSAR:
         return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
@@ -479,7 +480,7 @@ def calculate_psar(
     bull = pd.Series(True, index=df.index) # Stores trend direction (True for bullish)
     af = pd.Series(acceleration, index=df.index) # Acceleration Factor
     ep = pd.Series(np.nan, index=df.index) # Extreme Point
-    
+
     # Initialize trend and EP based on first two bars to establish a starting point
     if len(df) >= 2:
         # If price increased from bar 0 to 1, assume bullish start
@@ -496,9 +497,9 @@ def calculate_psar(
         prev_psar = psar.iloc[i - 1]
         prev_af = af.iloc[i - 1]
         prev_ep = ep.iloc[i - 1]
-        
+
         current_low, current_high = df["low"].iloc[i], df["high"].iloc[i]
-        
+
         # Calculate current PSAR based on previous trend and EP
         if prev_bull: current_psar = prev_psar + prev_af * (prev_ep - prev_psar)
         else: current_psar = prev_psar - prev_af * (prev_psar - prev_ep)
@@ -543,7 +544,7 @@ def calculate_psar(
 
     return (_clean_series(psar, df.index), _clean_series(direction, df.index))
 
-def calculate_fibonacci_levels(df: pd.DataFrame, window: int) -> Optional[Dict[str, Decimal]]:
+def calculate_fibonacci_levels(df: pd.DataFrame, window: int) -> dict[str, Decimal] | None:
     """Calculates Fibonacci retracement levels based on the high-low range of the last 'window' periods."""
     if len(df) < window: return None
 
@@ -566,7 +567,7 @@ def calculate_fibonacci_levels(df: pd.DataFrame, window: int) -> Optional[Dict[s
     }
     return fib_levels
 
-def calculate_fibonacci_pivot_points(df: pd.DataFrame) -> Optional[Dict[str, float]]:
+def calculate_fibonacci_pivot_points(df: pd.DataFrame) -> dict[str, float] | None:
     """Calculates Fibonacci Pivot Points (Pivot, R1, R2, S1, S2)."""
     if df.empty or len(df) < 2: return None # Need at least previous bar's data
 
@@ -596,10 +597,10 @@ def calculate_volatility_index(df: pd.DataFrame, period: int) -> pd.Series:
 
     # Normalize ATR by closing price, handling division by zero
     normalized_atr = _safe_divide_decimal(df["ATR"], df["close"].replace(0, Decimal("0")))
-    
+
     # Calculate the rolling mean of normalized ATR
     volatility_index = normalized_atr.rolling(window=period).mean()
-    
+
     return _clean_series(volatility_index, df.index)
 
 def calculate_vwma(df: pd.DataFrame, period: int) -> pd.Series:
@@ -613,7 +614,7 @@ def calculate_vwma(df: pd.DataFrame, period: int) -> pd.Series:
 
     # Calculate VWMA by summing (Price * Volume) / Sum (Volume) over the window
     vwma = _safe_divide_decimal(pv.rolling(window=period).sum(), valid_volume.rolling(window=period).sum())
-    
+
     return _clean_series(vwma, df.index)
 
 def calculate_volume_delta(df: pd.DataFrame, period: int) -> pd.Series:
@@ -631,7 +632,7 @@ def calculate_volume_delta(df: pd.DataFrame, period: int) -> pd.Series:
     total_volume_sum = buy_volume_sum + sell_volume_sum
     # Calculate Volume Delta, handling division by zero
     volume_delta = _safe_divide_decimal(buy_volume_sum - sell_volume_sum, total_volume_sum.replace(0, Decimal("0")))
-    
+
     return _clean_series(volume_delta.fillna(0.0), df.index) # Fill resulting NaNs with 0
 
 def calculate_kaufman_ama(
@@ -672,17 +673,17 @@ def calculate_kaufman_ama(
             kama[i] = kama[i - 1] + sc[i] * (close_prices[i] - kama[i - 1])
         else: # Handle NaNs in SC or previous KAMA value
             kama[i] = kama[i - 1] if not np.isnan(kama[i-1]) else close_prices[i]
-    
+
     return pd.Series(kama, index=df.index)
 
 def calculate_relative_volume(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculates Relative Volume, comparing current volume to its average over 'period'."""
     if len(df) < period: return pd.Series(np.nan, index=df.index)
-    
+
     avg_volume = df["volume"].rolling(window=period, min_periods=period).mean()
     # Calculate relative volume, handling division by zero
     relative_volume = _safe_divide_decimal(df["volume"], avg_volume.replace(0, Decimal("0")), default=Decimal("1.0"))
-    
+
     return _clean_series(relative_volume, df.index)
 
 def calculate_market_structure(df: pd.DataFrame, lookback_period: int) -> pd.Series:
@@ -706,7 +707,7 @@ def calculate_market_structure(df: pd.DataFrame, lookback_period: int) -> pd.Ser
     # Proceed only if all high/low values are valid
     if not pd.isna(recent_high) and not pd.isna(recent_low) and \
        not pd.isna(prev_high) and not pd.isna(prev_low):
-        
+
         is_higher_high = recent_high > prev_high
         is_higher_low = recent_low > prev_low
         is_lower_high = recent_high < prev_high
@@ -724,12 +725,12 @@ def calculate_dema(df: pd.DataFrame, series: pd.Series, period: int) -> pd.Serie
     ema1 = series.ewm(span=period, adjust=False).mean()
     ema2 = ema1.ewm(span=period, adjust=False).mean() # EMA of EMA1
     dema = 2 * ema1 - ema2
-    
+
     return _clean_series(dema, df.index)
 
 def calculate_keltner_channels(
     df: pd.DataFrame, period: int, atr_multiplier: float, atr_period: int
-) -> Tuple[pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculates Keltner Channels (Upper Band, Middle Line, Lower Band)."""
     # Check for ATR availability and validity
     if "ATR" not in df.columns or df["ATR"].isnull().all() or len(df) < period:
@@ -742,17 +743,17 @@ def calculate_keltner_channels(
 
     upper_band = ema + (atr * atr_multiplier)
     lower_band = ema - (atr * atr_multiplier)
-    
+
     return (_clean_series(upper_band, df.index), _clean_series(ema, df.index),
             _clean_series(lower_band, df.index))
 
 def calculate_roc(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculates the Rate of Change (ROC) percentage."""
     if len(df) < period + 1: return pd.Series(np.nan, index=df.index) # Need period + 1 data points
-    
+
     # Calculate ROC, handling division by zero for the shifted close price
     roc = (_safe_divide_decimal((df["close"] - df["close"].shift(period)), df["close"].shift(period).replace(0, Decimal("0")))) * 100
-    
+
     return _clean_series(roc, df.index)
 
 def detect_candlestick_patterns(df: pd.DataFrame) -> pd.Series:
@@ -777,18 +778,18 @@ def detect_candlestick_patterns(df: pd.DataFrame) -> pd.Series:
     range_current = current_bar["high"] - current_bar["low"]
     upper_shadow_current = current_bar["high"] - max(current_bar["open"], current_bar["close"])
     lower_shadow_current = min(current_bar["open"], current_bar["close"]) - current_bar["low"]
-    
+
     # Pattern detection logic
     if prev_bar is not None: # Requires comparison with previous bar
         body_prev = abs(prev_bar["close"] - prev_bar["open"])
-        
+
         # Bullish Engulfing: Current bullish candle engulfs previous bearish candle
         if (current_bar["close"] > current_bar["open"] and # Current bullish
             prev_bar["close"] < prev_bar["open"] and # Previous bearish
             current_bar["open"] < prev_bar["close"] and # Current open below prev close
             current_bar["close"] > prev_bar["open"]): # Current close above prev open
             patterns.iloc[i] = "Bullish Engulfing"
-            
+
         # Bearish Engulfing: Current bearish candle engulfs previous bullish candle
         elif (current_bar["close"] < current_bar["open"] and # Current bearish
               prev_bar["close"] > prev_bar["open"] and # Previous bullish
@@ -803,7 +804,7 @@ def detect_candlestick_patterns(df: pd.DataFrame) -> pd.Series:
         lower_shadow_current >= 2 * body_current and # Long lower shadow
         upper_shadow_current <= 0.5 * body_current): # Small upper shadow
         patterns.iloc[i] = "Bullish Hammer"
-        
+
     # Shooting Star (Bearish): Small body at bottom, long upper shadow, little/no lower shadow
     elif (current_bar["close"] < current_bar["open"] and # Bearish candle
           body_current > 0 and
@@ -830,15 +831,15 @@ def _get_mtf_trend(higher_tf_df: pd.DataFrame, config: dict, logger: logging.Log
                 if last_close > sma_val.iloc[-1]: return "UP"
                 if last_close < sma_val.iloc[-1]: return "DOWN"
             return "SIDEWAYS"
-            
-        elif indicator_type == "ema":
+
+        if indicator_type == "ema":
             ema_val = calculate_ema(higher_tf_df, period=period)
             if not ema_val.isnull().all() and not pd.isna(ema_val.iloc[-1]):
                 if last_close > ema_val.iloc[-1]: return "UP"
                 if last_close < ema_val.iloc[-1]: return "DOWN"
             return "SIDEWAYS"
-            
-        elif indicator_type == "ehlers_supertrend":
+
+        if indicator_type == "ehlers_supertrend":
             st_result = calculate_ehlers_supertrend(
                 df=higher_tf_df,
                 period=indicator_settings["ehlers_slow_period"],
@@ -849,11 +850,10 @@ def _get_mtf_trend(higher_tf_df: pd.DataFrame, config: dict, logger: logging.Log
                 if st_dir == 1: return "UP"
                 if st_dir == -1: return "DOWN"
             return "UNKNOWN" # If ST calculation failed or returned no direction
-            
-        else:
-            logger.warning(f"[{symbol}] MTF trend: Unknown indicator type '{indicator_type}' specified.")
-            return "UNKNOWN"
-            
+
+        logger.warning(f"[{symbol}] MTF trend: Unknown indicator type '{indicator_type}' specified.")
+        return "UNKNOWN"
+
     except Exception as e:
         logger.error(f"[{symbol}] MTF trend calculation error for indicator '{indicator_type}': {e}\n{traceback.format_exc()}")
         return "UNKNOWN"

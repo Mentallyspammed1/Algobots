@@ -2,20 +2,46 @@ import { Decimal } from 'decimal.js';
 import { logger } from '../logger.js';
 import chalk from 'chalk';
 
+/**
+ * @class PerformanceTracker
+ * @description Tracks and calculates the trading performance metrics, including PnL, win rate, and drawdown.
+ */
 class PerformanceTracker {
+    /**
+     * @constructor
+     * @description Initializes the performance tracker with configuration and sets up all metrics to zero.
+     * @param {Object} config - The configuration object, used for `TRADE_MANAGEMENT.TRADING_FEE_PERCENT`.
+     */
     constructor(config) {
         this.config = config;
+        /** @property {Array<Object>} trades - Stores a history of all recorded trades. */
         this.trades = [];
+        /** @property {Decimal} total_pnl - The cumulative net Profit and Loss. */
         this.total_pnl = new Decimal("0");
+        /** @property {Decimal} gross_profit - The sum of all winning trades' net PnL. */
         this.gross_profit = new Decimal("0");
+        /** @property {Decimal} gross_loss - The sum of all losing trades' absolute net PnL. */
         this.gross_loss = new Decimal("0");
+        /** @property {number} wins - The count of winning trades. */
         this.wins = 0;
+        /** @property {number} losses - The count of losing trades. */
         this.losses = 0;
+        /** @property {Decimal} peak_pnl - The highest `total_pnl` achieved. */
         this.peak_pnl = new Decimal("0");
+        /** @property {Decimal} max_drawdown - The maximum drawdown experienced. */
         this.max_drawdown = new Decimal("0");
+        /** @property {Decimal} trading_fee_percent - The trading fee percentage from configuration. */
         this.trading_fee_percent = new Decimal(config.TRADE_MANAGEMENT.TRADING_FEE_PERCENT);
     }
 
+    /**
+     * @method record_trade
+     * @description Records a completed trade, updates PnL, and other performance metrics.
+     * Calculates net PnL after accounting for trading fees.
+     * @param {Object} position - The position object representing the closed trade.
+     * @param {Decimal} pnl - The gross PnL for the trade before fees.
+     * @returns {void}
+     */
     record_trade(position, pnl) {
         const entry_fee = position.entry_price.times(position.qty).times(this.trading_fee_percent);
         const exit_fee = position.exit_price.times(position.qty).times(this.trading_fee_percent);
@@ -49,6 +75,11 @@ class PerformanceTracker {
         );
     }
 
+    /**
+     * @method day_pnl
+     * @description Calculates the total net PnL for trades that exited today.
+     * @returns {Decimal} The total net PnL for the current day.
+     */
     day_pnl() {
         const today = new Date().toISOString().slice(0, 10);
         return this.trades
@@ -56,6 +87,11 @@ class PerformanceTracker {
             .reduce((sum, t) => sum.plus(t.pnl_net || new Decimal(0)), new Decimal(0));
     }
 
+    /**
+     * @method get_summary
+     * @description Generates a summary object of the overall trading performance.
+     * @returns {Object} An object containing various performance metrics like total trades, total PnL, win rate, etc.
+     */
     get_summary() {
         const total_trades = this.trades.length;
         const win_rate = total_trades > 0 ? (this.wins / total_trades) * 100 : 0;

@@ -1,10 +1,10 @@
 # bybit_trade_helper.py
 import logging
 import time
-from typing import Dict, Any, Optional, Union
+from typing import Any
 
+from pybit.exceptions import BybitAPIError, BybitRequestError
 from pybit.unified_trading import HTTP
-from pybit.exceptions import BybitRequestError, BybitAPIError
 
 # Configure logging for the module
 logging.basicConfig(
@@ -14,15 +14,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BybitTradeHelper:
-    """
-    A helper class for managing Bybit trading operations, including placing,
+    """A helper class for managing Bybit trading operations, including placing,
     amending, and canceling orders, as well as managing positions via the
     Unified Trading HTTP API.
     """
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = False):
-        """
-        Initializes the BybitTradeHelper with API credentials and environment.
+        """Initializes the BybitTradeHelper with API credentials and environment.
 
         :param api_key: Your Bybit API key.
         :param api_secret: Your Bybit API secret.
@@ -38,9 +36,8 @@ class BybitTradeHelper:
         self.session = HTTP(testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret)
         logger.info(f"BybitTradeHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
 
-    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Internal method to make an HTTP request to the Bybit API and handle responses.
+    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> dict[str, Any] | None:
+        """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
 
         :param method: The name of the method to call on the `self.session` object (e.g., 'place_order').
@@ -52,18 +49,17 @@ class BybitTradeHelper:
         try:
             func = getattr(self.session, method)
             response = func(**kwargs)
-            
+
             if response and response.get('retCode') == 0:
                 logger.debug(f"[{endpoint_name}] Successfully called. Response: {response.get('result')}")
                 return response.get('result')
-            else:
-                ret_code = response.get('retCode', 'N/A')
-                error_msg = response.get('retMsg', 'Unknown error')
-                logger.error(
-                    f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
-                    f"Args: {kwargs}. Full Response: {response}"
-                )
-                return None
+            ret_code = response.get('retCode', 'N/A')
+            error_msg = response.get('retMsg', 'Unknown error')
+            logger.error(
+                f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
+                f"Args: {kwargs}. Full Response: {response}"
+            )
+            return None
         except (BybitRequestError, BybitAPIError) as e:
             logger.exception(
                 f"[{endpoint_name}] Pybit specific error during API call. "
@@ -77,16 +73,15 @@ class BybitTradeHelper:
             )
             return None
 
-    def place_order(self, 
-                    category: str, 
-                    symbol: str, 
-                    side: str, 
-                    order_type: str, 
-                    qty: str, 
-                    price: Optional[str] = None, 
-                    **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Places a new order on Bybit.
+    def place_order(self,
+                    category: str,
+                    symbol: str,
+                    side: str,
+                    order_type: str,
+                    qty: str,
+                    price: str | None = None,
+                    **kwargs) -> dict[str, Any] | None:
+        """Places a new order on Bybit.
 
         :param category: The product type (e.g., "spot", "linear", "inverse", "option").
         :param symbol: The trading symbol (e.g., "BTCUSDT").
@@ -127,16 +122,15 @@ class BybitTradeHelper:
 
         return self._make_request('place_order', 'Place Order', **params)
 
-    def amend_order(self, 
-                    category: str, 
-                    symbol: str, 
-                    order_id: Optional[str] = None, 
-                    order_link_id: Optional[str] = None, 
-                    new_qty: Optional[str] = None, 
-                    new_price: Optional[str] = None,
-                    **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Amends an existing order on Bybit by its `order_id` or `order_link_id`.
+    def amend_order(self,
+                    category: str,
+                    symbol: str,
+                    order_id: str | None = None,
+                    order_link_id: str | None = None,
+                    new_qty: str | None = None,
+                    new_price: str | None = None,
+                    **kwargs) -> dict[str, Any] | None:
+        """Amends an existing order on Bybit by its `order_id` or `order_link_id`.
         At least one of `new_qty` or `new_price` must be provided.
 
         :param category: The product type.
@@ -158,7 +152,7 @@ class BybitTradeHelper:
         if not (new_qty or new_price):
             logger.error("Either 'new_qty' or 'new_price' must be provided to amend an order.")
             return None
-        
+
         try:
             if new_qty is not None: float(new_qty)
             if new_price is not None: float(new_price)
@@ -182,13 +176,12 @@ class BybitTradeHelper:
 
         return self._make_request('amend_order', 'Amend Order', **params)
 
-    def cancel_order(self, 
-                     category: str, 
-                     symbol: str, 
-                     order_id: Optional[str] = None, 
-                     order_link_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Cancels an active order on Bybit by its `order_id` or `order_link_id`.
+    def cancel_order(self,
+                     category: str,
+                     symbol: str,
+                     order_id: str | None = None,
+                     order_link_id: str | None = None) -> dict[str, Any] | None:
+        """Cancels an active order on Bybit by its `order_id` or `order_link_id`.
 
         :param category: The product type.
         :param symbol: The trading symbol.
@@ -203,7 +196,7 @@ class BybitTradeHelper:
         if not (order_id or order_link_id):
             logger.error("Either 'order_id' or 'order_link_id' must be provided to cancel an order.")
             return None
-        
+
         params = {
             'category': category,
             'symbol': symbol,
@@ -215,9 +208,8 @@ class BybitTradeHelper:
 
         return self._make_request('cancel_order', 'Cancel Order', **params)
 
-    def cancel_all_orders(self, category: str, symbol: Optional[str] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Cancels all active orders for a specific category and optionally a symbol.
+    def cancel_all_orders(self, category: str, symbol: str | None = None, **kwargs) -> dict[str, Any] | None:
+        """Cancels all active orders for a specific category and optionally a symbol.
         This is a powerful function, use with caution.
 
         :param category: The product type.
@@ -239,9 +231,8 @@ class BybitTradeHelper:
         params.update(kwargs)
         return self._make_request('cancel_all_orders', 'Cancel All Orders', **params)
 
-    def get_open_orders(self, category: str, symbol: Optional[str] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves active open orders for a specific category and optional symbol.
+    def get_open_orders(self, category: str, symbol: str | None = None, **kwargs) -> dict[str, Any] | None:
+        """Retrieves active open orders for a specific category and optional symbol.
 
         :param category: The product type.
         :param symbol: Optional. The trading symbol.
@@ -262,9 +253,8 @@ class BybitTradeHelper:
         params.update(kwargs)
         return self._make_request('get_open_orders', 'Get Open Orders', **params)
 
-    def get_order_history(self, category: str, symbol: Optional[str] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves historical orders for a specific category and optional symbol.
+    def get_order_history(self, category: str, symbol: str | None = None, **kwargs) -> dict[str, Any] | None:
+        """Retrieves historical orders for a specific category and optional symbol.
 
         :param category: The product type.
         :param symbol: Optional. The trading symbol.
@@ -285,9 +275,8 @@ class BybitTradeHelper:
         params.update(kwargs)
         return self._make_request('get_order_history', 'Get Order History', **params)
 
-    def get_positions(self, category: str, symbol: Optional[str] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves current positions for a specific category and optional symbol.
+    def get_positions(self, category: str, symbol: str | None = None, **kwargs) -> dict[str, Any] | None:
+        """Retrieves current positions for a specific category and optional symbol.
 
         :param category: The product type.
         :param symbol: Optional. The trading symbol.
@@ -308,9 +297,8 @@ class BybitTradeHelper:
         params.update(kwargs)
         return self._make_request('get_positions', 'Get Positions', **params)
 
-    def set_leverage(self, category: str, symbol: str, buy_leverage: str, sell_leverage: str) -> Optional[Dict[str, Any]]:
-        """
-        Sets leverage for a specific symbol.
+    def set_leverage(self, category: str, symbol: str, buy_leverage: str, sell_leverage: str) -> dict[str, Any] | None:
+        """Sets leverage for a specific symbol.
 
         :param category: The product type.
         :param symbol: The trading symbol.
@@ -337,9 +325,8 @@ class BybitTradeHelper:
         }
         return self._make_request('set_leverage', 'Set Leverage', **params)
 
-    def set_trading_stop(self, category: str, symbol: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Sets or modifies take profit, stop loss, and/or trailing stop for a position.
+    def set_trading_stop(self, category: str, symbol: str, **kwargs) -> dict[str, Any] | None:
+        """Sets or modifies take profit, stop loss, and/or trailing stop for a position.
 
         :param category: The product type.
         :param symbol: The trading symbol.
@@ -358,10 +345,9 @@ class BybitTradeHelper:
         }
         params.update(kwargs)
         return self._make_request('set_trading_stop', 'Set Trading Stop', **params)
-    
-    def switch_position_mode(self, category: str, mode: str) -> Optional[Dict[str, Any]]:
-        """
-        Switches the position mode (e.g., One-Way or Hedge Mode) for a given category.
+
+    def switch_position_mode(self, category: str, mode: str) -> dict[str, Any] | None:
+        """Switches the position mode (e.g., One-Way or Hedge Mode) for a given category.
         Mode '0' for One-Way Mode, '3' for Hedge Mode.
         This operation is usually performed once per category.
 
@@ -397,7 +383,6 @@ if __name__ == "__main__":
         logger.error("Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_trade_helper.py example.")
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
-        pass
 
     trade_helper = BybitTradeHelper(API_KEY, API_SECRET, testnet=USE_TESTNET)
 
@@ -422,7 +407,9 @@ if __name__ == "__main__":
 
     # --- Order Management ---
     # Fetch current ticker to get a realistic price for limit orders
-    from pybit.unified_trading import HTTP as MarketHTTP # Use a separate HTTP session for market data if needed
+    from pybit.unified_trading import (
+        HTTP as MarketHTTP,  # Use a separate HTTP session for market data if needed
+    )
     market_session = MarketHTTP(testnet=USE_TESTNET)
     ticker_response = market_session.get_tickers(category=CATEGORY, symbol=SYMBOL)
     current_price = None
@@ -456,7 +443,7 @@ if __name__ == "__main__":
         print("  Failed to place order.")
 
     if order_id:
-        print(f"\n--- Amending the Order {order_id} to new price {str(float(buy_price) * 1.005)} ---")
+        print(f"\n--- Amending the Order {order_id} to new price {float(buy_price) * 1.005!s} ---")
         amend_order_response = trade_helper.amend_order(
             category=CATEGORY,
             symbol=SYMBOL,
@@ -467,7 +454,7 @@ if __name__ == "__main__":
             print(f"  Order amended: {amend_order_response}")
         else:
             print("  Failed to amend order.")
-            
+
         print(f"\n--- Cancelling the Order {order_id} ---")
         cancel_order_response = trade_helper.cancel_order(
             category=CATEGORY,
@@ -478,7 +465,7 @@ if __name__ == "__main__":
             print(f"  Order cancelled: {cancel_order_response}")
         else:
             print("  Failed to cancel order.")
-            
+
     # Placing another order with orderLinkId for cancellation demonstration
     print(f"\n--- Placing a SELL Limit Order with Client ID for {SYMBOL} at {sell_price} ---")
     client_order_id_sell = f"test-sell-{int(time.time())}"
@@ -504,7 +491,7 @@ if __name__ == "__main__":
             print(f"  Sell order cancelled by client ID: {cancel_by_client_id_response}")
         else:
             print("  Failed to cancel sell order by client ID.")
-    
+
     print(f"\n--- Getting Open Orders for {SYMBOL} ---")
     open_orders = trade_helper.get_open_orders(category=CATEGORY, symbol=SYMBOL)
     if open_orders and open_orders.get('list'):

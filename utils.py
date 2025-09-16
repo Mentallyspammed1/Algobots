@@ -16,8 +16,7 @@ class OrderBook:
         self.logger = logger
 
     def handle_snapshot(self, data):
-        """
-        Initializes the order book from a snapshot message.
+        """Initializes the order book from a snapshot message.
         """
         self.bids = {Decimal(price): Decimal(qty) for price, qty in data.get('b', []) if Decimal(qty) > 0}
         self.asks = {Decimal(price): Decimal(qty) for price, qty in data.get('a', []) if Decimal(qty) > 0}
@@ -25,8 +24,7 @@ class OrderBook:
         self.logger.debug(f"Order book snapshot initialized with seq: {self.last_seq}")
 
     def apply_delta(self, data):
-        """
-        Applies incremental updates (deltas) to the order book.
+        """Applies incremental updates (deltas) to the order book.
         """
         update_seq = data.get('seq')
         if update_seq is None or update_seq <= self.last_seq:
@@ -74,8 +72,7 @@ _module_logger = logging.getLogger(__name__)
 _ActualZoneInfo: type[dt.tzinfo] # This will hold the class to use for timezones (zoneinfo.ZoneInfo or FallbackZoneInfo)
 
 class FallbackZoneInfo(dt.tzinfo):
-    """
-    A basic, UTC-only fallback implementation for timezone handling,
+    """A basic, UTC-only fallback implementation for timezone handling,
     mimicking zoneinfo.ZoneInfo for the 'UTC' timezone.
     It is used if the 'zoneinfo' module (Python 3.9+) is not available.
     This class only truly supports 'UTC'; other timezone keys will default to UTC.
@@ -100,8 +97,7 @@ class FallbackZoneInfo(dt.tzinfo):
             self._name = "UTC" # Effective name is UTC
 
     def fromutc(self, dt_obj: dt.datetime) -> dt.datetime:
-        """
-        Called by datetime.astimezone() after adjusting dt_obj to UTC.
+        """Called by datetime.astimezone() after adjusting dt_obj to UTC.
         Since this class represents UTC, no further adjustment is needed.
         dt_obj.tzinfo is self when this method is called.
         """
@@ -209,8 +205,7 @@ RESET_ALL_STYLE = Style.RESET_ALL
 
 
 def set_timezone(tz_str: str) -> None:
-    """
-    Sets the global timezone for the application.
+    """Sets the global timezone for the application.
 
     If the specified timezone string is invalid or 'zoneinfo' is unavailable
     for non-UTC timezones, it defaults to UTC.
@@ -252,8 +247,7 @@ def set_timezone(tz_str: str) -> None:
             TIMEZONE = _ActualZoneInfo("UTC") # This is FallbackZoneInfo("UTC")
 
 def get_timezone() -> dt.tzinfo:
-    """
-    Retrieves the global timezone object.
+    """Retrieves the global timezone object.
 
     Initializes it from the TIMEZONE environment variable or `DEFAULT_TIMEZONE`
     if not already set.
@@ -284,8 +278,7 @@ def get_timezone() -> dt.tzinfo:
     return TIMEZONE
 
 class SensitiveFormatter(logging.Formatter):
-    """
-    Custom logging formatter that redacts sensitive information (API key and secret)
+    """Custom logging formatter that redacts sensitive information (API key and secret)
     from log messages.
     """
     # Store sensitive data as class attributes.
@@ -317,8 +310,7 @@ class SensitiveFormatter(logging.Formatter):
 
     @classmethod
     def from_environment_variables(cls) -> 'SensitiveFormatter':
-        """
-        Creates a SensitiveFormatter instance from environment variables.
+        """Creates a SensitiveFormatter instance from environment variables.
 
         Returns:
             A SensitiveFormatter instance.
@@ -332,8 +324,7 @@ class SensitiveFormatter(logging.Formatter):
         return cls(api_key, api_secret)
 
 def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> int:
-    """
-    Determines the number of decimal places for price formatting for a given market.
+    """Determines the number of decimal places for price formatting for a given market.
 
     It tries to extract this information from `market_info['precision']['price']`
     (interpreting int as places, float/str as tick size) or
@@ -363,11 +354,10 @@ def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> 
             if price_precision_value >= 0:
                 logger.debug(f"Using integer price precision for {symbol}: {price_precision_value}")
                 return price_precision_value
-            else:
-                logger.warning(
-                    f"Invalid negative integer price precision for {symbol}: {price_precision_value}. "
-                    "Proceeding to next check."
-                )
+            logger.warning(
+                f"Invalid negative integer price precision for {symbol}: {price_precision_value}. "
+                "Proceeding to next check."
+            )
 
         elif isinstance(price_precision_value, (str, float)):
             try:
@@ -379,11 +369,11 @@ def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> 
                     precision = abs(tick_size.normalize().as_tuple().exponent)
                     logger.debug(f"Derived price precision for {symbol} from tick size {tick_size}: {precision}")
                     return precision
-                else: # tick_size is zero or negative
-                    logger.warning(
-                        f"Invalid non-positive tick size '{price_precision_value}' from market_info.precision.price "
-                        f"for {symbol}. Proceeding to next check."
-                    )
+                # tick_size is zero or negative
+                logger.warning(
+                    f"Invalid non-positive tick size '{price_precision_value}' from market_info.precision.price "
+                    f"for {symbol}. Proceeding to next check."
+                )
             except (ValueError, TypeError, InvalidOperation) as e:
                 logger.warning(
                     f"Could not parse market_info.precision.price '{price_precision_value}' "
@@ -426,8 +416,7 @@ def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> 
     return default_precision
 
 def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> Decimal:
-    """
-    Determines the minimum tick size (price increment) for a given market.
+    """Determines the minimum tick size (price increment) for a given market.
 
     It tries to extract this from `market_info['precision']['price']`
     (interpreting float/str as tick size, int as precision for 10^-n) or
@@ -454,11 +443,11 @@ def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> De
                 if tick_size > Decimal('0'):
                     logger.debug(f"Using tick size from precision.price for {symbol}: {tick_size}")
                     return tick_size
-                else: # tick_size is zero or negative
-                    logger.warning(
-                        f"Invalid non-positive value '{price_precision_value}' from market_info.precision.price "
-                        f"for {symbol}. Proceeding to next check."
-                    )
+                # tick_size is zero or negative
+                logger.warning(
+                    f"Invalid non-positive value '{price_precision_value}' from market_info.precision.price "
+                    f"for {symbol}. Proceeding to next check."
+                )
             except (ValueError, TypeError, InvalidOperation) as e:
                 logger.warning(
                     f"Could not parse market_info.precision.price '{price_precision_value}' "
@@ -471,11 +460,10 @@ def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> De
                 tick_size = Decimal('1e-' + str(price_precision_value))
                 logger.debug(f"Calculated tick size from integer precision for {symbol}: {tick_size}")
                 return tick_size
-            else:
-                logger.warning(
-                    f"Invalid negative integer for precision.price for {symbol}: {price_precision_value}. "
-                    "Proceeding to next check."
-                )
+            logger.warning(
+                f"Invalid negative integer for precision.price for {symbol}: {price_precision_value}. "
+                "Proceeding to next check."
+            )
         else:
             logger.warning(
                 f"Unsupported type for market_info.precision.price for {symbol}: {type(price_precision_value)}. "
@@ -514,8 +502,7 @@ def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> De
     return fallback_tick_size
 
 def _format_signal(signal_payload: Any, *, success: bool = True, detail: str | None = None) -> str:
-    """
-    Formats a trading signal or related message for display, potentially with color.
+    """Formats a trading signal or related message for display, potentially with color.
     This is a placeholder to resolve the import error and can be customized
     based on the actual structure and requirements for signal formatting.
 
@@ -546,8 +533,7 @@ from decimal import ROUND_HALF_UP
 
 
 def round_decimal(value: float, precision: int) -> Decimal:
-    """
-    Rounds a float value to a specified decimal precision using Decimal for accuracy.
+    """Rounds a float value to a specified decimal precision using Decimal for accuracy.
 
     Args:
         value (float): The float value to round.
@@ -579,8 +565,7 @@ def calculate_order_quantity(
     min_order_value: Decimal,
     logger: logging.Logger
 ) -> Decimal:
-    """
-    Calculates the appropriate order quantity ensuring all exchange constraints are met.
+    """Calculates the appropriate order quantity ensuring all exchange constraints are met.
 
     This function performs the following steps:
     1. Calculates the raw quantity based on the desired USDT investment.
@@ -637,8 +622,7 @@ def calculate_order_quantity(
     return adjusted_qty
 
 def json_decimal_default(obj: Any) -> Any:
-    """
-    Custom JSON serializer for objects not serializable by default json code.
+    """Custom JSON serializer for objects not serializable by default json code.
     Specifically handles Decimal objects by converting them to floats.
     """
     if isinstance(obj, Decimal):

@@ -2,18 +2,21 @@ import argparse
 import json
 import logging
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
-from dataclasses import replace
 
 import optuna
 import pandas as pd
 
+from backtest import (
+    BacktestParams,  # Import here to avoid circular dependency if BacktestParams uses Config
+    BybitHistoricalData,  # To fetch klines
+)
+
 # Import the new Config definitions and Backtester
 from config_definitions import Config
 from strategy_backtester import Backtester
-from backtest import BybitHistoricalData # To fetch klines
-from backtest import BacktestParams # Import here to avoid circular dependency if BacktestParams uses Config
 
 logger = logging.getLogger("NewProfitOptimizer")
 logging.basicConfig(
@@ -298,10 +301,10 @@ def main():
     # Optional: re-run the backtest with best settings and dump equity curve
     logger.info("Re-running backtest with best parameters to export equity curve...")
     cfg_best = apply_trial_to_config(base_cfg, best)
-    
+
     bt = Backtester(config=cfg_best, klines_df=klines_df, kline_interval=args.interval) # Pass kline_interval here
     results_best = bt.run() # Run backtest to get equity curve
-    
+
     eq = pd.DataFrame(bt.equity_curve, columns=["timestamp_ms", "equity"])
     eq["timestamp"] = eq["timestamp_ms"].apply(lambda x: datetime.fromtimestamp(x/1000, tz=timezone.utc).isoformat())
     eq.to_csv("equity_curve_best.csv", index=False)

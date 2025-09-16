@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-MMXCEL v3.0 – Bybit Hedge-Mode Market-Making Bot
+"""MMXCEL v3.0 – Bybit Hedge-Mode Market-Making Bot
 Major enhancements, bug fixes, and performance improvements for v3.0.
 - Fixed 'return outside function' SyntaxError.
 - Improved asynchronous API calls with robust retries and error handling.
@@ -729,8 +728,7 @@ class MakiwiStrategy:
                     await self.client.cancel_all_orders()
                     await asyncio.sleep(1) # Wait a bit for WS to catch up
                     continue
-                else:
-                    set_bot_state("RUNNING")
+                set_bot_state("RUNNING")
 
                 mid_price = ws_state['mid_price']
                 if mid_price == Decimal("0"):

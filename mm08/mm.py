@@ -23,8 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class MarketMaker:
-    """
-    Advanced Bybit Market Making Bot with WebSocket integration and enhanced features
+    """Advanced Bybit Market Making Bot with WebSocket integration and enhanced features
     """
 
     def __init__(self):
@@ -75,8 +74,7 @@ class MarketMaker:
             logger.error(f"Failed to save stats: {e}")
 
     def _print(self, message: str, level: str = 'info', end: str = '\n') -> None:
-        """
-        Enhanced print function with logging and timestamp
+        """Enhanced print function with logging and timestamp
         """
         timestamp = dt.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -94,8 +92,7 @@ class MarketMaker:
             logger.info(message)
 
     def scale_qtys(self, x: float, n: int, scaling_factor: float = 1.0) -> list[float]:
-        """
-        Enhanced quantity scaling with adjustable parameters
+        """Enhanced quantity scaling with adjustable parameters
         Creates a list of qtys that scale additively with optional scaling factor
         [5, 4, 3, 2, 1, -1, -2, -3, -4, -5]
         
@@ -113,8 +110,7 @@ class MarketMaker:
         return long_qtys + short_qtys[::-1]
 
     def calculate_volatility(self, period: int = 20) -> float:
-        """
-        Calculate volatility based on price history
+        """Calculate volatility based on price history
         
         Args:
             period: Number of recent prices to consider for volatility calculation
@@ -137,8 +133,7 @@ class MarketMaker:
         return volatility
 
     def calculate_adaptive_spread(self, base_spread: float, volatility: float) -> float:
-        """
-        Calculate spread based on market volatility
+        """Calculate spread based on market volatility
         
         Args:
             base_spread: Minimum spread to maintain
@@ -158,8 +153,7 @@ class MarketMaker:
         return base_spread * spread_multiplier
 
     def get_account_balance(self) -> dict:
-        """
-        Get account balance with error handling
+        """Get account balance with error handling
         
         Returns:
             Dictionary with account balance information
@@ -176,8 +170,7 @@ class MarketMaker:
             return {}
 
     def initialize_session(self) -> bool:
-        """
-        Initialize HTTP session with enhanced configuration
+        """Initialize HTTP session with enhanced configuration
         
         Returns:
             True if initialization successful, False otherwise
@@ -242,8 +235,7 @@ class MarketMaker:
             return False
 
     def initialize_websocket(self) -> bool:
-        """
-        Initialize WebSocket connection for real-time data
+        """Initialize WebSocket connection for real-time data
         
         Returns:
             True if initialization successful, False otherwise
@@ -294,8 +286,7 @@ class MarketMaker:
             return False
 
     def _handle_orderbook_update(self, data: dict) -> None:
-        """
-        Handle orderbook updates from WebSocket
+        """Handle orderbook updates from WebSocket
         
         Args:
             data: Orderbook data from WebSocket
@@ -314,8 +305,7 @@ class MarketMaker:
                     self.last_prices.pop(0)
 
     def _handle_trade_update(self, data: dict) -> None:
-        """
-        Handle trade updates from WebSocket
+        """Handle trade updates from WebSocket
         
         Args:
             data: Trade data from WebSocket
@@ -335,8 +325,7 @@ class MarketMaker:
                     self.trade_history.pop(0)
 
     def _handle_position_update(self, data: dict) -> None:
-        """
-        Handle position updates from WebSocket
+        """Handle position updates from WebSocket
         
         Args:
             data: Position data from WebSocket
@@ -357,8 +346,7 @@ class MarketMaker:
                     break
 
     def _handle_order_update(self, data: dict) -> None:
-        """
-        Handle order updates from WebSocket
+        """Handle order updates from WebSocket
         
         Args:
             data: Order data from WebSocket
@@ -382,8 +370,7 @@ class MarketMaker:
                     self.orders = [o for o in self.orders if o['orderStatus'] in ['New', 'PartiallyFilled']]
 
     def get_current_price(self) -> float:
-        """
-        Get current market price with multiple sources
+        """Get current market price with multiple sources
         
         Returns:
             Current market price
@@ -409,8 +396,7 @@ class MarketMaker:
             return 0.0
 
     def get_position(self) -> dict | None:
-        """
-        Get current position information
+        """Get current position information
         
         Returns:
             Position information dictionary or None
@@ -447,8 +433,7 @@ class MarketMaker:
             return None
 
     def cancel_all_orders(self) -> bool:
-        """
-        Cancel all active orders
+        """Cancel all active orders
         
         Returns:
             True if successful, False otherwise
@@ -463,17 +448,15 @@ class MarketMaker:
                 self._print('All orders cancelled successfully')
                 self.orders = []  # Clear local order list
                 return True
-            else:
-                self._print(f"Failed to cancel orders: {response['retMsg']}", 'error')
-                return False
+            self._print(f"Failed to cancel orders: {response['retMsg']}", 'error')
+            return False
 
         except Exception as e:
             self._print(f"Error cancelling orders: {e}", 'error')
             return False
 
     def close_position(self) -> bool:
-        """
-        Close current position if it exists
+        """Close current position if it exists
         
         Returns:
             True if successful, False otherwise
@@ -498,17 +481,15 @@ class MarketMaker:
                 self._print(f"Position closed successfully: {side} {abs(position['size'])} {config.SYMBOL}")
                 self.position = None  # Clear local position
                 return True
-            else:
-                self._print(f"Failed to close position: {response['retMsg']}", 'error')
-                return False
+            self._print(f"Failed to close position: {response['retMsg']}", 'error')
+            return False
 
         except Exception as e:
             self._print(f"Error closing position: {e}", 'error')
             return False
 
     def place_orders(self) -> bool:
-        """
-        Place market making orders with enhanced logic
+        """Place market making orders with enhanced logic
         
         Returns:
             True if successful, False otherwise
@@ -589,8 +570,7 @@ class MarketMaker:
             return False
 
     def get_min_tick_size(self) -> float:
-        """
-        Get minimum tick size for the symbol
+        """Get minimum tick size for the symbol
         
         Returns:
             Minimum tick size or 0.0 if not available
@@ -613,8 +593,7 @@ class MarketMaker:
             return 0.0
 
     def check_and_handle_filled_orders(self) -> bool:
-        """
-        Check for filled orders and handle take-profit and stop-loss
+        """Check for filled orders and handle take-profit and stop-loss
         
         Returns:
             True if handled successfully, False otherwise
@@ -661,8 +640,7 @@ class MarketMaker:
             return False
 
     def update_performance_metrics(self) -> None:
-        """
-        Update performance metrics based on trading activity
+        """Update performance metrics based on trading activity
         """
         try:
             # Calculate win rate
@@ -689,8 +667,7 @@ class MarketMaker:
             self._print(f"Error updating performance metrics: {e}", 'error')
 
     def run(self) -> None:
-        """
-        Main execution loop with enhanced error handling and recovery
+        """Main execution loop with enhanced error handling and recovery
         """
         self._print('\n--- ADVANCED MARKET MAKER V3 ---')
         self._print('Enhanced version with WebSocket integration and advanced features')
@@ -744,8 +721,7 @@ class MarketMaker:
                 time.sleep(5)  # Wait before retrying
 
     def stop(self) -> None:
-        """
-        Gracefully stop the market maker
+        """Gracefully stop the market maker
         """
         self._print('Stopping market maker...')
         self.running = False
@@ -769,8 +745,7 @@ class MarketMaker:
         self._print('Market maker stopped')
 
 def scale_qtys(x: float, n: int, scaling_factor: float = 1.0) -> list[float]:
-    """
-    Standalone function for backward compatibility
+    """Standalone function for backward compatibility
     
     Args:
         x: How much of your balance to use

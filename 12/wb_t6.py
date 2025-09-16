@@ -427,7 +427,8 @@ class BybitClient:
 # ----------------------------------------------------------------------------
 class Indicators:
     """A collection of static methods for calculating technical indicators.
-       Prioritizes TA-Lib for performance if available, else uses Pandas/Numpy with Decimal."""
+    Prioritizes TA-Lib for performance if available, else uses Pandas/Numpy with Decimal.
+    """
 
     @staticmethod
     def _to_decimal_series_safe(series: pd.Series) -> pd.Series:
@@ -863,7 +864,6 @@ class Indicators:
                  tenkan_period: int = 9, kijun_period: int = 26, senkou_period: int = 52,
                  chikou_shift: int = 26) -> pd.DataFrame:
         """Decimal-safe Ichimoku Cloud components."""
-
         # Tenkan-sen (Conversion Line): (9-period high + 9-period low) / 2
         tenkan_sen = (high.rolling(window=tenkan_period).max() + low.rolling(window=tenkan_period).min()) / Decimal('2')
 
@@ -1447,8 +1447,7 @@ class TradingAnalyzer:
         self.log.info("─" * (42 + len(self.symbol) + len(self.interval)))
 
     def generate_trading_signal(self, current_price: Decimal) -> TradeSignal:
-        """
-        Combines indicator scores and other analysis to generate a final trade signal.
+        """Combines indicator scores and other analysis to generate a final trade signal.
         """
         raw_score = Decimal('0.0')
         conditions_met = []

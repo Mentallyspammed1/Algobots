@@ -1,10 +1,13 @@
 # bybit_account_helper.py
 import logging
-from typing import Dict, Any, Optional, Union
-import time # For potential timestamp in error logging
+import time  # For potential timestamp in error logging
+from typing import Any
 
+from pybit.exceptions import (  # Import specific Pybit exceptions
+    BybitAPIError,
+    BybitRequestError,
+)
 from pybit.unified_trading import HTTP
-from pybit.exceptions import BybitRequestError, BybitAPIError # Import specific Pybit exceptions
 
 # Configure logging for the module
 logging.basicConfig(
@@ -14,15 +17,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BybitAccountHelper:
-    """
-    A helper class for managing Bybit account-related functionalities
+    """A helper class for managing Bybit account-related functionalities
     including wallet balances, asset transfers, profit/loss tracking,
     and fee information via the Unified Trading HTTP API.
     """
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = False):
-        """
-        Initializes the BybitAccountHelper with API credentials and environment.
+        """Initializes the BybitAccountHelper with API credentials and environment.
 
         :param api_key: Your Bybit API key.
         :param api_secret: Your Bybit API secret.
@@ -38,9 +39,8 @@ class BybitAccountHelper:
         self.session = HTTP(testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret)
         logger.info(f"BybitAccountHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
 
-    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Internal method to make an HTTP request to the Bybit API and handle responses.
+    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> dict[str, Any] | None:
+        """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
 
         :param method: The name of the method to call on the `self.session` object (e.g., 'get_wallet_balance').
@@ -53,18 +53,17 @@ class BybitAccountHelper:
         try:
             func = getattr(self.session, method)
             response = func(**kwargs)
-            
+
             if response and response.get('retCode') == 0:
                 logger.debug(f"[{endpoint_name}] Successfully called. Response: {response.get('result')}")
                 return response.get('result')
-            else:
-                ret_code = response.get('retCode', 'N/A')
-                error_msg = response.get('retMsg', 'Unknown error')
-                logger.error(
-                    f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
-                    f"Args: {kwargs}. Full Response: {response}"
-                )
-                return None
+            ret_code = response.get('retCode', 'N/A')
+            error_msg = response.get('retMsg', 'Unknown error')
+            logger.error(
+                f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
+                f"Args: {kwargs}. Full Response: {response}"
+            )
+            return None
         except (BybitRequestError, BybitAPIError) as e:
             logger.exception(
                 f"[{endpoint_name}] Pybit specific error during API call. "
@@ -78,9 +77,8 @@ class BybitAccountHelper:
             )
             return None
 
-    def get_wallet_balance(self, account_type: str = "UNIFIED") -> Optional[Dict[str, Any]]:
-        """
-        Retrieves comprehensive wallet balance and risk information for a specified account type.
+    def get_wallet_balance(self, account_type: str = "UNIFIED") -> dict[str, Any] | None:
+        """Retrieves comprehensive wallet balance and risk information for a specified account type.
 
         :param account_type: The type of account (e.g., "UNIFIED", "CLASSIC", "SPOT").
                              Defaults to "UNIFIED".
@@ -92,9 +90,8 @@ class BybitAccountHelper:
             return None
         return self._make_request('get_wallet_balance', 'Account Wallet Balance', accountType=account_type)
 
-    def get_transferable_amount(self, coin_name: str) -> Optional[Dict[str, Any]]:
-        """
-        Queries the available amount of a specific coin that can be transferred.
+    def get_transferable_amount(self, coin_name: str) -> dict[str, Any] | None:
+        """Queries the available amount of a specific coin that can be transferred.
 
         :param coin_name: The name of the coin (e.g., "USDT", "BTC").
         :return: A dictionary containing transferable amount information (e.g., 'transferAbleAmount')
@@ -105,9 +102,8 @@ class BybitAccountHelper:
             return None
         return self._make_request('get_transferable_amount', 'Transferable Amount', coinName=coin_name)
 
-    def get_coins_balance(self, member_id: str, account_type: str = "UNIFIED") -> Optional[Dict[str, Any]]:
-        """
-        Retrieves all coin balances across account types for a specific member.
+    def get_coins_balance(self, member_id: str, account_type: str = "UNIFIED") -> dict[str, Any] | None:
+        """Retrieves all coin balances across account types for a specific member.
         Note: `member_id` is typically your Bybit UID.
 
         :param member_id: The unique identifier of the member (your UID).
@@ -122,9 +118,8 @@ class BybitAccountHelper:
             return None
         return self._make_request('get_coins_balance', 'All Coins Balance', memberId=member_id, accountType=account_type)
 
-    def get_coin_balance(self, member_id: str, coin: str, account_type: str = "UNIFIED") -> Optional[Dict[str, Any]]:
-        """
-        Queries the balance of a specific coin for a specific member and account type.
+    def get_coin_balance(self, member_id: str, coin: str, account_type: str = "UNIFIED") -> dict[str, Any] | None:
+        """Queries the balance of a specific coin for a specific member and account type.
         Note: `member_id` is typically your Bybit UID.
 
         :param member_id: The unique identifier of the member (your UID).
@@ -143,9 +138,8 @@ class BybitAccountHelper:
             return None
         return self._make_request('get_coin_balance', 'Single Coin Balance', memberId=member_id, coin=coin, accountType=account_type)
 
-    def get_closed_pnl(self, category: str, symbol: Optional[str] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Queries closed profit and loss records for a given category and optional symbol.
+    def get_closed_pnl(self, category: str, symbol: str | None = None, **kwargs) -> dict[str, Any] | None:
+        """Queries closed profit and loss records for a given category and optional symbol.
 
         :param category: The product type (e.g., "linear", "inverse", "option").
         :param symbol: Optional. The trading symbol (e.g., "BTCUSDT").
@@ -165,9 +159,8 @@ class BybitAccountHelper:
         params.update(kwargs)
         return self._make_request('get_closed_pnl', 'Closed PnL Records', **params)
 
-    def get_executions(self, category: str, symbol: Optional[str] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves execution history (detailed trade analysis) for a given category and optional symbol.
+    def get_executions(self, category: str, symbol: str | None = None, **kwargs) -> dict[str, Any] | None:
+        """Retrieves execution history (detailed trade analysis) for a given category and optional symbol.
 
         :param category: The product type (e.g., "linear", "inverse", "option").
         :param symbol: Optional. The trading symbol (e.g., "BTCUSDT").
@@ -187,9 +180,8 @@ class BybitAccountHelper:
         params.update(kwargs)
         return self._make_request('get_executions', 'Execution History', **params)
 
-    def get_transaction_log(self, account_type: str = "UNIFIED", **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Queries transaction logs for Unified accounts.
+    def get_transaction_log(self, account_type: str = "UNIFIED", **kwargs) -> dict[str, Any] | None:
+        """Queries transaction logs for Unified accounts.
 
         :param account_type: The type of account (e.g., "UNIFIED"). Defaults to "UNIFIED".
         :param kwargs: Additional parameters like `category`, `currency`, `type`, `startTime`, `endTime`, `limit`.
@@ -203,9 +195,8 @@ class BybitAccountHelper:
         params.update(kwargs)
         return self._make_request('get_transaction_log', 'Transaction Log', **params)
 
-    def get_borrow_history(self, currency: Optional[str] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves interest and borrowing records.
+    def get_borrow_history(self, currency: str | None = None, **kwargs) -> dict[str, Any] | None:
+        """Retrieves interest and borrowing records.
 
         :param currency: Optional. The name of the currency (e.g., "USDT").
         :param kwargs: Additional parameters like `bizType`, `startTime`, `endTime`, `limit`.
@@ -221,9 +212,8 @@ class BybitAccountHelper:
         params.update(kwargs)
         return self._make_request('get_borrow_history', 'Borrow History', **params)
 
-    def get_fee_rates(self, category: str, symbol: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves trading fee rates for derivatives (Linear, Inverse, Option).
+    def get_fee_rates(self, category: str, symbol: str | None = None) -> dict[str, Any] | None:
+        """Retrieves trading fee rates for derivatives (Linear, Inverse, Option).
 
         :param category: The product type (e.g., "linear", "inverse", "option").
         :param symbol: Optional. The trading symbol (e.g., "BTCUSDT").
@@ -241,9 +231,8 @@ class BybitAccountHelper:
             params['symbol'] = symbol
         return self._make_request('get_fee_rates', 'Fee Rates', **params)
 
-    def get_account_info(self) -> Optional[Dict[str, Any]]:
-        """
-        Queries margin mode configuration and other account details.
+    def get_account_info(self) -> dict[str, Any] | None:
+        """Queries margin mode configuration and other account details.
 
         :return: A dictionary containing account information or None on failure.
         """
@@ -254,16 +243,15 @@ if __name__ == "__main__":
     # IMPORTANT: Replace with your actual API key and secret.
     # For security, consider using environment variables (e.g., os.getenv("BYBIT_API_KEY")).
     # Set USE_TESTNET to False for production (mainnet).
-    API_KEY = "YOUR_API_KEY" 
-    API_SECRET = "YOUR_API_SECRET" 
+    API_KEY = "YOUR_API_KEY"
+    API_SECRET = "YOUR_API_SECRET"
     USE_TESTNET = True
 
     if API_KEY == "YOUR_API_KEY" or API_SECRET == "YOUR_API_SECRET":
         logger.error("Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_account_helper.py example.")
         # In a real application, you might exit or raise a more specific error.
         # For demonstration, we'll proceed but expect API calls to fail.
-        # exit() 
-        pass
+        # exit()
 
     account_helper = BybitAccountHelper(API_KEY, API_SECRET, testnet=USE_TESTNET)
 
@@ -276,7 +264,7 @@ if __name__ == "__main__":
                 print(f"  Coin: {coin_info.get('coin')}, Available: {coin_info.get('availableToWithdraw')}, Wallet Balance: {coin_info.get('walletBalance')}")
     else:
         print("  Failed to retrieve wallet balance or no accounts found.")
-    
+
     print("\n--- Getting Transferable Amount for USDT ---")
     transferable_usdt = account_helper.get_transferable_amount(coin_name="USDT")
     if transferable_usdt:

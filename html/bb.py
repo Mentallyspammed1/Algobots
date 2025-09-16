@@ -488,13 +488,12 @@ class PrecisionManager:
 
                 if response.get('retCode') == 0:
                     return response
-                else:
-                    ret_code = response.get('retCode')
-                    ret_msg = response.get('retMsg', 'Unknown Error')
-                    BOT_STATE.performance_monitor.api_errors_count += 1
-                    BOT_STATE.performance_monitor.last_api_error = ret_msg
-                    self.logger.warning(f"Bybit API Error ({ret_code}): {ret_msg} for {endpoint}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})")
-                    time.sleep(initial_delay * (2**attempt))
+                ret_code = response.get('retCode')
+                ret_msg = response.get('retMsg', 'Unknown Error')
+                BOT_STATE.performance_monitor.api_errors_count += 1
+                BOT_STATE.performance_monitor.last_api_error = ret_msg
+                self.logger.warning(f"Bybit API Error ({ret_code}): {ret_msg} for {endpoint}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})")
+                time.sleep(initial_delay * (2**attempt))
             except Exception as e:
                 BOT_STATE.performance_monitor.api_errors_count += 1
                 BOT_STATE.performance_monitor.last_api_error = str(e)
@@ -816,8 +815,7 @@ def trading_bot_loop():
                         BOT_STATE.current_position_info = {"order_id": None, "entry_price": None, "side": None, "peak_price": None, "entry_time": None, "trailing_activated": False, "size": None}
                         time.sleep(2)
                         continue
-                    else:
-                        log_message(f"Failed to close position on timeout: {close_res.get('retMsg', 'Unknown API error') if close_res else 'No response'}", "error")
+                    log_message(f"Failed to close position on timeout: {close_res.get('retMsg', 'Unknown API error') if close_res else 'No response'}", "error")
 
                 if amend_sl:
                     log_message(f"Amending trailing stop for {pos_info['side']} from {current_sl_on_exchange:.{price_prec}f} to {new_sl:.{price_prec}f}", "info")
@@ -1012,13 +1010,12 @@ def _make_api_call(api_client: HTTP, method: str, endpoint: str, params: dict | 
 
             if response.get('retCode') == 0:
                 return response
-            else:
-                ret_code = response.get('retCode')
-                ret_msg = response.get('retMsg', 'Unknown Error')
-                BOT_STATE.performance_monitor.api_errors_count += 1
-                BOT_STATE.performance_monitor.last_api_error = ret_msg
-                log_message(f"Bybit API Error ({ret_code}): {ret_msg}. Retrying {endpoint} in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "warning")
-                time.sleep(initial_delay * (2**attempt))
+            ret_code = response.get('retCode')
+            ret_msg = response.get('retMsg', 'Unknown Error')
+            BOT_STATE.performance_monitor.api_errors_count += 1
+            BOT_STATE.performance_monitor.last_api_error = ret_msg
+            log_message(f"Bybit API Error ({ret_code}): {ret_msg}. Retrying {endpoint} in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})", "warning")
+            time.sleep(initial_delay * (2**attempt))
         except Exception as e:
             BOT_STATE.performance_monitor.api_errors_count += 1
             BOT_STATE.performance_monitor.last_api_error = str(e)

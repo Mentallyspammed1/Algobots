@@ -778,8 +778,7 @@ class TradingAnalyzer:
         self.log.info("─" * (42 + len(self.symbol) + len(self.interval)))
 
     def generate_trading_signal(self, current_price: Decimal) -> TradeSignal:
-        """
-        Combines indicator scores and other analysis to generate a final trade signal.
+        """Combines indicator scores and other analysis to generate a final trade signal.
         """
         raw_score = Decimal('0.0')
         conditions_met = []

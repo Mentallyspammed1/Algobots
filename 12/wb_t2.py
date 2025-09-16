@@ -1013,9 +1013,9 @@ def interpret_indicator(logger: logging.Logger, indicator_name: str, value: Any)
         if isinstance(value, dict):
             if indicator_name == "macd":
                 return f"{NEON_PURPLE}MACD:{RESET} MACD={value.get('macd', np.nan):.2f}, Signal={value.get('signal', np.nan):.2f}, Hist={value.get('histogram', np.nan):.2f}"
-            elif indicator_name == "stochastic_oscillator":
+            if indicator_name == "stochastic_oscillator":
                 return f"{NEON_CYAN}Stochastic Oscillator:{RESET} K={value.get('k', np.nan):.1f}, D={value.get('d', np.nan):.1f}"
-            elif indicator_name == "stoch_rsi":
+            if indicator_name == "stoch_rsi":
                 return f"{NEON_GREEN}Stoch RSI:{RESET} K={value.get('stoch_rsi_k', np.nan):.1f}, D={value.get('stoch_rsi_d', np.nan):.1f} (RSI: {value.get('rsi', np.nan):.1f})"
             return f"{NEON_YELLOW}{indicator_name.upper()}:{RESET} Complex data format."
 

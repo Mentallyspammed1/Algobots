@@ -1,15 +1,11 @@
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import os
 import sys
-import time
-import urllib.parse
 import warnings
 from datetime import UTC, datetime
-from decimal import ROUND_DOWN, Decimal, getcontext
+from decimal import Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import (
@@ -17,19 +13,15 @@ from typing import (
     ClassVar,
     Literal,
 )
+
+# Import async CCXT
+import ccxt.async_support as ccxt
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
-# Import async CCXT
-import ccxt.async_support as ccxt
 from colorama import Fore, Style, init
-import warnings
-from decimal import getcontext
-from colorama import init, Fore, Style
-import os
-from pathlib import Path
-from pytz import UTC # Assuming pytz for UTC, common in financial applications
 from dotenv import load_dotenv
+from pytz import UTC  # Assuming pytz for UTC, common in financial applications
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -387,7 +379,7 @@ class ExchangeClient:
         self.exchange_id = exchange_id
         self.symbol_to_ccxt = {} # Cache for CCXT symbol conversion
         self.markets_loaded = False
-        
+
         try:
             exchange_class = getattr(ccxt, exchange_id)
             self.exchange = exchange_class(
@@ -405,7 +397,7 @@ class ExchangeClient:
             if testnet:
                 self.exchange.set_sandbox_mode(True)
                 self.logger.info(f"{NEON_YELLOW}CCXT {exchange_id} set to sandbox mode.{RESET}")
-            
+
             self.logger.info(f"{NEON_GREEN}CCXT {exchange_id} client initialized.{RESET}")
         except Exception as e:
             self.logger.critical(f"{NEON_RED}Failed to initialize CCXT exchange client: {e}{RESET}")
@@ -418,7 +410,7 @@ class ExchangeClient:
                 await self.exchange.load_markets()
                 self.markets_loaded = True
                 self.logger.info(f"{NEON_GREEN}Markets loaded for {self.exchange_id}.{RESET}")
-                
+
                 # Pre-build a mapping for common symbols like BTCUSDT -> BTC/USDT
                 for market_id, market_data in self.exchange.markets_by_id.items():
                     if market_id.endswith('USDT'): # Common pattern for perp markets
@@ -428,13 +420,13 @@ class ExchangeClient:
                 self.logger.error(f"{NEON_RED}Failed to load markets: {e}{RESET}")
                 # Markets not loaded, might need to retry or stop
                 self.markets_loaded = False
-        
+
     def get_ccxt_symbol(self, bybit_symbol: str) -> str:
         """Converts a Bybit symbol (e.g., BTCUSDT) to a CCXT symbol (e.g., BTC/USDT)."""
         if not self.markets_loaded:
             self.logger.warning(f"Markets not loaded, cannot convert symbol {bybit_symbol}.")
             return bybit_symbol # Return original, hope it works or fails later
-        
+
         # Check cache first
         if bybit_symbol in self.symbol_to_ccxt:
             return self.symbol_to_ccxt[bybit_symbol]
@@ -444,7 +436,7 @@ class ExchangeClient:
             if market['id'] == bybit_symbol:
                 self.symbol_to_ccxt[bybit_symbol] = market['symbol']
                 return market['symbol']
-            
+
             # For futures, sometimes CCXT symbol is different, e.g., BTC/USDT:USDT
             # Bybit often just uses BTCUSDT (ID) for perpetual.
             # Let's assume for now Bybit symbol is the market ID.
@@ -489,14 +481,14 @@ class ExchangeClient:
             df["start_time"] = pd.to_datetime(
                 df["timestamp"], unit="ms", utc=True
             ).dt.tz_convert(TIMEZONE)
-            
+
             # Ensure volume is float for calculations
             for col in ["open", "high", "low", "close", "volume"]:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
-            
+
             df.set_index("start_time", inplace=True)
             df.sort_index(inplace=True)
-            
+
             # Drop rows with any NaN values in critical columns
             df.dropna(subset=["open", "high", "low", "close", "volume"], inplace=True)
 
@@ -574,7 +566,7 @@ class ExchangeClient:
         ccxt_symbol = self.get_ccxt_symbol(symbol)
         ccxt_side = "buy" if side == "Buy" else "sell"
         ccxt_order_type = order_type.lower()
-        
+
         params = {}
         if reduce_only:
             params["reduceOnly"] = True
@@ -582,14 +574,14 @@ class ExchangeClient:
             params["takeProfit"] = float(take_profit)
         if stop_loss is not None:
             params["stopLoss"] = float(stop_loss)
-            
+
         # Bybit v5 specific parameter for position mode (Hedge vs One-Way)
         # 1 for long (Buy), 2 for short (Sell) in Hedge Mode. 0 in One-Way.
         # This needs to align with the account's actual position mode setting.
         # CCXT tries to abstract this, but sometimes explicit parameters are needed.
         # For 'linear' default type, CCXT typically handles this if the account is in Hedge Mode.
         # params['positionIdx'] = position_idx # Only if explicit control is needed and not handled by CCXT
-        
+
         try:
             if ccxt_order_type == "market":
                 order = await self.exchange.create_order(
@@ -646,7 +638,7 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"{NEON_RED}Error canceling order {order_id} for {symbol}: {e}{RESET}")
         return None
-    
+
     async def set_leverage(self, symbol: str, leverage: int) -> bool:
         """Set leverage for the trading pair using CCXT."""
         ccxt_symbol = self.get_ccxt_symbol(symbol)
@@ -689,12 +681,12 @@ class PrecisionManager:
         self.exchange_client = exchange_client
         self.ccxt_symbol = self.exchange_client.get_ccxt_symbol(symbol)
         self.market_info: dict | None = None
-        
+
         # Fallback values from config if market info cannot be fetched
         self.qty_step: Decimal = Decimal("1") / (Decimal("10") ** config["trade_management"]["order_precision"])
         self.price_tick_size: Decimal = Decimal("1") / (Decimal("10") ** config["trade_management"]["price_precision"])
         self.min_order_qty: Decimal = Decimal("0.0001") # Reasonable default
-        
+
         asyncio.create_task(self._fetch_precision_info()) # Fetch asynchronously
 
     async def _fetch_precision_info(self) -> None:
@@ -715,7 +707,7 @@ class PrecisionManager:
                 # Use CCXT's standardized precision fields
                 self.qty_step = Decimal(str(self.market_info["limits"]["amount"]["min"])) if self.market_info["limits"]["amount"]["min"] else self.qty_step
                 self.min_order_qty = Decimal(str(self.market_info["limits"]["amount"]["min"])) if self.market_info["limits"]["amount"]["min"] else self.min_order_qty
-                
+
                 # For Bybit, tickSize and lotSizeFilter are usually in 'info' dict
                 if 'info' in self.market_info and 'priceFilter' in self.market_info['info']:
                     self.price_tick_size = Decimal(str(self.market_info['info']['priceFilter'].get('tickSize', self.price_tick_size)))
@@ -774,7 +766,7 @@ class PositionManager:
         self.symbol = symbol
         self.exchange_client = exchange_client
         self.ccxt_symbol = self.exchange_client.get_ccxt_symbol(symbol)
-        
+
         self.open_positions: dict[str, dict] = (
             {}
         )  # Tracks positions opened by the bot locally
@@ -783,7 +775,7 @@ class PositionManager:
         self.max_open_positions = config["trade_management"]["max_open_positions"]
         self.leverage = config["trade_management"]["leverage"]
         self.order_mode = config["trade_management"]["order_mode"]
-        
+
         # Bybit v5 supports TP/SL directly on order creation, usually as 'full' by default
         self.trailing_stop_activation_percent = (
             Decimal(str(config["trade_management"]["trailing_stop_activation_percent"]))
@@ -820,13 +812,13 @@ class PositionManager:
             return Decimal("0")
 
         account_balance = self._get_available_balance() # This would be an async call, needs await
-        
+
         # For a synchronous function like this, we'd need to assume balance is available or pass it in.
         # Let's make this method async and await the balance.
         # However, for consistency with `open_position` being async, we'll keep it as a private helper
         # but acknowledge that `_get_available_balance` itself would typically be awaited.
         # For now, we'll call it within `open_position` directly.
-        
+
         risk_per_trade_percent = (
             Decimal(str(self.config["trade_management"]["risk_per_trade_percent"]))
             / 100
@@ -848,7 +840,7 @@ class PositionManager:
         order_value_notional = risk_amount / stop_loss_distance_usd
         # Convert to quantity of the asset (e.g., BTC)
         order_qty_unleveraged = order_value_notional / current_price
-        
+
         # Apply leverage for the actual order quantity (buying power)
         order_qty = order_qty_unleveraged * self.leverage
 
@@ -890,7 +882,7 @@ class PositionManager:
 
         # Fetch actual open positions from the exchange to check limits
         exchange_open_positions = await self.exchange_client.get_exchange_open_positions(self.symbol)
-        
+
         if exchange_open_positions and len(exchange_open_positions) >= self.max_open_positions:
             self.logger.warning(
                 f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached on exchange. Cannot open new position.{RESET}"
@@ -909,11 +901,11 @@ class PositionManager:
         if signal not in ["BUY", "SELL"]:
             self.logger.debug(f"Invalid signal '{signal}' for opening position.")
             return None
-        
+
         # Calculate order size using the async balance fetch
         available_balance = await self._get_available_balance()
         order_qty = self._calculate_order_size(current_price, atr_value) # This needs available_balance passed or refactored
-        
+
         # Refactor _calculate_order_size to take balance explicitly to avoid recursive async calls/complexity
         # For now, let's simplify and make _calculate_order_size assume a direct balance input
         order_qty = self._calculate_order_size_with_balance(current_price, atr_value, available_balance)
@@ -929,9 +921,9 @@ class PositionManager:
         )
 
         side = "Buy" if signal == "BUY" else "Sell"
-        
+
         # Entry price for limit orders or estimation for market orders
-        entry_price = current_price 
+        entry_price = current_price
 
         if signal == "BUY":
             stop_loss_price = current_price - (atr_value * stop_loss_atr_multiple)
@@ -982,11 +974,10 @@ class PositionManager:
                 position_info  # Track the position locally
             )
             return position_info
-        else:
-            self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Failed to place {signal} order. Check API logs for details.{RESET}"
-            )
-            return None
+        self.logger.error(
+            f"{NEON_RED}[{self.symbol}] Failed to place {signal} order. Check API logs for details.{RESET}"
+        )
+        return None
 
     # Helper to calculate order size if balance is passed explicitly
     def _calculate_order_size_with_balance(
@@ -1046,14 +1037,14 @@ class PositionManager:
             return
 
         exchange_positions = await self.exchange_client.get_exchange_open_positions(self.symbol)
-        
+
         # Convert exchange positions to a dictionary for easier lookup
         exchange_positions_map = {}
         for pos in exchange_positions:
             # CCXT 'side' can be 'long' or 'short', convert to 'BUY'/'SELL'
             ccxt_side = pos.get('side')
             bot_side = "BUY" if ccxt_side == "long" else "SELL" if ccxt_side == "short" else "UNKNOWN"
-            
+
             # Position key might need to be unique, e.g., by symbol and side for hedge mode
             pos_key = f"{self.symbol}_{bot_side}"
             exchange_positions_map[pos_key] = pos
@@ -1062,14 +1053,14 @@ class PositionManager:
         positions_to_remove = []
         for pos_key, local_position in list(self.open_positions.items()):
             bot_side = local_position['side']
-            
+
             # Check if this local position still exists on the exchange
             if pos_key in exchange_positions_map:
                 exchange_pos_data = exchange_positions_map[pos_key]
                 # Ensure it's truly an open position (size > 0)
                 if Decimal(str(exchange_pos_data.get('contracts', 0))) > 0: # 'contracts' is CCXT's standardized size field
                     # Position is still open on exchange. Update local info and manage trailing stop.
-                    
+
                     # Update local entry price with actual entry price from exchange if available
                     if 'entryPrice' in exchange_pos_data and exchange_pos_data['entryPrice'] is not None:
                         local_position['entry_price'] = Decimal(str(exchange_pos_data['entryPrice']))
@@ -1089,16 +1080,16 @@ class PositionManager:
                             profit_percent = (current_price - entry_price) / entry_price
                         elif bot_side == "SELL":
                             profit_percent = (entry_price - current_price) / entry_price
-                        
+
                         if profit_percent >= self.trailing_stop_activation_percent:
                             local_position["is_trailing_activated"] = True
-                            
+
                             # Calculate initial trailing stop price
                             if bot_side == "BUY":
                                 initial_trailing_sl = current_price - (atr_value * trailing_stop_atr_multiple)
                             else:  # SELL
                                 initial_trailing_sl = current_price + (atr_value * trailing_stop_atr_multiple)
-                            
+
                             local_position["current_trailing_sl"] = self.precision_manager.format_price(initial_trailing_sl)
                             self.logger.info(
                                 f"[{self.symbol}] Trailing stop activated. Initial SL: {local_position['current_trailing_sl'].normalize()}"
@@ -1114,7 +1105,7 @@ class PositionManager:
                             #    price=None, # or current_price for market SL
                             #    params={'stopLoss': float(local_position['current_trailing_sl'])}
                             # )
-                            
+
                     elif is_trailing_activated:
                         # Trailing stop is active, check if it needs updating
                         potential_new_sl = Decimal("0")
@@ -2091,13 +2082,13 @@ class TradingAnalyzer:
 
         di_diff = (plus_di - minus_di).abs()
         di_sum = plus_di + minus_di
-        
+
         # Avoid division by zero
         di_sum_safe = di_sum.replace(0, np.nan)
         dx = (di_diff / di_sum_safe) * 100
-        
+
         adx = dx.ewm(span=period, adjust=False, min_periods=period).mean()
-        
+
         return (
             self._safe_series_op(adx, "ADX").fillna(0).clip(0,100),
             self._safe_series_op(plus_di, "PlusDI").fillna(0).clip(0,100),
@@ -2112,12 +2103,12 @@ class TradingAnalyzer:
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series, nan_series
         bbands = ta.bbands(self.df["close"], length=period, std=std_dev)
-        
+
         # Adjust column names as pandas_ta can return them with prefixes
         upper_col = f"BBU_{period}_{std_dev}"
         middle_col = f"BBM_{period}_{std_dev}"
         lower_col = f"BBL_{period}_{std_dev}"
-        
+
         if upper_col not in bbands.columns: # Fallback if specific column name not found
              upper_col = bbands.columns[bbands.columns.str.startswith('BBU_')][0]
              middle_col = bbands.columns[bbands.columns.str.startswith('BBM_')][0]
@@ -2147,10 +2138,10 @@ class TradingAnalyzer:
 
                 group_tp_vol = (group_typical_price * group_valid_volume).cumsum()
                 group_vol = group_valid_volume.cumsum()
-                
+
                 # Avoid division by zero
                 vwap_series.append(group_tp_vol / group_vol.replace(0, np.nan))
-            
+
             if not vwap_series:
                  return pd.Series(np.nan, index=self.df.index)
 
@@ -2197,7 +2188,7 @@ class TradingAnalyzer:
         if len(self.df) < required_len:
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series, nan_series, nan_series, nan_series
-        
+
         # Calculate Tenkan-sen and Kijun-sen
         tenkan_sen = (
             self.df["high"]
@@ -2302,7 +2293,7 @@ class TradingAnalyzer:
             af=acceleration,
             max_af=max_acceleration,
         )
-        
+
         if not isinstance(psar_result, pd.DataFrame):
             self.logger.error(
                 f"{NEON_RED}pandas_ta.psar did not return a DataFrame. Type: {type(psar_result)}{RESET}"
@@ -2318,7 +2309,7 @@ class TradingAnalyzer:
         # Combine PSARr (reversal) with PSARl (long trend) or PSARs (short trend)
         # PSARr is the actual SAR value to use
         psar_val = self._safe_series_op(psar_result.get(psar_val_col_r), "PSAR_Val_Raw")
-        
+
         # Determine direction based on price relative to PSAR value.
         # 1 for uptrend, -1 for downtrend.
         direction = pd.Series(0, index=self.df.index, dtype=int)
@@ -2326,7 +2317,7 @@ class TradingAnalyzer:
         first_valid_idx = psar_val.first_valid_index()
         if first_valid_idx is None:
             return pd.Series(np.nan, index=self.df.index), pd.Series(np.nan, index=self.df.index)
-        
+
         # Initial direction based on first valid PSAR point
         if self.df["close"].loc[first_valid_idx] > psar_val.loc[first_valid_idx]:
             direction.loc[first_valid_idx] = 1 # Up trend
@@ -2340,7 +2331,7 @@ class TradingAnalyzer:
             if pd.isna(psar_val.loc[current_idx]) or pd.isna(self.df["close"].loc[current_idx]):
                 direction.loc[current_idx] = direction.loc[prev_idx] # Carry forward if current data is NaN
                 continue
-            
+
             # If previous direction was up, and price falls below PSAR, reverse
             if direction.loc[prev_idx] == 1 and self.df["close"].loc[current_idx] < psar_val.loc[current_idx]:
                 direction.loc[current_idx] = -1
@@ -2352,7 +2343,7 @@ class TradingAnalyzer:
 
         psar_val = self._safe_series_op(psar_val, "PSAR_Val").ffill() # Forward fill any gaps for PSAR value
         direction = self._safe_series_op(direction, "PSAR_Dir")
-        
+
         return psar_val, direction
 
     def calculate_fibonacci_levels(self) -> None:
@@ -2485,7 +2476,7 @@ class TradingAnalyzer:
                 if last_close < sma:
                     return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -2498,16 +2489,16 @@ class TradingAnalyzer:
                 if last_close < ema:
                     return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             # Temporarily create an analyzer for the higher timeframe data to get ST direction
             temp_config = self.config.copy()
             temp_config["indicators"][
                 "ehlers_supertrend"
             ] = True  # Ensure ST is enabled for temp analyzer
-            
+
             # Pass the same exchange client to the temporary analyzer
             temp_analyzer = TradingAnalyzer(
-                higher_tf_df, temp_config, self.logger, self.symbol, self.exchange_client 
+                higher_tf_df, temp_config, self.logger, self.symbol, self.exchange_client
             )
             st_dir = temp_analyzer._get_indicator_value("ST_Slow_Dir")
             if not pd.isna(st_dir):
@@ -3229,7 +3220,7 @@ class TradingAnalyzer:
                 total_mtf_indicators = len(mtf_trends)
                 # Normalize the difference between bullish and bearish trends
                 normalized_mtf_score = (mtf_buy_score - mtf_sell_score) / total_mtf_indicators
-                
+
                 signal_score += mtf_weight * normalized_mtf_score
                 self.logger.debug(
                     f"MTF Confluence: Normalized Score {normalized_mtf_score:.2f} (Buy: {mtf_buy_score}, Sell: {mtf_sell_score}). Total MTF contribution: {mtf_weight * normalized_mtf_score:.2f}"
@@ -3476,8 +3467,8 @@ async def main_async_loop(
                 logger.info(f"{NEON_CYAN}Open Positions: {len(open_positions)}{RESET}")
                 for pos in open_positions:
                     current_trailing_sl_display = (
-                        pos.get('current_trailing_sl').normalize() 
-                        if isinstance(pos.get('current_trailing_sl'), Decimal) 
+                        pos.get('current_trailing_sl').normalize()
+                        if isinstance(pos.get('current_trailing_sl'), Decimal)
                         else pos.get('current_trailing_sl', 'N/A')
                     )
                     logger.info(
@@ -3600,7 +3591,7 @@ async def start_bot():
             )
             class MockGeminiClient:
                 async def analyze_market(self, *args, **kwargs):
-                    logger.warning(f"Mock GeminiClient.analyze_market called.")
+                    logger.warning("Mock GeminiClient.analyze_market called.")
                     # Simulate a response or return None
                     return {"entry": "HOLD", "confidence_level": 50}
             gemini_client = MockGeminiClient()

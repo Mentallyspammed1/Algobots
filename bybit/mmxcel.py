@@ -92,7 +92,8 @@ symbol_info = {
 # Helper function to get precision from a Decimal value for display
 def _calculate_decimal_precision(value: Decimal) -> int:
     """Calculates the number of decimal places of a Decimal value.
-    This is for display formatting, not for exchange-specific precision."""
+    This is for display formatting, not for exchange-specific precision.
+    """
     s = str(value.normalize())
     if '.' in s:
         return len(s.split('.')[1])
@@ -343,12 +344,10 @@ class BybitClient:
 
                 logger.info(f"Fetched symbol info for {SYMBOL}: Price Precision = {symbol_info['price_precision']}, Quantity Precision = {symbol_info['qty_precision']}")
                 return True
-            else:
-                logger.error(f"Symbol {SYMBOL} not found in instruments info.")
-                return False
-        else:
-            logger.error(f"Failed to fetch instrument info for {SYMBOL}.")
+            logger.error(f"Symbol {SYMBOL} not found in instruments info.")
             return False
+        logger.error(f"Failed to fetch instrument info for {SYMBOL}.")
+        return False
 
     def start_websocket_streams(self):
         """Starts public and private websocket streams, opening channels to the ether."""
@@ -392,9 +391,8 @@ class BybitClient:
                 return self.current_balance
             logger.error(f"Unexpected balance response structure: {response.get('retMsg', 'No error message')} | Raw: {response}")
             return Decimal("0")
-        else:
-            logger.error(f"Failed to get balance: {response.get('retMsg', 'No error message') if response else 'No response'}")
-            return Decimal("0")
+        logger.error(f"Failed to get balance: {response.get('retMsg', 'No error message') if response else 'No response'}")
+        return Decimal("0")
 
     async def get_open_orders_rest(self) -> dict[str, Any]:
         """Fetches open orders via REST API to sync state, aligning the bot's perception with reality."""
@@ -417,9 +415,8 @@ class BybitClient:
                 }
             ws_state["open_orders"] = current_open_orders
             return current_open_orders
-        else:
-            logger.error(f"Failed to get open orders via REST: {response.get('retMsg', 'No error message') if response else 'No response'}")
-            return {}
+        logger.error(f"Failed to get open orders via REST: {response.get('retMsg', 'No error message') if response else 'No response'}")
+        return {}
 
     async def get_positions_rest(self) -> dict[str, Any]:
         """Fetches current positions via REST API to sync state, revealing the bot's current holdings."""
@@ -441,9 +438,8 @@ class BybitClient:
                     }
             ws_state['positions'] = current_positions # Update shared state
             return current_positions
-        else:
-            logger.error(f"Failed to get positions via REST: {response.get('retMsg', 'No error message') if response else 'No response'}")
-            return {}
+        logger.error(f"Failed to get positions via REST: {response.get('retMsg', 'No error message') if response else 'No response'}")
+        return {}
 
     async def place_order(self, side: str, qty: Decimal, price: Decimal | None = None, client_order_id: str | None = None, order_type: str = "Limit") -> dict[str, Any] | None:
         """Places a single order on the exchange, manifesting a new trade intention."""
@@ -494,9 +490,8 @@ class BybitClient:
                     log_msg += f" (Client ID: {client_order_id})"
                 logger.info(log_msg)
                 return order_info
-            else:
-                logger.error(f"Failed to place {order_type} {side} order for {quantized_qty}@{quantized_price if quantized_price else 'N/A'}: {response.get('retMsg', 'No error message') if response else 'No response'}")
-                return None
+            logger.error(f"Failed to place {order_type} {side} order for {quantized_qty}@{quantized_price if quantized_price else 'N/A'}: {response.get('retMsg', 'No error message') if response else 'No response'}")
+            return None
         except Exception as e:
             logger.error(f"Error placing order for {side} {quantized_qty}@{quantized_price if quantized_price else 'N/A'} (Type: {order_type}): {type(e).__name__} - {e}")
             return None
@@ -512,9 +507,8 @@ class BybitClient:
         if response and response.get('retCode') == 0:
             logger.info(f"Cancelled order: {order_id}")
             return True
-        else:
-            logger.error(f"Failed to cancel order {order_id}: {response.get('retMsg', 'No error message') if response else 'No response'}")
-            return False
+        logger.error(f"Failed to cancel order {order_id}: {response.get('retMsg', 'No error message') if response else 'No response'}")
+        return False
 
     async def cancel_all_orders(self) -> None:
         """Cancels all open orders for the symbol, sweeping the slate clean."""
@@ -575,9 +569,8 @@ class BybitClient:
         if response and response.get('retCode') == 0:
             logger.info(f"Successfully placed {len(batch_request_payload['request'])} batch orders.")
             return response['result']
-        else:
-            logger.error(f"Failed to place batch orders: {response.get('retMsg', 'No error message') if response else 'No response'}")
-            return None
+        logger.error(f"Failed to place batch orders: {response.get('retMsg', 'No error message') if response else 'No response'}")
+        return None
 
     async def get_orderbook_snapshot(self) -> dict[str, Any] | None:
         """Fetches a snapshot of the orderbook for more reliable market data."""
@@ -599,12 +592,10 @@ class BybitClient:
                 ws_state["last_update_time"] = time.time()
                 logger.debug(f"Orderbook snapshot: Mid Price: {mid_price:.4f}")
                 return orderbook
-            else:
-                logger.error(f"Orderbook snapshot returned but missing bids/asks data. Raw response: {response}")
-                return None
-        else:
-            logger.error(f"Failed to get orderbook snapshot: {response.get('retMsg', 'No error message') if response else 'No response'}")
+            logger.error(f"Orderbook snapshot returned but missing bids/asks data. Raw response: {response}")
             return None
+        logger.error(f"Failed to get orderbook snapshot: {response.get('retMsg', 'No error message') if response else 'No response'}")
+        return None
 
 class MarketMakingStrategy:
     """The Alchemist's Strategy, overseeing the delicate balance of market forces."""
@@ -769,9 +760,8 @@ class MarketMakingStrategy:
             if snapshot:
                 logger.info("Successfully recovered market data using REST snapshot.")
                 return True # Data is now available
-            else:
-                logger.error("Failed to recover market data using REST snapshot. Skipping operation.")
-                return False # Still no data
+            logger.error("Failed to recover market data using REST snapshot. Skipping operation.")
+            return False # Still no data
         return True
 
     async def rebalance_inventory(self):

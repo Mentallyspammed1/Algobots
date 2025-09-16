@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-MMXCEL – Bybit Hedge-Mode Market-Making Bot
+"""MMXCEL – Bybit Hedge-Mode Market-Making Bot
 Compatible drop-in replacement for xmm.py
 """
 
@@ -553,9 +552,8 @@ class BybitClient:
             order_info = response['result']
             logger.info(f"Successfully placed {order_type} {side} order: ID={order_info.get('orderId', 'N/A')}, Qty={quantized_qty}, Price={quantized_price if quantized_price else 'N/A'}")
             return order_info
-        else:
-            logger.error(f"Failed to place {order_type} {side} order: {response.get('retMsg', 'Unknown error') if response else 'No response'}")
-            return None
+        logger.error(f"Failed to place {order_type} {side} order: {response.get('retMsg', 'Unknown error') if response else 'No response'}")
+        return None
 
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel a specific order."""
@@ -570,9 +568,8 @@ class BybitClient:
             # Remove from ws_state if successful, though WS callback should handle it
             ws_state["open_orders"].pop(order_id, None)
             return True
-        else:
-            logger.error(f"Failed to cancel order {order_id}: {response.get('retMsg', 'Unknown error') if response else 'No response'}")
-            return False
+        logger.error(f"Failed to cancel order {order_id}: {response.get('retMsg', 'Unknown error') if response else 'No response'}")
+        return False
 
     async def cancel_all_orders(self) -> None:
         """Cancel all open orders for the current symbol."""
@@ -663,9 +660,8 @@ class BybitClient:
         if response and response.get('retCode') == 0:
             logger.info(f"Successfully placed {len(batch_payloads)} batch orders.")
             return response['result']
-        else:
-            logger.error(f"Failed to place batch orders: {response.get('retMsg', 'Unknown error') if response else 'No response'}")
-            return None
+        logger.error(f"Failed to place batch orders: {response.get('retMsg', 'Unknown error') if response else 'No response'}")
+        return None
 
 # -----------------------------
 # Market Making Strategy

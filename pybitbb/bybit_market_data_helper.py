@@ -1,10 +1,10 @@
 # bybit_market_data_helper.py
 import logging
 import time
-from typing import Dict, Any, Optional, Union
+from typing import Any
 
+from pybit.exceptions import BybitAPIError, BybitRequestError
 from pybit.unified_trading import HTTP
-from pybit.exceptions import BybitRequestError, BybitAPIError
 
 # Configure logging for the module
 logging.basicConfig(
@@ -14,15 +14,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class BybitMarketDataHelper:
-    """
-    A helper class for fetching various public market data points from Bybit
+    """A helper class for fetching various public market data points from Bybit
     via the Unified Trading HTTP REST API. This includes kline data, tickers,
     instrument information, and more.
     """
 
     def __init__(self, testnet: bool = False, api_key: str = "", api_secret: str = ""):
-        """
-        Initializes the BybitMarketDataHelper.
+        """Initializes the BybitMarketDataHelper.
         API key and secret are optional for most public market data endpoints,
         but are included in the constructor for consistency and if future
         extensions require authenticated public endpoints.
@@ -36,9 +34,8 @@ class BybitMarketDataHelper:
         self.session = HTTP(testnet=self.testnet, api_key=api_key, api_secret=api_secret)
         logger.info(f"BybitMarketDataHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
 
-    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Internal method to make an HTTP request to the Bybit API and handle responses.
+    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> dict[str, Any] | None:
+        """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
 
         :param method: The name of the method to call on the `self.session` object (e.g., 'get_tickers').
@@ -50,18 +47,17 @@ class BybitMarketDataHelper:
         try:
             func = getattr(self.session, method)
             response = func(**kwargs)
-            
+
             if response and response.get('retCode') == 0:
                 logger.debug(f"[{endpoint_name}] Successfully called. Response: {response.get('result')}")
                 return response.get('result')
-            else:
-                ret_code = response.get('retCode', 'N/A')
-                error_msg = response.get('retMsg', 'Unknown error')
-                logger.error(
-                    f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
-                    f"Args: {kwargs}. Full Response: {response}"
-                )
-                return None
+            ret_code = response.get('retCode', 'N/A')
+            error_msg = response.get('retMsg', 'Unknown error')
+            logger.error(
+                f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
+                f"Args: {kwargs}. Full Response: {response}"
+            )
+            return None
         except (BybitRequestError, BybitAPIError) as e:
             logger.exception(
                 f"[{endpoint_name}] Pybit specific error during API call. "
@@ -75,18 +71,16 @@ class BybitMarketDataHelper:
             )
             return None
 
-    def get_server_time(self) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves the current Bybit server time.
+    def get_server_time(self) -> dict[str, Any] | None:
+        """Retrieves the current Bybit server time.
 
         :return: A dictionary containing server time information (e.g., 'timeNano', 'timeSecond')
                  or None on failure.
         """
         return self._make_request('get_server_time', 'Server Time')
 
-    def get_tickers(self, category: str, symbol: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves 24-hour price statistics and current prices for instruments
+    def get_tickers(self, category: str, symbol: str | None = None) -> dict[str, Any] | None:
+        """Retrieves 24-hour price statistics and current prices for instruments
         within a specified category, optionally for a specific symbol.
 
         :param category: The product type (e.g., "spot", "linear", "inverse", "option").
@@ -107,15 +101,14 @@ class BybitMarketDataHelper:
             params['symbol'] = symbol
         return self._make_request('get_tickers', 'Tickers', **params)
 
-    def get_kline(self, 
-                  category: str, 
-                  symbol: str, 
-                  interval: str, 
-                  start_time: Optional[int] = None, 
-                  end_time: Optional[int] = None, 
-                  limit: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves candlestick/kline data for a specific symbol and interval.
+    def get_kline(self,
+                  category: str,
+                  symbol: str,
+                  interval: str,
+                  start_time: int | None = None,
+                  end_time: int | None = None,
+                  limit: int | None = None) -> dict[str, Any] | None:
+        """Retrieves candlestick/kline data for a specific symbol and interval.
 
         :param category: The product type.
         :param symbol: The trading symbol.
@@ -132,7 +125,7 @@ class BybitMarketDataHelper:
         if not all(isinstance(arg, str) and arg for arg in [category, symbol, interval]):
             logger.error("Invalid or empty string provided for category, symbol, or interval for get_kline.")
             return None
-        
+
         # Basic validation for interval (can be expanded)
         allowed_intervals = ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"]
         if interval not in allowed_intervals:
@@ -158,12 +151,11 @@ class BybitMarketDataHelper:
                 logger.error("Invalid 'limit' provided for get_kline. Must be an integer between 1 and 1000.")
                 return None
             params['limit'] = limit
-            
+
         return self._make_request('get_kline', 'Kline Data', **params)
 
-    def get_instruments_info(self, category: str, symbol: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves trading pair specifications and rules (e.g., min order size, tick size)
+    def get_instruments_info(self, category: str, symbol: str | None = None) -> dict[str, Any] | None:
+        """Retrieves trading pair specifications and rules (e.g., min order size, tick size)
         for a given category, optionally for a specific symbol.
 
         :param category: The product type.
@@ -183,9 +175,8 @@ class BybitMarketDataHelper:
             params['symbol'] = symbol
         return self._make_request('get_instruments_info', 'Instruments Info', **params)
 
-    def get_public_trade_history(self, category: str, symbol: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves recent public trades for a specified symbol.
+    def get_public_trade_history(self, category: str, symbol: str, **kwargs) -> dict[str, Any] | None:
+        """Retrieves recent public trades for a specified symbol.
 
         :param category: The product type.
         :param symbol: The trading symbol.
@@ -201,9 +192,8 @@ class BybitMarketDataHelper:
         params.update(kwargs)
         return self._make_request('get_public_trade_history', 'Public Trade History', **params)
 
-    def get_funding_rate_history(self, category: str, symbol: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves historical funding rates for derivatives.
+    def get_funding_rate_history(self, category: str, symbol: str, **kwargs) -> dict[str, Any] | None:
+        """Retrieves historical funding rates for derivatives.
 
         :param category: The product type (e.g., "linear", "inverse").
         :param symbol: The trading symbol.
@@ -219,9 +209,8 @@ class BybitMarketDataHelper:
         params.update(kwargs)
         return self._make_request('get_funding_rate_history', 'Funding Rate History', **params)
 
-    def get_long_short_ratio(self, category: str, symbol: str, interval_time: str, **kwargs) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves long/short ratio data for a specific symbol and interval.
+    def get_long_short_ratio(self, category: str, symbol: str, interval_time: str, **kwargs) -> dict[str, Any] | None:
+        """Retrieves long/short ratio data for a specific symbol and interval.
 
         :param category: The product type.
         :param symbol: The trading symbol.
@@ -233,7 +222,7 @@ class BybitMarketDataHelper:
         if not all(isinstance(arg, str) and arg for arg in [category, symbol, interval_time]):
             logger.error("Invalid or empty string provided for category, symbol, or interval_time for get_long_short_ratio.")
             return None
-        
+
         allowed_interval_times = ["5min", "15min", "30min", "1h", "4h", "12h", "1d"]
         if interval_time not in allowed_interval_times:
             logger.error(f"Invalid 'interval_time' provided for get_long_short_ratio. Allowed: {allowed_interval_times}, got '{interval_time}'.")

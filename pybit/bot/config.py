@@ -31,7 +31,7 @@ BOT_CONFIG = {
     "MAX_HOLDING_CANDLES": 20, # Max candles to hold a position (e.g., 40 * 15min = 10 hours)
     "TRAILING_STOP_ACTIVE": True, # If True, chandelier exit will be used as a dynamic trailing stop
     "FIXED_PROFIT_TARGET_PCT": 0.03, # Percentage gain to trigger an early exit (e.g., 0.03 = 3%)
-    
+
     # --- INDICATOR SETTINGS ---
     # Chandelier Exit (used for initial SL and trailing stop)
     "ATR_PERIOD": 14,
@@ -39,33 +39,33 @@ BOT_CONFIG = {
     "MIN_ATR_MULTIPLIER": 1.5, # Min dynamic ATR multiplier for Chandelier
     "MAX_ATR_MULTIPLIER": 3.0, # Max dynamic ATR multiplier for Chandelier
     "VOLATILITY_LOOKBACK": 20, # Period for calculating price volatility for dynamic multiplier
-    
+
     # EMA Crossover
     "TREND_EMA_PERIOD": 50, # Long-term EMA for overall trend filtering
     "EMA_SHORT_PERIOD": 9, # Short-term EMA for crossover
     "EMA_LONG_PERIOD": 21, # Long-term EMA for crossover
-    
+
     # RSI
     "RSI_PERIOD": 14,
     "RSI_OVERBOUGHT": 70,
     "RSI_OVERSOLD": 30,
-    
+
     # Volume Filter
     "VOLUME_MA_PERIOD": 20, # Moving average period for volume
     "VOLUME_THRESHOLD_MULTIPLIER": 1.5, # Volume above MA threshold for signal confirmation
-    
+
     # Higher Timeframe Confirmation
     "HIGHER_TF_TIMEFRAME": 60, # Higher timeframe in minutes (e.g., 60 for 1-hour)
     "H_TF_EMA_SHORT_PERIOD": 8,
     "H_TF_EMA_LONG_PERIOD": 21,
-    
+
     # Ehlers Supertrend & Fisher Transform
     "USE_EST_SLOW_FILTER": True, # Use Ehlers Supertrend as a slow trend filter for entry
     "EST_SLOW_LENGTH": 10,
     "EST_SLOW_MULTIPLIER": 2.0,
     "EHLERS_FISHER_PERIOD": 10,
     "USE_FISHER_EXIT": True, # Exit trade early if Fisher Transform flips against position
-    
+
     # Stochastic Oscillator (New)
     "USE_STOCH_FILTER": False, # Enable/Disable Stochastic filter for entry
     "STOCH_K_PERIOD": 14,
@@ -79,7 +79,7 @@ BOT_CONFIG = {
     "MACD_FAST_PERIOD": 12,
     "MACD_SLOW_PERIOD": 26,
     "MACD_SIGNAL_PERIOD": 9,
-    
+
     # ADX (New)
     "USE_ADX_FILTER": False, # Enable/Disable ADX filter for entry
     "ADX_PERIOD": 14,

@@ -16,7 +16,18 @@ const LOOP_DELAY_SECONDS = CONFIG.LOOP_DELAY_SECONDS;
 const WEBSOCKET_URL = CONFIG.WEBSOCKET_URL;
 
 // --- PositionManager (with Martingale) ---
+/**
+ * @class PositionManager
+ * @description Manages open trading positions, including opening new positions with Martingale logic,
+ * and saving/loading state. Interacts with the Bybit API for order placement.
+ */
 class PositionManager {
+    /**
+     * @constructor
+     * @param {Object} config - The configuration object for the strategy.
+     * @param {string} symbol - The trading symbol this position manager is responsible for.
+     * @param {BybitAPIClient} bybitClient - An instance of the BybitAPIClient.
+     */
     constructor(config, symbol, bybitClient) {
         this.config = config;
         this.logger = logger;
@@ -28,16 +39,37 @@ class PositionManager {
         this.load_state();
     }
 
+    /**
+     * @function load_state
+     * @description Loads the position manager's state from a persistent storage (stubbed in this version).
+     * In a real application, this would load from a file or database.
+     * @returns {void}
+     */
     load_state() {
         // In a real application, you'd load this from a file or database
         this.logger.info('Loading position manager state (stubbed).');
     }
 
+    /**
+     * @function save_state
+     * @description Saves the position manager's state to a persistent storage (stubbed in this version).
+     * In a real application, this would save to a file or database.
+     * @returns {void}
+     */
     save_state() {
         // In a real application, you'd save this to a file or database
         this.logger.info('Saving position manager state (stubbed).');
     }
 
+    /**
+     * @async
+     * @function manage_positions
+     * @description Manages existing open positions. This is a placeholder for more complex logic
+     * that would typically involve fetching actual open positions from the Bybit API and updating their status.
+     * @param {Decimal} current_price - The current market price.
+     * @param {PerformanceTracker} performanceTracker - An instance of the PerformanceTracker.
+     * @returns {Promise<void>}
+     */
     async manage_positions(current_price, performanceTracker) {
         // Check for open positions and update their status
         // For simplicity, we'll assume positions are managed externally or via order updates
@@ -50,6 +82,17 @@ class PositionManager {
         }
     }
 
+    /**
+     * @async
+     * @function open_position
+     * @description Opens a new trading position based on a signal, calculating quantity, stop loss, and take profit.
+     * Applies Martingale logic if enabled. Interacts with the Bybit API to place the order.
+     * @param {string} signal - The trading signal ("BUY" or "SELL").
+     * @param {Decimal} current_price - The current market price.
+     * @param {Decimal} atr_value - The Average True Range value for SL/TP calculation.
+     * @param {number} conviction - The conviction score of the signal.
+     * @returns {Promise<void>}
+     */
     async open_position(signal, current_price, atr_value, conviction) {
         if (!this.config.TRADE_MANAGEMENT.ENABLED) {
             this.logger.debug('Trade management is disabled.');
@@ -131,7 +174,18 @@ class PositionManager {
 }
 
 // --- TradingAnalyzer ---
+/**
+ * @class TradingAnalyzer
+ * @description Analyzes kline data to calculate various technical indicators (Pivot Points, StochRSI, ATR)
+ * and generates trading signals based on these indicators.
+ */
 class TradingAnalyzer {
+    /**
+     * @constructor
+     * @param {Array<Object>} klines - An array of kline data.
+     * @param {Object} config - The configuration object for the strategy.
+     * @param {string} symbol - The trading symbol being analyzed.
+     */
     constructor(klines, config, symbol) {
         this.klines = klines;
         this.config = config;
@@ -141,6 +195,12 @@ class TradingAnalyzer {
         this.calculate_indicators();
     }
 
+    /**
+     * @function calculate_indicators
+     * @description Calculates Pivot Points, StochRSI, and ATR based on the provided kline data.
+     * Stores the results in `this.indicator_values`.
+     * @returns {void}
+     */
     calculate_indicators() {
         if (!this.klines || this.klines.length < 14) { // Need at least 14 periods for StochRSI
             this.logger.warn('Not enough kline data to calculate indicators.');
@@ -187,6 +247,14 @@ class TradingAnalyzer {
         this.indicator_values.ATR = indicators.calculateATR(highs, lows, closes, atr_period);
     }
 
+    /**
+     * @private
+     * @function _get_indicator_value
+     * @description Retrieves the latest value of a specified indicator.
+     * @param {string} indicator_name - The name of the indicator.
+     * @param {Decimal} default_value - The default value to return if the indicator is not found.
+     * @returns {Decimal} The latest indicator value.
+     */
     _get_indicator_value(indicator_name, default_value) {
         if (this.indicator_values[indicator_name]) {
             if (Array.isArray(this.indicator_values[indicator_name])) {
@@ -198,6 +266,12 @@ class TradingAnalyzer {
         return default_value;
     }
 
+    /**
+     * @function generate_trading_signal
+     * @description Generates a trading signal ("BUY", "SELL", or "HOLD") based on combined analysis of Pivot Points and StochRSI.
+     * @param {Object} latest_orderbook - The latest order book data (used for potential future enhancements).
+     * @returns {Array<any>} An array containing [final_signal (string), signal_score (number), signal_breakdown (Object)].
+     */
     generate_trading_signal(latest_orderbook) {
         if (!this.klines || this.klines.length < 20) { // Need enough data for indicators
             return ["HOLD", 0, {}];
@@ -260,6 +334,14 @@ class TradingAnalyzer {
 }
 
 // --- Main Execution Logic ---
+/**
+ * @async
+ * @function run_bot
+ * @description The main execution loop for the Unified Whale strategy. It initializes the dashboard,
+ * WebSocket client, position manager, and performance tracker. Continuously fetches kline data,
+ * analyzes it for trading signals, manages positions, and updates the dashboard.
+ * @returns {Promise<void>}
+ */
 async function run_bot() {
     const dashboard = new Dashboard(CONFIG, logger);
     dashboard.start();
@@ -329,6 +411,10 @@ async function run_bot() {
 }
 
 // Start Bot
+/**
+ * @description Immediately invoked async function to launch the Unified Whale strategy.
+ * Handles top-level unhandled errors during the bot's execution.
+ */
 (async () => {
     try {
         await run_bot();

@@ -1,5 +1,4 @@
-"""
-Configuration for the Bybit Trading Bot.
+"""Configuration for the Bybit Trading Bot.
 
 This file stores API credentials, trading parameters, and other settings.
 It is recommended to use environment variables for sensitive data like API keys.

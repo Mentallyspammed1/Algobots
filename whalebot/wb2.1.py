@@ -1,25 +1,25 @@
 import json
 import logging
 import os
-import random
 import sys
-import time
 import threading
-from datetime import datetime, timezone, timedelta
-from decimal import ROUND_DOWN, Decimal, getcontext, InvalidOperation
+import time
+import traceback
+from collections.abc import Callable
+from datetime import datetime, timezone
+from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Optional, Tuple, Dict, List, Callable
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
 import websocket
-import traceback
 
 # --- Guarded Import for Pybit ---
 try:
-    from pybit.unified_trading import HTTP as PybitHTTP
     import pybit.exceptions
+    from pybit.unified_trading import HTTP as PybitHTTP
     PYBIT_AVAILABLE = True
 except ImportError:
     PYBIT_AVAILABLE = False
@@ -128,11 +128,11 @@ def _safe_divide_decimal(numerator: Decimal, denominator: Decimal, default: Deci
     except InvalidOperation:
         return default
 
-def _clean_series(series: Optional[pd.Series], df_index: pd.Index, default_val: Any = np.nan) -> pd.Series:
+def _clean_series(series: pd.Series | None, df_index: pd.Index, default_val: Any = np.nan) -> pd.Series:
     """Cleans a Pandas Series: re-indexes, handles NaNs, and returns as Series."""
     if series is None:
         return pd.Series(default_val, index=df_index)
-    
+
     cleaned = series.reindex(df_index) # Align with original DataFrame index
     if not pd.isna(default_val):
         cleaned = cleaned.fillna(default_val) # Fill NaNs if a default is specified
@@ -251,7 +251,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         "_last_signal_ts": 0,
         "_last_atr_value": "0.1",
     }
-    
+
     # Create config file if it doesn't exist
     if not Path(filepath).exists():
         try:
@@ -262,7 +262,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         except OSError as e:
             logger.error(f"{NEON_RED}Error creating default config file: {e}{RESET}")
             return default_config # Return default if creation fails
-            
+
     # Load existing config and merge with defaults
     try:
         with Path(filepath).open("r", encoding="utf-8") as f:
@@ -328,10 +328,10 @@ class PybitTradingClient:
         self.category = config.get("execution", {}).get("category", "linear")
         self.testnet = bool(config.get("execution", {}).get("testnet", False))
 
-        self.session: Optional[PybitHTTP] = None # REST client instance
-        self.ws_manager: Optional[WebSocketManager] = None # WebSocket manager instance
+        self.session: PybitHTTP | None = None # REST client instance
+        self.ws_manager: WebSocketManager | None = None # WebSocket manager instance
         self.stop_event = threading.Event() # Shared event for stopping threads
-        self.state_data: Dict = {} # Holds loaded state data
+        self.state_data: dict = {} # Holds loaded state data
 
         if not self.enabled:
             self.logger.info(f"{NEON_YELLOW}PyBit execution disabled in config.{RESET}")
@@ -362,7 +362,7 @@ class PybitTradingClient:
             )
             actual_base_url = self.session.base_url if self.session else "N/A"
             self.logger.info(f"{NEON_GREEN}PyBit HTTP client initialized. Testnet={self.testnet}, Base URL={actual_base_url}{RESET}")
-            
+
             self._initialize_websocket() # Initialize WebSocket manager
         except (pybit.exceptions.FailedRequestError, TypeError, Exception) as e:
             self.enabled = False # Disable client if initialization fails
@@ -381,7 +381,7 @@ class PybitTradingClient:
     def _ok(self, resp: dict | None) -> bool:
         """Checks if API response indicates success (retCode == 0)."""
         return bool(resp and resp.get("retCode") == 0)
-    
+
     def _q(self, x: Any) -> str: return str(x) # Helper to convert value to string for API params
 
     def _side_to_bybit(self, side: str) -> Literal["Buy", "Sell"]:
@@ -425,7 +425,7 @@ class PybitTradingClient:
             self.logger.error(f"get_positions exception: {e}\n{traceback.format_exc()}")
             self._handle_403_error(e)
             return None
-            
+
     def get_wallet_balance(self, coin: str = "USDT") -> dict | None:
         if not self.enabled or not self.session: return None
         try:
@@ -447,8 +447,8 @@ class PybitTradingClient:
             self.logger.error(f"place_order exception: {e}\n{traceback.format_exc()}")
             self._handle_403_error(e)
             return None
-            
-    def batch_place_orders(self, orders: List[Dict]) -> dict | None:
+
+    def batch_place_orders(self, orders: list[dict]) -> dict | None:
         """Places multiple orders in a single batch request."""
         if not self.enabled or not self.session: return None
         if not orders: return {"retCode": 0, "retMsg": "No orders to place."}
@@ -481,7 +481,7 @@ class PybitTradingClient:
             self._handle_403_error(e)
             return None
 
-    def get_open_orders(self, symbol: str | None = None) -> List[Dict]:
+    def get_open_orders(self, symbol: str | None = None) -> list[dict]:
         if not self.enabled or not self.session: return []
         try:
             params = {"category": self.category, "openOnly": 0} # 0 for all active orders, 1 for open only
@@ -511,7 +511,7 @@ class PybitTradingClient:
             self._handle_403_error(e)
             return None
 
-    def fetch_klines(self, symbol: str, interval: str, limit: int) -> Optional[pd.DataFrame]:
+    def fetch_klines(self, symbol: str, interval: str, limit: int) -> pd.DataFrame | None:
         if not self.enabled or not self.session: return None
         try:
             resp = self.session.get_kline(category=self.category, symbol=symbol, interval=interval, limit=limit)
@@ -626,7 +626,7 @@ class PybitTradingClient:
         try:
             with Path(STATE_FILE).open("r", encoding="utf-8") as f:
                 state_data = json.load(f)
-            
+
             # Load state into WS Manager
             if self.ws_manager:
                 self.ws_manager.positions = state_data.get("positions", {})
@@ -650,15 +650,15 @@ class WebSocketManager:
         # Bybit Unified Trading WS URL for private data (user data)
         self.private_ws_url = "wss://stream.bybit.com/v5/private" if not api_client.testnet else "wss://stream-testnet.bybit.com/v5/private"
 
-        self.ws_public: Optional[websocket.WebSocketApp] = None
-        self.ws_private: Optional[websocket.WebSocketApp] = None
-        self.public_ws_thread: Optional[threading.Thread] = None
-        self.private_ws_thread: Optional[threading.Thread] = None
+        self.ws_public: websocket.WebSocketApp | None = None
+        self.ws_private: websocket.WebSocketApp | None = None
+        self.public_ws_thread: threading.Thread | None = None
+        self.private_ws_thread: threading.Thread | None = None
         self.connect_delay = 1 # Reconnection delay in seconds
 
         # State caches (thread-safe access required)
-        self.positions: Dict[str, Dict] = {}
-        self.orders: Dict[str, Dict] = {}
+        self.positions: dict[str, dict] = {}
+        self.orders: dict[str, dict] = {}
         self.last_exec_time_ms = 0
         self.state_lock = threading.Lock() # Lock for accessing positions and orders
 
@@ -672,7 +672,7 @@ class WebSocketManager:
         self.public_ws_thread = threading.Thread(target=self._run_ws, args=(self.public_ws_url, "public"), daemon=True, name="BybitPublicWS")
         self.public_ws_thread.start()
         self.logger.info("Public WebSocket Manager started.")
-        
+
         # Only start private WS if Pybit client is enabled for actual trading
         if self.api_client.enabled:
             self.private_ws_thread = threading.Thread(target=self._run_ws, args=(self.private_ws_url, "private"), daemon=True, name="BybitPrivateWS")
@@ -761,7 +761,7 @@ class WebSocketManager:
                 "wallet",   # Account balance updates
             ])
             self.logger.info(f"Subscribing to private WS topics: {', '.join(subscriptions)}")
-        
+
         if subscriptions:
             # For Unified Trading, authentication is usually handled by the Pybit library
             # during connection or within the subscribe message.
@@ -776,7 +776,7 @@ class WebSocketManager:
     def _sync_initial_state(self):
         """Fetches initial positions and orders via REST API to populate local cache."""
         symbol = self.cfg["symbol"]
-        
+
         # Sync positions
         pos_data = self.api_client.get_positions(symbol)
         if pos_data and self.api_client._ok(pos_data):
@@ -787,7 +787,7 @@ class WebSocketManager:
                     self.notify_listeners("position_update", p)
                     break
         else: self.logger.warning(f"Could not sync initial positions for {symbol}. Response: {pos_data}")
-        
+
         # Sync open orders
         open_orders_data = self.api_client.get_open_orders(symbol)
         if open_orders_data:
@@ -806,13 +806,13 @@ class WebSocketManager:
         if not isinstance(data, dict): return # Ignore malformed messages
 
         topic = data.get("topic")
-        
+
         # Check for error or success messages directly from Bybit's API response structure
         if "op" in data and data["op"] == "subscribe":
             if data.get("success"): self.logger.info(f"WS Subscription successful for args: {data.get('req_id')}")
             else: self.logger.error(f"WS Subscription failed for args: {data.get('req_id')} - {data.get('retMsg')}")
             return
-        
+
         # Handle authenticated topic messages (private streams)
         if topic and topic.startswith(f"{self.cfg['execution']['category']}."):
             if "order" in topic: self._handle_order_update(data.get("data", []))
@@ -827,7 +827,7 @@ class WebSocketManager:
         elif data.get("retCode") is not None and data.get("retCode") != 0:
             self.logger.error(f"WS Error Response: {data.get('retCode')} - {data.get('retMsg')}")
 
-    def _handle_order_update(self, order_list: List[Dict]):
+    def _handle_order_update(self, order_list: list[dict]):
         """Updates the local order cache and notifies listeners."""
         for order_info in order_list:
             order_id = order_info.get("orderId")
@@ -836,7 +836,7 @@ class WebSocketManager:
                     self.orders[order_id] = order_info
                 self.notify_listeners("order_update", order_info)
 
-    def _handle_position_update(self, position_list: List[Dict]):
+    def _handle_position_update(self, position_list: list[dict]):
         """Updates the local position cache and notifies listeners."""
         for pos_info in position_list:
             symbol = pos_info.get("symbol")
@@ -845,7 +845,7 @@ class WebSocketManager:
                     self.positions[symbol] = pos_info
                 self.notify_listeners("position_update", pos_info)
 
-    def _handle_execution_update(self, execution_list: List[Dict]):
+    def _handle_execution_update(self, execution_list: list[dict]):
         """Processes execution updates and notifies listeners."""
         for exec_info in execution_list:
             exec_time_ms = int(exec_info.get("execTime", 0))
@@ -854,11 +854,11 @@ class WebSocketManager:
                 # Optionally store executions if needed for detailed analysis
                 self.notify_listeners("execution", exec_info)
 
-    def _handle_account_update(self, account_data: Dict):
+    def _handle_account_update(self, account_data: dict):
         """Handles account updates and notifies listeners."""
         self.notify_listeners("account_update", account_data)
 
-    def _handle_kline_update(self, kline_data: List[Dict]):
+    def _handle_kline_update(self, kline_data: list[dict]):
         """Processes real-time kline updates and notifies listeners."""
         # Bybit kline data often comes as a list of dictionaries, one for each candle update.
         # The 'confirm' field indicates if the candle is closed.
@@ -866,7 +866,7 @@ class WebSocketManager:
             if candle_info.get('confirm') is True: # Only process confirmed/closed candles
                 self.notify_listeners("kline_update", candle_info)
 
-    def _handle_orderbook_update(self, orderbook_data: Dict):
+    def _handle_orderbook_update(self, orderbook_data: dict):
         """Processes real-time orderbook updates and notifies listeners."""
         # Bybit orderbook updates can be snapshot or delta.
         # We're primarily interested in the 'b' (bids) and 'a' (asks) lists.
@@ -895,8 +895,8 @@ class PositionManager:
         self.config, self.logger, self.symbol = config, logger, symbol
         self.pybit = pybit_client
         self.live = bool(config.get("execution", {}).get("use_pybit", False))
-        
-        self.open_positions: List[Dict] = [] # Local cache of open positions
+
+        self.open_positions: list[dict] = [] # Local cache of open positions
         self.max_open_positions = config["trade_management"]["max_open_positions"]
         # Precision and step values, fetched from exchange or defaults
         self.order_precision = config["trade_management"]["order_precision"]
@@ -905,7 +905,7 @@ class PositionManager:
         self.slippage_percent = Decimal(str(config["trade_management"].get("slippage_percent", 0.0)))
         self.stop_loss_atr_multiple = Decimal(str(config["trade_management"]["stop_loss_atr_multiple"]))
         self.take_profit_atr_multiple = Decimal(str(config["trade_management"]["take_profit_atr_multiple"]))
-        
+
         self._update_precision_from_exchange() # Fetch precision settings from exchange
         self._load_state() # Load initial position state if available
 
@@ -918,7 +918,7 @@ class PositionManager:
             self.open_positions = [self._convert_ws_position_to_local(ws_pos_data)]
             self.logger.info(f"Loaded initial position state from WS for {self.symbol}.")
 
-    def _convert_ws_position_to_local(self, ws_pos: Dict) -> Dict:
+    def _convert_ws_position_to_local(self, ws_pos: dict) -> dict:
         """Maps WebSocket position data structure to the internal local format."""
         # Ensure mapping keys match the actual data structure from Bybit's WS position updates.
         # Adjust based on the precise format of 'pos_info' from _handle_position_update.
@@ -941,7 +941,7 @@ class PositionManager:
         if not self.live or not self.pybit or not self.pybit.enabled:
             self.logger.warning(f"Pybit client not ready. Cannot fetch precision for {self.symbol}. Using config values.")
             return
-        
+
         info = self.pybit.fetch_instrument_info(self.symbol)
         if info:
             lot_size_filter = info.get("lotSizeFilter", {})
@@ -972,23 +972,23 @@ class PositionManager:
     def _calculate_order_size(self, current_price: Decimal, atr_value: Decimal, conviction: float = 1.0) -> Decimal:
         """Calculates the order quantity based on risk parameters, ATR, and conviction level."""
         if not self.config["trade_management"]["enabled"]: return Decimal("0")
-        
+
         account_balance = self._get_current_balance()
         base_risk_pct = Decimal(str(self.config["trade_management"]["risk_per_trade_percent"])) / 100
         # Scale risk based on conviction (0.5x to 1.5x of base risk)
         risk_multiplier = Decimal(str(np.clip(0.5 + conviction, 0.5, 1.5)))
         risk_pct = base_risk_pct * risk_multiplier
-        
+
         stop_loss_distance = atr_value * self.stop_loss_atr_multiple
-        
+
         # Validate inputs to prevent division by zero or invalid calculations
         if stop_loss_distance <= 0 or current_price <= 0:
             self.logger.warning(f"Invalid SL distance ({stop_loss_distance}) or current price ({current_price}). Cannot calculate order size.")
             return Decimal("0")
-        
+
         order_value = (account_balance * risk_pct) / stop_loss_distance # USD risked per unit price
         order_qty = order_value / current_price # Convert USD risk to quantity
-        
+
         return round_qty(order_qty, self.qty_step) # Round quantity to nearest valid step
 
     def _compute_stop_loss_price(self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal) -> Decimal:
@@ -1007,21 +1007,21 @@ class PositionManager:
         tp = (entry_price + atr_value * self.take_profit_atr_multiple) if side == "BUY" else (entry_price - atr_value * self.take_profit_atr_multiple)
         return round_price(tp, self.price_precision)
 
-    def _get_position_by_link_prefix(self, link_prefix: str) -> Optional[Dict]:
+    def _get_position_by_link_prefix(self, link_prefix: str) -> dict | None:
         """Finds a local position entry using its unique link prefix."""
         return next((p for p in self.open_positions if p.get("link_prefix") == link_prefix), None)
 
-    def open_position(self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal, conviction: float) -> Optional[Dict]:
+    def open_position(self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal, conviction: float) -> dict | None:
         """Opens a new position, either live via API or simulated."""
         if not self.config["trade_management"]["enabled"] or len(self.get_open_positions()) >= self.max_open_positions:
             self.logger.info(f"Cannot open position: Max limits reached ({len(self.get_open_positions())}/{self.max_open_positions}) or trade management disabled.")
             return None
-        
+
         order_qty = self._calculate_order_size(current_price, atr_value, conviction)
         if order_qty <= 0:
             self.logger.warning("Order quantity calculated as zero. Cannot open position.")
             return None
-        
+
         stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
         take_profit = self._calculate_take_profit_price(signal, current_price, atr_value)
 
@@ -1075,7 +1075,7 @@ class PositionManager:
         if sl_cfg["use_conditional_stop"]:
             sl_price = self._compute_stop_loss_price(position["side"], position["entry_price"], atr_value)
             sl_link_id = f"{position.get('link_prefix', 'pos')}_sl" # Generate unique link ID
-            
+
             self.logger.info(f"Placing conditional SL for {self.symbol} at {sl_price}...")
             sl_resp = self.pybit.place_order(
                 category=self.pybit.category, symbol=self.symbol,
@@ -1099,7 +1099,7 @@ class PositionManager:
                 position["side"], position["entry_price"], atr_value, position["qty"],
                 self.config, self.qty_step, self.price_precision, position["link_prefix"]
             )
-            
+
             batch_orders = []
             for target_detail in tp_requests:
                 payload = {
@@ -1127,8 +1127,8 @@ class PositionManager:
             else: self.logger.info("No valid partial TP targets generated.")
 
     def build_partial_tp_targets(self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal,
-                                 total_qty: Decimal, config: Dict, qty_step: Decimal, price_precision: int,
-                                 link_prefix: str) -> List[Dict]:
+                                 total_qty: Decimal, config: dict, qty_step: Decimal, price_precision: int,
+                                 link_prefix: str) -> list[dict]:
         """Builds a list of partial take profit order requests based on configuration."""
         tp_targets_config = config["execution"]["tp_scheme"]["targets"]
         tp_requests = []
@@ -1157,25 +1157,25 @@ class PositionManager:
                 "order_link_id": f"{link_prefix}_tp{i+1}"
             })
             cumulative_qty_pct += target_qty_pct
-        
+
         # Adjust last TP to ensure total quantity is covered if there's a small remainder due to rounding
         if cumulative_qty_pct < Decimal("1.0") and tp_requests:
             remaining_qty = total_qty - sum(req["qty"] for req in tp_requests)
             if remaining_qty > 0:
                 tp_requests[-1]["qty"] += remaining_qty # Add remaining to the last target
                 tp_requests[-1]["qty"] = round_qty(tp_requests[-1]["qty"], qty_step) # Re-round
-        
+
         return tp_requests
 
     def manage_positions(self, current_price: Decimal, performance_tracker: Any):
         """Manages simulated positions: closes them if SL/TP is hit."""
         if self.live or not self.config["trade_management"]["enabled"] or not self.open_positions: return
-        
+
         indices_to_remove = []
         for i, pos in enumerate(self.open_positions):
             if pos["status"] == "OPEN":
                 closed_by, adjusted_exit_price_sim = "", current_price
-                
+
                 # Check for simulated TP/SL hit
                 if pos["side"] == "BUY":
                     if current_price <= pos["stop_loss"]: closed_by = "STOP_LOSS"
@@ -1195,21 +1195,21 @@ class PositionManager:
                     # Calculate PnL for the simulated trade
                     pnl = ( (pos["exit_price"] - pos["entry_price"]) * pos["qty"] if pos["side"] == "BUY"
                             else (pos["entry_price"] - pos["exit_price"]) * pos["qty"] )
-                    
+
                     performance_tracker.record_trade(pos, pnl) # Record in performance tracker
                     self.logger.info(f"Closed {pos['side']} simulated position by {closed_by}. PnL: {pnl.normalize():.4f}")
                     indices_to_remove.append(i)
-        
+
         # Remove closed positions from the local list
         self.open_positions = [p for i, p in enumerate(self.open_positions) if i not in indices_to_remove]
 
     def trail_stop(self, pos: dict, current_price: Decimal, atr_value: Decimal):
         """Adjusts trailing stop loss for simulated positions."""
         if pos.get('status') != 'OPEN' or self.live: return # Only for simulated, open positions
-        
+
         side, atr_mult = pos["side"], self.stop_loss_atr_multiple
         pos["best_price"] = pos.get("best_price", pos["entry_price"]) # Track best price achieved
-        
+
         new_sl = pos["stop_loss"] # Current stop loss
         if side == "BUY":
             pos["best_price"] = max(pos["best_price"], current_price) # Update best price if higher
@@ -1241,15 +1241,15 @@ class PositionManager:
             step_distance = step_atr_mult * atr_value
             # Calculate target price for the next pyramiding step
             target_price = pos["entry_price"] + step_distance * (adds + 1) if pos["side"] == "BUY" else pos["entry_price"] - step_distance * (adds + 1)
-            
+
             # Check if current price has reached the target price for an add
             should_add = (pos["side"] == "BUY" and current_price >= target_price) or \
                          (pos["side"] == "SELL" and current_price <= target_price)
-            
+
             if should_add:
                 size_pct_of_initial = Decimal(str(py_cfg.get("size_pct_of_initial", 0.5)))
                 add_qty = round_qty(pos['qty'] * size_pct_of_initial, self.qty_step) # Calculate quantity for the add
-                
+
                 if add_qty > 0:
                     # Update position details: average entry price and total quantity
                     total_cost = (pos['qty'] * pos['entry_price']) + (add_qty * current_price)
@@ -1258,7 +1258,7 @@ class PositionManager:
                     pos["adds"] = adds + 1 # Increment add count
                     self.logger.info(f"Pyramiding add #{pos['adds']} qty={add_qty.normalize()}. New avg price: {pos['entry_price'].normalize():.4f}")
 
-    def get_open_positions(self) -> List[Dict]:
+    def get_open_positions(self) -> list[dict]:
         """Returns the list of currently open positions."""
         return [pos for pos in self.open_positions if pos.get("status") == "OPEN"]
 
@@ -1268,7 +1268,7 @@ class PerformanceTracker:
     def __init__(self, logger: logging.Logger, config: dict):
         self.logger = logger
         self.config = config
-        self.trades: List[Dict] = [] # List to store completed trade records
+        self.trades: list[dict] = [] # List to store completed trade records
         self.total_pnl = Decimal("0")
         self.gross_profit = Decimal("0")
         self.gross_loss = Decimal("0")
@@ -1288,30 +1288,30 @@ class PerformanceTracker:
             self._last_day_reset = today
             self.logger.info("Resetting daily performance statistics.")
 
-    def record_trade(self, position: Dict, pnl: Decimal):
+    def record_trade(self, position: dict, pnl: Decimal):
         """Records a completed trade, calculates net PnL (after fees), and updates metrics."""
         self._reset_daily_stats() # Ensure daily stats are up-to-date
-        
+
         trade_record = {
             "entry_time": position.get("entry_time"), "exit_time": position.get("exit_time"),
             "symbol": position.get("symbol"), "side": position.get("side"),
             "entry_price": position.get("entry_price"), "exit_price": position.get("exit_price"),
             "qty": position.get("qty"), "pnl_gross": pnl, "closed_by": position.get("closed_by"),
         }
-        
+
         # Calculate fees based on entry/exit price and quantity
         entry_fee = Decimal(str(position.get("entry_price", 0))) * Decimal(str(position.get("qty", 0))) * self.trading_fee_percent
         exit_fee = Decimal(str(position.get("exit_price", 0))) * Decimal(str(position.get("qty", 0))) * self.trading_fee_percent
         total_fees = entry_fee + exit_fee
-        
+
         pnl_net = pnl - total_fees # Net PnL after deducting fees
         trade_record["fees"] = total_fees
         trade_record["pnl_net"] = pnl_net
-        
+
         self.trades.append(trade_record) # Add trade to history
         self.total_pnl += pnl_net
         self._daily_pnl += pnl_net # Accumulate for daily PnL tracking
-        
+
         # Update peak PnL and maximum drawdown
         if self.total_pnl > self.peak_pnl: self.peak_pnl = self.total_pnl
         drawdown = self.peak_pnl - self.total_pnl
@@ -1342,7 +1342,7 @@ class PerformanceTracker:
         profit_factor = self.gross_profit / self.gross_loss if self.gross_loss > 0 else Decimal("inf")
         avg_win = self.gross_profit / self.wins if self.wins > 0 else Decimal("0")
         avg_loss = self.gross_loss / self.losses if self.losses > 0 else Decimal("0")
-        
+
         # Format summary metrics for display
         summary = {
             "total_trades": total_trades, "total_pnl": f"{self.total_pnl:.4f}",
@@ -1353,8 +1353,8 @@ class PerformanceTracker:
             "daily_pnl": f"{self.day_pnl():.4f}",
         }
         return summary
-        
-    def load_state(self, state_data: Dict) -> bool:
+
+    def load_state(self, state_data: dict) -> bool:
         """Loads performance tracker state from a dictionary (e.g., from file)."""
         if not state_data: return False
         summary = state_data.get("performance_tracker", {}) # Assume performance tracker state is nested
@@ -1374,7 +1374,7 @@ class PerformanceTracker:
             self.logger.error(f"Error loading performance tracker state: {e}. Starting fresh.{traceback.format_exc()}")
             return False
 
-    def get_state(self) -> Dict:
+    def get_state(self) -> dict:
         """Returns the current state of the performance tracker for saving."""
         return {
             "total_pnl": str(self.total_pnl), # Convert Decimals to string for JSON serialization
@@ -1408,17 +1408,17 @@ class ExchangeExecutionSync:
         offset_type = str(be_cfg.get("offset_type", "atr")).lower()
         offset_value = Decimal(str(be_cfg.get("offset_value", 0)))
         lock_in_min_percent = Decimal(str(be_cfg.get("lock_in_min_percent", 0))) / 100
-        
+
         offset_amount = Decimal("0")
         if offset_type == "atr": offset_amount = atr_value * offset_value
         elif offset_type == "percent": offset_amount = entry_price * offset_value
         else: offset_amount = offset_value # Use as absolute value if type is unrecognized
-        
+
         # Ensure minimum profit is locked in
         adjustment = max(offset_amount, entry_price * lock_in_min_percent)
-        
+
         if side == "BUY": return round_price(entry_price + adjustment, self.pm.price_precision)
-        else: return round_price(entry_price - adjustment, self.pm.price_precision)
+        return round_price(entry_price - adjustment, self.pm.price_precision)
 
     def _move_stop_to_breakeven(self, open_pos: dict, atr_value: Decimal):
         """Moves the stop loss to breakeven after TP1 is hit (if enabled)."""
@@ -1481,7 +1481,7 @@ class ExchangeExecutionSync:
                 link, exec_time_ms = r.get("orderLinkId"), int(r.get("execTime", 0))
                 # Only process new executions, and if it's ours or if not tracking by link ID
                 if exec_time_ms < self.last_exec_time_ms or (self.cfg["execution"]["live_sync"]["only_track_linked"] and not self._is_ours(link)): continue
-                
+
                 self.last_exec_time_ms = exec_time_ms + 1 # Advance timestamp
 
                 tag = "UNKNOWN" # Determine if it's entry, SL, TP
@@ -1493,26 +1493,26 @@ class ExchangeExecutionSync:
                         if link.endswith("_entry"): tag = "ENTRY"
                         elif "_sl" in link: tag = "SL"
                         elif "_tp" in link: tag = "TP"
-                
+
                 # Find the corresponding local position entry
                 open_pos = self.pm._get_position_by_link_prefix(pos_prefix) if pos_prefix else None
-                
+
                 # Process TP or SL executions that affect open positions
                 if tag in ("TP", "SL") and open_pos and open_pos["status"] == "OPEN":
                     exec_qty = Decimal(str(r.get("execQty", "0")))
                     exec_price = Decimal(str(r.get("execPrice", "0")))
-                    
+
                     # Calculate PnL for this specific execution segment
                     pnl = ( (exec_price - open_pos["entry_price"]) * exec_qty if open_pos["side"] == "BUY"
                             else (open_pos["entry_price"] - exec_price) * exec_qty )
-                    
+
                     # Record this trade segment in the performance tracker
                     self.pt.record_trade(
                         {**open_pos, "exit_time": datetime.fromtimestamp(exec_time_ms / 1000, tz=TIMEZONE),
                          "exit_price": exec_price, "qty": exec_qty, "closed_by": tag},
                         pnl,
                     )
-                    
+
                     # Update remaining quantity in the local position state
                     open_pos["qty"] -= exec_qty
                     if open_pos["qty"] <= 0: # Position fully closed
@@ -1523,16 +1523,16 @@ class ExchangeExecutionSync:
                         self.pybit.logger.info(f"Position for {self.symbol} fully closed by {tag}.")
                     else:
                         self.pybit.logger.info(f"Partial execution for {self.symbol} by {tag}. Remaining Qty: {open_pos['qty'].normalize()}")
-                    
+
                     # Trigger breakeven logic if TP1 was hit and enabled
                     if tag == "TP" and link and link.endswith("_tp1") and not open_pos.get("breakeven_set", False):
                         # Retrieve last known ATR for breakeven calculation
                         atr_val = Decimal(str(self.cfg.get("_last_atr_value", "0.1"))) # Default ATR if unavailable
                         self._move_stop_to_breakeven(open_pos, atr_val)
-                        
+
             # Remove fully closed positions from the local manager state
             self.pm.open_positions = [p for p in self.pm.open_positions if p.get("status") == "OPEN"]
-        
+
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.pybit.logger.error(f"Execution sync error for {self.symbol}: {e}\n{traceback.format_exc()}")
 
@@ -1547,10 +1547,10 @@ class PositionHeartbeat:
         """Executes a heartbeat check if the interval has passed."""
         hb_cfg = self.cfg["execution"]["live_sync"]["heartbeat"]
         if not (hb_cfg.get("enabled", True) and self.pybit and self.pybit.enabled): return
-        
+
         now_ms = int(time.time() * 1000)
         if now_ms - self._last_heartbeat_ms < int(hb_cfg.get("interval_ms", 5000)): return # Wait for interval
-        
+
         self._last_heartbeat_ms = now_ms
         self.pybit.logger.debug(f"Performing position heartbeat for {self.symbol}...")
 
@@ -1561,10 +1561,10 @@ class PositionHeartbeat:
                 return
 
             exchange_positions = resp.get("result", {}).get("list", [])
-            
+
             net_qty_exchange = Decimal("0")
             avg_price_exchange = Decimal("0")
-            
+
             # Calculate net position details from exchange data
             if isinstance(exchange_positions, list):
                 for p in exchange_positions:
@@ -1576,10 +1576,10 @@ class PositionHeartbeat:
                         elif p.get("side") == "Sell":
                             net_qty_exchange -= pos_size
                             avg_price_exchange = Decimal(p.get("avgPrice", "0"))
-            
+
             local_open_positions = self.pm.get_open_positions()
             has_local_pos = len(local_open_positions) > 0
-            
+
             # Scenario 1: Exchange is flat, but local position exists -> Close local position
             if net_qty_exchange == 0 and has_local_pos:
                 for pos in local_open_positions: # Mark all local open positions as closed
@@ -1602,7 +1602,7 @@ class PositionHeartbeat:
                 }
                 self.pm.open_positions.append(synthetic_pos)
                 self.pybit.logger.warning(f"Heartbeat: Created synthetic local position for {self.symbol} to match exchange state.")
-            
+
             # Scenario 3: Both have positions; compare and log mismatches
             elif net_qty_exchange != 0 and has_local_pos:
                 local_pos = local_open_positions[0] # Assume single position for simplicity
@@ -1620,8 +1620,8 @@ class TradingAnalyzer:
     def __init__(self, df: pd.DataFrame, config: dict, logger: logging.Logger, symbol: str):
         self.df = df.copy()
         self.config, self.logger, self.symbol = config, logger, symbol
-        self.indicator_values: Dict[str, Any] = {} # Stores latest indicator values
-        self.fib_levels: Dict[str, Decimal] = {} # Stores Fibonacci levels
+        self.indicator_values: dict[str, Any] = {} # Stores latest indicator values
+        self.fib_levels: dict[str, Decimal] = {} # Stores Fibonacci levels
         self.weights = config["weight_sets"]["default_scalping"]
         self.indicator_settings = config["indicator_settings"]
         # Load transient state for hysteresis and cooldown
@@ -1631,7 +1631,7 @@ class TradingAnalyzer:
         if self.df.empty:
             self.logger.warning(f"[{self.symbol}] Initialized with empty DataFrame. Indicators cannot be calculated.")
             return
-        
+
         self._calculate_all_indicators()
         # Calculate Fibonacci levels if enabled
         if self.config["indicators"].get("fibonacci_levels", False): self.calculate_fibonacci_levels()
@@ -1667,7 +1667,7 @@ class TradingAnalyzer:
             self.df["ATR"] = self._safe_calculate(indicators.calculate_atr, "ATR", isd["atr_period"], period=isd["atr_period"])
             if "ATR" in self.df.columns and self.df["ATR"].iloc[-1] is not None and not pd.isna(self.df["ATR"].iloc[-1]):
                 self.indicator_values["ATR"] = Decimal(str(self.df["ATR"].iloc[-1]))
-        
+
         # --- Calculate other indicators based on config ---
         if cfg["indicators"].get("ema_alignment", False):
             self.df["EMA_Short"] = self._safe_calculate(indicators.calculate_ema, "EMA_Short", isd["ema_short_period"], period=isd["ema_short_period"])
@@ -1785,7 +1785,7 @@ class TradingAnalyzer:
         if cfg["indicators"].get("cmf", False):
             self.df["CMF"] = self._safe_calculate(indicators.calculate_cmf, "CMF", isd["cmf_period"], period=isd["cmf_period"])
             if "CMF" in self.df.columns and not pd.isna(self.df["CMF"].iloc[-1]): self.indicator_values["CMF"] = Decimal(str(self.df["CMF"].iloc[-1]))
-        
+
         if cfg["indicators"].get("volatility_index", False):
             self.df["Volatility_Index"] = self._safe_calculate(indicators.calculate_volatility_index, "Volatility_Index", isd["volatility_index_period"], period=isd["volatility_index_period"])
             if "Volatility_Index" in self.df.columns and not pd.isna(self.df["Volatility_Index"].iloc[-1]): self.indicator_values["Volatility_Index"] = Decimal(str(self.df["Volatility_Index"].iloc[-1]))
@@ -1797,7 +1797,7 @@ class TradingAnalyzer:
         if cfg["indicators"].get("volume_delta", False):
             self.df["Volume_Delta"] = self._safe_calculate(indicators.calculate_volume_delta, "Volume_Delta", isd["volume_delta_period"], period=isd["volume_delta_period"])
             if "Volume_Delta" in self.df.columns and not pd.isna(self.df["Volume_Delta"].iloc[-1]): self.indicator_values["Volume_Delta"] = Decimal(str(self.df["Volume_Delta"].iloc[-1]))
-        
+
         if cfg["indicators"].get("kaufman_ama", False):
             self.df["Kaufman_AMA"] = self._safe_calculate(indicators.calculate_kama, "Kaufman_AMA", isd["kama_period"],
                                                       period=isd["kama_period"], fast_period=isd["kama_fast_period"], slow_period=isd["kama_slow_period"])
@@ -1843,18 +1843,18 @@ class TradingAnalyzer:
         for col in essential_cols:
             if col in self.df.columns:
                 self.df.dropna(subset=[col], inplace=True)
-        
+
         # Ensure 'ATR' is treated as essential if it was calculated, before filling other NaNs
         if "ATR" in self.df.columns:
             self.df.dropna(subset=["ATR"], inplace=True)
 
         self.df.fillna(0, inplace=True) # Fill remaining NaNs, potentially after calculations
-        
+
         # Log cleanup results
         if len(self.df) < initial_len:
             self.logger.debug(f"Dropped {initial_len - len(self.df)} rows with NaNs after indicator calculations.")
         if self.df.empty:
-            self.logger.warning(f"DataFrame became empty after calculations and cleanup. Cannot proceed.")
+            self.logger.warning("DataFrame became empty after calculations and cleanup. Cannot proceed.")
         else:
             self.logger.debug(f"Indicator calculations complete. Final DataFrame shape: {self.df.shape}")
 
@@ -1887,7 +1887,7 @@ class TradingAnalyzer:
         return self.indicator_values.get(key, default)
 
     # --- Signal Generation Methods ---
-    def _score_adx(self, trend_strength_multiplier_in: float) -> Tuple[float, Dict]:
+    def _score_adx(self, trend_strength_multiplier_in: float) -> tuple[float, dict]:
         """Scores ADX for trend strength and returns multiplier/breakdown."""
         adx = self._get_indicator_value("ADX")
         plus_di = self._get_indicator_value("PlusDI")
@@ -1919,7 +1919,7 @@ class TradingAnalyzer:
 
         return score, {"breakdown": breakdown, "trend_strength_multiplier": trend_strength_multiplier}
 
-    def _score_ema_alignment(self, current_close: Decimal, trend_multiplier: float) -> Tuple[float, Dict]:
+    def _score_ema_alignment(self, current_close: Decimal, trend_multiplier: float) -> tuple[float, dict]:
         """Scores EMA alignment, adjusted by trend multiplier."""
         ema_short = self._get_indicator_value("EMA_Short")
         ema_long = self._get_indicator_value("EMA_Long")
@@ -1940,11 +1940,11 @@ class TradingAnalyzer:
 
         return score, {"breakdown": breakdown}
 
-    def _score_sma_trend_filter(self, current_close: Decimal) -> Tuple[float, Dict]:
+    def _score_sma_trend_filter(self, current_close: Decimal) -> tuple[float, dict]:
         """Scores SMA trend filter based on short and long SMA crossing."""
         sma_short = self._get_indicator_value("SMA_Short")
         sma_long = self._get_indicator_value("SMA_Long")
-        
+
         score = 0.0
         breakdown = {}
 
@@ -1959,7 +1959,7 @@ class TradingAnalyzer:
 
         return score, {"breakdown": breakdown}
 
-    def _score_momentum_indicators(self) -> Tuple[float, Dict]:
+    def _score_momentum_indicators(self) -> tuple[float, dict]:
         """Aggregates scores from RSI, StochRSI, CCI, Williams %R, MFI."""
         rsi = self._get_indicator_value("RSI")
         stoch_k = self._get_indicator_value("StochRSI_K")
@@ -1971,7 +1971,7 @@ class TradingAnalyzer:
         total_momentum_score = 0.0
         breakdown = {}
         momentum_weight = self.weights.get("momentum_rsi_stoch_cci_wr_mfi", 0.0)
-        
+
         # RSI
         if not pd.isna(rsi):
             if rsi < self.indicator_settings["rsi_oversold"]:
@@ -2023,8 +2023,8 @@ class TradingAnalyzer:
             self.logger.debug(f"MFI: {mfi:.2f}")
 
         return total_momentum_score, {"breakdown": breakdown}
-        
-    def _score_bollinger_bands(self, current_close: Decimal) -> Tuple[float, Dict]:
+
+    def _score_bollinger_bands(self, current_close: Decimal) -> tuple[float, dict]:
         """Scores based on Bollinger Bands breakout/reversion."""
         bb_upper = self._get_indicator_value("BB_Upper")
         bb_middle = self._get_indicator_value("BB_Middle")
@@ -2057,11 +2057,11 @@ class TradingAnalyzer:
                 breakdown["BB Mid-Lower (Bear)"] = -bb_weight * 0.1
 
         return score, {"breakdown": breakdown}
-        
-    def _score_vwap(self, current_close: Decimal, prev_close: Decimal) -> Tuple[float, Dict]:
+
+    def _score_vwap(self, current_close: Decimal, prev_close: Decimal) -> tuple[float, dict]:
         """Scores based on VWAP crossover."""
         vwap = self._get_indicator_value("VWAP")
-        
+
         score = 0.0
         breakdown = {}
 
@@ -2081,7 +2081,7 @@ class TradingAnalyzer:
                 breakdown["VWAP Below (Bear)"] = -vwap_weight * 0.2
         return score, {"breakdown": breakdown}
 
-    def _score_psar(self, current_close: Decimal, prev_close: Decimal) -> Tuple[float, Dict]:
+    def _score_psar(self, current_close: Decimal, prev_close: Decimal) -> tuple[float, dict]:
         """Scores based on PSAR direction and crossover."""
         psar_val = self._get_indicator_value("PSAR_Val")
         psar_dir = self._get_indicator_value("PSAR_Dir") # 1 for uptrend, -1 for downtrend
@@ -2110,7 +2110,7 @@ class TradingAnalyzer:
                     breakdown["PSAR Flip Bearish"] = -psar_weight * 0.5
         return score, {"breakdown": breakdown}
 
-    def _score_fibonacci_levels(self, current_close: Decimal, prev_close: Decimal) -> Tuple[float, Dict]:
+    def _score_fibonacci_levels(self, current_close: Decimal, prev_close: Decimal) -> tuple[float, dict]:
         """Scores based on interaction with Fibonacci retracement levels."""
         score = 0.0
         breakdown = {}
@@ -2122,13 +2122,13 @@ class TradingAnalyzer:
                 if level_price == 0: continue
                 # Define a small tolerance around the level
                 tolerance = self.df["ATR"].iloc[-1] * Decimal("0.1") if "ATR" in self.df.columns and not pd.isna(self.df["ATR"].iloc[-1]) else current_close * Decimal("0.001")
-                
+
                 if level_name in ["Support 1", "Support 2", "Support 3"] and current_close >= level_price - tolerance and current_close <= level_price + tolerance:
                     # Price near support, check for bounce (previous candle below, current above or strongly bouncing)
                     if prev_close < level_price - tolerance and current_close > level_price:
                         score += fib_weight * 0.5
                         breakdown[f"Fibonacci {level_name} Bounce (Bull)"] = fib_weight * 0.5
-                
+
                 if level_name in ["Resistance 1", "Resistance 2", "Resistance 3"] and current_close >= level_price - tolerance and current_close <= level_price + tolerance:
                     # Price near resistance, check for rejection
                     if prev_close > level_price + tolerance and current_close < level_price:
@@ -2137,7 +2137,7 @@ class TradingAnalyzer:
 
         return score, {"breakdown": breakdown}
 
-    def _score_fibonacci_pivot_points(self, current_close: Decimal, prev_close: Decimal) -> Tuple[float, Dict]:
+    def _score_fibonacci_pivot_points(self, current_close: Decimal, prev_close: Decimal) -> tuple[float, dict]:
         """Scores based on interaction with Fibonacci Pivot Points (Pivot, R1, R2, S1, S2)."""
         score = 0.0
         breakdown = {}
@@ -2163,7 +2163,7 @@ class TradingAnalyzer:
             elif current_close < s1 and prev_close >= s1: # Break below S1
                 score -= pivot_weight * 0.4
                 breakdown["S1 Breakout (Bear)"] = -pivot_weight * 0.4
-            
+
             # Rejection from R1/S1
             if current_close < r1 and prev_close > r1 and abs(current_close - r1) < tolerance: # Rejection from R1
                 score -= pivot_weight * 0.2
@@ -2174,7 +2174,7 @@ class TradingAnalyzer:
 
         return score, {"breakdown": breakdown}
 
-    def _score_ehlers_supertrend(self, trend_multiplier: float) -> Tuple[float, Dict]:
+    def _score_ehlers_supertrend(self, trend_multiplier: float) -> tuple[float, dict]:
         """Scores based on Ehlers Supertrend direction and crossover."""
         st_slow_dir = self._get_indicator_value("ST_Slow_Dir")
 
@@ -2202,7 +2202,7 @@ class TradingAnalyzer:
                     breakdown["Ehlers ST Flip Bearish"] = -est_weight * 0.5
         return score, {"breakdown": breakdown}
 
-    def _score_macd(self, trend_multiplier: float) -> Tuple[float, Dict]:
+    def _score_macd(self, trend_multiplier: float) -> tuple[float, dict]:
         """Scores based on MACD line and signal crossover, and histogram direction."""
         macd_line = self._get_indicator_value("MACD_Line")
         macd_signal = self._get_indicator_value("MACD_Signal")
@@ -2213,7 +2213,7 @@ class TradingAnalyzer:
 
         if not pd.isna(macd_line) and not pd.isna(macd_signal) and not pd.isna(macd_hist):
             macd_weight = self.weights.get("macd_alignment", 0.0)
-            
+
             # MACD Line / Signal Crossover
             if len(self.df) > 1:
                 prev_macd_line = self.df["MACD_Line"].iloc[-2]
@@ -2237,7 +2237,7 @@ class TradingAnalyzer:
 
         return score, {"breakdown": breakdown}
 
-    def _score_ichimoku_cloud(self, current_close: Decimal) -> Tuple[float, Dict]:
+    def _score_ichimoku_cloud(self, current_close: Decimal) -> tuple[float, dict]:
         """Scores based on Ichimoku Cloud signals."""
         tenkan = self._get_indicator_value("Tenkan_Sen")
         kijun = self._get_indicator_value("Kijun_Sen")
@@ -2288,7 +2288,7 @@ class TradingAnalyzer:
 
         return score, {"breakdown": breakdown}
 
-    def _score_obv(self) -> Tuple[float, Dict]:
+    def _score_obv(self) -> tuple[float, dict]:
         """Scores based on OBV and its EMA crossover."""
         obv = self._get_indicator_value("OBV")
         obv_ema = self._get_indicator_value("OBV_EMA")
@@ -2309,7 +2309,7 @@ class TradingAnalyzer:
                     breakdown["OBV Bearish Cross"] = -obv_weight
         return score, {"breakdown": breakdown}
 
-    def _score_cmf(self) -> Tuple[float, Dict]:
+    def _score_cmf(self) -> tuple[float, dict]:
         """Scores based on Chaikin Money Flow (CMF)."""
         cmf = self._get_indicator_value("CMF")
 
@@ -2326,10 +2326,10 @@ class TradingAnalyzer:
                 breakdown["CMF Negative Flow"] = -cmf_weight
         return score, {"breakdown": breakdown}
 
-    def _score_volatility_index(self, signal_score_current: float) -> Tuple[float, Dict]:
+    def _score_volatility_index(self, signal_score_current: float) -> tuple[float, dict]:
         """Adjusts signal score based on Volatility Index. High volatility can amplify or suppress."""
         volatility_index = self._get_indicator_value("Volatility_Index")
-        
+
         score = 0.0
         breakdown = {}
 
@@ -2337,7 +2337,7 @@ class TradingAnalyzer:
             vol_weight = self.weights.get("volatility_index_signal", 0.0)
             # Example logic: Amplify signals during moderate volatility, reduce during extreme or very low.
             # This is a conceptual example, actual implementation might involve non-linear adjustments.
-            
+
             # Assuming average volatility around 1.0 (normalized index)
             if volatility_index > 1.5: # Very high volatility
                 # Potentially reduce score to avoid whipsaws, or increase for strong breakouts
@@ -2352,7 +2352,7 @@ class TradingAnalyzer:
                 breakdown["Volatility Moderate"] = vol_weight * 0.1 * np.sign(signal_score_current)
         return score, {"breakdown": breakdown}
 
-    def _score_vwma_cross(self, current_close: Decimal, prev_close: Decimal) -> Tuple[float, Dict]:
+    def _score_vwma_cross(self, current_close: Decimal, prev_close: Decimal) -> tuple[float, dict]:
         """Scores based on VWMA crossover with price."""
         vwma = self._get_indicator_value("VWMA")
 
@@ -2369,10 +2369,10 @@ class TradingAnalyzer:
                 breakdown["VWMA Bearish Cross"] = -vwma_weight
         return score, {"breakdown": breakdown}
 
-    def _score_volume_delta(self) -> Tuple[float, Dict]:
+    def _score_volume_delta(self) -> tuple[float, dict]:
         """Scores based on volume delta indicating buying/selling pressure."""
         volume_delta = self._get_indicator_value("Volume_Delta")
-        
+
         score = 0.0
         breakdown = {}
 
@@ -2386,8 +2386,8 @@ class TradingAnalyzer:
                 score -= vol_delta_weight
                 breakdown["Volume Delta High Sell"] = -vol_delta_weight
         return score, {"breakdown": breakdown}
-    
-    def _score_kaufman_ama_cross(self, current_close: Decimal, prev_close: Decimal) -> Tuple[float, Dict]:
+
+    def _score_kaufman_ama_cross(self, current_close: Decimal, prev_close: Decimal) -> tuple[float, dict]:
         """Scores based on Kaufman Adaptive Moving Average (KAMA) crossover with price."""
         kama = self._get_indicator_value("Kaufman_AMA")
 
@@ -2404,10 +2404,10 @@ class TradingAnalyzer:
                 breakdown["KAMA Bearish Cross"] = -kama_weight
         return score, {"breakdown": breakdown}
 
-    def _score_relative_volume(self, current_close: Decimal, prev_close: Decimal) -> Tuple[float, Dict]:
+    def _score_relative_volume(self, current_close: Decimal, prev_close: Decimal) -> tuple[float, dict]:
         """Scores based on Relative Volume (above average volume)."""
         relative_volume = self._get_indicator_value("Relative_Volume")
-        
+
         score = 0.0
         breakdown = {}
 
@@ -2423,10 +2423,10 @@ class TradingAnalyzer:
                     breakdown["Relative Volume (Bear)"] = -rv_weight * 0.5
         return score, {"breakdown": breakdown}
 
-    def _score_market_structure(self) -> Tuple[float, Dict]:
+    def _score_market_structure(self) -> tuple[float, dict]:
         """Scores based on detected market structure (e.g., higher highs/lows)."""
         market_structure_trend = self._get_indicator_value("Market_Structure_Trend")
-        
+
         score = 0.0
         breakdown = {}
 
@@ -2438,10 +2438,10 @@ class TradingAnalyzer:
             ms_weight = self.weights.get("market_structure_confluence", 0.0)
             score -= ms_weight
             breakdown["Market Structure Downtrend"] = -ms_weight
-        
+
         return score, {"breakdown": breakdown}
 
-    def _score_dema_crossover(self) -> Tuple[float, Dict]:
+    def _score_dema_crossover(self) -> tuple[float, dict]:
         """Scores based on DEMA crossover with price or another moving average."""
         dema = self._get_indicator_value("DEMA")
         current_close = Decimal(str(self.df["close"].iloc[-1]))
@@ -2460,7 +2460,7 @@ class TradingAnalyzer:
                 breakdown["DEMA Bearish Cross"] = -dema_weight
         return score, {"breakdown": breakdown}
 
-    def _score_keltner_channels(self, current_close: Decimal, prev_close: Decimal) -> Tuple[float, Dict]:
+    def _score_keltner_channels(self, current_close: Decimal, prev_close: Decimal) -> tuple[float, dict]:
         """Scores based on Keltner Channels breakout/reversion."""
         kc_upper = self._get_indicator_value("Keltner_Upper")
         kc_middle = self._get_indicator_value("Keltner_Middle")
@@ -2485,10 +2485,10 @@ class TradingAnalyzer:
                 breakdown["Keltner Below Middle (Bear)"] = -kc_weight * 0.2
         return score, {"breakdown": breakdown}
 
-    def _score_roc_signals(self) -> Tuple[float, Dict]:
+    def _score_roc_signals(self) -> tuple[float, dict]:
         """Scores based on Rate of Change (ROC) signals (oversold/overbought)."""
         roc = self._get_indicator_value("ROC")
-        
+
         score = 0.0
         breakdown = {}
 
@@ -2500,7 +2500,7 @@ class TradingAnalyzer:
             elif roc > self.indicator_settings["roc_overbought"]:
                 score -= roc_weight * 0.5 # Bearish signal
                 breakdown["ROC Overbought (Bear)"] = -roc_weight * 0.5
-            
+
             # ROC cross zero line (momentum shift)
             if len(self.df) > 1:
                 prev_roc = Decimal(str(self.df["ROC"].iloc[-2]))
@@ -2512,10 +2512,10 @@ class TradingAnalyzer:
                     breakdown["ROC Bearish Cross Zero"] = -roc_weight * 0.3
         return score, {"breakdown": breakdown}
 
-    def _score_candlestick_patterns(self) -> Tuple[float, Dict]:
+    def _score_candlestick_patterns(self) -> tuple[float, dict]:
         """Scores based on detected candlestick patterns."""
         pattern = self._get_indicator_value("Candlestick_Pattern")
-        
+
         score = 0.0
         breakdown = {}
 
@@ -2535,7 +2535,7 @@ class TradingAnalyzer:
                 breakdown[f"Candlestick: {pattern} (Neutral)"] = 0.0
         return score, {"breakdown": breakdown}
 
-    def _score_orderbook_imbalance(self, orderbook_data: Optional[dict]) -> Tuple[float, Dict]:
+    def _score_orderbook_imbalance(self, orderbook_data: dict | None) -> tuple[float, dict]:
         """Scores order book imbalance and identifies potential Support/Resistance levels."""
         imbalance_contrib = 0.0
         signal_breakdown_contrib = {}
@@ -2545,12 +2545,12 @@ class TradingAnalyzer:
                 bid_volume = sum(Decimal(b[1]) for b in bids if b[1])
                 ask_volume = sum(Decimal(a[1]) for a in asks if a[1])
                 total_volume = bid_volume + ask_volume
-                
+
                 if total_volume > 0:
                     imbalance = _safe_divide_decimal(bid_volume - ask_volume, total_volume)
                     imbalance_contrib = imbalance * self.weights.get("orderbook_imbalance", 0)
                     self.logger.debug(f"Orderbook Imbalance: {imbalance:.4f}")
-                
+
                 # Calculate S/R levels from order book depth
                 self.calculate_support_resistance_from_orderbook(orderbook_data)
                 signal_breakdown_contrib["Orderbook Imbalance"] = imbalance_contrib
@@ -2586,7 +2586,7 @@ class TradingAnalyzer:
             self.indicator_values["Resistance_Level"] = resistance_level.quantize(Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN)
             self.logger.debug(f"Identified Resistance Level: {resistance_level}")
 
-    def _score_mtf_confluence(self, mtf_trends: Dict[str, str]) -> Tuple[float, Dict]:
+    def _score_mtf_confluence(self, mtf_trends: dict[str, str]) -> tuple[float, dict]:
         """Scores the confluence of trends across multiple timeframes."""
         mtf_contribution = 0.0
         signal_breakdown_contrib = {}
@@ -2600,7 +2600,7 @@ class TradingAnalyzer:
                 # Calculate score proportionally to the agreement
                 normalized_mtf_score = (mtf_buy_count - mtf_sell_count) / total_mtf_indicators
                 mtf_contribution = mtf_weight * normalized_mtf_score
-                
+
                 self.logger.debug(f"MTF Confluence: Buy={mtf_buy_count}, Sell={mtf_sell_count}, Total={total_mtf_indicators}. Score contribution: {mtf_contribution:.2f}")
                 signal_breakdown_contrib["MTF Confluence"] = mtf_contribution
         return mtf_contribution, signal_breakdown_contrib
@@ -2611,10 +2611,10 @@ class TradingAnalyzer:
         # Ensure ATR data is valid and we have enough history for rolling calculations
         if "ATR" not in self.df.columns or self.df["ATR"].isnull().all() or len(self.df["ATR"]) < 50:
             return base_threshold
-        
+
         atr_ma_series = self.df["ATR"].rolling(50).mean()
         if atr_ma_series.empty or atr_ma_series.iloc[-1] <= 0: return base_threshold
-        
+
         atr_ma = float(atr_ma_series.iloc[-1])
         # Calculate volatility ratio, clipping it to avoid extreme adjustments
         ratio = float(np.clip(float(atr_now) / atr_ma, 0.9, 1.5))
@@ -2623,28 +2623,28 @@ class TradingAnalyzer:
     def _market_regime(self) -> str:
         """Determines market regime (TRENDING, RANGING, SIDEWAYS) using ADX and Bollinger Bands."""
         adx, bb_u, bb_m, bb_l = self._get_indicator_value("ADX"), self._get_indicator_value("BB_Upper"), self._get_indicator_value("BB_Middle"), self._get_indicator_value("BB_Lower")
-        
+
         # Check for valid data before calculation
         if pd.isna(adx) or pd.isna(bb_u) or pd.isna(bb_m) or pd.isna(bb_l) or bb_m == Decimal("0"):
             return "UNKNOWN"
-        
+
         band_width_pct = float((bb_u - bb_l) / bb_m) if bb_m != Decimal("0") else 0 # Calculate Bollinger Band width percentage
 
         # Determine regime based on ADX and Bandwidth
         if float(adx) >= ADX_STRONG_TREND_THRESHOLD or band_width_pct >= 0.03: return "TRENDING"
-        elif float(adx) <= ADX_WEAK_TREND_THRESHOLD and band_width_pct <= 0.01: return "RANGING"
+        if float(adx) <= ADX_WEAK_TREND_THRESHOLD and band_width_pct <= 0.01: return "RANGING"
         return "SIDEWAYS"
 
-    def generate_trading_signal(self, current_price: Decimal, orderbook_data: Optional[dict], mtf_trends: Dict[str, str]) -> Tuple[str, float, Dict[str, float]]:
+    def generate_trading_signal(self, current_price: Decimal, orderbook_data: dict | None, mtf_trends: dict[str, str]) -> tuple[str, float, dict[str, float]]:
         """Generates a trading signal (BUY, SELL, HOLD) based on aggregated indicator scores."""
         signal_score = 0.0
-        signal_breakdown: Dict[str, float] = {}
+        signal_breakdown: dict[str, float] = {}
         if self.df.empty: return "HOLD", 0.0, {} # Cannot generate signal if DataFrame is empty
 
         # Get current and previous close prices safely
         current_close = Decimal(str(self.df["close"].iloc[-1])) if not self.df.empty else Decimal("0")
         prev_close = Decimal(str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close)
-        
+
         trend_strength_multiplier = 1.0 # Initial multiplier
 
         # --- Score indicators ---
@@ -2694,7 +2694,7 @@ class TradingAnalyzer:
         # --- Final Signal Decision ---
         base_threshold = max(float(self.config.get("signal_score_threshold", 2.0)), 1.0)
         dynamic_threshold = self._dynamic_threshold(base_threshold) # Adjust threshold based on volatility
-        
+
         final_signal = "HOLD" # Default signal
         now_ts = int(time.time())
         cooldown_sec = int(self.config.get("cooldown_sec", 0))
@@ -2703,11 +2703,11 @@ class TradingAnalyzer:
         # Determine BUY/SELL signal based on score and threshold
         is_strong_buy = signal_score >= dynamic_threshold
         is_strong_sell = signal_score <= -dynamic_threshold
-        
+
         # Apply hysteresis: only switch signal if score crosses threshold significantly
         # or if the previous state wasn't HOLD.
         should_override_hold = True # Assume we want to always consider the signal if strong enough
-        
+
         # Apply hysteresis only if the direction is changing and the score is relatively close to the threshold
         # and the previous score was in the "other" direction.
         if (self.config["_last_score"] > 0 and is_strong_sell and signal_score > (-dynamic_threshold * hysteresis_ratio)) or \
@@ -2717,7 +2717,7 @@ class TradingAnalyzer:
 
         if is_strong_buy and should_override_hold: final_signal = "BUY"
         elif is_strong_sell and should_override_hold: final_signal = "SELL"
-        
+
         # Apply cooldown period: ignore new signals if within cooldown window
         if final_signal != "HOLD":
             if now_ts - self._last_signal_ts < cooldown_sec:
@@ -2729,7 +2729,7 @@ class TradingAnalyzer:
         # Update transient state variables for next loop's analysis
         self.config["_last_score"] = float(signal_score)
         self.config["_last_signal_ts"] = self._last_signal_ts
-        
+
         self.logger.info(f"Generated Signal: {final_signal} (Score: {signal_score:.2f}, Threshold: {dynamic_threshold:.2f})")
         return final_signal, float(signal_score), signal_breakdown
 
@@ -2737,41 +2737,41 @@ class TradingAnalyzer:
     def _market_regime(self) -> str:
         """Determines market regime (TRENDING, RANGING, SIDEWAYS) using ADX and Bollinger Bands."""
         adx, bb_u, bb_m, bb_l = self._get_indicator_value("ADX"), self._get_indicator_value("BB_Upper"), self._get_indicator_value("BB_Middle"), self._get_indicator_value("BB_Lower")
-        
+
         if pd.isna(adx) or pd.isna(bb_u) or pd.isna(bb_m) or pd.isna(bb_l) or bb_m == Decimal("0"): return "UNKNOWN"
         band_width_pct = float((bb_u - bb_l) / bb_m) if bb_m != Decimal("0") else 0
 
         if float(adx) >= ADX_STRONG_TREND_THRESHOLD or band_width_pct >= 0.03: return "TRENDING"
-        elif float(adx) <= ADX_WEAK_TREND_THRESHOLD and band_width_pct <= 0.01: return "RANGING"
+        if float(adx) <= ADX_WEAK_TREND_THRESHOLD and band_width_pct <= 0.01: return "RANGING"
         return "SIDEWAYS"
 
 # --- Guardrails and Filters ---
-def in_allowed_session(config: Dict) -> bool:
+def in_allowed_session(config: dict) -> bool:
     """Checks if the current UTC time falls within allowed trading sessions."""
     if not config["session_filter"]["enabled"]: return True
-    
+
     now_utc = datetime.now(timezone.utc).time()
-    
+
     for start_str, end_str in config["session_filter"]["utc_allowed"]:
         start_time = datetime.strptime(start_str, "%H:%M").time()
         end_time = datetime.strptime(end_str, "%H:%M").time()
-        
+
         if start_time <= end_time:
             if start_time <= now_utc <= end_time: return True
         else: # Overnight session (e.g., 22:00 - 04:00)
             if now_utc >= start_time or now_utc <= end_time: return True
-            
+
     return False
 
 def get_spread_bps(orderbook_data: dict) -> float:
     """Calculates the bid-ask spread in basis points (bps)."""
     if not orderbook_data or not orderbook_data.get("bids") or not orderbook_data.get("asks"): return float('inf')
-    
+
     best_bid = Decimal(orderbook_data["bids"][0][0])
     best_ask = Decimal(orderbook_data["asks"][0][0])
-    
+
     if best_bid.is_zero() or best_ask.is_zero(): return float('inf')
-    
+
     spread = (best_ask - best_bid) / best_bid
     return float(spread * Decimal("10000")) # Convert to basis points
 
@@ -2784,11 +2784,11 @@ def expected_value(performance_tracker: PerformanceTracker) -> Decimal:
 
     avg_win = performance_tracker.gross_profit / performance_tracker.wins if performance_tracker.wins > 0 else Decimal("0")
     avg_loss = performance_tracker.gross_loss / performance_tracker.losses if performance_tracker.losses > 0 else Decimal("0")
-    
+
     ev = (win_rate * avg_win) - (loss_rate * avg_loss)
     return ev
 
-def adapt_exit_params(performance_tracker: PerformanceTracker, config: Dict) -> Tuple[Decimal, Decimal]:
+def adapt_exit_params(performance_tracker: PerformanceTracker, config: dict) -> tuple[Decimal, Decimal]:
     """Dynamically adapts TP/SL multiples based on recent performance."""
     base_tp = Decimal(str(config["trade_management"]["take_profit_atr_multiple"]))
     base_sl = Decimal(str(config["trade_management"]["stop_loss_atr_multiple"]))
@@ -2796,22 +2796,22 @@ def adapt_exit_params(performance_tracker: PerformanceTracker, config: Dict) -> 
     # Simple adaptation: if win rate is high, try slightly higher TP and tighter SL.
     # If win rate is low, revert to base or try tighter TP/wider SL.
     # More advanced logic would involve average R:R, profit factor, etc.
-    
+
     total_trades = performance_tracker.wins + performance_tracker.losses
     if total_trades < 10: # Need sufficient trades for meaningful stats
         return base_tp, base_sl
 
     win_rate = performance_tracker.wins / total_trades
-    
+
     if win_rate > 0.6: # Good win rate, try to capture more profit and cut losses faster
         return base_tp * Decimal("1.1"), base_sl * Decimal("0.9")
-    elif win_rate < 0.4: # Poor win rate, maybe adjust to avoid being stopped out too early
+    if win_rate < 0.4: # Poor win rate, maybe adjust to avoid being stopped out too early
         return base_tp * Decimal("0.9"), base_sl * Decimal("1.1")
-    
+
     return base_tp, base_sl
 
 # --- Display Functions ---
-def display_indicator_values_and_price(config: dict, logger: logging.Logger, current_price: Decimal, analyzer: TradingAnalyzer, mtf_trends: dict, signal_breakdown: Optional[dict] = None):
+def display_indicator_values_and_price(config: dict, logger: logging.Logger, current_price: Decimal, analyzer: TradingAnalyzer, mtf_trends: dict, signal_breakdown: dict | None = None):
     """Displays current market data, indicator values, and a concise trend summary."""
     logger.info(f"{NEON_BLUE}--- Current Market Data & Indicators ---{RESET}")
     logger.info(f"{NEON_GREEN}Current Price: {current_price.normalize()}{RESET}")
@@ -2877,7 +2877,7 @@ def display_indicator_values_and_price(config: dict, logger: logging.Logger, cur
         elif macd_hist < 0 and prev_macd_hist >= 0: trend_summary_lines.append(f"{Fore.RED}MACD Hist  : ↓ Bearish Cross{RESET}")
         elif macd_hist > 0: trend_summary_lines.append(f"{Fore.LIGHTGREEN_EX}MACD Hist  : Above 0{RESET}")
         elif macd_hist < 0: trend_summary_lines.append(f"{Fore.LIGHTRED_EX}MACD Hist  : Below 0{RESET}")
-    
+
     adx_val = analyzer._get_indicator_value("ADX")
     if not pd.isna(adx_val):
         strength = f"({adx_val:.0f})"
@@ -2917,7 +2917,7 @@ def main():
 
     # Setup logger early
     global_logger = setup_logger("whalebot", logging.INFO)
-    
+
     # Validate API keys early to prevent unnecessary startup
     if not API_KEY or not API_SECRET:
         global_logger.error(f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in .env. Exiting.{RESET}")
@@ -2944,7 +2944,7 @@ def main():
 
     # Initialize API Client (also initializes WS Manager)
     pybit_client = PybitTradingClient(config, global_logger)
-    
+
     # Initialize Position Manager and Performance Tracker
     position_manager = PositionManager(config, global_logger, config["symbol"], pybit_client)
     performance_tracker = PerformanceTracker(global_logger, config)
@@ -2953,11 +2953,11 @@ def main():
     if pybit_client.enabled and pybit_client.session:
         ws_state_loaded = pybit_client.load_state() # Loads into WS manager and populates pybit_client.state_data
         if not ws_state_loaded: global_logger.warning("Failed to load WS state, continuing without it.")
-        
+
         # Load performance state using pybit_client.state_data
         if not performance_tracker.load_state(pybit_client.state_data):
             global_logger.warning("Failed to load performance tracker state, starting fresh.")
-        
+
         # Set leverage on startup if live trading is enabled
         leverage_set = pybit_client.set_leverage(
             config["symbol"], config["execution"]["buy_leverage"], config["execution"]["sell_leverage"],
@@ -2983,18 +2983,18 @@ def main():
     while not pybit_client.stop_event.is_set():
         try:
             global_logger.info(f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
-            
+
             # --- Risk Guardrails & Filters ---
             guard = config.get("risk_guardrails", {})
             if guard.get("enabled", False):
                 # Calculate equity (balance + total PnL) for guardrail calculations
                 current_account_balance = position_manager._get_current_balance()
                 equity = current_account_balance + performance_tracker.total_pnl
-                
+
                 day_loss = performance_tracker.day_pnl()
                 max_day_loss = (Decimal(str(guard.get("max_day_loss_pct", 3.0))) / 100) * equity
                 max_dd = (Decimal(str(guard.get("max_drawdown_pct", 8.0))) / 100) * equity
-                
+
                 # Check if risk limits (daily loss or max drawdown) are breached
                 if (max_day_loss > 0 and day_loss <= -max_day_loss) or (performance_tracker.max_drawdown >= max_dd):
                     global_logger.critical(f"{NEON_RED}KILL SWITCH ACTIVATED: Risk limits hit! Day PnL: {day_loss.normalize():.2f} / Max Allowed: {max_day_loss.normalize():.2f}. Max DD: {performance_tracker.max_drawdown.normalize():.2f} / Allowed: {max_dd.normalize():.2f}. Cooling down.{RESET}")
@@ -3014,7 +3014,7 @@ def main():
                 alert_system.send_alert(f"[{config['symbol']}] Failed to fetch current price. Skipping loop.", "WARNING")
                 time.sleep(config["loop_delay"])
                 continue
-            
+
             # Fetch historical klines for analysis
             df = pybit_client.fetch_klines(config["symbol"], config["interval"], 1000) # Fetch sufficient history
             if df is None or df.empty:
@@ -3027,7 +3027,7 @@ def main():
             if config["indicators"].get("orderbook_imbalance", False):
                 orderbook_data = pybit_client.fetch_orderbook(config["symbol"], config["orderbook_limit"])
                 if orderbook_data is None: global_logger.warning("Failed to fetch orderbook data.")
-            
+
             # Apply Spread Filter if enabled
             if guard.get("enabled", False) and orderbook_data:
                 spread_bps = get_spread_bps(orderbook_data)
@@ -3035,7 +3035,7 @@ def main():
                     global_logger.warning(f"Spread too high ({spread_bps:.1f} bps). Holding.{RESET}")
                     time.sleep(config["loop_delay"])
                     continue
-            
+
             # Apply EV Filter if enabled
             if guard.get("ev_filter_enabled", True):
                 current_ev = expected_value(performance_tracker)
@@ -3051,7 +3051,7 @@ def main():
             config["trade_management"]["stop_loss_atr_multiple"] = float(sl_mult_adapted)
 
             # --- Multi-Timeframe Analysis ---
-            mtf_trends: Dict[str, str] = {}
+            mtf_trends: dict[str, str] = {}
             if config["mtf_analysis"]["enabled"]:
                 for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
                     htf_df = pybit_client.fetch_klines(config["symbol"], htf_interval, 1000) # Fetch historical data
@@ -3071,7 +3071,7 @@ def main():
                 alert_system.send_alert(f"[{config['symbol']}] TradingAnalyzer DataFrame is empty. Cannot generate signal.", "WARNING")
                 time.sleep(config["loop_delay"])
                 continue
-            
+
             # Retrieve ATR value for potential use in position management (e.g., breakeven)
             atr_value = Decimal(str(analyzer._get_indicator_value("ATR", Decimal("0.1"))))
             config["_last_atr_value"] = str(atr_value) # Store for potential use by other modules
@@ -3095,7 +3095,7 @@ def main():
                 # Calculate conviction based on signal score relative to threshold
                 conviction = float(min(1.0, max(0.0, (abs(signal_score) - config["signal_score_threshold"]) / config["signal_score_threshold"])))
                 if conviction < 0.1 and abs(signal_score) >= config["signal_score_threshold"]: conviction = 0.1 # Minimum conviction for valid signal
-                
+
                 # Open position only if score significantly exceeds threshold
                 if abs(signal_score) >= config["signal_score_threshold"]:
                     position_manager.open_position(trading_signal, current_price, atr_value, conviction)
@@ -3138,7 +3138,7 @@ def main():
 if __name__ == "__main__":
     # Setup the global logger instance early
     global_logger = setup_logger("whalebot", logging.INFO)
-    
+
     # Check for essential configuration early
     if not API_KEY or not API_SECRET:
         global_logger.error(f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in .env. Exiting.{RESET}")

@@ -129,7 +129,7 @@ class UnifiedTrader:
 
         if signal_score >= 2:
             return 'BUY'
-        elif signal_score <= -2:
+        if signal_score <= -2:
             return 'SELL'
         return 'HOLD'
 

@@ -185,8 +185,7 @@ def _calculate_bollinger_bands(closes: list[float], period: int, std_dev: float)
 # --- Main Public Function ---
 
 def calculate_indicators(klines: list[dict], config: dict) -> dict | None:
-    """
-    Calculates all trading indicators from a list of kline data.
+    """Calculates all trading indicators from a list of kline data.
     Returns a dictionary of indicator values or None if data is insufficient.
     """
     max_lookback = max(

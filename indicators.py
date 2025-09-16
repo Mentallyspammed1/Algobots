@@ -1,7 +1,7 @@
 import logging
 import math
 from decimal import ROUND_HALF_UP, Decimal, getcontext
-from typing import Any, Union
+from typing import Any
 
 import pandas as pd
 from bot_logger import setup_logging
@@ -20,8 +20,7 @@ if not indicators_logger.handlers:
     setup_logging() # Call the centralized setup
 
 def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
-    """
-    Calculates the Average True Range (ATR), a measure of market volatility.
+    """Calculates the Average True Range (ATR), a measure of market volatility.
     """
     if not all(col in df.columns for col in ['high', 'low', 'close']):
         indicators_logger.error(Fore.RED + "DataFrame must contain 'high', 'low', 'close' columns for ATR." + Style.RESET_ALL)
@@ -45,8 +44,7 @@ def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
     return atr
 
 def calculate_fibonacci_pivot_points(df: pd.DataFrame, fib_ratios: list[float] = [0.382, 0.618, 1.000], atr_length: int = 14) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """
-    Calculates Fibonacci Pivot Points with customizable ratios and ATR-based adjustments.
+    """Calculates Fibonacci Pivot Points with customizable ratios and ATR-based adjustments.
     Returns resistance and support levels as lists of dictionaries.
     """
     if not isinstance(df.index, pd.DatetimeIndex):
@@ -106,8 +104,7 @@ def calculate_fibonacci_pivot_points(df: pd.DataFrame, fib_ratios: list[float] =
     return resistance_levels, support_levels
 
 def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: int = 14, stoch_d_period: int = 3) -> pd.DataFrame:
-    """
-    Calculates the Stochastic RSI (StochRSI) for a given DataFrame using Decimal.
+    """Calculates the Stochastic RSI (StochRSI) for a given DataFrame using Decimal.
     """
     if 'close' not in df.columns:
         indicators_logger.error(Fore.RED + "DataFrame must contain a 'close' column for StochRSI calculation." + Style.RESET_ALL)
@@ -155,8 +152,7 @@ def calculate_stochrsi(df: pd.DataFrame, rsi_period: int = 14, stoch_k_period: i
     return df
 
 def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
-    """
-    Calculates the Simple Moving Average (SMA) for the 'close' prices.
+    """Calculates the Simple Moving Average (SMA) for the 'close' prices.
     """
     if 'close' not in df.columns:
         indicators_logger.error(Fore.RED + "DataFrame must contain a 'close' column for SMA calculation." + Style.RESET_ALL)
@@ -169,8 +165,7 @@ def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
     return sma
 
 def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_length: int = 1) -> tuple[pd.Series, pd.Series]:
-    """
-    Calculates the Ehlers Fisher Transform and its signal line using Decimal precision.
+    """Calculates the Ehlers Fisher Transform and its signal line using Decimal precision.
     """
     if 'high' not in df.columns or 'low' not in df.columns:
         indicators_logger.error(Fore.RED + "DataFrame must contain 'high' and 'low' columns for Fisher Transform." + Style.RESET_ALL)
@@ -206,8 +201,7 @@ def calculate_ehlers_fisher_transform(df: pd.DataFrame, length: int = 9, signal_
     return fisher_transform, fisher_signal
 
 def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Series:
-    """
-    Calculates the Ehlers 2-pole Super Smoother Filter.
+    """Calculates the Ehlers 2-pole Super Smoother Filter.
     """
     if 'close' not in df.columns:
         indicators_logger.error(Fore.RED + "DataFrame must contain a 'close' column for Super Smoother." + Style.RESET_ALL)
@@ -245,8 +239,7 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
     return filtered_values
 
 def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> tuple[pd.Series, pd.Series]:
-    """
-    Identifies Pivot Highs and Lows based on lookback periods.
+    """Identifies Pivot Highs and Lows based on lookback periods.
     """
     if not isinstance(df.index, pd.DatetimeIndex):
         indicators_logger.error(Fore.RED + "DataFrame index must be a DatetimeIndex for pivot calculation." + Style.RESET_ALL)
@@ -295,8 +288,7 @@ def find_pivots(df: pd.DataFrame, left: int, right: int, use_wicks: bool) -> tup
     return pivot_highs, pivot_lows
 
 def handle_websocket_kline_data(df: pd.DataFrame, message: dict[str, Any]) -> pd.DataFrame:
-    """
-    Processes one or more kline data messages from a WebSocket stream, ensuring robustness.
+    """Processes one or more kline data messages from a WebSocket stream, ensuring robustness.
     """
     dtype_mapping = {
         'open': object,
@@ -369,8 +361,7 @@ def handle_websocket_kline_data(df: pd.DataFrame, message: dict[str, Any]) -> pd
     return combined_df
 
 def calculate_vwap(df: pd.DataFrame) -> pd.Series:
-    """
-    Calculates the Volume Weighted Average Price (VWAP).
+    """Calculates the Volume Weighted Average Price (VWAP).
     """
     if not all(col in df.columns for col in ['high', 'low', 'close', 'volume']):
         indicators_logger.error("DataFrame must contain 'high', 'low', 'close', and 'volume' columns for VWAP.")
@@ -390,8 +381,7 @@ def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     return vwap
 
 def calculate_order_book_imbalance(order_book: dict[str, list[list[str]]]) -> tuple[Decimal, Decimal]:
-    """
-    Calculates the order book imbalance from the raw order book data.
+    """Calculates the order book imbalance from the raw order book data.
     Returns the imbalance ratio and the total volume.
     """
     bids = order_book.get('b', [])
@@ -413,8 +403,7 @@ def calculate_order_book_imbalance(order_book: dict[str, list[list[str]]]) -> tu
     return imbalance, total_volume
 
 def calculate_ehlers_fisher_strategy(df: pd.DataFrame, length: int = 10) -> pd.DataFrame:
-    """
-    Calculates the Ehlers Fisher Transform as per the strategy's logic, ensuring Decimal precision.
+    """Calculates the Ehlers Fisher Transform as per the strategy's logic, ensuring Decimal precision.
     """
     # Ensure all input columns are of type Decimal
     required_cols = ['high', 'low', 'close']
@@ -474,8 +463,7 @@ def calculate_ehlers_fisher_strategy(df: pd.DataFrame, length: int = 10) -> pd.D
     return df
 
 def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> pd.DataFrame:
-    """
-    Calculates Supertrend indicator.
+    """Calculates Supertrend indicator.
     """
     required_cols = ['high', 'low', 'close']
     for col in required_cols:
@@ -542,9 +530,8 @@ def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float =
     df.drop(columns=['tr1', 'tr2', 'tr3', 'tr', 'hl2'], inplace=True, errors='ignore')
     return df
 
-def interpret_indicator(logger: logging.Logger, indicator_name: str, values: Union[list[Decimal], Decimal, dict[str, Any], pd.DataFrame]) -> str | None:
-    """
-    Provides a human-readable interpretation of indicator values.
+def interpret_indicator(logger: logging.Logger, indicator_name: str, values: list[Decimal] | Decimal | dict[str, Any] | pd.DataFrame) -> str | None:
+    """Provides a human-readable interpretation of indicator values.
     """
     if values is None or (isinstance(values, list) and not values) or (isinstance(values, pd.DataFrame) and values.empty):
         return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} No data available."
@@ -557,7 +544,7 @@ def interpret_indicator(logger: logging.Logger, indicator_name: str, values: Uni
                 trend = values.get("trend", "N/A")
                 strength = values.get("strength", Decimal('0.0'))
                 return f"{Fore.MAGENTA}Momentum Trend:{Style.RESET_ALL} {trend} (Strength: {strength:.2f})"
-            elif indicator_name == "order_book_walls":
+            if indicator_name == "order_book_walls":
                  bullish = values.get("bullish", False)
                  bearish = values.get("bearish", False)
                  bullish_details = values.get("bullish_details", {})
@@ -571,22 +558,18 @@ def interpret_indicator(logger: logging.Logger, indicator_name: str, values: Uni
                  if not bullish and not bearish:
                      output += "  No significant walls detected.\\n"
                  return output
-            else:
-                return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} Dictionary format not specifically interpreted."
+            return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} Dictionary format not specifically interpreted."
         elif isinstance(values, pd.DataFrame): # For stoch_rsi_vals, macd
             if indicator_name == "stoch_rsi_vals":
                 if not values.empty and 'k' in values.columns and 'd' in values.columns and 'stoch_rsi' in values.columns:
                      return f"{Fore.GREEN}Stoch RSI:{Style.RESET_ALL} K={values['k'].iloc[-1]:.2f}, D={values['d'].iloc[-1]:.2f}, Stoch_RSI={values['stoch_rsi'].iloc[-1]:.2f}"
-                else:
-                     return f"{Fore.RED}Stoch RSI:{Style.RESET_ALL} Calculation issue or missing columns."
-            elif indicator_name == "macd":
+                return f"{Fore.RED}Stoch RSI:{Style.RESET_ALL} Calculation issue or missing columns."
+            if indicator_name == "macd":
                  if not values.empty and 'macd' in values.columns and 'signal' in values.columns and 'histogram' in values.columns:
                      macd_line, signal_line, histogram = values['macd'].iloc[-1], values['signal'].iloc[-1], values['histogram'].iloc[-1]
                      return f"{Fore.GREEN}MACD:{Style.RESET_ALL} MACD={macd_line:.2f}, Signal={signal_line:.2f}, Histogram={histogram:.2f}"
-                 else:
-                     return f"{Fore.RED}MACD:{Style.RESET_ALL} Calculation issue or missing columns."
-            else:
-                return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} DataFrame format not specifically interpreted."
+                 return f"{Fore.RED}MACD:{Style.RESET_ALL} Calculation issue or missing columns."
+            return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} DataFrame format not specifically interpreted."
         elif isinstance(values, list):
             values_list = values
         else:
@@ -601,64 +584,55 @@ def interpret_indicator(logger: logging.Logger, indicator_name: str, values: Uni
         if indicator_name == "rsi":
             if last_value > Decimal(70):
                 return f"{Fore.RED}RSI:{Style.RESET_ALL} Overbought ({last_value:.2f})"
-            elif last_value < Decimal(30):
+            if last_value < Decimal(30):
                 return f"{Fore.GREEN}RSI:{Style.RESET_ALL} Oversold ({last_value:.2f})"
-            else:
-                return f"{Fore.YELLOW}RSI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
-        elif indicator_name == "mfi":
+            return f"{Fore.YELLOW}RSI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
+        if indicator_name == "mfi":
             if last_value > Decimal(80):
                 return f"{Fore.RED}MFI:{Style.RESET_ALL} Overbought ({last_value:.2f})"
-            elif last_value < Decimal(20):
+            if last_value < Decimal(20):
                 return f"{Fore.GREEN}MFI:{Style.RESET_ALL} Oversold ({last_value:.2f})\"\n"
-            else:
-                return f"{Fore.YELLOW}MFI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
-        elif indicator_name == "cci":
+            return f"{Fore.YELLOW}MFI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
+        if indicator_name == "cci":
             if last_value > Decimal(100):
                 return f"{Fore.RED}CCI:{Style.RESET_ALL} Overbought ({last_value:.2f})"
-            elif last_value < Decimal(-100):
+            if last_value < Decimal(-100):
                 return f"{Fore.GREEN}CCI:{Style.RESET_ALL} Oversold ({last_value:.2f})"
-            else:
-                return f"{Fore.YELLOW}CCI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
-        elif indicator_name == "wr":
+            return f"{Fore.YELLOW}CCI:{Style.RESET_ALL} Neutral ({last_value:.2f})"
+        if indicator_name == "wr":
             if last_value < Decimal(-80):
                 return f"{Fore.GREEN}Williams %R:{Style.RESET_ALL} Oversold ({last_value:.2f})"
-            elif last_value > Decimal(-20):
+            if last_value > Decimal(-20):
                 return f"{Fore.RED}Williams %R:{Style.RESET_ALL} Overbought ({last_value:.2f})"
-            else:
-                return f"{Fore.YELLOW}Williams %R:{Style.RESET_ALL} Neutral ({last_value:.2f})"
-        elif indicator_name == "adx":
+            return f"{Fore.YELLOW}Williams %R:{Style.RESET_ALL} Neutral ({last_value:.2f})"
+        if indicator_name == "adx":
             if last_value > Decimal(25):
                 return f"{Fore.GREEN}ADX:{Style.RESET_ALL} Trending ({last_value:.2f})"
-            else:
-                return f"{Fore.YELLOW}ADX:{Style.RESET_ALL} Ranging ({last_value:.2f})\"\n"
-        elif indicator_name == "obv":
+            return f"{Fore.YELLOW}ADX:{Style.RESET_ALL} Ranging ({last_value:.2f})\"\n"
+        if indicator_name == "obv":
             if len(values_list) >= 2:
                 return f"{Fore.BLUE}OBV:{Style.RESET_ALL} {'Bullish' if values_list[-1] > values_list[-2] else 'Bearish' if values_list[-1] < values_list[-2] else 'Neutral'}"
-            else:
-                return f"{Fore.BLUE}OBV:{Style.RESET_ALL} {last_value:.2f} (Insufficient history for trend)"
-        elif indicator_name == "adi":
+            return f"{Fore.BLUE}OBV:{Style.RESET_ALL} {last_value:.2f} (Insufficient history for trend)"
+        if indicator_name == "adi":
             if len(values_list) >= 2:
                 return f"{Fore.BLUE}ADI:{Style.RESET_ALL} {'Accumulation' if values_list[-1] > values_list[-2] else 'Distribution' if values_list[-1] < values_list[-2] else 'Neutral'}"
-            else:
-                return f"{Fore.BLUE}ADI:{Style.RESET_ALL} {last_value:.2f} (Insufficient history for trend)"
-        elif indicator_name == "sma_10":
+            return f"{Fore.BLUE}ADI:{Style.RESET_ALL} {last_value:.2f} (Insufficient history for trend)"
+        if indicator_name == "sma_10":
             return f"{Fore.YELLOW}SMA (10):{Style.RESET_ALL} {last_value:.2f}"
-        elif indicator_name == "psar":
+        if indicator_name == "psar":
             return f"{Fore.BLUE}PSAR:{Style.RESET_ALL} {last_value:.4f} (Last Value)"
-        elif indicator_name == "fve":
+        if indicator_name == "fve":
             return f"{Fore.BLUE}FVE:{Style.RESET_ALL} {last_value:.2f} (Last Value)"
-        elif indicator_name == "supertrend":
+        if indicator_name == "supertrend":
              if len(values_list) >= 2:
                  # Assuming values_list is [..., latest_value, latest_direction]
                  latest_value = values_list[-2]
                  latest_direction = values_list[-1]
                  status = 'Above (Bullish)' if latest_direction == 1 else 'Below (Bearish)'
                  return f"{Fore.BLUE}Supertrend:{Style.RESET_ALL} {latest_value:.4f} ({status})"
-             else:
-                return f"{Fore.BLUE}Supertrend:{Style.RESET_ALL} {last_value:.4f} (Insufficient history for direction)"
+             return f"{Fore.BLUE}Supertrend:{Style.RESET_ALL} {last_value:.4f} (Insufficient history for direction)"
 
-        else:
-            return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} No specific interpretation available."
+        return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} No specific interpretation available."
     except (TypeError, IndexError, KeyError, ValueError, InvalidOperation) as e:
         logger.error(f"{Fore.RED}Error interpreting {indicator_name}: {e}. Values: {values}{Style.RESET_ALL}")
         return f"{Fore.RED}{indicator_name.upper()}:{Style.RESET_ALL} Interpretation error."

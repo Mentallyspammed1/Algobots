@@ -453,20 +453,20 @@ def _send_signed_request(
         )
         logger.debug(f"GET Request: {url}?{query_string}")
         return session.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
-    else:  # POST
-        json_params = json.dumps(params) if params else ""
-        param_str = timestamp + API_KEY + recv_window + json_params
-        signature = generate_signature(param_str, API_SECRET)
-        headers.update(
-            {
-                "X-BAPI-API-KEY": API_KEY,
-                "X-BAPI-TIMESTAMP": timestamp,
-                "X-BAPI-SIGN": signature,
-                "X-BAPI-RECV-WINDOW": recv_window,
-            }
-        )
-        logger.debug(f"POST Request: {url} with payload {json_params}")
-        return session.post(url, json=params, headers=headers, timeout=REQUEST_TIMEOUT)
+    # POST
+    json_params = json.dumps(params) if params else ""
+    param_str = timestamp + API_KEY + recv_window + json_params
+    signature = generate_signature(param_str, API_SECRET)
+    headers.update(
+        {
+            "X-BAPI-API-KEY": API_KEY,
+            "X-BAPI-TIMESTAMP": timestamp,
+            "X-BAPI-SIGN": signature,
+            "X-BAPI-RECV-WINDOW": recv_window,
+        }
+    )
+    logger.debug(f"POST Request: {url} with payload {json_params}")
+    return session.post(url, json=params, headers=headers, timeout=REQUEST_TIMEOUT)
 
 
 def _handle_api_response(
@@ -2468,7 +2468,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             if len(higher_tf_df) < period:
                 self.logger.debug(
                     f"[{self.symbol}] MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
@@ -2485,7 +2485,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             temp_analyzer = TradingAnalyzer(
                 higher_tf_df, self.config, self.logger, self.symbol
             )

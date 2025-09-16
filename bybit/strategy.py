@@ -301,8 +301,7 @@ class BybitTradingBot:
             logger.error(f"Error fetching instrument info: {e}")
 
     def set_strategy(self, strategy_func: Callable[[dict, dict, HTTP, Any], None]):
-        """
-        Sets the trading strategy function.
+        """Sets the trading strategy function.
         The strategy function should accept (market_data, account_info, http_client, bot_instance) as arguments.
         """
         self.strategy = strategy_func
@@ -322,9 +321,8 @@ class BybitTradingBot:
                     "ticker": ticker.get('result', {}).get('list', []),
                     "last_trade": trades.get('result', {}).get('list', [])
                 }
-            else:
-                logger.warning(f"Failed to get market data for {symbol}. Orderbook: {orderbook}, Ticker: {ticker}, Trades: {trades}")
-                return None
+            logger.warning(f"Failed to get market data for {symbol}. Orderbook: {orderbook}, Ticker: {ticker}, Trades: {trades}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching market data for {symbol}: {e}")
             return None
@@ -335,16 +333,14 @@ class BybitTradingBot:
             balance = self.session.get_wallet_balance(accountType=account_type)
             if balance and balance['retCode'] == 0:
                 return balance.get('result', {}).get('list', [])
-            else:
-                logger.warning(f"Failed to get account balance. Response: {balance}")
-                return None
+            logger.warning(f"Failed to get account balance. Response: {balance}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching account balance: {e}")
             return None
 
     async def calculate_position_size(self, symbol: str, capital_percentage: float, price: float, account_info: dict) -> Decimal:
-        """
-        Calculates the position size based on a percentage of available capital.
+        """Calculates the position size based on a percentage of available capital.
         Returns the quantity as a Decimal, rounded to the symbol's qtyStep.
         """
         if symbol not in self.symbol_info:
@@ -407,9 +403,8 @@ class BybitTradingBot:
             )
             if klines and klines['retCode'] == 0:
                 return klines
-            else:
-                logger.warning(f"Failed to get historical klines for {symbol} ({interval}). Response: {klines}")
-                return None
+            logger.warning(f"Failed to get historical klines for {symbol} ({interval}). Response: {klines}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching historical klines for {symbol} ({interval}): {e}")
             return None
@@ -453,9 +448,8 @@ class BybitTradingBot:
             if order_response and order_response['retCode'] == 0:
                 logger.info(f"Order placed successfully: {order_response.get('result')}")
                 return order_response.get('result')
-            else:
-                logger.error(f"Failed to place order: {order_response.get('retMsg')}")
-                return None
+            logger.error(f"Failed to place order: {order_response.get('retMsg')}")
+            return None
         except Exception as e:
             logger.error(f"Error placing order: {e}")
             return None
@@ -476,9 +470,8 @@ class BybitTradingBot:
             if cancel_response and cancel_response['retCode'] == 0:
                 logger.info(f"Order cancelled successfully: {cancel_response.get('result')}")
                 return True
-            else:
-                logger.error(f"Failed to cancel order: {cancel_response.get('retMsg')}")
-                return False
+            logger.error(f"Failed to cancel order: {cancel_response.get('retMsg')}")
+            return False
         except Exception as e:
             logger.error(f"Error cancelling order: {e}")
             return False

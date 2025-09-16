@@ -11,8 +11,7 @@ from .strategy_template import StrategyTemplate
 init()  # Initialize Colorama for vibrant terminal output
 
 class MarketMakingStrategy(StrategyTemplate):
-    """
-    An enhanced, adaptive market making strategy with ATR-based dynamic spreads,
+    """An enhanced, adaptive market making strategy with ATR-based dynamic spreads,
     inventory-aware skewing, S/R and Order Block avoidance, dynamic stop-loss,
     and improved hedging and logging for Termux compatibility.
     """

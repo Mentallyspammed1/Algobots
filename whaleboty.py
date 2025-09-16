@@ -3,12 +3,12 @@ import hmac
 import json
 import logging
 import os
-import time
 import sys
-from datetime import datetime, timedelta
-from decimal import Decimal, getcontext, ROUND_DOWN
+import time
+from datetime import datetime
+from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -20,7 +20,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 # Scikit-learn is explicitly excluded as per user request.
-SKLEARN_AVAILABLE = False 
+SKLEARN_AVAILABLE = False
 
 # Initialize colorama and set decimal precision
 getcontext().prec = 28
@@ -52,7 +52,7 @@ LOOP_DELAY_SECONDS = 15
 
 # --- Configuration Management ---
 
-def load_config(filepath: str) -> Dict[str, Any]:
+def load_config(filepath: str) -> dict[str, Any]:
     """Load configuration from JSON file, creating a default if not found."""
     default_config = {
         # Core Settings
@@ -76,7 +76,7 @@ def load_config(filepath: str) -> Dict[str, Any]:
         # Machine Learning Enhancement (Explicitly disabled)
         "ml_enhancement": {
             "enabled": False, # ML explicitly disabled
-            "model_path": "ml_model.pkl", 
+            "model_path": "ml_model.pkl",
             "retrain_on_startup": False,
             "training_data_limit": 5000, "prediction_lookahead": 12, "profit_target_percent": 0.5,
             "feature_lags": [1, 2, 3, 5],
@@ -119,28 +119,28 @@ def load_config(filepath: str) -> Dict[str, Any]:
                 json.dump(default_config, f, indent=4)
             print(f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath}{RESET}")
             return default_config
-        except IOError as e:
+        except OSError as e:
             print(f"{NEON_RED}Error creating default config file: {e}{RESET}")
             return default_config
 
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             config = json.load(f)
         _ensure_config_keys(config, default_config)
         with open(filepath, "w", encoding="utf-8") as f_write:
             json.dump(config, f_write, indent=4)
         return config
-    except (FileNotFoundError, json.JSONDecodeError, IOError) as e:
+    except (OSError, FileNotFoundError, json.JSONDecodeError) as e:
         print(f"{NEON_RED}Error loading config: {e}. Using default and attempting to save.{RESET}")
         try:
             with open(filepath, "w", encoding="utf-8") as f_default:
                 json.dump(default_config, f_default, indent=4)
-        except IOError as e_save:
+        except OSError as e_save:
             print(f"{NEON_RED}Could not save default config: {e_save}{RESET}")
         return default_config
 
 
-def _ensure_config_keys(config: Dict[str, Any], default_config: Dict[str, Any]) -> None:
+def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) -> None:
     """Recursively ensure all keys from default_config are in config."""
     for key, default_value in default_config.items():
         if key not in config:
@@ -207,9 +207,9 @@ def generate_signature(payload: str, api_secret: str) -> str:
     return hmac.new(api_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 def bybit_request(
-    method: str, endpoint: str, params: Optional[Dict] = None,
+    method: str, endpoint: str, params: dict | None = None,
     signed: bool = False, logger: logging.Logger = setup_logger("bybit_api")
-) -> Optional[Dict]:
+) -> dict | None:
     """Sends a request to the Bybit API."""
     session = create_session()
     url = f"{BASE_URL}{endpoint}"
@@ -270,7 +270,7 @@ def bybit_request(
         logger.error(f"{NEON_RED}Failed to decode JSON response: {response.text}{RESET}")
     return None
 
-def fetch_current_price(symbol: str, logger: logging.Logger) -> Optional[Decimal]:
+def fetch_current_price(symbol: str, logger: logging.Logger) -> Decimal | None:
     """Fetches the current market price for a symbol."""
     endpoint = "/v5/market/tickers"
     params = {"category": "linear", "symbol": symbol}
@@ -282,7 +282,7 @@ def fetch_current_price(symbol: str, logger: logging.Logger) -> Optional[Decimal
     logger.warning(f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}")
     return None
 
-def fetch_klines(symbol: str, interval: str, limit: int, logger: logging.Logger) -> Optional[pd.DataFrame]:
+def fetch_klines(symbol: str, interval: str, limit: int, logger: logging.Logger) -> pd.DataFrame | None:
     """Fetches kline data for a symbol and interval."""
     endpoint = "/v5/market/kline"
     params = {"category": "linear", "symbol": symbol, "interval": interval, "limit": limit}
@@ -296,17 +296,17 @@ def fetch_klines(symbol: str, interval: str, limit: int, logger: logging.Logger)
             df[col] = pd.to_numeric(df[col], errors='coerce')
         df.set_index('start_time', inplace=True)
         df.sort_index(inplace=True)
-        
+
         if df.empty:
             logger.warning(f"{NEON_YELLOW}Fetched klines for {symbol} {interval} but DataFrame is empty after processing. Raw response: {response}{RESET}")
             return None
-        
+
         logger.debug(f"Fetched {len(df)} {interval} klines for {symbol}.")
         return df
     logger.warning(f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}. API response might be empty or invalid. Raw response: {response}{RESET}")
     return None
 
-def fetch_orderbook(symbol: str, limit: int, logger: logging.Logger) -> Optional[Dict]:
+def fetch_orderbook(symbol: str, limit: int, logger: logging.Logger) -> dict | None:
     """Fetches orderbook data for a symbol."""
     endpoint = "/v5/market/orderbook"
     params = {"category": "linear", "symbol": symbol, "limit": limit}
@@ -320,11 +320,11 @@ def fetch_orderbook(symbol: str, limit: int, logger: logging.Logger) -> Optional
 # --- Position Management ---
 class PositionManager:
     """Manages open positions, stop-loss, and take-profit levels."""
-    def __init__(self, config: Dict[str, Any], logger: logging.Logger, symbol: str):
+    def __init__(self, config: dict[str, Any], logger: logging.Logger, symbol: str):
         self.config = config
         self.logger = logger
         self.symbol = symbol
-        self.open_positions: List[Dict] = [] # Stores active positions
+        self.open_positions: list[dict] = [] # Stores active positions
         self.trade_management_enabled = config["trade_management"]["enabled"]
         self.max_open_positions = config["trade_management"]["max_open_positions"]
 
@@ -354,24 +354,23 @@ class PositionManager:
         order_value = risk_amount / stop_loss_distance
         # Convert to quantity of the asset (e.g., BTC)
         order_qty = order_value / current_price
-        
+
         # Round order_qty to appropriate precision for the symbol (e.g., BTCUSDT might be 0.0001)
         # This requires knowing the symbol's lot size filter, which is exchange-specific.
         # For simulation, we'll use a generic rounding.
         order_qty = order_qty.quantize(Decimal('0.0001'), rounding=ROUND_DOWN) # Example precision
-        
+
         self.logger.info(f"Calculated order size: {order_qty} {self.symbol} (Risk: {risk_amount:.2f} USD)")
         return order_qty
 
-    def open_position(self, signal: str, current_price: Decimal, atr_value: Decimal) -> Optional[Dict]:
-        """
-        Opens a new position if conditions allow.
+    def open_position(self, signal: str, current_price: Decimal, atr_value: Decimal) -> dict | None:
+        """Opens a new position if conditions allow.
         Returns the new position details or None.
         """
         if not self.trade_management_enabled:
             self.logger.info(f"{NEON_YELLOW}Trade management is disabled. Skipping opening position.{RESET}")
             return None
-        
+
         if len(self.open_positions) >= self.max_open_positions:
             self.logger.info(f"{NEON_YELLOW}Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}")
             return None
@@ -410,8 +409,7 @@ class PositionManager:
         return position
 
     def manage_positions(self, current_price: Decimal, performance_tracker: Any) -> None:
-        """
-        Checks and manages all open positions (SL/TP).
+        """Checks and manages all open positions (SL/TP).
         In a real bot, this would interact with exchange orders.
         """
         if not self.trade_management_enabled or not self.open_positions:
@@ -450,15 +448,15 @@ class PositionManager:
                     position["exit_price"] = close_price
                     position["closed_by"] = closed_by
                     positions_to_close.append(i)
-                    
+
                     pnl = (close_price - entry_price) * qty if side == "BUY" else (entry_price - close_price) * qty
                     performance_tracker.record_trade(position, pnl)
                     self.logger.info(f"{NEON_PURPLE}Closed {side} position by {closed_by}: {position}. PnL: {pnl:.2f}{RESET}")
-            
+
         # Remove closed positions
         self.open_positions = [pos for i, pos in enumerate(self.open_positions) if i not in positions_to_close]
 
-    def get_open_positions(self) -> List[Dict]:
+    def get_open_positions(self) -> list[dict]:
         """Returns a list of currently open positions."""
         return [pos for pos in self.open_positions if pos["status"] == "OPEN"]
 
@@ -467,12 +465,12 @@ class PerformanceTracker:
     """Tracks and reports trading performance."""
     def __init__(self, logger: logging.Logger):
         self.logger = logger
-        self.trades: List[Dict] = []
+        self.trades: list[dict] = []
         self.total_pnl = Decimal('0')
         self.wins = 0
         self.losses = 0
 
-    def record_trade(self, position: Dict, pnl: Decimal) -> None:
+    def record_trade(self, position: dict, pnl: Decimal) -> None:
         """Records a completed trade."""
         trade_record = {
             "entry_time": position["entry_time"],
@@ -493,11 +491,11 @@ class PerformanceTracker:
             self.losses += 1
         self.logger.info(f"{NEON_CYAN}Trade recorded. Current Total PnL: {self.total_pnl:.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}")
 
-    def get_summary(self) -> Dict:
+    def get_summary(self) -> dict:
         """Returns a summary of all recorded trades."""
         total_trades = len(self.trades)
         win_rate = (self.wins / total_trades) * 100 if total_trades > 0 else 0
-        
+
         return {
             "total_trades": total_trades,
             "total_pnl": self.total_pnl,
@@ -525,16 +523,16 @@ class AlertSystem:
 # --- Trading Analysis (Upgraded with Ehlers SuperTrend) ---
 class TradingAnalyzer:
     """Analyzes trading data and generates signals with MTF and Ehlers SuperTrend."""
-    def __init__(self, df: pd.DataFrame, config: Dict[str, Any], logger: logging.Logger, symbol: str):
+    def __init__(self, df: pd.DataFrame, config: dict[str, Any], logger: logging.Logger, symbol: str):
         self.df = df.copy()
         self.config = config
         self.logger = logger
         self.symbol = symbol
-        self.indicator_values: Dict[str, Union[float, str, Decimal]] = {}
-        self.fib_levels: Dict[str, Decimal] = {}
+        self.indicator_values: dict[str, float | str | Decimal] = {}
+        self.fib_levels: dict[str, Decimal] = {}
         self.weights = config["weight_sets"]["default_scalping"]
         self.indicator_settings = config["indicator_settings"]
-        
+
         if self.df.empty:
             self.logger.warning(f"{NEON_YELLOW}TradingAnalyzer initialized with an empty DataFrame. Indicators will not be calculated.{RESET}")
             return
@@ -543,7 +541,7 @@ class TradingAnalyzer:
         if self.config["indicators"].get("fibonacci_levels", False):
             self.calculate_fibonacci_levels()
 
-    def _safe_calculate(self, func: callable, name: str, min_data_points: int = 0, *args, **kwargs) -> Optional[Any]:
+    def _safe_calculate(self, func: callable, name: str, min_data_points: int = 0, *args, **kwargs) -> Any | None:
         """Helper to safely calculate indicators and log errors, with min_data_points check."""
         if len(self.df) < min_data_points:
             self.logger.debug(f"Skipping indicator '{name}': Not enough data. Need {min_data_points}, have {len(self.df)}.")
@@ -665,13 +663,13 @@ class TradingAnalyzer:
                 self.df['st_slow_val'] = st_slow['supertrend']
                 self.indicator_values["ST_Slow_Dir"] = st_slow['direction'].iloc[-1]
                 self.indicator_values["ST_Slow_Val"] = st_slow['supertrend'].iloc[-1]
-        
+
         # Final dropna after all indicators are calculated
         initial_len = len(self.df)
-        self.df.dropna(inplace=True) 
+        self.df.dropna(inplace=True)
         if len(self.df) < initial_len:
             self.logger.debug(f"Dropped {initial_len - len(self.df)} rows with NaNs after indicator calculations.")
-        
+
         if self.df.empty:
             self.logger.warning(f"{NEON_YELLOW}DataFrame is empty after calculating all indicators and dropping NaNs.{RESET}")
         else:
@@ -688,7 +686,7 @@ class TradingAnalyzer:
     def calculate_super_smoother(self, series: pd.Series, period: int) -> pd.Series:
         """Ehlers SuperSmoother filter to reduce lag and noise."""
         if period <= 0 or len(series) < 2: return pd.Series(np.nan, index=series.index)
-        
+
         series = pd.to_numeric(series, errors='coerce').dropna()
         if len(series) < 2: return pd.Series(np.nan, index=series.index)
 
@@ -706,24 +704,24 @@ class TradingAnalyzer:
             filt.iloc[i] = (c1 / 2) * (series.iloc[i] + series.iloc[i-1]) + c2 * filt.iloc[i-1] - c3 * filt.iloc[i-2]
         return filt.reindex(self.df.index)
 
-    def calculate_ehlers_supertrend(self, period: int, multiplier: float) -> Optional[pd.DataFrame]:
+    def calculate_ehlers_supertrend(self, period: int, multiplier: float) -> pd.DataFrame | None:
         """Calculates SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:
             self.logger.debug(f"Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars.")
             return None
 
         df_copy = self.df.copy()
-        
+
         hl2 = (df_copy['high'] + df_copy['low']) / 2
         smoothed_price = self.calculate_super_smoother(hl2, period)
-        
+
         tr = self.calculate_true_range()
         smoothed_atr = self.calculate_super_smoother(tr, period)
 
         df_copy['smoothed_price'] = smoothed_price
         df_copy['smoothed_atr'] = smoothed_atr
         df_copy.dropna(inplace=True)
-        if df_copy.empty: 
+        if df_copy.empty:
             self.logger.debug("Ehlers SuperTrend: DataFrame empty after smoothing. Returning None.")
             return None
 
@@ -732,18 +730,18 @@ class TradingAnalyzer:
 
         direction = pd.Series(0, index=df_copy.index, dtype=int)
         supertrend = pd.Series(np.nan, index=df_copy.index)
-        
+
         first_valid_idx = df_copy.index[0]
         supertrend.loc[first_valid_idx] = lower_band.loc[first_valid_idx]
 
         for i in range(1, len(df_copy)):
             current_idx = df_copy.index[i]
             prev_idx = df_copy.index[i-1]
-            
+
             prev_direction = direction.loc[prev_idx]
             prev_supertrend = supertrend.loc[prev_idx]
             curr_close = df_copy['close'].loc[current_idx]
-            
+
             if prev_direction == 0:
                 if curr_close > prev_supertrend:
                     direction.loc[current_idx] = 1
@@ -783,11 +781,11 @@ class TradingAnalyzer:
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
-    def calculate_stoch_rsi(self, period: int, k_period: int, d_period: int) -> Tuple[pd.Series, pd.Series]:
+    def calculate_stoch_rsi(self, period: int, k_period: int, d_period: int) -> tuple[pd.Series, pd.Series]:
         """Calculates Stochastic RSI."""
         if len(self.df) <= period: return pd.Series(np.nan, index=self.df.index), pd.Series(np.nan, index=self.df.index)
         rsi = self.calculate_rsi(period)
-        
+
         lowest_rsi = rsi.rolling(window=period, min_periods=period).min()
         highest_rsi = rsi.rolling(window=period, min_periods=period).max()
 
@@ -800,7 +798,7 @@ class TradingAnalyzer:
 
         return stoch_rsi_k, stoch_rsi_d
 
-    def calculate_bollinger_bands(self, period: int, std_dev: float) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    def calculate_bollinger_bands(self, period: int, std_dev: float) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculates Bollinger Bands."""
         if len(self.df) < period: return pd.Series(np.nan, index=self.df.index), pd.Series(np.nan, index=self.df.index), pd.Series(np.nan, index=self.df.index)
         middle_band = self.df['close'].rolling(window=period, min_periods=period).mean()
@@ -862,10 +860,10 @@ class TradingAnalyzer:
         mfi = 100 - (100 / (1 + mf_ratio))
         return mfi
 
-    def calculate_psar(self, acceleration: float, max_acceleration: float) -> Tuple[pd.Series, pd.Series]:
+    def calculate_psar(self, acceleration: float, max_acceleration: float) -> tuple[pd.Series, pd.Series]:
         """Calculates Parabolic SAR."""
         if len(self.df) < 2: return pd.Series(np.nan, index=self.df.index), pd.Series(np.nan, index=self.df.index)
-        
+
         psar = self.df['close'].copy()
         bull = pd.Series(True, index=self.df.index)
         af = acceleration
@@ -899,7 +897,7 @@ class TradingAnalyzer:
                     if self.df['low'].iloc[i] < ep:
                         ep = self.df['low'].iloc[i]
                         af = min(af + acceleration, max_acceleration)
-        
+
         direction = pd.Series(0, index=self.df.index, dtype=int)
         direction[psar < self.df['close']] = 1
         direction[psar > self.df['close']] = -1
@@ -915,9 +913,9 @@ class TradingAnalyzer:
 
         recent_high = self.df['high'].iloc[-window:].max()
         recent_low = self.df['low'].iloc[-window:].min()
-        
+
         diff = recent_high - recent_low
-        
+
         self.fib_levels = {
             "0.0%": Decimal(str(recent_high)),
             "23.6%": Decimal(str(recent_high - 0.236 * diff)).quantize(Decimal('0.01'), rounding=ROUND_DOWN),
@@ -933,7 +931,7 @@ class TradingAnalyzer:
         """Safely retrieves an indicator value."""
         return self.indicator_values.get(key, default)
 
-    def _check_orderbook(self, current_price: Decimal, orderbook_data: Dict) -> float:
+    def _check_orderbook(self, current_price: Decimal, orderbook_data: dict) -> float:
         """Analyzes orderbook imbalance."""
         bids = orderbook_data.get('b', [])
         asks = orderbook_data.get('a', [])
@@ -954,7 +952,7 @@ class TradingAnalyzer:
             return "UNKNOWN"
 
         last_close = higher_tf_df['close'].iloc[-1]
-        
+
         if indicator_type == "sma":
             period = self.config["mtf_analysis"]["trend_period"]
             if len(higher_tf_df) < period:
@@ -964,7 +962,7 @@ class TradingAnalyzer:
             if last_close > sma: return "UP"
             if last_close < sma: return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             period = self.config["mtf_analysis"]["trend_period"]
             if len(higher_tf_df) < period:
                 self.logger.debug(f"MTF EMA: Not enough data for {period} period. Have {len(higher_tf_df)}.")
@@ -973,7 +971,7 @@ class TradingAnalyzer:
             if last_close > ema: return "UP"
             if last_close < ema: return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             # Temporarily create an analyzer for the higher timeframe data to calculate its ST
             # Pass the logger and symbol to the temporary analyzer
             temp_analyzer = TradingAnalyzer(higher_tf_df, self.config, self.logger, self.symbol)
@@ -987,20 +985,20 @@ class TradingAnalyzer:
         return "UNKNOWN"
 
     def generate_trading_signal(
-        self, current_price: Decimal, orderbook_data: Optional[Dict],
-        mtf_trends: Dict[str, str]
-    ) -> Tuple[str, float]:
+        self, current_price: Decimal, orderbook_data: dict | None,
+        mtf_trends: dict[str, str]
+    ) -> tuple[str, float]:
         """Generates a signal using confluence of indicators, including Ehlers SuperTrend."""
         signal_score = 0.0
         active_indicators = self.config["indicators"]
         weights = self.weights
-        
+
         if self.df.empty:
             self.logger.warning(f"{NEON_YELLOW}DataFrame is empty in generate_trading_signal. Cannot generate signal.{RESET}")
             return "HOLD", 0.0
 
         current_close = Decimal(str(self.df['close'].iloc[-1]))
-        
+
         # EMA Alignment
         if active_indicators.get("ema_alignment", False):
             ema_short = self._get_indicator_value("EMA_Short")
@@ -1024,7 +1022,7 @@ class TradingAnalyzer:
             cci = self._get_indicator_value("CCI")
             wr = self._get_indicator_value("WR")
             mfi = self._get_indicator_value("MFI")
-            
+
             isd = self.indicator_settings
 
             # RSI
@@ -1036,7 +1034,7 @@ class TradingAnalyzer:
             if not pd.isna(stoch_k) and not pd.isna(stoch_d):
                 if stoch_k > stoch_d and stoch_k < isd["stoch_rsi_oversold"]: signal_score += weights.get("stoch_rsi", 0) * 0.5
                 elif stoch_k < stoch_d and stoch_k > isd["stoch_rsi_overbought"]: signal_score -= weights.get("stoch_rsi", 0) * 0.5
-            
+
             # CCI
             if not pd.isna(cci):
                 if cci < isd["cci_oversold"]: signal_score += weights.get("cci", 0) * 0.5
@@ -1099,7 +1097,7 @@ class TradingAnalyzer:
         if active_indicators.get("ehlers_supertrend", False):
             st_fast_dir = self._get_indicator_value("ST_Fast_Dir")
             st_slow_dir = self._get_indicator_value("ST_Slow_Dir")
-            
+
             prev_st_fast_dir = self.df['st_fast_dir'].iloc[-2] if 'st_fast_dir' in self.df.columns and len(self.df) > 1 else np.nan
 
             weight = weights.get("ehlers_supertrend_alignment", 0.0)
@@ -1108,17 +1106,17 @@ class TradingAnalyzer:
                 # High-conviction BUY signal: Slow trend is UP, and fast trend just flipped UP
                 if st_slow_dir == 1 and st_fast_dir == 1 and prev_st_fast_dir == -1:
                     signal_score += weight
-                    self.logger.debug(f"Ehlers SuperTrend: Strong BUY signal (fast flip aligned with slow trend).")
+                    self.logger.debug("Ehlers SuperTrend: Strong BUY signal (fast flip aligned with slow trend).")
                 # High-conviction SELL signal: Slow trend is DOWN, and fast trend just flipped DOWN
                 elif st_slow_dir == -1 and st_fast_dir == -1 and prev_st_fast_dir == 1:
                     signal_score -= weight
-                    self.logger.debug(f"Ehlers SuperTrend: Strong SELL signal (fast flip aligned with slow trend).")
+                    self.logger.debug("Ehlers SuperTrend: Strong SELL signal (fast flip aligned with slow trend).")
                 # Weaker continuation signal: Both trends are aligned
                 elif st_slow_dir == 1 and st_fast_dir == 1:
                     signal_score += weight * 0.3
                 elif st_slow_dir == -1 and st_fast_dir == -1:
                     signal_score -= weight * 0.3
-        
+
         # --- Multi-Timeframe Trend Confluence Scoring ---
         if self.config["mtf_analysis"]["enabled"] and mtf_trends:
             mtf_buy_score = 0
@@ -1126,7 +1124,7 @@ class TradingAnalyzer:
             for tf, trend in mtf_trends.items():
                 if trend == "UP": mtf_buy_score += 1
                 elif trend == "DOWN": mtf_sell_score -= 1 # Subtract for sell bias
-            
+
             mtf_weight = weights.get("mtf_trend_confluence", 0.0)
             # Normalize MTF score by number of MTF indicators/timeframes
             if mtf_trends:
@@ -1144,11 +1142,11 @@ class TradingAnalyzer:
             final_signal = "BUY"
         elif signal_score <= -threshold:
             final_signal = "SELL"
-        
+
         self.logger.info(f"{NEON_YELLOW}Raw Signal Score: {signal_score:.2f}, Final Signal: {final_signal}{RESET}")
         return final_signal, signal_score
 
-    def calculate_entry_tp_sl(self, current_price: Decimal, atr_value: Decimal, signal: str) -> Tuple[Decimal, Decimal]:
+    def calculate_entry_tp_sl(self, current_price: Decimal, atr_value: Decimal, signal: str) -> tuple[Decimal, Decimal]:
         """Calculates Take Profit and Stop Loss levels."""
         stop_loss_atr_multiple = Decimal(str(self.config["trade_management"]["stop_loss_atr_multiple"]))
         take_profit_atr_multiple = Decimal(str(self.config["trade_management"]["take_profit_atr_multiple"]))
@@ -1175,12 +1173,12 @@ def main() -> None:
     # Bybit's valid intervals for linear category: "1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"
     # The API expects these as strings.
     valid_bybit_intervals = ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"]
-    
+
     # Check primary interval
     if config['interval'] not in valid_bybit_intervals:
         logger.error(f"{NEON_RED}Invalid primary interval '{config['interval']}' in config.json. Please use Bybit's valid string formats (e.g., '15', '60', 'D'). Exiting.{RESET}")
         sys.exit(1)
-    
+
     # Check higher timeframes intervals
     for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
         if htf_interval not in valid_bybit_intervals:
@@ -1210,14 +1208,14 @@ def main() -> None:
                 alert_system.send_alert("Failed to fetch primary klines or DataFrame is empty. Skipping loop.", "WARNING")
                 time.sleep(config['loop_delay'])
                 continue
-            
+
             # Fetch orderbook data
             orderbook_data = None
             if config["indicators"].get("orderbook_imbalance", False):
                 orderbook_data = fetch_orderbook(config['symbol'], config['orderbook_limit'], logger)
 
             # --- Multi-Timeframe Analysis ---
-            mtf_trends: Dict[str, str] = {}
+            mtf_trends: dict[str, str] = {}
             if config["mtf_analysis"]["enabled"]:
                 for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
                     logger.debug(f"Fetching klines for MTF interval: {htf_interval}")
@@ -1232,14 +1230,14 @@ def main() -> None:
                             logger.debug(f"MTF Trend ({htf_interval}, {trend_ind}): {trend}")
                     else:
                         logger.warning(f"{NEON_YELLOW}Could not fetch klines for higher timeframe {htf_interval} or it was empty. Skipping MTF trend for this TF.{RESET}")
-                    
+
                     # Introduce delay between MTF requests
                     time.sleep(config["mtf_analysis"]["mtf_request_delay_seconds"])
 
 
             # --- Trading Signal Generation ---
             analyzer = TradingAnalyzer(df, config, logger, config['symbol'])
-            
+
             if analyzer.df.empty: # Check if analyzer's df is empty after indicator calculations
                 alert_system.send_alert("TradingAnalyzer DataFrame is empty after indicator calculations. Cannot generate signal.", "WARNING")
                 time.sleep(config['loop_delay'])
@@ -1261,7 +1259,7 @@ def main() -> None:
                 position_manager.open_position("SELL", current_price, atr_value)
             else:
                 logger.info(f"{NEON_BLUE}No strong trading signal. Holding. Score: {signal_score:.2f}{RESET}")
-            
+
             # Log current open positions
             open_positions = position_manager.get_open_positions()
             if open_positions:

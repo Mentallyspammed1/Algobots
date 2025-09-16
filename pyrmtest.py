@@ -76,7 +76,7 @@ class ScalpingEngine:
         score = sum(1 if s == 'BUY' else -1 for s in signals)
         if score >= 2:
             return 'BUY'
-        elif score <= -2:
+        if score <= -2:
             return 'SELL'
         return None
 

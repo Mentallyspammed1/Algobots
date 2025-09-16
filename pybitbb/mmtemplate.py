@@ -1,19 +1,21 @@
 # bybit_market_maker_template.py
-import os
-import time
 import logging
+import os
 import threading
-from typing import Dict, Any, Optional, Tuple, List
-import math
+import time
+from typing import Any
 
 # Import your helper modules
 from bybit_account_helper import BybitAccountHelper
-from bybit_trade_helper import BybitTradeHelper
 from bybit_market_data_helper import BybitMarketDataHelper
-from bybit_ws_private_helper import BybitWsPrivateHelper
-from bybit_orderbook_helper import BybitOrderbookHelper, PriceLevel # PriceLevel for type hinting
+from bybit_orderbook_helper import (  # PriceLevel for type hinting
+    BybitOrderbookHelper,
+)
 from bybit_sizing_helper import BybitSizingHelper
-from bybit_unified_order_manager import BybitUnifiedOrderManager, TradingMode # Using unified manager for orders
+from bybit_unified_order_manager import (  # Using unified manager for orders
+    BybitUnifiedOrderManager,
+    TradingMode,
+)
 
 # Configure logging for the main script
 logging.basicConfig(
@@ -39,9 +41,9 @@ ORDER_MODE: TradingMode = "websocket" # "http" or "websocket" for order placemen
 
 # --- Global State for Market Maker ---
 # Store active orders placed by this bot, keyed by orderId
-active_market_maker_orders: Dict[str, Dict[str, Any]] = {} 
+active_market_maker_orders: dict[str, dict[str, Any]] = {}
 # Lock for accessing active_market_maker_orders
-active_orders_lock = threading.Lock() 
+active_orders_lock = threading.Lock()
 
 # --- Market Maker Logic ---
 class MarketMakerBot:
@@ -58,7 +60,7 @@ class MarketMakerBot:
             testnet=testnet, orderbook_stream_depth=25 # Using a reasonable depth
         )
         self.sizing_helper = BybitSizingHelper(testnet=testnet, api_key=api_key, api_secret=api_secret)
-        
+
         # Unified Order Manager handles actual order placement and WS private streams for tracking
         self.order_manager = BybitUnifiedOrderManager(
             api_key=api_key, api_secret=api_secret, testnet=testnet,
@@ -66,7 +68,7 @@ class MarketMakerBot:
         )
 
         self._running = threading.Event() # Event to control the main bot loop
-        self._main_loop_thread: Optional[threading.Thread] = None
+        self._main_loop_thread: threading.Thread | None = None
 
     def _get_current_position(self) -> float:
         """Retrieves the current absolute position size for the symbol."""
@@ -83,8 +85,7 @@ class MarketMakerBot:
         return current_size
 
     def _manage_active_orders(self):
-        """
-        Cancels or amends orders that are stale or filled.
+        """Cancels or amends orders that are stale or filled.
         This is a simplified version; a real bot would use WS updates for this.
         """
         with active_orders_lock:
@@ -109,13 +110,12 @@ class MarketMakerBot:
                     else:
                         logger.error(f"Failed to cancel timed-out order {order_id}. Will retry on next loop.")
                     continue
-            
+
             for order_id in orders_to_remove:
                 del active_market_maker_orders[order_id]
 
     def _place_market_making_orders(self):
-        """
-        Calculates prices and places bid/ask orders, managing existing ones.
+        """Calculates prices and places bid/ask orders, managing existing ones.
         """
         best_bid_level, best_ask_level = self.orderbook_helper.get_best_bid_ask()
         if not best_bid_level or not best_ask_level:
@@ -123,7 +123,7 @@ class MarketMakerBot:
             return
 
         mid_price = (best_bid_level.price + best_ask_level.price) / 2
-        
+
         # Calculate target bid/ask prices with spread
         target_bid_price = mid_price * (1 - SPREAD_PERCENTAGE / 2)
         target_ask_price = mid_price * (1 + SPREAD_PERCENTAGE / 2)
@@ -158,7 +158,7 @@ class MarketMakerBot:
         if current_position >= MAX_POSITION_SIZE:
             logger.warning(f"Position ({current_position:.4f}) is at or above MAX_POSITION_SIZE. Skipping bid order.")
             place_bid = False
-        
+
         # Check if there's an existing bid order at the target price
         existing_bid_order = None
         for oid, details in self.order_manager.get_all_tracked_orders().items():
@@ -234,10 +234,10 @@ class MarketMakerBot:
             try:
                 self._manage_active_orders() # Clean up old orders
                 self._place_market_making_orders() # Place/amend new orders
-                
-            except Exception as e:
+
+            except Exception:
                 logger.exception("Error in market maker loop.")
-            
+
             time.sleep(5) # Run every 5 seconds (adjust frequency as needed)
 
         logger.info("Market maker loop stopped.")
@@ -249,7 +249,7 @@ class MarketMakerBot:
             return
 
         logger.info("Starting Bybit Market Maker Bot...")
-        
+
         # Start core services
         self.orderbook_helper.start_orderbook_stream()
         if not self.orderbook_helper.is_orderbook_ready():
@@ -257,7 +257,7 @@ class MarketMakerBot:
             return
 
         self.order_manager.start() # This starts its internal WS private listener
-        
+
         # Give some time for sizing helper to fetch instrument info
         self.sizing_helper._get_instrument_info(CATEGORY, SYMBOL, force_update=True)
         if not self.sizing_helper.get_qty_step(CATEGORY, SYMBOL):
@@ -286,7 +286,7 @@ class MarketMakerBot:
 
         self.orderbook_helper.stop_orderbook_stream()
         self.order_manager.stop() # This stops its internal WS private listener
-        
+
         logger.info("Bybit Market Maker Bot stopped.")
 
 # --- Main Execution ---
@@ -305,7 +305,7 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Ctrl+C detected. Stopping bot...")
-    except Exception as e:
+    except Exception:
         logger.exception("An unexpected error occurred in the main program.")
     finally:
         bot.stop_bot()

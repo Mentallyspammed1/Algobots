@@ -13,8 +13,7 @@ if not trade_metrics_logger.handlers:
     pass
 
 class TradeMetrics:
-    """
-    Calculates fees and tracks various trade metrics such as PnL, win rate, etc.
+    """Calculates fees and tracks various trade metrics such as PnL, win rate, etc.
     """
     def __init__(self, maker_fee: float = 0.0002, taker_fee: float = 0.0007):
         self.maker_fee = Decimal(str(maker_fee))
@@ -27,8 +26,7 @@ class TradeMetrics:
         trade_metrics_logger.info(f"TradeMetrics initialized with Maker Fee: {self.maker_fee}, Taker Fee: {self.taker_fee}")
 
     def calculate_fee(self, quantity: Decimal, price: Decimal, is_maker: bool) -> Decimal:
-        """
-        Calculates the trading fee for a given trade.
+        """Calculates the trading fee for a given trade.
 
         Args:
             quantity (Decimal): The quantity of the asset traded.
@@ -46,8 +44,7 @@ class TradeMetrics:
 
     def record_trade(self, entry_price: Decimal, exit_price: Decimal, quantity: Decimal, side: str,
                      entry_fee: Decimal, exit_fee: Decimal, timestamp: Any):
-        """
-        Records a completed trade and updates PnL and trade statistics.
+        """Records a completed trade and updates PnL and trade statistics.
 
         Args:
             entry_price (Decimal): Price at which the position was opened.
@@ -88,22 +85,19 @@ class TradeMetrics:
         trade_metrics_logger.info(f"Trade recorded: Side={side}, Gross PnL={pnl:.8f}, Net PnL={net_pnl:.8f}")
 
     def get_win_rate(self) -> Decimal:
-        """
-        Calculates the win rate.
+        """Calculates the win rate.
         """
         if self.total_trades == 0:
             return Decimal('0.0')
         return (Decimal(self.winning_trades) / Decimal(self.total_trades)) * Decimal('100')
 
     def get_total_realized_pnl(self) -> Decimal:
-        """
-        Returns the total realized PnL.
+        """Returns the total realized PnL.
         """
         return self.total_realized_pnl
 
     def get_trade_statistics(self) -> dict[str, Any]:
-        """
-        Returns a dictionary of overall trade statistics.
+        """Returns a dictionary of overall trade statistics.
         """
         return {
             'total_realized_pnl': self.total_realized_pnl.quantize(Decimal('0.00000001'), rounding=ROUND_HALF_UP),

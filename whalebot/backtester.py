@@ -1,19 +1,27 @@
 import asyncio
-import json
 import logging
 import os
 from datetime import datetime
-from decimal import Decimal, ROUND_DOWN, getcontext
+from decimal import ROUND_DOWN, Decimal, getcontext
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import pandas as pd
 
 # Import necessary components from bbwb.py
 from bbwb import (
-    load_config, setup_logger, BybitClient, IndicatorCalculator, TradingAnalyzer,
-    NEON_GREEN, NEON_YELLOW, NEON_RED, NEON_BLUE, NEON_CYAN, NEON_PURPLE, RESET,
-    PriceLevel, AdvancedOrderbookManager # Imported for mocking purposes
+    NEON_BLUE,
+    NEON_CYAN,
+    NEON_GREEN,
+    NEON_RED,
+    NEON_YELLOW,
+    RESET,
+    BybitClient,
+    IndicatorCalculator,
+    PriceLevel,  # Imported for mocking purposes
+    TradingAnalyzer,
+    load_config,
+    setup_logger,
 )
 
 # Set Decimal precision
@@ -21,18 +29,17 @@ getcontext().prec = 28
 
 class MockOrderbookManager:
     """A mock orderbook manager for backtesting, always returning None/empty."""
-    async def get_best_bid_ask(self) -> Tuple[float | None, float | None]:
+    async def get_best_bid_ask(self) -> tuple[float | None, float | None]:
         return None, None
-    async def get_depth(self, depth: int) -> Tuple[List[PriceLevel], List[PriceLevel]]:
+    async def get_depth(self, depth: int) -> tuple[list[PriceLevel], list[PriceLevel]]:
         return [], []
 
 class Backtester:
-    """
-    Simulates trading strategy on historical data to evaluate performance.
+    """Simulates trading strategy on historical data to evaluate performance.
     """
     def __init__(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         logger: logging.Logger,
         bybit_client: BybitClient,
         indicator_calculator: IndicatorCalculator,
@@ -65,16 +72,15 @@ class Backtester:
         interval: str,
         start_date: str,
         end_date: str
-    ) -> Dict[str, Any]:
-        """
-        Runs the backtest over a specified historical period.
+    ) -> dict[str, Any]:
+        """Runs the backtest over a specified historical period.
         """
         self.logger.info(f"{NEON_BLUE}Fetching historical data for {symbol} ({interval}) from {start_date} to {end_date}...{RESET}")
 
         all_klines_df = pd.DataFrame()
         current_end_time = int(datetime.now().timestamp() * 1000) # Start from now
         start_timestamp_ms = int(pd.to_datetime(start_date).timestamp() * 1000)
-        
+
         max_fetches = 100 # Limit the number of API calls to prevent excessive fetching
         fetched_count = 0
 
@@ -112,10 +118,10 @@ class Backtester:
                     break
 
                 all_klines_df = pd.concat([df, all_klines_df]).drop_duplicates().sort_index()
-                
+
                 # Update current_end_time to the start_time of the oldest bar fetched
                 current_end_time = int(df.index.min().timestamp() * 1000) - 1 # Subtract 1ms to avoid fetching the same bar
-                
+
                 self.logger.debug(f"Fetched {len(df)} klines. Total: {len(all_klines_df)}. Oldest bar fetched: {df.index.min()}")
 
                 if current_end_time <= start_timestamp_ms:
@@ -124,7 +130,7 @@ class Backtester:
             else:
                 self.logger.warning(f"{NEON_YELLOW}No more historical data or error fetching. Stopping iterative fetch.{RESET}")
                 break
-            
+
             fetched_count += 1
             await asyncio.sleep(0.1) # Small delay to avoid hitting rate limits
 
@@ -135,19 +141,19 @@ class Backtester:
 
         # Filter data by date range
         klines_df = all_klines_df[(all_klines_df.index >= start_date) & (all_klines_df.index <= end_date)]
-        
+
         if klines_df.empty:
             self.logger.warning(f"{NEON_YELLOW}No data within the specified date range after fetching. Exiting backtest.{RESET}")
             return self._generate_report([], self.initial_capital, self.capital)
-        
+
         self.logger.info(f"{NEON_GREEN}Starting backtest with {len(klines_df)} historical bars.{RESET}")
-        
+
         # Ensure klines_df is sorted by index (timestamp)
         klines_df.sort_index(inplace=True)
 
         for i, (timestamp, bar) in enumerate(klines_df.iterrows()):
             current_price = Decimal(str(bar["close"]))
-            
+
             # Update TradingAnalyzer with current bar and recalculate indicators
             # Pass a slice of the DataFrame up to the current bar
             current_df_slice = klines_df.iloc[:i+1].copy()
@@ -295,7 +301,7 @@ class Backtester:
         if self.side == 'buy':
             sl_price = self.entry_price - (atr_value * stop_loss_atr_multiple)
             tp_price = self.entry_price + (atr_value * take_profit_atr_multiple)
-            
+
             if current_price <= sl_price:
                 self.logger.info(f"{NEON_RED}Simulated BUY position hit Stop Loss at {current_price} (SL: {sl_price:.2f}){RESET}")
                 await self._close_position(bar, sl_price, self.entry_price, self.side)
@@ -313,7 +319,7 @@ class Backtester:
                 self.logger.info(f"{NEON_GREEN}Simulated SELL position hit Take Profit at {current_price} (TP: {tp_price:.2f}){RESET}")
                 await self._close_position(bar, tp_price, self.entry_price, self.side)
 
-    def _generate_report(self, trade_history: List[Dict[str, Any]], initial_capital: Decimal, final_capital: Decimal) -> Dict[str, Any]:
+    def _generate_report(self, trade_history: list[dict[str, Any]], initial_capital: Decimal, final_capital: Decimal) -> dict[str, Any]:
         """Generates and prints a backtest report."""
         total_pnl = final_capital - initial_capital
         num_trades = len([t for t in trade_history if t["type"] == "exit"])

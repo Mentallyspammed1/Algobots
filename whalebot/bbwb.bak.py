@@ -19,7 +19,6 @@ import pandas as pd
 import pandas_ta as ta
 import requests
 from colorama import Fore, Style, init
-
 from pybit.unified_trading import HTTP, WebSocket
 
 SKLEARN_AVAILABLE = False
@@ -723,14 +722,13 @@ class BybitClient:
                     ret_code = response.get("retCode")
                     if ret_code == 0:
                         return response
-                    elif ret_code == 110043: # Leverage not modified
+                    if ret_code == 110043: # Leverage not modified
                         self.logger.info(f"{NEON_YELLOW}Leverage already set to requested value or cannot be modified at this time. Proceeding.{RESET}")
                         return {"retCode": 0, "retMsg": "Leverage already set"} # Return a success response
-                    else:
-                        error_msg = response.get("retMsg", "Unknown error")
-                        self.logger.error(
-                            f"{NEON_RED}Bybit API Error ({method} attempt {attempt + 1}/{MAX_API_RETRIES}): {error_msg} (Code: {ret_code}){RESET}"
-                        )
+                    error_msg = response.get("retMsg", "Unknown error")
+                    self.logger.error(
+                        f"{NEON_RED}Bybit API Error ({method} attempt {attempt + 1}/{MAX_API_RETRIES}): {error_msg} (Code: {ret_code}){RESET}"
+                    )
                 else: # No response
                     self.logger.error(f"{NEON_RED}Bybit API Error ({method} attempt {attempt + 1}/{MAX_API_RETRIES}): No response{RESET}")
             except requests.exceptions.HTTPError as e:
@@ -1351,7 +1349,7 @@ class IndicatorCalculator:
         wr = ta.willr(df["high"], df["low"], df["close"], length=period)
         return self._safe_series_op(wr, "WR")
 
-    
+
 
     def calculate_mfi(self, df: pd.DataFrame, period: int) -> pd.Series:
         """Calculate Money Flow Index (MFI)."""
@@ -1909,7 +1907,7 @@ class TradingAnalyzer:
             if last_close < sma:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ema":
+        if indicator_type == "ema":
             period = self.config["mtf_analysis"]["trend_period"]
             if len(higher_tf_df) < period:
                 self.logger.debug(
@@ -1922,7 +1920,7 @@ class TradingAnalyzer:
             if last_close < ema:
                 return "DOWN"
             return "SIDEWAYS"
-        elif indicator_type == "ehlers_supertrend":
+        if indicator_type == "ehlers_supertrend":
             st_result = self.indicator_calculator.calculate_ehlers_supertrend(
                 higher_tf_df,
                 period=isd["ehlers_slow_period"],
@@ -2062,7 +2060,7 @@ class TradingAnalyzer:
                     if len(self.df) >= 2:
                         prev_close = Decimal(str(self.df["close"].iloc[-2]))
                         # Retrieve previous PSAR_Val from indicator_values, not self.df["PSAR_Val"]
-                        prev_psar_val = self._get_indicator_value("PSAR_Val", default=0.0) 
+                        prev_psar_val = self._get_indicator_value("PSAR_Val", default=0.0)
                         prev_psar_val_numeric = Decimal(str(prev_psar_val)) if not isinstance(prev_psar_val, Decimal) else prev_psar_val
 
                         self.logger.debug(f"Prev Close: {prev_close} (Type: {type(prev_close)})")
@@ -2076,7 +2074,7 @@ class TradingAnalyzer:
                     if len(self.df) >= 2:
                         prev_close = Decimal(str(self.df["close"].iloc[-2]))
                         # Retrieve previous PSAR_Val from indicator_values, not self.df["PSAR_Val"]
-                        prev_psar_val = self._get_indicator_value("PSAR_Val", default=0.0) 
+                        prev_psar_val = self._get_indicator_value("PSAR_Val", default=0.0)
                         prev_psar_val_numeric = Decimal(str(prev_psar_val)) if not isinstance(prev_psar_val, Decimal) else prev_psar_val
 
                         if current_close < psar_val_numeric and prev_close >= prev_psar_val_numeric:
@@ -2530,7 +2528,7 @@ class PositionManager:
             if existing_pos["status"] == "OPEN" and existing_pos["side"] == signal:
                 self.logger.info(f"{NEON_BLUE}Already in a {signal} position for {self.symbol}. No new position opened.{RESET}")
                 return None
-            elif existing_pos["status"] == "OPEN" and existing_pos["side"] != signal:
+            if existing_pos["status"] == "OPEN" and existing_pos["side"] != signal:
                 if self.max_open_positions == 1:
                     self.logger.info(f"{NEON_YELLOW}Attempting to close existing {existing_pos['side']} position before opening new {signal} position.{RESET}")
                     await self.close_position(existing_pos)
