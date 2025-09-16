@@ -119,8 +119,9 @@ const INDICATOR_COLORS = {
 const indicators = {
     calculate_sma: function(df, period) {
         const result = [];
-        for (let i = period - 1; i < df.close.length; i++) {
-            const sum = df.close.slice(i - period + 1, i + 1).reduce((acc, val) => acc.plus(val), new Decimal(0));
+        // df is now an array of objects, so access close via df[i].close
+        for (let i = period - 1; i < df.length; i++) {
+            const sum = df.slice(i - period + 1, i + 1).reduce((acc, val) => acc.plus(val.close), new Decimal(0));
             result.push(sum.dividedBy(period));
         }
         return result;
@@ -129,11 +130,11 @@ const indicators = {
     calculate_ema: function(df, period) {
         const result = [];
         const multiplier = new Decimal(2).dividedBy(new Decimal(period).plus(1));
-        let ema = df.close[0];
+        let ema = df[0].close; // Access close from the first object
         result.push(ema);
         
-        for (let i = 1; i < df.close.length; i++) {
-            ema = df.close[i].times(multiplier).plus(ema.times(new Decimal(1).minus(multiplier)));
+        for (let i = 1; i < df.length; i++) {
+            ema = df[i].close.times(multiplier).plus(ema.times(new Decimal(1).minus(multiplier)));
             result.push(ema);
         }
         return result;
@@ -141,10 +142,10 @@ const indicators = {
     
     calculate_atr: function(df, period) {
         const tr = [];
-        for (let i = 1; i < df.close.length; i++) {
-            const high = df.high[i];
-            const low = df.low[i];
-            const prevClose = df.close[i - 1];
+        for (let i = 1; i < df.length; i++) {
+            const high = df[i].high;
+            const low = df[i].low;
+            const prevClose = df[i - 1].close;
             const tr1 = high.minus(low);
             const tr2 = high.minus(prevClose).abs();
             const tr3 = low.minus(prevClose).abs();
@@ -166,8 +167,8 @@ const indicators = {
         const gains = [];
         const losses = [];
         
-        for (let i = 1; i < df.close.length; i++) {
-            const change = df.close[i].minus(df.close[i - 1]);
+        for (let i = 1; i < df.length; i++) {
+            const change = df[i].close.minus(df[i - 1].close);
             gains.push(change.gt(0) ? change : new Decimal(0));
             losses.push(change.lt(0) ? change.abs() : new Decimal(0));
         }
@@ -187,7 +188,9 @@ const indicators = {
     },
     
     calculate_stoch_rsi: function(df, rsiPeriod, kPeriod, dPeriod) {
-        const rsi = indicators.calculate_rsi(df, rsiPeriod);
+        // Pass df.close as an array of Decimal values to calculate_rsi
+        const rsi_input_df = df.map(bar => ({ close: bar.close }));
+        const rsi = indicators.calculate_rsi(rsi_input_df, rsiPeriod);
         const stochRsi = [];
         
         for (let i = rsiPeriod - 1; i < rsi.length; i++) {
@@ -214,13 +217,15 @@ const indicators = {
     },
     
     calculate_bollinger_bands: function(df, period, stdDev) {
-        const sma = indicators.calculate_sma(df, period);
+        // Pass df.close as an array of Decimal values to calculate_sma
+        const sma_input_df = df.map(bar => ({ close: bar.close }));
+        const sma = indicators.calculate_sma(sma_input_df, period);
         const upper = [];
         const lower = [];
         
-        for (let i = 0; i < sma.length; i++) {
-            const slice = df.close.slice(i, i + period);
-            const mean = slice.reduce((acc, val) => acc.plus(val), new Decimal(0)).dividedBy(period);
+        for (let i = period - 1; i < df.length; i++) { // Iterate over df, not sma
+            const slice = df.slice(i - period + 1, i + 1).map(bar => bar.close); // Get close values for slice
+            const mean = sma[i - (period - 1)]; // Correctly index SMA
             const variance = slice.reduce((acc, val) => acc.plus(val.minus(mean).pow(2)), new Decimal(0)).dividedBy(period);
             const std = variance.sqrt();
             
@@ -233,23 +238,24 @@ const indicators = {
     
     calculate_cci: function(df, period) {
         const tp = [];
-        for (let i = 0; i < df.close.length; i++) {
-            tp.push(df.high[i].plus(df.low[i]).plus(df.close[i]).dividedBy(3));
+        for (let i = 0; i < df.length; i++) {
+            tp.push(df[i].high.plus(df[i].low).plus(df[i].close).dividedBy(3));
         }
         
-        const sma = indicators.calculate_sma({ close: tp }, period);
+        const sma_input_df = tp.map(val => ({ close: val }));
+        const sma = indicators.calculate_sma(sma_input_df, period);
         const mad = [];
         
-        for (let i = 0; i < sma.length; i++) {
-            const slice = tp.slice(i, i + period);
-            const mean = sma[i];
+        for (let i = period - 1; i < tp.length; i++) { // Iterate over tp, not sma
+            const slice = tp.slice(i - period + 1, i + 1);
+            const mean = sma[i - (period - 1)]; // Correctly index SMA
             const sum = slice.reduce((acc, val) => acc.plus(val.minus(mean).abs()), new Decimal(0));
             mad.push(sum.dividedBy(period));
         }
         
         const cci = [];
-        for (let i = 0; i < sma.length; i++) {
-            const value = tp[i + period - 1].minus(sma[i]).dividedBy(new Decimal(0.015).times(mad[i]));
+        for (let i = period - 1; i < tp.length; i++) { // Iterate over tp, not sma
+            const value = tp[i].minus(sma[i - (period - 1)]).dividedBy(new Decimal(0.015).times(mad[i - (period - 1)]));
             cci.push(value);
         }
         
@@ -258,10 +264,11 @@ const indicators = {
     
     calculate_williams_r: function(df, period) {
         const wr = [];
-        for (let i = period - 1; i < df.close.length; i++) {
-            const highest = Decimal.max(...df.high.slice(i - period + 1, i + 1));
-            const lowest = Decimal.min(...df.low.slice(i - period + 1, i + 1));
-            const value = highest.minus(df.close[i]).dividedBy(highest.minus(lowest)).times(new Decimal(-100));
+        for (let i = period - 1; i < df.length; i++) {
+            const slice = df.slice(i - period + 1, i + 1);
+            const highest = Decimal.max(...slice.map(bar => bar.high));
+            const lowest = Decimal.min(...slice.map(bar => bar.low));
+            const value = highest.minus(df[i].close).dividedBy(highest.minus(lowest)).times(new Decimal(-100));
             wr.push(value);
         }
         return wr;
@@ -269,8 +276,8 @@ const indicators = {
     
     calculate_mfi: function(df, period) {
         const tp = [];
-        for (let i = 0; i < df.close.length; i++) {
-            tp.push(df.high[i].plus(df.low[i]).plus(df.close[i]).dividedBy(3));
+        for (let i = 0; i < df.length; i++) {
+            tp.push(df[i].high.plus(df[i].low).plus(df[i].close).dividedBy(3));
         }
         
         const positiveFlow = [];
@@ -278,11 +285,11 @@ const indicators = {
         
         for (let i = 1; i < tp.length; i++) {
             if (tp[i].gt(tp[i - 1])) {
-                positiveFlow.push(tp[i].times(df.volume[i]));
+                positiveFlow.push(tp[i].times(df[i].volume));
                 negativeFlow.push(new Decimal(0));
             } else if (tp[i].lt(tp[i - 1])) {
                 positiveFlow.push(new Decimal(0));
-                negativeFlow.push(tp[i].times(df.volume[i]));
+                negativeFlow.push(tp[i].times(df[i].volume));
             } else {
                 positiveFlow.push(new Decimal(0));
                 negativeFlow.push(new Decimal(0));
@@ -305,32 +312,33 @@ const indicators = {
     },
     
     calculate_obv: function(df, period) {
-        const obv = [df.volume[0]];
-        for (let i = 1; i < df.close.length; i++) {
-            if (df.close[i].gt(df.close[i - 1])) {
-                obv.push(obv[i - 1].plus(df.volume[i]));
-            } else if (df.close[i].lt(df.close[i - 1])) {
-                obv.push(obv[i - 1].minus(df.volume[i]));
+        const obv = [df[0].volume];
+        for (let i = 1; i < df.length; i++) {
+            if (df[i].close.gt(df[i - 1].close)) {
+                obv.push(obv[i - 1].plus(df[i].volume));
+            } else if (df[i].close.lt(df[i - 1].close)) {
+                obv.push(obv[i - 1].minus(df[i].volume));
             } else {
                 obv.push(obv[i - 1]);
             }
         }
         
-        const obvEma = indicators.calculate_ema({ close: obv }, period);
+        const obvEma_input_df = obv.map(val => ({ close: val }));
+        const obvEma = indicators.calculate_ema(obvEma_input_df, period);
         return { obv, obv_ema: obvEma };
     },
     
     calculate_cmf: function(df, period) {
         const cmf = [];
-        for (let i = period - 1; i < df.close.length; i++) {
+        for (let i = period - 1; i < df.length; i++) {
             let sumVolume = new Decimal(0);
             let sumMoneyFlow = new Decimal(0);
             
             for (let j = i - period + 1; j <= i; j++) {
-                const high = df.high[j];
-                const low = df.low[j];
-                const close = df.close[j];
-                const volume = df.volume[j];
+                const high = df[j].high;
+                const low = df[j].low;
+                const close = df[j].close;
+                const volume = df[j].volume;
                 
                 const moneyFlowMultiplier = (close.minus(low).minus(high.minus(close))).dividedBy(high.minus(low));
                 const moneyFlowVolume = moneyFlowMultiplier.times(volume);
@@ -351,30 +359,38 @@ const indicators = {
         const senkouSpanB = [];
         const chikouSpan = [];
         
-        for (let i = tenkanPeriod - 1; i < df.close.length; i++) {
-            const high = Decimal.max(...df.high.slice(i - tenkanPeriod + 1, i + 1));
-            const low = Decimal.min(...df.low.slice(i - tenkanPeriod + 1, i + 1));
+        for (let i = tenkanPeriod - 1; i < df.length; i++) {
+            const slice = df.slice(i - tenkanPeriod + 1, i + 1);
+            const high = Decimal.max(...slice.map(bar => bar.high));
+            const low = Decimal.min(...slice.map(bar => bar.low));
             tenkanSen.push(high.plus(low).dividedBy(2));
         }
         
-        for (let i = kijunPeriod - 1; i < df.close.length; i++) {
-            const high = Decimal.max(...df.high.slice(i - kijunPeriod + 1, i + 1));
-            const low = Decimal.min(...df.low.slice(i - kijunPeriod + 1, i + 1));
+        for (let i = kijunPeriod - 1; i < df.length; i++) {
+            const slice = df.slice(i - kijunPeriod + 1, i + 1);
+            const high = Decimal.max(...slice.map(bar => bar.high));
+            const low = Decimal.min(...slice.map(bar => bar.low));
             kijunSen.push(high.plus(low).dividedBy(2));
         }
         
-        for (let i = kijunPeriod - 1; i < df.close.length; i++) {
-            const a = tenkanSen[i - kijunPeriod + 1].plus(kijunSen[i - kijunPeriod + 1]).dividedBy(2);
-            const high = Decimal.max(...df.high.slice(i - senkouBPeriod + 1, i + 1));
-            const low = Decimal.min(...df.low.slice(i - senkouBPeriod + 1, i + 1));
+        // Senkou Span A and B are calculated based on Tenkan Sen and Kijun Sen, and shifted
+        // Need to ensure tenkanSen and kijunSen have enough data points
+        const max_period = Math.max(tenkanPeriod, kijunPeriod, senkouBPeriod);
+        for (let i = max_period - 1; i < df.length; i++) {
+            const a = tenkanSen[i - (tenkanPeriod - 1)].plus(kijunSen[i - (kijunPeriod - 1)]).dividedBy(2);
+            
+            const slice = df.slice(i - senkouBPeriod + 1, i + 1);
+            const high = Decimal.max(...slice.map(bar => bar.high));
+            const low = Decimal.min(...slice.map(bar => bar.low));
             const b = high.plus(low).dividedBy(2);
             
             senkouSpanA.push(a);
             senkouSpanB.push(b);
         }
         
-        for (let i = chikouOffset; i < df.close.length; i++) {
-            chikouSpan.push(df.close[i - chikouOffset]);
+        // Chikou Span is current close shifted back
+        for (let i = chikouOffset; i < df.length; i++) {
+            chikouSpan.push(df[i - chikouOffset].close);
         }
         
         return {
@@ -389,45 +405,53 @@ const indicators = {
     calculate_psar: function(df, acceleration, maxAcceleration) {
         const psar = [];
         const direction = [];
-        let ep = df.low[0];
-        let sar = df.high[0];
+        let ep = df[0].low;
+        let sar = df[0].high;
         let af = acceleration;
-        let trend = 1;
+        let trend = 1; // 1 for uptrend, -1 for downtrend
         
         psar.push(sar);
         direction.push(trend);
         
-        for (let i = 1; i < df.close.length; i++) {
-            const high = df.high[i];
-            const low = df.low[i];
-            
-            if (trend === 1) {
+        for (let i = 1; i < df.length; i++) {
+            const high = df[i].high;
+            const low = df[i].low;
+            const prevHigh = df[i-1].high;
+            const prevLow = df[i-1].low;
+            const prevPrevHigh = df[i-2] ? df[i-2].high : high; // Handle edge case for i=1
+            const prevPrevLow = df[i-2] ? df[i-2].low : low; // Handle edge case for i=1
+
+            if (trend === 1) { // Currently in uptrend
+                sar = sar.plus(af.times(ep.minus(sar)));
+                // Check for reversal
                 if (low.lt(sar)) {
-                    trend = -1;
-                    sar = Decimal.max(ep, high, df.high[i - 1]);
-                    ep = low;
-                    af = acceleration;
+                    trend = -1; // Reverse to downtrend
+                    sar = ep; // Previous EP becomes new SAR
+                    ep = high; // Current high becomes new EP
+                    af = acceleration; // Reset AF
                 } else {
                     if (high.gt(ep)) {
                         ep = high;
                         af = Decimal.min(af.plus(acceleration), maxAcceleration);
                     }
-                    sar = sar.plus(af.times(ep.minus(sar)));
-                    sar = Decimal.min(sar, df.low[i - 1], df.low[i - 2]);
+                    // Ensure SAR does not go above previous two lows in uptrend
+                    sar = Decimal.min(sar, prevLow, prevPrevLow);
                 }
-            } else {
+            } else { // Currently in downtrend
+                sar = sar.plus(af.times(ep.minus(sar)));
+                // Check for reversal
                 if (high.gt(sar)) {
-                    trend = 1;
-                    sar = Decimal.min(ep, low, df.low[i - 1]);
-                    ep = high;
-                    af = acceleration;
+                    trend = 1; // Reverse to uptrend
+                    sar = ep; // Previous EP becomes new SAR
+                    ep = low; // Current low becomes new EP
+                    af = acceleration; // Reset AF
                 } else {
                     if (low.lt(ep)) {
                         ep = low;
                         af = Decimal.min(af.plus(acceleration), maxAcceleration);
                     }
-                    sar = sar.plus(af.times(ep.minus(sar)));
-                    sar = Decimal.max(sar, df.high[i - 1], df.high[i - 2]);
+                    // Ensure SAR does not go below previous two highs in downtrend
+                    sar = Decimal.max(sar, prevHigh, prevPrevHigh);
                 }
             }
             
@@ -443,9 +467,9 @@ const indicators = {
         let cumulativeVolume = new Decimal(0);
         let cumulativeVolumePrice = new Decimal(0);
         
-        for (let i = 0; i < df.close.length; i++) {
-            const typicalPrice = df.high[i].plus(df.low[i]).plus(df.close[i]).dividedBy(3);
-            const volume = df.volume[i];
+        for (let i = 0; i < df.length; i++) {
+            const typicalPrice = df[i].high.plus(df[i].low).plus(df[i].close).dividedBy(3);
+            const volume = df[i].volume;
             
             cumulativeVolume = cumulativeVolume.plus(volume);
             cumulativeVolumePrice = cumulativeVolumePrice.plus(typicalPrice.times(volume));
@@ -457,38 +481,46 @@ const indicators = {
     },
     
     calculate_ehlers_supertrend: function(df, period, multiplier) {
-        const atr = indicators.calculate_atr(df, 14);
-        const close = df.close.slice(14);
+        const atr = indicators.calculate_atr(df, 14); // ATR is calculated on the full df
         const supertrend = [];
         const direction = [];
         
-        let upperBand = close[0].plus(atr[0].times(multiplier));
-        let lowerBand = close[0].minus(atr[0].times(multiplier));
-        let trend = 1;
+        // Supertrend calculation starts after ATR has enough data
+        const start_idx = 14; // ATR period is 14, so we need at least 14 bars for ATR
         
-        supertrend.push(lowerBand);
+        if (df.length <= start_idx) {
+            return { supertrend: [], direction: [] }; // Not enough data
+        }
+
+        let upperBand = df[start_idx].close.plus(atr[0].times(multiplier));
+        let lowerBand = df[start_idx].close.minus(atr[0].times(multiplier));
+        let trend = 1; // 1 for uptrend, -1 for downtrend
+        
+        supertrend.push(lowerBand); // Initial value, will be adjusted
         direction.push(trend);
-        
-        for (let i = 1; i < close.length; i++) {
-            if (trend === 1) {
-                if (close[i].lt(lowerBand)) {
-                    trend = -1;
-                    upperBand = close[i].plus(atr[i].times(multiplier));
+
+        for (let i = start_idx + 1; i < df.length; i++) {
+            const currentClose = df[i].close;
+            const currentATR = atr[i - start_idx]; // ATR index aligns with close index after start_idx offset
+
+            let newUpperBand = currentClose.plus(currentATR.times(multiplier));
+            let newLowerBand = currentClose.minus(currentATR.times(multiplier));
+
+            if (trend === 1) { // Previous trend was uptrend
+                if (currentClose.lt(supertrend[supertrend.length - 1])) { // Price broke below previous supertrend
+                    trend = -1; // Reverse to downtrend
+                    supertrend.push(newUpperBand); // New supertrend is upper band
                 } else {
-                    upperBand = Decimal.min(upperBand, close[i].plus(atr[i].times(multiplier)));
-                    lowerBand = close[i].minus(atr[i].times(multiplier));
+                    supertrend.push(Decimal.max(supertrend[supertrend.length - 1], newLowerBand)); // Continue uptrend
                 }
-            } else {
-                if (close[i].gt(upperBand)) {
-                    trend = 1;
-                    lowerBand = close[i].minus(atr[i].times(multiplier));
+            } else { // Previous trend was downtrend
+                if (currentClose.gt(supertrend[supertrend.length - 1])) { // Price broke above previous supertrend
+                    trend = 1; // Reverse to uptrend
+                    supertrend.push(newLowerBand); // New supertrend is lower band
                 } else {
-                    lowerBand = Decimal.max(lowerBand, close[i].minus(atr[i].times(multiplier)));
-                    upperBand = close[i].plus(atr[i].times(multiplier));
+                    supertrend.push(Decimal.min(supertrend[supertrend.length - 1], newUpperBand)); // Continue downtrend
                 }
             }
-            
-            supertrend.push(trend === 1 ? lowerBand : upperBand);
             direction.push(trend);
         }
         
@@ -496,34 +528,42 @@ const indicators = {
     },
     
     calculate_macd: function(df, fastPeriod, slowPeriod, signalPeriod) {
-        const fastEma = indicators.calculate_ema(df, fastPeriod);
-        const slowEma = indicators.calculate_ema(df, slowPeriod);
+        const fastEma_input_df = df.map(bar => ({ close: bar.close }));
+        const slowEma_input_df = df.map(bar => ({ close: bar.close }));
+
+        const fastEma = indicators.calculate_ema(fastEma_input_df, fastPeriod);
+        const slowEma = indicators.calculate_ema(slowEma_input_df, slowPeriod);
         
         const macdLine = [];
-        for (let i = 0; i < fastEma.length; i++) {
-            macdLine.push(fastEma[i].minus(slowEma[i]));
+        // MACD line starts when both EMAs have values
+        const start_idx = Math.max(fastPeriod, slowPeriod) - 1;
+        for (let i = start_idx; i < df.length; i++) {
+            macdLine.push(fastEma[i - (fastPeriod - 1)].minus(slowEma[i - (slowPeriod - 1)]));
         }
         
-        const signalLine = indicators.calculate_ema({ close: macdLine }, signalPeriod);
-        const histogram = [];
+        const signalLine_input_df = macdLine.map(val => ({ close: val }));
+        const signalLine = indicators.calculate_ema(signalLine_input_df, signalPeriod);
         
-        for (let i = 0; i < signalLine.length; i++) {
-            histogram.push(macdLine[i + signalPeriod - 1].minus(signalLine[i]));
+        const histogram = [];
+        // Histogram starts when signalLine has values
+        const hist_start_idx = signalPeriod - 1;
+        for (let i = hist_start_idx; i < signalLine.length; i++) {
+            histogram.push(macdLine[i].minus(signalLine[i]));
         }
         
         return {
-            macd_line: macdLine.slice(signalPeriod - 1),
+            macd_line: macdLine.slice(hist_start_idx), // Slice to align with histogram
             signal_line: signalLine,
-            histogram
+            histogram: histogram
         };
     },
     
     calculate_adx: function(df, period) {
         const tr = [];
-        for (let i = 1; i < df.close.length; i++) {
-            const high = df.high[i];
-            const low = df.low[i];
-            const prevClose = df.close[i - 1];
+        for (let i = 1; i < df.length; i++) {
+            const high = df[i].high;
+            const low = df[i].low;
+            const prevClose = df[i - 1].close;
             const tr1 = high.minus(low);
             const tr2 = high.minus(prevClose).abs();
             const tr3 = low.minus(prevClose).abs();
@@ -533,9 +573,9 @@ const indicators = {
         const plusDM = [];
         const minusDM = [];
         
-        for (let i = 1; i < df.close.length; i++) {
-            const upMove = df.high[i].minus(df.high[i - 1]);
-            const downMove = df.low[i - 1].minus(df.low[i]);
+        for (let i = 1; i < df.length; i++) {
+            const upMove = df[i].high.minus(df[i - 1].high);
+            const downMove = df[i - 1].low.minus(df[i].low);
             
             if (upMove.gt(downMove) && upMove.gt(0)) {
                 plusDM.push(upMove);
@@ -550,49 +590,74 @@ const indicators = {
             }
         }
         
-        const atr = indicators.calculate_atr(df, period);
+        // ATR is calculated on the full df, but ADX uses a smoothed TR
+        // We need to calculate smoothed PlusDM, MinusDM, and TR
+        const smoothedTR = [];
+        const smoothedPlusDM = [];
+        const smoothedMinusDM = [];
+
+        // Initial smoothing for the first 'period' bars
+        let currentSmoothedTR = tr.slice(0, period).reduce((acc, val) => acc.plus(val), new Decimal(0));
+        let currentSmoothedPlusDM = plusDM.slice(0, period).reduce((acc, val) => acc.plus(val), new Decimal(0));
+        let currentSmoothedMinusDM = minusDM.slice(0, period).reduce((acc, val) => acc.plus(val), new Decimal(0));
+
+        smoothedTR.push(currentSmoothedTR);
+        smoothedPlusDM.push(currentSmoothedPlusDM);
+        smoothedMinusDM.push(currentSmoothedMinusDM);
+
+        for (let i = period; i < tr.length; i++) {
+            currentSmoothedTR = currentSmoothedTR.minus(currentSmoothedTR.dividedBy(period)).plus(tr[i]);
+            currentSmoothedPlusDM = currentSmoothedPlusDM.minus(currentSmoothedPlusDM.dividedBy(period)).plus(plusDM[i]);
+            currentSmoothedMinusDM = currentSmoothedMinusDM.minus(currentSmoothedMinusDM.dividedBy(period)).plus(minusDM[i]);
+            
+            smoothedTR.push(currentSmoothedTR);
+            smoothedPlusDM.push(currentSmoothedPlusDM);
+            smoothedMinusDM.push(currentSmoothedMinusDM);
+        }
+        
         const plusDI = [];
         const minusDI = [];
         const dx = [];
         
-        for (let i = period - 1; i < tr.length; i++) {
-            const trSlice = tr.slice(i - period + 1, i + 1);
-            const plusDMSlice = plusDM.slice(i - period + 1, i + 1);
-            const minusDMSlice = minusDM.slice(i - period + 1, i + 1);
+        for (let i = 0; i < smoothedTR.length; i++) {
+            if (smoothedTR[i].isZero()) { // Avoid division by zero
+                plusDI.push(new Decimal(0));
+                minusDI.push(new Decimal(0));
+            } else {
+                plusDI.push(smoothedPlusDM[i].dividedBy(smoothedTR[i]).times(100));
+                minusDI.push(smoothedMinusDM[i].dividedBy(smoothedTR[i]).times(100));
+            }
             
-            const trSum = trSlice.reduce((acc, val) => acc.plus(val), new Decimal(0));
-            const plusDMSum = plusDMSlice.reduce((acc, val) => acc.plus(val), new Decimal(0));
-            const minusDMSum = minusDMSlice.reduce((acc, val) => acc.plus(val), new Decimal(0));
-            
-            const plusDIValue = plusDMSum.dividedBy(trSum).times(100);
-            const minusDIValue = minusDMSum.dividedBy(trSum).times(100);
-            
-            plusDI.push(plusDIValue);
-            minusDI.push(minusDIValue);
-            
-            const diDiff = plusDIValue.minus(minusDIValue).abs();
-            const diSum = plusDIValue.plus(minusDIValue);
-            dx.push(diDiff.dividedBy(diSum).times(100));
+            const diDiff = plusDI[i].minus(minusDI[i]).abs();
+            const diSum = plusDI[i].plus(minusDI[i]);
+            if (diSum.isZero()) { // Avoid division by zero
+                dx.push(new Decimal(0));
+            } else {
+                dx.push(diDiff.dividedBy(diSum).times(100));
+            }
         }
         
         const adx = [];
-        for (let i = period - 1; i < dx.length; i++) {
-            const dxSlice = dx.slice(i - period + 1, i + 1);
-            const dxSum = dxSlice.reduce((acc, val) => acc.plus(val), new Decimal(0));
-            adx.push(dxSum.dividedBy(period));
+        // ADX is a smoothed DX
+        let currentSmoothedDX = dx.slice(0, period).reduce((acc, val) => acc.plus(val), new Decimal(0));
+        adx.push(currentSmoothedDX.dividedBy(period));
+
+        for (let i = period; i < dx.length; i++) {
+            currentSmoothedDX = currentSmoothedDX.minus(currentSmoothedDX.dividedBy(period)).plus(dx[i]);
+            adx.push(currentSmoothedDX.dividedBy(period));
         }
         
         return {
-            adx,
-            plus_di: plusDI.slice(period - 1),
-            minus_di: minusDI.slice(period - 1)
+            adx: adx,
+            plus_di: plusDI.slice(period - 1), // Slice to align with ADX
+            minus_di: minusDI.slice(period - 1) // Slice to align with ADX
         };
     },
     
     calculate_volatility_index: function(df, period) {
         const returns = [];
-        for (let i = 1; i < df.close.length; i++) {
-            returns.push(df.close[i].dividedBy(df.close[i - 1]).minus(1));
+        for (let i = 1; i < df.length; i++) {
+            returns.push(df[i].close.dividedBy(df[i - 1].close).minus(1));
         }
         
         const volatility = [];
@@ -608,13 +673,13 @@ const indicators = {
     
     calculate_vwma: function(df, period) {
         const vwma = [];
-        for (let i = period - 1; i < df.close.length; i++) {
+        for (let i = period - 1; i < df.length; i++) {
             let volumeSum = new Decimal(0);
             let volumePriceSum = new Decimal(0);
             
             for (let j = i - period + 1; j <= i; j++) {
-                volumeSum = volumeSum.plus(df.volume[j]);
-                volumePriceSum = volumePriceSum.plus(df.close[j].times(df.volume[j]));
+                volumeSum = volumeSum.plus(df[j].volume);
+                volumePriceSum = volumePriceSum.plus(df[j].close.times(df[j].volume));
             }
             
             vwma.push(volumePriceSum.dividedBy(volumeSum));
@@ -625,14 +690,14 @@ const indicators = {
     
     calculate_volume_delta: function(df, period) {
         const volumeDelta = [];
-        for (let i = period - 1; i < df.close.length; i++) {
+        for (let i = period - 1; i < df.length; i++) {
             let buyVolume = new Decimal(0);
             let sellVolume = new Decimal(0);
             
             for (let j = i - period + 1; j <= i; j++) {
-                const close = df.close[j];
-                const open = df.open[j];
-                const volume = df.volume[j];
+                const close = df[j].close;
+                const open = df[j].open;
+                const volume = df[j].volume;
                 
                 if (close.gt(open)) {
                     buyVolume = buyVolume.plus(volume);
@@ -654,16 +719,16 @@ const indicators = {
     
     calculate_kaufman_ama: function(df, period, fastPeriod, slowPeriod) {
         const change = [];
-        for (let i = 1; i < df.close.length; i++) {
-            change.push(df.close[i].minus(df.close[i - 1]).abs());
+        for (let i = 1; i < df.length; i++) {
+            change.push(df[i].close.minus(df[i - 1].close).abs());
         }
         
         const volatility = [];
-        for (let i = 1; i < df.close.length; i++) {
+        for (let i = 1; i < df.length; i++) {
             let vol = new Decimal(0);
             for (let j = 1; j <= period; j++) {
                 if (i - j >= 0) {
-                    vol = vol.plus(df.close[i - j + 1].minus(df.close[i - j]).abs());
+                    vol = vol.plus(df[i - j + 1].close.minus(df[i - j].close).abs());
                 }
             }
             volatility.push(vol);
@@ -681,17 +746,17 @@ const indicators = {
         const fastSC = new Decimal(2).dividedBy(new Decimal(fastPeriod).plus(1));
         const slowSC = new Decimal(2).dividedBy(new Decimal(slowPeriod).plus(1));
         
-        const kama = [df.close[0]];
-        for (let i = 1; i < df.close.length; i++) {
+        const kama = [df[0].close];
+        for (let i = 1; i < df.length; i++) {
             const sc = er[i - 1].times(fastSC.minus(slowSC)).plus(slowSC).pow(2);
-            kama.push(kama[i - 1].plus(sc.times(df.close[i].minus(kama[i - 1]))));
+            kama.push(kama[i - 1].plus(sc.times(df[i].close.minus(kama[i - 1]))));
         }
         
         return kama;
     },
     
     calculate_relative_volume: function(df, period) {
-        const volume = df.volume;
+        const volume = df.map(bar => bar.volume);
         const relativeVolume = [];
         
         for (let i = period - 1; i < volume.length; i++) {
@@ -706,12 +771,12 @@ const indicators = {
     calculate_market_structure: function(df, lookbackPeriod) {
         const trend = [];
         
-        for (let i = lookbackPeriod; i < df.close.length; i++) {
-            const highs = df.high.slice(i - lookbackPeriod, i);
-            const lows = df.low.slice(i - lookbackPeriod, i);
+        for (let i = lookbackPeriod; i < df.length; i++) {
+            const highs = df.slice(i - lookbackPeriod, i).map(bar => bar.high);
+            const lows = df.slice(i - lookbackPeriod, i).map(bar => bar.low);
             
-            const currentHigh = df.high[i];
-            const currentLow = df.low[i];
+            const currentHigh = df[i].high;
+            const currentLow = df[i].low;
             
             const higherHighs = highs.filter(h => h.gt(currentHigh)).length === 0;
             const lowerLows = lows.filter(l => l.lt(currentLow)).length === 0;
@@ -731,37 +796,39 @@ const indicators = {
     },
     
     calculate_dema: function(df, period) {
-        const ema1 = indicators.calculate_ema(df, period);
-        const ema2 = indicators.calculate_ema({ close: ema1 }, period);
+        const ema1_input_df = df.map(bar => ({ close: bar.close }));
+        const ema1 = indicators.calculate_ema(ema1_input_df, period);
+        
+        const ema2_input_df = ema1.map(val => ({ close: val }));
+        const ema2 = indicators.calculate_ema(ema2_input_df, period);
         
         const dema = [];
-        for (let i = 0; i < ema1.length; i++) {
-            if (i < period - 1) {
-                dema.push(new Decimal(NaN));
-            } else {
-                dema.push(ema1[i].times(2).minus(ema2[i - period + 1]));
-            }
+        // DEMA starts when ema2 has enough data
+        const start_idx = period - 1;
+        for (let i = start_idx; i < ema1.length; i++) {
+            dema.push(ema1[i].times(2).minus(ema2[i - (period - 1)]));
         }
         
         return dema;
     },
     
     calculate_keltner_channels: function(df, period, multiplier, atrPeriod) {
-        const ema = indicators.calculate_ema(df, period);
+        const ema_input_df = df.map(bar => ({ close: bar.close }));
+        const ema = indicators.calculate_ema(ema_input_df, period);
         const atr = indicators.calculate_atr(df, atrPeriod);
         
         const upper = [];
         const lower = [];
         
-        for (let i = 0; i < ema.length; i++) {
-            const atrIndex = i + period - 1;
-            if (atrIndex < atr.length) {
-                upper.push(ema[i].plus(atr[atrIndex].times(multiplier)));
-                lower.push(ema[i].minus(atr[atrIndex].times(multiplier)));
-            } else {
-                upper.push(new Decimal(NaN));
-                lower.push(new Decimal(NaN));
-            }
+        // Keltner channels start when both EMA and ATR have enough data
+        const start_idx = Math.max(period, atrPeriod) - 1;
+        
+        for (let i = start_idx; i < df.length; i++) {
+            const currentEMA = ema[i - (period - 1)];
+            const currentATR = atr[i - (atrPeriod - 1)];
+            
+            upper.push(currentEMA.plus(currentATR.times(multiplier)));
+            lower.push(currentEMA.minus(currentATR.times(multiplier)));
         }
         
         return { upper, middle: ema, lower };
@@ -769,9 +836,9 @@ const indicators = {
     
     calculate_roc: function(df, period) {
         const roc = [];
-        for (let i = period; i < df.close.length; i++) {
-            const change = df.close[i].minus(df.close[i - period]);
-            const rocValue = change.dividedBy(df.close[i - period]).times(100);
+        for (let i = period; i < df.length; i++) {
+            const change = df[i].close.minus(df[i - period].close);
+            const rocValue = change.dividedBy(df[i - period].close).times(100);
             roc.push(rocValue);
         }
         return roc;
@@ -780,19 +847,19 @@ const indicators = {
     detect_candlestick_patterns: function(df) {
         const patterns = [];
         
-        for (let i = 1; i < df.close.length; i++) {
+        for (let i = 1; i < df.length; i++) {
             const prev = {
-                open: df.open[i - 1],
-                high: df.high[i - 1],
-                low: df.low[i - 1],
-                close: df.close[i - 1]
+                open: df[i - 1].open,
+                high: df[i - 1].high,
+                low: df[i - 1].low,
+                close: df[i - 1].close
             };
             
             const curr = {
-                open: df.open[i],
-                high: df.high[i],
-                low: df.low[i],
-                close: df.close[i]
+                open: df[i].open,
+                high: df[i].high,
+                low: df[i].low,
+                close: df[i].close
             };
             
             let pattern = "No Pattern";
@@ -834,8 +901,8 @@ const indicators = {
         if (df.length < window) return null;
         
         const slice = df.slice(df.length - window);
-        const high = Decimal.max(...slice.high);
-        const low = Decimal.min(...slice.low);
+        const high = Decimal.max(...slice.map(bar => bar.high));
+        const low = Decimal.min(...slice.map(bar => bar.low));
         const diff = high.minus(low);
         
         return {
@@ -1875,12 +1942,12 @@ class TradingAnalyzer {
         this.config = config;
         this.logger = logger;
         this.symbol = symbol;
-        this.indicator_values = {};
+        this.indicator_values = {}; // This will now store only the LATEST indicator values for display
         this.fib_levels = {};
         this.weights = config.weight_sets.default_scalping;
         this.indicator_settings = config.indicator_settings;
         
-        if (this.df.close.length === 0) { // Check length of a core column
+        if (this.df.length === 0) { // Check length of the processed df
             this.logger.warning(`${chalk.yellow("TradingAnalyzer initialized with an empty DataFrame. Indicators will not be calculated.")}${chalk.reset()}`);
             return;
         }
@@ -1897,54 +1964,36 @@ class TradingAnalyzer {
     }
     
     _process_dataframe(df_raw) {
-        // Convert array of kline objects into object of arrays with Decimal values
-        const processed_df = {
-            start_time: [], 
-            open: [], 
-            high: [], 
-            low: [], 
-            close: [], 
-            volume: [], 
-            turnover: []
-        };
-        
-        df_raw.forEach(row => {
-            processed_df.start_time.push(row.start_time);
-            processed_df.open.push(new Decimal(row.open));
-            processed_df.high.push(new Decimal(row.high));
-            processed_df.low.push(new Decimal(row.low));
-            processed_df.close.push(new Decimal(row.close));
-            processed_df.volume.push(new Decimal(row.volume));
-            processed_df.turnover.push(new Decimal(row.turnover));
-        });
-        
-        // Add a .length property for compatibility with pandas len(df) checks
-        processed_df.length = processed_df.close.length;
-        
-        // Add .iloc for pandas-like access for specific indicators
+        // Convert array of kline objects into an array of objects with Decimal values
+        const processed_df = df_raw.map(row => ({
+            start_time: row.start_time,
+            open: new Decimal(row.open),
+            high: new Decimal(row.high),
+            low: new Decimal(row.low),
+            close: new Decimal(row.close),
+            volume: new Decimal(row.volume),
+            turnover: new Decimal(row.turnover)
+            // Indicators will be added to these objects later
+        }));
+
+        // Add .iloc for pandas-like access
         processed_df.iloc = (index) => {
             if (index < 0) index = processed_df.length + index; // Handle negative indexing
-            const row = {};
-            for (const key in processed_df) {
-                if (Array.isArray(processed_df[key])) {
-                    row[key] = processed_df[key][index];
-                }
-            }
-            return row;
+            return processed_df[index];
         };
-        
+
         return processed_df;
     }
     
     _safe_calculate(func, name, min_data_points, ...args) {
         if (this.df.length < min_data_points) {
-            this.logger.debug(`${chalk.blue("Skipping indicator '")}${name}${chalk.blue("': Not enough data. Need ")}${min_data_points}${chalk.blue(", have ")}${this.df.length}${chalk.blue(".")}${chalk.reset()}`);
+            this.logger.debug(`${chalk.blue("Skipping indicator '")}${name}${chalk.blue("': Not enough data. Need ")}${min_data_points}${chalk.blue(", have ")}${this.df.length}${chalk.blue(". ")}${chalk.reset()}`);
             return null;
         }
         
         try {
             // All indicator functions now directly use the `this.df` structure
-            const result = func(this.df, this.indicator_settings, this.logger, this.symbol, ...args);
+            const result = func(this.df, ...args); // Pass only df and specific args
             
             // Check if result is empty or invalid
             const is_empty = (
@@ -1970,35 +2019,51 @@ class TradingAnalyzer {
         const cfg_indicators = this.config.indicators;
         const isd = this.indicator_settings;
         
+        // Helper to assign indicator values to each bar object in this.df
+        const assign_indicator_to_df = (indicator_name, values_array, offset = 0) => {
+            if (values_array && values_array.length > 0) {
+                for (let i = 0; i < values_array.length; i++) {
+                    const df_index = i + offset;
+                    if (this.df[df_index]) {
+                        this.df[df_index][indicator_name] = values_array[i];
+                    }
+                }
+                this.indicator_values[indicator_name] = values_array[values_array.length - 1]; // Store latest for display
+            } else {
+                this.indicator_values[indicator_name] = new Decimal(NaN); // Mark as NaN if no values
+            }
+        };
+
         // SMA
         if (cfg_indicators.sma_10) {
-            const sma_10 = this._safe_calculate(indicators.calculate_sma, "SMA_10", isd.sma_short_period, isd.sma_short_period);
-            if (sma_10 !== null && sma_10.length > 0) this.indicator_values["SMA_10"] = sma_10[sma_10.length - 1];
+            const sma_10_values = this._safe_calculate(indicators.calculate_sma, "SMA_10", isd.sma_short_period, isd.sma_short_period);
+            assign_indicator_to_df("SMA_10", sma_10_values, isd.sma_short_period - 1);
         }
         
         if (cfg_indicators.sma_trend_filter) {
-            const sma_long = this._safe_calculate(indicators.calculate_sma, "SMA_Long", isd.sma_long_period, isd.sma_long_period);
-            if (sma_long !== null && sma_long.length > 0) this.indicator_values["SMA_Long"] = sma_long[sma_long.length - 1];
+            const sma_long_values = this._safe_calculate(indicators.calculate_sma, "SMA_Long", isd.sma_long_period, isd.sma_long_period);
+            assign_indicator_to_df("SMA_Long", sma_long_values, isd.sma_long_period - 1);
         }
         
         // EMA
         if (cfg_indicators.ema_alignment) {
-            const ema_short = this._safe_calculate(indicators.calculate_ema, "EMA_Short", isd.ema_short_period, isd.ema_short_period);
-            const ema_long = this._safe_calculate(indicators.calculate_ema, "EMA_Long", isd.ema_long_period, isd.ema_long_period);
-            if (ema_short !== null && ema_short.length > 0) this.indicator_values["EMA_Short"] = ema_short[ema_short.length - 1];
-            if (ema_long !== null && ema_long.length > 0) this.indicator_values["EMA_Long"] = ema_long[ema_long.length - 1];
+            const ema_short_values = this._safe_calculate(indicators.calculate_ema, "EMA_Short", isd.ema_short_period, isd.ema_short_period);
+            assign_indicator_to_df("EMA_Short", ema_short_values, isd.ema_short_period - 1);
+
+            const ema_long_values = this._safe_calculate(indicators.calculate_ema, "EMA_Long", isd.ema_long_period, isd.ema_long_period);
+            assign_indicator_to_df("EMA_Long", ema_long_values, isd.ema_long_period - 1);
         }
         
-        // ATR (TR is calculated internally by ATR)
+        // ATR
         if (cfg_indicators.atr) {
-            const atr = this._safe_calculate(indicators.calculate_atr, "ATR", isd.atr_period, isd.atr_period);
-            if (atr !== null && atr.length > 0) this.indicator_values["ATR"] = atr[atr.length - 1];
+            const atr_values = this._safe_calculate(indicators.calculate_atr, "ATR", isd.atr_period, isd.atr_period);
+            assign_indicator_to_df("ATR", atr_values, isd.atr_period - 1);
         }
         
         // RSI
         if (cfg_indicators.rsi) {
-            const rsi = this._safe_calculate(indicators.calculate_rsi, "RSI", isd.rsi_period + 1, isd.rsi_period);
-            if (rsi !== null && rsi.length > 0) this.indicator_values["RSI"] = rsi[rsi.length - 1];
+            const rsi_values = this._safe_calculate(indicators.calculate_rsi, "RSI", isd.rsi_period + 1, isd.rsi_period);
+            assign_indicator_to_df("RSI", rsi_values, isd.rsi_period); // RSI has a 1-bar offset
         }
         
         // StochRSI
@@ -2007,8 +2072,10 @@ class TradingAnalyzer {
                                                     isd.stoch_rsi_period + isd.stoch_k_period + isd.stoch_d_period,
                                                     isd.stoch_rsi_period, isd.stoch_k_period, isd.stoch_d_period);
             if (stoch_rsi_k_d !== null) {
-                this.indicator_values["StochRSI_K"] = stoch_rsi_k_d.k[stoch_rsi_k_d.k.length - 1];
-                this.indicator_values["StochRSI_D"] = stoch_rsi_k_d.d[stoch_rsi_k_d.d.length - 1];
+                // StochRSI K and D have a combined offset
+                const offset = isd.stoch_rsi_period + isd.stoch_k_period + isd.stoch_d_period - 3; // Approximate offset
+                assign_indicator_to_df("StochRSI_K", stoch_rsi_k_d.k, offset);
+                assign_indicator_to_df("StochRSI_D", stoch_rsi_k_d.d, offset);
             }
         }
         
@@ -2018,43 +2085,43 @@ class TradingAnalyzer {
                                                     isd.bollinger_bands_period,
                                                     isd.bollinger_bands_period, isd.bollinger_bands_std_dev);
             if (bb_bands !== null) {
-                this.indicator_values["BB_Upper"] = bb_bands.upper[bb_bands.upper.length - 1];
-                this.indicator_values["BB_Middle"] = bb_bands.middle[bb_bands.middle.length - 1];
-                this.indicator_values["BB_Lower"] = bb_bands.lower[bb_bands.lower.length - 1];
+                assign_indicator_to_df("BB_Upper", bb_bands.upper, isd.bollinger_bands_period - 1);
+                assign_indicator_to_df("BB_Middle", bb_bands.middle, isd.bollinger_bands_period - 1);
+                assign_indicator_to_df("BB_Lower", bb_bands.lower, isd.bollinger_bands_period - 1);
             }
         }
         
         // CCI
         if (cfg_indicators.cci) {
-            const cci = this._safe_calculate(indicators.calculate_cci, "CCI", isd.cci_period, isd.cci_period);
-            if (cci !== null && cci.length > 0) this.indicator_values["CCI"] = cci[cci.length - 1];
+            const cci_values = this._safe_calculate(indicators.calculate_cci, "CCI", isd.cci_period * 2, isd.cci_period); // CCI has a larger offset
+            assign_indicator_to_df("CCI", cci_values, isd.cci_period * 2 - 2); // Approximate offset
         }
         
         // Williams %R
         if (cfg_indicators.wr) {
-            const wr = this._safe_calculate(indicators.calculate_williams_r, "WR", isd.williams_r_period, isd.williams_r_period);
-            if (wr !== null && wr.length > 0) this.indicator_values["WR"] = wr[wr.length - 1];
+            const wr_values = this._safe_calculate(indicators.calculate_williams_r, "WR", isd.williams_r_period, isd.williams_r_period);
+            assign_indicator_to_df("WR", wr_values, isd.williams_r_period - 1);
         }
         
         // MFI
         if (cfg_indicators.mfi) {
-            const mfi = this._safe_calculate(indicators.calculate_mfi, "MFI", isd.mfi_period + 1, isd.mfi_period);
-            if (mfi !== null && mfi.length > 0) this.indicator_values["MFI"] = mfi[mfi.length - 1];
+            const mfi_values = this._safe_calculate(indicators.calculate_mfi, "MFI", isd.mfi_period + 1, isd.mfi_period);
+            assign_indicator_to_df("MFI", mfi_values, isd.mfi_period); // MFI has a 1-bar offset
         }
         
         // OBV
         if (cfg_indicators.obv) {
             const obv_ema_vals = this._safe_calculate(indicators.calculate_obv, "OBV", isd.obv_ema_period, isd.obv_ema_period);
             if (obv_ema_vals !== null) {
-                this.indicator_values["OBV"] = obv_ema_vals.obv[obv_ema_vals.obv.length - 1];
-                this.indicator_values["OBV_EMA"] = obv_ema_vals.obv_ema[obv_ema_vals.obv_ema.length - 1];
+                assign_indicator_to_df("OBV", obv_ema_vals.obv, 0); // OBV starts from 0
+                assign_indicator_to_df("OBV_EMA", obv_ema_vals.obv_ema, isd.obv_ema_period - 1);
             }
         }
         
         // CMF
         if (cfg_indicators.cmf) {
-            const cmf = this._safe_calculate(indicators.calculate_cmf, "CMF", isd.cmf_period, isd.cmf_period);
-            if (cmf !== null && cmf.length > 0) this.indicator_values["CMF"] = cmf[cmf.length - 1];
+            const cmf_values = this._safe_calculate(indicators.calculate_cmf, "CMF", isd.cmf_period, isd.cmf_period);
+            assign_indicator_to_df("CMF", cmf_values, isd.cmf_period - 1);
         }
         
         // Ichimoku Cloud
@@ -2063,11 +2130,12 @@ class TradingAnalyzer {
                                                             Math.max(isd.ichimoku_tenkan_period, isd.ichimoku_kijun_period, isd.ichimoku_senkou_span_b_period) + isd.ichimoku_chikou_span_offset,
                                                             isd.ichimoku_tenkan_period, isd.ichimoku_kijun_period, isd.ichimoku_senkou_span_b_period, isd.ichimoku_chikou_span_offset);
             if (ichimoku_components !== null) {
-                this.indicator_values["Tenkan_Sen"] = ichimoku_components.tenkan_sen[ichimoku_components.tenkan_sen.length - 1];
-                this.indicator_values["Kijun_Sen"] = ichimoku_components.kijun_sen[ichimoku_components.kijun_sen.length - 1];
-                this.indicator_values["Senkou_Span_A"] = ichimoku_components.senkou_span_a[ichimoku_components.senkou_span_a.length - 1];
-                this.indicator_values["Senkou_Span_B"] = ichimoku_components.senkou_span_b[ichimoku_components.senkou_span_b.length - 1];
-                this.indicator_values["Chikou_Span"] = ichimoku_components.chikou_span[ichimoku_components.chikou_span.length - 1];
+                const max_ichimoku_period = Math.max(isd.ichimoku_tenkan_period, isd.ichimoku_kijun_period, isd.ichimoku_senkou_span_b_period);
+                assign_indicator_to_df("Tenkan_Sen", ichimoku_components.tenkan_sen, isd.ichimoku_tenkan_period - 1);
+                assign_indicator_to_df("Kijun_Sen", ichimoku_components.kijun_sen, isd.ichimoku_kijun_period - 1);
+                assign_indicator_to_df("Senkou_Span_A", ichimoku_components.senkou_span_a, max_ichimoku_period - 1);
+                assign_indicator_to_df("Senkou_Span_B", ichimoku_components.senkou_span_b, max_ichimoku_period - 1);
+                assign_indicator_to_df("Chikou_Span", ichimoku_components.chikou_span, isd.ichimoku_chikou_span_offset);
             }
         }
         
@@ -2076,31 +2144,33 @@ class TradingAnalyzer {
             const psar_vals = this._safe_calculate(indicators.calculate_psar, "PSAR", MIN_DATA_POINTS_PSAR,
                                                   isd.psar_acceleration, isd.psar_max_acceleration);
             if (psar_vals !== null) {
-                this.indicator_values["PSAR_Val"] = psar_vals.psar[psar_vals.psar.length - 1];
-                this.indicator_values["PSAR_Dir"] = psar_vals.direction[psar_vals.direction.length - 1];
+                assign_indicator_to_df("PSAR_Val", psar_vals.psar, 0); // PSAR starts from 0
+                assign_indicator_to_df("PSAR_Dir", psar_vals.direction, 0); // PSAR starts from 0
             }
         }
         
         // VWAP
         if (cfg_indicators.vwap) {
-            const vwap = this._safe_calculate(indicators.calculate_vwap, "VWAP", 1);
-            if (vwap !== null && vwap.length > 0) this.indicator_values["VWAP"] = vwap[vwap.length - 1];
+            const vwap_values = this._safe_calculate(indicators.calculate_vwap, "VWAP", 1);
+            assign_indicator_to_df("VWAP", vwap_values, 0); // VWAP starts from 0
         }
         
         // Ehlers SuperTrend
         if (cfg_indicators.ehlers_supertrend) {
             const st_fast_result = this._safe_calculate(indicators.calculate_ehlers_supertrend, "EhlersSuperTrendFast",
                                                         isd.ehlers_fast_period * 3, isd.ehlers_fast_period, isd.ehlers_fast_multiplier);
-            if (st_fast_result !== null && st_fast_result.direction.length > 0) {
-                this.indicator_values["ST_Fast_Dir"] = st_fast_result.direction[st_fast_result.direction.length - 1];
-                this.indicator_values["ST_Fast_Val"] = st_fast_result.supertrend[st_fast_result.supertrend.length - 1];
+            if (st_fast_result !== null) {
+                const offset = 14; // ATR period used in Supertrend
+                assign_indicator_to_df("ST_Fast_Dir", st_fast_result.direction, offset);
+                assign_indicator_to_df("ST_Fast_Val", st_fast_result.supertrend, offset);
             }
             
             const st_slow_result = this._safe_calculate(indicators.calculate_ehlers_supertrend, "EhlersSuperTrendSlow",
                                                         isd.ehlers_slow_period * 3, isd.ehlers_slow_period, isd.ehlers_slow_multiplier);
-            if (st_slow_result !== null && st_slow_result.direction.length > 0) {
-                this.indicator_values["ST_Slow_Dir"] = st_slow_result.direction[st_slow_result.direction.length - 1];
-                this.indicator_values["ST_Slow_Val"] = st_slow_result.supertrend[st_slow_result.supertrend.length - 1];
+            if (st_slow_result !== null) {
+                const offset = 14; // ATR period used in Supertrend
+                assign_indicator_to_df("ST_Slow_Dir", st_slow_result.direction, offset);
+                assign_indicator_to_df("ST_Slow_Val", st_slow_result.supertrend, offset);
             }
         }
         
@@ -2110,9 +2180,10 @@ class TradingAnalyzer {
                                                   isd.macd_slow_period + isd.macd_signal_period,
                                                   isd.macd_fast_period, isd.macd_slow_period, isd.macd_signal_period);
             if (macd_vals !== null) {
-                this.indicator_values["MACD_Line"] = macd_vals.macd_line[macd_vals.macd_line.length - 1];
-                this.indicator_values["MACD_Signal"] = macd_vals.signal_line[macd_vals.signal_line.length - 1];
-                this.indicator_values["MACD_Hist"] = macd_vals.histogram[macd_vals.histogram.length - 1];
+                const offset = isd.macd_slow_period + isd.macd_signal_period - 2; // Approximate offset
+                assign_indicator_to_df("MACD_Line", macd_vals.macd_line, offset);
+                assign_indicator_to_df("MACD_Signal", macd_vals.signal_line, offset);
+                assign_indicator_to_df("MACD_Hist", macd_vals.histogram, offset);
             }
         }
         
@@ -2120,55 +2191,56 @@ class TradingAnalyzer {
         if (cfg_indicators.adx) {
             const adx_vals = this._safe_calculate(indicators.calculate_adx, "ADX", isd.adx_period * 2, isd.adx_period);
             if (adx_vals !== null) {
-                this.indicator_values["ADX"] = adx_vals.adx[adx_vals.adx.length - 1];
-                this.indicator_values["PlusDI"] = adx_vals.plus_di[adx_vals.plus_di.length - 1];
-                this.indicator_values["MinusDI"] = adx_vals.minus_di[adx_vals.minus_di.length - 1];
+                const offset = isd.adx_period * 2 - 2; // Approximate offset
+                assign_indicator_to_df("ADX", adx_vals.adx, offset);
+                assign_indicator_to_df("PlusDI", adx_vals.plus_di, offset);
+                assign_indicator_to_df("MinusDI", adx_vals.minus_di, offset);
             }
         }
         
         // Volatility Index
         if (cfg_indicators.volatility_index) {
-            const vol_idx = this._safe_calculate(indicators.calculate_volatility_index, "Volatility_Index", isd.volatility_index_period, isd.volatility_index_period);
-            if (vol_idx !== null && vol_idx.length > 0) this.indicator_values["Volatility_Index"] = vol_idx[vol_idx.length - 1];
+            const vol_idx_values = this._safe_calculate(indicators.calculate_volatility_index, "Volatility_Index", isd.volatility_index_period, isd.volatility_index_period);
+            assign_indicator_to_df("Volatility_Index", vol_idx_values, isd.volatility_index_period - 1);
         }
         
         // VWMA
         if (cfg_indicators.vwma) {
-            const vwma = this._safe_calculate(indicators.calculate_vwma, "VWMA", isd.vwma_period, isd.vwma_period);
-            if (vwma !== null && vwma.length > 0) this.indicator_values["VWMA"] = vwma[vwma.length - 1];
+            const vwma_values = this._safe_calculate(indicators.calculate_vwma, "VWMA", isd.vwma_period, isd.vwma_period);
+            assign_indicator_to_df("VWMA", vwma_values, isd.vwma_period - 1);
         }
         
         // Volume Delta
         if (cfg_indicators.volume_delta) {
-            const vol_delta = this._safe_calculate(indicators.calculate_volume_delta, "Volume_Delta", isd.volume_delta_period, isd.volume_delta_period);
-            if (vol_delta !== null && vol_delta.length > 0) this.indicator_values["Volume_Delta"] = vol_delta[vol_delta.length - 1];
+            const vol_delta_values = this._safe_calculate(indicators.calculate_volume_delta, "Volume_Delta", isd.volume_delta_period, isd.volume_delta_period);
+            assign_indicator_to_df("Volume_Delta", vol_delta_values, isd.volume_delta_period - 1);
         }
         
         // Kaufman AMA
         if (cfg_indicators.kaufman_ama) {
-            const kama = this._safe_calculate(indicators.calculate_kaufman_ama, "Kaufman_AMA",
+            const kama_values = this._safe_calculate(indicators.calculate_kaufman_ama, "Kaufman_AMA",
                                               isd.kama_period + isd.kama_slow_period,
                                               isd.kama_period, isd.kama_fast_period, isd.kama_slow_period);
-            if (kama !== null && kama.length > 0) this.indicator_values["Kaufman_AMA"] = kama[kama.length - 1];
+            assign_indicator_to_df("Kaufman_AMA", kama_values, isd.kama_period - 1); // Approximate offset
         }
         
         // Relative Volume
         if (cfg_indicators.relative_volume) {
-            const rv = this._safe_calculate(indicators.calculate_relative_volume, "Relative_Volume", isd.relative_volume_period, isd.relative_volume_period);
-            if (rv !== null && rv.length > 0) this.indicator_values["Relative_Volume"] = rv[rv.length - 1];
+            const rv_values = this._safe_calculate(indicators.calculate_relative_volume, "Relative_Volume", isd.relative_volume_period, isd.relative_volume_period);
+            assign_indicator_to_df("Relative_Volume", rv_values, isd.relative_volume_period - 1);
         }
         
         // Market Structure
         if (cfg_indicators.market_structure) {
-            const ms_trend = this._safe_calculate(indicators.calculate_market_structure, "Market_Structure",
+            const ms_trend_values = this._safe_calculate(indicators.calculate_market_structure, "Market_Structure",
                                                   isd.market_structure_lookback_period * 2, isd.market_structure_lookback_period);
-            if (ms_trend !== null && ms_trend.length > 0) this.indicator_values["Market_Structure_Trend"] = ms_trend[ms_trend.length - 1];
+            assign_indicator_to_df("Market_Structure_Trend", ms_trend_values, isd.market_structure_lookback_period); // Offset is lookbackPeriod
         }
         
         // DEMA
         if (cfg_indicators.dema) {
-            const dema = this._safe_calculate(indicators.calculate_dema, "DEMA", isd.dema_period * 2, this.df.close, isd.dema_period);
-            if (dema !== null && dema.length > 0) this.indicator_values["DEMA"] = dema[dema.length - 1];
+            const dema_values = this._safe_calculate(indicators.calculate_dema, "DEMA", isd.dema_period * 2, isd.dema_period);
+            assign_indicator_to_df("DEMA", dema_values, isd.dema_period * 2 - 2); // Approximate offset
         }
         
         // Keltner Channels
@@ -2177,25 +2249,26 @@ class TradingAnalyzer {
                                                   isd.keltner_period + isd.atr_period,
                                                   isd.keltner_period, isd.keltner_atr_multiplier, isd.atr_period);
             if (kc_bands !== null) {
-                this.indicator_values["Keltner_Upper"] = kc_bands.upper[kc_bands.upper.length - 1];
-                this.indicator_values["Keltner_Middle"] = kc_bands.middle[kc_bands.middle.length - 1];
-                this.indicator_values["Keltner_Lower"] = kc_bands.lower[kc_bands.lower.length - 1];
+                const offset = Math.max(isd.keltner_period, isd.atr_period) - 1;
+                assign_indicator_to_df("Keltner_Upper", kc_bands.upper, offset);
+                assign_indicator_to_df("Keltner_Middle", kc_bands.middle, offset);
+                assign_indicator_to_df("Keltner_Lower", kc_bands.lower, offset);
             }
         }
         
         // ROC
         if (cfg_indicators.roc) {
-            const roc = this._safe_calculate(indicators.calculate_roc, "ROC", isd.roc_period + 1, isd.roc_period);
-            if (roc !== null && roc.length > 0) this.indicator_values["ROC"] = roc[roc.length - 1];
+            const roc_values = this._safe_calculate(indicators.calculate_roc, "ROC", isd.roc_period + 1, isd.roc_period);
+            assign_indicator_to_df("ROC", roc_values, isd.roc_period); // ROC has a 1-bar offset
         }
         
         // Candlestick Patterns
         if (cfg_indicators.candlestick_patterns) {
-            const patterns = this._safe_calculate(indicators.detect_candlestick_patterns, "Candlestick_Patterns", MIN_CANDLESTICK_PATTERNS_BARS);
-            if (patterns !== null && patterns.length > 0) this.indicator_values["Candlestick_Pattern"] = patterns[patterns.length - 1];
+            const patterns_values = this._safe_calculate(indicators.detect_candlestick_patterns, "Candlestick_Patterns", MIN_CANDLESTICK_PATTERNS_BARS);
+            assign_indicator_to_df("Candlestick_Pattern", patterns_values, 1); // Patterns have a 1-bar offset
         }
         
-        // Final cleanup for indicator values
+        // Final cleanup for indicator values (for display purposes)
         for (const key in this.indicator_values) {
             const val = this.indicator_values[key];
             if (Array.isArray(val) && val.length === 0) { // If an indicator result was an empty array
@@ -2205,7 +2278,7 @@ class TradingAnalyzer {
             }
         }
         
-        this.logger.debug(`${chalk.blue("Indicators calculated. Final indicator_values:")}${JSON.stringify(this.indicator_values, null, 2)}${chalk.reset()}`);
+        this.logger.debug(`${chalk.blue("Indicators calculated. Final indicator_values (latest bar):")}${JSON.stringify(this.indicator_values, null, 2)}${chalk.reset()}`);
     }
     
     calculate_fibonacci_levels() {
@@ -2226,7 +2299,7 @@ class TradingAnalyzer {
         
         const pivot_data = indicators.calculate_fibonacci_pivot_points(this.df);
         if (pivot_data) {
-            const price_precision_str = "0." + "0" * (this.config.trade_management.price_precision - 1) + "1";
+            const price_precision_str = "0." + "0".repeat(this.config.trade_management.price_precision - 1) + "1";
             this.indicator_values["Pivot"] = pivot_data.pivot.quantize(new Decimal(price_precision_str), Decimal.ROUND_DOWN);
             this.indicator_values["R1"] = pivot_data.r1.quantize(new Decimal(price_precision_str), Decimal.ROUND_DOWN);
             this.indicator_values["R2"] = pivot_data.r2.quantize(new Decimal(price_precision_str), Decimal.ROUND_DOWN);
@@ -2239,7 +2312,10 @@ class TradingAnalyzer {
     }
     
     _get_indicator_value(key, default_value = new Decimal(NaN)) {
-        const value = this.indicator_values[key];
+        // Retrieve indicator value from the latest bar in this.df
+        if (this.df.length === 0) return default_value;
+        const latest_bar = this.df[this.df.length - 1];
+        const value = latest_bar[key];
         return (value instanceof Decimal && !value.isNaN()) ? value : default_value;
     }
     
@@ -2284,7 +2360,7 @@ class TradingAnalyzer {
             }
         }
         
-        const price_precision_str = "0." + "0" * (this.config.trade_management.price_precision - 1) + "1";
+        const price_precision_str = "0." + "0".repeat(this.config.trade_management.price_precision - 1) + "1";
         if (support_level.gt(0)) {
             this.indicator_values["Support_Level"] = support_level.quantize(new Decimal(price_precision_str), Decimal.ROUND_DOWN);
             this.logger.debug(`${chalk.blue("[")}${this.symbol}${chalk.blue("] Identified Support Level: ")}${support_level.toString()} (Volume: ${max_bid_volume.toString()})${chalk.reset()}`);
@@ -2299,22 +2375,26 @@ class TradingAnalyzer {
         const higher_tf_df = this._process_dataframe(higher_tf_df_raw);
         if (higher_tf_df.length === 0) return "UNKNOWN";
         
-        const last_close = higher_tf_df.close[higher_tf_df.close.length - 1];
+        const last_close = higher_tf_df[higher_tf_df.length - 1].close;
         const period = this.config.mtf_analysis.trend_period;
         const indicator_settings = this.config.indicator_settings;
         
         // Use the shared indicator calculation functions
         if (indicator_type === "sma") {
             if (higher_tf_df.length < period) return "UNKNOWN";
-            const sma = indicators.calculate_sma(higher_tf_df, period)[higher_tf_df.length - 1];
-            if (last_close.gt(sma)) return "UP";
-            if (last_close.lt(sma)) return "DOWN";
+            const sma = indicators.calculate_sma(higher_tf_df, period);
+            if (sma.length === 0) return "UNKNOWN";
+            const latest_sma = sma[sma.length - 1];
+            if (last_close.gt(latest_sma)) return "UP";
+            if (last_close.lt(latest_sma)) return "DOWN";
             return "SIDEWAYS";
         } else if (indicator_type === "ema") {
             if (higher_tf_df.length < period) return "UNKNOWN";
-            const ema = indicators.calculate_ema(higher_tf_df, period)[higher_tf_df.length - 1];
-            if (last_close.gt(ema)) return "UP";
-            if (last_close.lt(ema)) return "DOWN";
+            const ema = indicators.calculate_ema(higher_tf_df, period);
+            if (ema.length === 0) return "UNKNOWN";
+            const latest_ema = ema[ema.length - 1];
+            if (last_close.gt(latest_ema)) return "UP";
+            if (last_close.lt(latest_ema)) return "DOWN";
             return "SIDEWAYS";
         } else if (indicator_type === "ehlers_supertrend") {
             const st_result = indicators.calculate_ehlers_supertrend(
@@ -2582,7 +2662,7 @@ class TradingAnalyzer {
         const signal_breakdown_contrib = {};
         const cfg_indicators = this.config.indicators;
         const weights = this.weights;
-        const current_close = this.df.close[this.df.close.length - 1];
+        const current_close = this.df[this.df.length - 1].close;
         
         if (cfg_indicators.orderbook_imbalance && orderbook_data) {
             const imbalance = this._check_orderbook(orderbook_data);
@@ -3177,7 +3257,7 @@ class TradingAnalyzer {
         if (this.df.length < 50 || atr_now.isNaN() || atr_now.lte(0)) return base_threshold; // Not enough data for dynamic check
         
         // Calculate rolling mean of ATR. Simulate pandas rolling().mean().iloc[-1]
-        const atr_series = this.df.ATR; // Assume ATR is already calculated and available as an array in df
+        const atr_series = this.df.map(bar => bar.ATR); // Access ATR from each bar object
         if (!atr_series || atr_series.length < 50) return base_threshold;
         
         const atr_ma = atr_series.slice(atr_series.length - 50).reduce((sum, val) => sum.plus(val), new Decimal("0")).dividedBy(new Decimal("50"));
@@ -3223,8 +3303,8 @@ class TradingAnalyzer {
             return ["HOLD", 0.0, {}];
         }
         
-        const current_close = this.df.close[this.df.close.length - 1];
-        const prev_close = (this.df.length > 1) ? this.df.close[this.df.length - 2] : current_close;
+        const current_close = this.df[this.df.length - 1].close;
+        const prev_close = (this.df.length > 1) ? this.df[this.df.length - 2].close : current_close;
         
         let trend_strength_multiplier = 1.0;
         
@@ -3262,7 +3342,7 @@ class TradingAnalyzer {
         ];
         
         for (const [scorer_func, args] of scorers_to_run) {
-            const { contrib, breakdown } = scorer_func(...args);
+            const { contrib, breakdown } = scorer_func.apply(this, args); // Use .apply to pass 'this' context
             signal_score += contrib;
             Object.assign(signal_breakdown, breakdown);
         }
@@ -3347,15 +3427,16 @@ function display_indicator_values_and_price(config, logger, current_price, analy
     }
     
     logger.info(`${chalk.cyan("---")}${chalk.reset()}Indicator Values${chalk.cyan("---")}${chalk.reset()}`);
-    for (const indicator_name in analyzer.indicator_values) {
-        const value = analyzer.indicator_values[indicator_name];
-        const color = INDICATOR_COLORS[indicator_name] || chalk.yellow;
-        
+    // Iterate over the latest bar's properties for display
+    const latest_bar = analyzer.df[analyzer.df.length - 1];
+    for (const indicator_name in latest_bar) {
+        // Only display properties that are Decimal instances (i.e., indicators)
+        const value = latest_bar[indicator_name];
         if (value instanceof Decimal) {
+            const color = INDICATOR_COLORS[indicator_name] || chalk.yellow;
             logger.info(`  ${color}${indicator_name.padEnd(20)}: ${value.normalize().toString()}${chalk.reset()}`);
-        } else if (typeof value === 'number') {
-            logger.info(`  ${color}${indicator_name.padEnd(20)}: ${value.toFixed(8)}${chalk.reset()}`);
-        } else {
+        } else if (typeof value === 'string' && indicator_name === 'Candlestick_Pattern') { // Handle candlestick pattern string
+            const color = INDICATOR_COLORS[indicator_name] || chalk.yellow;
             logger.info(`  ${color}${indicator_name.padEnd(20)}: ${value}${chalk.reset()}`);
         }
     }

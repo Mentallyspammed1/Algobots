@@ -1,0 +1,28 @@
+
+name: traders-almanac
+specVersion: v1beta
+displayName: Trader's Almanac Extension
+version: 0.0.1
+description: >-
+  A Genkit-powered extension that provides trading signals and market analysis.
+license: Apache-2.0
+author:
+  authorName: Google
+  url: https://google.com
+billingRequired: true
+sourceUrl: https://github.com/your-repo/traders-almanac-extension
+apis:
+  - apiName: traders-almanac.googleapis.com
+    reason: Powers the core functionality of the extension.
+roles:
+  - role: firebasedatabase.user
+    reason: Allows the extension to read from and write to the Firebase Realtime Database.
+resources:
+  - name: generate-trading-signal-flow
+    type: genkit/flow
+    description: >-
+      A Genkit flow that generates trading signals based on market data and technical indicators.
+    properties:
+      flowName: generate-trading-signal
+      trigger: https
+
