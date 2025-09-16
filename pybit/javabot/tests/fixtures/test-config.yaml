@@ -1,0 +1,12 @@
+# Test configuration to verify loading and overriding defaults.
+TESTNET: true
+DRY_RUN: false
+LOOP_WAIT_TIME_SECONDS: 15
+
+STRATEGIES:
+  ehlst:
+    enabled: true
+    SYMBOL: 'ETHUSDT'
+    LEVERAGE: 25
+  whale:
+    enabled: false

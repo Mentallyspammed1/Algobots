@@ -14,13 +14,13 @@ async function startStrategy(strategyName, strategyConfig) {
     logger.debug(`startStrategy: Attempting to start strategy: ${strategyName} with config: ${JSON.stringify(strategyConfig)}`);
     try {
         logger.info(neon.header(`Attempting to start strategy: ${strategyName}`));
-        // Dynamically import the strategy module
+        // Construct the module path for dynamic import
         logger.debug(`startStrategy: Dynamically importing strategy module: ./strategies/${strategyName}_strategy.js`);
         const strategyModule = await import(`./strategies/${strategyName}_strategy.js`);
         logger.debug(`startStrategy: Strategy module imported for ${strategyName}.`);
         
-        // Assuming each strategy module exports a main or run_bot function
-        // And that these functions can accept a config object
+        // Check for and invoke the strategy's entry point function (main or run_bot)
+        // Pass the strategy-specific configuration to the entry point
         if (typeof strategyModule.main === 'function') {
             logger.debug(`startStrategy: Invoking 'main' function for ${strategyName}.`);
             await strategyModule.main(strategyConfig); // Pass strategyConfig
@@ -28,11 +28,13 @@ async function startStrategy(strategyName, strategyConfig) {
             logger.debug(`startStrategy: Invoking 'run_bot' function for ${strategyName}.`);
             await strategyModule.run_bot(strategyConfig); // Pass strategyConfig
         } else {
+            // Log an error if the strategy module does not export a recognized entry point
             logger.error(neon.error(`Strategy ${strategyName} does not export a 'main' or 'run_bot' function.`));
         }
         logger.info(neon.success(`Strategy ${strategyName} started successfully.`));
         logger.debug(`startStrategy: Strategy ${strategyName} execution complete.`);
     } catch (error) {
+        // Catch and log any errors that occur during strategy import or execution
         logger.critical(neon.error(`Failed to start strategy ${strategyName}: ${error.message}`), error);
         logger.debug(`startStrategy: Error details: ${error.stack}`);
     }
@@ -50,10 +52,12 @@ async function main() {
     logger.info(neon.header('Bot Orchestrator Initiated!'));
     logger.debug('main: Bot Orchestrator main function started.');
 
+    // Filter and collect the names of all enabled strategies from the global configuration
     const enabledStrategies = Object.entries(CONFIG.STRATEGIES)
         .filter(([, strategyConfig]) => strategyConfig.enabled)
         .map(([strategyName]) => strategyName);
 
+    // If no strategies are enabled in the configuration, log a warning and exit
     if (enabledStrategies.length === 0) {
         logger.warn(neon.warn('No enabled strategies defined in config.js. Exiting.'));
         logger.debug('main: No enabled strategies found, exiting main function.');
@@ -63,12 +67,14 @@ async function main() {
     logger.info(neon.info(`Enabled strategies: ${enabledStrategies.join(', ')}`));
     logger.debug(`main: Strategies to execute: ${JSON.stringify(enabledStrategies)}`);
 
+    // Create an array of promises, each representing the asynchronous execution of a strategy
     logger.debug('main: Mapping enabled strategies to startStrategy promises.');
     const strategyPromises = enabledStrategies.map(strategyName => {
         const strategyConfig = CONFIG.STRATEGIES[strategyName];
-        return startStrategy(strategyName, strategyConfig); // Pass strategyConfig
+        return startStrategy(strategyName, strategyConfig); // Pass strategyConfig to the strategy starter
     });
     
+    // Wait for all strategy execution promises to complete (either resolve or reject)
     logger.debug('main: Awaiting all strategy promises to settle.');
     await Promise.allSettled(strategyPromises);
     logger.debug('main: All strategy promises have settled.');
@@ -85,7 +91,8 @@ async function main() {
     try {
         await main();
     } catch (err) {
+        // Catch any unhandled errors from the main orchestration flow and log them critically
         logger.critical(neon.error(`Unhandled error in orchestrator main loop: ${err.message}`), err);
-        process.exit(1);
+        process.exit(1); // Exit the process on critical unhandled errors
     }
 })();

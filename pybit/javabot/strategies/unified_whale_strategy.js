@@ -197,12 +197,12 @@ class TradingAnalyzer {
 
     /**
      * @function calculate_indicators
-     * @description Calculates Pivot Points, StochRSI, and ATR based on the provided kline data.
+     * @description Calculates Pivot Points, Stochastic Oscillator, and ATR based on the provided kline data.
      * Stores the results in `this.indicator_values`.
      * @returns {void}
      */
     calculate_indicators() {
-        if (!this.klines || this.klines.length < 14) { // Need at least 14 periods for StochRSI
+        if (!this.klines || this.klines.length < 14) { // Need at least 14 periods for Stoch
             this.logger.warn('Not enough kline data to calculate indicators.');
             return;
         }
@@ -232,15 +232,16 @@ class TradingAnalyzer {
             r1: r1, s1: s1, r2: r2, s2: s2, r3: r3, s3: s3
         };
 
-        // --- StochRSI ---
-        const rsi_period = 14;
-        const stoch_k_period = 3;
-        const stoch_d_period = 3;
+        // --- Stochastic Oscillator ---
+        const stoch_k_period = this.config.INDICATOR_SETTINGS.STOCH_K_PERIOD || 14;
+        const stoch_d_period = this.config.INDICATOR_SETTINGS.STOCH_D_PERIOD || 3;
+        const stoch_smoothing = this.config.INDICATOR_SETTINGS.STOCH_SMOOTHING || 3;
 
-        const rsi_values = indicators.calculateRSI(closes, rsi_period);
-        const stoch_rsi_values = indicators.calculateStochRSI(rsi_values, rsi_period);
+        const [stoch_k, stoch_d] = indicators.calculateStochasticOscillator(highs, lows, closes, stoch_k_period, stoch_d_period, stoch_smoothing);
 
-        this.indicator_values.stoch_rsi = stoch_rsi_values;
+        this.indicator_values.stoch_k = stoch_k;
+        this.indicator_values.stoch_d = stoch_d;
+
 
         // --- ATR ---
         const atr_period = 14;
@@ -268,7 +269,7 @@ class TradingAnalyzer {
 
     /**
      * @function generate_trading_signal
-     * @description Generates a trading signal ("BUY", "SELL", or "HOLD") based on combined analysis of Pivot Points and StochRSI.
+     * @description Generates a trading signal ("BUY", "SELL", or "HOLD") based on combined analysis of Pivot Points and Stochastic Oscillator.
      * @param {Object} latest_orderbook - The latest order book data (used for potential future enhancements).
      * @returns {Array<any>} An array containing [final_signal (string), signal_score (number), signal_breakdown (Object)].
      */
@@ -289,17 +290,20 @@ class TradingAnalyzer {
         if (current_price.gt(pivots.r1)) pivot_signal = 'BUY';
         if (current_price.lt(pivots.s1)) pivot_signal = 'SELL';
 
-        // --- StochRSI Analysis ---
-        const stoch_rsi_values = this.indicator_values.stoch_rsi;
-        let stoch_rsi_signal = 'HOLD';
-        if (stoch_rsi_values && stoch_rsi_values.length > 0) {
-            const last_stoch_rsi = stoch_rsi_values[stoch_rsi_values.length - 1];
-            const prev_stoch_rsi = stoch_rsi_values.length > 1 ? stoch_rsi_values[stoch_rsi_values.length - 2] : last_stoch_rsi;
+        // --- Stochastic Oscillator Analysis ---
+        const stoch_k_values = this.indicator_values.stoch_k;
+        const stoch_d_values = this.indicator_values.stoch_d;
+        let stoch_signal = 'HOLD';
+        if (stoch_k_values && stoch_d_values && stoch_k_values.length > 1) {
+            const last_k = stoch_k_values[stoch_k_values.length - 1];
+            const last_d = stoch_d_values[stoch_d_values.length - 1];
+            const prev_k = stoch_k_values[stoch_k_values.length - 2];
+            const prev_d = stoch_d_values[stoch_d_values.length - 2];
 
-            if (last_stoch_rsi < 20 && prev_stoch_rsi < last_stoch_rsi) {
-                stoch_rsi_signal = 'BUY';
-            } else if (last_stoch_rsi > 80 && prev_stoch_rsi > last_stoch_rsi) {
-                stoch_rsi_signal = 'SELL';
+            if (prev_k.lte(prev_d) && last_k.gt(last_d) && last_k.lt(20)) {
+                stoch_signal = 'BUY';
+            } else if (prev_k.gte(prev_d) && last_k.lt(last_d) && last_k.gt(80)) {
+                stoch_signal = 'SELL';
             }
         }
 
@@ -308,7 +312,7 @@ class TradingAnalyzer {
         let signal_score = 0;
         const signal_breakdown = {};
 
-        const signals = { pivot: pivot_signal, stoch_rsi: stoch_rsi_signal };
+        const signals = { pivot: pivot_signal, stoch: stoch_signal };
         let buy_count = 0;
         let sell_count = 0;
 
@@ -342,7 +346,7 @@ class TradingAnalyzer {
  * analyzes it for trading signals, manages positions, and updates the dashboard.
  * @returns {Promise<void>}
  */
-async function run_bot() {
+export async function run_bot() {
     const dashboard = new Dashboard(CONFIG, logger);
     dashboard.start();
 
@@ -409,17 +413,3 @@ async function run_bot() {
         }
     }
 }
-
-// Start Bot
-/**
- * @description Immediately invoked async function to launch the Unified Whale strategy.
- * Handles top-level unhandled errors during the bot's execution.
- */
-(async () => {
-    try {
-        await run_bot();
-    } catch (e) {
-        logger.critical(neon.error(`Bot terminated due to unhandled error: ${e.message}`), e);
-        process.exit(1);
-    }
-})();

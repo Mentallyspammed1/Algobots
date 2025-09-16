@@ -3,11 +3,12 @@ import path from 'path';
 import yaml from 'js-yaml';
 import dotenv from 'dotenv';
 
-dotenv.config(); // Load environment variables from .env
+dotenv.config(); // Load environment variables from .env file
 
-const DEFAULT_CONFIG_PATH = "config.yaml";
+const DEFAULT_CONFIG_PATH = "config.yaml"; // Default path for the YAML configuration file
 
 // --- Configuration Parameters from market-maker.js ---
+// These defaults are specific to the market-making strategy.
 const MARKET_MAKER_DEFAULTS = {
     BID_SPREAD_BASE: 0.00025,
     ASK_SPREAD_BASE: 0.00025,
@@ -17,20 +18,20 @@ const MARKET_MAKER_DEFAULTS = {
     ORDER_SIZE_FIXED: false,
     VOLATILITY_WINDOW: 20,
     VOLATILITY_FACTOR: 2.0,
-    REFRESH_INTERVAL: 5000,
-    HEARTBEAT_INTERVAL: 30000,
-    RETRY_DELAY_BASE: 1000,
+    REFRESH_INTERVAL: 5000, // Interval for refreshing market data in milliseconds
+    HEARTBEAT_INTERVAL: 30000, // Interval for sending heartbeat signals in milliseconds
+    RETRY_DELAY_BASE: 1000, // Base delay for retrying operations in milliseconds
     MAX_NET_POSITION: 0.01,
     STOP_ON_LARGE_POS: false,
     LOG_TO_FILE: false,
     LOG_LEVEL: 'info',
-    DEBUG_MODE: false, // New debug flag
-    PNL_CSV_PATH: './logs/pnl.csv',
+    DEBUG_MODE: false, // New debug flag to enable verbose logging
+    PNL_CSV_PATH: './logs/pnl.csv', // Path to log Profit & Loss data
     USE_TERMUX_SMS: false,
     SMS_PHONE_NUMBER: '',
     POSITION_SKEW_FACTOR: 0.15,
     VOLATILITY_SPREAD_FACTOR: 0.75,
-    STATE_FILE_PATH: './logs/state.json',
+    STATE_FILE_PATH: './logs/state.json', // Path for saving bot state
     FILL_PROBABILITY: 0.15,
     SLIPPAGE_FACTOR: 0.0001,
     GRID_SPACING_BASE: 0.00015,
@@ -38,7 +39,8 @@ const MARKET_MAKER_DEFAULTS = {
     IMBALANCE_ORDER_SIZE_FACTOR: 0.5,
 };
 
-// --- Configuration Parameters from ehlst.js and chanexit.js ---
+// --- General Bot Configuration Parameters (from ehlst.js and chanexit.js) ---
+// These defaults apply to various trading bots and general operations.
 const BOT_DEFAULTS = {
     API_KEY: process.env.BYBIT_API_KEY || '',
     API_SECRET: process.env.BYBIT_API_SECRET || '',
@@ -68,8 +70,7 @@ const BOT_DEFAULTS = {
     FIXED_PROFIT_TARGET_PCT: 0.0,
     TRADING_SYMBOLS: ['BTCUSDT', 'ETHUSDT'],
 
-    // Orchestrator settings
-    // ACTIVE_STRATEGIES: [], // e.g., ['ehlst', 'whale'] - Replaced by STRATEGIES object
+    // Orchestrator settings for enabling/disabling specific strategies
     STRATEGIES: {
         ehlst: {
             enabled: false,
@@ -112,7 +113,7 @@ const BOT_DEFAULTS = {
     RSI_OVERSOLD: 30,
     VOLUME_MA_PERIOD: 20,
     VOLUME_THRESHOLD_MULTIPLIER: 1.5,
-    HIGHER_TF_TIMEFRAME: 5, // in minutes
+    HIGHER_TF_TIMEFRAME: 5, // Higher timeframe for analysis (in minutes)
     H_TF_EMA_SHORT_PERIOD: 8,
     H_TF_EMA_LONG_PERIOD: 21,
 
@@ -126,75 +127,76 @@ const BOT_DEFAULTS = {
     ADX_THRESHOLD: 25,
 
     // Filters (from chanexit.js)
-    USE_EST_SLOW_FILTER: true,
-    USE_STOCH_FILTER: false,
+    USE_EST_SLOW_FILTER: true, // Enable/disable Ehlers Supertrend slow filter
+    USE_STOCH_FILTER: false, // Enable/disable Stochastic filter
     STOCH_K_PERIOD: 14,
     STOCH_D_PERIOD: 3,
     STOCH_SMOOTHING: 3,
     STOCH_OVERBOUGHT: 80,
     STOCH_OVERSOLD: 20,
-    USE_MACD_FILTER: false,
+    USE_MACD_FILTER: false, // Enable/disable MACD filter
     MACD_FAST_PERIOD: 12,
     MACD_SLOW_PERIOD: 26,
     MACD_SIGNAL_PERIOD: 9,
-    USE_ADX_FILTER: false, // This is used in ehlst.js, but as a filter in chanexit.js
+    USE_ADX_FILTER: false, // Enable/disable ADX filter
 };
 
 // --- Configuration Parameters from wb4.0.js and whale.js ---
+// These defaults are specific to the "Whale" bot variations.
 const WHALE_BOT_DEFAULTS = {
-    BYBIT_BASE_URL: "https://api.bybit.com",
-    WEBSOCKET_URL: "wss://stream.bybit.com/v5/public/linear",
-    MAX_API_RETRIES: 5,
-    RETRY_DELAY_SECONDS: 7,
-    REQUEST_TIMEOUT: 20000,
-    LOOP_DELAY_SECONDS: 15,
-    ORDERBOOK_LIMIT: 50,
-    SIGNAL_SCORE_THRESHOLD: 2.0,
-    COOLDOWN_SEC: 60,
-    HYSTERESIS_RATIO: 0.85,
-    VOLUME_CONFIRMATION_MULTIPLIER: 1.5,
+    BYBIT_BASE_URL: "https://api.bybit.com", // Base URL for Bybit API
+    WEBSOCKET_URL: "wss://stream.bybit.com/v5/public/linear", // WebSocket URL for public data
+    MAX_API_RETRIES: 5, // Maximum retries for API calls
+    RETRY_DELAY_SECONDS: 7, // Delay between API retries
+    REQUEST_TIMEOUT: 20000, // API request timeout in milliseconds
+    LOOP_DELAY_SECONDS: 15, // Delay in main bot loop
+    ORDERBOOK_LIMIT: 50, // Number of order book levels to fetch
+    SIGNAL_SCORE_THRESHOLD: 2.0, // Threshold for trading signal score
+    COOLDOWN_SEC: 60, // Cooldown period between trades in seconds
+    HYSTERESIS_RATIO: 0.85, // Hysteresis ratio for signals
+    VOLUME_CONFIRMATION_MULTIPLIER: 1.5, // Multiplier for volume confirmation
     TRADE_MANAGEMENT: {
-        ENABLED: true,
-        ACCOUNT_BALANCE: 1000.0,
-        RISK_PER_TRADE_PERCENT: 1.0,
-        STOP_LOSS_ATR_MULTIPLE: 1.5,
-        TAKE_PROFIT_ATR_MULTIPLE: 2.0,
-        MAX_OPEN_POSITIONS: 1,
-        ORDER_PRECISION: 5,
-        PRICE_PRECISION: 3,
-        SLIPPAGE_PERCENT: 0.001,
-        TRADING_FEE_PERCENT: 0.0005,
+        ENABLED: true, // Enable/disable trade management features
+        ACCOUNT_BALANCE: 1000.0, // Simulated account balance for calculations
+        RISK_PER_TRADE_PERCENT: 1.0, // Risk percentage per trade
+        STOP_LOSS_ATR_MULTIPLE: 1.5, // Stop loss based on ATR multiple
+        TAKE_PROFIT_ATR_MULTIPLE: 2.0, // Take profit based on ATR multiple
+        MAX_OPEN_POSITIONS: 1, // Maximum number of open positions
+        ORDER_PRECISION: 5, // Decimal precision for order quantities
+        PRICE_PRECISION: 3, // Decimal precision for prices
+        SLIPPAGE_PERCENT: 0.001, // Slippage percentage for market orders
+        TRADING_FEE_PERCENT: 0.0005, // Trading fee percentage
     },
     MARTINGALE: {
-        ENABLED: false,
-        MULTIPLIER: 2.0,
-        MAX_LEVELS: 5
+        ENABLED: false, // Enable/disable Martingale strategy
+        MULTIPLIER: 2.0, // Martingale multiplier
+        MAX_LEVELS: 5 // Maximum Martingale levels
     },
     DASHBOARD: {
-        ENABLED: true,
-        PORT: 3000,
-        UPDATE_INTERVAL_MS: 1000
+        ENABLED: true, // Enable/disable dashboard
+        PORT: 3000, // Port for the dashboard
+        UPDATE_INTERVAL_MS: 1000 // Dashboard update interval
     },
     RISK_GUARDRAILS: {
-        ENABLED: true,
-        MAX_DAY_LOSS_PCT: 3.0,
-        MAX_DRAWDOWN_PCT: 8.0,
-        COOLDOWN_AFTER_KILL_MIN: 120,
-        SPREAD_FILTER_BPS: 5.0,
-        EV_FILTER_ENABLED: true,
+        ENABLED: true, // Enable/disable risk guardrails
+        MAX_DAY_LOSS_PCT: 3.0, // Maximum daily loss percentage
+        MAX_DRAWDOWN_PCT: 8.0, // Maximum drawdown percentage
+        COOLDOWN_AFTER_KILL_MIN: 120, // Cooldown after emergency stop in minutes
+        SPREAD_FILTER_BPS: 5.0, // Spread filter in basis points
+        EV_FILTER_ENABLED: true, // Enable/disable EV filter
     },
     SESSION_FILTER: {
-        ENABLED: false,
-        UTC_ALLOWED: [["00:00", "08:00"], ["13:00", "20:00"]],
+        ENABLED: false, // Enable/disable trading session filter
+        UTC_ALLOWED: [["00:00", "08:00"], ["13:00", "20:00"]], // Allowed UTC trading hours
     },
     PYRAMIDING: {
-        ENABLED: false,
-        MAX_ADDS: 2,
+        ENABLED: false, // Enable/disable pyramiding
+        MAX_ADDS: 2, // Maximum pyramiding additions
         STEP_ATR: 0.7,
         SIZE_PCT_OF_INITIAL: 0.5,
     },
     MTF_ANALYSIS: {
-        ENABLED: true,
+        ENABLED: true, // Enable/disable multi-timeframe analysis
         HIGHER_TIMEFRAMES: ["60", "240"],
         TREND_INDICATORS: ["ema", "ehlers_supertrend"],
         TREND_PERIOD: 50,

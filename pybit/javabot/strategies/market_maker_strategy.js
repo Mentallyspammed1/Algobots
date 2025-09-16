@@ -1,45 +1,8 @@
-import WebSocket from 'ws';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
-import { CONFIG } from './config.js';
-import { logger, neon } from './logger.js';
-import { bybitClient } from './bybit_api_client.js';
-// import { getVolatility } from './indicators.js'; // Assuming getVolatility will be moved here or calculated from klines
-
-// ====================== 
-// CONFIGURATION (now from config.js) 
-// ====================== 
-const SYMBOL = CONFIG.SYMBOL;
-const IS_TESTNET = CONFIG.TESTNET;
-const DRY_RUN = CONFIG.DRY_RUN;
-
-const BID_SPREAD_BASE = CONFIG.BID_SPREAD_BASE;
-const ASK_SPREAD_BASE = CONFIG.ASK_SPREAD_BASE;
-const SPREAD_MULTIPLIER = CONFIG.SPREAD_MULTIPLIER;
-const MAX_ORDERS_PER_SIDE = CONFIG.MAX_ORDERS_PER_SIDE;
-const MIN_ORDER_SIZE = CONFIG.MIN_ORDER_SIZE;
-const ORDER_SIZE_FIXED = CONFIG.ORDER_SIZE_FIXED;
-const VOLATILITY_WINDOW = CONFIG.VOLATILITY_WINDOW;
-const VOLATILITY_FACTOR = CONFIG.VOLATILITY_FACTOR;
-const REFRESH_INTERVAL = CONFIG.REFRESH_INTERVAL;
-const HEARTBEAT_INTERVAL = CONFIG.HEARTBEAT_INTERVAL;
-const RETRY_DELAY_BASE = CONFIG.RETRY_DELAY_BASE;
-const MAX_NET_POSITION = CONFIG.MAX_NET_POSITION;
-const STOP_ON_LARGE_POS = CONFIG.STOP_ON_LARGE_POS;
-const PNL_CSV_PATH = CONFIG.PNL_CSV_PATH;
-const USE_TERMUX_SMS = CONFIG.USE_TERMUX_SMS;
-const SMS_PHONE_NUMBER = CONFIG.SMS_PHONE_NUMBER;
-const POSITION_SKEW_FACTOR = CONFIG.POSITION_SKEW_FACTOR;
-const VOLATILITY_SPREAD_FACTOR = CONFIG.VOLATILITY_SPREAD_FACTOR;
-const STATE_FILE_PATH = CONFIG.STATE_FILE_PATH;
-const FILL_PROBABILITY = CONFIG.FILL_PROBABILITY;
-const SLIPPAGE_FACTOR = CONFIG.SLIPPAGE_FACTOR;
-const GRID_SPACING_BASE = CONFIG.GRID_SPACING_BASE;
-const IMBALANCE_SPREAD_FACTOR = CONFIG.IMBALANCE_SPREAD_FACTOR;
-const IMBALANCE_ORDER_SIZE_FACTOR = CONFIG.IMBALANCE_ORDER_SIZE_FACTOR;
-
-const BASE_URL = IS_TESTNET ? 'https://api-testnet.bybit.com' : 'https://api.bybit.com';
+import { logger, neon } from '../logger.js';
+import { bybitClient } from '../bybit_api_client.js';
 
 // ====================== 
 // GLOBAL STATE
@@ -53,10 +16,8 @@ const botState = {
   retryCount: 0,
   lastRefresh: Date.now(),
   isPaused: false,
-  hasValidCredentials: !!CONFIG.API_KEY && !!CONFIG.API_SECRET,
+  hasValidCredentials: false, // Will be set in main
   isShuttingDown: false,
-  wsReconnectAttempts: 0,
-  maxWsReconnect: 10,
   realizedPnL: 0,
   unrealizedPnL: 0,
   totalPnL: 0,
@@ -68,37 +29,14 @@ const botState = {
 // ====================== 
 // CSV PNL WRITER
 // ====================== 
-const createCsvWriter = require('csv-writer').createObjectCsvWriter; // Keep require for now
-const pnlCsvWriter = createCsvWriter({
-  path: PNL_CSV_PATH,
-  header: [
-    { id: 'timestamp', title: 'Timestamp' },
-    { id: 'event', title: 'Event' },
-    { id: 'price', title: 'Price' },
-    { id: 'qty', title: 'Qty' },
-    { id: 'side', title: 'Side' },
-    { id: 'realizedPnL', title: 'Realized PnL' },
-    { id: 'unrealizedPnL', title: 'Unrealized PnL' },
-    { id: 'totalPnL', title: 'Total PnL' },
-    { id: 'netPosition', title: 'Net Position' },
-  ],
-  append: true,
-});
-if (!fs.existsSync(PNL_CSV_PATH)) {
-  fs.writeFileSync(PNL_CSV_PATH, 'Timestamp,Event,Price,Qty,Side,Realized PnL,Unrealized PnL,Total PnL,Net Position\n');
-}
+// Note: This uses a dynamic require, which might be a code smell in a pure ES module.
+// For now, we keep it for functionality.
+import { createObjectCsvWriter } from 'csv-writer';
 
 // ====================== 
 // STATE MANAGEMENT
 // ====================== 
-/**
- * @function loadState
- * @description Loads the bot's persistent state (net position, average entry price, realized PnL, trade count)
- * from a JSON file specified by `STATE_FILE_PATH`.
- * Logs a warning if the state file cannot be loaded.
- * @returns {void}
- */
-function loadState() {
+function loadState(STATE_FILE_PATH) {
   try {
     if (fs.existsSync(STATE_FILE_PATH)) {
       const json = JSON.parse(fs.readFileSync(STATE_FILE_PATH, 'utf8'));
@@ -117,14 +55,8 @@ function loadState() {
     logger.warn(neon.warn('Failed to load state'), { error: err.message });
   }
 }
-/**
- * @function saveState
- * @description Saves the bot's current persistent state (net position, average entry price, realized PnL, trade count)
- * to a JSON file specified by `STATE_FILE_PATH`.
- * Logs an error if the state cannot be saved.
- * @returns {void}
- */
-function saveState() {
+
+function saveState(STATE_FILE_PATH) {
   try {
     const data = {
       netPosition: botState.netPosition,
@@ -143,15 +75,8 @@ function saveState() {
 // ====================== 
 // MARKET DATA (ALWAYS LIVE) - Using bybitClient
 // ====================== 
-/**
- * @async
- * @function getOrderBook
- * @description Fetches the order book levels (best bid and ask) from the Bybit API.
- * Includes retry logic and a fallback simulation if API calls fail.
- * @param {number} [retries=3] - The number of retry attempts for fetching the order book.
- * @returns {Promise<Object>} An object containing bids, asks, midPrice, and imbalance.
- */
-async function getOrderBook(retries = 3) {
+async function getOrderBook(strategyConfig, retries = 3) {
+    const { SYMBOL, RETRY_DELAY_BASE, MIN_ORDER_SIZE } = strategyConfig;
   try {
     const [bestBid, bestAsk] = await bybitClient.getOrderbookLevels(SYMBOL, 5);
 
@@ -161,7 +86,7 @@ async function getOrderBook(retries = 3) {
         const delay = 2000 * Math.pow(2, retries - 1);
         logger.warn(neon.warn('Empty book. Retrying...'), { retries: retries - 1 });
         await new Promise(r => setTimeout(r, delay));
-        return getOrderBook(retries - 1);
+        return getOrderBook(strategyConfig, retries - 1);
       }
       logger.warn(neon.warn('Empty book. Using fallback simulation.'));
       const mid = botState.lastPrice || 70000;
@@ -174,9 +99,8 @@ async function getOrderBook(retries = 3) {
       };
     }
 
-    // Simulate full order book structure for analysis
-    const bids = bestBid !== null ? [{ price: bestBid, size: MIN_ORDER_SIZE * 10 }] : []; // Placeholder size
-    const asks = bestAsk !== null ? [{ price: bestAsk, size: MIN_ORDER_SIZE * 10 }] : []; // Placeholder size
+    const bids = bestBid !== null ? [{ price: bestBid, size: MIN_ORDER_SIZE * 10 }] : [];
+    const asks = bestAsk !== null ? [{ price: bestAsk, size: MIN_ORDER_SIZE * 10 }] : [];
 
     if (bids.length === 0 || asks.length === 0) {
       logger.warn(neon.warn(`One side empty. Simulating for continuity. Bids: ${bids.length}, Asks: ${asks.length}`));
@@ -193,7 +117,7 @@ async function getOrderBook(retries = 3) {
       const delay = RETRY_DELAY_BASE * Math.pow(2, retries - 1);
       logger.warn(neon.warn(`Book fetch failed: ${err.message}. Retrying...`), { retries: retries - 1 });
       await new Promise(r => setTimeout(r, delay));
-      return getOrderBook(retries - 1);
+      return getOrderBook(strategyConfig, retries - 1);
     }
     if (!Number.isFinite(botState.lastPrice)) throw err;
     logger.warn(neon.warn('Using fallback book due to failure.'), { error: err.message });
@@ -207,12 +131,8 @@ async function getOrderBook(retries = 3) {
   }
 }
 
-/**
- * @function getVolatility
- * @description Calculates the market volatility based on recent price history.
- * @returns {number} The calculated average percentage change in price over the `VOLATILITY_WINDOW`.
- */
-function getVolatility() {
+function getVolatility(strategyConfig) {
+    const { VOLATILITY_WINDOW } = strategyConfig;
   if (botState.priceHistory.length < VOLATILITY_WINDOW) return 0.001;
   const recent = botState.priceHistory.slice(-VOLATILITY_WINDOW);
   const changes = recent.map((p, i) => i > 0 ? Math.abs((p - recent[i - 1]) / recent[i - 1]) : 0);
@@ -223,13 +143,6 @@ function getVolatility() {
 // ====================== 
 // ANALYSIS & DISPLAY
 // ====================== 
-/**
- * @function analyzeOrderBook
- * @description Analyzes the order book to calculate imbalance and depth.
- * @param {Array<Object>} bids - An array of bid objects ({price, size}).
- * @param {Array<Object>} asks - An array of ask objects ({price, size}).
- * @returns {Object} An object containing imbalance, depth (bids, asks, ratio), bidHeat, and askHeat.
- */
 function analyzeOrderBook(bids, asks) {
   const totalBidSize = bids.reduce((sum, b) => sum + b.size, 0);
   const totalAskSize = asks.reduce((sum, a) => sum + a.size, 0);
@@ -240,15 +153,6 @@ function analyzeOrderBook(bids, asks) {
   return { imbalance, depth, bidHeat, askHeat };
 }
 
-/**
- * @function displayOrderBook
- * @description Logs a formatted display of the current order book, mid-price, imbalance, and depth.
- * @param {Array<Object>} bids - An array of bid objects ({price, size}).
- * @param {Array<Object>} asks - An array of ask objects ({price, size}).
- * @param {number} midPrice - The calculated mid-price.
- * @param {Object} analysis - The analysis object from `analyzeOrderBook`.
- * @returns {void}
- */
 function displayOrderBook(bids, asks, midPrice, analysis) {
   const safeMid = Number.isFinite(midPrice) ? midPrice : 0;
   const imbStr = Number.isFinite(analysis.imbalance) ? (analysis.imbalance * 100).toFixed(2) : '0.00';
@@ -278,16 +182,7 @@ function displayOrderBook(bids, asks, midPrice, analysis) {
 // ====================== 
 // PNL & FILL SIMULATION
 // ====================== 
-/**
- * @function updatePnL
- * @description Updates the bot's net position, average entry price, and PnL (realized, unrealized, total).
- * Also writes PnL events to a CSV file.
- * @param {string} side - The side of the trade ("buy" or "sell").
- * @param {number} qty - The quantity of the asset traded.
- * @param {number} price - The price at which the trade occurred.
- * @returns {void}
- */
-function updatePnL(side, qty, price) {
+function updatePnL(pnlCsvWriter, price, qty, side) {
   const oldPos = botState.netPosition;
   const tradeDelta = side === 'buy' ? qty : -qty;
   const newPos = oldPos + tradeDelta;
@@ -314,27 +209,23 @@ function updatePnL(side, qty, price) {
     botState.unrealizedPnL = 0;
   }
   botState.totalPnL = botState.realizedPnL + botState.unrealizedPnL;
-  pnlCsvWriter.writeRecords([{
-    timestamp: new Date().toISOString(),
-    event: 'FILL',
-    price,
-    qty,
-    side,
-    realizedPnL: botState.realizedPnL,
-    unrealizedPnL: botState.unrealizedPnL,
-    totalPnL: botState.totalPnL,
-    netPosition: botState.netPosition,
-  }]).catch(err => logger.error(neon.error('Failed to write PnL to CSV'), { error: err.message }));
+  pnlCsvWriter.writeRecords([
+    {
+      timestamp: new Date().toISOString(),
+      event: 'FILL',
+      price,
+      qty,
+      side,
+      realizedPnL: botState.realizedPnL,
+      unrealizedPnL: botState.unrealizedPnL,
+      totalPnL: botState.totalPnL,
+      netPosition: botState.netPosition,
+    }
+  ]).catch(err => logger.error(neon.error('Failed to write PnL to CSV'), { error: err.message }));
 }
 
-/**
- * @function simulateFillEvent
- * @description Simulates a trade fill event in dry-run mode based on a `FILL_PROBABILITY`.
- * Updates PnL and logs the simulated fill.
- * @param {number} orderSize - The size of the order to simulate filling.
- * @returns {void}
- */
-function simulateFillEvent(orderSize) {
+function simulateFillEvent(strategyConfig, pnlCsvWriter, orderSize) {
+    const { DRY_RUN, FILL_PROBABILITY, SLIPPAGE_FACTOR } = strategyConfig;
   if (!DRY_RUN) return;
   if (Math.random() > FILL_PROBABILITY) return;
   const side = Math.random() > 0.5 ? 'buy' : 'sell';
@@ -344,20 +235,14 @@ function simulateFillEvent(orderSize) {
   logger.info(neon.info(`[DRY RUN] Simulated ${side.toUpperCase()} fill`), {
     side, qty: qty.toFixed(6), price: price.toFixed(2)
   });
-  updatePnL(side, qty, price);
+  updatePnL(pnlCsvWriter, price, qty, side);
 }
 
 // ====================== 
 // SMS ALERTS (TERMUX) 
 // ====================== 
-/**
- * @function sendTermuxSMS
- * @description Sends an SMS message via Termux:API if enabled and configured.
- * Includes rate limiting to prevent spamming.
- * @param {string} message - The message content to send.
- * @returns {void}
- */
-function sendTermuxSMS(message) {
+function sendTermuxSMS(strategyConfig, message) {
+    const { USE_TERMUX_SMS, SMS_PHONE_NUMBER } = strategyConfig;
   if (!USE_TERMUX_SMS || !SMS_PHONE_NUMBER) return;
   const now = Date.now();
   const digest = message.slice(0, 120);
@@ -378,17 +263,8 @@ function sendTermuxSMS(message) {
 // ====================== 
 // ORDER & RISK MANAGEMENT
 // ====================== 
-/**
- * @async
- * @function placeOrder
- * @description Places a limit order on the Bybit exchange.
- * In dry-run mode, simulates order placement.
- * @param {string} side - The order side ("buy" or "sell").
- * @param {number} price - The price for the limit order.
- * @param {number} qty - The quantity of the asset to trade.
- * @returns {Promise<string|null>} The order ID if successful, or null on failure.
- */
-async function placeOrder(side, price, qty) {
+async function placeOrder(strategyConfig, side, price, qty) {
+    const { DRY_RUN, SYMBOL } = strategyConfig;
   const displayPrice = Number.isFinite(price) ? price.toFixed(1) : String(price);
   const displayQty = Number.isFinite(qty) ? qty.toFixed(6) : String(qty);
   if (DRY_RUN) {
@@ -416,14 +292,8 @@ async function placeOrder(side, price, qty) {
   }
 }
 
-/**
- * @async
- * @function cancelAllOrders
- * @description Cancels all active open orders for the configured symbol.
- * In dry-run mode, simulates order cancellation.
- * @returns {Promise<boolean>} True if all orders were successfully cancelled or simulated, false otherwise.
- */
-async function cancelAllOrders() {
+async function cancelAllOrders(strategyConfig) {
+    const { DRY_RUN, SYMBOL } = strategyConfig;
   if (DRY_RUN) {
     const count = botState.activeOrders.size;
     logger.info(neon.info(`[DRY RUN] Would cancel ${count} orders`), { orders: Array.from(botState.activeOrders) });
@@ -451,26 +321,20 @@ async function cancelAllOrders() {
   }
 }
 
-/**
- * @function checkRiskLimits
- * @description Checks if the bot's net position exceeds predefined risk limits.
- * Pauses the bot if the limit is reached and resumes if the position reduces.
- * Sends Termux SMS alerts for risk events.
- * @returns {boolean} True if within risk limits (or resumed), false if paused.
- */
-function checkRiskLimits() {
+function checkRiskLimits(strategyConfig) {
+    const { STOP_ON_LARGE_POS, MAX_NET_POSITION } = strategyConfig;
   if (STOP_ON_LARGE_POS && Math.abs(botState.netPosition) >= MAX_NET_POSITION) {
     if (!botState.isPaused) {
       botState.isPaused = true;
       logger.warn(neon.warn(`⚠️ POSITION RISK TRIGGERED: Net ${botState.netPosition.toFixed(6)} ≥ ${MAX_NET_POSITION} → PAUSED`));
-      sendTermuxSMS(`⚠️ PAUSED: Net pos ${botState.netPosition.toFixed(6)} BTC > limit ${MAX_NET_POSITION}`);
+      sendTermuxSMS(strategyConfig, `⚠️ PAUSED: Net pos ${botState.netPosition.toFixed(6)} BTC > limit ${MAX_NET_POSITION}`);
     }
     return false;
   }
   if (botState.isPaused && Math.abs(botState.netPosition) < MAX_NET_POSITION * 0.8) {
     botState.isPaused = false;
     logger.info(neon.info(`✅ RISK CLEARED: Net ${botState.netPosition.toFixed(6)} < ${MAX_NET_POSITION * 0.8} → RESUMED`));
-    sendTermuxSMS(`✅ RESUMED: Net pos ${botState.netPosition.toFixed(6)} BTC back within limit`);
+    sendTermuxSMS(strategyConfig, `✅ RESUMED: Net pos ${botState.netPosition.toFixed(6)} BTC back within limit`);
   }
   return true;
 }
@@ -478,13 +342,8 @@ function checkRiskLimits() {
 // ====================== 
 // HEARTBEAT
 // ====================== 
-/**
- * @function startHeartbeat
- * @description Starts a periodic logging of the bot's status, including PnL, net position, and active orders.
- * The interval is defined by `HEARTBEAT_INTERVAL`.
- * @returns {void}
- */
-function startHeartbeat() {
+function startHeartbeat(strategyConfig) {
+    const { HEARTBEAT_INTERVAL } = strategyConfig;
   setInterval(() => {
     console.log('\n' + neon.header('📈 STATUS HEARTBEAT'));
     console.log(`${neon.dim('Last Price:')} ${neon.price(`$${(botState.lastPrice ?? 0).toFixed(2)}`)}`);
@@ -495,81 +354,42 @@ function startHeartbeat() {
     console.log(`${neon.dim('Total PnL:')} ${neon.pnl(botState.totalPnL)}`);
     console.log(`${neon.dim('Trades:')} ${neon.success(String(botState.tradeCount))}`);
     console.log(`${neon.dim('Active Orders:')} ${botState.activeOrders.size}`);
-    console.log(`${neon.dim('Volatility:')} ${getVolatility().toFixed(6)}`);
+    console.log(`${neon.dim('Volatility:')} ${getVolatility(strategyConfig).toFixed(6)}`);
     console.log(`${neon.dim('Is Paused:')} ${botState.isPaused ? neon.warn('YES') : neon.success('NO')}\n`);
   }, HEARTBEAT_INTERVAL);
 }
 
 // ====================== 
-// WEBSOCKET (Ticker for price history)
-// ====================== 
-/**
- * @function setupWebSocket
- * @description Establishes and manages a WebSocket connection to Bybit for real-time ticker updates.
- * Automatically reconnects on disconnection and updates `botState.lastPrice` and `botState.priceHistory`.
- * @returns {void}
- */
-function setupWebSocket() {
-  const wssUrl = IS_TESTNET
-    ? 'wss://stream-testnet.bybit.com/v5/public/linear'
-    : 'wss://stream.bybit.com/v5/public/linear';
-  const ws = new WebSocket(wssUrl);
-  ws.on('open', () => {
-    botState.wsReconnectAttempts = 0;
-    logger.info(neon.info('🔌 Connected to Bybit WebSocket'));
-    ws.send(JSON.stringify({ op: 'subscribe', args: [`ticker.${SYMBOL}`] }));
-  });
-  ws.on('message', (data) => {
-    try {
-      const msg = JSON.parse(data);
-      if (msg.topic && msg.topic.startsWith('ticker.') && msg.data?.lastPrice) {
-        const newPrice = parseFloat(msg.data.lastPrice);
-        if (Number.isFinite(newPrice)) {
-          botState.lastPrice = newPrice;
-          botState.priceHistory.push(newPrice);
-          if (botState.priceHistory.length > 200) botState.priceHistory.shift();
-        }
-      }
-    } catch (err) {
-      logger.warn(neon.warn('Invalid WebSocket message'), { err: err.message });
-    }
-  });
-  ws.on('close', () => {
-    logger.warn(neon.warn('🔌 WebSocket disconnected. Reconnecting...'));
-    const delay = Math.min(1000 * Math.pow(2, botState.wsReconnectAttempts++), 30000);
-    setTimeout(setupWebSocket, delay);
-  });
-  ws.on('error', (err) => {
-    logger.error(neon.error('WebSocket error'), { error: err.message });
-  });
-}
-
-// ====================== 
 // REFRESH CYCLE
 // ====================== 
-/**
- * @async
- * @function refreshOrders
- * @description The core refresh cycle for the market maker. It fetches the order book,
- * analyzes it, calculates new bid/ask spreads and order sizes based on volatility and imbalance,
- * cancels all existing orders, and places a new grid of orders.
- * Includes risk limit checks and simulated fill events.
- * @returns {Promise<void>}
- */
-async function refreshOrders() {
+async function refreshOrders(strategyConfig, pnlCsvWriter) {
   if (botState.isShuttingDown || botState.isPaused) {
     logger.info(neon.info('Market maker paused or shutting down. Skipping refresh.'));
     return;
   }
   try {
-    const { bids, asks, midPrice, imbalance } = await getOrderBook();
+    // This strategy requires a live price feed. The standalone WebSocket is removed.
+    // A centralized WebSocket client should be used to update botState.lastPrice
+    if (botState.lastPrice === null) {
+        logger.warn(neon.warn("MarketMaker strategy requires a live price feed, but botState.lastPrice is null. Skipping refresh. A central WebSocket client should provide this."));
+        return;
+    }
+
+    const { bids, asks, midPrice, imbalance } = await getOrderBook(strategyConfig);
     botState.lastPrice = midPrice;
     const analysis = analyzeOrderBook(bids, asks, midPrice);
     displayOrderBook(bids, asks, midPrice, analysis);
 
-    const vol = getVolatility();
+    const { 
+        VOLATILITY_SPREAD_FACTOR, POSITION_SKEW_FACTOR, IMBALANCE_SPREAD_FACTOR,
+        BID_SPREAD_BASE, ASK_SPREAD_BASE, ORDER_SIZE_FIXED, MIN_ORDER_SIZE,
+        VOLATILITY_FACTOR, IMBALANCE_ORDER_SIZE_FACTOR, GRID_SPACING_BASE,
+        MAX_ORDERS_PER_SIDE
+    } = strategyConfig;
+
+    const vol = getVolatility(strategyConfig);
     const volatilitySpread = vol * VOLATILITY_SPREAD_FACTOR;
-    const positionSkew = (botState.netPosition / Math.max(1e-9, MAX_NET_POSITION)) * POSITION_SKEW_FACTOR;
+    const positionSkew = (botState.netPosition / Math.max(1e-9, strategyConfig.MAX_NET_POSITION)) * POSITION_SKEW_FACTOR;
     const imbalanceSpread = imbalance * IMBALANCE_SPREAD_FACTOR;
     const bidSpread = Math.max(0.00005, BID_SPREAD_BASE + volatilitySpread + Math.max(0, positionSkew) + imbalanceSpread);
     const askSpread = Math.max(0.00005, ASK_SPREAD_BASE + volatilitySpread - Math.min(0, positionSkew) - imbalanceSpread);
@@ -578,117 +398,103 @@ async function refreshOrders() {
 
     let orderSize = MIN_ORDER_SIZE;
     if (!ORDER_SIZE_FIXED) {
-      const vol = getVolatility();
       orderSize = MIN_ORDER_SIZE * (1 + vol * VOLATILITY_FACTOR);
-      // Further adjust based on imbalance
       orderSize *= (1 + Math.abs(imbalance) * IMBALANCE_ORDER_SIZE_FACTOR);
     }
-    orderSize = Math.max(MIN_ORDER_SIZE, Math.min(orderSize, 0.01)); // Apply min/max limits
+    orderSize = Math.max(MIN_ORDER_SIZE, Math.min(orderSize, 0.01));
 
     logger.info(neon.info('📊 Refreshing orders'), {
       midPrice: midPrice.toFixed(2),
       bidSpread: bidSpread.toFixed(5),
       askSpread: askSpread.toFixed(5),
-      volSpread: volatilitySpread.toFixed(5),
-      posSkew: positionSkew.toFixed(5),
-      imbSpread: imbalanceSpread.toFixed(5),
       orderSize: orderSize.toFixed(6)
     });
 
-    await cancelAllOrders();
+    await cancelAllOrders(strategyConfig);
     const tasks = [];
     const gridSpacing = GRID_SPACING_BASE * (1 + vol * 0.5);
     for (let i = 0; i < MAX_ORDERS_PER_SIDE; i++) {
-      tasks.push(placeOrder('buy', baseBidPrice * (1 - i * gridSpacing), orderSize));
-      tasks.push(placeOrder('sell', baseAskPrice * (1 + i * gridSpacing), orderSize));
+      tasks.push(placeOrder(strategyConfig, 'buy', baseBidPrice * (1 - i * gridSpacing), orderSize));
+      tasks.push(placeOrder(strategyConfig, 'sell', baseAskPrice * (1 + i * gridSpacing), orderSize));
     }
     await Promise.all(tasks);
-    simulateFillEvent(orderSize);
-    checkRiskLimits();
+    simulateFillEvent(strategyConfig, pnlCsvWriter, orderSize);
+    checkRiskLimits(strategyConfig);
     logger.debug(neon.dim('Order refresh completed'), { duration: `${Date.now() - botState.lastRefresh}ms`, ordersPlaced: botState.activeOrders.size });
     botState.lastRefresh = Date.now();
   } catch (err) {
     logger.error(neon.error('❌ Refresh failed'), { error: err.message });
-    sendTermuxSMS(`[BOT ERROR] ${err.message.slice(0, 120)}`);
+    sendTermuxSMS(strategyConfig, `[BOT ERROR] ${err.message.slice(0, 120)}`);
   }
 }
 
 // ====================== 
 // GRACEFUL SHUTDOWN
 // ====================== 
-/**
- * @async
- * @function shutdown
- * @description Handles the graceful shutdown of the bot. It cancels all open orders,
- * saves the bot's state, sends a final SMS alert, and exits the process.
- * @param {string} signal - The signal that triggered the shutdown (e.g., 'SIGINT', 'uncaughtException').
- * @returns {Promise<void>}
- */
-const shutdown = async (signal) => {
+const shutdown = async (strategyConfig, signal) => {
   if (botState.isShuttingDown) return;
   botState.isShuttingDown = true;
   logger.info(neon.info(`🛑 Received ${signal}, shutting down gracefully...`));
   try {
-    await cancelAllOrders();
+    await cancelAllOrders(strategyConfig);
   } catch (_) {} // Ignore errors during shutdown
-  saveState();
-  sendTermuxSMS(`[SHUTDOWN] Bot stopped by ${signal}. PnL: ${botState.totalPnL.toFixed(6)}`);
+  saveState(strategyConfig.STATE_FILE_PATH);
+  sendTermuxSMS(strategyConfig, `[SHUTDOWN] Bot stopped by ${signal}. PnL: ${botState.totalPnL.toFixed(6)}`);
   logger.info(neon.info('✅ Shutdown complete.'));
-  process.exit(0);
+  // In an orchestrated environment, we don't exit the process.
+  // The orchestrator will handle the lifecycle.
 };
 
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('uncaughtException', (err) => {
-  logger.error(neon.error('Uncaught Exception'), { error: err.message, stack: err.stack });
-  sendTermuxSMS(`[CRASH] ${err.message.slice(0, 120)}`);
-  shutdown('uncaughtException');
-});
-process.on('unhandledRejection', (reason) => {
-  const msg = reason?.message || String(reason);
-  logger.error(neon.error('Unhandled Rejection'), { reason: msg });
-  sendTermuxSMS(`[REJECTION] ${msg.slice(0, 120)}`);
-  shutdown('unhandledRejection');
-});
-
 // ====================== 
-// STARTUP
+// STRATEGY ENTRY POINT
 // ====================== 
-/**
- * @async
- * @function startBot
- * @description The main entry point for the Market Maker strategy. Initializes the bot,
- * loads state, sets up WebSocket connections, starts the heartbeat, and begins the order refreshing cycle.
- * @param {Object} strategyConfig - The configuration object for this specific strategy instance.
- * @returns {Promise<void>}
- */
-async function startBot(strategyConfig) { // Added strategyConfig parameter
+export async function main(strategyConfig) {
   logger.info(neon.info('🚀 Starting Neon Market Maker Bot...'), {
-    version: '3.7.0',
-    symbol: strategyConfig.SYMBOL || SYMBOL, // Use strategyConfig for symbol
-    testnet: strategyConfig.TESTNET || IS_TESTNET, // Use strategyConfig for testnet
-    dryRun: strategyConfig.DRY_RUN || DRY_RUN, // Use strategyConfig for dryRun
-    dataSource: 'Live Bybit API',
-    maxPosition: strategyConfig.MAX_NET_POSITION || MAX_NET_POSITION, // Use strategyConfig
-    volatilityWindow: strategyConfig.VOLATILITY_WINDOW || VOLATILITY_WINDOW, // Use strategyConfig
-    smsAlerts: (strategyConfig.USE_TERMUX_SMS || USE_TERMUX_SMS) ? (strategyConfig.SMS_PHONE_NUMBER || SMS_PHONE_NUMBER) : 'disabled', // Use strategyConfig
+    version: '4.0.0-integrated',
+    symbol: strategyConfig.SYMBOL,
+    testnet: strategyConfig.TESTNET,
+    dryRun: strategyConfig.DRY_RUN,
   });
 
-  if (strategyConfig.DRY_RUN || DRY_RUN) { // Use strategyConfig for dryRun
+  // Set credentials status from the passed config
+  botState.hasValidCredentials = !!strategyConfig.API_KEY && !!strategyConfig.API_SECRET;
+
+  if (strategyConfig.DRY_RUN) {
     console.log('\n' + neon.header('🔥 DRY RUN MODE — SIMULATING TRADES WITH LIVE MARKET DATA 🔥'));
-    console.log(neon.dim('💡 Tip: Bot is resilient to empty books, rate limits, and crashes.') + '\n');
+  }
+  
+  const pnlCsvWriter = createObjectCsvWriter({
+    path: strategyConfig.PNL_CSV_PATH,
+    header: [
+        { id: 'timestamp', title: 'Timestamp' },
+        { id: 'event', title: 'Event' },
+        { id: 'price', title: 'Price' },
+        { id: 'qty', title: 'Qty' },
+        { id: 'side', title: 'Side' },
+        { id: 'realizedPnL', title: 'Realized PnL' },
+        { id: 'unrealizedPnL', title: 'Unrealized PnL' },
+        { id: 'totalPnL', title: 'Total PnL' },
+        { id: 'netPosition', title: 'Net Position' },
+    ],
+    append: true,
+  });
+  if (!fs.existsSync(strategyConfig.PNL_CSV_PATH)) {
+      fs.writeFileSync(strategyConfig.PNL_CSV_PATH, 'Timestamp,Event,Price,Qty,Side,Realized PnL,Unrealized PnL,Total PnL,Net Position\n');
   }
 
-  loadState();
-  startHeartbeat();
-  setupWebSocket();
-  await refreshOrders();
-  setInterval(refreshOrders, strategyConfig.REFRESH_INTERVAL || REFRESH_INTERVAL); // Use strategyConfig
-}
+  loadState(strategyConfig.STATE_FILE_PATH);
+  startHeartbeat(strategyConfig);
+  
+  // NOTE: The WebSocket for live price updates has been removed.
+  // This strategy now depends on an external mechanism to update `botState.lastPrice`.
+  // Without it, the bot will not function correctly.
+  logger.warn(neon.warn("MarketMaker depends on a live price feed. The standalone WebSocket has been removed for integration. Ensure a central WebSocket client updates 'botState.lastPrice'."));
 
-// === LAUNCH ===
-startBot(CONFIG).catch(err => {
-  logger.error(neon.error('Bot failed to start'), { error: err.message, stack: err.stack });
-  sendTermuxSMS(`[STARTUP FAIL] ${err.message.slice(0, 120)}`);
-  process.exit(1);
-});
+
+  await refreshOrders(strategyConfig, pnlCsvWriter);
+  setInterval(() => refreshOrders(strategyConfig, pnlCsvWriter), strategyConfig.REFRESH_INTERVAL);
+
+  // Graceful shutdown setup
+  process.on('SIGINT', () => shutdown(strategyConfig, 'SIGINT'));
+  process.on('SIGTERM', () => shutdown(strategyConfig, 'SIGTERM'));
+}
