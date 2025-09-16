@@ -1,0 +1,277 @@
+{
+    "symbol": "BTCUSDT",
+    "interval": "15",
+    "loop_delay": 15,
+    "orderbook_limit": 50,
+    "signal_score_threshold": 2,
+    "cooldown_sec": 60,
+    "hysteresis_ratio": 0.85,
+    "volume_confirmation_multiplier": 1.5,
+    "trade_management": {
+        "enabled": true,
+        "account_balance": "1000",
+        "risk_per_trade_percent": 1,
+        "stop_loss_atr_multiple": 1.5,
+        "take_profit_atr_multiple": 2,
+        "max_open_positions": 1,
+        "order_precision": 5,
+        "price_precision": 3,
+        "slippage_percent": "0.001",
+        "trading_fee_percent": "0.0005"
+    },
+    "risk_guardrails": {
+        "enabled": true,
+        "max_day_loss_pct": 3,
+        "max_drawdown_pct": 8,
+        "cooldown_after_kill_min": 120,
+        "spread_filter_bps": 5,
+        "ev_filter_enabled": true
+    },
+    "session_filter": {
+        "enabled": false,
+        "utc_allowed": [
+            [
+                "00:00",
+                "08:00"
+            ],
+            [
+                "13:00",
+                "20:00"
+            ]
+        ]
+    },
+    "pyramiding": {
+        "enabled": false,
+        "max_adds": 2,
+        "step_atr": 0.7,
+        "size_pct_of_initial": 0.5
+    },
+    "mtf_analysis": {
+        "enabled": true,
+        "higher_timeframes": [
+            "60",
+            "240"
+        ],
+        "trend_indicators": [
+            "ema",
+            "ehlers_supertrend"
+        ],
+        "trend_period": 50,
+        "mtf_request_delay_seconds": 0.5
+    },
+    "ml_enhancement": {
+        "enabled": false
+    },
+    "indicator_settings": {
+        "atr_period": 14,
+        "ema_short_period": 9,
+        "ema_long_period": 21,
+        "rsi_period": 14,
+        "stoch_rsi_period": 14,
+        "stoch_k_period": 3,
+        "stoch_d_period": 3,
+        "bollinger_bands_period": 20,
+        "bollinger_bands_std_dev": 2,
+        "cci_period": 20,
+        "williams_r_period": 14,
+        "mfi_period": 14,
+        "psar_acceleration": 0.02,
+        "psar_max_acceleration": 0.2,
+        "sma_short_period": 10,
+        "sma_long_period": 50,
+        "fibonacci_window": 60,
+        "ehlers_fast_period": 10,
+        "ehlers_fast_multiplier": 2,
+        "ehlers_slow_period": 20,
+        "ehlers_slow_multiplier": 3,
+        "macd_fast_period": 12,
+        "macd_slow_period": 26,
+        "macd_signal_period": 9,
+        "adx_period": 14,
+        "ichimoku_tenkan_period": 9,
+        "ichimoku_kijun_period": 26,
+        "ichimoku_senkou_span_b_period": 52,
+        "ichimoku_chikou_span_offset": 26,
+        "obv_ema_period": 20,
+        "cmf_period": 20,
+        "rsi_oversold": 30,
+        "rsi_overbought": 70,
+        "stoch_rsi_oversold": 20,
+        "stoch_rsi_overbought": 80,
+        "cci_oversold": -100,
+        "cci_overbought": 100,
+        "williams_r_oversold": -80,
+        "williams_r_overbought": -20,
+        "mfi_oversold": 20,
+        "mfi_overbought": 80,
+        "volatility_index_period": 20,
+        "vwma_period": 20,
+        "volume_delta_period": 5,
+        "volume_delta_threshold": 0.2,
+        "kama_period": 10,
+        "kama_fast_period": 2,
+        "kama_slow_period": 30,
+        "relative_volume_period": 20,
+        "relative_volume_threshold": 1.5,
+        "market_structure_lookback_period": 20,
+        "dema_period": 14,
+        "keltner_period": 20,
+        "keltner_atr_multiplier": 2,
+        "roc_period": 12,
+        "roc_oversold": -5,
+        "roc_overbought": 5
+    },
+    "indicators": {
+        "ema_alignment": true,
+        "sma_trend_filter": true,
+        "momentum": true,
+        "volume_confirmation": true,
+        "stoch_rsi": true,
+        "rsi": true,
+        "bollinger_bands": true,
+        "vwap": true,
+        "cci": true,
+        "wr": true,
+        "psar": true,
+        "sma_10": true,
+        "mfi": true,
+        "orderbook_imbalance": true,
+        "fibonacci_levels": true,
+        "ehlers_supertrend": true,
+        "macd": true,
+        "adx": true,
+        "ichimoku_cloud": true,
+        "obv": true,
+        "cmf": true,
+        "volatility_index": true,
+        "vwma": true,
+        "volume_delta": true,
+        "kaufman_ama": true,
+        "relative_volume": true,
+        "market_structure": true,
+        "dema": true,
+        "keltner_channels": true,
+        "roc": true,
+        "candlestick_patterns": true,
+        "fibonacci_pivot_points": false
+    },
+    "weight_sets": {
+        "default_scalping": {
+            "ema_alignment": 0.3,
+            "sma_trend_filter": 0.2,
+            "ehlers_supertrend_alignment": 0.4,
+            "macd_alignment": 0.3,
+            "adx_strength": 0.25,
+            "ichimoku_confluence": 0.35,
+            "psar": 0.15,
+            "vwap": 0.15,
+            "vwma_cross": 0.1,
+            "sma_10": 0.05,
+            "bollinger_bands": 0.25,
+            "momentum_rsi_stoch_cci_wr_mfi": 0.35,
+            "volume_confirmation": 0.1,
+            "obv_momentum": 0.15,
+            "cmf_flow": 0.1,
+            "volume_delta_signal": 0.1,
+            "orderbook_imbalance": 0.1,
+            "mtf_trend_confluence": 0.25,
+            "volatility_index_signal": 0.1,
+            "kaufman_ama_cross": 0.2,
+            "relative_volume_confirmation": 0.1,
+            "market_structure_confluence": 0.25,
+            "dema_crossover": 0.18,
+            "keltner_breakout": 0.2,
+            "roc_signal": 0.12,
+            "candlestick_confirmation": 0.15,
+            "fibonacci_pivot_points_confluence": 0.2
+        }
+    },
+    "execution": {
+        "use_pybit": false,
+        "testnet": false,
+        "account_type": "UNIFIED",
+        "category": "linear",
+        "position_mode": "ONE_WAY",
+        "tpsl_mode": "Full",
+        "buy_leverage": "3",
+        "sell_leverage": "3",
+        "tp_trigger_by": "LastPrice",
+        "sl_trigger_by": "LastPrice",
+        "default_time_in_force": "GTC",
+        "reduce_only_default": false,
+        "post_only_default": false,
+        "position_idx_overrides": {
+            "ONE_WAY": 0,
+            "HEDGE_BUY": 1,
+            "HEDGE_SELL": 2
+        },
+        "proxies": {
+            "enabled": false,
+            "http": "",
+            "https": ""
+        },
+        "tp_scheme": {
+            "mode": "atr_multiples",
+            "targets": [
+                {
+                    "name": "TP1",
+                    "atr_multiple": 1,
+                    "size_pct": 0.4,
+                    "order_type": "Limit",
+                    "tif": "PostOnly",
+                    "post_only": true
+                },
+                {
+                    "name": "TP2",
+                    "atr_multiple": 1.5,
+                    "size_pct": 0.4,
+                    "order_type": "Limit",
+                    "tif": "IOC",
+                    "post_only": false
+                },
+                {
+                    "name": "TP3",
+                    "atr_multiple": 2,
+                    "size_pct": 0.2,
+                    "order_type": "Limit",
+                    "tif": "GTC",
+                    "post_only": false
+                }
+            ]
+        },
+        "sl_scheme": {
+            "type": "atr_multiple",
+            "atr_multiple": 1.5,
+            "percent": 1,
+            "use_conditional_stop": true,
+            "stop_order_type": "Market"
+        },
+        "breakeven_after_tp1": {
+            "enabled": true,
+            "offset_type": "atr",
+            "offset_value": 0.1,
+            "lock_in_min_percent": 0,
+            "sl_trigger_by": "LastPrice"
+        },
+        "live_sync": {
+            "enabled": true,
+            "poll_ms": 2500,
+            "max_exec_fetch": 200,
+            "only_track_linked": true,
+            "heartbeat": {
+                "enabled": true,
+                "interval_ms": 5000
+            }
+        }
+    },
+    "martingale": {
+        "enabled": false,
+        "multiplier": 2,
+        "max_levels": 5
+    },
+    "dashboard": {
+        "enabled": true,
+        "port": 3000,
+        "update_interval_ms": 1000
+    }
+}

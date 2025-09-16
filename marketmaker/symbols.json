@@ -1,0 +1,30 @@
+[
+  {
+    "symbol": "XLMUSDT",
+    "trade_enabled": true,
+    "base_spread": 0.0015,
+    "order_amount": 100.0,
+    "leverage": 10.0,
+    "inventory_limit": 1000.0,
+    "signal_config": {
+      "use_rsi": true,
+      "rsi_period": 14,
+      "rsi_overbought": 70.0,
+      "rsi_oversold": 30.0,
+      "use_macd": true,
+      "macd_fast": 12,
+      "macd_slow": 26,
+      "macd_signal": 9,
+      "signal_bias_strength": 0.5
+    },
+    "orderbook_analysis": {
+      "enabled": true,
+      "obi_depth": 20,
+      "obi_impact_factor": 0.4,
+      "cliff_depth": 5,
+      "cliff_factor": 5.0,
+      "toxic_spread_widener": 2.0,
+      "wap_instead_of_mid": true
+    }
+  }
+]

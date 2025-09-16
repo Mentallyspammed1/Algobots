@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Chandelier Scalper Pro 🚀</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background: #0D1117;
+            color: #E2E8F0;
+        }
+        .neon-text-green {
+            text-shadow: 0 0 5px #00FF8C, 0 0 10px #00FF8C, 0 0 20px #00FF8C;
+            color: #00FF8C;
+        }
+        .neon-text-pink {
+            text-shadow: 0 0 5px #FF00A5, 0 0 10px #FF00A5, 0 0 20px #FF00A5;
+            color: #FF00A5;
+        }
+        .chart-grid {
+            border: 2px solid;
+            border-image: linear-gradient(45deg, #00FF8C, #8C00FF, #FF00A5) 1;
+            box-shadow: 0 0 20px rgba(0, 255, 140, 0.5);
+        }
+        .fade-in {
+            animation: fadeIn 1s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .signal-indicator {
+            transition: color 0.5s ease-in-out;
+        }
+        .chart-loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 17, 23, 0.8); /* Semi-transparent dark background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #FFD700; /* Yellow for loading */
+            z-index: 10;
+            border-radius: 8px; /* Match container radius */
+        }
+        .chart-loading-overlay.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center p-4 min-h-screen bg-gray-950 text-gray-200">
+
+    <header class="text-center mb-6 w-full fade-in">
+        <h1 class="text-4xl font-bold neon-text-green">Neon Chandelier Scalper Pro 🚀</h1>
+        <p class="mt-2 text-sm text-gray-400">Live Bybit Data on a Termux-powered ARM64 server.</p>
+        <div id="status-message" class="mt-2 text-red-400 font-bold">Loading live data...</div>
+    </header>
+
+    <main class="w-full max-w-7xl flex flex-col gap-4 mb-4">
+
+        <!-- Sync Toggle -->
+        <div class="flex justify-center items-center gap-4 fade-in">
+            <label for="sync-toggle" class="text-gray-400">Sync Charts:</label>
+            <input type="checkbox" id="sync-toggle" class="form-checkbox h-5 w-5 text-green-500 rounded focus:ring-green-400 bg-gray-700 border-gray-600" checked>
+        </div>
+        
+        <!-- Main Price Chart Container -->
+        <div class="relative flex-grow h-[60vh] bg-gray-800 rounded-lg p-2 chart-grid fade-in">
+            <div id="price-chart-container" class="w-full h-full"></div>
+            <div id="price-chart-loading" class="chart-loading-overlay hidden">Loading Chart...</div>
+        </div>
+
+        <!-- Indicator Panels Container -->
+        <div class="w-full grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- RSI Chart Container -->
+            <div class="relative h-[25vh] bg-gray-800 rounded-lg p-2 chart-grid fade-in">
+                <div id="rsi-chart-container" class="w-full h-full"></div>
+                <div id="rsi-chart-loading" class="chart-loading-overlay hidden">Loading RSI...</div>
+            </div>
+            <!-- MACD Chart Container -->
+            <div class="relative h-[25vh] bg-gray-800 rounded-lg p-2 chart-grid fade-in">
+                <div id="macd-chart-container" class="w-full h-full"></div>
+                <div id="macd-chart-loading" class="chart-loading-overlay hidden">Loading MACD...</div>
+            </div>
+            <!-- ADX Chart Container -->
+            <div class="relative h-[25vh] bg-gray-800 rounded-lg p-2 chart-grid fade-in">
+                <div id="adx-chart-container" class="w-full h-full"></div>
+                <div id="adx-chart-loading" class="chart-loading-overlay hidden">Loading ADX...</div>
+            </div>
+        </div>
+
+        <!-- Volume Chart Container -->
+        <div class="relative h-[25vh] bg-gray-800 rounded-lg p-2 chart-grid fade-in">
+            <div id="volume-chart-container" class="w-full h-full"></div>
+            <div id="volume-chart-loading" class="chart-loading-overlay hidden">Loading Volume...</div>
+        </div>
+
+        <!-- Info Panel -->
+        <div class="w-full bg-gray-800 rounded-lg p-4 chart-grid flex flex-col fade-in">
+            <h2 class="text-lg font-semibold border-b border-gray-600 pb-2 mb-2 text-[#FF00A5] neon-text-pink">Live Metrics</h2>
+            <div id="info-panel-content" class="text-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-2 gap-x-4">
+                <p><strong>Last Close:</strong> <span id="last-close" class="text-yellow-400" title="The last recorded closing price of the asset.">--</span></p>
+                <p><strong>Short EMA:</strong> <span id="short-ema" class="text-blue-400" title="Exponential Moving Average over a shorter period.">--</span></p>
+                <p><strong>Long EMA:</strong> <span id="long-ema" class="text-orange-400" title="Exponential Moving Average over a longer period.">--</span></p>
+                <p><strong>Trend EMA:</strong> <span id="trend-ema" class="text-gray-400" title="Exponential Moving Average used to determine the overall trend direction.">--</span></p>
+                <p><strong>Chandelier Long:</strong> <span id="chandelier-long" class="text-[#00FF8C]" title="The upper band of the Chandelier Exit indicator, suggesting potential resistance or take-profit levels for shorts.">--</span></p>
+                <p><strong>Chandelier Short:</strong> <span id="chandelier-short" class="text-[#FF00A5]" title="The lower band of the Chandelier Exit indicator, suggesting potential support or take-profit levels for longs.">--</span></p>
+                <p><strong>RSI:</strong> <span id="rsi" class="text-purple-400" title="Relative Strength Index: Measures the magnitude of recent price changes to evaluate overbought or oversold conditions.">--</span></p>
+                <p><strong>MACD:</strong> <span id="macd" class="text-[#00A8FF]" title="Moving Average Convergence Divergence: A trend-following momentum indicator. Shows the relationship between two moving averages of a stock’s prices.">--</span></p>
+                <p><strong>ADX:</strong> <span id="adx" class="text-gray-300" title="Average Directional Index: Measures the strength of a trend, not its direction.">--</span></p>
+                <p><strong>Current Signal:</strong> <span id="signal" class="font-bold signal-indicator" title="The current trading signal generated by the strategy.">--</span></p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="text-center text-xs text-gray-600 mt-4">
+        © 2025 Neon Chandelier Scalper. All Rights Reserved. Data provided by Bybit.
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const priceChartContainer = document.getElementById('price-chart-container');
+            const rsiChartContainer = document.getElementById('rsi-chart-container');
+            const macdChartContainer = document.getElementById('macd-chart-container');
+            const adxChartContainer = document.getElementById('adx-chart-container');
+            const volumeChartContainer = document.getElementById('volume-chart-container'); // New
+            const statusMessage = document.getElementById('status-message');
+            const syncToggle = document.getElementById('sync-toggle');
+            const chartLoadingOverlays = document.querySelectorAll('.chart-loading-overlay');
+
+            const showLoadingOverlay = (chartElement, message) => {
+                const overlay = chartElement.nextElementSibling; // Assumes overlay is the next sibling
+                if (overlay && overlay.classList.contains('chart-loading-overlay')) {
+                    overlay.querySelector('div') ? overlay.querySelector('div').textContent = message : overlay.textContent = message;
+                    overlay.classList.remove('hidden');
+                }
+            };
+
+            const hideLoadingOverlay = (chartElement) => {
+                const overlay = chartElement.nextElementSibling;
+                if (overlay && overlay.classList.contains('chart-loading-overlay')) {
+                    overlay.classList.add('hidden');
+                }
+            };
+
+            const createChart = (container) => {
+                const chart = LightweightCharts.createChart(container, {
+                    width: container.offsetWidth,
+                    height: container.offsetHeight,
+                    layout: {
+                        background: { type: 'solid', color: '#0D1117' },
+                        textColor: '#E2E8F0',
+                    },
+                    grid: {
+                        vertLines: { color: '#2D3748' },
+                        horzLines: { color: '#2D3748' },
+                    },
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Normal,
+                    },
+                    timeScale: {
+                        borderColor: '#4A5568',
+                    },
+                    rightPriceScale: {
+                        borderColor: '#4A5568',
+                    },
+                });
+                return chart;
+            };
+
+            const priceChart = createChart(priceChartContainer);
+            const rsiChart = createChart(rsiChartContainer);
+            const macdChart = createChart(macdChartContainer);
+            const adxChart = createChart(adxChartContainer);
+            const volumeChart = createChart(volumeChartContainer); // New
+
+            // Hide crosshair for indicator charts and sync them
+            [rsiChart, macdChart, adxChart, volumeChart].forEach(chart => {
+                chart.applyOptions({ crosshair: { mode: LightweightCharts.CrosshairMode.Magnet } });
+                chart.timeScale().fitContent();
+            });
+
+            // Crosshair synchronization logic
+            priceChart.subscribeCrosshairMove((param) => {
+                if (syncToggle.checked) {
+                    rsiChart.timeScale().scrollToPosition(param.logical, false);
+                    macdChart.timeScale().scrollToPosition(param.logical, false);
+                    adxChart.timeScale().scrollToPosition(param.logical, false);
+                    volumeChart.timeScale().scrollToPosition(param.logical, false); // Sync volume chart
+                }
+            });
+
+            // Main Price Chart Series
+            const candlestickSeries = priceChart.addCandlestickSeries({
+                upColor: '#00FF8C',
+                downColor: '#FF00A5',
+                borderVisible: false,
+                wickUpColor: '#00FF8C',
+                wickDownColor: '#FF00A5',
+            });
+            const trendEmaSeries = priceChart.addLineSeries({ color: '#A0AEC0', lineWidth: 2, title: 'Trend EMA', crosshairMarkerVisible: false });
+            const shortEmaSeries = priceChart.addLineSeries({ color: '#00A8FF', lineWidth: 2, title: 'Short EMA', crosshairMarkerVisible: false });
+            const longEmaSeries = priceChart.addLineSeries({ color: '#FFD700', lineWidth: 2, title: 'Long EMA', crosshairMarkerVisible: false });
+            const chandelierLongSeries = priceChart.addLineSeries({ color: '#00FF8C', lineWidth: 2, title: 'Chandelier Long', crosshairMarkerVisible: false, lineStyle: LightweightCharts.LineStyle.Dotted });
+            const chandelierShortSeries = priceChart.addLineSeries({ color: '#FF00A5', lineWidth: 2, title: 'Chandelier Short', crosshairMarkerVisible: false, lineStyle: LightweightCharts.LineStyle.Dotted });
+            const buySignalsSeries = priceChart.addMarkers();
+            const sellSignalsSeries = priceChart.addMarkers();
+            
+            // RSI Chart Series
+            const rsiLineSeries = rsiChart.addLineSeries({ color: '#8C00FF', lineWidth: 2, title: 'RSI' });
+            rsiChart.addLineSeries({ color: '#4A5568', lineStyle: LightweightCharts.LineStyle.Solid, lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => ({ priceRange: { from: 70, to: 70 } }) });
+            rsiChart.addLineSeries({ color: '#4A5568', lineStyle: LightweightCharts.LineStyle.Solid, lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => ({ priceRange: { from: 30, to: 30 } }) });
+
+            // MACD Chart Series
+            const macdLineSeries = macdChart.addLineSeries({ color: '#00A8FF', lineWidth: 2, title: 'MACD' });
+            const macdSignalSeries = macdChart.addLineSeries({ color: '#FFD700', lineWidth: 2, title: 'Signal' });
+            const macdHistogramSeries = macdChart.addHistogramSeries({
+                title: 'Histogram',
+                color: '#00FF8C',
+                base: 0,
+            });
+
+            // ADX Chart Series
+            const adxLineSeries = adxChart.addLineSeries({ color: '#999999', lineWidth: 2, title: 'ADX' });
+            const plusDiSeries = adxChart.addLineSeries({ color: '#00FF8C', lineWidth: 1, title: '+DI' });
+            const minusDiSeries = adxChart.addLineSeries({ color: '#FF00A5', lineWidth: 1, title: '-DI' });
+            adxChart.addLineSeries({ color: '#4A5568', lineStyle: LightweightCharts.LineStyle.Solid, lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => ({ priceRange: { from: 20, to: 20 } }) });
+
+            // Volume Chart Series (New)
+            const volumeSeries = volumeChart.addHistogramSeries({
+                title: 'Volume',
+                color: '#26A69A', // Default color, will override based on price movement
+                base: 0,
+                priceFormat: {
+                    type: 'volume',
+                },
+            });
+
+            const fetchData = async () => {
+                // Show all loading overlays initially
+                chartLoadingOverlays.forEach(overlay => overlay.classList.remove('hidden'));
+
+                try {
+                    statusMessage.textContent = 'Fetching and processing data...';
+                    statusMessage.className = 'mt-2 text-yellow-400 font-bold';
+                    
+                    const response = await fetch('http://127.0.0.1:5000/api/data');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                         throw new Error(data.error);
+                    }
+                    
+                    statusMessage.textContent = 'Live Data Connected';
+                    statusMessage.className = 'mt-2 text-[#00FF8C] neon-text-green font-bold';
+
+                    // Update Main Price Chart
+                    candlestickSeries.setData(data.candles);
+                    trendEmaSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.trend_ema[i] })));
+                    shortEmaSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.ema_short[i] })));
+                    longEmaSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.ema_long[i] })));
+                    chandelierLongSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.chandelier_long[i] })));
+                    chandelierShortSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.chandelier_short[i] })));
+
+                    // Plot signals
+                    const buyMarkers = [];
+                    const sellMarkers = [];
+                    const lastCandle = data.candles[data.candles.length - 1];
+                    if (data.current_signal === 'buy') {
+                        buyMarkers.push({ time: lastCandle.time, position: 'belowBar', color: '#00FF8C', shape: 'arrowUp' });
+                    } else if (data.current_signal === 'sell') {
+                        sellMarkers.push({ time: lastCandle.time, position: 'aboveBar', color: '#FF00A5', shape: 'arrowDown' });
+                    }
+                    buySignalsSeries.setMarkers(buyMarkers);
+                    sellSignalsSeries.setMarkers(sellMarkers);
+                    
+                    // Update Indicator Charts
+                    rsiLineSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.rsi[i] })));
+                    macdLineSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.macd_line[i] })));
+                    macdSignalSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.signal_line[i] })));
+                    adxLineSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.adx[i] })));
+                    plusDiSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.plus_di[i] })));
+                    minusDiSeries.setData(data.candles.map((d, i) => ({ time: d.time, value: data.minus_di[i] })));
+
+                    // Histogram data needs special formatting
+                    const macdHistData = [];
+                    for(let i=0; i<data.candles.length; i++) {
+                      if(data.macd_hist[i] !== null) {
+                        macdHistData.push({
+                          time: data.candles[i].time,
+                          value: data.macd_hist[i],
+                          color: data.macd_hist[i] > 0 ? '#00FF8C' : '#FF00A5'
+                        });
+                      }
+                    }
+                    macdHistogramSeries.setData(macdHistData);
+                    
+                    // Volume Chart Data (New)
+                    const volumeHistData = data.candles.map((d, i) => ({
+                        time: d.time,
+                        value: data.volume[i],
+                        color: data.close[i] > data.open[i] ? '#00FF8C' : '#FF00A5' // Color based on candle close/open
+                    }));
+                    volumeSeries.setData(volumeHistData);
+
+                    // Update info panel with the latest data
+                    document.getElementById('last-close').textContent = data.last_close.toFixed(2);
+                    document.getElementById('short-ema').textContent = data.ema_short[data.ema_short.length - 1] !== undefined ? data.ema_short[data.ema_short.length - 1].toFixed(2) : '--';
+                    document.getElementById('long-ema').textContent = data.long_ema[data.long_ema.length - 1] !== undefined ? data.long_ema[data.long_ema.length - 1].toFixed(2) : '--';
+                    document.getElementById('trend-ema').textContent = data.trend_ema[data.trend_ema.length - 1] !== undefined ? data.trend_ema[data.trend_ema.length - 1].toFixed(2) : '--';
+                    document.getElementById('rsi').textContent = data.rsi[data.rsi.length - 1] !== undefined ? data.rsi[data.rsi.length - 1].toFixed(2) : '--';
+                    document.getElementById('macd').textContent = data.macd_line[data.macd_line.length - 1] !== undefined ? data.macd_line[data.macd_line.length - 1].toFixed(2) : '--';
+                    document.getElementById('adx').textContent = data.adx[data.adx.length - 1] !== undefined ? data.adx[data.adx.length - 1].toFixed(2) : '--';
+                    document.getElementById('chandelier-long').textContent = data.chandelier_long[data.chandelier_long.length - 1] !== undefined ? data.chandelier_long[data.chandelier_long.length - 1].toFixed(2) : '--';
+                    document.getElementById('chandelier-short').textContent = data.chandelier_short[data.chandelier_short.length - 1] !== undefined ? data.chandelier_short[data.chandelier_short.length - 1].toFixed(2) : '--';
+
+                    const signalEl = document.getElementById('signal');
+                    let signalTitle = 'The current trading signal generated by the strategy.';
+                    if (data.current_signal === 'buy') {
+                        signalEl.textContent = 'Buy Signal';
+                        signalEl.className = 'font-bold signal-indicator neon-text-green';
+                        signalTitle = 'Buy Signal: Price is expected to rise.';
+                    } else if (data.current_signal === 'sell') {
+                        signalEl.textContent = 'Sell Signal';
+                        signalEl.className = 'font-bold signal-indicator neon-text-pink';
+                        signalTitle = 'Sell Signal: Price is expected to fall.';
+                    } else {
+                        signalEl.textContent = 'Neutral';
+                        signalEl.className = 'font-bold signal-indicator text-gray-400';
+                        signalTitle = 'Neutral: No clear buy or sell signal detected.';
+                    }
+                    signalEl.title = signalTitle;
+
+                } catch (e) {
+                    console.error("Could not fetch data:", e);
+                    statusMessage.textContent = 'Error: Failed to connect to Python server.';
+                    statusMessage.className = 'mt-2 text-red-400 font-bold';
+                } finally {
+                    // Hide all loading overlays once data fetching is complete (success or failure)
+                    chartLoadingOverlays.forEach(overlay => overlay.classList.add('hidden'));
+                }
+            };
+
+            // Initial fetch and then set interval
+            fetchData();
+            const intervalId = setInterval(fetchData, 15000); // Refresh every 15 seconds
+
+            window.addEventListener('resize', () => {
+                priceChart.applyOptions({ width: priceChartContainer.offsetWidth, height: priceChartContainer.offsetHeight });
+                rsiChart.applyOptions({ width: rsiChartContainer.offsetWidth, height: rsiChartContainer.offsetHeight });
+                macdChart.applyOptions({ width: macdChartContainer.offsetWidth, height: macdChartContainer.offsetHeight });
+                adxChart.applyOptions({ width: adxChartContainer.offsetWidth, height: adxChartContainer.offsetHeight });
+                volumeChart.applyOptions({ width: volumeChartContainer.offsetWidth, height: volumeChartContainer.offsetHeight }); // Resize volume chart
+            });
+
+            // Cleanup interval on page unload to prevent memory leaks
+            window.addEventListener('beforeunload', () => {
+                clearInterval(intervalId);
+            });
+        });
+    </script>
+</body>
+</html>

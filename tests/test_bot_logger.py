@@ -1,8 +1,12 @@
 # tests/test_bot_logger.py
-import pytest
 import logging
-from unittest.mock import patch, MagicMock
-from bot_logger import setup_logging, log_trade, log_metrics, log_exception
+import sys
+
+import pytest
+
+sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
+from bot_logger import log_exception, log_metrics, log_trade, setup_logging
+
 
 @pytest.fixture
 def caplog_for_test(caplog):
@@ -13,8 +17,8 @@ def caplog_for_test(caplog):
 def test_setup_logging(caplog_for_test):
     logger = setup_logging()
     assert isinstance(logger, logging.Logger)
-    assert logger.name == 'scalper_bot'
-    assert len(logger.handlers) == 2 # File and Console
+    assert logger.name == 'PyrmethusBot'
+    assert len(logger.handlers) == 4 # File and Console
     logger.info("Test log message")
     assert "Test log message" in caplog_for_test.text
 

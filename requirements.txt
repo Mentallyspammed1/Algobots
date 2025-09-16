@@ -1,0 +1,14 @@
+# It is recommended to install all these packages
+# to ensure the bot runs smoothly.
+
+# For API communication
+pybit
+
+# For data manipulation
+pandas
+
+# For technical indicators
+pandas_ta
+
+# For environment variables
+python-dotenv

@@ -1,0 +1,626 @@
+2025-08-18 03:06:31,676 - TRUMPUSDT - INFO - [36mStarting analysis for TRUMPUSDT with interval 5[0m
+2025-08-18 03:06:34,369 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0245). Using 'high_volatility' weights.[0m
+2025-08-18 03:06:34,595 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:06:34,600 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:06:34,601 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:06:34 CDT
+[36mPrice History:[0m 8.98 | 8.99 | 8.98
+[36mVolume History:[0m 18,754 | 29,653 | 4,811
+[36mCurrent Price:[0m 8.97900
+[36mATR (14):[0m 0.02449
+[36mTrend:[0m Uptrend (Strength: 2.46)
+[36mOBV:[0m Bearish
+[33mRSI:[0m Neutral (48.75)
+[33mMFI:[0m Neutral (77.25)
+[33mCCI:[0m Neutral (43.42)
+[33mWilliams %R:[0m Neutral (-51.85)
+[33mADX:[0m Ranging (21.10)
+[36mADI:[0m Distribution
+[36mPSAR:[0m 8.9970 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=0.00 (Neutral)
+[92mStoch RSI:[0m K=22.93, D=34.09, Stoch_RSI=7.78
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.73733
+S: S2 $8.49567
+S: S3 $8.11733
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11567
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:07:06,996 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0249). Using 'high_volatility' weights.[0m
+2025-08-18 03:07:07,249 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:07:07,253 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:07:07,254 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:07:07 CDT
+[36mPrice History:[0m 8.98 | 8.99 | 8.99
+[36mVolume History:[0m 18,754 | 29,653 | 7,061
+[36mCurrent Price:[0m 8.98700
+[36mATR (14):[0m 0.02489
+[36mTrend:[0m Uptrend (Strength: 2.43)
+[36mOBV:[0m Neutral
+[33mRSI:[0m Neutral (54.67)
+[33mMFI:[0m Neutral (76.73)
+[33mCCI:[0m Neutral (47.17)
+[33mWilliams %R:[0m Neutral (-41.98)
+[33mADX:[0m Ranging (21.10)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9970 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=31.70, D=37.01, Stoch_RSI=34.09
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74267
+S: S2 $8.49833
+S: S3 $8.12267
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11833
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:07:39,751 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0249). Using 'high_volatility' weights.[0m
+2025-08-18 03:07:40,001 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:07:40,008 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:07:40,011 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:07:39 CDT
+[36mPrice History:[0m 8.98 | 8.99 | 8.99
+[36mVolume History:[0m 18,754 | 29,653 | 7,404
+[36mCurrent Price:[0m 8.98700
+[36mATR (14):[0m 0.02489
+[36mTrend:[0m Uptrend (Strength: 2.43)
+[36mOBV:[0m Neutral
+[33mRSI:[0m Neutral (54.67)
+[33mMFI:[0m Neutral (76.65)
+[33mCCI:[0m Neutral (47.17)
+[33mWilliams %R:[0m Neutral (-41.98)
+[33mADX:[0m Ranging (21.10)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9970 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=31.70, D=37.01, Stoch_RSI=34.09
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74267
+S: S2 $8.49833
+S: S3 $8.12267
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11833
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:08:12,481 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0249). Using 'high_volatility' weights.[0m
+2025-08-18 03:08:12,705 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:08:12,708 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:08:12,709 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:08:12 CDT
+[36mPrice History:[0m 8.98 | 8.99 | 8.99
+[36mVolume History:[0m 18,754 | 29,653 | 10,069
+[36mCurrent Price:[0m 8.98800
+[36mATR (14):[0m 0.02489
+[36mTrend:[0m Uptrend (Strength: 2.44)
+[36mOBV:[0m Bullish
+[33mRSI:[0m Neutral (55.35)
+[33mMFI:[0m Neutral (78.39)
+[33mCCI:[0m Neutral (47.92)
+[33mWilliams %R:[0m Neutral (-40.74)
+[33mADX:[0m Ranging (21.10)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9970 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=32.70, D=37.35, Stoch_RSI=37.10
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74333
+S: S2 $8.49867
+S: S3 $8.12333
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11867
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:08:12,712 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:08:12,714 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:08:45,277 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0249). Using 'high_volatility' weights.[0m
+2025-08-18 03:08:45,505 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:08:45,509 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:08:45,510 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:08:45 CDT
+[36mPrice History:[0m 8.98 | 8.99 | 8.99
+[36mVolume History:[0m 18,754 | 29,653 | 10,370
+[36mCurrent Price:[0m 8.98700
+[36mATR (14):[0m 0.02489
+[36mTrend:[0m Uptrend (Strength: 2.43)
+[36mOBV:[0m Neutral
+[33mRSI:[0m Neutral (54.67)
+[33mMFI:[0m Neutral (75.97)
+[33mCCI:[0m Neutral (47.17)
+[33mWilliams %R:[0m Neutral (-41.98)
+[33mADX:[0m Ranging (21.10)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9970 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=31.70, D=37.01, Stoch_RSI=34.09
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74267
+S: S2 $8.49833
+S: S3 $8.12267
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11833
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:09:17,819 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0250). Using 'high_volatility' weights.[0m
+2025-08-18 03:09:18,040 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:09:18,044 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:09:18,045 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:09:17 CDT
+[36mPrice History:[0m 8.98 | 8.99 | 8.99
+[36mVolume History:[0m 18,754 | 29,653 | 19,290
+[36mCurrent Price:[0m 8.99100
+[36mATR (14):[0m 0.02503
+[36mTrend:[0m Uptrend (Strength: 2.43)
+[36mOBV:[0m Bullish
+[33mRSI:[0m Neutral (57.27)
+[33mMFI:[0m Neutral (79.60)
+[33mCCI:[0m Neutral (50.91)
+[33mWilliams %R:[0m Neutral (-37.04)
+[33mADX:[0m Ranging (21.10)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9970 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=35.54, D=38.29, Stoch_RSI=45.62
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74533
+S: S2 $8.49967
+S: S3 $8.12533
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11967
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:09:18,047 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:09:18,049 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:09:50,650 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0250). Using 'high_volatility' weights.[0m
+2025-08-18 03:09:50,865 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:09:50,869 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:09:50,870 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:09:50 CDT
+[36mPrice History:[0m 8.98 | 8.99 | 8.99
+[36mVolume History:[0m 18,754 | 29,653 | 21,135
+[36mCurrent Price:[0m 8.99000
+[36mATR (14):[0m 0.02503
+[36mTrend:[0m Uptrend (Strength: 2.43)
+[36mOBV:[0m Bullish
+[33mRSI:[0m Neutral (56.65)
+[33mMFI:[0m Neutral (79.70)
+[33mCCI:[0m Neutral (50.16)
+[33mWilliams %R:[0m Neutral (-38.27)
+[33mADX:[0m Ranging (21.10)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9970 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=34.62, D=37.99, Stoch_RSI=42.86
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74467
+S: S2 $8.49933
+S: S3 $8.12467
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11933
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:09:50,872 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:09:50,874 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:10:23,370 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0222). Using 'high_volatility' weights.[0m
+2025-08-18 03:10:23,586 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:10:23,589 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:10:23,591 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:10:23 CDT
+[36mPrice History:[0m 8.99 | 8.99 | 8.99
+[36mVolume History:[0m 29,653 | 21,136 | 541
+[36mCurrent Price:[0m 8.99200
+[36mATR (14):[0m 0.02222
+[36mTrend:[0m Uptrend (Strength: 2.36)
+[36mOBV:[0m Bullish
+[33mRSI:[0m Neutral (58.06)
+[33mMFI:[0m Neutral (77.56)
+[33mCCI:[0m Neutral (56.26)
+[33mWilliams %R:[0m Neutral (-48.33)
+[33mADX:[0m Ranging (20.47)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9760 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=42.24, D=36.40, Stoch_RSI=49.11
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74600
+S: S2 $8.50000
+S: S3 $8.12600
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.12000
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:10:23,593 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:10:23,595 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:10:56,738 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0228). Using 'high_volatility' weights.[0m
+2025-08-18 03:10:56,955 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:10:56,958 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:10:56,960 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:10:56 CDT
+[36mPrice History:[0m 8.99 | 8.99 | 9.00
+[36mVolume History:[0m 29,653 | 21,136 | 1,332
+[36mCurrent Price:[0m 8.99600
+[36mATR (14):[0m 0.02276
+[36mTrend:[0m Uptrend (Strength: 2.31)
+[36mOBV:[0m Bullish
+[33mRSI:[0m Neutral (60.61)
+[33mMFI:[0m Neutral (77.62)
+[33mCCI:[0m Neutral (62.73)
+[33mWilliams %R:[0m Neutral (-41.67)
+[33mADX:[0m Ranging (20.78)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9760 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=46.02, D=37.67, Stoch_RSI=60.46
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74867
+S: S2 $8.50133
+S: S3 $8.12867
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.12133
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:11:29,465 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0234). Using 'high_volatility' weights.[0m
+2025-08-18 03:11:29,681 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:11:29,684 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:11:29,685 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:11:29 CDT
+[36mPrice History:[0m 8.99 | 8.99 | 9.00
+[36mVolume History:[0m 29,653 | 21,136 | 10,232
+[36mCurrent Price:[0m 9.00100
+[36mATR (14):[0m 0.02342
+[36mTrend:[0m Uptrend (Strength: 2.25)
+[36mOBV:[0m Bullish
+[33mRSI:[0m Neutral (63.40)
+[33mMFI:[0m Neutral (78.23)
+[33mCCI:[0m Neutral (70.76)
+[33mWilliams %R:[0m Neutral (-33.33)
+[33mADX:[0m Ranging (21.49)
+[36mADI:[0m Accumulation
+[36mPSAR:[0m 8.9760 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=50.15, D=39.04, Stoch_RSI=72.83
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.75200
+S: S2 $8.50300
+S: S3 $8.13200
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.12300
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:12:02,357 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0240). Using 'high_volatility' weights.[0m
+2025-08-18 03:12:02,576 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:12:02,579 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:12:02,581 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:12:02 CDT
+[36mPrice History:[0m 8.99 | 8.99 | 8.99
+[36mVolume History:[0m 29,653 | 21,136 | 15,946
+[36mCurrent Price:[0m 8.99200
+[36mATR (14):[0m 0.02396
+[36mTrend:[0m Uptrend (Strength: 2.19)
+[36mOBV:[0m Bullish
+[33mRSI:[0m Neutral (58.06)
+[33mMFI:[0m Neutral (78.61)
+[33mCCI:[0m Neutral (66.75)
+[33mWilliams %R:[0m Neutral (-48.33)
+[33mADX:[0m Ranging (22.00)
+[36mADI:[0m Distribution
+[36mPSAR:[0m 8.9760 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=42.24, D=36.40, Stoch_RSI=49.11
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74600
+S: S2 $8.50000
+S: S3 $8.12600
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.12000
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:12:02,584 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:12:02,586 - TRUMPUSDT - INFO - [91mDetected Bearish MACD Divergence.[0m
+2025-08-18 03:12:35,075 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0242). Using 'high_volatility' weights.[0m
+2025-08-18 03:12:35,309 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:12:35,313 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:12:35,314 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:12:35 CDT
+[36mPrice History:[0m 8.99 | 8.99 | 8.99
+[36mVolume History:[0m 29,653 | 21,136 | 17,248
+[36mCurrent Price:[0m 8.98800
+[36mATR (14):[0m 0.02422
+[36mTrend:[0m Uptrend (Strength: 2.16)
+[36mOBV:[0m Bearish
+[33mRSI:[0m Neutral (54.81)
+[33mMFI:[0m Neutral (78.70)
+[33mCCI:[0m Neutral (61.93)
+[33mWilliams %R:[0m Neutral (-55.00)
+[33mADX:[0m Ranging (22.00)
+[36mADI:[0m Distribution
+[36mPSAR:[0m 8.9760 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=37.44, D=34.80, Stoch_RSI=34.70
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74333
+S: S2 $8.49867
+S: S3 $8.12333
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11867
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:13:08,359 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0253). Using 'high_volatility' weights.[0m
+2025-08-18 03:13:08,738 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:13:08,745 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:13:08,748 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:13:08 CDT
+[36mPrice History:[0m 8.99 | 8.99 | 8.98
+[36mVolume History:[0m 29,653 | 21,136 | 23,426
+[36mCurrent Price:[0m 8.97800
+[36mATR (14):[0m 0.02529
+[36mTrend:[0m Uptrend (Strength: 2.05)
+[36mOBV:[0m Bearish
+[33mRSI:[0m Neutral (47.16)
+[33mMFI:[0m Neutral (79.09)
+[33mCCI:[0m Neutral (47.30)
+[33mWilliams %R:[0m Neutral (-71.67)
+[33mADX:[0m Ranging (22.00)
+[36mADI:[0m Distribution
+[36mPSAR:[0m 8.9760 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=26.11, D=31.03, Stoch_RSI=0.73
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.73667
+S: S2 $8.49533
+S: S3 $8.11667
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11533
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:13:41,355 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0253). Using 'high_volatility' weights.[0m
+2025-08-18 03:13:41,672 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:13:41,676 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:13:41,677 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:13:41 CDT
+[36mPrice History:[0m 8.99 | 8.99 | 8.98
+[36mVolume History:[0m 29,653 | 21,136 | 23,577
+[36mCurrent Price:[0m 8.97900
+[36mATR (14):[0m 0.02529
+[36mTrend:[0m Uptrend (Strength: 2.05)
+[36mOBV:[0m Bearish
+[33mRSI:[0m Neutral (47.83)
+[33mMFI:[0m Neutral (79.09)
+[33mCCI:[0m Neutral (48.12)
+[33mWilliams %R:[0m Neutral (-70.00)
+[33mADX:[0m Ranging (22.00)
+[36mADI:[0m Distribution
+[36mPSAR:[0m 8.9760 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=27.10, D=31.36, Stoch_RSI=3.70
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.73733
+S: S2 $8.49567
+S: S3 $8.11733
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11567
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+
+2025-08-18 03:14:15,101 - TRUMPUSDT - INFO - [33mMarket detected as HIGH VOLATILITY (ATR: 0.0256). Using 'high_volatility' weights.[0m
+2025-08-18 03:14:15,318 - TRUMPUSDT - ERROR - [91mError calculating FVE: 'numpy.float64' object has no attribute 'replace'[0m
+2025-08-18 03:14:15,322 - TRUMPUSDT - WARNING - [33mOrder book data incomplete for wall analysis.[0m
+2025-08-18 03:14:15,323 - TRUMPUSDT - INFO - 
+[36mExchange:[0m Bybit
+[36mSymbol:[0m TRUMPUSDT
+[36mInterval:[0m 5
+[36mTimestamp:[0m 2025-08-18 03:14:15 CDT
+[36mPrice History:[0m 8.99 | 8.99 | 8.99
+[36mVolume History:[0m 29,653 | 21,136 | 24,051
+[36mCurrent Price:[0m 8.98800
+[36mATR (14):[0m 0.02556
+[36mTrend:[0m Uptrend (Strength: 2.04)
+[36mOBV:[0m Bearish
+[33mRSI:[0m Neutral (54.81)
+[33mMFI:[0m Neutral (79.12)
+[33mCCI:[0m Neutral (53.83)
+[33mWilliams %R:[0m Neutral (-55.00)
+[33mADX:[0m Ranging (22.00)
+[36mADI:[0m Distribution
+[36mPSAR:[0m 8.9760 (Last Value)
+[36mFVE:[0m nan (Last Value)
+[92mMACD:[0m MACD=0.00, Signal=-0.00, Histogram=0.00
+[35mEMA Alignment:[0m Score=1.00 (Bullish)
+[92mStoch RSI:[0m K=37.44, D=34.80, Stoch_RSI=34.70
+
+[36mOrder Book Walls:[0m
+  No significant walls detected.
+
+[36mSupport and Resistance Levels:[0m
+S: Support (Fib 88.6%) $8.94468
+S: Support (Fib 94.1%) $8.91058
+S: S1 $8.74333
+S: S2 $8.49867
+S: S3 $8.12333
+R: Resistance (Fib 78.6%) $9.00668
+R: Resistance (Fib 61.8%) $9.11084
+R: Pivot $9.11867
+R: Resistance (Fib 50.0%) $9.18400
+R: Resistance (Fib 38.2%) $9.25716
+

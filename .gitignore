@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+
+# Log files
+logs/
+*.log
+
+# Environment variables
+.env
+
+# Database files
+*.db
+*.db-journal
+
+# Pickle files
+*.pkl
+.gemini/
+gha-creds-*.json
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules

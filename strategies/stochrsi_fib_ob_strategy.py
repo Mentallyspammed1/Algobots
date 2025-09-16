@@ -1,12 +1,16 @@
-import pandas as pd
 import logging
-from typing import List, Dict, Any, Tuple
 from decimal import Decimal
+from typing import Any
 
+import pandas as pd
 from algobots_types import OrderBlock
-from bot_logger import setup_logging
-from config import SMA_PERIOD, PIVOT_TOLERANCE_PCT, OB_TOLERANCE_PCT, EHLERS_FISHER_SIGNAL_PERIOD
-from color_codex import COLOR_RED, COLOR_YELLOW, COLOR_GREEN, COLOR_CYAN, COLOR_RESET
+from color_codex import COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_RESET, COLOR_YELLOW
+from config import (
+    EHLERS_FISHER_SIGNAL_PERIOD,
+    OB_TOLERANCE_PCT,
+    PIVOT_TOLERANCE_PCT,
+    SMA_PERIOD,
+)
 from strategies.strategy_template import StrategyTemplate
 
 strategy_logger = logging.getLogger('stochrsi_fib_ob_strategy')
@@ -22,11 +26,11 @@ def _to_decimal(value: Any) -> Decimal:
         return Decimal('0')
 
 def _check_confluence(latest_close: Decimal,
-                      levels: List[Dict[str, Any]],
+                      levels: list[dict[str, Any]],
                       level_tolerance_pct: float,
-                      active_obs: List[OrderBlock],
+                      active_obs: list[OrderBlock],
                       ob_tolerance_pct: float,
-                      is_for_buy_signal: bool) -> Tuple[bool, str]:
+                      is_for_buy_signal: bool) -> tuple[bool, str]:
     level_tolerance_dec = _to_decimal(level_tolerance_pct)
     ob_tolerance_dec = _to_decimal(ob_tolerance_pct)
 
@@ -49,7 +53,7 @@ def _check_confluence(latest_close: Decimal,
         ob_range = ob_top - ob_bottom
         extended_ob_bottom = ob_bottom - ob_range * ob_tolerance_dec
         extended_ob_top = ob_top + ob_range * ob_tolerance_dec
-        
+
         if ob_range == Decimal('0'):
              extended_ob_bottom = ob_bottom * (Decimal('1') - ob_tolerance_dec)
              extended_ob_top = ob_top * (Decimal('1') + ob_tolerance_dec)
@@ -57,7 +61,7 @@ def _check_confluence(latest_close: Decimal,
         if latest_close >= extended_ob_bottom and latest_close <= extended_ob_top:
             ob_label = "Bullish" if is_for_buy_signal else "Bearish"
             return True, f"Near {ob_label} Order Block (B: {ob_bottom:.2f}, T: {ob_top:.2f})"
-    
+
     return False, "No structural confluence"
 
 
@@ -66,13 +70,13 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
         super().__init__(logger)
         self.logger.info("StochRSI_Fib_OB_Strategy initialized.")
 
-    def generate_signals(self, 
-                         df: pd.DataFrame, 
-                         resistance_levels: List[Dict[str, Any]], 
-                         support_levels: List[Dict[str, Any]],
-                         active_bull_obs: List[OrderBlock], 
-                         active_bear_obs: List[OrderBlock],
-                         **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+    def generate_signals(self,
+                         df: pd.DataFrame,
+                         resistance_levels: list[dict[str, Any]],
+                         support_levels: list[dict[str, Any]],
+                         active_bull_obs: list[OrderBlock],
+                         active_bear_obs: list[OrderBlock],
+                         **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
         signals = []
 
         stoch_k_period = kwargs.get('stoch_k_period')
@@ -121,7 +125,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
 
         fisher_buy_signal = prev_ehlers_fisher < prev_ehlers_fisher_signal and latest_ehlers_fisher >= latest_ehlers_fisher_signal
         fisher_sell_signal = prev_ehlers_fisher > prev_ehlers_fisher_signal and latest_ehlers_fisher <= latest_ehlers_fisher_signal
-        
+
         fisher_long_bias = latest_ehlers_fisher > Decimal('0') and latest_ehlers_fisher > prev_ehlers_fisher
         fisher_short_bias = latest_ehlers_fisher < Decimal('0') and latest_ehlers_fisher < prev_ehlers_fisher
 
@@ -132,7 +136,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
         if enable_fib_pivot_actions:
             if not pivot_support_levels and not pivot_resistance_levels:
                 self.logger.warning(f"{COLOR_YELLOW}Fib Pivot confirmation enabled, but no pivot levels calculated. Entry check may be impacted.{COLOR_RESET}")
-            
+
             if current_trend_is_up:
                 for name, price in pivot_support_levels.items():
                     if price > Decimal('0') and abs(latest_close - price) / price <= fib_entry_confirm_dec:
@@ -173,7 +177,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                     if prev_stoch_k < oversold_dec and latest_stoch_k >= oversold_dec:
                         stoch_condition_met = True
                         stoch_type_str = 'k_oversold_bounce'
-                
+
                 if stoch_condition_met:
                     if fisher_buy_signal or fisher_long_bias:
                         signals.append(('BUY', latest_close, current_timestamp, {
@@ -208,7 +212,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                     if prev_stoch_k > overbought_dec and latest_stoch_k <= overbought_dec:
                         stoch_condition_met = True
                         stoch_type_str = 'k_overbought_rejection'
-                
+
                 if stoch_condition_met:
                     if fisher_sell_signal or fisher_short_bias:
                         signals.append(('SELL', latest_close, current_timestamp, {
@@ -228,12 +232,12 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
 
         return signals
 
-    def generate_exit_signals(self, 
-                              df: pd.DataFrame, 
+    def generate_exit_signals(self,
+                              df: pd.DataFrame,
                               current_position_side: str,
-                              active_bull_obs: List['OrderBlock'], 
-                              active_bear_obs: List['OrderBlock'],
-                              **kwargs) -> List[Tuple[str, Decimal, Any, Dict[str, Any]]]:
+                              active_bull_obs: list['OrderBlock'],
+                              active_bear_obs: list['OrderBlock'],
+                              **kwargs) -> list[tuple[str, Decimal, Any, dict[str, Any]]]:
         exit_signals = []
 
         stoch_k_period = kwargs.get('stoch_k_period')
@@ -285,7 +289,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
 
         fisher_exit_long_signal = prev_ehlers_fisher > prev_ehlers_fisher_signal and latest_ehlers_fisher <= latest_ehlers_fisher_signal
         fisher_exit_short_signal = prev_ehlers_fisher < prev_ehlers_fisher_signal and latest_ehlers_fisher >= latest_ehlers_fisher_signal
-        
+
         fisher_exit_long_bias_change = latest_ehlers_fisher < Decimal('0')
         fisher_exit_short_bias_change = latest_ehlers_fisher > Decimal('0')
 
@@ -316,12 +320,12 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                         else:
                             self.logger.warning(f"{COLOR_YELLOW}Fibonacci Exit Warning (SELL position): {fib_exit_reason}{COLOR_RESET}")
                         break
-    
+
         if current_position_side == 'BUY':
             confluence_found_exit, confluence_reason_exit = _check_confluence(
                 latest_close, resistance_levels, PIVOT_TOLERANCE_PCT, active_bear_obs, OB_TOLERANCE_PCT, False
             )
-            
+
             stoch_exit_condition = False
             stoch_exit_type_str = ""
             if use_crossover:
@@ -332,19 +336,19 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                 if prev_stoch_k > overbought_dec and latest_stoch_k <= overbought_dec:
                     stoch_exit_condition = True
                     stoch_exit_type_str = 'k_overbought_rejection_exit_long'
-            
+
             ehlers_exit_condition = fisher_exit_long_signal or fisher_exit_long_bias_change
 
             if (stoch_exit_condition or ehlers_exit_condition or trend_reversal_buy_exit or confluence_found_exit or fib_exit_triggered):
                 reason_parts = []
                 if stoch_exit_condition: reason_parts.append(f"StochRSI ({stoch_exit_type_str})")
-                if ehlers_exit_condition: reason_parts.append(f"Ehlers Fisher (cross/bias reversal)")
+                if ehlers_exit_condition: reason_parts.append("Ehlers Fisher (cross/bias reversal)")
                 if trend_reversal_buy_exit: reason_parts.append("Trend reversal (below SMA)")
                 if confluence_found_exit: reason_parts.append(f"Confluence ({confluence_reason_exit})")
                 if fib_exit_triggered: reason_parts.append(f"Fibonacci Exit ({fib_exit_reason})")
-                
+
                 exit_reason_str = "; ".join(reason_parts)
-                
+
                 exit_signals.append(('EXIT_BUY', latest_close, current_timestamp, {
                     **stoch_info, **ehlers_info, 'exit_reason': exit_reason_str,
                     'confluence_detail': confluence_reason_exit, 'fib_trigger_detail': fib_exit_reason
@@ -366,17 +370,17 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                 if prev_stoch_k < oversold_dec and latest_stoch_k >= oversold_dec:
                     stoch_exit_condition = True
                     stoch_exit_type_str = 'k_oversold_bounce_exit_short'
-            
+
             ehlers_exit_condition = fisher_exit_short_signal or fisher_exit_short_bias_change
 
             if (stoch_exit_condition or ehlers_exit_condition or trend_reversal_sell_exit or confluence_found_exit or fib_exit_triggered):
                 reason_parts = []
                 if stoch_exit_condition: reason_parts.append(f"StochRSI ({stoch_exit_type_str})")
-                if ehlers_exit_condition: reason_parts.append(f"Ehlers Fisher (cross/bias reversal)")
+                if ehlers_exit_condition: reason_parts.append("Ehlers Fisher (cross/bias reversal)")
                 if trend_reversal_sell_exit: reason_parts.append("Trend reversal (above SMA)")
                 if confluence_found_exit: reason_parts.append(f"Confluence ({confluence_reason_exit})")
                 if fib_exit_triggered: reason_parts.append(f"Fibonacci Exit ({fib_exit_reason})")
-                
+
                 exit_reason_str = "; ".join(reason_parts)
 
                 exit_signals.append(('EXIT_SELL', latest_close, current_timestamp, {

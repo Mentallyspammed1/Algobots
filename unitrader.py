@@ -1,15 +1,15 @@
+import hashlib
+import hmac
+import logging
 import os
 import time
-import logging
-import pandas as pd
-import requests
-import hmac
-import hashlib
 import urllib.parse
 from datetime import datetime
-from dotenv import load_dotenv
+
+import pandas as pd
+import requests
 from colorama import Fore, Style, init
-from typing import Dict, List, Optional, Tuple
+from dotenv import load_dotenv
 
 # Initialize Colorama
 init(autoreset=True)
@@ -44,7 +44,7 @@ class UnifiedTrader:
         self.api_secret = os.getenv("BYBIT_API_SECRET")
         self.position = None
         self.orders = []
-        
+
         if paper_mode:
             self.balance = 10000.0
             logger.info("Running in PAPER TRADING mode")
@@ -74,17 +74,17 @@ class UnifiedTrader:
                 "recv_window": "5000"
             })
             params["sign"] = self.generate_signature(params)
-            
+
             if method == "GET":
                 response = requests.get(f"{CONFIG['api_endpoint']}{endpoint}", params=params)
             else:
                 response = requests.post(f"{CONFIG['api_endpoint']}{endpoint}", json=params)
-            
+
             response.raise_for_status()
             return response.json()
-        
+
         except Exception as e:
-            logger.error(f"API Request failed: {str(e)}")
+            logger.error(f"API Request failed: {e!s}")
             return None
 
     # --- Technical Indicators ---
@@ -106,7 +106,7 @@ class UnifiedTrader:
     def generate_signal(self, df: pd.DataFrame) -> str:
         # Combined strategy from all components
         signals = []
-        
+
         # EMA Crossover Strategy
         df['ema_fast'] = self.calculate_ema(df, 9)
         df['ema_slow'] = self.calculate_ema(df, 21)
@@ -126,10 +126,10 @@ class UnifiedTrader:
         signal_score = 0
         for signal in signals:
             signal_score += 1 if signal == 'BUY' else -1
-        
+
         if signal_score >= 2:
             return 'BUY'
-        elif signal_score <= -2:
+        if signal_score <= -2:
             return 'SELL'
         return 'HOLD'
 
@@ -138,7 +138,7 @@ class UnifiedTrader:
         if self.paper_mode:
             logger.info(f"PAPER TRADE: {signal} {quantity}")
             return True
-            
+
         endpoint = "/v5/order/create"
         data = {
             "symbol": CONFIG['symbol'],
@@ -152,7 +152,7 @@ class UnifiedTrader:
     # --- Main Loop ---
     def run(self):
         logger.info("Starting Unified Trading Bot")
-        
+
         while True:
             try:
                 # Fetch market data
@@ -161,20 +161,20 @@ class UnifiedTrader:
                     "interval": CONFIG['interval'],
                     "limit": 100
                 })
-                
+
                 if not klines or klines['retCode'] != 0:
                     logger.error("Failed to fetch klines")
                     time.sleep(10)
                     continue
-                
+
                 # Process data
                 df = pd.DataFrame(klines['result']['list'], columns=[
                     'timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'
                 ]).astype(float)
-                
+
                 # Generate signal
                 signal = self.generate_signal(df)
-                
+
                 # Execute trade
                 if signal in ['BUY', 'SELL']:
                     if len(self.orders) < CONFIG['max_orders']:
@@ -183,14 +183,14 @@ class UnifiedTrader:
                                 "signal": signal,
                                 "timestamp": datetime.now().isoformat()
                             })
-                
+
                 time.sleep(60)  # Check every minute
-                
+
             except KeyboardInterrupt:
                 logger.info("Bot stopped by user")
                 break
             except Exception as e:
-                logger.error(f"Main loop error: {str(e)}")
+                logger.error(f"Main loop error: {e!s}")
                 time.sleep(30)
 
 if __name__ == "__main__":

@@ -1,0 +1,59 @@
+# Project-Wide Improvements
+## Security & Configuration
+- [x] Ensure API keys are *never* hardcoded and are loaded securely (e.g., from environment variables or a secure vault).
+- [x] Review all `DRY_RUN` flags and ensure they are set appropriately for production deployment.
+- [ ] Standardize configuration loading across all bot versions (e.g., `config.js`, `config.json`, `config.yaml`).
+    - [ ] Centralize all bot configuration into a single, well-defined structure (e.g., a `ConfigManager` class).
+    - [ ] Implement dynamic fetching of `MIN_ORDER_SIZE`, `PRICE_PRECISION`, `QTY_PRECISION` from exchange info rather than hardcoding.
+- [ ] Convert string-represented numbers in JSON/YAML configs to actual numbers during loading to prevent type issues.
+
+## Codebase Structure & Maintainability
+- [ ] Consolidate multiple bot versions (`wb*.js`, `ehlst.js`, `chanexit.js`, `market-maker.js`, `whale.js`, `unified_whalebot.js`) into a single, modular codebase.
+    - [ ] Identify and remove redundant `.bak` files (`ehlst.bak.js`, `market-maker.bak.js`, `market-maker.bak1.js`).
+    - [ ] Extract common utilities (logging, API interaction, math helpers) into shared modules.
+    - [ ] Create a clear module structure for strategies, indicators, risk management, etc.
+- [ ] Convert all CommonJS `require` statements to ES module `import` statements across the codebase to align with `"type": "module"` in `package.json`.
+- [ ] Implement a consistent logging approach across all modules, potentially using a single logger instance.
+- [ ] Review and update `package.json` dependencies for latest stable versions.
+    - [ ] Run `npm audit` and `npm outdated` to identify and address dependency vulnerabilities and updates.
+- [ ] Address truncated file content in `wb4.0.js` and `unified_whalebot.js` for full analysis.
+- [ ] Break down overly large files/functions into smaller, single-responsibility modules/functions.
+- [ ] Ensure consistent use of `Decimal.js` for all financial calculations to prevent floating-point inaccuracies.
+- [ ] Standardize data structures used for kline data (e.g., always use `Decimal.js` for OHLCV values within kline objects).
+- [ ] **Refactor `wbglm.js` into smaller, single-purpose ES modules (e.g., `constants.js`, `utils.js`, `api_client.js`, `config_manager.js`, `position_manager.js`, `performance_tracker.js`, `alert_system.js`, `trading_analyzer.js`, `main.js`).**
+- [ ] **Encapsulate global constants within relevant classes or a dedicated `constants.js` module.**
+- [ ] **Replace hardcoded magic numbers/strings with named constants, ideally from `config.json` or a `constants.js` module.**
+- [ ] **Consider migrating to TypeScript for enhanced type safety and improved code quality.**
+- [ ] **Implement ESLint with a consistent style guide and Prettier for automatic code formatting.**
+
+## Error Handling & Robustness
+- [ ] Enhance API error handling to be more specific than generic `catch` blocks. Implement retry logic with exponential backoff where appropriate.
+    - [ ] Implement custom error types for specific API failures (e.g., rate limits, invalid parameters).
+- [ ] Improve time synchronization robustness (as per previous context).
+- [ ] Implement circuit breaker patterns for external API calls to prevent cascading failures.
+- [ ] Add comprehensive input validation for all external data (API responses, config values).
+- [ ] Implement robust WebSocket reconnection and data integrity checks (e.g., handle missing kline data, out-of-order messages).
+- [ ] Ensure proper cleanup of resources (e.g., database connections, WebSocket connections) on bot shutdown or error.
+- [ ] **Add explicit checks for zero denominators before division in calculations.**
+- [ ] **Define custom error classes for specific application errors (e.g., `ApiError`, `ConfigurationError`, `InsufficientDataError`) and use them for more granular error handling.**
+
+## Trading Logic & Strategy
+- [ ] Implement a robust position reconciliation mechanism to ensure local state matches exchange state.
+- [ ] Refine signal generation logic across all strategies for consistency and performance.
+- [ ] Improve precision and dynamic adjustment of Stop-Loss (SL) and Take-Profit (TP) orders.
+    - [ ] Fetch price and quantity precision from exchange info dynamically.
+- [ ] Review and standardize indicator implementations (e.g., remove "Mock" or "Placeholder" indicators in `indicators.js`).
+- [ ] Implement a unified position tracking and PnL management system across all bot instances.
+- [ ] Consider adding more advanced risk management features (e.g., daily loss limits, max drawdown, consecutive loss limits).
+- [ ] Explore implementing a backtesting framework to test strategies against historical data.
+
+## Documentation & Testing
+- [ ] Add comprehensive inline comments for complex logic, explaining *why* rather than *what*.
+- [ ] Write unit tests for critical components (indicator calculations, order placement, risk management).
+- [ ] Create integration tests for end-to-end trading flows.
+- [ ] Document the overall architecture and how different modules interact.
+- [ ] Implement input sanitization for any user-provided inputs (if applicable).
+- [ ] Review all external dependencies for known vulnerabilities (`npm audit`).
+- [ ] **Implement comprehensive unit tests for each module/class, especially for indicator calculations, signal generation, and position management logic.**
+- [ ] **Add JSDoc comments for functions, classes, and complex logic.**
+- [ ] **Create a `README.md` explaining the bot's architecture, setup, and usage.**

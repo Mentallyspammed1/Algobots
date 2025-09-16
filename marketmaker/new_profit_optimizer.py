@@ -1,0 +1,315 @@
+import argparse
+import json
+import logging
+from copy import deepcopy
+from dataclasses import replace
+from datetime import datetime, timezone
+from decimal import Decimal
+
+import optuna
+import pandas as pd
+
+from backtest import (
+    BacktestParams,  # Import here to avoid circular dependency if BacktestParams uses Config
+    BybitHistoricalData,  # To fetch klines
+)
+
+# Import the new Config definitions and Backtester
+from config_definitions import Config
+from strategy_backtester import Backtester
+
+logger = logging.getLogger("NewProfitOptimizer")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
+def parse_dt(s: str) -> datetime:
+    """Parse an ISO-formatted datetime string to a UTC datetime object."""
+    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+
+def fetch_klines_once(symbol: str, category: str, interval: str, start: datetime, end: datetime, testnet: bool) -> pd.DataFrame:
+    logger.info("Fetching klines once for the entire optimization window...")
+    # BybitHistoricalData expects a BacktestParams object, so create a minimal one
+    params = BacktestParams(symbol=symbol, category=category, interval=interval, start=start, end=end, testnet=testnet)
+    df = BybitHistoricalData(params).get_klines()
+    logger.info(
+        f"Fetched {len(df)} candles from {datetime.fromtimestamp(df.start.iloc[0]/1000)} "
+        f"to {datetime.fromtimestamp(df.start.iloc[-1]/1000)}"
+    )
+    return df
+
+def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
+    cfg = deepcopy(base_cfg)
+
+    # 1. Define all parameters using tr.suggest_...
+    min_spread_pct = tr.suggest_float("min_spread_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
+    base_spread_pct = tr.suggest_float("base_spread_pct", 0.0005, 0.005, log=True) # 0.05% to 0.5%
+    max_spread_pct = tr.suggest_float("max_spread_pct", base_spread_pct * 1.5, 0.02, log=True) # up to 2%
+
+    base_order_size_pct_of_balance = tr.suggest_float("base_order_size_pct_of_balance", 0.001, 0.01, log=True) # 0.1% to 1%
+    min_order_value_usd = tr.suggest_float("min_order_value_usd", 5.0, 50.0, log=True)
+    max_order_size_pct = tr.suggest_float("max_order_size_pct", 0.05, 0.5, log=True) # 5% to 50%
+
+    max_inventory_ratio = tr.suggest_float("max_inventory_ratio", 0.1, 0.9)
+    skew_intensity = tr.suggest_float("skew_intensity", 0.1, 1.0)
+
+    volatility_window_sec = tr.suggest_int("volatility_window_sec", 30, 180)
+    volatility_multiplier = tr.suggest_float("volatility_multiplier", 1.0, 5.0)
+
+    min_profit_spread_after_fees_pct = tr.suggest_float("min_profit_spread_after_fees_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
+    max_daily_loss_pct = tr.suggest_float("max_daily_loss_pct", 0.01, 0.1) # 1% to 10%
+
+    order_stale_threshold_pct = tr.suggest_float("order_stale_threshold_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
+    max_outstanding_orders = tr.suggest_int("max_outstanding_orders", 1, 5)
+
+    # 2. Use the defined parameters in replace() calls
+    # Update DynamicSpreadConfig fields
+    new_dynamic_spread = replace(cfg.strategy.dynamic_spread,
+        min_spread_pct=Decimal(str(min_spread_pct)),
+        max_spread_pct=Decimal(str(max_spread_pct)),
+        volatility_window_sec=volatility_window_sec,
+        volatility_multiplier=Decimal(str(volatility_multiplier)),
+    )
+    # Update InventoryStrategyConfig fields
+    new_inventory = replace(cfg.strategy.inventory,
+        max_inventory_ratio=Decimal(str(max_inventory_ratio)),
+        skew_intensity=Decimal(str(skew_intensity)),
+    )
+    # Update CircuitBreakerConfig fields
+    new_circuit_breaker = replace(cfg.strategy.circuit_breaker,
+        max_daily_loss_pct=Decimal(str(max_daily_loss_pct)),
+    )
+
+    # Now create a new StrategyConfig instance
+    new_strategy = replace(cfg.strategy,
+        base_spread_pct=Decimal(str(base_spread_pct)),
+        base_order_size_pct_of_balance=Decimal(str(base_order_size_pct_of_balance)),
+        order_stale_threshold_pct=Decimal(str(order_stale_threshold_pct)),
+        min_profit_spread_after_fees_pct=Decimal(str(min_profit_spread_after_fees_pct)),
+        max_outstanding_orders=max_outstanding_orders,
+        inventory=new_inventory,
+        dynamic_spread=new_dynamic_spread,
+        circuit_breaker=new_circuit_breaker,
+    )
+
+    # Finally, create a new Config instance
+    cfg = replace(cfg,
+        min_order_value_usd=Decimal(str(min_order_value_usd)),
+        max_order_size_pct=Decimal(str(max_order_size_pct)),
+        strategy=new_strategy,
+    )
+
+    return cfg
+
+def make_objective(
+    klines_df: pd.DataFrame,
+    base_cfg: Config,
+    metric: str,
+    risk_penalty: float,
+    max_dd_cap: float,
+    trials_verbose: bool,
+    kline_interval: str, # Add kline_interval here
+):
+    """
+    Returns an Optuna objective callable.
+    metric: 'net' (net pnl - risk_penalty * drawdown) or 'sharpe'
+    """
+    assert metric in ("net", "sharpe")
+
+    def objective(trial: optuna.Trial) -> float:
+        # Config per-trial
+        cfg = apply_trial_to_config(base_cfg, trial)
+
+        # Run backtest using the new Backtester
+        bt = Backtester(config=cfg, klines_df=klines_df, kline_interval=kline_interval) # Use kline_interval
+        results = bt.run()
+
+        net = float(results["net_pnl"])
+        dd = float(results["max_drawdown"])
+        sharpe_like = float(results["sharpe_like"])
+
+        # Hard cap on max drawdown if provided
+        if max_dd_cap is not None and dd > max_dd_cap:
+            # Infeasible solution — penalize heavily
+            score = -1e9
+        else:
+            score = net - risk_penalty * dd if metric == "net" else sharpe_like
+
+        if trials_verbose:
+            logger.info(
+                f"Trial {trial.number}: net={net:.4f}, dd={dd:.4f}, sharpe={sharpe_like:.3f}, score={score:.5f}"
+            )
+
+        # Attach extras for inspection
+        trial.set_user_attr("net_pnl", net)
+        trial.set_user_attr("max_drawdown", dd)
+        trial.set_user_attr("sharpe_like", sharpe_like)
+        return float(score)
+
+    return objective
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Profit optimizer for MarketMaker using Optuna + Bybit historical data"
+    )
+    ap.add_argument("--symbol", type=str, default="XLMUSDT")
+    ap.add_argument(
+        "--category", type=str, default="linear", choices=["linear", "inverse", "spot"]
+    )
+    ap.add_argument(
+        "--interval",
+        type=str,
+        default="1",
+        help="Bybit kline interval: 1,3,5,15,60,240,D,...",
+    )
+    ap.add_argument(
+        "--start", type=str, required=True, help="UTC start, e.g. 2024-06-01T00:00:00"
+    )
+    ap.add_argument(
+        "--end", type=str, required=True, help="UTC end, e.g. 2024-06-07T00:00:00"
+    )
+    ap.add_argument("--testnet", action="store_true")
+
+    ap.add_argument("--trials", type=int, default=60)
+    ap.add_argument("--n-jobs", type=int, default=1, help="Parallel workers for Optuna")
+    ap.add_argument(
+        "--metric",
+        type=str,
+        default="net",
+        choices=["net", "sharpe"],
+        help="Optimization target",
+    )
+    ap.add_argument(
+        "--risk-penalty",
+        type=float,
+        default=0.25,
+        help="Penalty lambda for drawdown when metric=net",
+    )
+    ap.add_argument(
+        "--max-dd-cap",
+        type=float,
+        default=None,
+        help="Hard cap on max drawdown; infeasible if exceeded",
+    )
+    ap.add_argument(
+        "--storage",
+        type=str,
+        default=None,
+        help="Optuna storage, e.g., sqlite:///profit_opt.db (enables parallel)",
+    )
+    ap.add_argument("--study-name", type=str, default="mm_profit_opt")
+    ap.add_argument(
+        "--sampler", type=str, default="tpe", choices=["tpe", "cmaes", "random"]
+    )
+    ap.add_argument(
+        "--pruner", type=str, default="median", choices=["none", "median", "hnp"]
+    )
+    ap.add_argument("--trials-verbose", action="store_true")
+    ap.add_argument("--save-results", type=str, default="opt_results.csv")
+
+    args = ap.parse_args()
+
+    # Fetch data once
+    klines_df = fetch_klines_once(
+        symbol=args.symbol,
+        category=args.category,
+        interval=args.interval,
+        start=parse_dt(args.start),
+        end=parse_dt(args.end),
+        testnet=args.testnet
+    )
+
+    # Base config to be tuned
+    base_cfg = Config(symbol=args.symbol, category=args.category)
+    # Create a new FilesConfig with DEBUG log level
+    new_files_config = replace(base_cfg.files, log_level="DEBUG")
+    # Create a new Config instance with the updated files config
+    base_cfg = replace(base_cfg, files=new_files_config)
+
+    # Sampler / Pruner
+    if args.sampler == "tpe":
+        sampler = optuna.samplers.TPESampler(seed=42, multivariate=True)
+    elif args.sampler == "cmaes":
+        sampler = optuna.samplers.CmaEsSampler(seed=42)
+    else:
+        sampler = optuna.samplers.RandomSampler(seed=42)
+
+    if args.pruner == "median":
+        pruner = optuna.pruners.MedianPruner(n_startup_trials=10, n_warmup_steps=0)
+    elif args.pruner == "hnp":
+        pruner = optuna.pruners.HyperbandPruner()
+    else:
+        pruner = optuna.pruners.NopPruner()
+
+    # Study
+    storage = args.storage if args.storage else None
+    study = optuna.create_study(
+        study_name=args.study_name,
+        direction="maximize",
+        sampler=sampler,
+        pruner=pruner,
+        storage=storage,
+        load_if_exists=bool(storage),
+    )
+
+    # Optimize
+    obj = make_objective(
+        klines_df=klines_df,
+        base_cfg=base_cfg,
+        metric=args.metric,
+        risk_penalty=args.risk_penalty,
+        max_dd_cap=args.max_dd_cap,
+        trials_verbose=args.trials_verbose,
+        kline_interval=args.interval, # Pass kline_interval here
+    )
+
+    logger.info(
+        f"Starting optimization for {args.trials} trials (parallel n_jobs={args.n_jobs}) ..."
+    )
+    study.optimize(
+        obj, n_trials=args.trials, n_jobs=args.n_jobs, show_progress_bar=True
+    )
+
+    # Results
+    best = study.best_trial
+    logger.info("Optimization complete.")
+    logger.info(f"Best score: {best.value:.6f}")
+    logger.info(f"Best params:\n{json.dumps(best.params, indent=2)}")
+    logger.info(
+        f"Best metrics: net={best.user_attrs.get('net_pnl'):.6f}, "
+        f"dd={best.user_attrs.get('max_drawdown'):.6f}, "
+        f"sharpe={best.user_attrs.get('sharpe_like'):.4f}"
+    )
+
+    # Save all trials to CSV
+    records = []
+    for t in study.trials:
+        row = {
+            "number": t.number,
+            "value": t.value,
+            "state": str(t.state),
+            "net_pnl": t.user_attrs.get("net_pnl"),
+            "max_drawdown": t.user_attrs.get("max_drawdown"),
+            "sharpe_like": t.user_attrs.get("sharpe_like"),
+        }
+        row.update(t.params)
+        records.append(row)
+    df_results = pd.DataFrame.from_records(records)
+    df_results.to_csv(args.save_results, index=False)
+    logger.info(f"Saved results to {args.save_results}")
+
+    # Optional: re-run the backtest with best settings and dump equity curve
+    logger.info("Re-running backtest with best parameters to export equity curve...")
+    cfg_best = apply_trial_to_config(base_cfg, best)
+
+    bt = Backtester(config=cfg_best, klines_df=klines_df, kline_interval=args.interval) # Pass kline_interval here
+    results_best = bt.run() # Run backtest to get equity curve
+
+    eq = pd.DataFrame(bt.equity_curve, columns=["timestamp_ms", "equity"])
+    eq["timestamp"] = eq["timestamp_ms"].apply(lambda x: datetime.fromtimestamp(x/1000, tz=timezone.utc).isoformat())
+    eq.to_csv("equity_curve_best.csv", index=False)
+    logger.info("Saved equity_curve_best.csv")
+
+
+if __name__ == "__main__":
+    main()

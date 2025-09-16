@@ -1,0 +1,26 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^1.13.0",
+    "colorama": "^0.0.0",
+    "dotenv": "^17.2.1",
+    "mime": "^4.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-react": "^7.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "prettier": "^3.0.0",
+    "eslint-plugin-prettier": "^5.0.0"
+  },
+  "scripts": {
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "lint:all": "npm run lint && npm run format",
+    "fix:lint": "npm run lint:fix && npm run format"
+  }
+}

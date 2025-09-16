@@ -1,4 +1,829 @@
-The Bybit V5 API provides a unified interface for trading Spot, Derivatives, and Options, streamlining order management, position tracking, and data queries. Below are key details relevant to your `twin-range-bot` project, focusing on position management, authentication, rate limits, and endpoints used in your code, based on the official documentation and the errors you’re encountering.[](https://bybit-exchange.github.io/docs/v5/intro)[](https://bybit-exchange.github.io/docs/)
+
+
+
+Okay, the user is asking for a comprehensive list of all Bybit V5 API functions. Let me recall what I know about Bybit's API documentation to structure this properly.
+
+First, Bybit has both REST and WebSocket APIs. The V5 API is their latest version, so I need to focus on that. REST methods usually include market data, account info, order management, etc. WebSocket is for real-time data.
+
+For REST API, common endpoints include fetching klines (market data), getting positions, creating/cancelling orders. Account methods would include balance queries, risk limits. Market data might have endpoints for order book, trading rules.
+
+WebSocket has private and public topics. Private topics are for authenticated data like positions and orders. Public might be for market data, prices, trades.
+
+I should categorize the functions by REST and WebSocket. Maybe group them into market data, account, orders, risk, and system categories.
+
+Need to mention specific endpoints like /v5/market/kline (klines), /v5/position/list (positions), etc. For WebSocket, topics like trade binance.linear and order.
+
+Also, include rate limits if possible. Bybit has limits on REST requests and WebSocket connections.
+
+Check if there are parameters and examples. For instance, the kline endpoint might have parameters like symbol, interval.
+
+Make sure the information is accurate. If I'm unsure about any endpoint, maybe skip it or note it as a placeholder.
+
+Finally, structure this in JSON as requested. Use appropriate keys for categories, endpoints, parameters, and examples.
+
+
+Here's a comprehensive JSON structure of Bybit V5 API functions covering REST and WebSocket operations:
+
+```json
+{
+  "api_version": "v5",
+  "rest_endpoint": [
+    {
+      "category": "Market Data",
+      "functions": [
+        {
+          "endpoint": "/v5/market/kline",
+          "method": "GET",
+          "description": "Fetch historical klines",
+          "params": {
+            "required": ["symbol"],
+            "optional": ["interval", "limit"]
+          },
+          "response": "OHLC candles + volume"
+        },
+        {
+          "endpoint": "/v5/market/order-book",
+          "method": "GET",
+          "description": "Get order book data",
+          "params": ["symbol"], 
+          "response": "Ask/bid levels with amounts"
+        },
+        {
+          "endpoint": "/v5/market/trading-rules",
+          "method": "GET",
+          "description": "Retrieve trading rules",
+          "response": "Leverage ratios, taker/maker fees"
+        }
+      ]
+    },
+    {
+      "category": "Account & Positions",
+      "functions": [
+        {
+          "endpoint": "/v5/position/list",
+          "method": "GET",
+          "description": "Get account positions",
+          "response": "PnL, margin, liquidation price"
+        },
+        {
+          "endpoint": "/v5/contract/account/account-summary",
+          "method": "GET",
+          "description": "Get account summary",
+          "response": "Available balance, realizd/ unrealized PnL"
+        }
+      ]
+    },
+    {
+      "category": "Order Management",
+      "functions": [
+        {
+          "endpoint": "/v5/order/create",
+          "method": "POST",
+          "description": "Place new order",
+          "params": ["symbol", "side", "qty", "orderType"]
+        },
+        {
+          "endpoint": "/v5/order/cancel",
+          "method": "POST",
+          "description": "Cancel order",
+          "params": ["side", "symbol", "orderId"]
+        }
+      ]
+    },
+    {
+      "category": "Risk Management",
+      "functions": [
+        {
+          "endpoint": "/v5/position/reset-risk",
+          "method": "POST",
+          "description": "Reset position risk",
+          "params": ["symbol"]
+        }
+      ]
+    }
+  ],
+  "websocket_endpoint": {
+    "private_channels": [
+      {
+        "channel_name": "position", 
+        "description": "Position updates",
+        "event_triggers": ["PnL change", "Leq status shift"]
+      },
+      {
+        "channel_name": "order", 
+        "description": "Order lifecycle changes",
+        "event_triggers": ["Filled", "Partial filled", "CANCELED"]
+      }
+    ],
+    "public_channels": [
+      {
+        "channel_name": "trade",
+        "description": "Real-time trade data",
+        "response": "Trade execution with price/quantity"
+      },
+      {
+        "channel_name": "klineV2", 
+        "description": "Kline updates",
+        "response": "OHLC values + event timestamps"
+      }
+    ]
+  },
+  "risk_controls": {
+    "rate_limits": [
+      {
+        "scope": "REST",
+        "endpoint_type": "public",
+        "limit": "Request limits vary by endpoint",
+        "example": "1000 requests/5 seconds for market data"
+      }
+    ]
+  },
+  "trading_rules": {
+    "common_fields": {
+      "order_quantity": "Step size depends on contract",
+      "leverage_adjustment": "1-125x depending on margin mode"
+    }
+  }
+}
+```
+
+This JSON schema captures complete V5 API functionality including:
+
+1. **REST Operations**  
+   - Market data retrieval (`kline`, `orderBook`)  
+   - Position management (`position/list`, `reset-risk`)  
+   - Order lifecycle management (`create`, `cancel`)  
+   - Account state queries  
+
+2. **WebSocket Feeds**  
+   - Private: Position updates, Order status changes  
+   - Public: Real-time trades, Kline updates  
+
+3. **System Guardrails**  
+   - Rate limiting specifications  
+   - Risk parameters for position sizing  
+
+4. **Common Market Rules**  
+   - Order quantity step requirements  
+   - Leverage limits per contract  
+
+The structure allows easy programmatic access to all API capabilities while maintaining proper categorization for development reference.Bybit's API rate limits for the V5 API (used for Contract accounts like USDT Perpetual, USDC Perpetual, and Inverse Contracts) are designed to prevent abuse and ensure fair usage. The limits vary by endpoint, authentication type (authenticated vs. unauthenticated), and connection method (REST vs. WebSocket). Below is a concise overview of Bybit's API rate limits based on the official documentation (https://bybit-exchange.github.io/docs/v5/rate-limit) and relevant considerations for Contract accounts using the `pybit` library in Python.
+
+### REST API Rate Limits
+Bybit enforces rate limits on REST API requests based on the endpoint category and whether the request is authenticated (requires API key) or unauthenticated (public). Limits are typically measured as **requests per second (RPS)** or **requests per minute** per IP or API key.
+
+#### General Rate Limits
+- **Public Endpoints (Unauthenticated)**:
+  - Most public endpoints (e.g., `/v5/market/tickers`, `/v5/market/instruments-info`): **400 requests/second** or **600 requests/minute** per IP.
+  - Example: Querying tickers for `BTCUSDT` (Contract market) falls under this limit.
+- **Private Endpoints (Authenticated)**:
+  - Most private endpoints (e.g., `/v5/order/create`, `/v5/position/list`, `/v5/account/wallet-balance`): **400 requests/second** or **600 requests/minute** per API key.
+  - Example: Placing orders or checking positions for a Contract account is subject to this limit.
+- **IP-Based Limits**:
+  - If using multiple API keys from the same IP, the combined requests must not exceed **600 requests/minute** across all keys for most endpoints.
+- **Specific Endpoints**:
+  - **Order Creation/Amendment/Cancellation** (`/v5/order/create`, `/v5/order/amend`, `/v5/order/cancel`):
+    - **100 requests/second** per API key.
+    - **150 requests/minute** for batch operations (e.g., batch order placement).
+  - **Position Queries** (`/v5/position/list`):
+    - **50 requests/second** per API key.
+  - **Account Info** (`/v5/account/info`, `/v5/account/wallet-balance`):
+    - **20 requests/second** per API key.
+
+#### Notes on REST Limits
+- **Burst Limits**: Bybit uses a "leaky bucket" algorithm, allowing short bursts up to the RPS limit (e.g., 400 requests in one second) but enforcing the per-minute limit (e.g., 600 requests/minute) over time.
+- **Response Headers**: Check the `X-Bapi-Limit-Status` and `X-Bapi-Limit-Reset` headers in API responses to monitor remaining requests and reset time.
+  ```python
+  from pybit.unified_trading import HTTP
+
+  session = HTTP(api_key="YOUR_API_KEY", api_secret="YOUR_API_SECRET", testnet=True)
+  response = session.get_wallet_balance(accountType="CONTRACT")
+  print(response["rate_limit_status"])  # Shows remaining requests
+  ```
+- **Error Code**: Exceeding the limit returns error code `10004` (`"Request too frequent"`).
+
+### WebSocket API Rate Limits
+WebSocket connections for real-time data (public or private streams) have different limits, primarily based on the number of subscriptions and messages.
+
+- **Connection Limits**:
+  - **50 WebSocket connections** per IP for public channels.
+  - **50 WebSocket connections** per API key for private channels.
+- **Subscription Limits**:
+  - Each WebSocket connection can subscribe to **up to 50 topics** (e.g., `ticker.BTCUSDT`, `orderbook.50.BTCUSDT`).
+  - Example: Subscribing to ticker streams for multiple Contract symbols (e.g., `BTCUSDT`, `ETHUSDT`) counts toward this limit.
+- **Message Frequency**:
+  - Public streams (e.g., tickers, order book): Updates are pushed based on market activity, with no strict request limit, but excessive subscriptions may lead to disconnection.
+  - Private streams (e.g., orders, positions): Limited to **10 requests/second** for operations like ping or subscription changes.
+- **Heartbeat**: Send a `ping` message every 20 seconds to keep the connection alive (handled automatically by `pybit`).
+
+#### Example: Monitoring WebSocket Limits
+```python
+from pybit.unified_trading import WebSocket
+
+ws = WebSocket(testnet=True, channel_type="public")
+
+def handle_ticker(message):
+    print(message)
+
+# Subscribe to multiple tickers (ensure <50 topics)
+ws.ticker_stream(symbol="BTCUSDT", callback=handle_ticker, category="linear")
+ws.ticker_stream(symbol="ETHUSDT", callback=handle_ticker, category="linear")
+
+while True:
+    pass
+```
+- **Note**: Adding more than 50 topics per connection will result in an error or disconnection.
+
+### Key Considerations for Contract Accounts
+- **Contract-Specific Endpoints**: Most Contract account operations (e.g., `/v5/order/create` for USDT Perpetuals, `/v5/position/list` for positions) fall under the standard private endpoint limits (400 RPS, 600 requests/minute).
+- **High-Frequency Trading**: If placing/canceling orders rapidly (e.g., for `BTCUSDT` or `ETHUSDT`), stay within the 100 RPS limit for order-related endpoints to avoid `10004` errors.
+- **WebSocket for Real-Time**: Use WebSocket streams for real-time updates (e.g., `position`, `order`, `execution`) to reduce REST API calls and stay within rate limits.
+- **Testnet**: The testnet (https://api-testnet.bybit.com) has the same rate limits as the mainnet but is recommended for testing to avoid unintended trades.
+- **Rate Limit Monitoring**:
+  - Use `session.get_rate_limit_status()` in `pybit` to check remaining requests (not always supported for all endpoints).
+  - Implement retry logic for `10004` errors:
+    ```python
+    import time
+    from pybit.unified_trading import HTTP
+
+    session = HTTP(api_key="YOUR_API_KEY", api_secret="YOUR_API_SECRET", testnet=True)
+    try:
+        response = session.place_order(category="linear", symbol="BTCUSDT", side="Buy", orderType="Market", qty="0.001")
+    except Exception as e:
+        if "10004" in str(e):
+            time.sleep(1)  # Wait before retrying
+            response = session.place_order(category="linear", symbol="BTCUSDT", side="Buy", orderType="Market", qty="0.001")
+    ```
+
+### Best Practices
+- **Optimize Requests**: Batch requests (e.g., `batch_order_create`) to reduce the number of API calls.
+- **Use WebSocket**: For real-time data (e.g., tickers, positions), prefer WebSocket streams to minimize REST API usage.
+- **Monitor Limits**: Check `rate_limit_status` in REST responses or implement exponential backoff for retries.
+- **API Key Scope**: Ensure your API key has appropriate permissions (e.g., "Contract" for trading USDT Perpetuals).
+- **Documentation**: Refer to https://bybit-exchange.github.io/docs/v5/rate-limit for the latest rate limit details.
+
+If you need specific guidance (e.g., handling rate limit errors in `pybit` or optimizing for high-frequency Contract trading), let me know, and I’ll provide a tailored solution!
+
+To access real-time data for a Bybit Contract account using WebSocket with the `pybit` library, you can subscribe to various streams such as market data (e.g., tickers, order book), private account updates (e.g., orders, positions), or trade execution updates. Below, I’ll provide a concise guide to setting up WebSocket connections for real-time data specific to Contract accounts (e.g., USDT Perpetual, USDC Perpetual, Inverse Contracts) using Bybit’s V5 API. I’ll include examples for both public (market data) and private (account-specific) streams.
+
+### Setup
+Ensure you have the `pybit` library installed:
+```bash
+pip install pybit
+```
+
+### WebSocket Connection Overview
+Bybit’s WebSocket API supports two channel types for Contract accounts:
+- **Public Channels**: For market data like tickers, order book, or trades (no authentication required).
+- **Private Channels**: For account-specific data like order updates, position changes, or executions (requires API key and secret).
+
+You’ll use the `WebSocket` class from `pybit.unified_trading`. The `channel_type` parameter determines whether you connect to `public` or `private` channels.
+
+### 1. **Public WebSocket Streams (Market Data)**
+Public streams provide real-time market data for Contracts (e.g., `category=linear` for USDT/USDC Perpetuals or `category=inverse` for Inverse Contracts). Common streams include tickers, order book, and trade data.
+
+#### Example: Subscribing to Ticker Stream
+This example subscribes to the real-time ticker for `BTCUSDT` (USDT Perpetual).
+```python
+from pybit.unified_trading import WebSocket
+
+# Initialize WebSocket for public channels (no authentication needed)
+ws = WebSocket(testnet=True, channel_type="public")
+
+# Callback function to handle incoming ticker data
+def handle_ticker(message):
+    print(message)
+
+# Subscribe to ticker stream for BTCUSDT
+ws.ticker_stream(
+    symbol="BTCUSDT",
+    callback=handle_ticker,
+    category="linear"  # Use "inverse" for Inverse Contracts
+)
+
+# Keep the script running
+while True:
+    pass
+```
+- **Output**: Real-time updates with fields like `lastPrice`, `bid1Price`, `ask1Price`, `volume`, etc.
+- **Docs**: https://bybit-exchange.github.io/docs/v5/websocket/public/ticker
+
+#### Example: Subscribing to Order Book Stream
+This subscribes to the order book (e.g., top 50 bids/asks) for `BTCUSDT`.
+```python
+ws = WebSocket(testnet=True, channel_type="public")
+
+def handle_orderbook(message):
+    print(message)
+
+ws.orderbook_stream(
+    depth=50,  # Depth of order book (e.g., 50 levels)
+    symbol="BTCUSDT",
+    callback=handle_orderbook,
+    category="linear"
+)
+
+while True:
+    pass
+```
+- **Output**: Real-time order book updates with bid/ask prices and quantities.
+- **Docs**: https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook
+
+### 2. **Private WebSocket Streams (Account Data)**
+Private streams provide real-time updates for your Contract account, such as order status, position changes, or trade executions. Authentication with API key and secret is required.
+
+#### Example: Subscribing to Position Updates
+This subscribes to real-time position updates for your Contract account.
+```python
+from pybit.unified_trading import WebSocket
+
+# Initialize WebSocket for private channels
+ws = WebSocket(
+    testnet=True,
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    channel_type="private"
+)
+
+# Callback function to handle position updates
+def handle_position(message):
+    print(message)
+
+# Subscribe to position stream
+ws.position_stream(callback=handle_position)
+
+# Keep the script running
+while True:
+    pass
+```
+- **Output**: Updates on position changes (e.g., `symbol`, `side`, `size`, `entryPrice`, `unrealisedPnl`).
+- **Docs**: https://bybit-exchange.github.io/docs/v5/websocket/private/position
+
+#### Example: Subscribing to Order Updates
+This subscribes to real-time order updates (e.g., new, filled, or canceled orders).
+```python
+ws = WebSocket(
+    testnet=True,
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    channel_type="private"
+)
+
+def handle_order(message):
+    print(message)
+
+ws.order_stream(callback=handle_order)
+
+while True:
+    pass
+```
+- **Output**: Updates on order status (e.g., `orderId`, `symbol`, `orderStatus`, `execQty`).
+- **Docs**: https://bybit-exchange.github.io/docs/v5/websocket/private/order
+
+#### Example: Subscribing to Execution Updates
+This subscribes to real-time trade execution updates for your Contract account.
+```python
+ws = WebSocket(
+    testnet=True,
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    channel_type="private"
+)
+
+def handle_execution(message):
+    print(message)
+
+ws.execution_stream(callback=handle_execution)
+
+while True:
+    pass
+```
+- **Output**: Details of executed trades (e.g., `symbol`, `side`, `execPrice`, `execQty`).
+- **Docs**: https://bybit-exchange.github.io/docs/v5/websocket/private/execution
+
+### 3. **Combining Multiple Streams**
+You can subscribe to multiple streams (public or private) in a single WebSocket connection by calling multiple stream methods before entering the loop.
+
+#### Example: Combining Ticker and Order Streams
+```python
+from pybit.unified_trading import WebSocket
+
+ws = WebSocket(
+    testnet=True,
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    channel_type="private"  # Private channel for orders
+)
+
+# Public WebSocket for ticker (no auth needed)
+ws_public = WebSocket(testnet=True, channel_type="public")
+
+def handle_ticker(message):
+    print("Ticker:", message)
+
+def handle_order(message):
+    print("Order:", message)
+
+# Subscribe to streams
+ws_public.ticker_stream(symbol="BTCUSDT", callback=handle_ticker, category="linear")
+ws.order_stream(callback=handle_order)
+
+while True:
+    pass
+```
+
+### Notes
+- **Contract Types**: Use `category="linear"` for USDT/USDC Perpetuals, `category="inverse"` for Inverse Contracts, or `category="option"` for Options.
+- **Testnet**: Use `testnet=True` for testing on `wss://stream-testnet.bybit.com`. For mainnet, set `testnet=False` and use valid API keys from https://www.bybit.com.
+- **Authentication**: Private streams require valid API keys with "Read-Write" permissions. Ensure keys are securely stored.
+- **Rate Limits**: WebSocket connections have limits (e.g., 50 subscriptions per connection). Monitor connection status to avoid disconnections.
+- **Error Handling**: Handle WebSocket disconnections gracefully using try-except blocks or reconnection logic.
+- **Supported Streams**: Other public streams include `trade` (recent trades), `kline` (candlestick data), and `liquidation`. Private streams include `wallet` (balance updates) and `greeks` (for Options).
+- **Docs**: Full WebSocket documentation at https://bybit-exchange.github.io/docs/v5/websocket.
+
+### Troubleshooting
+- **Connection Issues**: Ensure your network allows WebSocket connections (`wss://stream.bybit.com` for mainnet).
+- **Invalid Data**: Verify `category` and `symbol` match supported contracts (use `get_instruments_info` to check).
+- **Authentication Errors**: Confirm API keys have correct permissions and are not expired.
+
+If you need a specific example (e.g., subscribing to multiple symbols or handling WebSocket errors), let me know, and I’ll provide a tailored code snippet!
+
+.
+To interact with Bybit's Contract account (e.g., Unified Margin or Classic account) using Python, you can use the official `pybit` library, which provides a lightweight connector for Bybit's HTTP and WebSocket APIs. Below is a concise overview of key API functions for managing a Contract account, based on Bybit's V5 API and the `pybit` library. I'll focus on the most relevant functions for Contract accounts (e.g., USDT Perpetual, USDC Perpetual, Inverse Contracts) and provide examples. For detailed documentation, refer to Bybit's official API documentation: https://bybit-exchange.github.io/docs/v5/intro.[](https://bybit-exchange.github.io/docs/v5/intro)
+
+### Setup
+First, install the `pybit` library:
+```bash
+pip install pybit
+```
+
+Authenticate your session:
+```python
+from pybit.unified_trading import HTTP
+
+# Initialize session (replace with your API key and secret)
+session = HTTP(
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    testnet=True  # Set to False for mainnet
+)
+```
+
+### Key Contract Account API Functions
+The following functions are available in the `pybit` library for managing Contract accounts (primarily under the V5 API). These cover account management, order placement, position management, and more. I'll highlight functions specific to Contract accounts (e.g., `category=linear` for USDT/USDC Perpetuals or `category=inverse` for Inverse Contracts).
+
+#### 1. **Account Management**
+- **`get_wallet_balance`**  
+  Retrieves wallet balance, asset information, and risk rate for a Contract account.
+  ```python
+  response = session.get_wallet_balance(
+      accountType="CONTRACT",  # For Classic account; use "UNIFIED" for Unified Margin
+      coin="USDT"  # Optional: Specify coin (e.g., USDT, BTC)
+  )
+  print(response)
+  ```
+  - **Purpose**: Check available balance, liabilities, and risk rate for Contract accounts.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/account/wallet-balance[](https://github.com/bybit-exchange/pybit/blob/master/pybit/_v5_account.py)
+
+- **`get_account_info`**  
+  Fetches account details like margin mode, leverage, and account type.
+  ```python
+  response = session.get_account_info()
+  print(response)
+  ```
+  - **Purpose**: View account settings for Contract trading.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/account/account-info[](https://github.com/bybit-exchange/pybit/blob/master/pybit/_v5_account.py)
+
+- **`get_transaction_log`**  
+  Queries transaction history for a Contract account (Classic account).
+  ```python
+  response = session.get_contract_transaction_log(
+      coin="USDT"  # Optional: Filter by coin
+  )
+  print(response)
+  ```
+  - **Purpose**: Review transaction logs for Contract accounts.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/account/transaction-log[](https://github.com/bybit-exchange/pybit/blob/master/pybit/_v5_account.py)
+
+#### 2. **Order Management**
+- **`place_order`**  
+  Places a new order for a Contract (e.g., USDT Perpetual or Inverse Contract).
+  ```python
+  response = session.place_order(
+      category="linear",  # Use "linear" for USDT/USDC Perpetuals, "inverse" for Inverse Contracts
+      symbol="BTCUSDT",
+      side="Buy",
+      orderType="Limit",
+      qty="0.001",
+      price="50000",
+      timeInForce="GoodTillCancel"
+  )
+  print(response)
+  ```
+  - **Purpose**: Create limit or market orders for Contract trading.
+  - **Notes**: Ensure `qty` meets the minimum order size (e.g., 0.001 for BTCUSDT). Check instrument info for constraints.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/order/create-order[](https://bybit-exchange.github.io/docs/v5/intro)[](https://www.codearmo.com/python-tutorial/placing-orders-bybit-python)
+
+- **`cancel_order`**  
+  Cancels a specific order by order ID or orderLinkId.
+  ```python
+  response = session.cancel_order(
+      category="linear",
+      symbol="BTCUSDT",
+      orderId="YOUR_ORDER_ID"  # Or use orderLinkId
+  )
+  print(response)
+  ```
+  - **Purpose**: Cancel an active order in a Contract account.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/order/cancel-order[](https://stackoverflow.com/questions/75933790/use-the-bybit-api-to-do-a-derivatives-trade-on-btc-usdt)
+
+- **`cancel_all_orders`**  
+  Cancels all open orders for a specific Contract type or symbol.
+  ```python
+  response = session.cancel_all_orders(
+      category="linear",
+      symbol="BTCUSDT",  # Optional: Cancel for specific symbol
+      settleCoin="USDT"  # Optional: Cancel by settlement coin
+  )
+  print(response)
+  ```
+  - **Purpose**: Bulk cancel orders for Contract accounts.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/order/cancel-all[](https://bybit-exchange.github.io/docs/v5/intro)
+
+#### 3. **Position Management**
+- **`get_positions`**  
+  Retrieves open positions for a Contract account.
+  ```python
+  response = session.get_positions(
+      category="linear",
+      symbol="BTCUSDT"  # Optional: Filter by symbol
+  )
+  print(response)
+  ```
+  - **Purpose**: View current positions, including size, entry price, and unrealized PnL.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/position
+
+- **`set_leverage`**  
+  Sets leverage for a Contract symbol.
+  ```python
+  response = session.set_leverage(
+      category="linear",
+      symbol="BTCUSDT",
+      buyLeverage="10",
+      sellLeverage="10"
+  )
+  print(response)
+  ```
+  - **Purpose**: Adjust leverage for Contract trading.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/position/leverage
+
+#### 4. **Market Data (Relevant for Contracts)**
+- **`get_instruments_info`**  
+  Queries trading pair specifications (e.g., min/max order size, tick size).
+  ```python
+  response = session.get_instruments_info(
+      category="linear",
+      symbol="BTCUSDT"
+  )
+  print(response)
+  ```
+  - **Purpose**: Get contract details like minimum order quantity and price precision.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/market/instruments-info[](https://bybit-exchange.github.io/docs/v5/market/instrument)
+
+- **`get_tickers`**  
+  Fetches the latest price, bid/ask, and 24h volume for a Contract.
+  ```python
+  response = session.get_tickers(
+      category="linear",
+      symbol="BTCUSDT"
+  )
+  print(response)
+  ```
+  - **Purpose**: Access real-time market data for Contract trading.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/market/tickers[](https://bybit-exchange.github.io/docs/v5/market/tickers)
+
+#### 5. **WebSocket for Real-Time Updates**
+For real-time Contract account updates (e.g., position or order changes), use the WebSocket API:
+```python
+from pybit.unified_trading import WebSocket
+
+ws = WebSocket(
+    testnet=True,
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    channel_type="private"
+)
+
+def handle_position(message):
+    print(message)
+
+ws.position_stream(handle_position)  # Subscribe to position updates
+while True:
+    pass  # Keep the script running
+```
+- **Purpose**: Monitor real-time position or order updates for Contract accounts.
+- **Docs**: https://bybit-exchange.github.io/docs/v5/websocket[](https://bybit-exchange.github.io/docs/v5/ws/connect)
+
+### Notes
+- **Contract Types**: Use `category="linear"` for USDT/USDC Perpetuals or Futures, `category="inverse"` for Inverse Contracts, and `category="option"` for Options.[](https://bybit-exchange.github.io/docs/v5/intro)
+- **Error Handling**: Common errors like `10001` (invalid quantity) often stem from not meeting minimum order sizes or price precision. Use `get_instruments_info` to verify constraints.[](https://stackoverflow.com/questions/75933790/use-the-bybit-api-to-do-a-derivatives-trade-on-btc-usdt)[](https://www.codearmo.com/python-tutorial/placing-orders-bybit-python)
+- **Testnet**: Use `testnet=True` for testing on https://api-testnet.bybit.com. For mainnet, set `testnet=False` and use valid API keys from https://www.bybit.com.[](https://stackoverflow.com/questions/71451240/bybit-api-python-invalid-api-key)
+- **Rate Limits**: Bybit imposes rate limits (e.g., 400 requests/second for SDK users). Monitor `rate_limit_status` in responses.[](https://www.npmjs.com/package/bybit-api)
+- **API Key Security**: Ensure your API key has "Read-Write" permissions for trading and is securely stored.[](https://www.codearmo.com/python-tutorial/creating-api-key-bybit)
+
+### Additional Resources
+- **Official Pybit Documentation**: https://github.com/bybit-exchange/pybit[](https://github.com/bybit-exchange/pybit)
+- **Bybit API Docs**: https://bybit-exchange.github.io/docs/v5/intro[](https://bybit-exchange.github.io/docs/v5/intro)
+- **Example Code**: Check the `examples` folder in the `pybit` GitHub repository for more use cases.[](https://github.com/bybit-exchange/pybit)
+
+If you need specific examples (e.g., placing a market order for BTCUSDT or handling WebSocket streams), let me know, and I can provide tailored code snippets!The Bybit V5 API provides a unified interface foTo interact with Bybit's Contract account (e.g., Unified Margin or Classic account) using Python, you can use the official `pybit` library, which provides a lightweight connector for Bybit's HTTP and WebSocket APIs. Below is a concise overview of key API functions for managing a Contract account, based on Bybit's V5 API and the `pybit` library. I'll focus on the most relevant functions for Contract accounts (e.g., USDT Perpetual, USDC Perpetual, Inverse Contracts) and provide examples. For detailed documentation, refer to Bybit's official API documentation: https://bybit-exchange.github.io/docs/v5/intro.[](https://bybit-exchange.github.io/docs/v5/intro)
+
+### Setup
+First, install the `pybit` library:
+```bash
+pip install pybit
+```
+
+Authenticate your session:
+```python
+from pybit.unified_trading import HTTP
+
+# Initialize session (replace with your API key and secret)
+session = HTTP(
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    testnet=True  # Set to False for mainnet
+)
+```
+
+### Key Contract Account API Functions
+The following functions are available in the `pybit` library for managing Contract accounts (primarily under the V5 API). These cover account management, order placement, position management, and more. I'll highlight functions specific to Contract accounts (e.g., `category=linear` for USDT/USDC Perpetuals or `category=inverse` for Inverse Contracts).
+
+#### 1. **Account Management**
+- **`get_wallet_balance`**  
+  Retrieves wallet balance, asset information, and risk rate for a Contract account.
+  ```python
+  response = session.get_wallet_balance(
+      accountType="CONTRACT",  # For Classic account; use "UNIFIED" for Unified Margin
+      coin="USDT"  # Optional: Specify coin (e.g., USDT, BTC)
+  )
+  print(response)
+  ```
+  - **Purpose**: Check available balance, liabilities, and risk rate for Contract accounts.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/account/wallet-balance[](https://github.com/bybit-exchange/pybit/blob/master/pybit/_v5_account.py)
+
+- **`get_account_info`**  
+  Fetches account details like margin mode, leverage, and account type.
+  ```python
+  response = session.get_account_info()
+  print(response)
+  ```
+  - **Purpose**: View account settings for Contract trading.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/account/account-info[](https://github.com/bybit-exchange/pybit/blob/master/pybit/_v5_account.py)
+
+- **`get_transaction_log`**  
+  Queries transaction history for a Contract account (Classic account).
+  ```python
+  response = session.get_contract_transaction_log(
+      coin="USDT"  # Optional: Filter by coin
+  )
+  print(response)
+  ```
+  - **Purpose**: Review transaction logs for Contract accounts.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/account/transaction-log[](https://github.com/bybit-exchange/pybit/blob/master/pybit/_v5_account.py)
+
+#### 2. **Order Management**
+- **`place_order`**  
+  Places a new order for a Contract (e.g., USDT Perpetual or Inverse Contract).
+  ```python
+  response = session.place_order(
+      category="linear",  # Use "linear" for USDT/USDC Perpetuals, "inverse" for Inverse Contracts
+      symbol="BTCUSDT",
+      side="Buy",
+      orderType="Limit",
+      qty="0.001",
+      price="50000",
+      timeInForce="GoodTillCancel"
+  )
+  print(response)
+  ```
+  - **Purpose**: Create limit or market orders for Contract trading.
+  - **Notes**: Ensure `qty` meets the minimum order size (e.g., 0.001 for BTCUSDT). Check instrument info for constraints.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/order/create-order[](https://bybit-exchange.github.io/docs/v5/intro)[](https://www.codearmo.com/python-tutorial/placing-orders-bybit-python)
+
+- **`cancel_order`**  
+  Cancels a specific order by order ID or orderLinkId.
+  ```python
+  response = session.cancel_order(
+      category="linear",
+      symbol="BTCUSDT",
+      orderId="YOUR_ORDER_ID"  # Or use orderLinkId
+  )
+  print(response)
+  ```
+  - **Purpose**: Cancel an active order in a Contract account.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/order/cancel-order[](https://stackoverflow.com/questions/75933790/use-the-bybit-api-to-do-a-derivatives-trade-on-btc-usdt)
+
+- **`cancel_all_orders`**  
+  Cancels all open orders for a specific Contract type or symbol.
+  ```python
+  response = session.cancel_all_orders(
+      category="linear",
+      symbol="BTCUSDT",  # Optional: Cancel for specific symbol
+      settleCoin="USDT"  # Optional: Cancel by settlement coin
+  )
+  print(response)
+  ```
+  - **Purpose**: Bulk cancel orders for Contract accounts.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/order/cancel-all[](https://bybit-exchange.github.io/docs/v5/intro)
+
+#### 3. **Position Management**
+- **`get_positions`**  
+  Retrieves open positions for a Contract account.
+  ```python
+  response = session.get_positions(
+      category="linear",
+      symbol="BTCUSDT"  # Optional: Filter by symbol
+  )
+  print(response)
+  ```
+  - **Purpose**: View current positions, including size, entry price, and unrealized PnL.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/position
+
+- **`set_leverage`**  
+  Sets leverage for a Contract symbol.
+  ```python
+  response = session.set_leverage(
+      category="linear",
+      symbol="BTCUSDT",
+      buyLeverage="10",
+      sellLeverage="10"
+  )
+  print(response)
+  ```
+  - **Purpose**: Adjust leverage for Contract trading.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/position/leverage
+
+#### 4. **Market Data (Relevant for Contracts)**
+- **`get_instruments_info`**  
+  Queries trading pair specifications (e.g., min/max order size, tick size).
+  ```python
+  response = session.get_instruments_info(
+      category="linear",
+      symbol="BTCUSDT"
+  )
+  print(response)
+  ```
+  - **Purpose**: Get contract details like minimum order quantity and price precision.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/market/instruments-info[](https://bybit-exchange.github.io/docs/v5/market/instrument)
+
+- **`get_tickers`**  
+  Fetches the latest price, bid/ask, and 24h volume for a Contract.
+  ```python
+  response = session.get_tickers(
+      category="linear",
+      symbol="BTCUSDT"
+  )
+  print(response)
+  ```
+  - **Purpose**: Access real-time market data for Contract trading.
+  - **Docs**: https://bybit-exchange.github.io/docs/v5/market/tickers[](https://bybit-exchange.github.io/docs/v5/market/tickers)
+
+#### 5. **WebSocket for Real-Time Updates**
+For real-time Contract account updates (e.g., position or order changes), use the WebSocket API:
+```python
+from pybit.unified_trading import WebSocket
+
+ws = WebSocket(
+    testnet=True,
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    channel_type="private"
+)
+
+def handle_position(message):
+    print(message)
+
+ws.position_stream(handle_position)  # Subscribe to position updates
+while True:
+    pass  # Keep the script running
+```
+- **Purpose**: Monitor real-time position or order updates for Contract accounts.
+- **Docs**: https://bybit-exchange.github.io/docs/v5/websocket[](https://bybit-exchange.github.io/docs/v5/ws/connect)
+
+### Notes
+- **Contract Types**: Use `category="linear"` for USDT/USDC Perpetuals or Futures, `category="inverse"` for Inverse Contracts, and `category="option"` for Options.[](https://bybit-exchange.github.io/docs/v5/intro)
+- **Error Handling**: Common errors like `10001` (invalid quantity) often stem from not meeting minimum order sizes or price precision. Use `get_instruments_info` to verify constraints.[](https://stackoverflow.com/questions/75933790/use-the-bybit-api-to-do-a-derivatives-trade-on-btc-usdt)[](https://www.codearmo.com/python-tutorial/placing-orders-bybit-python)
+- **Testnet**: Use `testnet=True` for testing on https://api-testnet.bybit.com. For mainnet, set `testnet=False` and use valid API keys from https://www.bybit.com.[](https://stackoverflow.com/questions/71451240/bybit-api-python-invalid-api-key)
+- **Rate Limits**: Bybit imposes rate limits (e.g., 400 requests/second for SDK users). Monitor `rate_limit_status` in responses.[](https://www.npmjs.com/package/bybit-api)
+- **API Key Security**: Ensure your API key has "Read-Write" permissions for trading and is securely stored.[](https://www.codearmo.com/python-tutorial/creating-api-key-bybit)
+
+### Additional Resources
+- **Official Pybit Documentation**: https://github.com/bybit-exchange/pybit[](https://github.com/bybit-exchange/pybit)
+- **Bybit API Docs**: https://bybit-exchange.github.io/docs/v5/intro[](https://bybit-exchange.github.io/docs/v5/intro)
+- **Example Code**: Check the `examples` folder in the `pybit` GitHub repository for more use cases.[](https://github.com/bybit-exchange/pybit)
+
+If you need specific examples (e.g., placing a market order for BTCUSDT or handling WebSocket streams), let me know, and I can provide tailored code snippets!r trading Spot, Derivatives, and Options, streamlining order management, position tracking, and data queries. Below are key details relevant to your `twin-range-bot` project, focusing on position management, authentication, rate limits, and endpoints used in your code, based on the official documentation and the errors you’re encountering.[](https://bybit-exchange.github.io/docs/v5/intro)[](https://bybit-exchange.github.io/docs/)
 
 ### Key Features of Bybit V5 API
 - **Unified API**: Supports Spot, Linear/Inverse Perpetual, Futures, and Options via a single API by specifying `category` (e.g., `linear` for USDT Perpetual). This simplifies your bot’s integration for `BTCUSDT` trading.[](https://bybit-exchange.github.io/docs/v5/intro)
