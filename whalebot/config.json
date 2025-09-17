@@ -1,12 +1,12 @@
 {
-    "symbol": "TRUMPUSDT",
+    "symbol": "BTCUSDT",
     "interval": "1",
     "loop_delay": 15,
     "orderbook_limit": 50,
     "signal_score_threshold": 0.7,
     "volume_confirmation_multiplier": 0.5,
     "trade_management": {
-        "enabled": true,
+        "enabled": false,
         "account_balance": 20.0,
         "risk_per_trade_percent": 1.0,
         "stop_loss_atr_multiple": 0.4,
@@ -174,7 +174,8 @@
             "rsi": 0.12,
             "cci": 0.08,
             "wr": 0.08,
-            "mfi": 0.12
+            "mfi": 0.12,
+            "fibonacci_levels": 0.1
         }
     },
     "execution": {
@@ -263,7 +264,10 @@
         "max_drawdown_pct": 8.0,
         "cooldown_after_kill_min": 120,
         "spread_filter_bps": 5.0,
-        "ev_filter_enabled": true
+        "ev_filter_enabled": true,
+        "consecutive_losses_limit": 5,
+        "api_error_limit_per_hour": 10,
+        "ws_disconnect_limit_per_hour": 5
     },
     "session_filter": {
         "enabled": false,

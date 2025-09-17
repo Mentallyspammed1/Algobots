@@ -358,7 +358,10 @@ class TradingBot {
 
 const bot = new TradingBot(
   new LogParser(config.tradingSymbol),
-  new GeminiAnalyzer(config.geminiApiKey, config.tradingSymbol),
+  new GeminiAnalyzer(config.geminiApiKey, config.tradingSymbol, {
+    model: "gemini-pro",
+    retryDelay: 5000 // 5 seconds
+  }),
   new SignalGenerator(config.tradingSymbol)
 );
 

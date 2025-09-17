@@ -1,123 +1,98 @@
+
 import json
-import logging
-import os
+import logging  # Import logging
+import re
+from decimal import Decimal
 from typing import Any
 
 import requests
-from colorama import Fore, Style, init
-
-init(autoreset=True)
+from colorama import Fore, Style
 
 NEON_RED = Fore.LIGHTRED_EX
 NEON_YELLOW = Fore.YELLOW
-NEON_GREEN = Fore.LIGHTGREEN_EX
-NEON_BLUE = Fore.CYAN
-NEON_PURPLE = Fore.MAGENTA
 RESET = Style.RESET_ALL
 
 class GeminiClient:
-    def __init__(self, api_key: str, model_name: str, temperature: float, top_p: float, logger: logging.Logger):
+    """A client for interacting with the Google Gemini API to get trading signals.
+    """
+
+    def __init__(self, api_key: str, logger: logging.Logger, model: str = "gemini-1.5-flash"):
+        """Initializes the GeminiClient.
+
+        Args:
+            api_key: The Google Gemini API key.
+            logger: The logger instance for logging messages.
+            model: The specific Gemini model to use.
+        """
+        if not api_key:
+            raise ValueError("Gemini API key is required.")
         self.api_key = api_key
-        self.model_name = model_name
-        self.temperature = temperature
-        self.top_p = top_p
         self.logger = logger
-        self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
+        self.model = model
+        self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
 
-    def analyze_market_data(self, prompt: str) -> dict[str, Any] | None:
-        headers = {
-            "Content-Type": "application/json",
+    def _prepare_prompt(self, indicator_data: dict[str, Any]) -> str:
+        formatted_indicators = {
+            key: str(value.normalize() if isinstance(value, Decimal) else value)
+            for key, value in indicator_data.items()
         }
-        data = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": prompt}
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "temperature": self.temperature,
-                "topP": self.top_p,
-            }
-        }
+        prompt = f"""
+        You are an expert trading analyst AI. Your task is to analyze the provided live market data and technical indicators for a cryptocurrency pair and provide a clear trading signal.
 
+        **Market Data:**
+        {json.dumps(formatted_indicators, indent=2)}
+
+        **Analysis Task:**
+        Based on the data above, please determine the most probable market direction.
+
+        **Response Format:**
+        Your response MUST be a valid JSON object with the following structure:
+        {{
+          "signal": "BUY", "SELL", or "HOLD",
+          "confidence": A float between 0.0 and 1.0 representing your confidence in the signal,
+          "reasoning": "A brief, one-sentence explanation for your decision."
+        }}
+
+        Provide only the JSON object in your response.
+        """
+        return prompt
+
+    def get_trading_signal(self, indicator_data: dict[str, Any]) -> dict[str, Any] | None:
+        prompt = self._prepare_prompt(indicator_data)
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        }
+        text_content = ""
         try:
-            self.logger.debug(f"{NEON_BLUE}Sending prompt to Gemini: {prompt[:200]}...{RESET}")
-            response = requests.post(self.base_url, headers=headers, json=data, timeout=30)
-            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
 
             response_json = response.json()
-            self.logger.debug(f"{NEON_BLUE}Received response from Gemini: {json.dumps(response_json)[:200]}...{RESET}")
+            text_content = response_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
 
-            if response_json.get("candidates"):
-                # Assuming the first candidate's text is the relevant part
-                gemini_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
-
-                # Attempt to parse the text as JSON
-                try:
-                    analysis = json.loads(gemini_text)
-                    return analysis
-                except json.JSONDecodeError:
-                    self.logger.error(f"{NEON_RED}Gemini response is not valid JSON: {gemini_text}{RESET}")
-                    return None
+            json_match = re.search(r'```json\s*({.*?})\s*```', text_content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
             else:
-                self.logger.warning(f"{NEON_YELLOW}Gemini response did not contain candidates: {response_json}{RESET}")
-                return None
+                json_str = text_content.strip()
 
-        except requests.exceptions.HTTPError as e:
-            self.logger.error(f"{NEON_RED}HTTP Error during Gemini API call: {e.response.status_code} - {e.response.text}{RESET}")
+            signal_data = json.loads(json_str)
+
+            if "signal" in signal_data and "confidence" in signal_data and "reasoning" in signal_data:
+                return signal_data
+            self.logger.warning(f"{NEON_YELLOW}Gemini API response is missing required keys.{RESET}")
             return None
-        except requests.exceptions.ConnectionError as e:
-            self.logger.error(f"{NEON_RED}Connection Error during Gemini API call: {e}{RESET}")
-            return None
+
         except requests.exceptions.Timeout:
-            self.logger.error(f"{NEON_RED}Gemini API call timed out.{RESET}")
-            return None
-        except Exception as e:
-            self.logger.error(f"{NEON_RED}Unexpected error during Gemini API call: {e}{RESET}", exc_info=True)
-            return None
+            self.logger.error(f"{NEON_RED}Error: Gemini API request timed out.{RESET}")
+        except requests.exceptions.HTTPError as e:
+            self.logger.error(f"{NEON_RED}Error: Gemini API HTTP error: {e.response.status_code} - {e.response.text}{RESET}")
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"{NEON_RED}Error: An unexpected error occurred during Gemini API request: {e}{RESET}", exc_info=True)
+        except json.JSONDecodeError:
+            self.logger.error(f"{NEON_RED}Error: Failed to decode JSON response from Gemini API. Raw text was: {text_content}{RESET}")
 
-if __name__ == "__main__":
-    # Example Usage (for testing purposes)
-    import sys
-
-    from dotenv import load_dotenv
-
-    # Setup a basic logger for testing
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format='%(asctime)s - %(levelname)s - %(message)s')
-    test_logger = logging.getLogger(__name__)
-
-    # Load API key from .env file for testing
-    load_dotenv()
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-    if not GEMINI_API_KEY:
-        test_logger.error("GEMINI_API_KEY not found in .env. Please set it.")
-        sys.exit(1)
-
-    gemini_client = GeminiClient(
-        api_key=GEMINI_API_KEY,
-        model_name="gemini-pro",
-        temperature=0.7,
-        top_p=0.9,
-        logger=test_logger
-    )
-
-    test_prompt = """Analyze the following market data and provide a trading recommendation in JSON format.
-Current Price: 100.50
-RSI: 75 (Overbought)
-MACD: MACD Line 2.5, Signal Line 2.0 (Bullish Crossover)
-Volume: 12345.67
-Bollinger Bands: Upper 102.00, Middle 99.00, Lower 96.00 (Price near Upper Band)
-Recommendation should include: "entry", "exit", "take_profit", "stop_loss", "confidence_level" (0-100).
-Example JSON: {"entry": "BUY", "exit": "N/A", "take_profit": 103.00, "stop_loss": 98.00, "confidence_level": 85}
-"""
-
-    test_logger.info("Running Gemini API test...")
-    analysis_result = gemini_client.analyze_market_data(test_prompt)
-
-    if analysis_result:
-        test_logger.info(f"{NEON_GREEN}Gemini Analysis Result: {json.dumps(analysis_result, indent=2)}{RESET}")
-    else:
-        test_logger.error(f"{NEON_RED}Gemini Analysis Failed.{RESET}")
+        return None

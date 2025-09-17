@@ -13,7 +13,7 @@ export default class GeminiAnalyzer {
     
     // Enhanced configuration with defaults
     this.config = {
-      model: options.model || "gemini-2.0-flash-exp",
+      model: options.model || "gemini-2.5-flash",
       temperature: options.temperature || 0.3,
       topK: options.topK || 40,
       topP: options.topP || 0.95,

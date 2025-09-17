@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import chalk from 'chalk';
-import { logger, stripAnsi } from './utils.js';
+import { logger } from './utils.js'; // Removed stripAnsi
 
 export default class LogParser {
   constructor(tradingSymbol, options = {}) {
@@ -62,7 +62,7 @@ export default class LogParser {
         r2: /R2:\s*([\d.]+)/,
         s1: /S1:\s*([\d.]+)/,
         s2: /S2:\s*([\d.]+)/,
-        symbol: new RegExp(`(?:Symbol:|\[|for\s+)(${this.tradingSymbol})(?:\]|\s+@|\s+from)?`),
+        symbol: new RegExp(`(?:Symbol:|[\[]|for\s+)(${this.tradingSymbol})(?:[\]]|\s+@|\s+from)?`),
         signal: /Final Signal:\s*(\w+)/,
         score: /Score:\s*([-\d.]+)/,
         rawScore: /Raw Signal Score:\s*([-\d.]+)/
@@ -225,14 +225,14 @@ export default class LogParser {
                     fib_50: this.parseValue(logEntry['50.0%']),
                     fib_618: this.parseValue(logEntry['61.8%']),
                     fib_786: this.parseValue(logEntry['78.6%']),
-                    fib_100: this.parseValue(logEntry['100.0%']),
+                    fib_100: this.parseValue(logEntry['100.0%'])
                 };
                 dataPoints.push(this.enrichDataPoint(dataPoint));
             }
         } catch (error) {
             parseErrors++;
             if (this.options.debugMode) {
-                logger.debug(chalk.gray(`Skipping non-JSON line: ${line}`));
+                logger.debug(chalk.gray(`Skipping non-JSON line: ${line} - Error: ${error.message}`)); // Used error.message
             }
         }
     }
