@@ -6,7 +6,7 @@
     "signal_score_threshold": 0.7,
     "volume_confirmation_multiplier": 0.5,
     "trade_management": {
-        "enabled": false,
+        "enabled": true,
         "account_balance": 20.0,
         "risk_per_trade_percent": 1.0,
         "stop_loss_atr_multiple": 0.4,
