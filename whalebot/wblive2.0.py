@@ -995,15 +995,15 @@ class PositionManager:
                 closed_by = ""
                 
                 # Check if stop loss is hit
-                if pos["side"] == "BUY" and current_price <= pos["stop_loss"]: 
+                if pos["side"] == "BUY" and current_price <= pos["stop_loss"]:
                     closed_by = "STOP_LOSS"
-                elif pos["side"] == "SELL" and current_price >= pos["stop_loss"]: 
+                elif pos["side"] == "SELL" and current_price >= pos["stop_loss"]:
                     closed_by = "STOP_LOSS"
                 
                 # Check if take profit is hit
-                elif pos["side"] == "BUY" and current_price >= pos["take_profit"]: 
+                elif pos["side"] == "BUY" and current_price >= pos["take_profit"]:
                     closed_by = "TAKE_PROFIT"
-                elif pos["side"] == "SELL" and current_price <= pos["take_profit"]: 
+                elif pos["side"] == "SELL" and current_price <= pos["take_profit"]:
                     closed_by = "TAKE_PROFIT"
                 
                 # Close position if stop loss or take profit is hit
@@ -1073,13 +1073,13 @@ class PositionManager:
         if side == "BUY":
             pos["best_price"] = max(pos["best_price"], current_price)
             new_sl = round_price(pos["best_price"] - atr_mult * atr_value, self.price_precision)
-            if new_sl > pos["stop_loss"]: 
+            if new_sl > pos["stop_loss"]:
                 pos["stop_loss"] = new_sl
                 self.logger.debug(f"Trailing BUY SL for {pos['symbol']}: {new_sl:.2f}")
         else: # SELL
             pos["best_price"] = min(pos["best_price"], current_price)
             new_sl = round_price(pos["best_price"] + atr_mult * atr_value, self.price_precision)
-            if new_sl < pos["stop_loss"]: 
+            if new_sl < pos["stop_loss"]:
                 pos["stop_loss"] = new_sl
                 self.logger.debug(f"Trailing SELL SL for {pos['symbol']}: {new_sl:.2f}")
 
@@ -1783,8 +1783,7 @@ class TradingAnalyzer:
                 self.indicator_values["Volatility_Index"] = self.df["Volatility_Index"].iloc[-1]
         
         if cfg["indicators"].get("vwma", False):
-            self.df["VWMA"] = self._safe_calculate(
-                indicators.calculate_vwma, "VWMA", df=self.df,
+            self.df["VWMA"] = self._safe_calculate(indicators.calculate_vwma, "VWMA", df=self.df,
                 period=isd["vwma_period"]
             )
             if self.df["VWMA"] is not None and not self.df["VWMA"].empty: 
@@ -1824,7 +1823,8 @@ class TradingAnalyzer:
         bid_volume = sum(Decimal(b[1]) for b in bids)
         ask_volume = sum(Decimal(a[1]) for a in asks)
         
-        if bid_volume + ask_volume == 0: return 0.0
+        if bid_volume + ask_volume == 0:
+            return 0.0
         imbalance = (bid_volume - ask_volume) / (bid_volume + ask_volume)
         return float(imbalance)
 
@@ -1869,18 +1869,22 @@ class TradingAnalyzer:
             return vol_now > mult * vol_ma if vol_ma > 0 else False
         except Exception: return False
 
-    def _orderbook_score(self, orderbook_data, weight):\
-        if not orderbook_data: return 0.0, None
+    def _orderbook_score(self, orderbook_data, weight):
+        if not orderbook_data:
+            return 0.0, None
         imb = self._clip(self._check_orderbook(Decimal(str(self.df['close'].iloc[-1])), orderbook_data))
-        if abs(imb) < 0.05: return 0.0, None # Filter out negligible imbalance
+        if abs(imb) < 0.05:
+            return 0.0, None # Filter out negligible imbalance
         return weight * imb, f"OB Imbalance {imb:+.2f}"
 
-    def _mtf_confluence(self, mtf_trends: dict[str, str], weight):\
-        if not mtf_trends: return 0.0, None
+    def _mtf_confluence(self, mtf_trends: dict[str, str], weight):
+        if not mtf_trends:
+            return 0.0, None
         bulls = sum(1 for v in mtf_trends.values() if isinstance(v, str) and v.upper().startswith("BULL"))
         bears = sum(1 for v in mtf_trends.values() if isinstance(v, str) and v.upper().startswith("BEAR"))
         total = bulls + bears
-        if total == 0: return 0.0, None
+        if total == 0:
+            return 0.0, None
         net = (bulls - bears) / total
         return weight * net, f"MTF Confluence {net:+.2f} ({bulls}:{bears})"
 
@@ -1973,10 +1977,10 @@ class TradingAnalyzer:
             if not np.isnan(adx) and adx > 20: # ADX > 20 indicates a trend
                 if pdi > mdi: 
                     score += current_weights.get("adx_strength", 0) * (adx/50.0) # Scale strength by ADX value
-                    notes_buy.append(f"ADX Bull {adx:.1f} +{current_weights.get('adx_strength',0) * (adx/50.0):.2f}\"")
-                else: 
+                    notes_buy.append(f"ADX Bull {adx:.1f} +{current_weights.get('adx_strength',0) * (adx/50.0):.2f}")
+                else:
                     score -= current_weights.get("adx_strength", 0) * (adx/50.0)
-                    notes_sell.append(f"ADX Bear {adx:.1f} -{current_weights.get('adx_strength',0) * (adx/50.0):.2f}\"")
+                    notes_sell.append(f"ADX Bear {adx:.1f} -{current_weights.get('adx_strength',0) * (adx/50.0):.2f}")
         
         if active.get("ichimoku_cloud"):
             tenkan, kijun, span_a, span_b, chikou = (
@@ -2216,7 +2220,7 @@ class TradingAnalyzer:
         
         # Apply cooldown
         cooldown = int(self.config.get("cooldown_sec", 0))
-        now_ts, last_ts = int(time.time()), int(self.config.get("_last_signal_ts", 0))
+        now_ts, last_ts = int(self.config.get("_last_signal_ts", 0))
         if cooldown > 0 and final_signal != "HOLD" and now_ts - last_ts < cooldown:
             self.logger.info(f"{NEON_YELLOW}Signal {final_signal} ignored due to cooldown ({now_ts - last_ts}s elapsed, {cooldown}s required).{RESET}")
             final_signal = "HOLD"
@@ -2233,14 +2237,15 @@ class TradingAnalyzer:
         return final_signal, float(score)
 
 # --- Helper functions for main loop ---
-def get_spread_bps(orderbook):\
+def get_spread_bps(orderbook):
     try:
         # Pybit WebSocket orderbook data needs to be parsed
         # Example: {'s': 'BTCUSDT', 'b': [['26000.00', '1.5']], 'a': [['26001.00', '2.0']]}
         bids = orderbook.get("b", [])
         asks = orderbook.get("a", [])
 
-        if not bids or not asks: return 0.0 # No bids or asks
+        if not bids or not asks:
+            return 0.0 # No bids or asks
         
         best_bid = Decimal(bids[0][0])
         best_ask = Decimal(asks[0][0])
@@ -2254,17 +2259,20 @@ def get_spread_bps(orderbook):\
         logging.getLogger("wgwhalex_bot").warning(f"{NEON_YELLOW}Error calculating spread: {e}{RESET}")
         return 0.0
 
-def expected_value(perf: PerformanceTracker, n=50, fee_bps=2.0, slip_bps=2.0):\
+def expected_value(perf: PerformanceTracker, n=50, fee_bps=2.0, slip_bps=2.0):
     trades = perf.trades[-n:]
-    if not trades or len(trades) < 10: return 1.0  # Default to positive if not enough history
+    if not trades or len(trades) < 10:
+        return 1.0  # Default to positive if not enough history
     
     wins = [Decimal(str(t["pnl"])) for t in trades if Decimal(str(t["pnl"])) > 0]
     losses = [-Decimal(str(t["pnl"])) for t in trades if Decimal(str(t["pnl"])) <= 0]
     
     # If no wins or no losses, EV calculation is skewed.
     # Return a neutral/positive EV to allow trading if there's no losing history yet.
-    if not wins: return 1.0 
-    if not losses: return 1.0
+    if not wins:
+        return 1.0 
+    if not losses:
+        return 1.0
     
     win_rate = (len(wins) / len(trades))
     avg_win = (sum(wins) / len(wins))
@@ -2317,9 +2325,10 @@ def adapt_exit_params(pt: PerformanceTracker, cfg: dict) -> tuple[Decimal, Decim
     
     return tp_mult, sl_mult
 
-def random_tune_weights(cfg_path="config.json", k=50, jitter=0.2):\
+def random_tune_weights(cfg_path="config.json", k=50, jitter=0.2):
     print("Running random weight tuning...")
-    with open(cfg_path,encoding="utf-8") as f: cfg=json.load(f)
+    with open(cfg_path,encoding="utf-8") as f:
+        cfg=json.load(f)
     base = cfg["weight_sets"]["default_scalping"]
     best_cfg, best_score = base, -1e9 # Initialize with a very low score
     
@@ -2336,7 +2345,8 @@ def random_tune_weights(cfg_path="config.json", k=50, jitter=0.2):\
             best_cfg, best_score = trial, current_proxy_score
     
     cfg["weight_sets"]["default_scalping"] = best_cfg
-    with open(cfg_path,"w",encoding="utf-8") as f: json.dump(cfg,f,indent=4)
+    with open(cfg_path,"w",encoding="utf-8") as f:
+        json.dump(cfg,f,indent=4)
     print(f"New weights saved to {cfg_path}")
     return best_cfg
 
@@ -2349,7 +2359,7 @@ def main() -> None:
     logger.info(f"{NEON_GREEN}--- Wgwhalex Trading Bot Initialized ---{RESET}")
     logger.info(f"Symbol: {config['symbol']}, Interval: {config['interval']}")
     if config["execution"]["dry_run"]:
-        logger.info(f"{NEON_YELLOW}--- DRY RUN MODE ACTIVE --- No real trades will be placed. ---{RESET}")
+        logger.info(f"{NEON_YELLOW}--- DRY RUN MODE ACTIVE --- No real trades will be placed. ---")
 
     pybit_client = PybitTradingClient(config, logger)
     position_manager = PositionManager(config, logger, config["symbol"], pybit_client)
@@ -2380,7 +2390,7 @@ def main() -> None:
 
     try: # Wrap main loop in try-finally for graceful WebSocket shutdown
         while True:
-            logger.info(f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
+            logger.info(f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---")
 
             # Check risk limits
             risk_ok, risk_msg = position_manager.check_risk_limits()
@@ -2492,7 +2502,7 @@ def main() -> None:
 
             # Log performance
             logger.info(f"{NEON_YELLOW}Performance: {performance_tracker.get_summary()}{RESET}")
-            logger.info(f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---{RESET}")
+            logger.info(f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---")
             time.sleep(config["loop_delay"])
 
     except Exception as e:
@@ -2509,4 +2519,3 @@ if __name__ == "__main__":
     # Uncomment the line below to run random weight tuning before starting the bot
     # random_tune_weights(CONFIG_FILE) 
     main()
-

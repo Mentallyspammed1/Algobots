@@ -454,7 +454,7 @@ class ConfigManager {
         // Validate required API keys for non-dry-run
         if (!this.config.DRY_RUN && (!this.config.API_KEY || !this.config.API_SECRET)) {
             console.error("ERROR: API_KEY and API_SECRET must be provided in .env or config.yaml for live trading.");
-            process.exit(1);
+            throw new Error("ERROR: API_KEY and API_SECRET must be provided in .env or config.yaml for live trading.");
         }
     }
 

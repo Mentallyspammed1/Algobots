@@ -12,3 +12,6 @@ pandas_ta
 
 # For environment variables
 python-dotenv
+
+# For Google AI
+google-generativeai

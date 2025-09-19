@@ -169,7 +169,8 @@
             "volume_delta_signal": 0.1,
             "orderbook_imbalance": 0.1,
             "mtf_trend_confluence": 0.25,
-            "volatility_index_signal": 0.1
+            "volatility_index_signal": 0.1,
+            "fibonacci_confluence": 0.1
         },
         "aggressive_trend": {
             "ema_alignment": 0.4,
@@ -301,7 +302,8 @@
         "max_fill_time_ms": 5000,
         "retry_failed_orders": true,
         "max_order_retries": 3,
-        "order_timeout_ms": 10000
+        "order_timeout_ms": 10000,
+        "dry_run": false
     },
     "notifications": {
         "enabled": true,

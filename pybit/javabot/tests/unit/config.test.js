@@ -1,34 +1,37 @@
 import { jest } from '@jest/globals';
 
-// Mock the fs module before any imports
-jest.mock('fs', async () => { // Make the factory async
-  const { jest } = await import('@jest/globals'); // Import jest inside the factory
-  return {
-    existsSync: jest.fn(),
-    readFileSync: jest.fn(),
-  };
-});
+// Define the mock implementation we can control throughout the tests
+const mockFs = {
+  existsSync: jest.fn(),
+  readFileSync: jest.fn(),
+};
+
+// Use the modern unstable_mockModule API
+jest.unstable_mockModule('fs', () => ({
+  default: mockFs, // Mock the default export
+  ...mockFs,      // Mock named exports like existsSync, readFileSync
+}));
 
 describe('Config Singleton', () => {
   const originalEnv = process.env;
-  let fs;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     // Reset modules before each test to ensure a fresh import of the config singleton
     jest.resetModules();
-    // Mock environment
+    // Clear mock history and reset implementations
+    mockFs.existsSync.mockClear();
+    mockFs.readFileSync.mockClear();
+    // Restore environment variables
     process.env = { ...originalEnv };
-    // Import the mocked fs module so we can manipulate its mock functions
-    fs = await import('fs');
   });
 
   afterAll(() => {
-    // Restore original environment
+    // Restore original environment after all tests in this file
     process.env = originalEnv;
   });
 
   it('should load default values when no config file is found', async () => {
-    fs.existsSync.mockReturnValue(false);
+    mockFs.existsSync.mockReturnValue(false);
     const { CONFIG } = await import('../../config.js');
 
     expect(CONFIG.TESTNET).toBe(false);
@@ -45,8 +48,8 @@ describe('Config Singleton', () => {
           enabled: true
           LEVERAGE: 25
     `;
-    fs.existsSync.mockReturnValue(true);
-    fs.readFileSync.mockReturnValue(yamlContent);
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readFileSync.mockReturnValue(yamlContent);
 
     const { CONFIG } = await import('../../config.js');
 
@@ -66,8 +69,8 @@ describe('Config Singleton', () => {
       TESTNET: true
       LOOP_WAIT_TIME_SECONDS: 15
     `;
-    fs.existsSync.mockReturnValue(true);
-    fs.readFileSync.mockReturnValue(yamlContent);
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readFileSync.mockReturnValue(yamlContent);
 
     const { CONFIG } = await import('../../config.js');
 
@@ -78,7 +81,7 @@ describe('Config Singleton', () => {
 
   it('should set LOG_LEVEL to debug when DEBUG_MODE is true', async () => {
     process.env.DEBUG_MODE = 'true';
-    fs.existsSync.mockReturnValue(false);
+    mockFs.existsSync.mockReturnValue(false);
 
     const { CONFIG } = await import('../../config.js');
 
@@ -86,31 +89,27 @@ describe('Config Singleton', () => {
     expect(CONFIG.LOG_LEVEL).toBe('debug');
   });
 
-  it('should exit process if API keys are missing and not in dry_run mode', async () => {
-    const mockExit = jest.spyOn(process, 'exit').mockImplementation(() => {});
-    
+  it('should throw an error if API keys are missing and not in dry_run mode', async () => {
     process.env.DRY_RUN = 'false';
     delete process.env.BYBIT_API_KEY;
     delete process.env.BYBIT_API_SECRET;
 
-    fs.existsSync.mockReturnValue(false);
-    await import('../../config.js');
+    mockFs.existsSync.mockReturnValue(false);
 
-    expect(mockExit).toHaveBeenCalledWith(1);
-    mockExit.mockRestore();
+    // We expect the import itself to throw an error
+    await expect(import('../../config.js')).rejects.toThrow(
+      'ERROR: API_KEY and API_SECRET must be provided in .env or config.yaml for live trading.'
+    );
   });
 
-  it('should NOT exit process if API keys are missing but in dry_run mode', async () => {
-    const mockExit = jest.spyOn(process, 'exit').mockImplementation(() => {});
-    
+  it('should NOT throw an error if API keys are missing but in dry_run mode', async () => {
     process.env.DRY_RUN = 'true';
     delete process.env.BYBIT_API_KEY;
     delete process.env.BYBIT_API_SECRET;
 
-    fs.existsSync.mockReturnValue(false);
-    await import('../../config.js');
+    mockFs.existsSync.mockReturnValue(false);
 
-    expect(mockExit).not.toHaveBeenCalled();
-    mockExit.mockRestore();
+    // We expect the import to succeed without throwing
+    await expect(import('../../config.js')).resolves.toBeDefined();
   });
 });

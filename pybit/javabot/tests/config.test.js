@@ -1,6 +1,19 @@
 import { CONFIG } from '../config.js';
 
 describe('Configuration Loading', () => {
+  const originalEnv = process.env;
+
+  beforeAll(() => {
+    process.env = {
+      ...originalEnv,
+      BYBIT_API_KEY: 'test_key',
+      BYBIT_API_SECRET: 'test_secret',
+    };
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
   test('CONFIG object should be defined', () => {
     expect(CONFIG).toBeDefined();
   });
