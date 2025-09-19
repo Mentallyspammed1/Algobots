@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bybit V5 Advanced Trading Terminal - AI Enhanced</title>
+
+  <!-- Core Libraries -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+  
+  <!-- Additional Libraries for Enhanced Features -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-statistics@7.8.3/dist/simple-statistics.min.js"></script>
+
+  <!-- Gemini AI Import Map -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@google/generative-ai": "https://esm.sh/@google/generative-ai"
+    }
+  }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    
+    :root {
+      --bg-primary: #0a0a1e;
+      --bg-secondary: #12122e;
+      --bg-tertiary: #1a1a3a;
+      --text-primary: #e8e8ff;
+      --text-secondary: #a8a8c8;
+      --neon-green: #00ff41;
+      --neon-orange: #ff9f1c;
+      --neon-red: #ff1744;
+      --neon-cyan: #00e5ff;
+      --neon-purple: #d500f9;
+      --neon-yellow: #ffea00;
+      --chart-bg: #0f0f2a;
+      --shadow-neon: 0 0 20px rgba(0, 229, 255, 0.5);
+      --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      color: var(--text-primary);
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+    
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 50%, rgba(0, 229, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 50%, rgba(213, 0, 249, 0.1) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 1;
+    }
+    
+    .container {
+      position: relative;
+      z-index: 2;
+    }
+    
+    .card {
+      background: var(--bg-tertiary);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-neon);
+      backdrop-filter: blur(10px);
+      transition: var(--transition-smooth);
+    }
+    
+    .card:hover {
+      box-shadow: 0 0 30px rgba(0, 229, 255, 0.6);
+      transform: translateY(-2px);
+    }
+    
+    .card-header {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid rgba(0, 229, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .btn {
+      background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+      color: var(--bg-primary);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      transition: left 0.5s;
+    }
+    
+    .btn:hover::before {
+      left: 100%;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0, 229, 255, 0.4);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      border: 2px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+    }
+    
+    .btn-danger {
+      background: linear-gradient(135deg, var(--neon-red), var(--neon-orange));
+    }
+    
+    .btn-success {
+      background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan));
+    }
+    
+    input, textarea, select {
+      background: var(--bg-primary);
+      border: 2px solid rgba(0, 229, 255, 0.3);
+      color: var(--text-primary);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      transition: var(--transition-smooth);
+      width: 100%;
+    }
+    
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--neon-cyan);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+    
+    .status-connected {
+      background: var(--neon-green);
+      box-shadow: 0 0 10px var(--neon-green);
+    }
+    
+    .status-disconnected {
+      background: var(--neon-red);
+      box-shadow: 0 0 10px var(--neon-red);
+    }
+    
+    .status-connecting {
+      background: var(--neon-orange);
+      box-shadow: 0 0 10px var(--neon-orange);
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .metric-card {
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(213, 0, 249, 0.1));
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    
+    .metric-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 8px;
+    }
+    
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .chart-container {
+      position: relative;
+      height: 400px;
+      background: var(--chart-bg);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    
+    .tab-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid rgba(0, 229, 255, 0.2);
+      padding-bottom: 8px;
+    }
+    
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      font-weight: 500;
+      position: relative;
+    }
+    
+    .tab-btn.active {
+      color: var(--neon-cyan);
+    }
+    
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--neon-cyan);
+      box-shadow: 0 0 10px var(--neon-cyan);
+    }
+    
+    .log-container {
+      max-height: 300px;
+      overflow-y: auto;
+      background: var(--bg-primary);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+    
+    .log-entry {
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      border-left: 3px solid;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    
+    .log-info { border-color: var(--neon-cyan); }
+    .log-success { border-color: var(--neon-green); }
+    .log-warning { border-color: var(--neon-orange); }
+    .log-error { border-color: var(--neon-red); }
+    
+    .grid-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(10, 10, 30, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      opacity: 0;
+      visibility: hidden;
+      transition: var(--transition-smooth);
+    }
+    
+    .loading-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(0, 229, 255, 0.2);
+      border-top: 4px solid var(--neon-cyan);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      cursor: help;
+    }
+    
+    .tooltip .tooltip-text {
+      visibility: hidden;
+      width: 200px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      text-align: center;
+      border-radius: 8px;
+      padding: 8px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%;
+      left: 50%;
+      margin-left: -100px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      border: 1px solid var(--neon-cyan);
+      font-size: 0.75rem;
+    }
+    
+    .tooltip:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
+    
+    @media (max-width: 768px) {
+      .grid-metrics {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .card {
+        padding: 16px;
+      }
+      
+      .tab-nav {
+        flex-wrap: wrap;
+      }
+    }
+    
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(135deg, var(--neon-purple), var(--neon-cyan));
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
+
+  <div class="container mx-auto p-6 max-w-7xl">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent mb-2">
+        Advanced AI Trading Terminal
+      </h1>
+      <p class="text-text-secondary">Powered by Bybit V5 API & Google Gemini AI</p>
+    </div>
+
+    <!-- Performance Metrics Dashboard -->
+    <div class="grid-metrics">
+      <div class="metric-card">
+        <div class="metric-label">Total P&L</div>
+        <div class="metric-value" id="totalPnL">$0.00</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Win Rate</div>
+        <div class="metric-value" id="winRate">0%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Sharpe Ratio</div>
+        <div class="metric-value" id="sharpeRatio">0.00</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Max Drawdown</div>
+        <div class="metric-value" id="maxDrawdown">0%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Active Trades</div>
+        <div class="metric-value" id="activeTrades">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">24h Volume</div>
+        <div class="metric-value" id="volume24h">$0</div>
+      </div>
+    </div>
+
+    <!-- Configuration Section -->
+    <div class="card">
+      <div class="card-header">
+        <span>⚙️ Configuration & API Settings</span>
+        <button class="btn btn-secondary" id="toggleAdvancedBtn">Advanced Settings</button>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label for="geminiApiKey">
+            Google Gemini API Key
+            <span class="tooltip">ⓘ
+              <span class="tooltip-text">Your Google AI Studio API key for Gemini analysis. Stored encrypted in your browser.</span>
+            </span>
+          </label>
+          <input type="password" id="geminiApiKey" placeholder="Enter Gemini API Key" />
+        </div>
+        <div>
+          <label for="bybitApiKey">
+            Bybit API Key
+            <span class="tooltip">ⓘ
+              <span class="tooltip-text">Your Bybit API key with trading permissions. Stored encrypted in your browser.</span>
+            </span>
+          </label>
+          <input type="password" id="bybitApiKey" placeholder="Enter Bybit API Key" />
+        </div>
+        <div>
+          <label for="bybitApiSecret">
+            Bybit API Secret
+            <span class="tooltip">ⓘ
+              <span class="tooltip-text">Your Bybit API secret for authentication. Stored encrypted in your browser.</span>
+            </span>
+          </label>
+          <input type="password" id="bybitApiSecret" placeholder="Enter Bybit API Secret" />
+        </div>
+      </div>
+
+      <div id="advancedSettings" class="hidden">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label for="maxPosition">Max Position Size (Contracts)</label>
+            <input type="number" id="maxPosition" value="0.01" step="0.001" min="0.001" />
+          </div>
+          <div>
+            <label for="riskPerTrade">Risk Per Trade (%)</label>
+            <input type="number" id="riskPerTrade" value="1" step="0.1" min="0.1" max="5" />
+          </div>
+          <div>
+            <label for="leverage">Leverage</label>
+            <select id="leverage">
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="5">5x</option>
+              <option value="10" selected>10x</option>
+              <option value="20">20x</option>
+              <option value="50">50x</option>
+            </select>
+          </div>
+          <div>
+            <label for="orderType">Default Order Type</label>
+            <select id="orderType">
+              <option value="Market" selected>Market</option>
+              <option value="Limit">Limit</option>
+              <option value="StopLimit">Stop Limit</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label for="tpPercent">Take Profit (%)</label>
+            <input type="number" id="tpPercent" value="2" step="0.1" min="0.1" />
+          </div>
+          <div>
+            <label for="slPercent">Stop Loss (%)</label>
+            <input type="number" id="slPercent" value="1" step="0.1" min="0.1" />
+          </div>
+          <div>
+            <label for="trailingStop">Trailing Stop (%)</label>
+            <input type="number" id="trailingStop" value="0.5" step="0.1" min="0" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="enableTpSl" checked class="w-5 h-5" />
+              <span>Auto TP/SL</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="enableTrailing" class="w-5 h-5" />
+              <span>Trailing Stop</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="enableKelly" class="w-5 h-5" />
+              <span>Kelly Criterion</span>
+            </label>
+          </div>
+          <div>
+            <label for="tradingMode">Trading Mode</label>
+            <select id="tradingMode">
+              <option value="testnet" selected>Testnet</option>
+              <option value="mainnet">Mainnet</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-4 mt-4">
+        <button class="btn btn-success" id="saveConfigBtn">Save Configuration</button>
+        <button class="btn btn-secondary" id="loadConfigBtn">Load Saved Config</button>
+        <button class="btn btn-danger" id="clearConfigBtn">Clear All</button>
+        <span id="configStatus" class="flex items-center text-sm"></span>
+      </div>
+    </div>
+
+    <!-- Market Data Section -->
+    <div class="card">
+      <div class="card-header">
+        <span>📊 Market Data & Analysis</span>
+        <div class="flex gap-2">
+          <span class="status-indicator" id="wsStatus"></span>
+          <span id="wsStatusText">Disconnected</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label for="symbolSelect">Trading Symbol</label>
+          <select id="symbolSelect">
+            <option value="">Loading symbols...</option>
+          </select>
+        </div>
+        <div>
+          <label for="timeframe">Analysis Timeframe</label>
+          <select id="timeframe">
+            <option value="1m">1 Minute</option>
+            <option value="5m" selected>5 Minutes</option>
+            <option value="15m">15 Minutes</option>
+            <option value="30m">30 Minutes</option>
+            <option value="1h">1 Hour</option>
+            <option value="4h">4 Hours</option>
+            <option value="1d">1 Day</option>
+          </select>
+        </div>
+        <div class="flex items-end gap-2">
+          <button class="btn flex-1" id="connectBtn">Connect</button>
+          <button class="btn btn-secondary flex-1" id="disconnectBtn">Disconnect</button>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="orderbook">Order Book</button>
+        <button class="tab-btn" data-tab="chart">Price Chart</button>
+        <button class="tab-btn" data-tab="indicators">Technical Indicators</button>
+      </div>
+
+      <!-- Tab Contents -->
+      <div id="tab-orderbook" class="tab-content">
+        <div class="chart-container">
+          <canvas id="orderBookChart"></canvas>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div class="log-container" id="bidBookDisplay">
+            <div class="text-green-400 font-semibold mb-2">Bid Book</div>
+          </div>
+          <div class="log-container" id="askBookDisplay">
+            <div class="text-red-400 font-semibold mb-2">Ask Book</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-chart" class="tab-content hidden">
+        <div class="chart-container">
+          <canvas id="priceChart"></canvas>
+        </div>
+      </div>
+
+      <div id="tab-indicators" class="tab-content hidden">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="metric-card">
+            <div class="metric-label">RSI</div>
+            <div class="metric-value" id="rsiValue">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">MACD</div>
+            <div class="metric-value" id="macdValue">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">BB Width</div>
+            <div class="metric-value" id="bbValue">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Volume</div>
+            <div class="metric-value" id="volumeValue">--</div>
+          </div>
+        </div>
+        <div class="chart-container mt-4">
+          <canvas id="indicatorChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Analysis Section -->
+    <div class="card">
+      <div class="card-header">
+        <span>🤖 AI Analysis & Trading Signals</span>
+        <button class="btn btn-secondary" id="customPromptBtn">Custom Prompt</button>
+      </div>
+
+      <div id="customPromptSection" class="hidden mb-4">
+        <label for="customPrompt">Custom Analysis Prompt</label>
+        <textarea id="customPrompt" rows="3" placeholder="Enter custom instructions for Gemini AI..."></textarea>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label for="analysisMode">Analysis Mode</label>
+          <select id="analysisMode">
+            <option value="conservative">Conservative</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="aggressive">Aggressive</option>
+            <option value="scalping">Scalping</option>
+            <option value="swing">Swing Trading</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button class="btn w-full" id="analyzeBtn">🔍 Analyze Market</button>
+        </div>
+      </div>
+
+      <div class="log-container" id="aiOutput">
+        <div class="text-text-secondary">No analysis performed yet...</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <button class="btn btn-success" id="executeBuyBtn">Execute Buy Signal</button>
+        <button class="btn btn-danger" id="executeSellBtn">Execute Sell Signal</button>
+        <button class="btn btn-secondary" id="executeHoldBtn">Hold Position</button>
+      </div>
+    </div>
+
+    <!-- Position & Orders Section -->
+    <div class="card">
+      <div class="card-header">
+        <span>💼 Positions & Orders</span>
+        <button class="btn btn-secondary" id="refreshPositionsBtn">Refresh</button>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div class="metric-card">
+          <div class="metric-label">Position Size</div>
+          <div class="metric-value" id="positionSize">0.000</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Entry Price</div>
+          <div class="metric-value" id="entryPrice">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Unrealized P&L</div>
+          <div class="metric-value" id="unrealizedPnL">$0.00</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Margin Used</div>
+          <div class="metric-value" id="marginUsed">$0.00</div>
+        </div>
+      </div>
+
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="positions">Active Positions</button>
+        <button class="tab-btn" data-tab="openOrders">Open Orders</button>
+        <button class="tab-btn" data-tab="history">Trade History</button>
+      </div>
+
+      <div id="tab-positions" class="tab-content">
+        <div class="log-container" id="positionsDisplay">
+          <div class="text-text-secondary">No active positions</div>
+        </div>
+      </div>
+
+      <div id="tab-openOrders" class="tab-content hidden">
+        <div class="log-container" id="ordersDisplay">
+          <div class="text-text-secondary">No open orders</div>
+        </div>
+      </div>
+
+      <div id="tab-history" class="tab-content hidden">
+        <div class="log-container" id="historyDisplay">
+          <div class="text-text-secondary">No trade history</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Risk Management Section -->
+    <div class="card">
+      <div class="card-header">
+        <span>⚠️ Risk Management</span>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="metric-card">
+          <div class="metric-label">Portfolio Risk</div>
+          <div class="metric-value" id="portfolioRisk">Low</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">VaR (95%)</div>
+          <div class="metric-value" id="varValue">$0.00</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Kelly %</div>
+          <div class="metric-value" id="kellyPercent">0%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Risk Score</div>
+          <div class="metric-value" id="riskScore">0/100</div>
+        </div>
+      </div>
+
+      <div class="chart-container mt-4">
+        <canvas id="riskChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Activity Log Section -->
+    <div class="card">
+      <div class="card-header">
+        <span>📜 Activity Log</span>
+        <button class="btn btn-secondary" id="clearLogsBtn">Clear Logs</button>
+      </div>
+      
+      <div class="log-container" id="activityLog" style="height: 200px;">
+        <div class="text-text-secondary">System initialized...</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { GoogleGenerativeAI } from "@google/generative-ai";
+
+    // --- CONFIGURATION ---
+    const CONFIG = {
+      BYBIT_WS_URL: {
+        testnet: 'wss://stream-testnet.bybit.com/v5/public/linear',
+        mainnet: 'wss://stream.bybit.com/v5/public/linear'
+      },
+      BYBIT_API_URL: {
+        testnet: 'https://api-testnet.bybit.com',
+        mainnet: 'https://api.bybit.com'
+      },
+      GEMINI_MODEL: 'gemini-1.5-flash',
+      WS_PING_INTERVAL: 20000,
+      WS_RECONNECT_DELAY: 5000,
+      SESSION_TIMEOUT_MS: 3600000, // 1 hour
+      ENCRYPTION_KEY: 'a-very-secret-key-that-should-be-more-complex' // For demonstration only
+    };
+
+    // --- UTILITY & SECURITY ---
+    class Utils {
+      static encrypt(text, key) {
+        return CryptoJS.AES.encrypt(text, key).toString();
+      }
+
+      static decrypt(encryptedText, key) {
+        try {
+          const bytes = CryptoJS.AES.decrypt(encryptedText, key);
+          const originalText = bytes.toString(CryptoJS.enc.Utf8);
+          return originalText;
+        } catch (e) {
+          return '';
+        }
+      }
+
+      static debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+      
+      static formatCurrency(amount) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+      }
+    }
+
+    // --- EVENT EMITTER ---
+    class EventEmitter {
+      constructor() { this.events = {}; }
+      on(event, listener) {
+        if (!this.events[event]) this.events[event] = [];
+        this.events[event].push(listener);
+      }
+      emit(event, ...args) {
+        if (this.events[event]) this.events[event].forEach(listener => listener(...args));
+      }
+    }
+
+    // --- BYBIT API CLIENT ---
+    class BybitClient extends EventEmitter {
+      constructor(config) {
+        super();
+        this.config = config;
+        this.apiKey = '';
+        this.apiSecret = '';
+        this.axiosInstance = axios.create();
+        this.setupRateLimiting();
+      }
+
+      setCredentials(apiKey, apiSecret) {
+        this.apiKey = apiKey;
+        this.apiSecret = apiSecret;
+      }
+
+      setupRateLimiting() {
+        this.axiosInstance.interceptors.response.use(response => {
+          // You can add logic here to handle rate limit headers from Bybit
+          return response;
+        }, error => {
+          if (error.response && error.response.status === 429) {
+            this.emit('rateLimitExceeded');
+          }
+          return Promise.reject(error);
+        });
+      }
+
+      async request(method, endpoint, params = {}, isPrivate = false) {
+        const mode = document.getElementById('tradingMode').value;
+        const baseURL = this.config.BYBIT_API_URL[mode];
+        
+        const headers = { 'Content-Type': 'application/json' };
+        const timestamp = Date.now().toString();
+        const recvWindow = '10000';
+
+        if (isPrivate) {
+          if (!this.apiKey || !this.apiSecret) throw new Error("API credentials not set.");
+          
+          headers['X-BAPI-API-KEY'] = this.apiKey;
+          headers['X-BAPI-TIMESTAMP'] = timestamp;
+          headers['X-BAPI-RECV-WINDOW'] = recvWindow;
+
+          const query = method === 'GET' ? new URLSearchParams(params).toString() : '';
+          const body = method === 'POST' ? JSON.stringify(params) : '';
+          const signaturePayload = timestamp + this.apiKey + recvWindow + (query || body);
+          headers['X-BAPI-SIGN'] = CryptoJS.HmacSHA256(signaturePayload, this.apiSecret).toString();
+        }
+
+        try {
+          const response = await this.axiosInstance({
+            method,
+            url: `${baseURL}${endpoint}`,
+            headers,
+            params: method === 'GET' ? params : {},
+            data: method === 'POST' ? params : {}
+          });
+          if (response.data.retCode !== 0) {
+            throw new Error(`Bybit API Error: ${response.data.retMsg} (Code: ${response.data.retCode})`);
+          }
+          return response.data.result;
+        } catch (error) {
+          this.emit('error', error.message);
+          throw error;
+        }
+      }
+
+      async getValidSymbols() {
+        const result = await this.request('GET', '/v5/market/instruments-info', { category: 'linear' });
+        return result.list
+          .filter(s => s.status === 'Trading' && s.quoteCoin === 'USDT')
+          .map(s => s.symbol)
+          .sort();
+      }
+      
+      async getKlines(symbol, interval, limit = 200) {
+        return this.request('GET', '/v5/market/kline', { category: 'linear', symbol, interval, limit });
+      }
+
+      async placeOrder(orderParams) {
+        return this.request('POST', '/v5/order/create', { category: 'linear', ...orderParams }, true);
+      }
+      
+      async getPosition(symbol) {
+        return this.request('GET', '/v5/position/list', { category: 'linear', symbol }, true);
+      }
+    }
+
+    // --- MAIN APPLICATION ---
+    class TradingApp {
+      constructor() {
+        this.config = CONFIG;
+        this.dom = this.getDomElements();
+        this.state = this.getInitialState();
+        
+        this.emitter = new EventEmitter();
+        this.bybitClient = new BybitClient(this.config);
+        this.ws = null;
+        
+        this.charts = {};
+
+        this.bindEventListeners();
+        this.initialize();
+      }
+
+      getDomElements() {
+        const ids = [
+          'loadingOverlay', 'totalPnL', 'winRate', 'sharpeRatio', 'maxDrawdown', 'activeTrades', 'volume24h',
+          'toggleAdvancedBtn', 'geminiApiKey', 'bybitApiKey', 'bybitApiSecret', 'advancedSettings', 'maxPosition',
+          'riskPerTrade', 'leverage', 'orderType', 'tpPercent', 'slPercent', 'trailingStop', 'enableTpSl',
+          'enableTrailing', 'enableKelly', 'tradingMode', 'saveConfigBtn', 'loadConfigBtn', 'clearConfigBtn',
+          'configStatus', 'wsStatus', 'wsStatusText', 'symbolSelect', 'timeframe', 'connectBtn', 'disconnectBtn',
+          'orderBookChart', 'bidBookDisplay', 'askBookDisplay', 'priceChart', 'rsiValue', 'macdValue', 'bbValue',
+          'volumeValue', 'indicatorChart', 'customPromptBtn', 'customPromptSection', 'customPrompt', 'analysisMode',
+          'analyzeBtn', 'aiOutput', 'executeBuyBtn', 'executeSellBtn', 'executeHoldBtn', 'refreshPositionsBtn',
+          'positionSize', 'entryPrice', 'unrealizedPnL', 'marginUsed', 'positionsDisplay', 'ordersDisplay',
+          'historyDisplay', 'portfolioRisk', 'varValue', 'kellyPercent', 'riskScore', 'riskChart', 'activityLog',
+          'clearLogsBtn'
+        ];
+        const elements = {};
+        ids.forEach(id => elements[id] = document.getElementById(id));
+        return elements;
+      }
+
+      getInitialState() {
+        return {
+          isConnected: false,
+          currentSymbol: 'BTCUSDT',
+          currentTimeframe: '5m',
+          orderBook: { bids: [], asks: [] },
+          klines: [],
+          indicators: {},
+          position: null,
+          lastSignal: null,
+        };
+      }
+
+      bindEventListeners() {
+        // Config
+        this.dom.saveConfigBtn.addEventListener('click', () => this.saveConfiguration());
+        this.dom.loadConfigBtn.addEventListener('click', () => this.loadConfiguration());
+        this.dom.clearConfigBtn.addEventListener('click', () => this.clearConfiguration());
+        this.dom.toggleAdvancedBtn.addEventListener('click', () => this.dom.advancedSettings.classList.toggle('hidden'));
+
+        // Connection
+        this.dom.connectBtn.addEventListener('click', () => this.connect());
+        this.dom.disconnectBtn.addEventListener('click', () => this.disconnect());
+        this.dom.symbolSelect.addEventListener('change', (e) => this.handleSymbolChange(e.target.value));
+        this.dom.timeframe.addEventListener('change', (e) => this.handleTimeframeChange(e.target.value));
+
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => this.handleTabSwitch(e));
+        });
+        
+        // AI & Trading
+        this.dom.analyzeBtn.addEventListener('click', () => this.runAnalysis());
+        this.dom.executeBuyBtn.addEventListener('click', () => this.executeSignal('BUY'));
+        this.dom.executeSellBtn.addEventListener('click', () => this.executeSignal('SELL'));
+      }
+
+      async initialize() {
+        this.log('System Initializing...', 'info');
+        this.initializeCharts();
+        this.loadConfiguration();
+        await this.populateSymbols();
+        this.log('Initialization Complete. Ready to connect.', 'success');
+      }
+
+      // --- CONFIGURATION & SECURITY ---
+      saveConfiguration() {
+        try {
+          const config = {
+            geminiApiKey: this.dom.geminiApiKey.value,
+            bybitApiKey: this.dom.bybitApiKey.value,
+            bybitApiSecret: this.dom.bybitApiSecret.value,
+            tradingMode: this.dom.tradingMode.value,
+            // Add other settings
+          };
+          const encryptedConfig = Utils.encrypt(JSON.stringify(config), CONFIG.ENCRYPTION_KEY);
+          localStorage.setItem('tradingBotConfig', encryptedConfig);
+          this.log('Configuration saved and encrypted.', 'success');
+        } catch (e) {
+          this.log('Failed to save configuration.', 'error');
+        }
+      }
+
+      loadConfiguration() {
+        const encryptedConfig = localStorage.getItem('tradingBotConfig');
+        if (encryptedConfig) {
+          try {
+            const config = JSON.parse(Utils.decrypt(encryptedConfig, CONFIG.ENCRYPTION_KEY));
+            this.dom.geminiApiKey.value = config.geminiApiKey || '';
+            this.dom.bybitApiKey.value = config.bybitApiKey || '';
+            this.dom.bybitApiSecret.value = config.bybitApiSecret || '';
+            this.dom.tradingMode.value = config.tradingMode || 'testnet';
+            this.bybitClient.setCredentials(config.bybitApiKey, config.bybitApiSecret);
+            this.log('Configuration loaded and decrypted.', 'info');
+          } catch (e) {
+            this.log('Failed to load or decrypt configuration. It may be corrupted.', 'error');
+            localStorage.removeItem('tradingBotConfig');
+          }
+        }
+      }
+      
+      clearConfiguration() {
+        localStorage.removeItem('tradingBotConfig');
+        // Clear input fields
+        this.dom.geminiApiKey.value = '';
+        this.dom.bybitApiKey.value = '';
+        this.dom.bybitApiSecret.value = '';
+        this.log('Configuration cleared.', 'warning');
+      }
+
+      // --- CORE LOGIC ---
+      async connect() {
+        if (this.state.isConnected) return;
+        this.log('Connecting...', 'info');
+        this.dom.wsStatus.className = 'status-indicator status-connecting';
+        this.dom.wsStatusText.textContent = 'Connecting';
+
+        try {
+          // Fetch initial data
+          await this.fetchInitialData();
+          
+          // Connect WebSocket
+          const mode = this.dom.tradingMode.value;
+          this.ws = new WebSocket(this.config.BYBIT_WS_URL[mode]);
+
+          this.ws.onopen = () => {
+            this.state.isConnected = true;
+            this.log('WebSocket Connected.', 'success');
+            this.dom.wsStatus.className = 'status-indicator status-connected';
+            this.dom.wsStatusText.textContent = 'Connected';
+            this.subscribeToTopics();
+            this.startPing();
+          };
+
+          this.ws.onmessage = (event) => this.handleWsMessage(JSON.parse(event.data));
+          this.ws.onclose = () => this.handleDisconnect();
+          this.ws.onerror = (err) => this.log(`WebSocket Error: ${err.message}`, 'error');
+
+        } catch (error) {
+          this.log(`Connection failed: ${error.message}`, 'error');
+          this.handleDisconnect();
+        }
+      }
+      
+      disconnect() {
+        if (this.ws) {
+          this.ws.close();
+        }
+      }
+      
+      handleDisconnect() {
+        this.state.isConnected = false;
+        this.log('Disconnected.', 'warning');
+        this.dom.wsStatus.className = 'status-indicator status-disconnected';
+        this.dom.wsStatusText.textContent = 'Disconnected';
+        if (this.pingInterval) clearInterval(this.pingInterval);
+      }
+
+      async populateSymbols() {
+        try {
+          const symbols = await this.bybitClient.getValidSymbols();
+          this.dom.symbolSelect.innerHTML = symbols.map(s => `<option value="${s}">${s}</option>`).join('');
+          this.dom.symbolSelect.value = this.state.currentSymbol;
+          this.log(`Loaded ${symbols.length} valid trading symbols.`, 'info');
+        } catch (error) {
+          this.log('Failed to load symbols.', 'error');
+          this.dom.symbolSelect.innerHTML = '<option>Error loading</option>';
+        }
+      }
+      
+      async handleSymbolChange(newSymbol) {
+        this.state.currentSymbol = newSymbol;
+        this.log(`Symbol changed to ${newSymbol}`, 'info');
+        if (this.state.isConnected) {
+          this.unsubscribeFromTopics();
+          await this.fetchInitialData();
+          this.subscribeToTopics();
+        } else {
+          await this.fetchInitialData();
+        }
+      }
+      
+      async handleTimeframeChange(newTimeframe) {
+        this.state.currentTimeframe = newTimeframe;
+        this.log(`Timeframe changed to ${newTimeframe}`, 'info');
+        await this.fetchInitialData();
+      }
+
+      async fetchInitialData() {
+        this.dom.loadingOverlay.classList.add('active');
+        try {
+          const klinesResult = await this.bybitClient.getKlines(this.state.currentSymbol, this.state.currentTimeframe);
+          this.state.klines = klinesResult.list.map(k => ({
+            time: parseInt(k[0]) / 1000,
+            open: parseFloat(k[1]),
+            high: parseFloat(k[2]),
+            low: parseFloat(k[3]),
+            close: parseFloat(k[4]),
+            volume: parseFloat(k[5]),
+          })).reverse();
+          this.updatePriceChart();
+          this.log('Fetched historical klines.', 'info');
+        } catch (error) {
+          this.log(`Failed to fetch initial data: ${error.message}`, 'error');
+        } finally {
+          this.dom.loadingOverlay.classList.remove('active');
+        }
+      }
+
+      // --- WEBSOCKET HANDLING ---
+      subscribeToTopics() {
+        const topics = [
+          `orderbook.50.${this.state.currentSymbol}`,
+          `kline.${this.state.currentTimeframe}.${this.state.currentSymbol}`,
+          // `publicTrade.${this.state.currentSymbol}`
+        ];
+        this.ws.send(JSON.stringify({ op: 'subscribe', args: topics }));
+        this.log(`Subscribed to: ${topics.join(', ')}`, 'info');
+      }
+      
+      unsubscribeFromTopics() {
+         const topics = [
+          `orderbook.50.${this.state.currentSymbol}`,
+          `kline.${this.state.currentTimeframe}.${this.state.currentSymbol}`,
+        ];
+        this.ws.send(JSON.stringify({ op: 'unsubscribe', args: topics }));
+      }
+
+      handleWsMessage(data) {
+        if (data.topic?.startsWith('orderbook')) {
+          this.updateOrderBook(data.data);
+        }
+        if (data.topic?.startsWith('kline')) {
+          this.updateKlines(data.data[0]);
+        }
+      }
+      
+      startPing() {
+        this.pingInterval = setInterval(() => {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ op: 'ping' }));
+          }
+        }, this.config.WS_PING_INTERVAL);
+      }
+
+      // --- UI & CHARTING ---
+      log(message, type = 'info') {
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        entry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+        this.dom.activityLog.prepend(entry);
+        if (this.dom.activityLog.children.length > 100) {
+          this.dom.activityLog.lastChild.remove();
+        }
+      }
+      
+      handleTabSwitch(event) {
+        const tabName = event.target.dataset.tab;
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+        document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+      }
+
+      initializeCharts() {
+        this.charts.orderBook = new Chart(this.dom.orderBookChart, this.getOrderBookChartConfig());
+        this.charts.price = new Chart(this.dom.priceChart, this.getPriceChartConfig());
+      }
+      
+      updateOrderBook(data) {
+        this.state.orderBook.bids = data.b.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) }));
+        this.state.orderBook.asks = data.a.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) }));
+        
+        // Update Chart
+        const labels = [...this.state.orderBook.bids.map(b => b.price), ...this.state.orderBook.asks.map(a => a.price)];
+        const bidData = this.state.orderBook.bids.map(b => b.size);
+        const askData = this.state.orderBook.asks.map(a => a.size);
+        
+        this.charts.orderBook.data.labels = labels;
+        this.charts.orderBook.data.datasets[0].data = bidData;
+        this.charts.orderBook.data.datasets[1].data = [...new Array(bidData.length).fill(0), ...askData];
+        this.charts.orderBook.update('none');
+        
+        // Update Text Display
+        this.dom.bidBookDisplay.innerHTML = '<div class="text-green-400 font-semibold mb-2">Bid Book</div>' + this.state.orderBook.bids.slice(0, 10).map(b => `<div>${b.size.toFixed(3)} @ ${Utils.formatCurrency(b.price)}</div>`).join('');
+        this.dom.askBookDisplay.innerHTML = '<div class="text-red-400 font-semibold mb-2">Ask Book</div>' + this.state.orderBook.asks.slice(0, 10).map(a => `<div>${a.size.toFixed(3)} @ ${Utils.formatCurrency(a.price)}</div>`).join('');
+      }
+      
+      updateKlines(kline) {
+        const newKline = {
+            time: parseInt(kline.start) / 1000,
+            open: parseFloat(kline.open),
+            high: parseFloat(kline.high),
+            low: parseFloat(kline.low),
+            close: parseFloat(kline.close),
+            volume: parseFloat(kline.volume),
+        };
+        
+        const lastKline = this.state.klines[this.state.klines.length - 1];
+        if (newKline.time === lastKline.time) {
+            this.state.klines[this.state.klines.length - 1] = newKline;
+        } else {
+            this.state.klines.push(newKline);
+            this.state.klines.shift();
+        }
+        this.updatePriceChart();
+      }
+      
+      updatePriceChart() {
+        this.charts.price.data.datasets[0].data = this.state.klines.map(k => ({x: k.time * 1000, o: k.open, h: k.high, l: k.low, c: k.close}));
+        this.charts.price.update('none');
+      }
+
+      // --- CHART CONFIGS ---
+      getOrderBookChartConfig() {
+        return {
+          type: 'bar',
+          data: { labels: [], datasets: [
+            { label: 'Bids', data: [], backgroundColor: 'rgba(0, 255, 65, 0.5)' },
+            { label: 'Asks', data: [], backgroundColor: 'rgba(255, 23, 68, 0.5)' }
+          ]},
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { x: { stacked: true }, y: { beginAtZero: true } },
+            plugins: { legend: { display: false } }
+          }
+        };
+      }
+      
+      getPriceChartConfig() {
+        // Requires chartjs-chart-financial plugin if not using a custom parser
+        // For simplicity, we'll use a basic line chart here. A full candlestick requires more setup.
+        return {
+          type: 'line',
+          data: { datasets: [{ label: 'Price', data: [], borderColor: 'rgba(0, 229, 255, 1)', borderWidth: 2, pointRadius: 0 }] },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { type: 'time', time: { unit: 'minute' } },
+              y: { position: 'right' }
+            }
+          }
+        };
+      }
+
+      // --- AI & TRADING ---
+      async runAnalysis() {
+        this.log('Running AI analysis...', 'info');
+        this.dom.aiOutput.innerHTML = 'Analyzing...';
+        
+        try {
+            const genAI = new GoogleGenerativeAI(this.dom.geminiApiKey.value);
+            const model = genAI.getGenerativeModel({ model: this.config.GEMINI_MODEL });
+
+            const prompt = this.buildAIPrompt();
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const text = response.text();
+
+            this.log('AI Analysis Complete.', 'success');
+            this.dom.aiOutput.textContent = text;
+            this.parseAndStoreSignal(text);
+
+        } catch (error) {
+            this.log(`AI Analysis Error: ${error.message}`, 'error');
+            this.dom.aiOutput.textContent = `Error: ${error.message}`;
+        }
+      }
+      
+      buildAIPrompt() {
+        // A much more sophisticated prompt
+        const latestPrice = this.state.klines[this.state.klines.length - 1]?.close || 0;
+        return `
+          You are a professional crypto trading analyst. Your goal is to provide a clear, actionable trading signal based on the provided market data for ${this.state.currentSymbol}.
+
+          **Current Market Data:**
+          - Latest Price: ${latestPrice}
+          - Order Book Depth (Top 5):
+            - Bids: ${JSON.stringify(this.state.orderBook.bids.slice(0,5))}
+            - Asks: ${JSON.stringify(this.state.orderBook.asks.slice(0,5))}
+          - Current Position: ${JSON.stringify(this.state.position) || 'None'}
+          - Trading Strategy: ${this.dom.analysisMode.value}
+
+          **Instructions:**
+          1. Analyze the provided data.
+          2. Consider the specified trading strategy.
+          3. Provide a clear signal in the format: [ACTION] [QUANTITY] [REASON].
+          4. ACTION must be one of: BUY, SELL, HOLD.
+          5. QUANTITY is the suggested trade size in contracts (e.g., 0.01). For HOLD, use 0.
+          6. REASON is a brief, one-sentence explanation for your decision.
+
+          Example: [BUY] [0.01] [Strong bid support and bullish momentum observed.]
+        `;
+      }
+      
+      parseAndStoreSignal(text) {
+        const match = text.match(/\[(BUY|SELL|HOLD)\]\s\[([\d.]+)\]\s\[(.*)\]/);
+        if (match) {
+          this.state.lastSignal = {
+            action: match[1],
+            quantity: parseFloat(match[2]),
+            reason: match[3]
+          };
+          this.log(`AI Signal Parsed: ${this.state.lastSignal.action} ${this.state.lastSignal.quantity}`, 'info');
+        } else {
+          this.state.lastSignal = null;
+          this.log('Could not parse AI signal from response.', 'warning');
+        }
+      }
+      
+      async executeSignal(action) {
+        if (!this.state.lastSignal || this.state.lastSignal.action !== action) {
+          this.log(`No valid ${action} signal to execute.`, 'warning');
+          return;
+        }
+        
+        this.log(`Executing ${action} signal for ${this.state.lastSignal.quantity} contracts.`, 'info');
+        
+        try {
+          const orderParams = {
+            symbol: this.state.currentSymbol,
+            side: action === 'BUY' ? 'Buy' : 'Sell',
+            orderType: 'Market',
+            qty: this.state.lastSignal.quantity.toString(),
+          };
+          
+          // Add server-side TP/SL
+          if (this.dom.enableTpSl.checked) {
+            const latestPrice = this.state.klines[this.state.klines.length - 1]?.close;
+            if (latestPrice) {
+              const tpPct = parseFloat(this.dom.tpPercent.value) / 100;
+              const slPct = parseFloat(this.dom.slPercent.value) / 100;
+              if (action === 'BUY') {
+                orderParams.takeProfit = (latestPrice * (1 + tpPct)).toFixed(1);
+                orderParams.stopLoss = (latestPrice * (1 - slPct)).toFixed(1);
+              } else { // SELL
+                orderParams.takeProfit = (latestPrice * (1 - tpPct)).toFixed(1);
+                orderParams.stopLoss = (latestPrice * (1 + slPct)).toFixed(1);
+              }
+            }
+          }
+
+          const result = await this.bybitClient.placeOrder(orderParams);
+          this.log(`Order placed successfully! Order ID: ${result.orderId}`, 'success');
+        } catch (error) {
+          this.log(`Order execution failed: ${error.message}`, 'error');
+        }
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.app = new TradingApp();
+    });
+
+  </script>
+</body>
+</html>

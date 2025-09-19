@@ -1,5 +1,4 @@
 import { RestClientV5 } from 'bybit-api';
-import { CONFIG } from './config.js';
 import { logger, neon } from './logger.js';
 import { setTimeout } from 'timers/promises'; // For async sleep
 import { v4 as uuidv4 } from 'uuid'; // For generating UUIDs
@@ -16,12 +15,15 @@ class BybitAPIClient {
    * @description Initializes the BybitAPIClient with API key, secret, testnet/dry-run flags,
    * and sets up the RestClientV5 session.
    * Exits the process if API key/secret are missing and not in dry-run mode.
+   * @param {object} config - The configuration object containing API_KEY, API_SECRET, TESTNET, DRY_RUN.
    */
-  constructor() {
-    this.api = CONFIG.API_KEY;
-    this.secret = CONFIG.API_SECRET;
-    this.testnet = CONFIG.TESTNET;
-    this.dry_run = CONFIG.DRY_RUN;
+  constructor(config) {
+    this.api = config.API_KEY;
+    this.secret = config.API_SECRET;
+    this.testnet = config.TESTNET;
+    this.dry_run = config.DRY_RUN;
+    this.order_retry_attempts = config.ORDER_RETRY_ATTEMPTS;
+    this.order_retry_delay_seconds = config.ORDER_RETRY_DELAY_SECONDS;
 
     if (!this.api || !this.secret) {
       logger.error(neon.error("API Key and Secret must be provided in config.js or .env."));
@@ -55,18 +57,18 @@ class BybitAPIClient {
    * @returns {Promise<Object>} The response from the API call, or an error object if max retries are reached.
    */
   async _retryWrapper(apiCall, ...args) {
-    for (let attempt = 0; attempt < CONFIG.ORDER_RETRY_ATTEMPTS; attempt++) {
+    for (let attempt = 0; attempt < this.order_retry_attempts; attempt++) {
       try {
         const resp = await apiCall(...args);
         if (resp.retCode === 0) {
           return resp;
         } else {
-          logger.error(neon.error(`API Error (attempt ${attempt + 1}/${CONFIG.ORDER_RETRY_ATTEMPTS}): ${resp.retMsg || 'Unknown error'} (Code: ${resp.retCode})`));
+          logger.error(neon.error(`API Error (attempt ${attempt + 1}/${this.order_retry_attempts}): ${resp.retMsg || 'Unknown error'} (Code: ${resp.retCode})`));
         }
       } catch (e) {
-        logger.error(neon.error(`API Exception (attempt ${attempt + 1}/${CONFIG.ORDER_RETRY_ATTEMPTS}): ${e.message}`));
+        logger.error(neon.error(`API Exception (attempt ${attempt + 1}/${this.order_retry_attempts}): ${e.message}`));
       }
-      await setTimeout(CONFIG.ORDER_RETRY_DELAY_SECONDS * 1000);
+      await setTimeout(this.order_retry_delay_seconds * 1000);
     }
     return { retCode: -1, retMsg: 'Max retries reached', result: null };
   }
@@ -149,7 +151,7 @@ class BybitAPIClient {
         time: parseFloat(row[0]),
         open: parseFloat(row[1]),
         high: parseFloat(row[2]),
-        low: parseFloat(row[2]), // Corrected: row[3] for low
+        low: parseFloat(row[3]),
         close: parseFloat(row[4]),
         volume: parseFloat(row[5]),
         turnover: parseFloat(row[6]),
@@ -364,7 +366,7 @@ class BybitAPIClient {
       price = triggerPrice;
       logger.warning(neon.warn(`Conditional limit order requested for ${symbol} without explicit price. Using trigger_price as limit execution price.`));
     }
-    return await this.placeOrderCommon(symbol, side, orderType, qty, price, triggerPrice, tpPrice, slPrice, 'GTC', reduceOnly);
+    return await this.placeOrderCommon(symbol, side, orderType, qty, price, triggerPrice, tpPrice, slPrice, timeInForce, reduceOnly);
   }
 
   /**
@@ -487,4 +489,4 @@ class BybitAPIClient {
   }
 }
 
-export const bybitClient = new BybitAPIClient();
+export default BybitAPIClient;

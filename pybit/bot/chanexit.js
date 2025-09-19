@@ -29,7 +29,7 @@ import { DataFrame } from 'dataframe-js'; // A common choice for JS DataFrames
 // --- CONFIGURATION IMPORT ---
 // In JS, config is typically a JS object or JSON.
 // Assuming config.js exists and exports an object:
-import { BOT_CONFIG } from './config.js';
+import { BOT_CONFIG } from './configLoader.js';
 
 // Global placeholder for getaddrinfo patch, not directly translatable to JS in Node.js
 // Node.js DNS resolution is handled differently; direct IP routing might need
@@ -351,6 +351,7 @@ class Bybit {
         await setTimeout(BOT_CONFIG.ORDER_RETRY_DELAY_SECONDS * 1000);
       }
     }
+    return;
   }
 
   async placeOrderCommon(symbol, side, orderType, qty, price = null, triggerPrice = null, tpPrice = null, slPrice = null, timeInForce = 'GTC', reduceOnly = false) {
@@ -424,7 +425,11 @@ class Bybit {
   async placeConditionalOrder(symbol, side, qty, triggerPrice, orderType = 'Market', price = null, tpPrice = null, slPrice = null, reduceOnly = false) {
     if (orderType === 'Limit' && price === null) {
       price = triggerPrice;
-      rootLogger.warning(`Conditional limit order requested for ${symbol} without explicit \`price\`. Using \`trigger_price\` as limit execution price.`);
+      rootLogger.warning(`Conditional limit order requested for ${symbol} without explicit 
+price
+. Using 
+trigger_price
+ as limit execution price.`);
     }
     return await this.placeOrderCommon(symbol, side, orderType, qty, price, triggerPrice, tpPrice, slPrice, 'GTC', reduceOnly);
   }
@@ -469,7 +474,7 @@ class Bybit {
         if (r.retCode === 0) {
           rootLogger.debug(`Modified TP/SL for ${symbol}. TP:${tpPrice}, SL:${slPrice}`);
           return true;
-        } else if (r.retCode === 110026) { // No position to modify
+        } else if ([110026, 110043].includes(r.retCode)) { // No position to modify
           rootLogger.warning(`No active position for ${symbol} to modify TP/SL.`);
           return false;
         }
@@ -607,8 +612,6 @@ function calculateRSI(data, period) {
   if (avgLoss === 0) {
     if (avgGain === 0) {
       rsi[period] = 50;
-    } else {
-      rsi[period] = 100;
     }
   } else {
     const rs = avgGain / avgLoss;
@@ -622,8 +625,6 @@ function calculateRSI(data, period) {
     if (avgLoss === 0) {
       if (avgGain === 0) {
         rsi[i] = 50;
-      } else {
-        rsi[i] = 100;
       }
     } else {
       const rs = avgGain / avgLoss;
@@ -634,13 +635,270 @@ function calculateRSI(data, period) {
 }
 
 
-// Mock Supertrend and Fisher Transform for now
-// Real implementations would be complex.
-const mockSupertrend = (df, length, multiplier) => new Array(df.length).fill(0); // placeholder
-const mockFisherTransform = (df, period) => new Array(df.length).fill(0); // placeholder
-const mockStochasticOscillator = (df, k, d, smoothing) => [new Array(df.length).fill(50), new Array(df.length).fill(50)]; // placeholder
-const mockMacdIndicator = (df, fast, slow, signal) => [new Array(df.length).fill(0), new Array(df.length).fill(0), new Array(df.length).fill(0)]; // placeholder
-const mockAdxIndicator = (df, period) => new Array(df.length).fill(0); // placeholder
+// Helper to calculate Supertrend
+function estSupertrend(closePrices, highPrices, lowPrices, atrSeries, length, multiplier) {
+  if (closePrices.length < length) {
+    return new Array(closePrices.length).fill(0); // Return neutral if not enough data
+  }
+
+  const basicUpperBand = [];
+  const basicLowerBand = [];
+  const finalUpperBand = [];
+  const finalLowerBand = [];
+  const supertrend = new Array(closePrices.length).fill(0);
+  const direction = new Array(closePrices.length).fill(0); // 1 for uptrend, -1 for downtrend
+
+  for (let i = 0; i < closePrices.length; i++) {
+    if (i < length) {
+      basicUpperBand.push(NaN);
+      basicLowerBand.push(NaN);
+      finalUpperBand.push(NaN);
+      finalLowerBand.push(NaN);
+      continue;
+    }
+
+    const currentHigh = highPrices[i];
+    const currentLow = lowPrices[i];
+    const currentClose = closePrices[i];
+    const currentAtr = atrSeries[i];
+
+    basicUpperBand.push((currentHigh + currentLow) / 2 + multiplier * currentAtr);
+    basicLowerBand.push((currentHigh + currentLow) / 2 - multiplier * currentAtr);
+
+    // Final Upper Band
+    if (i === length) {
+      finalUpperBand.push(basicUpperBand[i]);
+    } else {
+      finalUpperBand.push(
+        (basicUpperBand[i] < finalUpperBand[i - 1] || closePrices[i - 1] > finalUpperBand[i - 1]) ?
+        basicUpperBand[i] :
+        finalUpperBand[i - 1]
+      );
+    }
+
+    // Final Lower Band
+    if (i === length) {
+      finalLowerBand.push(basicLowerBand[i]);
+    } else {
+      finalLowerBand.push(
+        (basicLowerBand[i] > finalLowerBand[i - 1] || closePrices[i - 1] < finalLowerBand[i - 1]) ?
+        basicLowerBand[i] :
+        finalLowerBand[i - 1]
+      );
+    }
+
+    // Determine Direction and Supertrend
+    if (i === length) { // Initial calculation for Supertrend
+      if (currentClose > finalUpperBand[i]) {
+        direction[i] = 1; // Uptrend
+        supertrend[i] = finalLowerBand[i];
+      } else if (currentClose < finalLowerBand[i]) {
+        direction[i] = -1; // Downtrend
+        supertrend[i] = finalUpperBand[i];
+      }
+    } else {
+      if (direction[i - 1] === 1) { // Previous was uptrend
+        if (currentClose < finalLowerBand[i]) {
+          direction[i] = -1; // Downtrend
+          supertrend[i] = finalUpperBand[i];
+        }
+      } else if (direction[i - 1] === -1) { // Previous was downtrend
+        if (currentClose > finalUpperBand[i]) {
+          direction[i] = 1; // Uptrend
+          supertrend[i] = finalLowerBand[i];
+        }
+      } else { // Previous was neutral or initial state
+        if (currentClose > finalUpperBand[i]) {
+          direction[i] = 1; // Uptrend
+          supertrend[i] = finalLowerBand[i];
+        }
+      }
+    }
+  }
+  return direction.map(val => isNaN(val) ? 0 : val);
+}
+
+
+// Helper to calculate Fisher Transform
+function fisherTransform(closePrices, highPrices, lowPrices, period) {
+  if (closePrices.length < period) {
+    return new Array(closePrices.length).fill(0);
+  }
+
+  const fisher = new Array(closePrices.length).fill(0);
+  const prevFisher = new Array(closePrices.length).fill(0);
+
+  for (let i = period - 1; i < closePrices.length; i++) {
+    const windowHigh = highPrices.slice(i - period + 1, i + 1);
+    const windowLow = lowPrices.slice(i - period + 1, i + 1);
+    const windowClose = closePrices.slice(i - period + 1, i + 1);
+
+    const highestHigh = Math.max(...windowHigh);
+    const lowestLow = Math.min(...windowLow);
+
+    let val = 0;
+    if (highestHigh !== lowestLow) {
+      val = ((windowClose[windowClose.length - 1] - lowestLow) / (highestHigh - lowestLow)) * 2 - 1;
+    }
+
+    // Ensure val is within bounds [-0.999, 0.999] to prevent log(0) or log(negative)
+    val = Math.max(Math.min(val, 0.999), -0.999);
+
+    const currentFisher = 0.5 * Math.log((1 + val) / (1 - val)) + 0.5 * (i > 0 ? prevFisher[i - 1] : 0);
+    fisher[i] = currentFisher;
+    prevFisher[i] = currentFisher; // Store for next iteration's prevFisher
+  }
+
+  return fisher.map(val => isNaN(val) ? 0 : val);
+}
+
+
+// Helper to calculate Stochastic Oscillator
+function stochasticOscillator(closePrices, highPrices, lowPrices, kPeriod, dPeriod, smoothing) {
+  if (closePrices.length < kPeriod) {
+    return [new Array(closePrices.length).fill(0), new Array(closePrices.length).fill(0)];
+  }
+
+  const percentK = new Array(closePrices.length).fill(0);
+  const percentD = new Array(closePrices.length).fill(0);
+
+  for (let i = kPeriod - 1; i < closePrices.length; i++) {
+    const windowHigh = highPrices.slice(i - kPeriod + 1, i + 1);
+    const windowLow = lowPrices.slice(i - kPeriod + 1, i + 1);
+    const currentClose = closePrices[i];
+
+    const highestHigh = Math.max(...windowHigh);
+    const lowestLow = Math.min(...windowLow);
+
+    if (highestHigh === lowestLow) {
+      percentK[i] = 0; // Avoid division by zero
+    } else {
+      percentK[i] = ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
+    }
+  }
+
+  // Apply smoothing to %K if smoothing period is provided
+  let smoothedK = percentK;
+  if (smoothing > 1) {
+    smoothedK = calculateSMA(percentK.filter(val => !isNaN(val)), smoothing);
+    // Pad with NaNs for initial values
+    smoothedK = new Array(kPeriod - 1).fill(NaN).concat(smoothedK);
+  }
+
+  // Calculate %D as SMA of %K
+  const dData = smoothedK.slice(kPeriod - 1);
+  const rawPercentD = calculateSMA(dData.filter(val => !isNaN(val)), dPeriod);
+
+  // Pad %D with NaNs for initial values
+  percentD = new Array(kPeriod - 1 + dPeriod - 1).fill(NaN).concat(rawPercentD);
+
+  return [smoothedK.map(val => isNaN(val) ? 0 : val), percentD.map(val => isNaN(val) ? 0 : val)];
+}
+
+
+// Helper to calculate MACD
+function macdIndicator(closePrices, fastPeriod, slowPeriod, signalPeriod) {
+  if (closePrices.length < slowPeriod + signalPeriod) {
+    return [new Array(closePrices.length).fill(0), new Array(closePrices.length).fill(0), new Array(closePrices.length).fill(0)];
+  }
+
+  const fastEma = calculateEMA(closePrices, fastPeriod);
+  const slowEma = calculateEMA(closePrices, slowPeriod);
+
+  const macdLine = fastEma.map((val, i) => val - slowEma[i]);
+
+  const signalLine = calculateEMA(macdLine.filter(val => !isNaN(val)), signalPeriod);
+  // Pad signalLine with NaNs for initial values
+  const paddedSignalLine = new Array(slowPeriod + signalPeriod - 2).fill(NaN).concat(signalLine);
+
+  const macdHist = macdLine.map((val, i) => val - paddedSignalLine[i]);
+
+  return [
+    macdLine.map(val => isNaN(val) ? 0 : val),
+    paddedSignalLine.map(val => isNaN(val) ? 0 : val),
+    macdHist.map(val => isNaN(val) ? 0 : val)
+  ];
+}
+
+
+// Helper to calculate ADX
+function adxIndicator(closePrices, highPrices, lowPrices, period) {
+  if (closePrices.length < period * 2) { // ADX needs a good amount of data
+    return new Array(closePrices.length).fill(0);
+  }
+
+  const tr = [];
+  const plusDm = [];
+  const minusDm = [];
+
+  for (let i = 0; i < closePrices.length; i++) {
+    const h = highPrices[i];
+    const l = lowPrices[i];
+    const cPrev = i > 0 ? closePrices[i - 1] : closePrices[i];
+
+    // True Range
+    tr.push(Math.max(h - l, Math.abs(h - cPrev), Math.abs(l - cPrev)));
+
+    // Directional Movement
+    let upMove = i > 0 ? h - highPrices[i - 1] : 0;
+    let downMove = i > 0 ? lowPrices[i - 1] - l : 0;
+
+    if (upMove > downMove && upMove > 0) {
+      plusDm.push(upMove);
+      minusDm.push(0);
+    } else if (downMove > upMove && downMove > 0) {
+      plusDm.push(0);
+      minusDm.push(downMove);
+    } else {
+      plusDm.push(0);
+      minusDm.push(0);
+    }
+  }
+
+  // Smooth TR, +DM, -DM using EMA
+  const smoothTr = calculateEMA(tr, period);
+  const smoothPlusDm = calculateEMA(plusDm, period);
+  const smoothMinusDm = calculateEMA(minusDm, period);
+
+  const plusDi = [];
+  const minusDi = [];
+  const dx = [];
+  const adx = new Array(closePrices.length).fill(0);
+
+  for (let i = 0; i < closePrices.length; i++) {
+    if (i < period) {
+      plusDi.push(NaN);
+      minusDi.push(NaN);
+      dx.push(NaN);
+      continue;
+    }
+
+    // +DI and -DI
+    if (smoothTr[i] > 0) {
+      plusDi.push((smoothPlusDm[i] / smoothTr[i]) * 100);
+      minusDi.push((smoothMinusDm[i] / smoothTr[i]) * 100);
+    } else {
+      plusDi.push(0);
+      minusDi.push(0);
+    }
+
+    // DX
+    const diSum = plusDi[i] + minusDi[i];
+    if (diSum > 0) {
+      dx.push(Math.abs(plusDi[i] - minusDi[i]) / diSum * 100);
+    } else {
+      dx.push(0);
+    }
+  }
+
+  // ADX is smoothed DX
+  const rawAdx = calculateEMA(dx.filter(val => !isNaN(val)), period);
+  // Pad ADX with NaNs for initial values
+  const paddedAdx = new Array(period * 2 - 2).fill(NaN).concat(rawAdx);
+
+  return paddedAdx.map(val => isNaN(val) ? 0 : val);
+}
+
 
 // -------------- higher TF confirmation --------------
 async function higherTfTrend(bybit, symbol) {
@@ -662,35 +920,10 @@ async function higherTfTrend(bybit, symbol) {
 }
 
 // -------------- Ehlers Supertrend (mocked) --------------
-function estSupertrend(df, length = 8, multiplier = 1.2) {
-  // A real implementation would involve ATR calculations and tracking trend state.
-  // For now, this is a mock.
-  return df.map(row => 0); // Placeholder, always returns 0 (neutral)
-}
-
-// -------------- Fisher Transform (mocked) --------------
-function fisherTransform(df, period = 8) {
-  // Placeholder mock
-  return df.map(row => 0); // Placeholder, always returns 0
-}
-
-// -------------- Stochastic Oscillator (mocked) --------------
-function stochasticOscillator(df, k_period = 14, d_period = 3, smoothing = 3) {
-  // Placeholder mock
-  return [df.map(row => 50), df.map(row => 50)];
-}
-
-// -------------- MACD (mocked) --------------
-function macdIndicator(df, fast = 12, slow = 26, signal = 9) {
-  // Placeholder mock
-  return [df.map(row => 0), df.map(row => 0), df.map(row => 0)];
-}
-
-// -------------- ADX (mocked) --------------
-function adxIndicator(df, period = 14) {
-  // Placeholder mock
-  return df.map(row => 0);
-}
+// This mock will be replaced by the actual implementation.
+// function estSupertrend(df, length = 8, multiplier = 1.2) {
+//   return df.map(row => 0); // Placeholder, always returns 0 (neutral)
+// }
 
 
 // -------------- upgraded chandelier + multi-TF --------------
@@ -784,22 +1017,22 @@ function buildIndicators(df) {
   ]);
 
   const volumeMa = calculateSMA(volumes, BOT_CONFIG.VOLUME_MA_PERIOD || 20);
-  const volSpike = volumes.map((vol, i) => (volMa[i] > 0 && vol / volumeMa[i] > BOT_CONFIG.VOLUME_THRESHOLD_MULTIPLIER));
+  const volSpike = volumes.map((vol, i) => (volumeMa[i] > 0 && vol / volumeMa[i] > BOT_CONFIG.VOLUME_THRESHOLD_MULTIPLIER));
   clonedDf.addColumns([
       volumeMa.map(val => ({vol_ma: val})),
       volSpike.map(val => ({vol_spike: val}))
   ]);
   
-  // Mock implementations for now
-  const estSlow = estSupertrend(clonedDf, BOT_CONFIG.EST_SLOW_LENGTH || 8, BOT_CONFIG.EST_SLOW_MULTIPLIER || 1.2);
-  const fisher = fisherTransform(clonedDf, BOT_CONFIG.EHLERS_FISHER_PERIOD || 8);
+  // Actual implementations for now
+  const estSlow = estSupertrend(closePrices, highPrices, lowPrices, atrSeries, BOT_CONFIG.EST_SLOW_LENGTH || 8, BOT_CONFIG.EST_SLOW_MULTIPLIER || 1.2);
+  const fisher = fisherTransform(closePrices, highPrices, lowPrices, BOT_CONFIG.EHLERS_FISHER_PERIOD || 8); // Now using actual Fisher Transform
   clonedDf.addColumns([
       estSlow.map(val => ({est_slow: val})),
       fisher.map(val => ({fisher: val}))
   ]);
 
   if (BOT_CONFIG.USE_STOCH_FILTER) {
-    const [stochK, stochD] = stochasticOscillator(clonedDf, BOT_CONFIG.STOCH_K_PERIOD, BOT_CONFIG.STOCH_D_PERIOD, BOT_CONFIG.STOCH_SMOOTHING);
+    const [stochK, stochD] = stochasticOscillator(closePrices, highPrices, lowPrices, BOT_CONFIG.STOCH_K_PERIOD, BOT_CONFIG.STOCH_D_PERIOD, BOT_CONFIG.STOCH_SMOOTHING); // Now using actual Stochastic Oscillator
     clonedDf.addColumns([
         stochK.map(val => ({stoch_k: val})),
         stochD.map(val => ({stoch_d: val}))
@@ -807,7 +1040,7 @@ function buildIndicators(df) {
   }
   
   if (BOT_CONFIG.USE_MACD_FILTER) {
-    const [macdLine, macdSignal, macdHist] = macdIndicator(clonedDf, BOT_CONFIG.MACD_FAST_PERIOD, BOT_CONFIG.MACD_SLOW_PERIOD, BOT_CONFIG.MACD_SIGNAL_PERIOD);
+    const [macdLine, macdSignal, macdHist] = macdIndicator(closePrices, BOT_CONFIG.MACD_FAST_PERIOD, BOT_CONFIG.MACD_SLOW_PERIOD, BOT_CONFIG.MACD_SIGNAL_PERIOD); // Now using actual MACD
     clonedDf.addColumns([
         macdLine.map(val => ({macd_line: val})),
         macdSignal.map(val => ({macd_signal: val})),
@@ -816,7 +1049,7 @@ function buildIndicators(df) {
   }
 
   if (BOT_CONFIG.USE_ADX_FILTER) {
-    const adx = adxIndicator(clonedDf, BOT_CONFIG.ADX_PERIOD);
+    const adx = adxIndicator(closePrices, highPrices, lowPrices, BOT_CONFIG.ADX_PERIOD); // Now using actual ADX
     clonedDf.addColumns([
         adx.map(val => ({adx: val}))
     ]);
@@ -845,7 +1078,10 @@ async function generateSignal(bybit, symbol, df) {
     BOT_CONFIG.EMA_LONG_PERIOD, BOT_CONFIG.ATR_PERIOD,
     BOT_CONFIG.RSI_PERIOD, BOT_CONFIG.VOLUME_MA_PERIOD || 20,
     BOT_CONFIG.VOLATILITY_LOOKBACK || 20,
-    (BOT_CONFIG.EST_SLOW_LENGTH || 8) + 5, (BOT_CONFIG.EHLERS_FISHER_PERIOD || 8) + 5
+    (BOT_CONFIG.EST_SLOW_LENGTH || 8) + 5, (BOT_CONFIG.EHLERS_FISHER_PERIOD || 8) + 5,
+    (BOT_CONFIG.STOCH_K_PERIOD || 14) + (BOT_CONFIG.STOCH_D_PERIOD || 3) + (BOT_CONFIG.STOCH_SMOOTHING || 3) + 5, // For Stochastic
+    (BOT_CONFIG.MACD_SLOW_PERIOD || 26) + (BOT_CONFIG.MACD_SIGNAL_PERIOD || 9) + 5, // For MACD
+    (BOT_CONFIG.ADX_PERIOD || 14) * 2 + 5 // For ADX
   );
   if (BOT_CONFIG.USE_STOCH_FILTER) minRequiredKlines = Math.max(minRequiredKlines, BOT_CONFIG.STOCH_K_PERIOD + BOT_CONFIG.STOCH_SMOOTHING + 5);
   if (BOT_CONFIG.USE_MACD_FILTER) minRequiredKlines = Math.max(minRequiredKlines, BOT_CONFIG.MACD_SLOW_PERIOD + BOT_CONFIG.MACD_SIGNAL_PERIOD + 5);
@@ -1025,7 +1261,7 @@ async function main() {
   rootLogger.info(`Starting trading bot in ${modeInfo} mode on ${testnetInfo}. Checking ${symbols.length} symbols.`);
   rootLogger.info("Bot started – Press Ctrl+C to stop.");
 
-  let lastReconciliationTime = moment.utc();
+  let lastReconciliationTime = moment().utc();
 
   try {
     while (true) {
@@ -1227,7 +1463,7 @@ async function manageTradeExit(bybit, tradeId, symbol, side, entryTimeStr, entry
   }
 
   // Time-based Exit
-  const entryDt = moment.utc(entryTimeStr);
+  const entryDt = moment().utc(entryTimeStr);
   const elapsedMinutes = utcTime.diff(entryDt, 'minutes');
   const elapsedCandles = elapsedMinutes / BOT_CONFIG.TIMEFRAME;
   if (reasonToExit === null && elapsedCandles >= (BOT_CONFIG.MAX_HOLDING_CANDLES || 50)) {
@@ -1328,9 +1564,6 @@ async function processSymbolForSignal(bybit, symbol, balance, utcTime) {
     } else if (signal === 'Sell' && bestAsk !== null && (bestAsk - currentPrice) < (currentPrice * BOT_CONFIG.PRICE_DETECTION_THRESHOLD_PCT)) {
       limitExecutionPrice = parseFloat(bestAsk.toFixed(pricePrecision));
       rootLogger.info(`[${symbol}] Price near best ask at ${bestAsk.toFixed(4)}. Placing Limit Order to Sell at ask.`);
-    } else {
-      limitExecutionPrice = parseFloat(currentPrice.toFixed(pricePrecision));
-      rootLogger.info(`[${symbol}] No specific S/R condition for limit. Placing Limit Order at current price ${limitExecutionPrice.toFixed(4)}.`);
     }
 
     if (limitExecutionPrice) {
@@ -1377,7 +1610,7 @@ async function processSymbolForSignal(bybit, symbol, balance, utcTime) {
 // -------------- tiny helpers --------------
 function getCurrentTime(tzStr) {
   const localTime = moment().tz(tzStr);
-  const utcTime = moment.utc();
+  const utcTime = moment().utc();
   return [localTime, utcTime];
 }
 

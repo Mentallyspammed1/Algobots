@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bybit V5 Multi-Strategy Trading Terminal</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-statistics@7.8.3/dist/simple-statistics.min.js"></script>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "@google/generative-ai": "https://esm.sh/@google/generative-ai"
+    }
+  }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    
+    :root {
+      --bg-primary: #0a0a1e;
+      --bg-secondary: #12122e;
+      --bg-tertiary: #1a1a3a;
+      --text-primary: #e8e8ff;
+      --text-secondary: #a8a8c8;
+      --neon-green: #00ff41;
+      --neon-orange: #ff9f1c;
+      --neon-red: #ff1744;
+      --neon-cyan: #00e5ff;
+      --neon-purple: #d500f9;
+      --shadow-neon: 0 0 20px rgba(0, 229, 255, 0.5);
+      --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%); color: var(--text-primary); }
+    .card { background: var(--bg-tertiary); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-neon); }
+    .card-header { font-size: 1.25rem; font-weight: 600; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid rgba(0, 229, 255, 0.3); display: flex; align-items: center; justify-content: space-between; }
+    .btn { background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple)); color: var(--bg-primary); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth); text-transform: uppercase; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: transparent; border: 2px solid var(--neon-cyan); color: var(--neon-cyan); }
+    .btn-danger { background: linear-gradient(135deg, var(--neon-red), var(--neon-orange)); }
+    .btn-success { background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+    input, textarea, select { background: var(--bg-primary); border: 2px solid rgba(0, 229, 255, 0.3); color: var(--text-primary); padding: 10px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; width: 100%; }
+    label { display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 0.875rem; }
+    .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; animation: pulse 2s infinite; }
+    .status-connected { background: var(--neon-green); box-shadow: 0 0 10px var(--neon-green); }
+    .status-disconnected { background: var(--neon-red); box-shadow: 0 0 10px var(--neon-red); }
+    .status-connecting { background: var(--neon-orange); box-shadow: 0 0 10px var(--neon-orange); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .metric-card { background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(213, 0, 249, 0.1)); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 12px; padding: 16px; text-align: center; }
+    .metric-value { font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; margin-top: 8px; }
+    .metric-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+    .chart-container { position: relative; height: 450px; background: #0f0f2a; border-radius: 12px; padding: 16px; }
+    .tab-nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid rgba(0, 229, 255, 0.2); padding-bottom: 8px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-secondary); padding: 8px 16px; cursor: pointer; font-weight: 500; position: relative; }
+    .tab-btn.active { color: var(--neon-cyan); }
+    .tab-btn.active::after { content: ''; position: absolute; bottom: -10px; left: 0; right: 0; height: 2px; background: var(--neon-cyan); }
+    .log-container { max-height: 300px; overflow-y: auto; background: var(--bg-primary); border-radius: 8px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; }
+    .log-entry { margin-bottom: 8px; padding: 4px 8px; border-left: 3px solid; background: rgba(255, 255, 255, 0.02); }
+    .log-info { border-color: var(--neon-cyan); } .log-success { border-color: var(--neon-green); } .log-warning { border-color: var(--neon-orange); } .log-error { border-color: var(--neon-red); }
+    .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(10, 10, 30, 0.95); display: flex; align-items: center; justify-content: center; z-index: 9999; opacity: 0; visibility: hidden; transition: var(--transition-smooth); }
+    .loading-overlay.active { opacity: 1; visibility: visible; }
+    .spinner { width: 60px; height: 60px; border: 4px solid rgba(0, 229, 255, 0.2); border-top: 4px solid var(--neon-cyan); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; }
+    .data-table th, .data-table td { padding: 10px 12px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); text-align: left; }
+    .data-table th { background-color: rgba(0, 229, 255, 0.1); font-weight: 600; color: var(--neon-cyan); }
+    .data-table tbody tr:hover { background-color: rgba(0, 229, 255, 0.05); }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+
+  <div class="container mx-auto p-6 max-w-7xl">
+    <div class="text-center mb-8">
+      <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent mb-2">Multi-Strategy Trading Terminal</h1>
+      <p class="text-text-secondary">AI Directional & High-Frequency Market Maker</p>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+      <div class="metric-card"><div class="metric-label">Total P&L</div><div class="metric-value" id="totalPnL">$0.00</div></div>
+      <div class="metric-card"><div class="metric-label">Win Rate</div><div class="metric-value" id="winRate">0%</div></div>
+      <div class="metric-card"><div class="metric-label">Sharpe Ratio</div><div class="metric-value" id="sharpeRatio">0.00</div></div>
+      <div class="metric-card"><div class="metric-label">Trades</div><div class="metric-value" id="totalTrades">0</div></div>
+      <div class="metric-card"><div class="metric-label">Avg. Win</div><div class="metric-value" id="avgWin">$0.00</div></div>
+      <div class="metric-card"><div class="metric-label">Avg. Loss</div><div class="metric-value" id="avgLoss">$0.00</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>⚙️ Configuration & Connection</span>
+        <div class="flex items-center gap-2">
+          <span class="status-indicator" id="wsStatus"></span>
+          <span id="wsStatusText">Disconnected</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div><label for="geminiApiKey">Google Gemini API Key</label><input type="password" id="geminiApiKey" /></div>
+        <div><label for="bybitApiKey">Bybit API Key</label><input type="password" id="bybitApiKey" /></div>
+        <div><label for="bybitApiSecret">Bybit API Secret</label><input type="password" id="bybitApiSecret" /></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div><label for="symbolSelect">Trading Symbol</label><select id="symbolSelect"><option>Loading...</option></select></div>
+        <div><label for="timeframe">Timeframe</label><select id="timeframe"><option value="1">1m</option><option value="5" selected>5m</option><option value="15">15m</option><option value="60">1H</option><option value="D">1D</option></select></div>
+        <div><label for="tradingMode">Mode</label><select id="tradingMode"><option value="testnet">Testnet</option><option value="mainnet">Mainnet</option></select></div>
+      </div>
+      <div class="flex gap-4 mt-4">
+        <button class="btn btn-success" id="saveConfigBtn">Save</button>
+        <button class="btn btn-secondary" id="loadConfigBtn">Load</button>
+        <button class="btn" id="connectBtn">Connect</button>
+        <button class="btn btn-danger" id="disconnectBtn">Disconnect</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>🚀 Strategy Control Center</span></div>
+      <div class="tab-nav" id="strategy-tabs">
+        <button class="tab-btn active" data-tab="strategy-directional">AI Directional</button>
+        <button class="tab-btn" data-tab="strategy-marketmaker">Market Maker</button>
+      </div>
+
+      <div id="strategy-directional" class="tab-content">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div><label for="riskPerTrade">Risk Per Trade (%)</label><input type="number" id="riskPerTrade" value="1" step="0.1" min="0.1" max="5" /></div>
+          <div><label for="analysisMode">Analysis Mode</label><select id="analysisMode"><option value="balanced" selected>Balanced</option><option value="conservative">Conservative</option><option value="aggressive">Aggressive</option></select></div>
+          <div class="flex items-end"><button class="btn w-full" id="analyzeBtn">🔍 Analyze Market</button></div>
+        </div>
+        <div class="log-container mt-4" id="aiOutput"><div class="text-text-secondary">No analysis performed.</div></div>
+      </div>
+
+      <div id="strategy-marketmaker" class="tab-content hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <h3 class="text-lg font-semibold mb-4 text-cyan-400">Controls</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div><label for="mmSpread">Base Spread (%)</label><input type="number" id="mmSpread" value="0.1" step="0.01" /></div>
+              <div><label for="mmOrderSize">Order Size</label><input type="number" id="mmOrderSize" value="0.001" step="0.001" /></div>
+              <div><label for="mmLayers">Order Layers</label><input type="number" id="mmLayers" value="3" step="1" /></div>
+              <div><label for="mmMaxInventory">Max Inventory</label><input type="number" id="mmMaxInventory" value="0.01" step="0.001" /></div>
+            </div>
+            <div class="mt-6 flex flex-col gap-4">
+              <button class="btn btn-success" id="startMMBtn">▶️ Start Market Maker</button>
+              <button class="btn btn-danger" id="stopMMBtn">⏹️ Stop Market Maker</button>
+              <button class="btn btn-secondary" id="flattenMMBtn">🚨 Cancel All & Flatten</button>
+            </div>
+          </div>
+          <div>
+            <h3 class="text-lg font-semibold mb-4 text-cyan-400">Live Status</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="metric-card"><div class="metric-label">MM Status</div><div class="metric-value" id="mmStatus">STOPPED</div></div>
+              <div class="metric-card"><div class="metric-label">Inventory</div><div class="metric-value" id="mmInventory">0.000</div></div>
+              <div class="metric-card"><div class="metric-label">Realized P&L</div><div class="metric-value" id="mmPnl">$0.00</div></div>
+              <div class="metric-card"><div class="metric-label">Quote Skew</div><div class="metric-value" id="mmSkew">0.00</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>📈 Live Charts & Data</span></div>
+      <div class="tab-nav" id="chart-tabs">
+        <button class="tab-btn active" data-tab="chart">Price Chart</button>
+        <button class="tab-btn" data-tab="orderbook">Order Book</button>
+        <button class="tab-btn" data-tab="indicators">Indicators</button>
+      </div>
+      <div id="chart" class="tab-content"><div class="chart-container"><canvas id="priceChart"></canvas></div></div>
+      <div id="orderbook" class="tab-content hidden"><div class="chart-container"><canvas id="orderBookChart"></canvas></div></div>
+      <div id="indicators" class="tab-content hidden"><div class="chart-container"><canvas id="indicatorChart"></canvas></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>💼 Positions & Orders</span><button class="btn btn-secondary" id="refreshPositionsBtn">Refresh</button></div>
+      <div class="tab-nav" id="account-tabs">
+        <button class="tab-btn active" data-tab="positions">Active Positions</button>
+        <button class="tab-btn" data-tab="openOrders">Open Orders</button>
+        <button class="tab-btn" data-tab="history">Trade History</button>
+      </div>
+      <div id="positions" class="tab-content"><div class="log-container"><table class="data-table"><thead><tr><th>Symbol</th><th>Side</th><th>Size</th><th>Entry Price</th><th>Liq. Price</th><th>P&L</th><th>Actions</th></tr></thead><tbody id="positionsDisplay"></tbody></table></div></div>
+      <div id="openOrders" class="tab-content hidden"><div class="log-container"><table class="data-table"><thead><tr><th>ID</th><th>Side</th><th>Type</th><th>Price</th><th>Qty</th><th>Status</th><th>Actions</th></tr></thead><tbody id="ordersDisplay"></tbody></table></div></div>
+      <div id="history" class="tab-content hidden"><div class="log-container"><table class="data-table"><thead><tr><th>Time</th><th>Side</th><th>Qty</th><th>Price</th><th>Fee</th><th>P&L</th></tr></thead><tbody id="historyDisplay"></tbody></table></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>📜 Activity Log</span><button class="btn btn-secondary" id="clearLogsBtn">Clear</button></div>
+      <div class="log-container" id="activityLog" style="height: 200px;"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { GoogleGenerativeAI } from "@google/generative-ai";
+
+    const CONFIG = {
+      BYBIT_WS_URL: { testnet: 'wss://stream-testnet.bybit.com/v5/private', mainnet: 'wss://stream.bybit.com/v5/private' },
+      BYBIT_API_URL: { testnet: 'https://api-testnet.bybit.com', mainnet: 'https://api.bybit.com' },
+      GEMINI_MODEL: 'gemini-1.5-flash',
+      WS_PING_INTERVAL: 20000,
+      MAX_KLINES_DISPLAY: 200,
+      ENCRYPTION_KEY: 'a-very-secret-key-that-should-be-more-complex',
+      MM_LOOP_INTERVAL: 2500,
+    };
+
+    class Utils {
+      static encrypt(text, key) { return CryptoJS.AES.encrypt(text, key).toString(); }
+      static decrypt(encryptedText, key) { try { return CryptoJS.AES.decrypt(encryptedText, key).toString(CryptoJS.enc.Utf8); } catch (e) { return ''; } }
+      static debounce(func, wait) { let timeout; return function(...args) { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), wait); }; }
+      static formatCurrency(amount) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount); }
+    }
+
+    class EventEmitter {
+      constructor() { this.events = {}; }
+      on(event, listener) { (this.events[event] = this.events[event] || []).push(listener); }
+      emit(event, ...args) { if (this.events[event]) this.events[event].forEach(l => l(...args)); }
+    }
+
+    class BybitClient extends EventEmitter {
+      constructor(config, logger) {
+        super();
+        this.config = config;
+        this.logger = logger;
+        this.apiKey = '';
+        this.apiSecret = '';
+        this.axiosInstance = axios.create();
+      }
+      setCredentials(apiKey, apiSecret) { this.apiKey = apiKey; this.apiSecret = apiSecret; }
+      async request(method, endpoint, params = {}, isPrivate = true) {
+        const mode = document.getElementById('tradingMode').value;
+        const baseURL = this.config.BYBIT_API_URL[mode];
+        const headers = { 'Content-Type': 'application/json' };
+        if (isPrivate) {
+          if (!this.apiKey || !this.apiSecret) throw new Error("API credentials not set.");
+          const timestamp = Date.now().toString();
+          const recvWindow = '10000';
+          headers['X-BAPI-API-KEY'] = this.apiKey;
+          headers['X-BAPI-TIMESTAMP'] = timestamp;
+          headers['X-BAPI-RECV-WINDOW'] = recvWindow;
+          const query = method === 'GET' ? new URLSearchParams(params).toString() : '';
+          const body = method === 'POST' ? JSON.stringify(params) : '';
+          headers['X-BAPI-SIGN'] = CryptoJS.HmacSHA256(timestamp + this.apiKey + recvWindow + (query || body), this.apiSecret).toString();
+        }
+        try {
+          const response = await this.axiosInstance({ method, url: `${baseURL}${endpoint}`, headers, params: method === 'GET' ? params : {}, data: method === 'POST' ? params : {} });
+          if (response.data.retCode !== 0) throw new Error(`Bybit API Error: ${response.data.retMsg}`);
+          return response.data.result;
+        } catch (error) {
+          const msg = error.response?.data?.retMsg || error.message;
+          this.emit('error', msg);
+          this.logger(`API Request Failed: ${msg}`, 'error');
+          throw error;
+        }
+      }
+      async getValidSymbols() { return (await this.request('GET', '/v5/market/instruments-info', { category: 'linear' }, false)).list.filter(s => s.status === 'Trading' && s.quoteCoin === 'USDT').map(s => s.symbol).sort(); }
+      async getKlines(symbol, interval) { return this.request('GET', '/v5/market/kline', { category: 'linear', symbol, interval, limit: CONFIG.MAX_KLINES_DISPLAY }, false); }
+      async getOrderbook(symbol) { return this.request('GET', '/v5/market/orderbook', { category: 'linear', symbol, limit: 50 }, false); }
+      async placeOrder(orderParams) { return this.request('POST', '/v5/order/create', { category: 'linear', ...orderParams }, true); }
+      async batchPlaceOrders(orders) { return this.request('POST', '/v5/order/create-batch', { category: 'linear', request: orders }, true); }
+      async batchCancelOrders(orders) { return this.request('POST', '/v5/order/cancel-batch', { category: 'linear', request: orders }, true); }
+      async getPositions(symbol) { return (await this.request('GET', '/v5/position/list', { category: 'linear', symbol }, true)).list; }
+      async getOpenOrders(symbol) { return (await this.request('GET', '/v5/order/realtime', { category: 'linear', symbol }, true)).list; }
+      async getTradeHistory(symbol) { return (await this.request('GET', '/v5/execution/list', { category: 'linear', symbol, limit: 50 }, true)).list; }
+      async getWalletBalance() { return (await this.request('GET', '/v5/account/wallet-balance', { accountType: 'UNIFIED', coin: 'USDT' }, true)).list[0]?.coin[0] || null; }
+      async cancelOrder(symbol, orderId) { return this.request('POST', '/v5/order/cancel', { category: 'linear', symbol, orderId }, true); }
+      async cancelAllOrders(symbol) { return this.request('POST', '/v5/order/cancel-all', { category: 'linear', symbol }, true); }
+      async closePosition(position) { return this.placeOrder({ symbol: position.symbol, side: position.side === 'Buy' ? 'Sell' : 'Buy', orderType: 'Market', qty: position.size, reduceOnly: true }); }
+    }
+
+    class BybitWebSocket extends EventEmitter {
+      constructor(config, logger, getAuthPayload) {
+        super();
+        this.config = config;
+        this.logger = logger;
+        this.getAuthPayload = getAuthPayload;
+        this.ws = null;
+        this.pingInterval = null;
+        this.publicTopics = new Set();
+        this.privateTopics = new Set();
+      }
+      connect(mode) {
+        if (this.ws && this.ws.readyState < 2) return;
+        this.logger('Connecting to WebSocket...', 'info');
+        this.emit('status', 'connecting');
+        const publicUrl = CONFIG.BYBIT_WS_URL[mode].replace('/private', '/public/linear');
+        this.ws = new WebSocket(publicUrl);
+        this.ws.onopen = () => {
+          this.logger('WebSocket Connected.', 'success');
+          this.emit('status', 'connected');
+          this.startPing();
+          this.authenticate();
+          this.resubscribe();
+        };
+        this.ws.onmessage = (event) => this.emit('message', JSON.parse(event.data));
+        this.ws.onclose = () => { this.stopPing(); this.logger('WebSocket Disconnected.', 'warning'); this.emit('status', 'disconnected'); };
+        this.ws.onerror = (err) => this.logger(`WebSocket Error: ${err.message}`, 'error');
+      }
+      authenticate() {
+        const { expires, signature } = this.getAuthPayload();
+        this.send({ op: 'auth', args: [this.getAuthPayload().apiKey, expires, signature] });
+      }
+      disconnect() { if (this.ws) this.ws.close(); }
+      send(data) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(data)); }
+      subscribe(topics, isPrivate = false) {
+        const topicSet = isPrivate ? this.privateTopics : this.publicTopics;
+        topics.forEach(t => topicSet.add(t));
+        this.send({ op: 'subscribe', args: topics });
+      }
+      unsubscribe(topics, isPrivate = false) {
+        const topicSet = isPrivate ? this.privateTopics : this.publicTopics;
+        topics.forEach(t => topicSet.delete(t));
+        this.send({ op: 'unsubscribe', args: topics });
+      }
+      resubscribe() {
+        if (this.publicTopics.size > 0) this.subscribe([...this.publicTopics]);
+        if (this.privateTopics.size > 0) this.subscribe([...this.privateTopics], true);
+      }
+      startPing() { this.pingInterval = setInterval(() => this.send({ op: 'ping' }), this.config.WS_PING_INTERVAL); }
+      stopPing() { clearInterval(this.pingInterval); }
+    }
+
+    class ChartManager {
+      constructor(dom) {
+        this.dom = dom;
+        this.charts = {};
+        Chart.register(ChartjsAdapterDateFns, ChartAnnotation, window.Chart.FinancialController, window.Chart.FinancialElement);
+      }
+      init() {
+        this.charts.orderBook = new Chart(this.dom.orderBookChart, this._getChartConfig('bar'));
+        this.charts.price = new Chart(this.dom.priceChart, this._getChartConfig('candlestick'));
+        this.charts.indicator = new Chart(this.dom.indicatorChart, this._getChartConfig('indicator'));
+      }
+      updateOrderBook(bids, asks) {
+        const data = {
+          labels: [...bids.map(b => b.price).reverse(), ...asks.map(a => a.price)],
+          datasets: [
+            { data: [...bids.map(b => b.size).reverse(), ...new Array(asks.length).fill(0)] },
+            { data: [...new Array(bids.length).fill(0), ...asks.map(a => a.size)] }
+          ]
+        };
+        this.charts.orderBook.data.labels = data.labels;
+        this.charts.orderBook.data.datasets[0].data = data.datasets[0].data;
+        this.charts.orderBook.data.datasets[1].data = data.datasets[1].data;
+        this.charts.orderBook.update('none');
+      }
+      updatePriceChart(klines, position, openOrders) {
+        this.charts.price.data.datasets[0].data = klines.map(k => ({ x: k.time, o: k.open, h: k.high, l: k.low, c: k.close }));
+        const annotations = {};
+        if (position && position.size > 0) {
+          annotations.entryLine = { type: 'line', yMin: position.avgPrice, yMax: position.avgPrice, borderColor: 'var(--neon-orange)', borderWidth: 2, label: { content: `Entry: ${position.avgPrice}`, display: true, position: 'start' } };
+        }
+        openOrders.forEach((order, i) => {
+          annotations[`order${i}`] = { type: 'line', yMin: order.price, yMax: order.price, borderColor: order.side === 'Buy' ? 'var(--neon-green)' : 'var(--neon-red)', borderWidth: 1, borderDash: [5, 5], label: { content: `${order.side} ${order.qty}`, display: true, position: 'end' } };
+        });
+        this.charts.price.options.plugins.annotation.annotations = annotations;
+        this.charts.price.update('none');
+      }
+      updateIndicatorChart(klines, indicators) {
+        // Implementation for historical indicator charting
+      }
+      _getChartConfig(type) {
+        const commonOptions = { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } }, y: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } } } };
+        if (type === 'candlestick') return { type: 'candlestick', data: { datasets: [{ data: [] }] }, options: { ...commonOptions, plugins: { annotation: { annotations: {} } }, scales: { ...commonOptions.scales, x: { type: 'time', time: { unit: 'minute' } }, y: { position: 'right' } } } };
+        if (type === 'bar') return { type: 'bar', data: { datasets: [{ label: 'Bids', backgroundColor: 'rgba(0, 255, 65, 0.5)' }, { label: 'Asks', backgroundColor: 'rgba(255, 23, 68, 0.5)' }] }, options: { ...commonOptions, scales: { ...commonOptions.scales, x: { stacked: true } } } };
+        if (type === 'indicator') return { type: 'line', data: { datasets: [{ label: 'RSI', borderColor: 'var(--neon-cyan)', yAxisID: 'y' }, { label: 'MACD', borderColor: 'var(--neon-green)', yAxisID: 'y1' }, { label: 'Signal', borderColor: 'var(--neon-orange)', yAxisID: 'y1' }] }, options: { ...commonOptions, scales: { ...commonOptions.scales, x: { type: 'time' }, y: { position: 'left', title: { display: true, text: 'RSI' } }, y1: { position: 'right', title: { display: true, text: 'MACD' } } } } };
+      }
+    }
+
+    class UIManager {
+      constructor(dom) { this.dom = dom; this.toastContainer = this._createToastContainer(); }
+      log(message, type = 'info') { const e = document.createElement('div'); e.className = `log-entry log-${type}`; e.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`; this.dom.activityLog.prepend(e); }
+      showToast(message, type = 'info', duration = 3000) { const t = document.createElement('div'); t.className = `p-3 rounded-lg shadow-lg text-white text-sm bg-${type === 'success' ? 'green' : type === 'error' ? 'red' : 'blue'}-500`; t.textContent = message; this.toastContainer.appendChild(t); setTimeout(() => t.remove(), duration); }
+      updateWsStatus(status) { this.dom.wsStatus.className = `status-indicator status-${status}`; this.dom.wsStatusText.textContent = status; }
+      renderTable(tbody, data, renderRow) { tbody.innerHTML = data.length > 0 ? data.map(renderRow).join('') : `<tr><td colspan="100%" class="text-center text-text-secondary p-4">No data</td></tr>`; }
+      _createToastContainer() { const c = document.createElement('div'); c.className = 'fixed bottom-4 right-4 z-[10000] flex flex-col gap-2'; document.body.appendChild(c); return c; }
+    }
+
+    class AIManager {
+      constructor(config, logger) { this.config = config; this.logger = logger; this.genAI = null; }
+      init(apiKey) { if (apiKey) this.genAI = new GoogleGenerativeAI(apiKey); }
+      async analyze(promptData) {
+        if (!this.genAI) throw new Error('Gemini AI not initialized.');
+        const model = this.genAI.getGenerativeModel({ model: this.config.GEMINI_MODEL });
+        const result = await model.generateContent(this._buildPrompt(promptData));
+        return this._parseOutput(result.response.text());
+      }
+      _buildPrompt({ klines, orderBook, position, tradingMode }) {
+        const closes = klines.map(k => k.close);
+        return `Analyze the following market data for ${klines[0].symbol} and provide a trading signal as a JSON object: { "action": "BUY"|"SELL"|"HOLD", "quantity": number, "confidence": "LOW"|"MEDIUM"|"HIGH", "reason": string, "stopLossPrice": number }.
+          Data: { "latestPrice": ${closes[closes.length - 1]}, "tradingMode": "${tradingMode}", "position": ${JSON.stringify(position)}, "orderBook": ${JSON.stringify(orderBook.bids.slice(0,5).concat(orderBook.asks.slice(0,5)))} }`;
+      }
+      _parseOutput(text) { try { const jsonMatch = text.match(/\{[\s\S]*\}/); return JSON.parse(jsonMatch[0]); } catch (e) { throw new Error('AI response could not be parsed.'); } }
+    }
+
+    class StrategyManager {
+        constructor(app) { this.app = app; this.activeStrategy = null; }
+        start(strategyName, options) {
+            this.stop();
+            this.app.ui.log(`Starting ${strategyName} strategy...`, 'info');
+            if (strategyName === 'MarketMaker') this.activeStrategy = new MarketMakerStrategy(this.app, options);
+            if (this.activeStrategy) this.activeStrategy.start();
+        }
+        stop() { if (this.activeStrategy) { this.activeStrategy.stop(); this.activeStrategy = null; } }
+    }
+
+    class MarketMakerStrategy {
+        constructor(app, options) {
+            this.app = app;
+            this.options = options;
+            this.isRunning = false;
+            this.loopInterval = null;
+        }
+        start() { this.isRunning = true; this.app.dom.mmStatus.textContent = 'RUNNING'; this.loopInterval = setInterval(() => this.runLoop(), CONFIG.MM_LOOP_INTERVAL); }
+        stop() { this.isRunning = false; clearInterval(this.loopInterval); this.app.dom.mmStatus.textContent = 'STOPPED'; this.app.bybitClient.cancelAllOrders(this.app.state.currentSymbol); }
+        async flatten() { await this.stop(); const pos = this.app.state.positions[0]; if (pos && parseFloat(pos.size) > 0) await this.app.bybitClient.closePosition(pos); }
+        async runLoop() {
+            if (!this.isRunning) return;
+            try {
+                const { orderBook, positions } = this.app.state;
+                if (!orderBook.bids.length || !orderBook.asks.length) return;
+                const inventory = positions[0] ? parseFloat(positions[0].size) : 0;
+                this.app.dom.mmInventory.textContent = inventory.toFixed(3);
+                
+                await this.app.bybitClient.cancelAllOrders(this.app.state.currentSymbol);
+
+                const midPrice = (orderBook.bids[0].price + orderBook.asks[0].price) / 2;
+                const spread = midPrice * (this.options.spread / 100);
+                const skew = (inventory / this.options.maxInventory) * (spread / 2);
+                this.app.dom.mmSkew.textContent = skew.toFixed(4);
+                const centerPrice = midPrice - skew;
+
+                const ordersToPlace = [];
+                for (let i = 0; i < this.options.layers; i++) {
+                    const offset = (spread / 2) * (1 + i * 0.5);
+                    ordersToPlace.push({ symbol: this.app.state.currentSymbol, side: 'Buy', orderType: 'Limit', qty: this.options.orderSize.toString(), price: (centerPrice - offset).toFixed(1) });
+                    ordersToPlace.push({ symbol: this.app.state.currentSymbol, side: 'Sell', orderType: 'Limit', qty: this.options.orderSize.toString(), price: (centerPrice + offset).toFixed(1) });
+                }
+                if (ordersToPlace.length > 0) await this.app.bybitClient.batchPlaceOrders(ordersToPlace);
+            } catch (error) { this.app.ui.log(`MM Loop Error: ${error.message}`, 'error'); }
+        }
+    }
+
+    class TradingApp {
+      constructor() {
+        this.dom = this._getDomElements();
+        this.ui = new UIManager(this.dom);
+        this.bybitClient = new BybitClient(CONFIG, this.ui.log.bind(this.ui));
+        this.bybitWs = new BybitWebSocket(CONFIG, this.ui.log.bind(this.ui), () => this._getWsAuthPayload());
+        this.chartManager = new ChartManager(this.dom);
+        this.aiManager = new AIManager(CONFIG, this.ui.log.bind(this.ui));
+        this.strategyManager = new StrategyManager(this);
+        this.state = this._getInitialState();
+        this._bindEventListeners();
+        this._initialize();
+      }
+
+      _getDomElements() {
+        const ids = ['loadingOverlay', 'totalPnL', 'winRate', 'sharpeRatio', 'totalTrades', 'avgWin', 'avgLoss', 'geminiApiKey', 'bybitApiKey', 'bybitApiSecret', 'saveConfigBtn', 'loadConfigBtn', 'clearConfigBtn', 'wsStatus', 'wsStatusText', 'symbolSelect', 'timeframe', 'tradingMode', 'connectBtn', 'disconnectBtn', 'riskPerTrade', 'analysisMode', 'analyzeBtn', 'aiOutput', 'executeBuyBtn', 'executeSellBtn', 'executeHoldBtn', 'priceChart', 'orderBookChart', 'indicatorChart', 'refreshPositionsBtn', 'positionsDisplay', 'ordersDisplay', 'historyDisplay', 'activityLog', 'clearLogsBtn', 'mmSpread', 'mmOrderSize', 'mmLayers', 'mmMaxInventory', 'startMMBtn', 'stopMMBtn', 'flattenMMBtn', 'mmStatus', 'mmInventory', 'mmPnl', 'mmSkew'];
+        return ids.reduce((acc, id) => ({ ...acc, [id]: document.getElementById(id) }), {});
+      }
+
+      _getInitialState() {
+        return { currentSymbol: 'BTCUSDT', currentTimeframe: '5', klines: [], orderBook: { bids: [], asks: [] }, accountBalance: null, positions: [], openOrders: [], tradeHistory: [], lastSignal: null };
+      }
+
+      _bindEventListeners() {
+        this.dom.saveConfigBtn.addEventListener('click', () => this.saveConfiguration());
+        this.dom.loadConfigBtn.addEventListener('click', () => this.loadConfiguration());
+        this.dom.connectBtn.addEventListener('click', () => this.connect());
+        this.dom.disconnectBtn.addEventListener('click', () => this.disconnect());
+        this.dom.symbolSelect.addEventListener('change', (e) => this.handleSymbolChange(e.target.value));
+        this.dom.timeframe.addEventListener('change', (e) => this.handleTimeframeChange(e.target.value));
+        this.dom.analyzeBtn.addEventListener('click', () => this.runAnalysis());
+        this.dom.refreshPositionsBtn.addEventListener('click', () => this.fetchAccountInfo());
+        this.bybitWs.on('status', (status) => this.ui.updateWsStatus(status));
+        this.bybitWs.on('message', (data) => this._handleWsMessage(data));
+        this.dom.positionsDisplay.addEventListener('click', (e) => this.handleTableAction(e, 'positions'));
+        this.dom.ordersDisplay.addEventListener('click', (e) => this.handleTableAction(e, 'orders'));
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', (e) => this.handleTabSwitch(e)));
+        this.dom.startMMBtn.addEventListener('click', () => this.startMarketMaker());
+        this.dom.stopMMBtn.addEventListener('click', () => this.strategyManager.stop());
+        this.dom.flattenMMBtn.addEventListener('click', () => this.strategyManager.activeStrategy?.flatten());
+      }
+
+      async _initialize() {
+        this.ui.log('System Initializing...', 'info');
+        this.chartManager.init();
+        this.loadConfiguration();
+        await this.populateSymbols();
+        this.ui.log('Initialization Complete.', 'success');
+      }
+
+      saveConfiguration() {
+        const config = { geminiApiKey: this.dom.geminiApiKey.value, bybitApiKey: this.dom.bybitApiKey.value, bybitApiSecret: this.dom.bybitApiSecret.value, currentSymbol: this.state.currentSymbol, currentTimeframe: this.state.currentTimeframe };
+        localStorage.setItem('tradingBotConfig', Utils.encrypt(JSON.stringify(config), CONFIG.ENCRYPTION_KEY));
+        this.ui.showToast('Configuration saved!', 'success');
+      }
+
+      loadConfiguration() {
+        const encryptedConfig = localStorage.getItem('tradingBotConfig');
+        if (encryptedConfig) {
+          const config = JSON.parse(Utils.decrypt(encryptedConfig, CONFIG.ENCRYPTION_KEY));
+          if (config) {
+            this.dom.geminiApiKey.value = config.geminiApiKey || '';
+            this.dom.bybitApiKey.value = config.bybitApiKey || '';
+            this.dom.bybitApiSecret.value = config.bybitApiSecret || '';
+            this.state.currentSymbol = config.currentSymbol || 'BTCUSDT';
+            this.state.currentTimeframe = config.currentTimeframe || '5';
+            this.bybitClient.setCredentials(config.bybitApiKey, config.bybitApiSecret);
+            this.aiManager.init(config.geminiApiKey);
+          }
+        }
+      }
+
+      async connect() {
+        this.dom.loadingOverlay.classList.add('active');
+        try {
+          await this.fetchInitialData();
+          await this.fetchAccountInfo();
+          this.bybitWs.connect(this.dom.tradingMode.value);
+        } finally {
+          this.dom.loadingOverlay.classList.remove('active');
+        }
+      }
+
+      disconnect() { this.strategyManager.stop(); this.bybitWs.disconnect(); }
+
+      async populateSymbols() {
+        try {
+          const symbols = await this.bybitClient.getValidSymbols();
+          this.dom.symbolSelect.innerHTML = symbols.map(s => `<option value="${s}">${s}</option>`).join('');
+          this.dom.symbolSelect.value = this.state.currentSymbol;
+        } catch (e) { this.ui.showToast('Failed to load symbols.', 'error'); }
+      }
+
+      async handleSymbolChange(newSymbol) {
+        this.strategyManager.stop();
+        this.bybitWs.unsubscribe(this._getPublicTopics(this.state.currentSymbol));
+        this.state.currentSymbol = newSymbol;
+        await this.fetchInitialData();
+        await this.fetchAccountInfo();
+        this.bybitWs.subscribe(this._getPublicTopics(newSymbol));
+      }
+
+      async handleTimeframeChange(newTimeframe) {
+        this.strategyManager.stop();
+        this.bybitWs.unsubscribe([`kline.${this.state.currentTimeframe}.${this.state.currentSymbol}`]);
+        this.state.currentTimeframe = newTimeframe;
+        await this.fetchInitialData();
+        this.bybitWs.subscribe([`kline.${newTimeframe}.${this.state.currentSymbol}`]);
+      }
+
+      async fetchInitialData() {
+        const [klines, orderbook] = await Promise.all([
+            this.bybitClient.getKlines(this.state.currentSymbol, this.state.currentTimeframe),
+            this.bybitClient.getOrderbook(this.state.currentSymbol)
+        ]);
+        this.state.klines = klines.list.map(k => ({ time: parseInt(k[0]), open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]) })).reverse();
+        this.state.orderBook = { bids: orderbook.b.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) })), asks: orderbook.a.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) })) };
+        this._updateCharts();
+      }
+
+      async fetchAccountInfo() {
+        const [balance, positions, openOrders, tradeHistory] = await Promise.all([
+          this.bybitClient.getWalletBalance(),
+          this.bybitClient.getPositions(this.state.currentSymbol),
+          this.bybitClient.getOpenOrders(this.state.currentSymbol),
+          this.bybitClient.getTradeHistory(this.state.currentSymbol)
+        ]);
+        this.state.accountBalance = balance;
+        this.state.positions = positions;
+        this.state.openOrders = openOrders;
+        this.state.tradeHistory = tradeHistory;
+        this._renderAccountData();
+        this._updatePerformanceMetrics();
+        this.chartManager.updatePriceChart(this.state.klines, this.state.positions[0], this.state.openOrders);
+      }
+
+      _getPublicTopics(symbol) { return [`kline.${this.state.currentTimeframe}.${symbol}`, `orderbook.50.${symbol}`]; }
+      _getPrivateTopics() { return ['position', 'order', 'execution']; }
+      _getWsAuthPayload() {
+        const expires = Date.now() + 10000;
+        const signature = CryptoJS.HmacSHA256(`GET/realtime${expires}`, this.bybitClient.apiSecret).toString();
+        return { apiKey: this.bybitClient.apiKey, expires, signature };
+      }
+
+      _handleWsMessage(data) {
+        if (data.topic?.startsWith('kline')) this._updateKlines(data.data[0]);
+        if (data.topic?.startsWith('orderbook')) this._updateOrderBook(data.data);
+        if (['position', 'order', 'execution'].includes(data.topic)) Utils.debounce(() => this.fetchAccountInfo(), 1000)();
+      }
+
+      _updateOrderBook(data) {
+        this.state.orderBook = { bids: data.b.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) })), asks: data.a.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) })) };
+        this.chartManager.updateOrderBook(this.state.orderBook.bids, this.state.orderBook.asks);
+      }
+
+      _updateKlines(kline) {
+        const newKline = { time: parseInt(kline.start), open: parseFloat(kline.open), high: parseFloat(kline.high), low: parseFloat(kline.low), close: parseFloat(kline.close), volume: parseFloat(kline.volume) };
+        if (this.state.klines.length > 0 && newKline.time === this.state.klines[this.state.klines.length - 1].time) this.state.klines[this.state.klines.length - 1] = newKline;
+        else { this.state.klines.push(newKline); if (this.state.klines.length > CONFIG.MAX_KLINES_DISPLAY) this.state.klines.shift(); }
+        this._updateCharts();
+      }
+
+      _updateCharts() {
+        this.chartManager.updatePriceChart(this.state.klines, this.state.positions[0], this.state.openOrders);
+      }
+
+      _renderAccountData() {
+        this.ui.renderTable(this.dom.positionsDisplay, this.state.positions, p => `<tr><td>${p.symbol}</td><td>${p.side}</td><td>${p.size}</td><td>${Utils.formatCurrency(p.avgPrice)}</td><td>${Utils.formatCurrency(p.liqPrice)}</td><td>${Utils.formatCurrency(p.unrealizedPnl)}</td><td><button class="btn btn-danger btn-sm" data-action="close" data-symbol="${p.symbol}">Close</button></td></tr>`);
+        this.ui.renderTable(this.dom.ordersDisplay, this.state.openOrders, o => `<tr><td>${o.orderId.slice(-6)}</td><td>${o.side}</td><td>${o.orderType}</td><td>${Utils.formatCurrency(o.price)}</td><td>${o.qty}</td><td>${o.orderStatus}</td><td><button class="btn btn-danger btn-sm" data-action="cancel" data-id="${o.orderId}" data-symbol="${o.symbol}">Cancel</button></td></tr>`);
+        this.ui.renderTable(this.dom.historyDisplay, this.state.tradeHistory, t => `<tr><td>${new Date(parseInt(t.execTime)).toLocaleTimeString()}</td><td>${t.side}</td><td>${t.execQty}</td><td>${Utils.formatCurrency(t.execPrice)}</td><td>${t.execFee}</td><td>${Utils.formatCurrency(t.closedPnl)}</td></tr>`);
+      }
+
+      _updatePerformanceMetrics() {
+        const closedTrades = this.state.tradeHistory.filter(t => parseFloat(t.closedPnl) !== 0);
+        if (closedTrades.length === 0) return;
+        const totalPnl = ss.sum(closedTrades.map(t => parseFloat(t.closedPnl)));
+        const winningTrades = closedTrades.filter(t => parseFloat(t.closedPnl) > 0);
+        const losingTrades = closedTrades.filter(t => parseFloat(t.closedPnl) < 0);
+        this.dom.totalPnL.textContent = Utils.formatCurrency(totalPnl);
+        this.dom.winRate.textContent = `${(winningTrades.length / closedTrades.length * 100).toFixed(1)}%`;
+        this.dom.totalTrades.textContent = closedTrades.length;
+        this.dom.avgWin.textContent = Utils.formatCurrency(ss.mean(winningTrades.map(t => parseFloat(t.closedPnl))) || 0);
+        this.dom.avgLoss.textContent = Utils.formatCurrency(ss.mean(losingTrades.map(t => parseFloat(t.closedPnl))) || 0);
+      }
+
+      async handleTableAction(event, type) {
+        const target = event.target.closest('button');
+        if (!target) return;
+        const { action, id, symbol } = target.dataset;
+        this.dom.loadingOverlay.classList.add('active');
+        try {
+          if (type === 'orders' && action === 'cancel') await this.bybitClient.cancelOrder(symbol, id);
+          else if (type === 'positions' && action === 'close') {
+            const position = this.state.positions.find(p => p.symbol === symbol);
+            if (position) await this.bybitClient.closePosition(position);
+          }
+          this.ui.showToast(`Action '${action}' successful.`, 'success');
+          await this.fetchAccountInfo();
+        } catch (e) { this.ui.showToast(`Action failed: ${e.message}`, 'error');
+        } finally { this.dom.loadingOverlay.classList.remove('active'); }
+      }
+
+      handleTabSwitch(event) {
+        const tabGroup = event.target.closest('.tab-nav').id;
+        const tabName = event.target.dataset.tab;
+        document.querySelectorAll(`#${tabGroup} ~ .tab-content`).forEach(c => c.classList.add('hidden'));
+        document.getElementById(tabName).classList.remove('hidden');
+        document.querySelectorAll(`#${tabGroup} .tab-btn`).forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+        if (tabGroup === 'strategy-tabs') this.strategyManager.stop();
+      }
+
+      async runAnalysis() {
+        this.dom.aiOutput.textContent = 'Analyzing...';
+        try {
+          const signal = await this.aiManager.analyze({ klines: this.state.klines, orderBook: this.state.orderBook, position: this.state.positions[0], tradingMode: this.dom.analysisMode.value });
+          this.state.lastSignal = signal;
+          this.dom.aiOutput.textContent = JSON.stringify(signal, null, 2);
+          this.ui.showToast(`AI Signal: ${signal.action} (${signal.confidence})`, 'info');
+        } catch (e) { this.dom.aiOutput.textContent = `Error: ${e.message}`; }
+      }
+
+      startMarketMaker() {
+        const options = {
+            spread: parseFloat(this.dom.mmSpread.value),
+            orderSize: parseFloat(this.dom.mmOrderSize.value),
+            layers: parseInt(this.dom.mmLayers.value),
+            maxInventory: parseFloat(this.dom.mmMaxInventory.value),
+        };
+        if (Object.values(options).some(isNaN)) return this.ui.showToast('Invalid Market Maker settings.', 'error');
+        this.strategyManager.start('MarketMaker', options);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { window.app = new TradingApp(); });
+  </script>
+</body>
+</html>

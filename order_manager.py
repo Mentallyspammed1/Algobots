@@ -1,10 +1,10 @@
 import asyncio
 from decimal import Decimal
-from typing import Any
+from typing import Any, Dict, Optional
 
 import config
-from bot_logger import log_exception
-from bybit_api import BybitAPIError, BybitContractAPI
+from bybit_api import BybitContractAPI, BybitAPIError
+from bot_logger import log_trade, log_exception
 from utils import calculate_order_quantity
 
 # --- Pyrmethus's Color Codex ---
@@ -27,7 +27,8 @@ PYRMETHUS_CYAN = COLOR_CYAN
 
 
 class OrderManager:
-    """Manages all aspects of order execution, including placing, amending, and exiting trades.
+    """
+    Manages all aspects of order execution, including placing, amending, and exiting trades.
     This class abstracts the order logic away from the main bot loop.
     """
     def __init__(self, bybit_client: BybitContractAPI, bot_instance):
@@ -35,7 +36,7 @@ class OrderManager:
         self.bot = bot_instance
         self.logger = bot_instance.bot_logger
 
-    async def _get_instrument_info(self, symbol: str) -> dict[str, Decimal] | None:
+    async def _get_instrument_info(self, symbol: str) -> Optional[Dict[str, Decimal]]:
         """Fetches and returns instrument details like min quantity and step size."""
         try:
             instrument_info_resp = await self.bybit_client.get_instruments_info(
@@ -88,7 +89,7 @@ class OrderManager:
             log_exception(self.logger, f"Failed to fetch current price for {symbol}: {e}", e)
             return Decimal('0')
 
-    async def execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: dict[str, Any]) -> bool:
+    async def execute_entry(self, signal_type: str, signal_price: Decimal, signal_timestamp: Any, signal_info: Dict[str, Any]) -> bool:
         """Handles the complete logic for executing an entry order."""
         self.logger.info(f"{PYRMETHUS_PURPLE}💡 OrderManager received {signal_type.upper()} signal at {signal_price:.4f}{COLOR_RESET}")
 
@@ -150,8 +151,9 @@ class OrderManager:
                 if order_id:
                     asyncio.create_task(self.chase_limit_order(order_id, config.SYMBOL, side))
                 return True
-            self.logger.error(f"{COLOR_RED}Order placement failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
-            return False
+            else:
+                self.logger.error(f"{COLOR_RED}Order placement failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
+                return False
         except BybitAPIError as e:
             await self.bot._handle_api_error(e, "order placement")
             return False
@@ -159,7 +161,7 @@ class OrderManager:
             log_exception(self.logger, "Exception during order placement", e)
             return False
 
-    async def execute_exit(self, inventory: Decimal, exit_type: str, exit_price: Decimal, exit_timestamp: Any, exit_info: dict[str, Any]) -> bool:
+    async def execute_exit(self, inventory: Decimal, exit_type: str, exit_price: Decimal, exit_timestamp: Any, exit_info: Dict[str, Any]) -> bool:
         """Handles the complete logic for executing a market exit order."""
         self.logger.info(f"{PYRMETHUS_PURPLE}💡 OrderManager received {exit_type.upper()} exit signal at {exit_price:.4f}{COLOR_RESET}")
 
@@ -187,8 +189,9 @@ class OrderManager:
                 self.logger.info(f"{PYRMETHUS_GREEN}Successfully placed exit order.{COLOR_RESET}")
                 # The main bot loop will handle the position state reset via WebSocket updates.
                 return True
-            self.logger.error(f"{COLOR_RED}Exit order failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
-            return False
+            else:
+                self.logger.error(f"{COLOR_RED}Exit order failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}")
+                return False
         except BybitAPIError as e:
             await self.bot._handle_api_error(e, "exit order placement")
             return False

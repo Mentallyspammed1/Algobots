@@ -1,5 +1,6 @@
-import { CONFIG } from './config.js';
+import { CONFIG } from './src/config/configLoader.js';
 import { logger, neon } from './logger.js';
+import BybitAPIClient from './bybit_api_client.js';
 
 /**
  * @async
@@ -8,9 +9,10 @@ import { logger, neon } from './logger.js';
  * It expects the strategy module to export either a `main` or `run_bot` async function.
  * @param {string} strategyName - The name of the strategy to start (e.g., "ehlst_strategy").
  * @param {Object} strategyConfig - The configuration object for the specific strategy.
+ * @param {BybitAPIClient} bybitClient - The initialized Bybit API client instance.
  * @returns {Promise<void>} A promise that resolves when the strategy has finished execution or rejects if an error occurs.
  */
-async function startStrategy(strategyName, strategyConfig) {
+async function startStrategy(strategyName, strategyConfig, bybitClient) {
     logger.debug(`startStrategy: Attempting to start strategy: ${strategyName} with config: ${JSON.stringify(strategyConfig)}`);
     try {
         logger.info(neon.header(`Attempting to start strategy: ${strategyName}`));
@@ -20,13 +22,13 @@ async function startStrategy(strategyName, strategyConfig) {
         logger.debug(`startStrategy: Strategy module imported for ${strategyName}.`);
         
         // Check for and invoke the strategy's entry point function (main or run_bot)
-        // Pass the strategy-specific configuration to the entry point
+        // Pass the strategy-specific configuration and the bybitClient to the entry point
         if (typeof strategyModule.main === 'function') {
             logger.debug(`startStrategy: Invoking 'main' function for ${strategyName}.`);
-            await strategyModule.main(strategyConfig); // Pass strategyConfig
+            await strategyModule.main(strategyConfig, bybitClient); // Pass strategyConfig and bybitClient
         } else if (typeof strategyModule.run_bot === 'function') {
             logger.debug(`startStrategy: Invoking 'run_bot' function for ${strategyName}.`);
-            await strategyModule.run_bot(strategyConfig); // Pass strategyConfig
+            await strategyModule.run_bot(strategyConfig, bybitClient); // Pass strategyConfig and bybitClient
         } else {
             // Log an error if the strategy module does not export a recognized entry point
             logger.error(neon.error(`Strategy ${strategyName} does not export a 'main' or 'run_bot' function.`));
@@ -52,14 +54,17 @@ async function main() {
     logger.info(neon.header('Bot Orchestrator Initiated!'));
     logger.debug('main: Bot Orchestrator main function started.');
 
-    // Filter and collect the names of all enabled strategies from the global configuration
-    const enabledStrategies = Object.entries(CONFIG.STRATEGIES)
+    // Initialize the Bybit API client once for all strategies
+    const bybitClient = new BybitAPIClient(CONFIG.common);
+
+    // Filter and collect the names of all enabled strategies from the new configuration structure
+    const enabledStrategies = Object.entries(CONFIG.strategies)
         .filter(([, strategyConfig]) => strategyConfig.enabled)
         .map(([strategyName]) => strategyName);
 
     // If no strategies are enabled in the configuration, log a warning and exit
     if (enabledStrategies.length === 0) {
-        logger.warn(neon.warn('No enabled strategies defined in config.js. Exiting.'));
+        logger.warn(neon.warn('No enabled strategies found in config.yaml. Exiting.'));
         logger.debug('main: No enabled strategies found, exiting main function.');
         return;
     }
@@ -70,8 +75,13 @@ async function main() {
     // Create an array of promises, each representing the asynchronous execution of a strategy
     logger.debug('main: Mapping enabled strategies to startStrategy promises.');
     const strategyPromises = enabledStrategies.map(strategyName => {
-        const strategyConfig = CONFIG.STRATEGIES[strategyName];
-        return startStrategy(strategyName, strategyConfig); // Pass strategyConfig to the strategy starter
+        // Pass the common config, indicator config, and specific strategy config
+        const combinedConfig = {
+            ...CONFIG.common,
+            ...CONFIG.indicators,
+            ...CONFIG.strategies[strategyName]
+        };
+        return startStrategy(strategyName, combinedConfig, bybitClient);
     });
     
     // Wait for all strategy execution promises to complete (either resolve or reject)
@@ -80,7 +90,8 @@ async function main() {
     logger.debug('main: All strategy promises have settled.');
 
     logger.info(neon.header('All enabled strategies have been processed. Orchestrator finishing.'));
-    logger.debug('main: Bot Orchestrator main function finished.');
+    logger.debug('main: Bot Orchestrator main function finished.
+');
 }
 
 /**

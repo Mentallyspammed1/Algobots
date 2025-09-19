@@ -1,22 +1,11 @@
 import { Decimal } from 'decimal.js';
-import { CONFIG } from '../config.js';
 import { logger, neon } from '../logger.js';
-import { bybitClient } from '../bybit_api_client.js';
 import { round_qty, round_price, np_clip } from '../utils/math_utils.js';
 import PerformanceTracker from '../utils/performance_tracker.js';
 import AlertSystem from '../utils/alert_system.js';
 import * as indicators from '../indicators.js'; // Import all indicator functions
 import { setTimeout } from 'timers/promises';
-
-// --- Constants (from original whale.js, now mostly in CONFIG) ---
-const SYMBOL = CONFIG.SYMBOL;
-const INTERVAL = CONFIG.INTERVAL;
-const LOOP_DELAY_SECONDS = CONFIG.LOOP_DELAY_SECONDS;
-const ORDERBOOK_LIMIT = CONFIG.ORDERBOOK_LIMIT;
-const SIGNAL_SCORE_THRESHOLD = CONFIG.SIGNAL_SCORE_THRESHOLD;
-const COOLDOWN_SEC = CONFIG.COOLDOWN_SEC;
-const HYSTERESIS_RATIO = CONFIG.HYSTERESIS_RATIO;
-const VOLUME_CONFIRMATION_MULTIPLIER = CONFIG.VOLUME_CONFIRMATION_MULTIPLIER;
+import { DataFrame } from 'dataframe-js'; // Import DataFrame
 
 // --- Position Management ---
 /**
@@ -36,11 +25,12 @@ class PositionManager {
         this.logger = logger;
         this.symbol = symbol;
         this.open_positions = [];
-        this.trade_management_enabled = config.TRADE_MANAGEMENT.ENABLED;
-        this.max_open_positions = config.TRADE_MANAGEMENT.MAX_OPEN_POSITIONS;
-        this.order_precision = config.TRADE_MANAGEMENT.ORDER_PRECISION;
-        this.price_precision = config.TRADE_MANAGEMENT.PRICE_PRECISION;
-        this.slippage_percent = new Decimal(config.TRADE_MANAGEMENT.SLIPPAGE_PERCENT);
+        // Access nested config properties correctly
+        this.trade_management_enabled = config.TRADE_MANAGEMENT?.ENABLED || false;
+        this.max_open_positions = config.TRADE_MANAGEMENT?.MAX_OPEN_POSITIONS || 1;
+        this.order_precision = config.TRADE_MANAGEMENT?.ORDER_PRECISION || 0;
+        this.price_precision = config.TRADE_MANAGEMENT?.PRICE_PRECISION || 0;
+        this.slippage_percent = new Decimal(config.TRADE_MANAGEMENT?.SLIPPAGE_PERCENT || 0);
         this.pybit = pybit_client;
         this.qty_step = new Decimal("0.000001"); // Default, will be updated from exchange
         this._update_precision_from_exchange();
@@ -68,7 +58,7 @@ class PositionManager {
      */
     _get_current_balance() {
         // In a real bot, this would fetch live balance. For now, use config value.
-        return new Decimal(this.config.TRADE_MANAGEMENT.ACCOUNT_BALANCE);
+        return new Decimal(this.config.TRADE_MANAGEMENT?.ACCOUNT_BALANCE || 0);
     }
 
     /**
@@ -82,10 +72,10 @@ class PositionManager {
     _calculate_order_size(current_price, atr_value, conviction = 1.0) {
         if (!this.trade_management_enabled) return new Decimal("0");
         const account_balance = this._get_current_balance();
-        const base_risk_pct = new Decimal(this.config.TRADE_MANAGEMENT.RISK_PER_TRADE_PERCENT).dividedBy(100);
+        const base_risk_pct = new Decimal(this.config.TRADE_MANAGEMENT?.RISK_PER_TRADE_PERCENT || 0).dividedBy(100);
         const risk_multiplier = new Decimal(np_clip(0.5 + conviction, 0.5, 1.5));
         const risk_pct = base_risk_pct.times(risk_multiplier);
-        const stop_loss_atr_multiple = new Decimal(this.config.TRADE_MANAGEMENT.STOP_LOSS_ATR_MULTIPLE);
+        const stop_loss_atr_multiple = new Decimal(this.config.TRADE_MANAGEMENT?.STOP_LOSS_ATR_MULTIPLE || 0);
         const risk_amount = account_balance.times(risk_pct);
         const stop_loss_distance = atr_value.times(stop_loss_atr_multiple);
 
@@ -108,13 +98,13 @@ class PositionManager {
      * @returns {Decimal} The calculated Stop Loss price.
      */
     _compute_stop_loss_price(side, entry_price, atr_value) {
-        const sl_cfg = this.config.EXECUTION.SL_SCHEME;
+        const sl_cfg = this.config.EXECUTION?.SL_SCHEME;
         let sl;
-        if (sl_cfg.TYPE === "atr_multiple") {
+        if (sl_cfg?.TYPE === "atr_multiple") {
             const sl_mult = new Decimal(sl_cfg.ATR_MULTIPLE);
             sl = (side === "BUY") ? entry_price.minus(atr_value.times(sl_mult)) : entry_price.plus(atr_value.times(sl_mult));
         } else {
-            const sl_pct = new Decimal(sl_cfg.PERCENT).dividedBy(100);
+            const sl_pct = new Decimal(sl_cfg?.PERCENT || 0).dividedBy(100);
             sl = (side === "BUY") ? entry_price.times(new Decimal(1).minus(sl_pct)) : entry_price.times(new Decimal(1).plus(sl_pct));
         }
         return round_price(sl, this.price_precision);
@@ -129,7 +119,7 @@ class PositionManager {
      * @returns {Decimal} The calculated Take Profit price.
      */
     _calculate_take_profit_price(signal, current_price, atr_value) {
-        const tp_mult = new Decimal(this.config.TRADE_MANAGEMENT.TAKE_PROFIT_ATR_MULTIPLE);
+        const tp_mult = new Decimal(this.config.TRADE_MANAGEMENT?.TAKE_PROFIT_ATR_MULTIPLE || 0);
         const tp = (signal === "BUY") ? current_price.plus(atr_value.times(tp_mult)) : current_price.minus(atr_value.times(tp_mult));
         return round_price(tp, this.price_precision);
     }
@@ -175,7 +165,7 @@ class PositionManager {
             "best_price": adjusted_entry_price_sim
         };
 
-        if (this.config.EXECUTION.USE_PYBIT && this.pybit) {
+        if (this.config.EXECUTION?.USE_PYBIT && this.pybit) {
             try {
                 const resp = await this.pybit.placeMarketOrder(
                     this.symbol, signal, order_qty, take_profit, stop_loss
@@ -266,7 +256,7 @@ class PositionManager {
 
                 positions_to_remove.push(i);
 
-                if (this.config.EXECUTION.USE_PYBIT && this.pybit) {
+                if (this.config.EXECUTION?.USE_PYBIT && this.pybit) {
                     // Assuming bybitClient has a cancelAllOrders or similar for orderLinkId
                     // This part needs to be adapted to bybitClient's capabilities
                     // For now, just log a warning
@@ -291,7 +281,7 @@ class PositionManager {
      */
     trail_stop(pos, current_price, atr_value) {
         if (!atr_value || !pos.best_price) return;
-        const atr_mult = new Decimal(this.config.TRADE_MANAGEMENT.STOP_LOSS_ATR_MULTIPLE);
+        const atr_mult = new Decimal(this.config.TRADE_MANAGEMENT?.STOP_LOSS_ATR_MULTIPLE || 0);
         const side = pos.side;
 
         if (side === "BUY") {
@@ -320,12 +310,12 @@ class PositionManager {
      * @returns {Promise<void>}
      */
     async try_pyramid(current_price, atr_value) {
-        if (!this.config.PYRAMIDING.ENABLED) return;
+        if (!this.config.PYRAMIDING?.ENABLED) return;
 
         for (const pos of this.open_positions) {
-            if (pos.status !== "OPEN" || pos.adds >= this.config.PYRAMIDING.MAX_ADDS) continue;
+            if (pos.status !== "OPEN" || pos.adds >= (this.config.PYRAMIDING?.MAX_ADDS || 0)) continue;
 
-            const step_atr_mult = new Decimal(this.config.PYRAMIDING.STEP_ATR);
+            const step_atr_mult = new Decimal(this.config.PYRAMIDING?.STEP_ATR || 0);
             const step_distance = step_atr_mult.times(atr_value).times(new Decimal(pos.adds + 1));
 
             let target_price;
@@ -337,7 +327,7 @@ class PositionManager {
                 if (current_price.gt(target_price)) continue;
             }
 
-            const add_qty = round_qty(pos.qty.times(this.config.PYRAMIDING.SIZE_PCT_OF_INITIAL), this.qty_step);
+            const add_qty = round_qty(pos.qty.times(this.config.PYRAMIDING?.SIZE_PCT_OF_INITIAL || 0), this.qty_step);
             if (add_qty.lte(0)) continue;
 
             const total_cost = pos.entry_price.times(pos.qty).plus(current_price.times(add_qty));
@@ -347,7 +337,7 @@ class PositionManager {
 
             this.logger.info(neon.green(`Pyramided: Added ${add_qty} at ${current_price}. New avg: ${pos.entry_price.toFixed(this.price_precision)}`));
 
-            if (this.config.EXECUTION.USE_PYBIT && this.pybit) {
+            if (this.config.EXECUTION?.USE_PYBIT && this.pybit) {
                 try {
                     await this.pybit.placeMarketOrder(this.symbol, pos.side, add_qty, pos.take_profit, pos.stop_loss);
                 } catch (e) {
@@ -390,8 +380,9 @@ class TradingAnalyzer {
         this.symbol = symbol;
         this.indicator_values = {};
         this.fib_levels = {};
-        this.weights = config.WEIGHT_SETS.DEFAULT_SCALPING;
-        this.indicator_settings = config.INDICATOR_SETTINGS;
+        // Access nested config properties correctly
+        this.weights = config.WEIGHT_SETS?.DEFAULT_SCALPING || {};
+        this.indicator_settings = config.INDICATOR_SETTINGS || {};
 
         if (this.df.length === 0) {
             this.logger.warning(neon.warn("Empty DataFrame. Skipping indicators."));
@@ -399,8 +390,8 @@ class TradingAnalyzer {
         }
 
         this._calculate_all_indicators();
-        if (config.INDICATORS.FIBONACCI_LEVELS) this.calculate_fibonacci_levels();
-        if (config.INDICATORS.FIBONACCI_PIVOT_POINTS) this.calculate_fibonacci_pivot_points();
+        if (config.INDICATORS?.FIBONACCI_LEVELS) this.calculate_fibonacci_levels();
+        if (config.INDICATORS?.FIBONACCI_PIVOT_POINTS) this.calculate_fibonacci_pivot_points();
     }
 
     /**
@@ -411,29 +402,27 @@ class TradingAnalyzer {
      * @returns {Object} A DataFrame-like object with Decimal.js values.
      */
     _process_dataframe(df_raw) {
-        const processed = {
-            start_time: [], open: [], high: [], low: [], close: [], volume: [], turnover: []
-        };
-        df_raw.forEach(row => {
-            processed.start_time.push(row.start_time);
-            processed.open.push(new Decimal(row.open));
-            processed.high.push(new Decimal(row.high));
-            processed.low.push(new Decimal(row.low));
-            processed.close.push(new Decimal(row.close));
-            processed.volume.push(new Decimal(row.volume));
-            processed.turnover.push(new Decimal(row.turnover));
-        });
+        // Convert raw kline data to a format suitable for DataFrame
+        const dataForDataFrame = df_raw.map(row => ({
+            start_time: row.start_time,
+            open: new Decimal(row.open),
+            high: new Decimal(row.high),
+            low: new Decimal(row.low),
+            close: new Decimal(row.close),
+            volume: new Decimal(row.volume),
+            turnover: new Decimal(row.turnover),
+        }));
 
-        const df_like = { ...processed, length: processed.close.length };
-        df_like.iloc = (index) => {
-            if (index < 0) index += df_like.length;
-            const row = {};
-            for (const key in df_like) {
-                if (Array.isArray(df_like[key])) row[key] = df_like[key][index];
-            }
-            return row;
-        };
-        return df_like;
+        // Create a real DataFrame instance
+        let df = new DataFrame(dataForDataFrame);
+
+        // Ensure all relevant columns are cast to Decimal for consistency
+        const decimalColumns = ['open', 'high', 'low', 'close', 'volume', 'turnover'];
+        for (const col of decimalColumns) {
+            df = df.cast(col, Decimal);
+        }
+
+        return df;
     }
 
     /**
@@ -447,8 +436,8 @@ class TradingAnalyzer {
      * @returns {any|null} The calculated indicator result, or null if calculation fails or data is insufficient.
      */
     _safe_calculate(func, name, min_data_points, ...args) {
-        if (this.df.length < min_data_points) {
-            this.logger.debug(neon.blue(`Skipping ${name}: Insufficient data (${this.df.length} < ${min_data_points})`));
+        if (this.df.count() < min_data_points) {
+            this.logger.debug(neon.blue(`Skipping ${name}: Insufficient data (${this.df.count()} < ${min_data_points})`));
             return null;
         }
         try {
@@ -471,14 +460,14 @@ class TradingAnalyzer {
      * @returns {void}
      */
     _calculate_all_indicators() {
-        const cfg = this.config.INDICATORS;
+        const cfg = this.config.INDICATORS || {};
         const isd = this.indicator_settings;
 
         // Use the shared indicators module
-        const closePrices = this.df.close;
-        const highPrices = this.df.high;
-        const lowPrices = this.df.low;
-        const volumes = this.df.volume;
+        const closePrices = this.df.toArray('close');
+        const highPrices = this.df.toArray('high');
+        const lowPrices = this.df.toArray('low');
+        const volumes = this.df.toArray('volume');
 
         if (cfg.SMA_10) {
             const sma = indicators.calculateSMA(closePrices, isd.SMA_SHORT_PERIOD);
@@ -508,7 +497,7 @@ class TradingAnalyzer {
         }
 
         if (cfg.STOCH_RSI) {
-            const [k, d] = indicators.calculateStochasticOscillator(highPrices, lowPrices, closePrices, isd.STOCH_RSI_PERIOD, isd.STOCH_K_PERIOD, isd.STOCH_D_PERIOD);
+            const [k, d] = indicators.calculateStochasticOscillator(highPrices, lowPrices, closePrices, isd.STOCH_RSI_PERIOD, isd.STOCH_K_PERIOD, isd.STOCH_D_PERIOD, isd.STOCH_SMOOTHING);
             if (k && d) {
                 this.indicator_values["StochRSI_K"] = k[k.length - 1];
                 this.indicator_values["StochRSI_D"] = d[d.length - 1];
@@ -575,7 +564,7 @@ class TradingAnalyzer {
         if (cfg.VWAP) {
             // VWAP needs a DataFrame with 'volume' and 'close' and 'high' and 'low'
             // Assuming df has these columns as Decimal arrays
-            const vwap = indicators.calculateVWAP(this.df.high, this.df.low, this.df.close, this.df.volume);
+            const vwap = indicators.calculateVWAP(this.df.toArray('high'), this.df.toArray('low'), this.df.toArray('close'), this.df.toArray('volume'));
             if (vwap) this.indicator_values["VWAP"] = vwap[vwap.length - 1];
         }
 
@@ -693,10 +682,10 @@ class TradingAnalyzer {
      * @returns {void}
      */
     calculate_fibonacci_pivot_points() {
-        if (this.df.length < 2) return;
+        if (this.df.count() < 2) return;
         const pivot = indicators.calculateFibonacciPivotPoints(this.df);
         if (pivot) {
-            const pp = this.config.TRADE_MANAGEMENT.PRICE_PRECISION;
+            const pp = this.config.TRADE_MANAGEMENT?.PRICE_PRECISION || 0;
             this.indicator_values["Pivot"] = pivot.pivot.toDecimalPlaces(pp, Decimal.ROUND_DOWN);
             this.indicator_values["R1"] = pivot.r1.toDecimalPlaces(pp, Decimal.ROUND_DOWN);
             this.indicator_values["R2"] = pivot.r2.toDecimalPlaces(pp, Decimal.ROUND_DOWN);
@@ -751,7 +740,7 @@ class TradingAnalyzer {
             const vol = new Decimal(v);
             if (vol.gt(maxAsk)) { maxAsk = vol; resistance = new Decimal(p); }
         }
-        const pp = this.config.TRADE_MANAGEMENT.PRICE_PRECISION;
+        const pp = this.config.TRADE_MANAGEMENT?.PRICE_PRECISION || 0;
         if (support.gt(0)) this.indicator_values["Support_Level"] = support.toDecimalPlaces(pp, Decimal.ROUND_DOWN);
         if (resistance.gt(0)) this.indicator_values["Resistance_Level"] = resistance.toDecimalPlaces(pp, Decimal.ROUND_DOWN);
     }
@@ -767,24 +756,24 @@ class TradingAnalyzer {
     _get_mtf_trend(higher_tf_df_raw, indicator_type) {
         if (!higher_tf_df_raw || higher_tf_df_raw.length === 0) return "UNKNOWN";
         const df = this._process_dataframe(higher_tf_df_raw);
-        const last = df.close[df.close.length - 1];
-        const period = this.config.MTF_ANALYSIS.TREND_PERIOD;
+        const last = df.toArray('close')[df.count() - 1];
+        const period = this.config.MTF_ANALYSIS?.TREND_PERIOD || 0;
 
-        if (indicator_type === "sma" && df.length >= period) {
-            const sma = indicators.calculateSMA(df.close, period)[df.close.length - 1];
+        if (indicator_type === "sma" && df.count() >= period) {
+            const sma = indicators.calculateSMA(df.toArray('close'), period)[df.count() - 1];
             return last.gt(sma) ? "UP" : last.lt(sma) ? "DOWN" : "SIDEWAYS";
         }
 
-        if (indicator_type === "ema" && df.length >= period) {
-            const ema = indicators.calculateEMA(df.close, period)[df.close.length - 1];
+        if (indicator_type === "ema" && df.count() >= period) {
+            const ema = indicators.calculateEMA(df.toArray('close'), period)[df.count() - 1];
             return last.gt(ema) ? "UP" : last.lt(ema) ? "DOWN" : "SIDEWAYS";
         }
 
         if (indicator_type === "ehlers_supertrend") {
-            const st = indicators.calculateSupertrend(df.high, df.low, df.close, this.indicator_settings.EHLERS_SLOW_PERIOD, this.indicator_settings.EHLERS_SLOW_MULTIPLIER);
-            if (st && st.direction.length > 0) {
-                const dir = st.direction[st.direction.length - 1];
-                return dir === 1 ? "UP" : dir === -1 ? "DOWN" : "UNKNOWN";
+            const st = indicators.calculateSupertrend(df.toArray('high'), df.toArray('low'), df.toArray('close'), this.indicator_settings.EHLERS_SLOW_PERIOD, this.indicator_settings.EHLERS_SLOW_MULTIPLIER);
+            if (st && st[1].length > 0) {
+                const dir = st[1][st[1].length - 1];
+                return dir.eq(1) ? "UP" : dir.eq(-1) ? "DOWN" : "UNKNOWN";
             }
         }
         return "UNKNOWN";
@@ -798,10 +787,10 @@ class TradingAnalyzer {
      * @returns {Object} An object containing the total score, signal ("BUY", "SELL", "NEUTRAL"), conviction, and a breakdown of contributions.
      */
     calculate_signal_score(orderbook_data = null, higher_tf_signals = {}) {
-        if (this.df.length === 0) return { total_score: 0, signal: "NEUTRAL", conviction: 0, breakdown: {} };
+        if (this.df.count() === 0) return { total_score: 0, signal: "NEUTRAL", conviction: 0, breakdown: {} };
 
-        const current = this.df.close[this.df.close.length - 1];
-        const prev = this.df.length > 1 ? this.df.close[this.df.close.length - 2] : current;
+        const current = this.df.toArray('close')[this.df.count() - 1];
+        const prev = this.df.count() > 1 ? this.df.toArray('close')[this.df.count() - 2] : current;
 
         let score = 0;
         let breakdown = {};
@@ -847,9 +836,9 @@ class TradingAnalyzer {
         }
 
         // MTF
-        if (this.config.MTF_ANALYSIS.ENABLED && Object.keys(higher_tf_signals).length > 0) {
+        if (this.config.MTF_ANALYSIS?.ENABLED && Object.keys(higher_tf_signals).length > 0) {
             let mtf = 0;
-            const weight = this.weights.mtf_trend_confluence / Object.keys(higher_tf_signals).length;
+            const weight = (this.weights.mtf_trend_confluence || 0) / Object.keys(higher_tf_signals).length;
             for (const tf in higher_tf_signals) {
                 if (higher_tf_signals[tf] === "UP") mtf += weight;
                 else if (higher_tf_signals[tf] === "DOWN") mtf -= weight;
@@ -858,7 +847,7 @@ class TradingAnalyzer {
             breakdown["MTF Confluence"] = mtf;
         }
 
-        const threshold = this.config.SIGNAL_SCORE_THRESHOLD;
+        const threshold = this.config.signal_score_threshold;
         const signal = score > threshold ? "BUY" : score < -threshold ? "SELL" : "NEUTRAL";
         const conviction = Math.abs(score);
 
@@ -925,15 +914,27 @@ class TradingAnalyzer {
  * @description The main execution loop for the Whale strategy. It initializes alert system,
  * position manager, and performance tracker. Continuously fetches kline data,
  * analyzes it for trading signals, manages positions, and updates performance metrics.
+ * @param {object} config - The configuration object for this strategy.
+ * @param {BybitAPIClient} bybitClient - The initialized Bybit API client instance.
  * @returns {Promise<void>}
  */
-async function run_bot() {
+async function run_bot(config, bybitClient) {
     const alertSystem = new AlertSystem();
+
+    // Access constants from the passed config object
+    const SYMBOL = config.symbol;
+    const INTERVAL = config.timeframe;
+    const LOOP_DELAY_SECONDS = config.loop_delay_seconds;
+    const ORDERBOOK_LIMIT = config.ORDERBOOK_LIMIT;
+    const SIGNAL_SCORE_THRESHOLD = config.signal_score_threshold;
+    const COOLDOWN_SEC = config.COOLDOWN_SEC;
+    const HYSTERESIS_RATIO = config.HYSTERESIS_RATIO;
+    const VOLUME_CONFIRMATION_MULTIPLIER = config.VOLUME_CONFIRMATION_MULTIPLIER;
 
     logger.info(neon.green(`🚀 WhaleBot Started for ${SYMBOL} @ ${INTERVAL}m interval`));
 
-    const positionMgr = new PositionManager(CONFIG, SYMBOL, bybitClient);
-    const perfTracker = new PerformanceTracker(CONFIG);
+    const positionMgr = new PositionManager(config, SYMBOL, bybitClient);
+    const perfTracker = new PerformanceTracker(config);
 
     let latest_orderbook = null; // This will be updated by WebSocketClient if implemented
 
@@ -949,18 +950,18 @@ async function run_bot() {
 
             const current_price = new Decimal(klines[klines.length - 1].close);
 
-            const analyzer = new TradingAnalyzer(klines, CONFIG, SYMBOL);
+            const analyzer = new TradingAnalyzer(klines, config, SYMBOL);
             const mtfSignals = {};
 
-            if (CONFIG.MTF_ANALYSIS.ENABLED) {
-                for (const tf of CONFIG.MTF_ANALYSIS.HIGHER_TIMEFRAMES) {
+            if (config.MTF_ANALYSIS?.ENABLED) {
+                for (const tf of config.MTF_ANALYSIS.HIGHER_TIMEFRAMES) {
                     const tfCandles = await bybitClient.klines(SYMBOL, tf, 100);
                     if (tfCandles) {
-                        for (const ind of CONFIG.MTF_ANALYSIS.TREND_INDICATORS) {
+                        for (const ind of config.MTF_ANALYSIS.TREND_INDICATORS) {
                             mtfSignals[`${tf}_${ind}`] = analyzer._get_mtf_trend(tfCandles, ind);
                         }
                     }
-                    await setTimeout(CONFIG.MTF_ANALYSIS.MTF_REQUEST_DELAY_SECONDS * 1000);
+                    await setTimeout(config.MTF_ANALYSIS.MTF_REQUEST_DELAY_SECONDS * 1000);
                 }
             }
 
@@ -1001,7 +1002,9 @@ async function run_bot() {
  */
 (async () => {
     try {
-        await run_bot();
+        // The orchestrator will call run_bot with config and bybitClient
+        // For direct execution (e.g., during testing), you might need to mock these
+        // await run_bot(mockConfig, mockBybitClient);
     } catch (e) {
         logger.critical(neon.error(`Bot terminated due to unhandled error: ${e.message}`), e);
         process.exit(1);

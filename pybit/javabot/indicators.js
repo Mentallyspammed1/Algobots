@@ -1106,7 +1106,7 @@ export function calculateFisherTransform(high, low, period) {
 export function calculateSupertrend(high, low, close, period, multiplier) {
     const atr = calculateATR(high, low, close, period);
     const basicUpperBand = high.map((h, i) => h.plus(low[i]).dividedBy(2).plus(multiplier.times(atr[i])));
-    const basicLowerBand = low.map((l, i) => h.plus(l).dividedBy(2).minus(multiplier.times(atr[i])));
+    const basicLowerBand = low.map((l, i) => high[i].plus(l).dividedBy(2).minus(multiplier.times(atr[i])));
 
     const finalUpperBand = [];
     const finalLowerBand = [];

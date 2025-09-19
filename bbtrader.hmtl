@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bybit V5 Order Book & Gemini Algo Trading - Linear Advanced</title>
+
+  <!-- UI & libraries -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+
+  <!-- GenAI import map (Google Gemini) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@google/genai": "https://esm.sh/@google/genai@^1.5.1"
+    }
+  }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+    :root {
+      --bg-primary: #0d0d20;
+      --text-primary: #e0e0ff;
+      --neon-green: #39ff14;
+      --neon-orange: #ffae42;
+      --neon-red: #ff2079;
+      --neon-cyan: #00f2ea;
+      --neon-purple: #c500f2;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+    }
+    h1, h2 {
+      font-family: 'Roboto Mono', monospace;
+      text-shadow: 0 0 5px var(--neon-cyan), 0 0 10px var(--neon-cyan);
+      border-bottom: 1px solid rgba(0, 242, 234, 0.3);
+    }
+    .section {
+      background-color: #1a1a3a;
+      border: 1px solid rgba(0, 242, 234, 0.4);
+      box-shadow: inset 0 0 8px rgba(0, 242, 234, 0.2);
+    }
+    button, .btn {
+      background-color: transparent;
+      color: var(--neon-cyan);
+      border: 2px solid var(--neon-cyan);
+      box-shadow: 0 0 8px rgba(0, 242, 234, 0.5);
+      transition: all 0.3s ease;
+    }
+    button:hover, .btn:hover {
+      background-color: var(--neon-cyan);
+      color: var(--bg-primary);
+      box-shadow: 0 0 12px var(--neon-cyan);
+    }
+    input, textarea, select {
+      background-color: var(--bg-primary);
+      border: 1px solid rgba(0, 242, 234, 0.4);
+      color: var(--text-primary);
+      font-family: 'Roboto Mono', monospace;
+    }
+    #orderBookChart {
+      max-height: 400px;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    #dataOutput, #geminiOutput, #orderOutput, #keyStatus, #advancedOrderBookOutput, #tpSlStatus, #tradingModeDisplay {
+      font-family: 'Roboto Mono', monospace;
+    }
+    ::-webkit-scrollbar { width: 10px; }
+    ::-webkit-scrollbar-track { background: #1a1a3a; border-radius: 5px; }
+    ::-webkit-scrollbar-thumb { background: var(--neon-cyan); border-radius: 5px; }
+    .loading-spinner {
+        border: 4px solid rgba(0, 242, 234, 0.1);
+        border-top: 4px solid var(--neon-cyan);
+        border-radius: 50%;
+        width: 1.5em;
+        height: 1.5em;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 0.5em;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="min-h-screen p-6 flex flex-col items-center">
+  <div class="container mx-auto p-4 max-w-4xl">
+    <h1 class="text-center text-4xl sm:text-5xl font-bold text-[#00f2ea] pb-2 mb-8 border-b-2 border-cyan-400">
+      Bybit Algo Trading Bot - Linear Advanced
+    </h1>
+
+    <!-- API Key and Configuration Section -->
+    <div class="section p-6 rounded-lg mb-8 space-y-4">
+      <h2 class="text-2xl font-bold text-[#00f2ea] pb-2 border-b border-cyan-400">Configuration</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="space-y-2">
+          <label for="geminiApiKeyUser" class="block font-medium">Google Gemini API Key:</label>
+          <input type="password" id="geminiApiKeyUser" placeholder="Google Gemini API Key" class="w-full px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+        </div>
+        <div class="space-y-2">
+          <label for="bybitTradingApiKey" class="block font-medium">Bybit Trading API Key:</label>
+          <input type="password" id="bybitTradingApiKey" placeholder="Bybit Trading API Key" class="w-full px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+        </div>
+        <div class="space-y-2">
+          <label for="bybitTradingApiSecret" class="block font-medium">Bybit Trading API Secret:</label>
+          <input type="password" id="bybitTradingApiSecret" placeholder="Bybit Trading API Secret" class="w-full px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+        </div>
+      </div>
+
+      <!-- TP/SL Settings -->
+      <div class="mt-4 grid grid-cols-3 gap-4">
+        <div>
+          <label for="tpPctInput" class="block font-medium">Take Profit % (LONG):</label>
+          <input id="tpPctInput" type="number" step="0.1" value="2" class="w-full px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+        </div>
+        <div>
+          <label for="slPctInput" class="block font-medium">Stop Loss % (LONG):</label>
+          <input id="slPctInput" type="number" step="0.1" value="1" class="w-full px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+        </div>
+        <div class="flex items-end">
+          <label class="inline-flex items-center">
+            <input id="tpSlEnabled" type="checkbox" checked class="form-checkbox h-5 w-5 bg-bg-primary border-cyan-400 text-neon-cyan focus:ring-neon-cyan" />
+            <span class="ml-2">TP/SL Enabled</span>
+          </label>
+        </div>
+      </div>
+      <div class="mt-2 text-sm" id="tpSlStatus">TP/SL Status: Initializing...</div>
+
+      <div class="grid grid-cols-2 gap-4 mt-4">
+        <div>
+          <label for="maxPositionContracts" class="block font-medium">Max Position (Contracts):</label>
+          <input type="number" id="maxPositionContracts" value="0.01" step="0.001" min="0" class="px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 w-full">
+        </div>
+        <div>
+          <label for="impactQtyContracts" class="block font-medium">Impact Qty (Contracts) for Est. Price Move:</label>
+          <input type="number" id="impactQtyContracts" value="0.01" step="0.001" min="0" class="px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 w-full" />
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center mt-4">
+        <button id="saveApiKeysBtn" onclick="saveApiKeys()" class="px-6 py-2 rounded-full font-bold text-lg">Save API Keys</button>
+        <div id="keyStatus" class="text-sm">Please save your API keys.</div>
+      </div>
+      <div class="mt-2 text-sm">Trading Mode: <span id="tradingModeDisplay" class="font-bold text-neon-cyan"></span></div>
+    </div>
+
+    <!-- Market Data & Status -->
+    <div class="section p-6 rounded-lg mb-8 space-y-4">
+      <h2 class="text-2xl font-bold text-[#00f2ea] pb-2 border-b border-cyan-400">Market Data & Status</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+        <div>
+          <label for="symbolSelect" class="block font-medium">Trading Symbol (USDT Linear):</label>
+          <select id="symbolSelect" class="w-full px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
+        </div>
+        <div class="text-center sm:text-left">
+          <button onclick="connectWebSocket()" class="px-6 py-2 rounded-full font-bold text-lg mr-2">Connect</button>
+          <button onclick="subscribeToOrderBook()" class="px-6 py-2 rounded-full font-bold text-lg">Subscribe</button>
+        </div>
+      </div>
+      <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0 items-center justify-between mt-4">
+        <div class="flex-1">
+          <button onclick="unsubscribeOrderBook()" class="px-6 py-2 rounded-full font-bold text-lg">Unsubscribe</button>
+        </div>
+        <div class="flex-1">
+          <div class="font-medium">Connection Status:</div>
+          <div id="connectionStatus" class="text-sm font-mono whitespace-pre-wrap mt-1">Disconnected.</div>
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <h3 class="text-lg font-bold text-[#00f2ea]">Real-time Order Book</h3>
+        <div id="dataOutput" class="text-sm font-mono whitespace-pre-wrap p-3 mt-2 rounded-md border border-cyan-400/30 overflow-x-auto bg-[#0d0d20] h-48">Waiting for data...</div>
+      </div>
+
+      <div class="mt-4">
+        <canvas id="orderBookChart"></canvas>
+      </div>
+
+      <!-- Advanced Orderbook Analysis -->
+      <div class="mt-6 section p-4 rounded-lg">
+        <h3 class="text-lg font-bold text-[#00f2ea] pb-2 border-b border-cyan-400">Advanced Orderbook Analysis</h3>
+        <div id="advancedOrderBookOutput" class="text-sm font-mono whitespace-pre-wrap p-3 bg-[#0d0d20] rounded-md border border-cyan-400/30"></div>
+        <div class="flex justify-between items-center mt-2">
+          <div class="font-medium">Mid Price:</div>
+          <div id="midPriceDisplay" class="text-lg font-semibold text-cyan-400">0.0000</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gemini Analysis & Orders -->
+    <div class="section p-6 rounded-lg mb-8 space-y-4">
+      <h2 class="text-2xl font-bold text-[#00f2ea] pb-2 border-b border-cyan-400">Gemini Analysis & Orders</h2>
+
+      <div class="flex items-center space-x-2">
+        <span class="font-medium">Current Position (<span id="baseCoinDisplay">BTC</span> Contracts):</span>
+        <span id="currentPositionDisplay" class="font-bold text-xl text-neon-cyan">0.00000</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <span class="font-medium">Unrealised PnL:</span>
+        <span id="unrealisedPnlDisplay" class="font-bold text-xl text-neon-cyan">0.00 USDT</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <span class="font-medium">Entry Price:</span>
+        <span id="entryPriceDisplay" class="font-bold text-xl text-neon-cyan">0.00 USDT</span>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4 mt-2">
+        <div>
+          <label for="timeframeSelect" class="block font-medium">Analysis Timeframe:</label>
+          <select id="timeframeSelect" class="w-full px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+            <option value="realtime">Real-time L1 (Default)</option>
+            <option value="5m">Last 5 Minutes</option>
+            <option value="15m">Last 15 Minutes</option>
+            <option value="1h">Last 1 Hour</option>
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label for="geminiPrompt" class="block font-medium">Gemini Prompt (optional):</label>
+          <textarea id="geminiPrompt" placeholder="Optional: Enter a custom prompt for Gemini." rows="2" class="w-full px-4 py-2 rounded-md border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"></textarea>
+        </div>
+      </div>
+
+      <button id="analyzeBtn" onclick="analyzeWithGemini()" class="w-full px-6 py-3 rounded-full font-bold text-lg">Analyze & Get Signal</button>
+
+      <div id="geminiOutput" class="text-sm font-mono whitespace-pre-wrap p-3 mt-4 rounded-md border border-cyan-400/30 bg-[#0d0d20] overflow-y-auto max-h-48">No analysis yet...</div>
+
+      <div class="mt-4">
+        <h3 class="text-lg font-bold text-[#00f2ea] pb-2 border-b border-cyan-400">Automated Orders Log</h3>
+        <div id="orderOutput" class="text-sm font-mono whitespace-pre-wrap p-3 mt-2 rounded-md border border-cyan-400/30 overflow-y-auto max-h-48 bg-[#0d0d20]">No orders placed...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { GoogleGenAI } from "@google/genai";
+
+    // --- Constants & Config ---
+    const CONSTANTS = {
+      // Set IS_TESTNET to false for LIVE trading. Adjust BYBIT_BASE_API_URL accordingly.
+      IS_TESTNET: true,
+      BYBIT_WEBSOCKET_URL: 'wss://stream.bybit.com/v5/public/linear', // For linear orderbooks
+      BYBIT_BASE_API_URL: 'https://api-testnet.bybit.com', // Change to 'https://api.bybit.com' for LIVE
+      GEMINI_MODEL_NAME: 'gemini-2.5-flash-preview-04-17',
+      DEFAULT_MAX_POSITION_CONTRACTS: 0.01, // Default for BTCUSDT, needs to match contract step size
+      POSITION_BUFFER: 0.0001, // Small buffer for float precision
+      ORDER_COOLDOWN_MS: 3000, // Min 3s between trade orders (Bybit rate limits)
+      API_COOLDOWN_MS: 1000, // Min 1s between any general Bybit API calls (e.g., fetching position)
+      MAX_ORDERBOOK_HISTORY_MS: 65 * 60 * 1000, // 1h 5m for historical context
+      MAX_ORDERBOOK_HISTORY_LENGTH: 1000, // Max 1000 snapshots
+      ORDERBOOK_DEPTH_N: 5, // Number of levels for advanced analysis
+      TP_SL_CHECK_INTERVAL_MS: 3000, // How often to check TP/SL against mid-price
+      API_POSITION_FETCH_INTERVAL_MS: 10000, // How often to fetch actual position from Bybit
+      RECONNECT_INITIAL_DELAY: 5000, // Initial WebSocket reconnect delay
+      MAX_RECONNECT_DELAY: 30000, // Max WebSocket reconnect delay
+      API_RECV_WINDOW: '10000', // Bybit API recvWindow
+      NEON_GREEN: '#39ff14',
+      NEON_ORANGE: '#ffae42',
+      NEON_RED: '#ff2079',
+      NEON_CYAN: '#00f2ea',
+      NEON_PURPLE: '#c500f2',
+    };
+
+    // --- Global State ---
+    let ws = null;
+    let latestOrderBook = null;
+    let orderBookChartInstance = null;
+    let ai = null;
+    let currentSymbol = localStorage.getItem('lastSelectedSymbol') || 'BTCUSDT';
+    let currentBaseCoin = 'BTC'; // E.g., for BTCUSDT
+    let currentQuoteCoin = 'USDT'; // E.g., for BTCUSDT
+    let currentPositionQty = 0.0; // In contracts
+    let currentEntryPrice = 0.0;
+    let currentUnrealisedPnl = 0.0;
+    const orderBookHistory = [];
+    const availableSymbols = []; // Stores fetched symbols (linear)
+    let lastApiCallTime = 0; // For global API cooldown
+
+    let reconnectAttempts = 0; // For WebSocket exponential backoff
+    let positionFetchInterval = null; // For fetching current position periodically
+
+    const tpSlConfig = {
+      enabled: true,
+      tpPct: 0.02, // 2%
+      slPct: 0.01, // 1%
+      activeTrade: null // { tradeId: string, symbol: string, direction: 'LONG', entryPrice, tpPrice, slPrice, remainingQty }
+    };
+
+    // --- API Keys (loaded from localStorage) ---
+    let GEMINI_API_KEY = '';
+    let BYBIT_API_KEY = '';
+    let BYBIT_API_SECRET = '';
+
+    // --- DOM Element References ---
+    const DOM_ELEMENTS = {
+      geminiApiKeyUser: document.getElementById('geminiApiKeyUser'),
+      bybitTradingApiKey: document.getElementById('bybitTradingApiKey'),
+      bybitTradingApiSecret: document.getElementById('bybitTradingApiSecret'),
+      maxPositionContracts: document.getElementById('maxPositionContracts'),
+      impactQtyContracts: document.getElementById('impactQtyContracts'),
+      tpPctInput: document.getElementById('tpPctInput'),
+      slPctInput: document.getElementById('slPctInput'),
+      tpSlEnabled: document.getElementById('tpSlEnabled'),
+      tpSlStatus: document.getElementById('tpSlStatus'),
+      keyStatus: document.getElementById('keyStatus'),
+      tradingModeDisplay: document.getElementById('tradingModeDisplay'),
+      symbolSelect: document.getElementById('symbolSelect'),
+      connectionStatus: document.getElementById('connectionStatus'),
+      dataOutput: document.getElementById('dataOutput'),
+      orderBookChart: document.getElementById('orderBookChart'),
+      advancedOrderBookOutput: document.getElementById('advancedOrderBookOutput'),
+      midPriceDisplay: document.getElementById('midPriceDisplay'),
+      baseCoinDisplay: document.getElementById('baseCoinDisplay'),
+      currentPositionDisplay: document.getElementById('currentPositionDisplay'),
+      unrealisedPnlDisplay: document.getElementById('unrealisedPnlDisplay'),
+      entryPriceDisplay: document.getElementById('entryPriceDisplay'),
+      timeframeSelect: document.getElementById('timeframeSelect'),
+      geminiPrompt: document.getElementById('geminiPrompt'),
+      analyzeBtn: document.getElementById('analyzeBtn'),
+      saveApiKeysBtn: document.getElementById('saveApiKeysBtn'),
+      geminiOutput: document.getElementById('geminiOutput'),
+      orderOutput: document.getElementById('orderOutput'),
+    };
+
+    // --- Helper Functions ---
+    function logToOutput(message, area, color, element) {
+      const timestamp = new Date().toLocaleTimeString();
+      const text = `[${timestamp}] [${area}] ${message}`.trim();
+      if (element) {
+        const div = document.createElement('div');
+        div.style.color = color;
+        div.innerHTML = text.replace(/\n/g, '<br>');
+        if (element.id === 'dataOutput' || element.id === 'advancedOrderBookOutput') {
+          element.innerHTML = div.innerHTML; // Overwrite for real-time data
+        } else {
+          element.insertBefore(div, element.firstChild); // Prepend for logs
+          if (element.children.length > 100) element.removeChild(element.lastChild); // Cap log size
+        }
+      }
+      console.log(`%c${text}`, `color: ${color};`);
+    }
+
+    function setLoading(elementId, isLoading, originalText = 'Submit') {
+        const btn = document.getElementById(elementId);
+        if (!btn) return;
+        if (isLoading) {
+            btn.disabled = true;
+            btn.innerHTML = `<span class="loading-spinner"></span>${originalText.replace('Analyze', 'Analyzing...').replace('Save API Keys', 'Saving...')}`;
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    // --- Bybit API Interaction Wrapper ---
+    async function bybitApiCall(method, endpoint, params = {}, isPrivate = true, category = 'linear') {
+        if (Date.now() - lastApiCallTime < CONSTANTS.API_COOLDOWN_MS) {
+            logToOutput(`API cooldown active. Please wait.`, 'API Call', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+            return null;
+        }
+
+        const url = `${CONSTANTS.BYBIT_BASE_API_URL}${endpoint}`;
+        const timestamp = Date.now().toString();
+        const recvWindow = CONSTANTS.API_RECV_WINDOW;
+
+        let headers = {
+            'Content-Type': 'application/json',
+            'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-RECV-WINDOW': recvWindow,
+        };
+
+        let requestParams = { ...params }; // Copy params to modify
+
+        // Add category to params if it's an instrument or order related call that needs it
+        if (endpoint.includes('/v5/market/instruments-info') || endpoint.includes('/v5/order/create') || endpoint.includes('/v5/position/list')) {
+            requestParams.category = category;
+        }
+
+        if (isPrivate) {
+            if (!BYBIT_API_KEY || !BYBIT_API_SECRET) {
+                logToOutput('Bybit API Key/Secret not set for private call.', 'API Call', CONSTANTS.NEON_RED, DOM_ELEMENTS.orderOutput);
+                return null;
+            }
+            headers['X-BAPI-API-KEY'] = BYBIT_API_KEY;
+
+            let signaturePayload;
+            let queryString = ''; // For GET/DELETE
+            let requestBody = ''; // For POST
+
+            if (method === 'GET' || method === 'DELETE') {
+                queryString = new URLSearchParams(requestParams).toString();
+                signaturePayload = `${timestamp}${BYBIT_API_KEY}${recvWindow}${queryString}`;
+            } else if (method === 'POST') {
+                requestBody = JSON.stringify(requestParams);
+                signaturePayload = `${timestamp}${BYBIT_API_KEY}${recvWindow}${requestBody}`;
+            }
+
+            headers['X-BAPI-SIGN'] = CryptoJS.HmacSHA256(signaturePayload, BYBIT_API_SECRET).toString(CryptoJS.enc.Hex);
+        }
+
+        try {
+            const response = await axios({ method, url, headers, data: method === 'POST' ? requestBody : undefined, params: method === 'GET' ? requestParams : undefined });
+            lastApiCallTime = Date.now();
+            return response.data;
+        } catch (error) {
+            const errMsg = error.response?.data?.retMsg || error.message;
+            logToOutput(`Bybit API Error (${method} ${endpoint}): ${errMsg}`, 'API Call', CONSTANTS.NEON_RED, DOM_ELEMENTS.orderOutput);
+            console.error('Bybit API Error:', error.response ? error.response.data : error.message);
+            return null;
+        }
+    }
+
+    // --- Initialization & Setup ---
+    function initializeApp() {
+      DOM_ELEMENTS.tradingModeDisplay.textContent = CONSTANTS.IS_TESTNET ? 'Testnet' : 'Mainnet';
+      loadApiKeysFromLocalStorage();
+      initializeGeminiClient();
+      initializeOrderBookChart();
+      loadTpSlState(); // Load active trade state
+      updateTpSlFromUI(); // Sync TP/SL UI config
+      updateCurrentPositionDisplay();
+      fetchAndPopulateSymbols();
+      setupSymbolChangeListener();
+
+      // Start periodic position fetching
+      if (positionFetchInterval) clearInterval(positionFetchInterval);
+      positionFetchInterval = setInterval(fetchCurrentPosition, CONSTANTS.API_POSITION_FETCH_INTERVAL_MS);
+    }
+
+    function loadApiKeysFromLocalStorage() {
+      GEMINI_API_KEY = localStorage.getItem('geminiApiKeyUser') || '';
+      BYBIT_API_KEY = localStorage.getItem('bybitTradingApiKey') || '';
+      BYBIT_API_SECRET = localStorage.getItem('bybitTradingApiSecret') || '';
+      DOM_ELEMENTS.geminiApiKeyUser.value = GEMINI_API_KEY;
+      DOM_ELEMENTS.bybitTradingApiKey.value = BYBIT_API_KEY;
+      DOM_ELEMENTS.bybitTradingApiSecret.value = BYBIT_API_SECRET;
+      DOM_ELEMENTS.maxPositionContracts.value = localStorage.getItem('maxPositionContracts') || CONSTANTS.DEFAULT_MAX_POSITION_CONTRACTS;
+      DOM_ELEMENTS.impactQtyContracts.value = localStorage.getItem('impactQtyContracts') || CONSTANTS.DEFAULT_MAX_POSITION_CONTRACTS;
+
+      DOM_ELEMENTS.tpPctInput.value = localStorage.getItem('tpPct') || (CONSTANTS.tpPct * 100).toFixed(1);
+      DOM_ELEMENTS.slPctInput.value = localStorage.getItem('slPct') || (CONSTANTS.slPct * 100).toFixed(1);
+      DOM_ELEMENTS.tpSlEnabled.checked = localStorage.getItem('tpSlEnabled') === 'true';
+
+      logToOutput('API keys & config loaded from local storage.', 'Config', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.keyStatus);
+    }
+
+    function saveApiKeys() {
+      setLoading('saveApiKeysBtn', true, 'Save API Keys');
+      const maxPos = parseFloat(DOM_ELEMENTS.maxPositionContracts.value);
+      const impactQty = parseFloat(DOM_ELEMENTS.impactQtyContracts.value);
+
+      if (isNaN(maxPos) || maxPos <= 0 || isNaN(impactQty) || impactQty <= 0) {
+        logToOutput('Invalid Max Position or Impact Quantity. Must be positive numbers.', 'Config', CONSTANTS.NEON_RED, DOM_ELEMENTS.keyStatus);
+        setLoading('saveApiKeysBtn', false, 'Save API Keys');
+        return;
+      }
+
+      GEMINI_API_KEY = DOM_ELEMENTS.geminiApiKeyUser.value;
+      BYBIT_API_KEY = DOM_ELEMENTS.bybitTradingApiKey.value;
+      BYBIT_API_SECRET = DOM_ELEMENTS.bybitTradingApiSecret.value;
+
+      localStorage.setItem('geminiApiKeyUser', GEMINI_API_KEY);
+      localStorage.setItem('bybitTradingApiKey', BYBIT_API_KEY);
+      localStorage.setItem('bybitTradingApiSecret', BYBIT_API_SECRET);
+      localStorage.setItem('maxPositionContracts', maxPos);
+      localStorage.setItem('impactQtyContracts', impactQty);
+
+      localStorage.setItem('tpPct', DOM_ELEMENTS.tpPctInput.value);
+      localStorage.setItem('slPct', DOM_ELEMENTS.slPctInput.value);
+      localStorage.setItem('tpSlEnabled', DOM_ELEMENTS.tpSlEnabled.checked);
+
+      logToOutput(`API keys and config saved!`, 'Config', CONSTANTS.NEON_GREEN, DOM_ELEMENTS.keyStatus);
+      initializeGeminiClient();
+      updateTpSlFromUI();
+      setLoading('saveApiKeysBtn', false, 'Save API Keys');
+    }
+
+    function initializeGeminiClient() {
+      if (GEMINI_API_KEY) {
+        ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+        logToOutput('Gemini API Key loaded.', 'Config', CONSTANTS.NEON_GREEN, DOM_ELEMENTS.keyStatus);
+      } else {
+        ai = null;
+        logToOutput('Gemini API Key not found. Analysis disabled.', 'Config', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.keyStatus);
+      }
+    }
+
+    async function fetchAndPopulateSymbols() {
+        DOM_ELEMENTS.symbolSelect.innerHTML = '<option value="">Loading symbols...</option>';
+        DOM_ELEMENTS.symbolSelect.disabled = true;
+
+        const response = await bybitApiCall('GET', '/v5/market/instruments-info', { status: 'Trading' }, false, 'linear');
+
+        if (response && response.retCode === 0 && response.result.list) {
+            const usdtSymbols = response.result.list
+                .filter(item => item.quoteCoin === 'USDT' && item.status === 'Trading' && item.contractType === 'InversePerpetual' ? item.symbol.endsWith('USD') : true) // Filter USD for inverse if needed
+                .map(item => item.symbol)
+                .sort();
+
+            availableSymbols.length = 0; // Clear existing
+            availableSymbols.push(...usdtSymbols);
+
+            DOM_ELEMENTS.symbolSelect.innerHTML = ''; // Clear loading message
+
+            usdtSymbols.forEach(symbol => {
+                const option = document.createElement('option');
+                option.value = symbol;
+                option.textContent = symbol;
+                DOM_ELEMENTS.symbolSelect.appendChild(option);
+            });
+
+            // Set current symbol
+            if (availableSymbols.includes(currentSymbol)) {
+                DOM_ELEMENTS.symbolSelect.value = currentSymbol;
+            } else if (availableSymbols.length > 0) {
+                currentSymbol = availableSymbols[0]; // Default to first available
+                DOM_ELEMENTS.symbolSelect.value = currentSymbol;
+            }
+            updateSymbolDerivedState();
+            logToOutput(`Loaded ${availableSymbols.length} USDT linear symbols.`, 'Symbol Loader', CONSTANTS.NEON_GREEN, DOM_ELEMENTS.keyStatus);
+        } else {
+            logToOutput('Failed to load symbols from Bybit API. Check console for details.', 'Symbol Loader', CONSTANTS.NEON_RED, DOM_ELEMENTS.keyStatus);
+            DOM_ELEMENTS.symbolSelect.innerHTML = '<option value="">Error loading symbols</option>';
+        }
+        DOM_ELEMENTS.symbolSelect.disabled = false;
+    }
+
+    function setupSymbolChangeListener() {
+        DOM_ELEMENTS.symbolSelect.addEventListener('change', (event) => {
+            const newSymbol = event.target.value;
+            if (newSymbol === currentSymbol) return;
+
+            logToOutput(`Changing symbol from ${currentSymbol} to ${newSymbol}...`, 'Symbol Change', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.connectionStatus);
+
+            unsubscribeOrderBook(); // Unsubscribe from old symbol
+            currentSymbol = newSymbol;
+            localStorage.setItem('lastSelectedSymbol', currentSymbol);
+            updateSymbolDerivedState();
+
+            latestOrderBook = null; // Clear old data
+            orderBookHistory.length = 0; // Clear history
+            clearOrderBookUI(); // Reset UI
+            // Reset position when changing symbol
+            currentPositionQty = 0.0;
+            currentEntryPrice = 0.0;
+            currentUnrealisedPnl = 0.0;
+            tpSlConfig.activeTrade = null;
+            saveTpSlState();
+            updateCurrentPositionDisplay();
+            updateTpSlFromUI();
+
+            // Automatically subscribe to the new symbol if connected
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                subscribeToOrderBook();
+            }
+            fetchCurrentPosition(); // Fetch position for new symbol immediately
+        });
+    }
+
+    function updateSymbolDerivedState() {
+        // Assuming linear USDT pairs follow BASEUSDT format
+        const match = currentSymbol.match(/^([A-Z]+)(USDT)$/);
+        if (match) {
+            currentBaseCoin = match[1];
+            currentQuoteCoin = match[2];
+            DOM_ELEMENTS.baseCoinDisplay.textContent = currentBaseCoin;
+            // Update max position label
+            DOM_ELEMENTS.maxPositionContracts.previousElementSibling.textContent = `Max Position (${currentBaseCoin} Contracts):`;
+            DOM_ELEMENTS.impactQtyContracts.previousElementSibling.textContent = `Impact Qty (${currentBaseCoin} Contracts) for Est. Price Move:`;
+        } else {
+            // Fallback for unexpected symbol formats (e.g., BTCUSD for inverse futures)
+            const baseMatch = currentSymbol.match(/^([A-Z]+)/);
+            currentBaseCoin = baseMatch ? baseMatch[1] : 'UNKNOWN';
+            currentQuoteCoin = 'USDT'; // Still assume USDT for perpetuals
+            DOM_ELEMENTS.baseCoinDisplay.textContent = '???';
+            DOM_ELEMENTS.maxPositionContracts.previousElementSibling.textContent = `Max Position (Contracts):`;
+            DOM_ELEMENTS.impactQtyContracts.previousElementSibling.textContent = `Impact Qty (Contracts) for Est. Price Move:`;
+        }
+    }
+
+    function clearOrderBookUI() {
+        if (DOM_ELEMENTS.dataOutput) DOM_ELEMENTS.dataOutput.textContent = 'Waiting for data...';
+        if (DOM_ELEMENTS.advancedOrderBookOutput) DOM_ELEMENTS.advancedOrderBookOutput.textContent = '';
+        if (DOM_ELEMENTS.midPriceDisplay) DOM_ELEMENTS.midPriceDisplay.textContent = '0.0000';
+        if (orderBookChartInstance) {
+            orderBookChartInstance.data.datasets[0].data = [0, 0];
+            orderBookChartInstance.data.datasets[1].data = [0, 0];
+            orderBookChartInstance.options.scales.y.title.text = `Price (${currentQuoteCoin})`;
+            orderBookChartInstance.options.scales.y1.title.text = `Quantity (${currentBaseCoin} Contracts)`;
+            orderBookChartInstance.update();
+        }
+    }
+
+    // --- Chart Logic ---
+    function initializeOrderBookChart() {
+      if (!DOM_ELEMENTS.orderBookChart) return;
+      if (orderBookChartInstance) orderBookChartInstance.destroy();
+
+      const chartConfig = {
+        type: 'bar',
+        data: {
+          labels: ['Best Bid', 'Best Ask'],
+          datasets: [
+            {
+              label: 'Price (USDT)',
+              data: [0, 0],
+              backgroundColor: [CONSTANTS.NEON_GREEN, CONSTANTS.NEON_RED],
+              borderColor: [CONSTANTS.NEON_CYAN, CONSTANTS.NEON_PURPLE],
+              borderWidth: 2,
+              barThickness: 50,
+            },
+            {
+              label: 'Quantity (Contracts)',
+              data: [0, 0],
+              backgroundColor: ['rgba(57, 255, 20, 0.5)', 'rgba(255, 32, 121, 0.5)'],
+              borderColor: [CONSTANTS.NEON_GREEN, CONSTANTS.NEON_RED],
+              borderWidth: 1,
+              barThickness: 50,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 150 },
+          scales: {
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              beginAtZero: false,
+              title: { display: true, text: `Price (${currentQuoteCoin})`, color: CONSTANTS.NEON_CYAN },
+              ticks: { color: CONSTANTS.NEON_CYAN, font: { family: "'Roboto Mono', monospace" } },
+              grid: { color: 'rgba(0, 242, 234, 0.2)' }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              beginAtZero: true,
+              title: { display: true, text: `Quantity (${currentBaseCoin} Contracts)`, color: CONSTANTS.NEON_ORANGE },
+              ticks: { color: CONSTANTS.NEON_ORANGE, font: { family: "'Roboto Mono', monospace" } },
+              grid: { drawOnChartArea: false }
+            },
+            x: {
+              ticks: { color: CONSTANTS.NEON_CYAN, font: { family: "'Roboto Mono', monospace", weight: 'bold' } },
+              grid: { display: false }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: CONSTANTS.NEON_CYAN, font: { family: "'Roboto Mono', monospace" } } },
+            tooltip: {
+              enabled: true,
+              backgroundColor: 'rgba(0,0,0,0.85)',
+              titleColor: CONSTANTS.NEON_CYAN,
+              bodyColor: '#e0e0ff',
+              borderColor: CONSTANTS.NEON_PURPLE,
+              borderWidth: 1,
+              padding: 10,
+              callbacks: {
+                label: (ctx) => {
+                  let label = ctx.dataset.label || '';
+                  if (label) label += ': ';
+                  if (ctx.parsed.y !== null) {
+                    if (ctx.dataset.label.startsWith('Price')) {
+                      return label + new Intl.NumberFormat('en-US', { style: 'currency', currency: currentQuoteCoin }).format(ctx.parsed.y);
+                    } else {
+                      return label + ctx.parsed.y.toFixed(5) + ` ${currentBaseCoin}`;
+                    }
+                  }
+                  return label;
+                }
+              }
+            }
+          }
+        }
+      };
+      orderBookChartInstance = new Chart(DOM_ELEMENTS.orderBookChart, chartConfig);
+    }
+
+    // --- WebSocket Logic ---
+    let wsPingInterval = null; // Stored for clearInterval
+    let wsReconnectAttempts = 0; // For exponential backoff
+
+    function connectWebSocket() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        logToOutput('WebSocket is already connected or connecting.', 'WS Status', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.connectionStatus);
+        return;
+      }
+
+      ws = new WebSocket(CONSTANTS.BYBIT_WEBSOCKET_URL);
+      logToOutput('Connecting to Bybit WebSocket...', 'WS Status', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.connectionStatus);
+
+      ws.onopen = () => {
+        logToOutput('Connected to Bybit WebSocket!', 'WS Status', CONSTANTS.NEON_GREEN, DOM_ELEMENTS.connectionStatus);
+        wsReconnectAttempts = 0; // Reset attempts on successful connection
+        sendPing();
+        if (wsPingInterval) clearInterval(wsPingInterval);
+        wsPingInterval = setInterval(sendPing, 20000); // Keep alive
+        subscribeToOrderBook(); // Auto-subscribe to current symbol
+      };
+
+      ws.onmessage = (evt) => handleWebSocketMessage(evt);
+      ws.onerror = (err) => {
+        logToOutput('WebSocket error. Check console.', 'WS Status', CONSTANTS.NEON_RED, DOM_ELEMENTS.connectionStatus);
+        console.error('WebSocket Error:', err);
+      };
+      ws.onclose = () => {
+        logToOutput('WebSocket disconnected. Attempting to reconnect...', 'WS Status', CONSTANTS.NEON_RED, DOM_ELEMENTS.connectionStatus);
+        ws = null;
+        latestOrderBook = null;
+        orderBookHistory.length = 0;
+        clearOrderBookUI(); // Reset UI on disconnect
+        if (wsPingInterval) clearInterval(wsPingInterval);
+        wsPingInterval = null;
+
+        const delay = Math.min(CONSTANTS.RECONNECT_INITIAL_DELAY * Math.pow(2, wsReconnectAttempts), CONSTANTS.MAX_RECONNECT_DELAY);
+        wsReconnectAttempts++;
+        setTimeout(connectWebSocket, delay);
+        logToOutput(`Reconnecting in ${delay / 1000}s (Attempt ${wsReconnectAttempts})...`, 'WS Status', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.connectionStatus);
+      };
+    }
+
+    function handleWebSocketMessage(event) {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.op === 'pong') return;
+        if (message.op === 'subscribe') {
+          const status = message.success ? 'Success' : 'Failed';
+          logToOutput(`Subscription ${status}: ${message.ret_msg || message.req_id}`, 'WS Status', message.success ? CONSTANTS.NEON_GREEN : CONSTANTS.NEON_RED, DOM_ELEMENTS.connectionStatus);
+          return;
+        }
+
+        if (message.topic && message.topic === `orderbook.1.${currentSymbol}`) {
+          if (message.data) updateOrderBookData(message.data);
+        }
+      } catch (error) {
+        logToOutput('Error processing WebSocket message. Check console.', 'WS Data', CONSTANTS.NEON_RED, DOM_ELEMENTS.dataOutput);
+        console.error('WebSocket Message Error:', error);
+      }
+    }
+
+    function sendPing() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ op: 'ping' }));
+      }
+    }
+
+    function subscribeToOrderBook() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        logToOutput('WebSocket not connected. Please connect first.', 'WS Status', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.connectionStatus);
+        return;
+      }
+      if (!currentSymbol || currentSymbol === '') {
+          logToOutput('No trading symbol selected.', 'WS Status', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.connectionStatus);
+          return;
+      }
+      const msg = { op: 'subscribe', args: [`orderbook.1.${currentSymbol}`] };
+      ws.send(JSON.stringify(msg));
+      logToOutput(`Subscribing to ${currentSymbol} order book...`, 'WS Status', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.connectionStatus);
+    }
+
+    function unsubscribeOrderBook() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        logToOutput('WebSocket not connected.', 'WS Status', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.connectionStatus);
+        return;
+      }
+      if (!currentSymbol || currentSymbol === '') {
+        logToOutput('No active subscription to unsubscribe from.', 'WS Status', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.connectionStatus);
+        return;
+      }
+      const msg = { op: 'unsubscribe', args: [`orderbook.1.${currentSymbol}`] };
+      ws.send(JSON.stringify(msg));
+      logToOutput(`Unsubscribing from ${currentSymbol} order book...`, 'WS Status', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.connectionStatus);
+      latestOrderBook = null;
+      orderBookHistory.length = 0;
+      clearOrderBookUI();
+    }
+
+    // --- Order Book Data & Analysis ---
+    function updateOrderBookData(data) {
+      if (!data?.b?.[0] || !data?.a?.[0]) {
+        if (DOM_ELEMENTS.dataOutput) DOM_ELEMENTS.dataOutput.textContent = 'Waiting for valid L1 order book data...';
+        return;
+      }
+      latestOrderBook = data;
+
+      const bestBidPrice = parseFloat(data.b[0][0]);
+      const bestBidQty = parseFloat(data.b[0][1]);
+      const bestAskPrice = parseFloat(data.a[0][0]);
+      const bestAskQty = parseFloat(data.a[0][1]);
+
+      const now = Date.now();
+      orderBookHistory.push({ ts: now, bidPrice: bestBidPrice, bidQty: bestBidQty, askPrice: bestAskPrice, askQty: bestAskQty, raw: data });
+      pruneOrderBookHistory();
+
+      updateL1DataOutput(bestBidPrice, bestBidQty, bestAskPrice, bestAskQty, data.u, data.s);
+      updateOrderBookChart(bestBidPrice, bestBidQty, bestAskPrice, bestAskQty);
+
+      const advancedStats = computeAdvancedOrderBookStats(data);
+      updateAdvancedDisplay(advancedStats);
+
+      checkTpSlAndExecute(); // Check TP/SL on every order book update
+    }
+
+    function updateL1DataOutput(bidPrice, bidQty, askPrice, askQty, updateId, symbol) {
+      const spread = askPrice - bidPrice;
+      const spreadPercentage = (spread / askPrice) * 100;
+
+      DOM_ELEMENTS.dataOutput.innerHTML =
+        `Symbol: <span class="text-cyan-400">${symbol}</span> (Update ID: ${updateId})<br>` +
+        `Best Bid: <span class="text-green-400">$${bidPrice.toFixed(2)}</span> (Qty: <span class="text-green-400">${bidQty.toFixed(4)} ${currentBaseCoin}</span>)<br>` +
+        `Best Ask: <span class="text-red-400">$${askPrice.toFixed(2)}</span> (Qty: <span class="text-red-400">${askQty.toFixed(4)} ${currentBaseCoin}</span>)<br>` +
+        `Spread: <span class="text-orange-400">$${spread.toFixed(2)} (${spreadPercentage.toFixed(3)}%)</span>`;
+    }
+
+    function pruneOrderBookHistory() {
+      const now = Date.now();
+      while (orderBookHistory.length > 0 && now - orderBookHistory[0].ts > CONSTANTS.MAX_ORDERBOOK_HISTORY_MS) {
+        orderBookHistory.shift();
+      }
+      if (orderBookHistory.length > CONSTANTS.MAX_ORDERBOOK_HISTORY_LENGTH) {
+        orderBookHistory.splice(0, orderBookHistory.length - CONSTANTS.MAX_ORDERBOOK_HISTORY_LENGTH);
+      }
+    }
+
+    // Advanced Orderbook Analysis Calculations
+    function computeAdvancedOrderBookStats(data) {
+      const bids = data?.b?.slice(0, CONSTANTS.ORDERBOOK_DEPTH_N) || [];
+      const asks = data?.a?.slice(0, CONSTANTS.ORDERBOOK_DEPTH_N) || [];
+
+      const depthBid = bids.map(([price, qty]) => ({ price: parseFloat(price), qty: parseFloat(qty) }));
+      const depthAsk = asks.map(([price, qty]) => ({ price: parseFloat(price), qty: parseFloat(qty) }));
+
+      const bestBid = depthBid[0]?.price ?? 0;
+      const bestAsk = depthAsk[0]?.price ?? 0;
+
+      // Summed Quantities
+      const sumBidQty = depthBid.reduce((s, d) => s + (d.qty || 0), 0);
+      const sumAskQty = depthAsk.reduce((s, d) => s + (d.qty || 0), 0);
+
+      // Order Book Imbalance (simple: bids vs asks in top N)
+      const totalDepthQty = sumBidQty + sumAskQty;
+      const imbalancePct = totalDepthQty > 0 ? ((sumBidQty - sumAskQty) / totalDepthQty) * 100 : 0;
+
+      // VWAP (Volume-Weighted Average Price) for top N
+      const vwapBid = sumBidQty > 0
+        ? depthBid.reduce((acc, d) => acc + d.price * d.qty, 0) / sumBidQty
+        : 0;
+      const vwapAsk = sumAskQty > 0
+        ? depthAsk.reduce((acc, d) => acc + d.price * d.qty, 0) / sumAskQty
+        : 0;
+
+      // Liquidity Gap (difference between best and second-best level)
+      const secondBestBid = depthBid[1]?.price ?? bestBid;
+      const secondBestAsk = depthAsk[1]?.price ?? bestAsk;
+      const gapBid = bestBid - secondBestBid;
+      const gapAsk = secondBestAsk - bestAsk;
+
+      // Estimated Price Impact for a given trade quantity
+      const impactQty = parseFloat(DOM_ELEMENTS.impactQtyContracts.value) || CONSTANTS.DEFAULT_MAX_POSITION_CONTRACTS;
+      const estBuyPriceForImpact = estimatePriceForQty(impactQty, depthAsk, bestAsk);
+      const estSellPriceForImpact = estimatePriceForQty(impactQty, depthBid, bestBid); // Selling against bids
+
+      // Mid price
+      const midPrice = (bestBid && bestAsk) ? (bestBid + bestAsk) / 2 : 0;
+
+      return {
+        bestBid, bestAsk, sumBidQty, sumAskQty,
+        imbalancePct, vwapBid, vwapAsk,
+        gapBid, gapAsk, midPrice,
+        estBuyPriceForImpact, estSellPriceForImpact, impactQty
+      };
+    }
+
+    // Helper to estimate execution price if a 'qtyNeeded' order were placed
+    function estimatePriceForQty(qtyNeeded, depthLevels, fallbackBestPrice) {
+      if (!qtyNeeded || qtyNeeded <= 0 || !depthLevels || depthLevels.length === 0) return fallbackBestPrice;
+
+      let remainingQty = qtyNeeded;
+      let costAccumulator = 0;
+      let qtyFilled = 0;
+
+      for (const level of depthLevels) {
+        const price = level.price;
+        const availableQty = level.qty;
+
+        if (remainingQty <= 0) break;
+
+        if (remainingQty <= availableQty) {
+          costAccumulator += price * remainingQty;
+          qtyFilled += remainingQty;
+          remainingQty = 0;
+        } else {
+          costAccumulator += price * availableQty;
+          qtyFilled += availableQty;
+          remainingQty -= availableQty;
+        }
+      }
+
+      if (remainingQty > 0) { // If more quantity needed than available in depth
+          if (qtyFilled > 0) {
+            const lastPriceInDepth = depthLevels[depthLevels.length - 1].price;
+            costAccumulator += lastPriceInDepth * remainingQty;
+            qtyFilled += remainingQty;
+          } else { // If no depth at all in provided levels
+              costAccumulator = fallbackBestPrice * qtyNeeded;
+              qtyFilled = qtyNeeded;
+          }
+      }
+
+      return qtyFilled > 0 ? costAccumulator / qtyFilled : fallbackBestPrice;
+    }
+
+    function updateAdvancedDisplay(stats) {
+      if (!stats) return;
+      const html = [];
+      html.push(`<strong>Top ${CONSTANTS.ORDERBOOK_DEPTH_N} Bid Depth:</strong> ${stats.sumBidQty?.toFixed(4)} ${currentBaseCoin} | <strong>Ask Depth:</strong> ${stats.sumAskQty?.toFixed(4)} ${currentBaseCoin}`);
+      html.push(`<br><strong>Order Book Imbalance:</strong> <span style="color:${stats.imbalancePct > 0 ? CONSTANTS.NEON_GREEN : CONSTANTS.NEON_RED};">${stats.imbalancePct?.toFixed(2)}%</span>`);
+      html.push(`<br><strong>Bid VWAP:</strong> $${stats.vwapBid?.toFixed(2) ?? '0.00'} | <strong>Ask VWAP:</strong> $${stats.vwapAsk?.toFixed(2) ?? '0.00'}`);
+      html.push(`<br><strong>Liquidity Gap (Bid):</strong> $${stats.gapBid?.toFixed(2) ?? '0.00'} | <strong>Gap (Ask):</strong> $${stats.gapAsk?.toFixed(2) ?? '0.00'}`);
+      html.push(`<br><strong>Est. Buy Price for ${stats.impactQty?.toFixed(4)} ${currentBaseCoin} Contracts:</strong> $${stats.estBuyPriceForImpact?.toFixed(2) ?? '0.00'}`);
+      html.push(`<br><strong>Est. Sell Price for ${stats.impactQty?.toFixed(4)} ${currentBaseCoin} Contracts:</strong> $${stats.estSellPriceForImpact?.toFixed(2) ?? '0.00'}`);
+      DOM_ELEMENTS.advancedOrderBookOutput.innerHTML = html.join('');
+      DOM_ELEMENTS.midPriceDisplay.textContent = `$${stats.midPrice?.toFixed(4) ?? '0.0000'}`;
+    }
+
+    // --- TP/SL (Take-Profit / Stop-Loss) Logic ---
+    function updateTpSlFromUI() {
+      const tp = parseFloat(DOM_ELEMENTS.tpPctInput.value);
+      const sl = parseFloat(DOM_ELEMENTS.slPctInput.value);
+      const enabled = DOM_ELEMENTS.tpSlEnabled.checked;
+
+      tpSlConfig.enabled = !!enabled;
+      tpSlConfig.tpPct = isNaN(tp / 100) ? 0.02 : (tp / 100);
+      tpSlConfig.slPct = isNaN(sl / 100) ? 0.01 : (sl / 100);
+
+      localStorage.setItem('tpPct', tp);
+      localStorage.setItem('slPct', sl);
+      localStorage.setItem('tpSlEnabled', enabled);
+
+      let statusText = `TP/SL ${tpSlConfig.enabled ? 'Enabled' : 'Disabled'} | TP ${tp.toFixed(1)}%, SL ${sl.toFixed(1)}%`;
+      if (tpSlConfig.activeTrade && tpSlConfig.activeTrade.symbol === currentSymbol) {
+          const trade = tpSlConfig.activeTrade;
+          statusText += ` | Active: Entry $${trade.entryPrice.toFixed(2)}, TP $${trade.tpPrice.toFixed(2)}, SL $${trade.slPrice.toFixed(2)} (Qty: ${trade.remainingQty.toFixed(4)} ${currentBaseCoin})`;
+      } else {
+          statusText += ` | No active trade.`;
+      }
+      DOM_ELEMENTS.tpSlStatus.textContent = statusText;
+    }
+
+    function loadTpSlState() {
+      const savedTrade = localStorage.getItem('activeTrade');
+      if (savedTrade) {
+        tpSlConfig.activeTrade = JSON.parse(savedTrade);
+        // Only load if it's for the current symbol
+        if (tpSlConfig.activeTrade && tpSlConfig.activeTrade.symbol !== currentSymbol) {
+            tpSlConfig.activeTrade = null; // Clear if symbol mismatch
+        } else {
+            logToOutput('Active trade state loaded from local storage.', 'TP/SL', CONSTANTS.NEON_GREEN, DOM_ELEMENTS.tpSlStatus);
+        }
+      }
+      DOM_ELEMENTS.tpPctInput.value = localStorage.getItem('tpPct') || (tpSlConfig.tpPct * 100).toFixed(1);
+      DOM_ELEMENTS.slPctInput.value = localStorage.getItem('slPct') || (tpSlConfig.slPct * 100).toFixed(1);
+      DOM_ELEMENTS.tpSlEnabled.checked = localStorage.getItem('tpSlEnabled') === 'true';
+    }
+
+    function saveTpSlState() {
+      if (tpSlConfig.activeTrade) {
+        localStorage.setItem('activeTrade', JSON.stringify(tpSlConfig.activeTrade));
+      } else {
+        localStorage.removeItem('activeTrade');
+      }
+    }
+
+    function onBuyOrderFilled(adjustedQuantity, entryPrice) {
+      if (!tpSlConfig.enabled) return;
+      if (tpSlConfig.activeTrade && tpSlConfig.activeTrade.symbol === currentSymbol) {
+          logToOutput('TP/SL already managing an active trade for this symbol. Not setting new TP/SL for this buy.', 'TP/SL', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+          return;
+      }
+
+      const tpPrice = entryPrice * (1 + tpSlConfig.tpPct);
+      const slPrice = entryPrice * (1 - tpSlConfig.slPct);
+
+      tpSlConfig.activeTrade = {
+        tradeId: `TRADE_${Date.now()}`,
+        symbol: currentSymbol,
+        direction: 'LONG',
+        entryPrice: entryPrice,
+        tpPrice: tpPrice,
+        slPrice: slPrice,
+        remainingQty: adjustedQuantity
+      };
+      saveTpSlState();
+      logToOutput(`TP/SL Opened (LONG): Entry $${entryPrice.toFixed(5)} | TP $${tpPrice.toFixed(5)} | SL $${slPrice.toFixed(5)} | Qty ${adjustedQuantity.toFixed(5)} ${currentBaseCoin} Contracts`, 'TP/SL', CONSTANTS.NEON_GREEN, DOM_ELEMENTS.orderOutput);
+      updateTpSlFromUI(); // Update status display
+    }
+
+    function checkTpSlAndExecute() {
+      if (!tpSlConfig.enabled || !tpSlConfig.activeTrade || tpSlConfig.activeTrade.symbol !== currentSymbol) return;
+
+      const bestBid = latestOrderBook?.b?.[0]?.[0] ? parseFloat(latestOrderBook.b[0][0]) : null;
+      const bestAsk = latestOrderBook?.a?.[0]?.[0] ? parseFloat(latestOrderBook.a[0][0]) : null;
+      if (bestBid == null || bestAsk == null) return;
+      const mid = (bestBid + bestAsk) / 2;
+
+      const trade = tpSlConfig.activeTrade;
+
+      // Ensure remainingQty matches actual position for robustness
+      if (currentPositionQty <= CONSTANTS.POSITION_BUFFER) {
+          if (trade.remainingQty > CONSTANTS.POSITION_BUFFER) { // If client-side thinks it has a position but actual is zero
+            logToOutput(`Actual position is zero. Clearing TP/SL for this symbol.`, 'TP/SL', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.orderOutput);
+          }
+          tpSlConfig.activeTrade = null;
+          saveTpSlState();
+          updateTpSlFromUI();
+          return;
+      } else {
+          trade.remainingQty = currentPositionQty; // Sync remainingQty with actual
+      }
+
+      // Take Profit (LONG)
+      if (mid >= trade.tpPrice) {
+        logToOutput(`TP Reached! Closing LONG ${trade.remainingQty.toFixed(5)} ${currentBaseCoin} Contracts at mid $${mid.toFixed(5)}`, 'TP/SL', CONSTANTS.NEON_GREEN, DOM_ELEMENTS.orderOutput);
+        placeAutomatedOrder('SELL', trade.remainingQty);
+        tpSlConfig.activeTrade = null; // Clear active trade after placing close order
+        saveTpSlState();
+        updateTpSlFromUI();
+        return;
+      }
+
+      // Stop-Loss (LONG)
+      if (mid <= trade.slPrice) {
+        logToOutput(`SL Triggered! Closing LONG ${trade.remainingQty.toFixed(5)} ${currentBaseCoin} Contracts at mid $${mid.toFixed(5)}`, 'TP/SL', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+        placeAutomatedOrder('SELL', trade.remainingQty);
+        tpSlConfig.activeTrade = null; // Clear active trade after placing close order
+        saveTpSlState();
+        updateTpSlFromUI();
+      }
+    }
+
+    // --- Bybit Order Interaction ---
+    let lastOrderSentTime = 0; // Separate cooldown for trade orders
+
+    async function placeAutomatedOrder(side, quantity) {
+      if (Date.now() - lastOrderSentTime < CONSTANTS.ORDER_COOLDOWN_MS) {
+        const remaining = ((CONSTANTS.ORDER_COOLDOWN_MS - (Date.now() - lastOrderSentTime)) / 1000).toFixed(1);
+        logToOutput(`Order cooldown active. Wait ${remaining}s.`, 'Order Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+        return;
+      }
+
+      if (!BYBIT_API_KEY || !BYBIT_API_SECRET) {
+        logToOutput('Bybit API Key or Secret not set. Cannot place order.', 'Order Output', CONSTANTS.NEON_RED, DOM_ELEMENTS.orderOutput);
+        return;
+      }
+      if (!currentSymbol || currentSymbol === '') {
+          logToOutput('No trading symbol selected. Cannot place order.', 'Order Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+          return;
+      }
+      if (!latestOrderBook || !latestOrderBook.a || !latestOrderBook.b) {
+        logToOutput('No latest order book data available. Order cancelled.', 'Order Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+        return;
+      }
+
+      const maxPos = parseFloat(DOM_ELEMENTS.maxPositionContracts.value) || CONSTANTS.DEFAULT_MAX_POSITION_CONTRACTS;
+      let adjustedQuantity = quantity;
+
+      // Apply position limits for linear contracts
+      if (side === 'BUY') {
+        const remainingCapacity = maxPos - currentPositionQty;
+        if (remainingCapacity <= CONSTANTS.POSITION_BUFFER) {
+          logToOutput(`BUY order cancelled: Max position of ${maxPos.toFixed(5)} ${currentBaseCoin} Contracts reached (Current: ${currentPositionQty.toFixed(5)} ${currentBaseCoin} Contracts).`, 'Order Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+          return;
+        }
+        adjustedQuantity = Math.min(quantity, remainingCapacity);
+        if (adjustedQuantity < quantity) {
+            logToOutput(`BUY order quantity ${quantity.toFixed(5)} ${currentBaseCoin} Contracts adjusted to ${adjustedQuantity.toFixed(5)} ${currentBaseCoin} Contracts due to max position limit.`, 'Order Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+        }
+      } else if (side === 'SELL') {
+        if (currentPositionQty <= CONSTANTS.POSITION_BUFFER) {
+          logToOutput(`SELL order cancelled: No ${currentBaseCoin} Contracts position to sell.`, 'Order Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+          return;
+        }
+        adjustedQuantity = Math.min(quantity, currentPositionQty);
+        if (adjustedQuantity < quantity) {
+            logToOutput(`SELL order quantity ${quantity.toFixed(5)} ${currentBaseCoin} Contracts adjusted to ${adjustedQuantity.toFixed(5)} ${currentBaseCoin} Contracts to match current position.`, 'Order Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+        }
+      }
+
+      if (adjustedQuantity <= CONSTANTS.POSITION_BUFFER) {
+        logToOutput(`Order for ${side} results in negligible effective quantity after adjustments. Order cancelled.`, 'Order Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+        return;
+      }
+
+      const orderParams = {
+        category: 'linear', // Explicitly linear
+        symbol: currentSymbol,
+        side: side,
+        orderType: 'Market',
+        qty: adjustedQuantity.toFixed(3), // Bybit linear qty usually has lower precision, check instrument info
+        orderLinkId: `geminiBot_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      };
+
+      // TODO: For a more robust solution, query instrument info for `lotSizeFilter.qtyStep`
+      // and round `adjustedQuantity` to the nearest step.
+
+      logToOutput(`Placing ${side} order for ${adjustedQuantity.toFixed(3)} ${currentBaseCoin} Contracts on ${currentSymbol}...`, 'Order Output', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.orderOutput);
+
+      const response = await bybitApiCall('POST', '/v5/order/create', orderParams, true, 'linear');
+
+      if (response && response.retCode === 0) {
+        const orderId = response.result?.orderId;
+        logToOutput(`${side} Order Placed Successfully! Order ID: ${orderId}, Qty: ${adjustedQuantity.toFixed(3)} ${currentBaseCoin} Contracts.`, "Order Output", CONSTANTS.NEON_GREEN, DOM_ELEMENTS.orderOutput);
+        // Position update will be handled by fetchCurrentPosition() for accuracy with linear accounts
+        lastOrderSentTime = Date.now(); // Reset order cooldown
+
+        // If BUY, trigger client-side TP/SL monitoring setup
+        if (side === 'BUY') {
+          const entryPrice = latestOrderBook?.a?.[0]?.[0] ? parseFloat(latestOrderBook.a[0][0]) : 0;
+          onBuyOrderFilled(adjustedQuantity, entryPrice);
+        }
+        // Force a position refresh after an order for immediate feedback
+        fetchCurrentPosition();
+
+      } else {
+        logToOutput(`Bybit Order failed: ${response?.retMsg || 'Unknown error'}`, "Order Output", CONSTANTS.NEON_RED, DOM_ELEMENTS.orderOutput);
+      }
+    }
+
+    // --- Position Management ---
+    async function fetchCurrentPosition() {
+        if (!BYBIT_API_KEY || !BYBIT_API_SECRET || !currentSymbol) {
+            // logToOutput('API keys or symbol not set, cannot fetch position.', 'Position', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+            return;
+        }
+
+        const response = await bybitApiCall('GET', '/v5/position/list', { symbol: currentSymbol }, true, 'linear');
+
+        if (response && response.retCode === 0 && response.result.list && response.result.list.length > 0) {
+            const position = response.result.list[0]; // Assuming only one position per symbol
+            currentPositionQty = parseFloat(position.size);
+            currentEntryPrice = parseFloat(position.avgPrice);
+            currentUnrealisedPnl = parseFloat(position.unrealisedPnl);
+
+            // If a client-side TP/SL is not active but there's an open position, initialize it
+            if (currentPositionQty > CONSTANTS.POSITION_BUFFER && !tpSlConfig.activeTrade) {
+                logToOutput(`Detected open position for ${currentSymbol}. Initializing client-side TP/SL.`, 'Position', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.orderOutput);
+                onBuyOrderFilled(currentPositionQty, currentEntryPrice); // Treat as if a buy just happened
+            }
+        } else {
+            currentPositionQty = 0.0;
+            currentEntryPrice = 0.0;
+            currentUnrealisedPnl = 0.0;
+            // If position is zero, clear active client-side TP/SL
+            if (tpSlConfig.activeTrade) {
+                logToOutput(`Position closed. Clearing active TP/SL trade for ${currentSymbol}.`, 'TP/SL', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.orderOutput);
+                tpSlConfig.activeTrade = null;
+                saveTpSlState();
+            }
+        }
+        updateCurrentPositionDisplay();
+        updateTpSlFromUI(); // Update TP/SL status based on refreshed position
+    }
+
+    function updateCurrentPositionDisplay() {
+      DOM_ELEMENTS.currentPositionDisplay.textContent = currentPositionQty.toFixed(5);
+      DOM_ELEMENTS.currentPositionDisplay.style.color =
+        currentPositionQty > CONSTANTS.POSITION_BUFFER ? CONSTANTS.NEON_GREEN : CONSTANTS.NEON_CYAN;
+
+      DOM_ELEMENTS.entryPriceDisplay.textContent = currentEntryPrice > 0 ? `$${currentEntryPrice.toFixed(2)}` : '0.00 USDT';
+
+      const pnlColor = currentUnrealisedPnl > 0 ? CONSTANTS.NEON_GREEN : (currentUnrealisedPnl < 0 ? CONSTANTS.NEON_RED : CONSTANTS.NEON_CYAN);
+      DOM_ELEMENTS.unrealisedPnlDisplay.textContent = `${currentUnrealisedPnl.toFixed(2)} USDT`;
+      DOM_ELEMENTS.unrealisedPnlDisplay.style.color = pnlColor;
+    }
+
+    // --- Historical Data Summary for Gemini ---
+    function getHistoricalOrderBookSummary(timeframeMinutes) {
+      if (orderBookHistory.length === 0) return "No historical data available.";
+      const now = Date.now();
+      const startTime = now - timeframeMinutes * 60 * 1000;
+      const relevant = orderBookHistory.filter(d => d.ts >= startTime);
+      if (relevant.length < 2) return `Insufficient historical data for the last ${timeframeMinutes} minutes (found ${relevant.length} points). Using latest L1 data instead.`;
+
+      const first = relevant[0];
+      const last = relevant[relevant.length - 1];
+      const midIndex = Math.floor(relevant.length / 2);
+      const middle = relevant[midIndex];
+      const priceChangeBid = (((last.bidPrice - first.bidPrice) / first.bidPrice) * 100).toFixed(2);
+      const priceChangeAsk = (((last.askPrice - first.askPrice) / first.askPrice) * 100).toFixed(2);
+
+      return `Summary for last ${timeframeMinutes} minutes (${relevant.length} data points):
+Initial: Bid $${first.bidPrice.toFixed(2)} (Qty ${first.bidQty.toFixed(4)}), Ask $${first.askPrice.toFixed(2)} (Qty ${first.askQty.toFixed(4)})
+Middle:  Bid $${middle.bidPrice.toFixed(2)} (Qty ${middle.bidQty.toFixed(4)}), Ask $${middle.askPrice.toFixed(2)} (Qty ${middle.askQty.toFixed(4)})
+Current: Bid $${last.bidPrice.toFixed(2)} (Qty ${last.bidQty.toFixed(4)}), Ask $${last.askPrice.toFixed(2)} (Qty ${last.askQty.toFixed(4)})
+Bid Price Change: ${priceChangeBid}%, Ask Price Change: ${priceChangeAsk}%`;
+    }
+
+    // --- Gemini AI Analysis ---
+    async function analyzeWithGemini() {
+      if (!ai) {
+        logToOutput("Gemini client not initialized. Check API Key.", "Gemini Output", CONSTANTS.NEON_RED, DOM_ELEMENTS.geminiOutput);
+        return;
+      }
+      if (!latestOrderBook) {
+        logToOutput('No live order book data to analyze.', 'Gemini Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.geminiOutput);
+        return;
+      }
+      if (!currentSymbol || currentSymbol === '') {
+          logToOutput('No trading symbol selected.', 'Gemini Output', CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.geminiOutput);
+          return;
+      }
+
+      setLoading('analyzeBtn', true, 'Analyze & Get Signal');
+
+      const maxPos = parseFloat(DOM_ELEMENTS.maxPositionContracts.value) || CONSTANTS.DEFAULT_MAX_POSITION_CONTRACTS;
+      const bestBidPrice = parseFloat(latestOrderBook.b[0][0]);
+      const bestBidQty = parseFloat(latestOrderBook.b[0][1]);
+      const bestAskPrice = parseFloat(latestOrderBook.a[0][0]);
+      const bestAskQty = parseFloat(latestOrderBook.a[0][1]);
+      const advancedStats = computeAdvancedOrderBookStats(latestOrderBook);
+
+      let promptData = `Current ${currentSymbol} Linear Perpetual Order Book L1 Data:
+Best Bid: $${bestBidPrice.toFixed(2)} (Quantity: ${bestBidQty.toFixed(4)} Contracts)
+Best Ask: $${bestAskPrice.toFixed(2)} (Quantity: ${bestAskQty.toFixed(4)} Contracts)
+Current Position (${currentBaseCoin} Contracts): ${currentPositionQty.toFixed(5)}
+Current Entry Price: $${currentEntryPrice.toFixed(2)}
+Unrealised PnL: ${currentUnrealisedPnl.toFixed(2)}
+Maximum Allowed Position (${currentBaseCoin} Contracts): ${maxPos.toFixed(5)}
+Mid Price: $${advancedStats.midPrice.toFixed(4)}
+Order Book Imbalance (Top ${CONSTANTS.ORDERBOOK_DEPTH_N}): ${advancedStats.imbalancePct.toFixed(2)}%
+Estimated Buy Price for ${advancedStats.impactQty.toFixed(4)} Contracts: $${advancedStats.estBuyPriceForImpact.toFixed(2)}
+Estimated Sell Price for ${advancedStats.impactQty.toFixed(4)} Contracts: $${advancedStats.estSellPriceForImpact.toFixed(2)}
+`;
+
+      const selectedTimeframe = DOM_ELEMENTS.timeframeSelect.value;
+      if (selectedTimeframe !== "realtime") {
+        const minutes = parseInt(selectedTimeframe.replace('m', '').replace('h', '')) * (selectedTimeframe.includes('h') ? 60 : 1);
+        promptData += `\nHistorical Context (${selectedTimeframe}):\n${getHistoricalOrderBookSummary(minutes)}\n`;
+      }
+
+      const userPrompt = DOM_ELEMENTS.geminiPrompt.value.trim() ||
+        `Provide a trading signal for ${currentSymbol} (Linear Perpetual) based on the current order book data, historical context, advanced analytics (imbalance, price impact), current position (contracts), PnL, and maximum position limits. Format: [ACTION QUANTITY Contracts]. Example: [BUY 0.005 Contracts] or [SELL 0.002 Contracts] or [HOLD 0 Contracts]. Prioritize capital preservation. If buying, ensure quantity does not exceed available capacity within max position. If selling, ensure quantity does not exceed current position. If HOLD, quantity is 0. Base quantity on market conditions and risk assessment.`;
+
+      const fullPrompt = `${promptData}\nInstruction: ${userPrompt}`;
+      logToOutput(`Prompt sent to Gemini:\n${fullPrompt}`, 'Gemini Output', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.geminiOutput);
+
+      try {
+        const response = await ai.getGenerativeModel({ model: CONSTANTS.GEMINI_MODEL_NAME }).generateContent(fullPrompt);
+        const signal = response.text;
+        logToOutput(`Gemini Signal Received: ${signal}`, 'Gemini Output', CONSTANTS.NEON_GREEN, DOM_ELEMENTS.geminiOutput);
+        parseGeminiResponseAndPlaceOrder(signal);
+      } catch (error) {
+        logToOutput(`Gemini API Error: ${error?.message || 'Unknown error'}`, 'Gemini Output', CONSTANTS.NEON_RED, DOM_ELEMENTS.geminiOutput);
+        console.error('Gemini API Error:', error);
+      } finally {
+        setLoading('analyzeBtn', false, 'Analyze & Get Signal');
+      }
+    }
+
+    function parseGeminiResponseAndPlaceOrder(signalText) {
+      // Robust parsing for various Gemini output formats
+      const cleaned = (signalText || '')
+        .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+        .trim();
+
+      let action = null;
+      let quantity = null;
+
+      // Try for bracketed format: [BUY 0.005 Contracts]
+      let match = cleaned.match(/```math
+(BUY|SELL|HOLD)\s+([\d.]+)\s*(Contracts|BTC|ETH|SOL|XRP|LTC|ADA|DOGE|BCH)?```/i);
+      if (match) {
+        action = match[1].toUpperCase();
+        quantity = parseFloat(match[2]);
+      } else {
+        // Try for unbracketed format: BUY 0.005 Contracts
+        match = cleaned.match(/(BUY|SELL|HOLD)\s+([\d.]+)\s*(Contracts|BTC|ETH|SOL|XRP|LTC|ADA|DOGE|BCH)?/i);
+        if (match) {
+          action = match[1].toUpperCase();
+          quantity = parseFloat(match[2]);
+        }
+      }
+
+      if (!action) {
+        logToOutput(`Invalid signal format from Gemini: "${signalText}". Expected [ACTION QUANTITY Contracts]. No order placed.`, "Gemini Parser", CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+        return;
+      }
+
+      if (isNaN(quantity) || quantity <= 0) {
+        if (action === "HOLD") {
+             logToOutput("Gemini signal: HOLD. No action taken.", "Gemini Parser", CONSTANTS.NEON_CYAN, DOM_ELEMENTS.orderOutput);
+        } else {
+             logToOutput(`Invalid quantity "${quantity}" or quantity is zero for ${action}. No order placed.`, "Gemini Parser", CONSTANTS.NEON_ORANGE, DOM_ELEMENTS.orderOutput);
+        }
+        return;
+      }
+
+      if (action === 'BUY' || action === 'SELL') {
+        placeAutomatedOrder(action, quantity);
+      } else {
+        logToOutput(`Gemini signal: HOLD. No order placed.`, 'Gemini Parser', CONSTANTS.NEON_CYAN, DOM_ELEMENTS.orderOutput);
+      }
+    }
+
+
+    // --- Global Event Listeners and Initializations ---
+    window.addEventListener('resize', () => {
+      if (orderBookChartInstance) orderBookChartInstance.resize();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeApp();
+      // Bind TP/SL UI listeners
+      DOM_ELEMENTS.tpPctInput.addEventListener('input', updateTpSlFromUI);
+      DOM_ELEMENTS.slPctInput.addEventListener('input', updateTpSlFromUI);
+      DOM_ELEMENTS.tpSlEnabled.addEventListener('change', updateTpSlFromUI);
+      // Expose functions to global scope for HTML onclicks
+      window.saveApiKeys = saveApiKeys;
+      window.connectWebSocket = connectWebSocket;
+      window.subscribeToOrderBook = subscribeToOrderBook;
+      window.unsubscribeOrderBook = unsubscribeOrderBook;
+      window.analyzeWithGemini = analyzeWithGemini;
+    });
+
+  </script>
+</body>
+</html>
