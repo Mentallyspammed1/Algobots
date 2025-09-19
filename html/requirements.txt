@@ -8,3 +8,8 @@ numpy
 matplotlib
 seaborn
 pandas-ta
+fastapi
+uvicorn
+ta
+pytest
+httpx

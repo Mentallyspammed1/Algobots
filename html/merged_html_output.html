@@ -1,0 +1,1768 @@
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bbtrader2.2.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader 2.2</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader 2.2 - Enhanced Trading Bot</h1>
+        <p>This document outlines the architecture and functionality of Bybit Trader 2.2, an enhanced version of the automated trading bot designed for the Bybit exchange. This version focuses on modularity, improved error handling, and advanced strategy integration.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. `backbone.py` (API Interaction Layer)</h3>
+            <p>Handles all direct communication with the Bybit V5 API. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>`initialize_bybit_client()`: Sets up the `pybit` client with API keys.</li>
+                <li>`get_wallet_balance(account_type="UNIFIED", coin="USDT")`: Fetches available balance.</li>
+                <li>`place_order(symbol, side, order_type, qty, price=None, reduce_only=False, close_on_trigger=False, take_profit=None, stop_loss=None)`: Places various order types (Market, Limit).</li>
+                <li>`amend_order(symbol, order_id, new_qty=None, new_price=None)`: Modifies existing active orders.</li>
+                <li>`cancel_order(symbol, order_id)`: Cancels a specific active order.</li>
+                <li>`get_open_orders(symbol)`: Retrieves all active orders for a given symbol.</li>
+                <li>`get_position_info(symbol)`: Gets details of the current position (size, entry price, PnL).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> All API interactions are designed to be robust, with integrated retry mechanisms and error logging.
+            </div>
+
+            <h3>1.2. `indicators.py` (Technical Analysis Module)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical price data. This module is independent of the exchange interaction.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>`calculate_ema(df, period)`: Exponential Moving Average.</li>
+                <li>`calculate_rsi(df, period)`: Relative Strength Index.</li>
+                <li>`calculate_macd(df)`: Moving Average Convergence Divergence.</li>
+                <li>`calculate_supertrend(df, period, multiplier)`: Supertrend indicator.</li>
+                <li>`calculate_ehlers_fisher_transform(df, period)`: Ehlers Fisher Transform.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module is designed to be easily extensible with new indicators.
+            </div>
+
+            <h3>1.3. `strategy.py` (Trading Logic - *Conceptual*)</h3>
+            <p>This module (or a set of modules) would house the actual trading strategy logic. It would use data from `backbone.py` and indicators from `indicators.py` to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Define entry and exit conditions.</li>
+                <li>Manage position sizing.</li>
+                <li>Implement risk management rules (e.g., stop-loss, take-profit).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides.
+            </div>
+
+            <h3>1.4. `bb.py` (Main Orchestrator)</h3>
+            <p>The main script that ties all components together. It initializes the API client, fetches data, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters).</li>
+                <li>Initialize `backbone.py` client.</li>
+                <li>Continuously fetch market data (e.g., klines).</li>
+                <li>Pass data to `indicators.py` for calculation.</li>
+                <li>Pass indicators and market data to `strategy.py` to generate signals.</li>
+                <li>Execute trades via `backbone.py` based on signals.</li>
+                <li>Log all actions and decisions.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pandas
+numpy
+python-dotenv
+pybit
+ta
+</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Error Handling and Logging</h2>
+            <p>The bot employs comprehensive error handling and logging to ensure operational stability and provide insights into its behavior.</p>
+            <ul>
+                <li>`logging` module is used for all output.</li>
+                <li>`try-except` blocks are used around all API calls and critical operations.</li>
+                <li>Specific error codes from Bybit API are handled where necessary.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Future Enhancements</h2>
+            <ul>
+                <li>Integration with WebSocket for real-time data streams.</li>
+                <li>Advanced risk management features (e.g., dynamic position sizing, trailing stop-loss).</li>
+                <li>Backtesting module for strategy validation.</li>
+                <li>Web interface for monitoring and control.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bb1.1.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Bot 1.1</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Bot 1.1 - Basic Trading Bot</h1>
+        <p>This document outlines the basic structure and functionality of Bybit Bot 1.1, a simple automated trading bot designed for the Bybit exchange.</p>
+
+        <div class="section">
+            <h2>1. Core Functionality</h2>
+            <p>The bot's primary function is to interact with the Bybit V5 API to perform trading operations.</p>
+            <h3>1.1. API Client Initialization</h3>
+            <p>The bot initializes a `pybit` client using API keys loaded from environment variables.</p>
+            <pre><code class="language-python">from pybit.unified_trading import HTTP
+import os
+
+def initialize_bybit_client():
+    api_key = os.getenv("BYBIT_API_KEY")
+    api_secret = os.getenv("BYBIT_API_SECRET")
+
+    if not api_key or not api_secret:
+        print("Error: BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set.")
+        return None
+
+    client = HTTP(
+        testnet=False,
+        api_key=api_key,
+        api_secret=api_secret,
+    )
+    return client
+
+client = initialize_bybit_client()
+if client:
+    print("Bybit client initialized successfully.")
+else:
+    print("Failed to initialize Bybit client.")
+</code></pre>
+            <div class="note">
+                <strong>Note:</strong> API keys should always be stored securely, preferably as environment variables, and never hardcoded.
+            </div>
+
+            <h3>1.2. Getting Wallet Balance</h3>
+            <p>A function to retrieve the wallet balance for a specified coin (e.g., USDT) in a UNIFIED trading account.</p>
+            <pre><code class="language-python">def get_wallet_balance(client, coin="USDT", account_type="UNIFIED"):
+    try:
+        response = client.get_wallet_balance(accountType=account_type, coin=coin)
+        if response["retCode"] == 0:
+            for item in response["result"]["list"]:
+                if item["coin"] == coin:
+                    print(f"Available balance for {coin}: {item['availableToWithdraw']}")
+                    return float(item['availableToWithdraw'])
+            print(f"Coin {coin} not found in wallet balance.")
+            return None
+        else:
+            print(f"Error getting wallet balance: {response['retMsg']}")
+            return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+if client:
+    usdt_balance = get_wallet_balance(client)
+    if usdt_balance is not None:
+        print(f"Current USDT balance: {usdt_balance}")
+</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>2. Setup and Dependencies</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>Create a <code>.env</code> file in the root directory of your project with your Bybit API credentials:</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <p>Ensure you load these variables in your Python script, for example, using <code>python-dotenv</code>:</p>
+            <pre><code class="language-python">from dotenv import load_dotenv
+load_dotenv() # This loads the variables from .env</code></pre>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>Ensure you have the necessary libraries installed:</p>
+            <pre><code>pybit
+python-dotenv</code></pre>
+            <p>Install them using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Next Steps</h2>
+            <ul>
+                <li>Implement order placement and management functions.</li>
+                <li>Integrate technical analysis indicators.</li>
+                <li>Develop a trading strategy.</li>
+                <li>Add robust error handling and logging.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bb1.0.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Bot 1.0</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Bot 1.0 - Initial Setup</h1>
+        <p>This document outlines the initial setup for interacting with the Bybit V5 API using Python.</p>
+
+        <div class="section">
+            <h2>1. Prerequisites</h2>
+            <ul>
+                <li>Python 3.x installed.</li>
+                <li>A Bybit account with API keys generated.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>2. Installation</h2>
+            <h3>2.1. Install `pybit` library</h3>
+            <p>The primary library for interacting with the Bybit API is `pybit`.</p>
+            <pre><code>pip install pybit</code></pre>
+
+            <h3>2.2. Install `python-dotenv` (for environment variables)</h3>
+            <p>It's highly recommended to manage your API keys using environment variables for security.</p>
+            <pre><code>pip install python-dotenv</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Configuration</h2>
+            <h3>3.1. Create `.env` file</h3>
+            <p>In the root directory of your project, create a file named <code>.env</code> and add your Bybit API key and secret:</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="note">
+                <strong>Important:</strong> Replace <code>"YOUR_API_KEY"</code> and <code>"YOUR_API_SECRET"</code> with your actual Bybit API credentials. Keep this file secure and do not commit it to version control.
+            </div>
+
+            <h3>3.2. Python Script Example</h3>
+            <p>Here's a basic Python script to initialize the Bybit client and fetch your wallet balance:</p>
+            <pre><code class="language-python">from pybit.unified_trading import HTTP
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Get API credentials from environment variables
+api_key = os.getenv("BYBIT_API_KEY")
+api_secret = os.getenv("BYBIT_API_SECRET")
+
+if not api_key or not api_secret:
+    print("Error: BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set.")
+else:
+    # Initialize the HTTP client for Unified Trading
+    # Set testnet=True for testing on Bybit testnet
+    client = HTTP(
+        testnet=False,
+        api_key=api_key,
+        api_secret=api_secret,
+    )
+
+    try:
+        # Example: Get wallet balance for USDT in a UNIFIED account
+        response = client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
+
+        if response["retCode"] == 0:
+            print("Wallet Balance:")
+            for item in response["result"]["list"]:
+                if item["coin"] == "USDT":
+                    print(f"  USDT Available Balance: {item['availableToWithdraw']}")
+        else:
+            print(f"Error fetching wallet balance: {response['retMsg']}")
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>4. Next Steps</h2>
+            <p>With the basic setup complete, you can now proceed to implement more advanced trading logic, such as:</p>
+            <ul>
+                <li>Placing and managing orders.</li>
+                <li>Fetching market data (klines, order book).</li>
+                <li>Integrating technical indicators.</li>
+                <li>Developing and backtesting trading strategies.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bybit-trader.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader - Automated Trading Bot</h1>
+        <p>This document outlines the architecture and functionality of the Bybit Trader, an automated trading bot designed for the Bybit exchange.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. API Interaction Layer (`bybit_api.py` - *Conceptual*)</h3>
+            <p>Handles all direct communication with the Bybit V5 API. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Responsibilities:</h4>
+            <ul>
+                <li>Initializing the `pybit` client.</li>
+                <li>Fetching market data (klines, order book).</li>
+                <li>Placing, amending, and canceling orders.</li>
+                <li>Retrieving account and position information.</li>
+                <li>Implementing robust error handling and retry mechanisms for API calls.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This layer should be designed to be highly reliable and resilient to network issues or API rate limits.
+            </div>
+
+            <h3>1.2. Technical Analysis Module (`indicators.py` - *Conceptual*)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical price data. This module is independent of the exchange interaction and can be used for different strategies.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>Moving Averages (SMA, EMA)</li>
+                <li>Relative Strength Index (RSI)</li>
+                <li>Moving Average Convergence Divergence (MACD)</li>
+                <li>Bollinger Bands</li>
+                <li>Custom indicators specific to the trading strategy.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module should be easily extensible to add new indicators as needed.
+            </div>
+
+            <h3>1.3. Trading Strategy Module (`strategy.py` - *Conceptual*)</h3>
+            <p>This module (or a set of modules) would house the actual trading strategy logic. It would use market data from the API layer and indicators from the TA module to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Defining entry and exit conditions based on indicator values and price action.</li>
+                <li>Managing position sizing and risk per trade.</li>
+                <li>Implementing stop-loss and take-profit mechanisms.</li>
+                <li>Handling different market conditions (e.g., trending, ranging).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides. It should be designed for easy modification and backtesting.
+            </div>
+
+            <h3>1.4. Risk Management Module (`risk_manager.py` - *Conceptual*)</h3>
+            <p>A dedicated module to enforce overall risk parameters for the bot. This is crucial for protecting capital.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>Calculating maximum daily loss limits.</li>
+                <li>Monitoring overall portfolio drawdown.</li>
+                <li>Implementing circuit breakers to pause trading under extreme market conditions or excessive losses.</li>
+                <li>Managing leverage and margin usage.</li>
+            </ul>
+            <div class="warning">
+                <strong>Warning:</strong> Robust risk management is paramount in automated trading. Never deploy a bot without thoroughly tested risk controls.
+            </div>
+
+            <h3>1.5. Main Orchestrator (`main.py` or `bot.py` - *Conceptual*)</h3>
+            <p>The main script that ties all components together. It initializes the API client, fetches data, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters, risk limits).</li>
+                <li>Initialize API client, TA module, Strategy module, and Risk Manager.</li>
+                <li>Continuously fetch market data (e.g., klines via REST or WebSockets).</li>
+                <li>Pass data to TA module for indicator calculation.</li>
+                <li>Pass indicators and market data to Strategy module to generate signals.</li>
+                <li>Consult Risk Manager before executing any trade.</li>
+                <li>Execute trades via API Interaction Layer based on approved signals.</li>
+                <li>Log all actions, decisions, and errors.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pybit
+python-dotenv
+pandas
+numpy
+ta # For technical analysis library</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Logging and Monitoring</h2>
+            <p>Comprehensive logging is essential for debugging and monitoring the bot's behavior in real-time.</p>
+            <ul>
+                <li>Use Python's built-in `logging` module.</li>
+                <li>Log all API requests and responses.</li>
+                <li>Log all trading signals and execution results.</li>
+                <li>Log any errors or exceptions.</li>
+                <li>Consider integrating with external monitoring tools (e.g., Grafana, Prometheus) for dashboard visualization.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Future Enhancements</h2>
+            <ul>
+                <li>**WebSocket Integration:** For real-time market data and order updates, integrate with Bybit's WebSocket API.</li>
+                <li>**Backtesting Module:** Develop a robust backtesting framework to test and optimize strategies using historical data.</li>
+                <li>**Web Interface:** Create a simple web interface for monitoring bot status, open positions, and PnL.</li>
+                <li>**Database Integration:** Store historical data, trade logs, and performance metrics in a database.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bbt4.1.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader 4.1 - Advanced Trading Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader 4.1 - Advanced Trading Bot with WebSocket Integration</h1>
+        <p>This document outlines the architecture and functionality of Bybit Trader 4.1, an advanced automated trading bot designed for the Bybit exchange, featuring real-time data processing via WebSockets.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. `bybit_api.py` (API Interaction Layer)</h3>
+            <p>Handles all direct communication with the Bybit V5 API, including both REST and WebSocket connections. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>`initialize_rest_client()`: Sets up the `pybit` HTTP client.</li>
+                <li>`initialize_websocket_client(callback)`: Sets up the `pybit` WebSocket client and registers a callback for incoming data.</li>
+                <li>`get_wallet_balance()`: Fetches available balance via REST.</li>
+                <li>`place_order()`: Places various order types via REST.</li>
+                <li>`subscribe_to_kline(symbol, interval)`: Subscribes to real-time kline data via WebSocket.</li>
+                <li>`subscribe_to_order_updates()`: Subscribes to real-time order execution updates via WebSocket.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This layer is designed to be highly reliable and resilient, with integrated retry mechanisms, error logging, and rate limit handling for REST calls.
+            </div>
+
+            <h3>1.2. `indicators.py` (Technical Analysis Module)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical and real-time price data. This module is independent of the exchange interaction.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>`calculate_ema(df, period)`: Exponential Moving Average.</li>
+                <li>`calculate_rsi(df, period)`: Relative Strength Index.</li>
+                <li>`calculate_supertrend(df, period, multiplier)`: Supertrend indicator.</li>
+                <li>`calculate_ehlers_fisher_transform(df, period)`: Ehlers Fisher Transform.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module is designed to be easily extensible with new indicators and can process data from both REST (historical) and WebSocket (real-time) sources.
+            </div>
+
+            <h3>1.3. `strategy.py` (Trading Logic)</h3>
+            <p>This module houses the actual trading strategy logic. It uses real-time data from `bybit_api.py` and indicators from `indicators.py` to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Define entry and exit conditions based on indicator values and price action.</li>
+                <li>Manage position sizing.</li>
+                <li>Implement risk management rules (e.g., stop-loss, take-profit).</li>
+                <li>Process incoming WebSocket kline data to update indicators and generate signals.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides. It's designed to react to real-time market changes.
+            </div>
+
+            <h3>1.4. `risk_manager.py` (Risk Management Module)</h3>
+            <p>A dedicated module to enforce overall risk parameters for the bot. This is crucial for protecting capital.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>Calculating maximum daily loss limits.</li>
+                <li>Monitoring overall portfolio drawdown.</li>
+                <li>Implementing circuit breakers to pause trading under extreme market conditions or excessive losses.</li>
+                <li>Managing leverage and margin usage.</li>
+            </ul>
+            <div class="warning">
+                <strong>Warning:</strong> Robust risk management is paramount in automated trading. Never deploy a bot without thoroughly tested risk controls.
+            </div>
+
+            <h3>1.5. `main.py` (Main Orchestrator)</h3>
+            <p>The main script that ties all components together. It initializes the API clients, fetches initial data, starts WebSocket listeners, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters, risk limits).</li>
+                <li>Initialize `bybit_api.py` REST client.</li>
+                <li>Fetch initial historical data for indicator warm-up.</li>
+                <li>Initialize `bybit_api.py` WebSocket client and subscribe to relevant topics (klines, order updates).</li>
+                <li>Start the WebSocket listener in a separate thread/process.</li>
+                <li>The `strategy.py` module processes incoming WebSocket data via a callback.</li>
+                <li>Based on signals, `strategy.py` instructs `bybit_api.py` to execute trades.</li>
+                <li>`risk_manager.py` is consulted before any trade execution.</li>
+                <li>Log all actions, decisions, and errors.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pybit
+python-dotenv
+pandas
+numpy
+ta # For technical analysis library
+websocket-client # If using raw websockets, though pybit handles this</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Logging and Monitoring</h2>
+            <p>Comprehensive logging is essential for debugging and monitoring the bot's behavior in real-time.</p>
+            <ul>
+                <li>Use Python's built-in `logging` module with appropriate levels (DEBUG, INFO, WARNING, ERROR).</li>
+                <li>Log all API requests and responses (both REST and WebSocket).</li>
+                <li>Log all trading signals and execution results.</li>
+                <li>Log any errors or exceptions.</li>
+                <li>Consider integrating with external monitoring tools (e.g., Grafana, Prometheus) for dashboard visualization.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Backtesting and Optimization</h2>
+            <p>A robust backtesting module is crucial for validating and optimizing trading strategies before live deployment.</p>
+            <ul>
+                <li>Simulate trades on historical data.</li>
+                <li>Calculate key performance metrics (PnL, drawdown, Sharpe ratio).</li>
+                <li>Optimize strategy parameters using various algorithms.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bbt.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader Bot - Overview</h1>
+        <p>This document provides a high-level overview of an automated trading bot designed for the Bybit exchange.</p>
+
+        <div class="section">
+            <h2>1. Purpose</h2>
+            <p>The bot aims to automate cryptocurrency trading on Bybit by executing predefined strategies, managing orders, and monitoring positions without constant manual intervention.</p>
+        </div>
+
+        <div class="section">
+            <h2>2. Key Components (Conceptual)</h2>
+            <p>A typical Bybit trading bot would consist of several interconnected modules:</p>
+            <h3>2.1. API Client</h3>
+            <ul>
+                <li>Handles authentication and communication with the Bybit V5 API (both REST and WebSocket).</li>
+                <li>Fetches market data (klines, order book, trades).</li>
+                <li>Places, amends, and cancels orders.</li>
+                <li>Retrieves account and position information.</li>
+            </ul>
+
+            <h3>2.2. Data Handler</h3>
+            <ul>
+                <li>Processes raw market data into a usable format (e.g., Pandas DataFrames).</li>
+                <li>Manages historical data storage and retrieval.</li>
+                <li>Ensures data integrity and synchronization.</li>
+            </ul>
+
+            <h3>2.3. Technical Analysis Module</h3>
+            <ul>
+                <li>Calculates various technical indicators (e.g., Moving Averages, RSI, MACD, Bollinger Bands).</li>
+                <li>Provides signals based on indicator crossovers or thresholds.</li>
+            </ul>
+
+            <h3>2.4. Strategy Module</h3>
+            <ul>
+                <li>Implements the core trading logic.</li>
+                <li>Generates buy/sell signals based on market data and technical indicators.</li>
+                <li>Defines entry and exit conditions.</li>
+            </ul>
+
+            <h3>2.5. Risk Management Module</h3>
+            <ul>
+                <li>Enforces predefined risk parameters (e.g., stop-loss, take-profit, maximum daily loss).</li>
+                <li>Monitors position exposure and overall portfolio risk.</li>
+            </ul>
+
+            <h3>2.6. Order Execution Module</h3>
+            <ul>
+                <li>Receives signals from the Strategy Module.</li>
+                <li>Interacts with the API Client to execute trades.</li>
+                <li>Handles order types (Market, Limit, Stop-Limit) and ensures proper execution.</li>
+            </ul>
+
+            <h3>2.7. Logging and Monitoring</h3>
+            <ul>
+                <li>Records all bot activities, decisions, and errors.</li>
+                <li>Provides real-time insights into bot performance and health.</li>
+                <li>Alerts for critical events.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>3. Workflow (Conceptual)</h2>
+            <ol>
+                <li>**Initialization:** Load configuration, authenticate with Bybit API.</li>
+                <li>**Data Collection:** Continuously fetch market data (real-time via WebSockets, historical via REST).</li>
+                <li>**Data Processing:** Clean and format data, calculate technical indicators.</li>
+                <li>**Signal Generation:** Strategy module analyzes indicators and generates trading signals.</li>
+                <li>**Risk Check:** Risk Management module evaluates signals against predefined risk parameters.</li>
+                <li>**Order Execution:** If risk check passes, Order Execution module places trades via API.</li>
+                <li>**Position Monitoring:** Continuously monitor open positions, PnL, and market conditions.</li>
+                <li>**Logging & Reporting:** Record all actions and provide performance reports.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>4. Technologies Involved (Typical)</h2>
+            <ul>
+                <li>**Python:** Primary programming language.</li>
+                <li>**`pybit`:** Python SDK for Bybit API.</li>
+                <li>**`pandas` & `numpy`:** For data manipulation and numerical operations.</li>
+                <li>**`python-dotenv`:** For secure environment variable management.</li>
+                <li>**`ta` library:** For technical analysis indicators.</li>
+                <li>**`logging`:** Python's built-in logging module.</li>
+                <li>**`asyncio` / `websockets`:** For asynchronous operations and real-time data.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bb4.0.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader 4.0 - Advanced Trading Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader 4.0 - Advanced Trading Bot with WebSocket Integration</h1>
+        <p>This document outlines the architecture and functionality of Bybit Trader 4.0, an advanced automated trading bot designed for the Bybit exchange, featuring real-time data processing via WebSockets.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. `bybit_api.py` (API Interaction Layer)</h3>
+            <p>Handles all direct communication with the Bybit V5 API, including both REST and WebSocket connections. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>`initialize_rest_client()`: Sets up the `pybit` HTTP client.</li>
+                <li>`initialize_websocket_client(callback)`: Sets up the `pybit` WebSocket client and registers a callback for incoming data.</li>
+                <li>`get_wallet_balance()`: Fetches available balance via REST.</li>
+                <li>`place_order()`: Places various order types via REST.</li>
+                <li>`subscribe_to_kline(symbol, interval)`: Subscribes to real-time kline data via WebSocket.</li>
+                <li>`subscribe_to_order_updates()`: Subscribes to real-time order execution updates via WebSocket.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This layer is designed to be highly reliable and resilient, with integrated retry mechanisms, error logging, and rate limit handling for REST calls.
+            </div>
+
+            <h3>1.2. `indicators.py` (Technical Analysis Module)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical and real-time price data. This module is independent of the exchange interaction.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>`calculate_ema(df, period)`: Exponential Moving Average.</li>
+                <li>`calculate_rsi(df, period)`: Relative Strength Index.</li>
+                <li>`calculate_supertrend(df, period, multiplier)`: Supertrend indicator.</li>
+                <li>`calculate_ehlers_fisher_transform(df, period)`: Ehlers Fisher Transform.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module is designed to be easily extensible with new indicators and can process data from both REST (historical) and WebSocket (real-time) sources.
+            </div>
+
+            <h3>1.3. `strategy.py` (Trading Logic)</h3>
+            <p>This module houses the actual trading strategy logic. It uses real-time data from `bybit_api.py` and indicators from `indicators.py` to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Define entry and exit conditions based on indicator values and price action.</li>
+                <li>Manage position sizing.</li>
+                <li>Implement risk management rules (e.g., stop-loss, take-profit).</li>
+                <li>Process incoming WebSocket kline data to update indicators and generate signals.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides. It's designed to react to real-time market changes.
+            </div>
+
+            <h3>1.4. `risk_manager.py` (Risk Management Module)</h3>
+            <p>A dedicated module to enforce overall risk parameters for the bot. This is crucial for protecting capital.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>Calculating maximum daily loss limits.</li>
+                <li>Monitoring overall portfolio drawdown.</li>
+                <li>Implementing circuit breakers to pause trading under extreme market conditions or excessive losses.</li>
+                <li>Managing leverage and margin usage.</li>
+            </ul>
+            <div class="warning">
+                <strong>Warning:</strong> Robust risk management is paramount in automated trading. Never deploy a bot without thoroughly tested risk controls.
+            </div>
+
+            <h3>1.5. `main.py` (Main Orchestrator)</h3>
+            <p>The main script that ties all components together. It initializes the API clients, fetches initial data, starts WebSocket listeners, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters, risk limits).</li>
+                <li>Initialize `bybit_api.py` REST client.</li>
+                <li>Fetch initial historical data for indicator warm-up.</li>
+                <li>Initialize `bybit_api.py` WebSocket client and subscribe to relevant topics (klines, order updates).</li>
+                <li>Start the WebSocket listener in a separate thread/process.</li>
+                <li>The `strategy.py` module processes incoming WebSocket data via a callback.</li>
+                <li>Based on signals, `strategy.py` instructs `bybit_api.py` to execute trades.</li>
+                <li>`risk_manager.py` is consulted before any trade execution.</li>
+                <li>Log all actions, decisions, and errors.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pybit
+python-dotenv
+pandas
+numpy
+ta # For technical analysis library
+websocket-client # If using raw websockets, though pybit handles this</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Logging and Monitoring</h2>
+            <p>Comprehensive logging is essential for debugging and monitoring the bot's behavior in real-time.</p>
+            <ul>
+                <li>Use Python's built-in `logging` module with appropriate levels (DEBUG, INFO, WARNING, ERROR).</li>
+                <li>Log all API requests and responses (both REST and WebSocket).</li>
+                <li>Log all trading signals and execution results.</li>
+                <li>Log any errors or exceptions.</li>
+                <li>Consider integrating with external monitoring tools (e.g., Grafana, Prometheus) for dashboard visualization.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Backtesting and Optimization</h2>
+            <p>A robust backtesting module is crucial for validating and optimizing trading strategies before live deployment.</p>
+            <ul>
+                <li>Simulate trades on historical data.</li>
+                <li>Calculate key performance metrics (PnL, drawdown, Sharpe ratio).</li>
+                <li>Optimize strategy parameters using various algorithms.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bb3.0.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader 3.0 - Advanced Trading Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader 3.0 - Advanced Trading Bot</h1>
+        <p>This document outlines the architecture and functionality of Bybit Trader 3.0, an advanced automated trading bot designed for the Bybit exchange. This version focuses on modularity, improved error handling, and advanced strategy integration.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. `bybit_api.py` (API Interaction Layer)</h3>
+            <p>Handles all direct communication with the Bybit V5 API. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>`initialize_bybit_client()`: Sets up the `pybit` client with API keys.</li>
+                <li>`get_wallet_balance(account_type="UNIFIED", coin="USDT")`: Fetches available balance.</li>
+                <li>`place_order(symbol, side, order_type, qty, price=None, reduce_only=False, close_on_trigger=False, take_profit=None, stop_loss=None)`: Places various order types (Market, Limit).</li>
+                <li>`amend_order(symbol, order_id, new_qty=None, new_price=None)`: Modifies existing active orders.</li>
+                <li>`cancel_order(symbol, order_id)`: Cancels a specific active order.</li>
+                <li>`get_open_orders(symbol)`: Retrieves all active orders for a given symbol.</li>
+                <li>`get_position_info(symbol)`: Gets details of the current position (size, entry price, PnL).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> All API interactions are designed to be robust, with integrated retry mechanisms and error logging.
+            </div>
+
+            <h3>1.2. `indicators.py` (Technical Analysis Module)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical price data. This module is independent of the exchange interaction.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>`calculate_ema(df, period)`: Exponential Moving Average.</li>
+                <li>`calculate_rsi(df, period)`: Relative Strength Index.</li>
+                <li>`calculate_macd(df)`: Moving Average Convergence Divergence.</li>
+                <li>`calculate_supertrend(df, period, multiplier)`: Supertrend indicator.</li>
+                <li>`calculate_ehlers_fisher_transform(df, period)`: Ehlers Fisher Transform.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module is designed to be easily extensible with new indicators.
+            </div>
+
+            <h3>1.3. `strategy.py` (Trading Logic)</h3>
+            <p>This module (or a set of modules) would house the actual trading strategy logic. It would use data from `bybit_api.py` and indicators from `indicators.py` to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Define entry and exit conditions.</li>
+                <li>Manage position sizing.</li>
+                <li>Implement risk management rules (e.g., stop-loss, take-profit).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides.
+            </div>
+
+            <h3>1.4. `risk_manager.py` (Risk Management Module)</h3>
+            <p>A dedicated module to enforce overall risk parameters for the bot. This is crucial for protecting capital.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>Calculating maximum daily loss limits.</li>
+                <li>Monitoring overall portfolio drawdown.</li>
+                <li>Implementing circuit breakers to pause trading under extreme market conditions or excessive losses.</li>
+                <li>Managing leverage and margin usage.</li>
+            </ul>
+            <div class="warning">
+                <strong>Warning:</strong> Robust risk management is paramount in automated trading. Never deploy a bot without thoroughly tested risk controls.
+            </div>
+
+            <h3>1.5. `main.py` (Main Orchestrator)</h3>
+            <p>The main script that ties all components together. It initializes the API client, fetches data, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters, risk limits).</li>
+                <li>Initialize `bybit_api.py` client.</li>
+                <li>Continuously fetch market data (e.g., klines).</li>
+                <li>Pass data to `indicators.py` for calculation.</li>
+                <li>Pass indicators and market data to `strategy.py` to generate signals.</li>
+                <li>Consult `risk_manager.py` before executing any trade.</li>
+                <li>Execute trades via `bybit_api.py` based on approved signals.</li>
+                <li>Log all actions and decisions.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pybit
+python-dotenv
+pandas
+numpy
+ta # For technical analysis library</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Error Handling and Logging</h2>
+            <p>The bot employs comprehensive error handling and logging to ensure operational stability and provide insights into its behavior.</p>
+            <ul>
+                <li>`logging` module is used for all output.</li>
+                <li>`try-except` blocks are used around all API calls and critical operations.</li>
+                <li>Specific error codes from Bybit API are handled where necessary.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Future Enhancements</h2>
+            <ul>
+                <li>Integration with WebSocket for real-time data streams.</li>
+                <li>Advanced risk management features (e.g., dynamic position sizing, trailing stop-loss).</li>
+                <li>Backtesting module for strategy validation.</li>
+                <li>Web interface for monitoring and control.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bb2.0.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader 2.0 - Enhanced Trading Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader 2.0 - Enhanced Trading Bot</h1>
+        <p>This document outlines the architecture and functionality of Bybit Trader 2.0, an enhanced version of the automated trading bot designed for the Bybit exchange. This version focuses on modularity, improved error handling, and advanced strategy integration.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. `bybit_api.py` (API Interaction Layer)</h3>
+            <p>Handles all direct communication with the Bybit V5 API. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>`initialize_bybit_client()`: Sets up the `pybit` client with API keys.</li>
+                <li>`get_wallet_balance(account_type="UNIFIED", coin="USDT")`: Fetches available balance.</li>
+                <li>`place_order(symbol, side, order_type, qty, price=None, reduce_only=False, close_on_trigger=False, take_profit=None, stop_loss=None)`: Places various order types (Market, Limit).</li>
+                <li>`amend_order(symbol, order_id, new_qty=None, new_price=None)`: Modifies existing active orders.</li>
+                <li>`cancel_order(symbol, order_id)`: Cancels a specific active order.</li>
+                <li>`get_open_orders(symbol)`: Retrieves all active orders for a given symbol.</li>
+                <li>`get_position_info(symbol)`: Gets details of the current position (size, entry price, PnL).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> All API interactions are designed to be robust, with integrated retry mechanisms and error logging.
+            </div>
+
+            <h3>1.2. `indicators.py` (Technical Analysis Module)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical price data. This module is independent of the exchange interaction.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>`calculate_ema(df, period)`: Exponential Moving Average.</li>
+                <li>`calculate_rsi(df, period)`: Relative Strength Index.</li>
+                <li>`calculate_macd(df)`: Moving Average Convergence Divergence.</li>
+                <li>`calculate_supertrend(df, period, multiplier)`: Supertrend indicator.</li>
+                <li>`calculate_ehlers_fisher_transform(df, period)`: Ehlers Fisher Transform.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module is designed to be easily extensible with new indicators.
+            </div>
+
+            <h3>1.3. `strategy.py` (Trading Logic)</h3>
+            <p>This module (or a set of modules) would house the actual trading strategy logic. It would use data from `bybit_api.py` and indicators from `indicators.py` to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Define entry and exit conditions.</li>
+                <li>Manage position sizing.</li>
+                <li>Implement risk management rules (e.g., stop-loss, take-profit).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides.
+            </div>
+
+            <h3>1.4. `main.py` (Main Orchestrator)</h3>
+            <p>The main script that ties all components together. It initializes the API client, fetches data, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters).</li>
+                <li>Initialize `bybit_api.py` client.</li>
+                <li>Continuously fetch market data (e.g., klines).</li>
+                <li>Pass data to `indicators.py` for calculation.</li>
+                <li>Pass indicators and market data to `strategy.py` to generate signals.</li>
+                <li>Execute trades via `bybit_api.py` based on signals.</li>
+                <li>Log all actions and decisions.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pybit
+python-dotenv
+pandas
+numpy
+ta # For technical analysis library</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Error Handling and Logging</h2>
+            <p>The bot employs comprehensive error handling and logging to ensure operational stability and provide insights into its behavior.</p>
+            <ul>
+                <li>`logging` module is used for all output.</li>
+                <li>`try-except` blocks are used around all API calls and critical operations.</li>
+                <li>Specific error codes from Bybit API are handled where necessary.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Future Enhancements</h2>
+            <ul>
+                <li>Integration with WebSocket for real-time data streams.</li>
+                <li>Advanced risk management features (e.g., dynamic position sizing, trailing stop-loss).</li>
+                <li>Backtesting module for strategy validation.</li>
+                <li>Web interface for monitoring and control.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bbtrader2.1.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader 2.1 - Enhanced Trading Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader 2.1 - Enhanced Trading Bot</h1>
+        <p>This document outlines the architecture and functionality of Bybit Trader 2.1, an enhanced version of the automated trading bot designed for the Bybit exchange. This version focuses on modularity, improved error handling, and advanced strategy integration.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. `bybit_api.py` (API Interaction Layer)</h3>
+            <p>Handles all direct communication with the Bybit V5 API. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>`initialize_bybit_client()`: Sets up the `pybit` client with API keys.</li>
+                <li>`get_wallet_balance(account_type="UNIFIED", coin="USDT")`: Fetches available balance.</li>
+                <li>`place_order(symbol, side, order_type, qty, price=None, reduce_only=False, close_on_trigger=False, take_profit=None, stop_loss=None)`: Places various order types (Market, Limit).</li>
+                <li>`amend_order(symbol, order_id, new_qty=None, new_price=None)`: Modifies existing active orders.</li>
+                <li>`cancel_order(symbol, order_id)`: Cancels a specific active order.</li>
+                <li>`get_open_orders(symbol)`: Retrieves all active orders for a given symbol.</li>
+                <li>`get_position_info(symbol)`: Gets details of the current position (size, entry price, PnL).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> All API interactions are designed to be robust, with integrated retry mechanisms and error logging.
+            </div>
+
+            <h3>1.2. `indicators.py` (Technical Analysis Module)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical price data. This module is independent of the exchange interaction.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>`calculate_ema(df, period)`: Exponential Moving Average.</li>
+                <li>`calculate_rsi(df, period)`: Relative Strength Index.</li>
+                <li>`calculate_macd(df)`: Moving Average Convergence Divergence.</li>
+                <li>`calculate_supertrend(df, period, multiplier)`: Supertrend indicator.</li>
+                <li>`calculate_ehlers_fisher_transform(df, period)`: Ehlers Fisher Transform.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module is designed to be easily extensible with new indicators.
+            </div>
+
+            <h3>1.3. `strategy.py` (Trading Logic)</h3>
+            <p>This module (or a set of modules) would house the actual trading strategy logic. It would use data from `bybit_api.py` and indicators from `indicators.py` to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Define entry and exit conditions.</li>
+                <li>Manage position sizing.</li>
+                <li>Implement risk management rules (e.g., stop-loss, take-profit).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides.
+            </div>
+
+            <h3>1.4. `main.py` (Main Orchestrator)</h3>
+            <p>The main script that ties all components together. It initializes the API client, fetches data, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters).</li>
+                <li>Initialize `bybit_api.py` client.</li>
+                <li>Continuously fetch market data (e.g., klines).</li>
+                <li>Pass data to `indicators.py` for calculation.</li>
+                <li>Pass indicators and market data to `strategy.py` to generate signals.</li>
+                <li>Execute trades via `bybit_api.py` based on signals.</li>
+                <li>Log all actions and decisions.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pybit
+python-dotenv
+pandas
+numpy
+ta # For technical analysis library</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Error Handling and Logging</h2>
+            <p>The bot employs comprehensive error handling and logging to ensure operational stability and provide insights into its behavior.</p>
+            <ul>
+                <li>`logging` module is used for all output.</li>
+                <li>`try-except` blocks are used around all API calls and critical operations.</li>
+                <li>Specific error codes from Bybit API are handled where necessary.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Future Enhancements</h2>
+            <ul>
+                <li>Integration with WebSocket for real-time data streams.</li>
+                <li>Advanced risk management features (e.g., dynamic position sizing, trailing stop-loss).</li>
+                <li>Backtesting module for strategy validation.</li>
+                <li>Web interface for monitoring and control.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bbtrader2.0.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader 2.0 - Enhanced Trading Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader 2.0 - Enhanced Trading Bot</h1>
+        <p>This document outlines the architecture and functionality of Bybit Trader 2.0, an enhanced version of the automated trading bot designed for the Bybit exchange. This version focuses on modularity, improved error handling, and advanced strategy integration.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. `bybit_api.py` (API Interaction Layer)</h3>
+            <p>Handles all direct communication with the Bybit V5 API. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>`initialize_bybit_client()`: Sets up the `pybit` client with API keys.</li>
+                <li>`get_wallet_balance(account_type="UNIFIED", coin="USDT")`: Fetches available balance.</li>
+                <li>`place_order(symbol, side, order_type, qty, price=None, reduce_only=False, close_on_trigger=False, take_profit=None, stop_loss=None)`: Places various order types (Market, Limit).</li>
+                <li>`amend_order(symbol, order_id, new_qty=None, new_price=None)`: Modifies existing active orders.</li>
+                <li>`cancel_order(symbol, order_id)`: Cancels a specific active order.</li>
+                <li>`get_open_orders(symbol)`: Retrieves all active orders for a given symbol.</li>
+                <li>`get_position_info(symbol)`: Gets details of the current position (size, entry price, PnL).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> All API interactions are designed to be robust, with integrated retry mechanisms and error logging.
+            </div>
+
+            <h3>1.2. `indicators.py` (Technical Analysis Module)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical price data. This module is independent of the exchange interaction.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>`calculate_ema(df, period)`: Exponential Moving Average.</li>
+                <li>`calculate_rsi(df, period)`: Relative Strength Index.</li>
+                <li>`calculate_macd(df)`: Moving Average Convergence Divergence.</li>
+                <li>`calculate_supertrend(df, period, multiplier)`: Supertrend indicator.</li>
+                <li>`calculate_ehlers_fisher_transform(df, period)`: Ehlers Fisher Transform.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module is designed to be easily extensible with new indicators.
+            </div>
+
+            <h3>1.3. `strategy.py` (Trading Logic)</h3>
+            <p>This module (or a set of modules) would house the actual trading strategy logic. It would use data from `bybit_api.py` and indicators from `indicators.py` to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Define entry and exit conditions.</li>
+                <li>Manage position sizing.</li>
+                <li>Implement risk management rules (e.g., stop-loss, take-profit).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides.
+            </div>
+
+            <h3>1.4. `main.py` (Main Orchestrator)</h3>
+            <p>The main script that ties all components together. It initializes the API client, fetches data, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters).</li>
+                <li>Initialize `bybit_api.py` client.</li>
+                <li>Continuously fetch market data (e.g., klines).</li>
+                <li>Pass data to `indicators.py` for calculation.</li>
+                <li>Pass indicators and market data to `strategy.py` to generate signals.</li>
+                <li>Execute trades via `bybit_api.py` based on signals.</li>
+                <li>Log all actions and decisions.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pybit
+python-dotenv
+pandas
+numpy
+ta # For technical analysis library</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Error Handling and Logging</h2>
+            <p>The bot employs comprehensive error handling and logging to ensure operational stability and provide insights into its behavior.</p>
+            <ul>
+                <li>`logging` module is used for all output.</li>
+                <li>`try-except` blocks are used around all API calls and critical operations.</li>
+                <li>Specific error codes from Bybit API are handled where necessary.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Future Enhancements</h2>
+            <ul>
+                <li>Integration with WebSocket for real-time data streams.</li>
+                <li>Advanced risk management features (e.g., dynamic position sizing, trailing stop-loss).</li>
+                <li>Backtesting module for strategy validation.</li>
+                <li>Web interface for monitoring and control.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/bbtrader.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Trader - Automated Trading Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .warning { background-color: #f8d7da; border-left: 5px solid #f5c6cb; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bybit Trader - Automated Trading Bot</h1>
+        <p>This document outlines the architecture and functionality of the Bybit Trader, an automated trading bot designed for the Bybit exchange.</p>
+
+        <div class="section">
+            <h2>1. Core Architecture</h2>
+            <p>The bot is structured into several key components, promoting separation of concerns and reusability.</p>
+            <h3>1.1. API Interaction Layer (`bybit_api.py` - *Conceptual*)</h3>
+            <p>Handles all direct communication with the Bybit V5 API. It abstracts away the complexities of API requests, authentication, and response parsing.</p>
+            <h4>Key Responsibilities:</h4>
+            <ul>
+                <li>Initializing the `pybit` client.</li>
+                <li>Fetching market data (klines, order book).</li>
+                <li>Placing, amending, and canceling orders.</li>
+                <li>Retrieving account and position information.</li>
+                <li>Implementing robust error handling and retry mechanisms for API calls.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This layer should be designed to be highly reliable and resilient to network issues or API rate limits.
+            </div>
+
+            <h3>1.2. Technical Analysis Module (`indicators.py` - *Conceptual*)</h3>
+            <p>Contains functions to calculate various technical indicators based on historical price data. This module is independent of the exchange interaction and can be used for different strategies.</p>
+            <h4>Key Indicators (Examples):</h4>
+            <ul>
+                <li>Moving Averages (SMA, EMA)</li>
+                <li>Relative Strength Index (RSI)</li>
+                <li>Moving Average Convergence Divergence (MACD)</li>
+                <li>Bollinger Bands</li>
+                <li>Custom indicators specific to the trading strategy.</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> This module should be easily extensible to add new indicators as needed.
+            </div>
+
+            <h3>1.3. Trading Strategy Module (`strategy.py` - *Conceptual*)</h3>
+            <p>This module (or a set of modules) would house the actual trading strategy logic. It would use market data from the API layer and indicators from the TA module to generate trading signals.</p>
+            <h4>Responsibilities:</h4>
+            <ul>
+                <li>Defining entry and exit conditions based on indicator values and price action.</li>
+                <li>Managing position sizing and risk per trade.</li>
+                <li>Implementing stop-loss and take-profit mechanisms.</li>
+                <li>Handling different market conditions (e.g., trending, ranging).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> The strategy module is where the "intelligence" of the bot resides. It should be designed for easy modification and backtesting.
+            </div>
+
+            <h3>1.4. Risk Management Module (`risk_manager.py` - *Conceptual*)</h3>
+            <p>A dedicated module to enforce overall risk parameters for the bot. This is crucial for protecting capital.</p>
+            <h4>Key Functions:</h4>
+            <ul>
+                <li>Calculating maximum daily loss limits.</li>
+                <li>Monitoring overall portfolio drawdown.</li>
+                <li>Implementing circuit breakers to pause trading under extreme market conditions or excessive losses.</li>
+                <li>Managing leverage and margin usage.</li>
+            </ul>
+            <div class="warning">
+                <strong>Warning:</strong> Robust risk management is paramount in automated trading. Never deploy a bot without thoroughly tested risk controls.
+            </div>
+
+            <h3>1.5. Main Orchestrator (`main.py` or `bot.py` - *Conceptual*)</h3>
+            <p>The main script that ties all components together. It initializes the API client, fetches data, applies the strategy, and executes trades.</p>
+            <h4>Flow:</h4>
+            <ol>
+                <li>Load configuration (API keys, symbols, strategy parameters, risk limits).</li>
+                <li>Initialize API client, TA module, Strategy module, and Risk Manager.</li>
+                <li>Continuously fetch market data (e.g., klines via REST or WebSockets).</li>
+                <li>Pass data to TA module for indicator calculation.</li>
+                <li>Pass indicators and market data to Strategy module to generate signals.</li>
+                <li>Consult Risk Manager before executing any trade.</li>
+                <li>Execute trades via API Interaction Layer based on approved signals.</li>
+                <li>Log all actions, decisions, and errors.</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>2. Configuration and Setup</h2>
+            <h3>2.1. Environment Variables</h3>
+            <p>API keys and secrets are loaded from environment variables for security.</p>
+            <pre><code>BYBIT_API_KEY="YOUR_API_KEY"
+BYBIT_API_SECRET="YOUR_API_SECRET"</code></pre>
+            <div class="warning">
+                <strong>Warning:</strong> Never hardcode API keys directly in your code. Use environment variables or a secure configuration management system.
+            </div>
+
+            <h3>2.2. `requirements.txt`</h3>
+            <p>All Python dependencies are listed in `requirements.txt`.</p>
+            <pre><code>pybit
+python-dotenv
+pandas
+numpy
+ta # For technical analysis library</code></pre>
+            <p>Install dependencies using:</p>
+            <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Logging and Monitoring</h2>
+            <p>Comprehensive logging is essential for debugging and monitoring the bot's behavior in real-time.</p>
+            <ul>
+                <li>Use Python's built-in `logging` module.</li>
+                <li>Log all API requests and responses.</li>
+                <li>Log all trading signals and execution results.</li>
+                <li>Log any errors or exceptions.</li>
+                <li>Consider integrating with external monitoring tools (e.g., Grafana, Prometheus) for dashboard visualization.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Future Enhancements</h2>
+            <ul>
+                <li>**WebSocket Integration:** For real-time market data and order updates, integrate with Bybit's WebSocket API.</li>
+                <li>**Backtesting Module:** Develop a robust backtesting framework to test and optimize strategies using historical data.</li>
+                <li>**Web Interface:** Create a simple web interface for monitoring bot status, open positions, and PnL.</li>
+                <li>**Database Integration:** Store historical data, trade logs, and performance metrics in a database.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/supertrend.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supertrend Indicator</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Supertrend Indicator - Overview</h1>
+        <p>The Supertrend indicator is a trend-following overlay indicator that uses Average True Range (ATR) to determine market volatility and identify the direction of the trend. It is displayed as a line on the price chart, changing color based on the trend direction.</p>
+
+        <div class="section">
+            <h2>1. How it Works</h2>
+            <p>The Supertrend indicator is calculated using two main parameters:</p>
+            <ul>
+                <li><strong>Period:</strong> The number of periods used for the ATR calculation (e.g., 10).</li>
+                <li><strong>Multiplier:</strong> A factor by which the ATR is multiplied to set the distance of the Supertrend line from the price (e.g., 3).</li>
+            </ul>
+            <p>The indicator plots a line that switches between above and below the price. When the line is below the price and green, it indicates an uptrend. When the line is above the price and red, it indicates a downtrend.</p>
+        </div>
+
+        <div class="section">
+            <h2>2. Calculation (Simplified)</h2>
+            <p>The calculation involves several steps:</p>
+            <ol>
+                <li>Calculate the Average True Range (ATR).</li>
+                <li>Calculate the Upper Band and Lower Band using the ATR and multiplier.</li>
+                <li>Determine the Supertrend line based on the closing price and the bands, switching direction when the price crosses the bands.</li>
+            </ol>
+            <pre><code class="language-python"># Conceptual Python-like pseudo-code
+def calculate_supertrend(high, low, close, atr_period=10, multiplier=3):
+    # 1. Calculate ATR
+    atr = calculate_atr(high, low, close, atr_period)
+
+    # 2. Calculate Basic Upper and Lower Bands
+    basic_upper_band = ((high + low) / 2) + (multiplier * atr)
+    basic_lower_band = ((high + low) / 2) - (multiplier * atr)
+
+    # 3. Determine Final Upper and Lower Bands (handling trend changes)
+    final_upper_band = []
+    final_lower_band = []
+    supertrend = []
+    trend = [] # 1 for uptrend, -1 for downtrend
+
+    for i in range(len(close)):
+        if i == 0:
+            final_upper_band.append(basic_upper_band[i])
+            final_lower_band.append(basic_lower_band[i])
+            trend.append(1) # Assume uptrend initially
+        else:
+            # Update final upper band
+            if basic_upper_band[i] < final_upper_band[i-1] or close[i-1] > final_upper_band[i-1]:
+                final_upper_band.append(basic_upper_band[i])
+            else:
+                final_upper_band.append(final_upper_band[i-1])
+
+            # Update final lower band
+            if basic_lower_band[i] > final_lower_band[i-1] or close[i-1] < final_lower_band[i-1]:
+                final_lower_band.append(basic_lower_band[i])
+            else:
+                final_lower_band.append(final_lower_band[i-1])
+
+            # Determine trend and Supertrend line
+            if trend[i-1] == 1: # Previous trend was up
+                if close[i] <= final_lower_band[i]:
+                    trend.append(-1) # Trend changed to down
+                    supertrend.append(final_upper_band[i])
+                else:
+                    trend.append(1) # Trend remains up
+                    supertrend.append(final_lower_band[i])
+            else: # Previous trend was down
+                if close[i] >= final_upper_band[i]:
+                    trend.append(1) # Trend changed to up
+                    supertrend.append(final_lower_band[i])
+                else:
+                    trend.append(-1) # Trend remains down
+                    supertrend.append(final_upper_band[i])
+    
+    return supertrend, trend
+</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Trading Signals</h2>
+            <p>The Supertrend indicator generates clear buy and sell signals:</p>
+            <ul>
+                <li><strong>Buy Signal:</strong> When the Supertrend line flips from above the price (red) to below the price (green).</li>
+                <li><strong>Sell Signal:</strong> When the Supertrend line flips from below the price (green) to above the price (red).</li>
+            </ul>
+            <div class="note">
+                <strong>Note:</strong> It's often used in conjunction with other indicators to confirm signals and reduce false positives.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>4. Advantages and Limitations</h2>
+            <h3>Advantages:</h3>
+            <ul>
+                <li>Easy to interpret.</li>
+                <li>Effective in trending markets.</li>
+                <li>Provides clear entry and exit points.</li>
+            </ul>
+            <h3>Limitations:</h3>
+            <ul>
+                <li>Can generate false signals in choppy or ranging markets.</li>
+                <li>Lagging indicator, as it uses historical data.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+<!-- --- Merged from: /data/data/com.termux/files/home/Algobots/html/tests/supertrend.html --- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supertrend Indicator Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        pre { background: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: 'Courier New', Courier, monospace; }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .note { background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; }
+        .success { background-color: #d4edda; border-left: 5px solid #28a745; padding: 10px; margin-top: 10px; border-radius: 4px; color: #155724; }
+        .fail { background-color: #f8d7da; border-left: 5px solid #dc3545; padding: 10px; margin-top: 10px; border-radius: 4px; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Supertrend Indicator Test - Verification</h1>
+        <p>This document outlines a conceptual approach to testing the implementation of the Supertrend indicator.</p>
+
+        <div class="section">
+            <h2>1. Test Objectives</h2>
+            <ul>
+                <li>Verify the correctness of Supertrend calculation against known values.</li>
+                <li>Ensure the indicator accurately identifies trend changes.</li>
+                <li>Test edge cases (e.g., insufficient data, flat markets).</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>2. Test Data (Conceptual)</h2>
+            <p>To test the Supertrend indicator, we need a dataset with `high`, `low`, and `close` prices where the expected Supertrend values and trend changes are known.</p>
+            <pre><code class="language-json"># Sample historical data (simplified)
+[
+    {"high": 10, "low": 8, "close": 9},
+    {"high": 11, "low": 9, "close": 10},
+    {"high": 12, "low": 10, "close": 11},
+    {"high": 10, "low": 8, "close": 8.5}, # Potential downtrend start
+    {"high": 9, "low": 7, "close": 7.5},
+    {"high": 8, "low": 6, "close": 7},
+    {"high": 9, "low": 7, "close": 8.5}, # Potential uptrend start
+    {"high": 10, "low": 8, "close": 9.5}
+]
+</code></pre>
+            <div class="note">
+                <strong>Note:</strong> For robust testing, use a larger dataset that includes clear uptrends, downtrends, and sideways movements.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>3. Test Cases (Conceptual)</h2>
+            <h3>3.1. Basic Calculation Verification</h3>
+            <p>Test the indicator with a small, controlled dataset where the expected Supertrend values are manually calculated or obtained from a trusted source.</p>
+            <pre><code class="language-python"># Conceptual Python-like pseudo-code for a test
+def test_supertrend_basic_calculation():
+    data = get_test_data_for_supertrend() # Returns high, low, close arrays
+    expected_supertrend_values = [None, None, ..., 9.0, 8.0, 7.0, 8.5, 9.5] # Pre-calculated
+    
+    supertrend_line, trend = calculate_supertrend(data['high'], data['low'], data['close'], atr_period=3, multiplier=2)
+    
+    assert len(supertrend_line) == len(data['close'])
+    # Compare calculated values with expected values, allowing for minor floating point differences
+    for i in range(len(supertrend_line)):
+        if expected_supertrend_values[i] is not None:
+            assert abs(supertrend_line[i] - expected_supertrend_values[i]) < 0.001
+    
+    print("Basic calculation test: PASSED")
+</code></pre>
+
+            <h3>3.2. Trend Change Detection</h3>
+            <p>Verify that the indicator correctly identifies and signals trend changes (uptrend to downtrend, and vice-versa).</p>
+            <pre><code class="language-python">def test_supertrend_trend_changes():
+    data_with_trend_flips = get_data_with_known_trend_flips()
+    
+    supertrend_line, trend = calculate_supertrend(data_with_trend_flips['high'], data_with_trend_flips['low'], data_with_trend_flips['close'], atr_period=5, multiplier=3)
+    
+    # Assert specific trend values at known flip points
+    assert trend[index_of_first_downtrend] == -1
+    assert trend[index_of_first_uptrend] == 1
+    
+    print("Trend change detection test: PASSED")
+</code></pre>
+
+            <h3>3.3. Insufficient Data Handling</h3>
+            <p>Test how the indicator behaves when provided with less data than required for its period calculations.</p>
+            <pre><code class="language-python">def test_supertrend_insufficient_data():
+    short_data = {"high": [10], "low": [8], "close": [9]}
+    
+    # Expect an error or specific handling (e.g., returning None or NaN for early values)
+    supertrend_line, trend = calculate_supertrend(short_data['high'], short_data['low'], short_data['close'], atr_period=10, multiplier=3)
+    
+    assert all(pd.isna(val) for val in supertrend_line) # Assuming NaN for insufficient data
+    
+    print("Insufficient data handling test: PASSED")
+</code></pre>
+        </div>
+
+        <div class="section">
+            <h2>4. Test Framework Integration</h2>
+            <p>These conceptual tests would be implemented using a testing framework like `pytest` in Python.</p>
+            <pre><code class="language-bash"># Example of running tests
+pytest test_supertrend_indicator.py
+</code></pre>
+            <div class="success">
+                <strong>Test Result:</strong> All Supertrend indicator tests passed successfully.
+            </div>
+            <div class="fail">
+                <strong>Test Result:</strong> Some Supertrend indicator tests failed. Review logs for details.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

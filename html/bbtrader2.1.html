@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bybit V5 Multi-Strategy Trading Terminal</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-statistics@7.8.3/dist/simple-statistics.min.js"></script>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "@google/generative-ai": "https://esm.sh/@google/generative-ai"
+    }
+  }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    
+    :root {
+      --bg-primary: #0a0a1e;
+      --bg-secondary: #12122e;
+      --bg-tertiary: #1a1a3a;
+      --text-primary: #e8e8ff;
+      --text-secondary: #a8a8c8;
+      --neon-green: #00ff41;
+      --neon-orange: #ff9f1c;
+      --neon-red: #ff1744;
+      --neon-cyan: #00e5ff;
+      --neon-purple: #d500f9;
+      --shadow-neon: 0 0 20px rgba(0, 229, 255, 0.5);
+      --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%); color: var(--text-primary); }
+    .card { background: var(--bg-tertiary); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-neon); }
+    .card-header { font-size: 1.25rem; font-weight: 600; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid rgba(0, 229, 255, 0.3); display: flex; align-items: center; justify-content: space-between; }
+    .btn { background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple)); color: var(--bg-primary); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth); text-transform: uppercase; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: transparent; border: 2px solid var(--neon-cyan); color: var(--neon-cyan); }
+    .btn-danger { background: linear-gradient(135deg, var(--neon-red), var(--neon-orange)); }
+    .btn-success { background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+    input, textarea, select { background: var(--bg-primary); border: 2px solid rgba(0, 229, 255, 0.3); color: var(--text-primary); padding: 10px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; width: 100%; }
+    label { display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 0.875rem; }
+    .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; animation: pulse 2s infinite; }
+    .status-connected { background: var(--neon-green); box-shadow: 0 0 10px var(--neon-green); }
+    .status-disconnected { background: var(--neon-red); box-shadow: 0 0 10px var(--neon-red); }
+    .status-connecting { background: var(--neon-orange); box-shadow: 0 0 10px var(--neon-orange); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .metric-card { background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(213, 0, 249, 0.1)); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 12px; padding: 16px; text-align: center; }
+    .metric-value { font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; margin-top: 8px; }
+    .metric-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+    .chart-container { position: relative; height: 450px; background: #0f0f2a; border-radius: 12px; padding: 16px; }
+    .tab-nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid rgba(0, 229, 255, 0.2); padding-bottom: 8px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-secondary); padding: 8px 16px; cursor: pointer; font-weight: 500; position: relative; }
+    .tab-btn.active { color: var(--neon-cyan); }
+    .tab-btn.active::after { content: ''; position: absolute; bottom: -10px; left: 0; right: 0; height: 2px; background: var(--neon-cyan); }
+    .log-container { max-height: 300px; overflow-y: auto; background: var(--bg-primary); border-radius: 8px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; }
+    .log-entry { margin-bottom: 8px; padding: 4px 8px; border-left: 3px solid; background: rgba(255, 255, 255, 0.02); }
+    .log-info { border-color: var(--neon-cyan); } .log-success { border-color: var(--neon-green); } .log-warning { border-color: var(--neon-orange); } .log-error { border-color: var(--neon-red); }
+    .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(10, 10, 30, 0.95); display: flex; align-items: center; justify-content: center; z-index: 9999; opacity: 0; visibility: hidden; transition: var(--transition-smooth); }
+    .loading-overlay.active { opacity: 1; visibility: visible; }
+    .spinner { width: 60px; height: 60px; border: 4px solid rgba(0, 229, 255, 0.2); border-top: 4px solid var(--neon-cyan); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; }
+    .data-table th, .data-table td { padding: 10px 12px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); text-align: left; }
+    .data-table th { background-color: rgba(0, 229, 255, 0.1); font-weight: 600; color: var(--neon-cyan); }
+    .data-table tbody tr:hover { background-color: rgba(0, 229, 255, 0.05); }
+    .toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 10000; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast { padding: 0.75rem 1rem; border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); color: white; font-size: 0.875rem; opacity: 0; transform: translateY(20px); transition: opacity 0.3s ease-out, transform 0.3s ease-out; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-info { background-color: #2196f3; }
+    .toast-success { background-color: #4caf50; }
+    .toast-error { background-color: #f44336; }
+    .toast-warning { background-color: #ff9800; }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+
+  <div class="container mx-auto p-6 max-w-7xl">
+    <div class="text-center mb-8">
+      <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent mb-2">Multi-Strategy Trading Terminal</h1>
+      <p class="text-text-secondary">AI Directional & High-Frequency Market Maker</p>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+      <div class="metric-card"><div class="metric-label">Total P&L</div><div class="metric-value" id="totalPnL">$0.00</div></div>
+      <div class="metric-card"><div class="metric-label">Win Rate</div><div class="metric-value" id="winRate">0%</div></div>
+      <div class="metric-card"><div class="metric-label">Sharpe Ratio</div><div class="metric-value" id="sharpeRatio">0.00</div></div>
+      <div class="metric-card"><div class="metric-label">Trades</div><div class="metric-value" id="totalTrades">0</div></div>
+      <div class="metric-card"><div class="metric-label">Avg. Win</div><div class="metric-value" id="avgWin">$0.00</div></div>
+      <div class="metric-card"><div class="metric-label">Avg. Loss</div><div class="metric-value" id="avgLoss">$0.00</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>⚙️ Configuration & Connection</span>
+        <div class="flex items-center gap-2">
+          <span class="status-indicator" id="wsStatus"></span>
+          <span id="wsStatusText">Disconnected</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div><label for="geminiApiKey">Google Gemini API Key</label><input type="password" id="geminiApiKey" placeholder="sk-..." /></div>
+        <div><label for="bybitApiKey">Bybit API Key</label><input type="password" id="bybitApiKey" placeholder="Your Bybit API Key" /></div>
+        <div><label for="bybitApiSecret">Bybit API Secret</label><input type="password" id="bybitApiSecret" placeholder="Your Bybit API Secret" /></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div><label for="symbolSelect">Trading Symbol</label><select id="symbolSelect" disabled><option value="">Loading...</option></select></div>
+        <div><label for="timeframe">Timeframe</label><select id="timeframe"><option value="1">1m</option><option value="5" selected>5m</option><option value="15">15m</option><option value="60">1H</option><option value="D">1D</option></select></div>
+        <div><label for="tradingMode">Mode</label><select id="tradingMode"><option value="testnet">Testnet</option><option value="mainnet">Mainnet</option></select></div>
+      </div>
+      <div class="flex gap-4 mt-4">
+        <button class="btn btn-success" id="saveConfigBtn">Save</button>
+        <button class="btn btn-secondary" id="loadConfigBtn">Load</button>
+        <button class="btn" id="connectBtn">Connect</button>
+        <button class="btn btn-danger" id="disconnectBtn" disabled>Disconnect</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>🚀 Strategy Control Center</span></div>
+      <div class="tab-nav" id="strategy-tabs">
+        <button class="tab-btn active" data-tab="strategy-directional">AI Directional</button>
+        <button class="tab-btn" data-tab="strategy-marketmaker">Market Maker</button>
+      </div>
+
+      <div id="strategy-directional" class="tab-content">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div><label for="riskPerTrade">Risk Per Trade (%)</label><input type="number" id="riskPerTrade" value="1" step="0.1" min="0.1" max="5" /></div>
+          <div><label for="analysisMode">Analysis Mode</label><select id="analysisMode"><option value="balanced" selected>Balanced</option><option value="conservative">Conservative</option><option value="aggressive">Aggressive</option></select></div>
+          <div class="flex items-end"><button class="btn w-full" id="analyzeBtn">🔍 Analyze Market</button></div>
+        </div>
+        <div class="mt-4 flex gap-4">
+            <button class="btn btn-success w-full" id="executeBuyBtn" disabled>⬆️ Execute BUY</button>
+            <button class="btn btn-danger w-full" id="executeSellBtn" disabled>⬇️ Execute SELL</button>
+        </div>
+        <div class="log-container mt-4" id="aiOutput"><div class="text-text-secondary">No analysis performed.</div></div>
+      </div>
+
+      <div id="strategy-marketmaker" class="tab-content hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <h3 class="text-lg font-semibold mb-4 text-cyan-400">Controls</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div><label for="mmSpread">Base Spread (%)</label><input type="number" id="mmSpread" value="0.1" step="0.01" /></div>
+              <div><label for="mmOrderSize">Order Size</label><input type="number" id="mmOrderSize" value="0.001" step="0.001" /></div>
+              <div><label for="mmLayers">Order Layers</label><input type="number" id="mmLayers" value="3" step="1" /></div>
+              <div><label for="mmMaxInventory">Max Inventory</label><input type="number" id="mmMaxInventory" value="0.01" step="0.001" /></div>
+            </div>
+            <div class="mt-6 flex flex-col gap-4">
+              <button class="btn btn-success" id="startMMBtn" disabled>▶️ Start Market Maker</button>
+              <button class="btn btn-danger" id="stopMMBtn" disabled>⏹️ Stop Market Maker</button>
+              <button class="btn btn-secondary" id="flattenMMBtn" disabled>🚨 Cancel All & Flatten</button>
+            </div>
+          </div>
+          <div>
+            <h3 class="text-lg font-semibold mb-4 text-cyan-400">Live Status</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="metric-card"><div class="metric-label">MM Status</div><div class="metric-value" id="mmStatus">STOPPED</div></div>
+              <div class="metric-card"><div class="metric-label">Inventory</div><div class="metric-value" id="mmInventory">0.000</div></div>
+              <div class="metric-card"><div class="metric-label">Realized P&L</div><div class="metric-value" id="mmPnl">$0.00</div></div>
+              <div class="metric-card"><div class="metric-label">Quote Skew</div><div class="metric-value" id="mmSkew">0.00</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>📈 Live Charts & Data</span></div>
+      <div class="tab-nav" id="chart-tabs">
+        <button class="tab-btn active" data-tab="chart-price">Price Chart</button>
+        <button class="tab-btn" data-tab="chart-orderbook">Order Book</button>
+        <button class="tab-btn" data-tab="chart-indicators">Indicators</button>
+      </div>
+      <div id="chart-price" class="tab-content"><div class="chart-container"><canvas id="priceChart"></canvas></div></div>
+      <div id="chart-orderbook" class="tab-content hidden"><div class="chart-container"><canvas id="orderBookChart"></canvas></div></div>
+      <div id="chart-indicators" class="tab-content hidden"><div class="chart-container"><canvas id="indicatorChart"></canvas></div></div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header"><span>💼 Positions & Orders</span><button class="btn btn-secondary" id="refreshAccountInfoBtn">Refresh</button></div>
+      <div class="tab-nav" id="account-tabs">
+        <button class="tab-btn active" data-tab="positions">Active Positions</button>
+        <button class="tab-btn" data-tab="openOrders">Open Orders</button>
+        <button class="tab-btn" data-tab="history">Trade History</button>
+      </div>
+      <div id="positions" class="tab-content"><div class="log-container"><table class="data-table"><thead><tr><th>Symbol</th><th>Side</th><th>Size</th><th>Entry Price</th><th>Liq. Price</th><th>P&L</th><th>Actions</th></tr></thead><tbody id="positionsDisplay"></tbody></table></div></div>
+      <div id="openOrders" class="tab-content hidden"><div class="log-container"><table class="data-table"><thead><tr><th>ID</th><th>Side</th><th>Type</th><th>Price</th><th>Qty</th><th>Status</th><th>Actions</th></tr></thead><tbody id="ordersDisplay"></tbody></table></div></div>
+      <div id="history" class="tab-content hidden"><div class="log-container"><table class="data-table"><thead><tr><th>Time</th><th>Side</th><th>Qty</th><th>Price</th><th>Fee</th><th>P&L</th></tr></thead><tbody id="historyDisplay"></tbody></table></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>📜 Activity Log</span><button class="btn btn-secondary" id="clearLogsBtn">Clear</button></div>
+      <div class="log-container" id="activityLog" style="height: 200px;"></div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script type="module">
+    import { GoogleGenerativeAI } from "@google/generative-ai";
+
+    const CONFIG = {
+      BYBIT_WS_URL: { testnet: 'wss://stream-testnet.bybit.com/v5/private', mainnet: 'wss://stream.bybit.com/v5/private' },
+      BYBIT_API_URL: { testnet: 'https://api-testnet.bybit.com', mainnet: 'https://api.bybit.com' },
+      GEMINI_MODEL: 'gemini-1.5-flash',
+      WS_PING_INTERVAL: 20000,
+      MAX_KLINES_DISPLAY: 200,
+      ENCRYPTION_KEY: 'a-very-secret-key-that-should-be-more-complex', // In a real app, this should be more secure (e.g., user-provided)
+      MM_LOOP_INTERVAL: 2500,
+      RISK_FREE_RATE: 0.00, // For Sharpe Ratio, simplify to 0 for a simple trading app
+    };
+
+    class Utils {
+      static encrypt(text, key) { return CryptoJS.AES.encrypt(text, key).toString(); }
+      static decrypt(encryptedText, key) { try { return CryptoJS.AES.decrypt(encryptedText, key).toString(CryptoJS.enc.Utf8); } catch (e) { return ''; } }
+      static debounce(func, wait) { let timeout; return function(...args) { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), wait); }; }
+      static formatCurrency(amount) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount); }
+      static calculateRSI(closes, period = 14) {
+        if (closes.length < period + 1) return [];
+        const rsi = [];
+        for (let i = period; i < closes.length; i++) {
+          let avgGain = 0;
+          let avgLoss = 0;
+          for (let j = i - period + 1; j <= i; j++) {
+            const change = closes[j] - closes[j - 1];
+            if (change > 0) avgGain += change;
+            else avgLoss -= change;
+          }
+          avgGain /= period;
+          avgLoss /= period;
+          if (avgLoss === 0) rsi.push(100);
+          else {
+            const rs = avgGain / avgLoss;
+            rsi.push(100 - (100 / (1 + rs)));
+          }
+        }
+        return rsi;
+      }
+    }
+
+    class EventEmitter {
+      constructor() { this.events = {}; }
+      on(event, listener) { (this.events[event] = this.events[event] || []).push(listener); }
+      emit(event, ...args) { if (this.events[event]) this.events[event].forEach(l => l(...args)); }
+    }
+
+    class BybitClient extends EventEmitter {
+      constructor(config, logger) {
+        super();
+        this.config = config;
+        this.logger = logger;
+        this.apiKey = '';
+        this.apiSecret = '';
+        this.axiosInstance = axios.create();
+      }
+      setCredentials(apiKey, apiSecret) { this.apiKey = apiKey; this.apiSecret = apiSecret; }
+      async request(method, endpoint, params = {}, isPrivate = true) {
+        const mode = document.getElementById('tradingMode').value;
+        const baseURL = this.config.BYBIT_API_URL[mode];
+        const headers = { 'Content-Type': 'application/json' };
+        if (isPrivate) {
+          if (!this.apiKey || !this.apiSecret) throw new Error("API credentials not set.");
+          const timestamp = Date.now().toString();
+          const recvWindow = '10000';
+          headers['X-BAPI-API-KEY'] = this.apiKey;
+          headers['X-BAPI-TIMESTAMP'] = timestamp;
+          headers['X-BAPI-RECV-WINDOW'] = recvWindow;
+          const query = method === 'GET' ? new URLSearchParams(params).toString() : '';
+          const body = method === 'POST' ? JSON.stringify(params) : '';
+          headers['X-BAPI-SIGN'] = CryptoJS.HmacSHA256(timestamp + this.apiKey + recvWindow + (query || body), this.apiSecret).toString();
+        }
+        try {
+          const response = await this.axiosInstance({ method, url: `${baseURL}${endpoint}`, headers, params: method === 'GET' ? params : {}, data: method === 'POST' ? params : {} });
+          if (response.data.retCode !== 0) throw new Error(`Bybit API Error: ${response.data.retMsg} (Code: ${response.data.retCode})`);
+          return response.data.result;
+        } catch (error) {
+          const msg = error.response?.data?.retMsg || error.message;
+          this.emit('error', msg);
+          this.logger(`API Request Failed: ${msg}`, 'error');
+          throw error;
+        }
+      }
+      async getValidSymbols() { return (await this.request('GET', '/v5/market/instruments-info', { category: 'linear' }, false)).list.filter(s => s.status === 'Trading' && s.quoteCoin === 'USDT').map(s => s.symbol).sort(); }
+      async getKlines(symbol, interval) { return this.request('GET', '/v5/market/kline', { category: 'linear', symbol, interval, limit: CONFIG.MAX_KLINES_DISPLAY }, false); }
+      async getOrderbook(symbol) { return this.request('GET', '/v5/market/orderbook', { category: 'linear', symbol, limit: 50 }, false); }
+      async placeOrder(orderParams) { return this.request('POST', '/v5/order/create', { category: 'linear', ...orderParams }, true); }
+      async batchPlaceOrders(orders) { return this.request('POST', '/v5/order/create-batch', { category: 'linear', request: orders }, true); }
+      async batchCancelOrders(orders) { return this.request('POST', '/v5/order/cancel-batch', { category: 'linear', request: orders }, true); }
+      async getPositions(symbol) { return (await this.request('GET', '/v5/position/list', { category: 'linear', symbol }, true)).list; }
+      async getOpenOrders(symbol) { return (await this.request('GET', '/v5/order/realtime', { category: 'linear', symbol }, true)).list; }
+      async getTradeHistory(symbol) { return (await this.request('GET', '/v5/execution/list', { category: 'linear', symbol, limit: 50 }, true)).list; }
+      async getWalletBalance() { return (await this.request('GET', '/v5/account/wallet-balance', { accountType: 'UNIFIED', coin: 'USDT' }, true)).list[0]?.coin[0] || null; }
+      async cancelOrder(symbol, orderId) { return this.request('POST', '/v5/order/cancel', { category: 'linear', symbol, orderId }, true); }
+      async cancelAllOrders(symbol) { return this.request('POST', '/v5/order/cancel-all', { category: 'linear', symbol }, true); }
+      async closePosition(position) { 
+        if (!position || parseFloat(position.size) === 0) {
+            this.logger('No open position to close.', 'warning');
+            return;
+        }
+        const side = position.side === 'Buy' ? 'Sell' : 'Buy';
+        return this.placeOrder({ symbol: position.symbol, side, orderType: 'Market', qty: position.size, reduceOnly: true }); 
+      }
+    }
+
+    class BybitWebSocket extends EventEmitter {
+      constructor(config, logger, getAuthPayload) {
+        super();
+        this.config = config;
+        this.logger = logger;
+        this.getAuthPayload = getAuthPayload;
+        this.ws = null;
+        this.pingInterval = null;
+        this.publicTopics = new Set();
+        this.privateTopics = new Set();
+        this.isConnected = false;
+      }
+      connect(mode) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.logger('WebSocket already connected.', 'info');
+            return;
+        }
+        this.logger('Connecting to WebSocket...', 'info');
+        this.emit('status', 'connecting');
+        const wsUrl = this.config.BYBIT_WS_URL[mode];
+        this.ws = new WebSocket(wsUrl);
+        this.ws.onopen = () => {
+          this.logger('WebSocket Connected.', 'success');
+          this.isConnected = true;
+          this.emit('status', 'connected');
+          this.startPing();
+          this.authenticate();
+          this.resubscribe();
+        };
+        this.ws.onmessage = (event) => this.emit('message', JSON.parse(event.data));
+        this.ws.onclose = () => { 
+            this.stopPing(); 
+            this.logger('WebSocket Disconnected.', 'warning'); 
+            this.isConnected = false;
+            this.emit('status', 'disconnected'); 
+        };
+        this.ws.onerror = (err) => {
+            this.logger(`WebSocket Error: ${err.message}`, 'error');
+            this.isConnected = false;
+            this.emit('status', 'disconnected');
+        };
+      }
+      authenticate() {
+        const { apiKey, expires, signature } = this.getAuthPayload();
+        this.send({ op: 'auth', args: [apiKey, expires, signature] });
+      }
+      disconnect() { 
+        if (this.ws) {
+            this.ws.close(); 
+            this.ws = null;
+        }
+      }
+      send(data) { 
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(data)); 
+        } else {
+            this.logger('WebSocket not open, cannot send data.', 'warning');
+        }
+      }
+      subscribe(topics, isPrivate = false) {
+        const topicSet = isPrivate ? this.privateTopics : this.publicTopics;
+        topics.forEach(t => topicSet.add(t));
+        this.send({ op: 'subscribe', args: topics });
+      }
+      unsubscribe(topics, isPrivate = false) {
+        const topicSet = isPrivate ? this.privateTopics : this.publicTopics;
+        topics.forEach(t => topicSet.delete(t));
+        this.send({ op: 'unsubscribe', args: topics });
+      }
+      resubscribe() {
+        if (this.publicTopics.size > 0) this.subscribe([...this.publicTopics]);
+        if (this.privateTopics.size > 0) this.subscribe([...this.privateTopics], true);
+      }
+      startPing() { this.pingInterval = setInterval(() => this.send({ op: 'ping' }), this.config.WS_PING_INTERVAL); }
+      stopPing() { clearInterval(this.pingInterval); }
+    }
+
+    class ChartManager {
+      constructor(dom) {
+        this.dom = dom;
+        this.charts = {};
+        Chart.register(ChartjsAdapterDateFns, ChartAnnotation, window.Chart.FinancialController, window.Chart.FinancialElement);
+      }
+      init() {
+        this.charts.orderBook = new Chart(this.dom.orderBookChart, this._getChartConfig('bar'));
+        this.charts.price = new Chart(this.dom.priceChart, this._getChartConfig('candlestick'));
+        this.charts.indicator = new Chart(this.dom.indicatorChart, this._getChartConfig('indicator'));
+      }
+      updateOrderBook(bids, asks) {
+        // Ensure bids and asks are sorted and trimmed for display
+        const bidPrices = bids.slice(0, 25).map(b => parseFloat(b.price)).reverse();
+        const bidSizes = bids.slice(0, 25).map(b => parseFloat(b.size)).reverse();
+        const askPrices = asks.slice(0, 25).map(a => parseFloat(a.price));
+        const askSizes = asks.slice(0, 25).map(a => parseFloat(a.size));
+
+        this.charts.orderBook.data.labels = [...bidPrices, ...askPrices];
+        this.charts.orderBook.data.datasets[0].data = [...bidSizes, ...new Array(askSizes.length).fill(0)]; // Bids
+        this.charts.orderBook.data.datasets[1].data = [...new Array(bidSizes.length).fill(0), ...askSizes]; // Asks
+        this.charts.orderBook.update('none');
+      }
+      updatePriceChart(klines, position, openOrders) {
+        this.charts.price.data.datasets[0].data = klines.map(k => ({ x: k.time, o: k.open, h: k.high, l: k.low, c: k.close }));
+        const annotations = {};
+        if (position && parseFloat(position.size) !== 0) { // Only show if position is active
+          annotations.entryLine = { type: 'line', yMin: parseFloat(position.avgPrice), yMax: parseFloat(position.avgPrice), borderColor: 'var(--neon-orange)', borderWidth: 2, label: { content: `Entry: ${parseFloat(position.avgPrice).toFixed(2)}`, display: true, position: 'start' } };
+        }
+        openOrders.forEach((order, i) => {
+          annotations[`order${i}`] = { type: 'line', yMin: parseFloat(order.price), yMax: parseFloat(order.price), borderColor: order.side === 'Buy' ? 'var(--neon-green)' : 'var(--neon-red)', borderWidth: 1, borderDash: [5, 5], label: { content: `${order.side} ${order.qty}`, display: true, position: 'end' } };
+        });
+        this.charts.price.options.plugins.annotation.annotations = annotations;
+        this.charts.price.update('none');
+      }
+      updateIndicatorChart(klines) {
+        if (klines.length === 0) return;
+        const closes = klines.map(k => k.close);
+        const times = klines.map(k => k.time);
+
+        // Example: RSI calculation
+        const rsiValues = Utils.calculateRSI(closes);
+        const rsiTimes = times.slice(klines.length - rsiValues.length);
+
+        this.charts.indicator.data.labels = rsiTimes;
+        this.charts.indicator.data.datasets[0].data = rsiValues.map((val, i) => ({ x: rsiTimes[i], y: val }));
+        
+        // Clear other datasets if not used or update with actual data
+        this.charts.indicator.data.datasets[1].data = []; 
+        this.charts.indicator.data.datasets[2].data = []; 
+
+        this.charts.indicator.update('none');
+      }
+      _getChartConfig(type) {
+        const commonOptions = { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            interaction: { mode: 'index', intersect: false },
+            scales: { 
+                x: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } }, 
+                y: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } } 
+            },
+            plugins: {
+                legend: { display: true, labels: { color: 'var(--text-secondary)' } },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            if (context.parsed.y !== null) label += new Intl.NumberFormat('en-US').format(context.parsed.y);
+                            return label;
+                        }
+                    }
+                }
+            }
+        };
+
+        if (type === 'candlestick') return { 
+            type: 'candlestick', 
+            data: { datasets: [{ label: 'Price', data: [] }] }, 
+            options: { 
+                ...commonOptions, 
+                plugins: { annotation: { annotations: {} }, ...commonOptions.plugins }, 
+                scales: { 
+                    ...commonOptions.scales, 
+                    x: { type: 'time', time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } }, ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } }, 
+                    y: { position: 'right', ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } } 
+                } 
+            } 
+        };
+        if (type === 'bar') return { 
+            type: 'bar', 
+            data: { 
+                datasets: [
+                    { label: 'Bids', backgroundColor: 'rgba(0, 255, 65, 0.5)' }, 
+                    { label: 'Asks', backgroundColor: 'rgba(255, 23, 68, 0.5)' }
+                ] 
+            }, 
+            options: { 
+                ...commonOptions, 
+                scales: { 
+                    ...commonOptions.scales, 
+                    x: { stacked: true, ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                    y: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                },
+                indexAxis: 'y', // Horizontal bars for order book
+            } 
+        };
+        if (type === 'indicator') return { 
+            type: 'line', 
+            data: { 
+                datasets: [
+                    { label: 'RSI', borderColor: 'var(--neon-cyan)', yAxisID: 'y', tension: 0.1, pointRadius: 0 }, 
+                    { label: 'MACD', borderColor: 'var(--neon-green)', yAxisID: 'y1', tension: 0.1, pointRadius: 0 }, 
+                    { label: 'Signal', borderColor: 'var(--neon-orange)', yAxisID: 'y1', tension: 0.1, pointRadius: 0 }
+                ] 
+            }, 
+            options: { 
+                ...commonOptions, 
+                scales: { 
+                    ...commonOptions.scales, 
+                    x: { type: 'time', time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } }, ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } }, 
+                    y: { position: 'left', title: { display: true, text: 'RSI', color: 'var(--text-secondary)' }, ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } }, 
+                    y1: { position: 'right', title: { display: true, text: 'MACD', color: 'var(--text-secondary)' }, ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.1)' } } 
+                } 
+            } 
+        };
+      }
+    }
+
+    class UIManager {
+      constructor(dom) { 
+        this.dom = dom; 
+        this.toastContainer = this.dom.toastContainer || this._createToastContainer(); 
+      }
+      log(message, type = 'info') { 
+        const e = document.createElement('div'); 
+        e.className = `log-entry log-${type}`; 
+        e.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`; 
+        this.dom.activityLog.prepend(e); 
+        // Keep log size reasonable
+        if (this.dom.activityLog.children.length > 100) {
+            this.dom.activityLog.removeChild(this.dom.activityLog.lastChild);
+        }
+      }
+      showToast(message, type = 'info', duration = 3000) { 
+        const t = document.createElement('div'); 
+        t.className = `toast toast-${type}`; 
+        t.textContent = message; 
+        this.toastContainer.appendChild(t); 
+        // Animate in
+        requestAnimationFrame(() => t.classList.add('show'));
+        setTimeout(() => {
+            t.classList.remove('show');
+            t.addEventListener('transitionend', () => t.remove(), { once: true });
+        }, duration);
+      }
+      updateWsStatus(status) { 
+        this.dom.wsStatus.className = `status-indicator status-${status}`; 
+        this.dom.wsStatusText.textContent = status.charAt(0).toUpperCase() + status.slice(1); 
+      }
+      renderTable(tbody, data, renderRow) { 
+        tbody.innerHTML = data.length > 0 ? data.map(renderRow).join('') : `<tr><td colspan="100%" class="text-center text-text-secondary p-4">No data</td></tr>`; 
+      }
+      clearLogs() {
+        this.dom.activityLog.innerHTML = '';
+        this.log('Activity log cleared.', 'info');
+      }
+      _createToastContainer() { 
+        const c = document.createElement('div'); 
+        c.className = 'toast-container'; 
+        document.body.appendChild(c); 
+        return c; 
+      }
+    }
+
+    class AIManager {
+      constructor(config, logger) { this.config = config; this.logger = logger; this.genAI = null; }
+      init(apiKey) { 
+        if (apiKey) {
+            this.genAI = new GoogleGenerativeAI(apiKey); 
+            this.logger('Gemini AI initialized.', 'info');
+        } else {
+            this.logger('Gemini AI API Key not set. AI analysis will not be available.', 'warning');
+        }
+      }
+      async analyze(promptData) {
+        if (!this.genAI) throw new Error('Gemini AI not initialized. Please provide an API key.');
+        const model = this.genAI.getGenerativeModel({ model: this.config.GEMINI_MODEL });
+        this.logger('Sending market data to AI for analysis...', 'info');
+        const prompt = this._buildPrompt(promptData);
+        try {
+          const result = await model.generateContent(prompt);
+          const responseText = result.response.text();
+          this.logger('AI Raw Response: ' + responseText.substring(0, 200) + '...', 'info'); // Log snippet
+          return this._parseOutput(responseText);
+        } catch (error) {
+          this.logger(`AI analysis failed: ${error.message}`, 'error');
+          throw error;
+        }
+      }
+      _buildPrompt({ klines, orderBook, position, tradingMode }) {
+        const closes = klines.map(k => k.close);
+        const latestPrice = closes[closes.length - 1];
+        const lastKline = klines[klines.length - 1];
+
+        // Include basic indicators
+        const rsi = Utils.calculateRSI(closes);
+        const latestRSI = rsi.length > 0 ? rsi[rsi.length - 1] : 'N/A';
+
+        // More detailed prompt for better AI context
+        return `You are an expert crypto trading AI. Analyze the following real-time market data for ${klines[0].symbol} on Bybit (V5, linear perpetuals) and provide a precise trading signal.
+          
+          Current Market Context:
+          - Trading Mode: ${tradingMode} (testnet means simulated trading, mainnet is real money).
+          - Latest Price: ${latestPrice}
+          - Last Kline (Open, High, Low, Close, Volume): ${lastKline.open}, ${lastKline.high}, ${lastKline.low}, ${lastKline.close}, ${lastKline.volume}
+          - RSI (14-period): ${latestRSI}
+          - Current Open Position: ${JSON.stringify(position || {})}
+          - Top 5 Bids (Price, Size): ${JSON.stringify(orderBook.bids.slice(0,5))}
+          - Top 5 Asks (Price, Size): ${JSON.stringify(orderBook.asks.slice(0,5))}
+
+          Based on this data, provide a trading decision in JSON format.
+          The 'action' field must be one of "BUY", "SELL", or "HOLD".
+          The 'quantity' field should be a numerical value representing the desired trade size in base asset (e.g., BTC for BTCUSDT). Only provide if action is BUY/SELL.
+          The 'confidence' field must be one of "LOW", "MEDIUM", or "HIGH".
+          The 'reason' field should be a concise explanation for the decision.
+          The 'stopLossPrice' field should be a numerical value for a recommended stop-loss price.
+
+          Example BUY signal:
+          { "action": "BUY", "quantity": 0.001, "confidence": "HIGH", "reason": "Strong bullish momentum, RSI oversold and rebounding, high bid liquidity.", "stopLossPrice": 29000.5 }
+
+          Example SELL signal:
+          { "action": "SELL", "quantity": 0.001, "confidence": "MEDIUM", "reason": "Price hitting resistance, low volume on recent uptrend, increasing ask pressure.", "stopLossPrice": 30500.0 }
+
+          Example HOLD signal:
+          { "action": "HOLD", "confidence": "LOW", "reason": "Market is ranging, no clear direction, awaiting further confirmation.", "stopLossPrice": null }
+
+          Your JSON output should be directly parsable. Do not include any preambles or additional text outside the JSON object.
+          `;
+      }
+      _parseOutput(text) { 
+        try { 
+          const jsonMatch = text.match(/\{[\s\S]*\}/); 
+          if (jsonMatch && jsonMatch[0]) {
+            return JSON.parse(jsonMatch[0]); 
+          }
+          throw new Error('No JSON object found in AI response.');
+        } catch (e) { 
+          this.logger(`Failed to parse AI response: ${e.message}. Raw text: ${text}`, 'error');
+          throw new Error('AI response could not be parsed into valid JSON.'); 
+        } 
+      }
+    }
+
+    class DirectionalStrategy {
+        constructor(app, options) {
+            this.app = app;
+            this.options = options;
+            this.isRunning = false;
+        }
+
+        start() {
+            this.isRunning = true;
+            this.app.ui.log('AI Directional strategy active.', 'info');
+            // For a real-time AI strategy, you'd likely trigger analysis periodically
+            // or based on new kline data. For this UI, it's manual via analyzeBtn.
+        }
+
+        stop() {
+            this.isRunning = false;
+            this.app.ui.log('AI Directional strategy inactive.', 'info');
+        }
+
+        async executeSignal(signal) {
+            if (!this.isRunning) {
+                this.app.ui.showToast('Directional strategy not active.', 'warning');
+                return;
+            }
+            if (signal.action === 'HOLD') {
+                this.app.ui.showToast('AI recommends HOLD. No action taken.', 'info');
+                return;
+            }
+
+            this.app.dom.loadingOverlay.classList.add('active');
+            try {
+                const currentBalance = this.app.state.accountBalance?.walletBalance;
+                if (!currentBalance || currentBalance <= 0) {
+                    throw new Error('Insufficient balance to place orders.');
+                }
+                
+                const riskAmount = (parseFloat(currentBalance) * this.options.riskPerTrade) / 100;
+                // Simplified: use a fixed quantity for now, or calculate based on risk and stop loss
+                const quantity = signal.quantity; 
+
+                if (!quantity || quantity <= 0) {
+                    throw new Error('AI signal did not provide a valid quantity.');
+                }
+
+                const orderParams = {
+                    symbol: this.app.state.currentSymbol,
+                    side: signal.action,
+                    orderType: 'Market', // Use market order for immediate execution
+                    qty: quantity.toString(),
+                    timeInForce: 'GTC',
+                    // Add stop loss if provided by AI
+                    ... (signal.stopLossPrice && {
+                        stopLoss: signal.stopLossPrice.toString(),
+                        // Conditional for take profit if AI provided it
+                        // takeProfit: signal.takeProfitPrice.toString(), 
+                        triggerDirection: signal.action === 'BUY' ? 2 : 1 // 1: bid side, 2: ask side
+                    })
+                };
+
+                this.app.ui.log(`Attempting to place ${signal.action} order for ${quantity} ${this.app.state.currentSymbol}...`, 'info');
+                const result = await this.app.bybitClient.placeOrder(orderParams);
+                this.app.ui.showToast(`${signal.action} order placed successfully! Order ID: ${result.orderId}`, 'success');
+                this.app.ui.log(`Order Placed: ${JSON.stringify(result)}`, 'success');
+                await this.app.fetchAccountInfo(); // Refresh account data
+            } catch (error) {
+                this.app.ui.showToast(`Failed to execute AI signal: ${error.message}`, 'error');
+                this.app.ui.log(`Failed to execute AI signal: ${error.message}`, 'error');
+            } finally {
+                this.app.dom.loadingOverlay.classList.remove('active');
+            }
+        }
+    }
+
+    class MarketMakerStrategy {
+        constructor(app, options) {
+            this.app = app;
+            this.options = options;
+            this.isRunning = false;
+            this.loopInterval = null;
+            this.mmPnl = 0; // Simplified PnL tracking for MM
+        }
+        start() { 
+            this.isRunning = true; 
+            this.app.dom.mmStatus.textContent = 'RUNNING'; 
+            this.app.ui.showToast('Market Maker started.', 'success');
+            this.loopInterval = setInterval(() => this.runLoop(), CONFIG.MM_LOOP_INTERVAL); 
+        }
+        stop() { 
+            this.isRunning = false; 
+            clearInterval(this.loopInterval); 
+            this.app.dom.mmStatus.textContent = 'STOPPED'; 
+            this.app.ui.showToast('Market Maker stopped.', 'warning');
+            this.app.bybitClient.cancelAllOrders(this.app.state.currentSymbol); 
+        }
+        async flatten() { 
+            this.app.dom.loadingOverlay.classList.add('active');
+            try {
+                await this.stop(); 
+                this.app.ui.log('Attempting to flatten position...', 'info');
+                const pos = this.app.state.positions.find(p => p.symbol === this.app.state.currentSymbol);
+                if (pos && parseFloat(pos.size) !== 0) {
+                    await this.app.bybitClient.closePosition(pos);
+                    this.app.ui.showToast('Position flattened successfully!', 'success');
+                    this.app.ui.log('Position flattened.', 'success');
+                } else {
+                    this.app.ui.showToast('No active position to flatten.', 'info');
+                    this.app.ui.log('No active position to flatten.', 'info');
+                }
+            } catch (error) {
+                this.app.ui.showToast(`Failed to flatten position: ${error.message}`, 'error');
+                this.app.ui.log(`Failed to flatten position: ${error.message}`, 'error');
+            } finally {
+                this.app.dom.loadingOverlay.classList.remove('active');
+                await this.app.fetchAccountInfo();
+            }
+        }
+        async runLoop() {
+            if (!this.isRunning) return;
+            try {
+                const { orderBook, positions } = this.app.state;
+                if (!orderBook.bids.length || !orderBook.asks.length) {
+                    this.app.ui.log('Order book data not available for MM.', 'warning');
+                    return;
+                }
+                const position = positions.find(p => p.symbol === this.app.state.currentSymbol);
+                const inventory = position ? parseFloat(position.size) : 0;
+                this.app.dom.mmInventory.textContent = inventory.toFixed(3);
+                
+                // Cancel existing orders before placing new ones
+                await this.app.bybitClient.cancelAllOrders(this.app.state.currentSymbol);
+
+                const bestBid = orderBook.bids[0].price;
+                const bestAsk = orderBook.asks[0].price;
+                const midPrice = (bestBid + bestAsk) / 2;
+                const spreadAmount = midPrice * (this.options.spread / 100);
+                
+                // Adjust center price based on inventory skew
+                let centerPrice = midPrice;
+                if (this.options.maxInventory > 0) {
+                    const inventoryRatio = inventory / this.options.maxInventory;
+                    const skewFactor = inventoryRatio * (spreadAmount / 2); // Push orders away from current inventory
+                    centerPrice = midPrice - skewFactor;
+                }
+                this.app.dom.mmSkew.textContent = (centerPrice - midPrice).toFixed(4); // Display actual skew
+
+                const ordersToPlace = [];
+                for (let i = 0; i < this.options.layers; i++) {
+                    const offset = (spreadAmount / 2) * (1 + i * 0.5); // Wider spread for deeper layers
+                    
+                    // Buy orders below centerPrice
+                    const buyPrice = (centerPrice - offset).toFixed(this._getPricePrecision(this.app.state.currentSymbol));
+                    ordersToPlace.push({ 
+                        symbol: this.app.state.currentSymbol, 
+                        side: 'Buy', 
+                        orderType: 'Limit', 
+                        qty: this.options.orderSize.toString(), 
+                        price: buyPrice,
+                        timeInForce: 'GTC',
+                        reduceOnly: false, // MM typically not reduceOnly
+                        isLeverage: 1 // For futures
+                    });
+
+                    // Sell orders above centerPrice
+                    const sellPrice = (centerPrice + offset).toFixed(this._getPricePrecision(this.app.state.currentSymbol));
+                    ordersToPlace.push({ 
+                        symbol: this.app.state.currentSymbol, 
+                        side: 'Sell', 
+                        orderType: 'Limit', 
+                        qty: this.options.orderSize.toString(), 
+                        price: sellPrice,
+                        timeInForce: 'GTC',
+                        reduceOnly: false, // MM typically not reduceOnly
+                        isLeverage: 1 // For futures
+                    });
+                }
+                
+                if (ordersToPlace.length > 0) {
+                    await this.app.bybitClient.batchPlaceOrders(ordersToPlace);
+                    this.app.ui.log(`Placed ${ordersToPlace.length} MM orders.`, 'info');
+                }
+                
+                // Update MM PnL (simplified, could be more detailed with trade history)
+                // This is a placeholder, real PnL would come from account info
+                this.app.dom.mmPnl.textContent = Utils.formatCurrency(this.mmPnl); 
+
+            } catch (error) { 
+                this.app.ui.log(`MM Loop Error: ${error.message}`, 'error'); 
+            }
+        }
+
+        _getPricePrecision(symbol) {
+            // This would ideally come from instrument info API. For now, assume common precision.
+            if (symbol.includes('BTC')) return 1; // BTCUSDT often 0.5 or 1 decimal
+            if (symbol.includes('ETH')) return 2;
+            return 3; // Default for other pairs
+        }
+    }
+
+    class TradingApp {
+      constructor() {
+        this.dom = this._getDomElements();
+        this.ui = new UIManager(this.dom);
+        this.bybitClient = new BybitClient(CONFIG, this.ui.log.bind(this.ui));
+        this.bybitWs = new BybitWebSocket(CONFIG, this.ui.log.bind(this.ui), () => this._getWsAuthPayload());
+        this.chartManager = new ChartManager(this.dom);
+        this.aiManager = new AIManager(CONFIG, this.ui.log.bind(this.ui));
+        this.strategyManager = new StrategyManager(this);
+        this.state = this._getInitialState();
+        this._bindEventListeners();
+        this._initialize();
+      }
+
+      _getDomElements() {
+        const ids = ['loadingOverlay', 'totalPnL', 'winRate', 'sharpeRatio', 'totalTrades', 'avgWin', 'avgLoss', 'geminiApiKey', 'bybitApiKey', 'bybitApiSecret', 'saveConfigBtn', 'loadConfigBtn', 'wsStatus', 'wsStatusText', 'symbolSelect', 'timeframe', 'tradingMode', 'connectBtn', 'disconnectBtn', 'riskPerTrade', 'analysisMode', 'analyzeBtn', 'aiOutput', 'executeBuyBtn', 'executeSellBtn', 'priceChart', 'orderBookChart', 'indicatorChart', 'refreshAccountInfoBtn', 'positionsDisplay', 'ordersDisplay', 'historyDisplay', 'activityLog', 'clearLogsBtn', 'mmSpread', 'mmOrderSize', 'mmLayers', 'mmMaxInventory', 'startMMBtn', 'stopMMBtn', 'flattenMMBtn', 'mmStatus', 'mmInventory', 'mmPnl', 'mmSkew', 'toastContainer'];
+        return ids.reduce((acc, id) => ({ ...acc, [id]: document.getElementById(id) }), {});
+      }
+
+      _getInitialState() {
+        return { 
+            currentSymbol: 'BTCUSDT', 
+            currentTimeframe: '5', 
+            klines: [], 
+            orderBook: { bids: [], asks: [] }, 
+            accountBalance: null, 
+            positions: [], 
+            openOrders: [], 
+            tradeHistory: [], 
+            lastSignal: null,
+            isConnected: false
+        };
+      }
+
+      _bindEventListeners() {
+        this.dom.saveConfigBtn.addEventListener('click', () => this.saveConfiguration());
+        this.dom.loadConfigBtn.addEventListener('click', () => this.loadConfiguration());
+        this.dom.connectBtn.addEventListener('click', () => this.connect());
+        this.dom.disconnectBtn.addEventListener('click', () => this.disconnect());
+        this.dom.symbolSelect.addEventListener('change', (e) => this.handleSymbolChange(e.target.value));
+        this.dom.timeframe.addEventListener('change', (e) => this.handleTimeframeChange(e.target.value));
+        this.dom.analyzeBtn.addEventListener('click', () => this.runAnalysis());
+        this.dom.executeBuyBtn.addEventListener('click', () => this.executeAISignal('BUY'));
+        this.dom.executeSellBtn.addEventListener('click', () => this.executeAISignal('SELL'));
+        this.dom.refreshAccountInfoBtn.addEventListener('click', () => this.fetchAccountInfo());
+        this.dom.clearLogsBtn.addEventListener('click', () => this.ui.clearLogs());
+
+        this.bybitWs.on('status', (status) => {
+            this.state.isConnected = (status === 'connected');
+            this.ui.updateWsStatus(status);
+            this._updateConnectionDependentUI();
+        });
+        this.bybitWs.on('message', (data) => this._handleWsMessage(data));
+        this.bybitClient.on('error', (msg) => this.ui.showToast(`API Error: ${msg}`, 'error'));
+
+        this.dom.positionsDisplay.addEventListener('click', (e) => this.handleTableAction(e, 'positions'));
+        this.dom.ordersDisplay.addEventListener('click', (e) => this.handleTableAction(e, 'orders'));
+        document.querySelectorAll('.tab-nav .tab-btn').forEach(btn => btn.addEventListener('click', (e) => this.handleTabSwitch(e)));
+        this.dom.startMMBtn.addEventListener('click', () => this.startMarketMaker());
+        this.dom.stopMMBtn.addEventListener('click', () => this.strategyManager.stop());
+        this.dom.flattenMMBtn.addEventListener('click', () => this.strategyManager.activeStrategy?.flatten());
+      }
+
+      async _initialize() {
+        this.ui.log('System Initializing...', 'info');
+        this.chartManager.init();
+        this.loadConfiguration();
+        await this.populateSymbols();
+        this._updateConnectionDependentUI(); // Initial UI state
+        this.ui.log('Initialization Complete.', 'success');
+      }
+
+      _updateConnectionDependentUI() {
+        const isConnected = this.state.isConnected;
+        this.dom.connectBtn.disabled = isConnected;
+        this.dom.disconnectBtn.disabled = !isConnected;
+        this.dom.startMMBtn.disabled = !isConnected;
+        this.dom.stopMMBtn.disabled = !isConnected || this.strategyManager.activeStrategy?.isRunning === false;
+        this.dom.flattenMMBtn.disabled = !isConnected;
+        this.dom.analyzeBtn.disabled = !isConnected;
+        this.dom.executeBuyBtn.disabled = !isConnected || !this.state.lastSignal || this.state.lastSignal.action !== 'BUY';
+        this.dom.executeSellBtn.disabled = !isConnected || !this.state.lastSignal || this.state.lastSignal.action !== 'SELL';
+        this.dom.symbolSelect.disabled = !isConnected;
+        this.dom.timeframe.disabled = !isConnected;
+      }
+
+      saveConfiguration() {
+        const config = { 
+            geminiApiKey: this.dom.geminiApiKey.value, 
+            bybitApiKey: this.dom.bybitApiKey.value, 
+            bybitApiSecret: this.dom.bybitApiSecret.value, 
+            currentSymbol: this.dom.symbolSelect.value, 
+            currentTimeframe: this.dom.timeframe.value 
+        };
+        localStorage.setItem('tradingBotConfig', Utils.encrypt(JSON.stringify(config), CONFIG.ENCRYPTION_KEY));
+        this.ui.showToast('Configuration saved!', 'success');
+      }
+
+      loadConfiguration() {
+        const encryptedConfig = localStorage.getItem('tradingBotConfig');
+        if (encryptedConfig) {
+          const config = JSON.parse(Utils.decrypt(encryptedConfig, CONFIG.ENCRYPTION_KEY));
+          if (config) {
+            this.dom.geminiApiKey.value = config.geminiApiKey || '';
+            this.dom.bybitApiKey.value = config.bybitApiKey || '';
+            this.dom.bybitApiSecret.value = config.bybitApiSecret || '';
+            this.state.currentSymbol = config.currentSymbol || 'BTCUSDT';
+            this.state.currentTimeframe = config.currentTimeframe || '5';
+            
+            // Set values to UI elements
+            this.dom.symbolSelect.value = this.state.currentSymbol;
+            this.dom.timeframe.value = this.state.currentTimeframe;
+
+            this.bybitClient.setCredentials(config.bybitApiKey, config.bybitApiSecret);
+            this.aiManager.init(config.geminiApiKey);
+            this.ui.log('Configuration loaded.', 'info');
+          }
+        } else {
+            this.ui.log('No saved configuration found.', 'info');
+        }
+      }
+
+      async connect() {
+        this.dom.loadingOverlay.classList.add('active');
+        try {
+          // Ensure credentials are set from UI
+          this.bybitClient.setCredentials(this.dom.bybitApiKey.value, this.dom.bybitApiSecret.value);
+          this.aiManager.init(this.dom.geminiApiKey.value); // Re-init AI if key changed
+
+          await this.fetchInitialData();
+          await this.fetchAccountInfo();
+          this.bybitWs.connect(this.dom.tradingMode.value);
+          this.bybitWs.subscribe(this._getPublicTopics(this.state.currentSymbol));
+          this.bybitWs.subscribe(this._getPrivateTopics(), true); // Subscribe to private topics
+          this.ui.showToast('Connected to Bybit!', 'success');
+        } catch (e) {
+          this.ui.showToast(`Failed to connect: ${e.message}`, 'error');
+          this.ui.log(`Connection failed: ${e.message}`, 'error');
+          this.disconnect(); // Ensure UI reflects disconnected state
+        } finally {
+          this.dom.loadingOverlay.classList.remove('active');
+          this._updateConnectionDependentUI();
+        }
+      }
+
+      disconnect() { 
+        this.strategyManager.stop(); 
+        this.bybitWs.disconnect(); 
+        this.ui.showToast('Disconnected from Bybit.', 'warning');
+        this._updateConnectionDependentUI();
+      }
+
+      async populateSymbols() {
+        this.dom.symbolSelect.innerHTML = '<option value="">Loading...</option>';
+        try {
+          const symbols = await this.bybitClient.getValidSymbols();
+          this.dom.symbolSelect.innerHTML = symbols.map(s => `<option value="${s}">${s}</option>`).join('');
+          this.dom.symbolSelect.value = this.state.currentSymbol; // Set to saved or default
+          this.dom.symbolSelect.disabled = false; // Enable after loading
+          this.ui.log('Trading symbols loaded.', 'info');
+        } catch (e) { 
+          this.ui.showToast('Failed to load symbols.', 'error'); 
+          this.ui.log(`Failed to load symbols: ${e.message}`, 'error');
+        }
+      }
+
+      async handleSymbolChange(newSymbol) {
+        this.strategyManager.stop(); // Stop any active strategy on symbol change
+        if (this.bybitWs.isConnected) {
+            this.bybitWs.unsubscribe(this._getPublicTopics(this.state.currentSymbol));
+        }
+        this.state.currentSymbol = newSymbol;
+        this.ui.log(`Switching to symbol: ${newSymbol}`, 'info');
+        this.dom.loadingOverlay.classList.add('active');
+        try {
+            await this.fetchInitialData();
+            await this.fetchAccountInfo();
+            if (this.bybitWs.isConnected) {
+                this.bybitWs.subscribe(this._getPublicTopics(newSymbol));
+            }
+        } catch (e) {
+            this.ui.log(`Error changing symbol: ${e.message}`, 'error');
+            this.ui.showToast(`Error changing symbol: ${e.message}`, 'error');
+        } finally {
+            this.dom.loadingOverlay.classList.remove('active');
+            this._updateConnectionDependentUI();
+        }
+      }
+
+      async handleTimeframeChange(newTimeframe) {
+        this.strategyManager.stop(); // Stop any active strategy on timeframe change
+        if (this.bybitWs.isConnected) {
+            this.bybitWs.unsubscribe([`kline.${this.state.currentTimeframe}.${this.state.currentSymbol}`]);
+        }
+        this.state.currentTimeframe = newTimeframe;
+        this.ui.log(`Switching to timeframe: ${newTimeframe}`, 'info');
+        this.dom.loadingOverlay.classList.add('active');
+        try {
+            await this.fetchInitialData();
+            if (this.bybitWs.isConnected) {
+                this.bybitWs.subscribe([`kline.${newTimeframe}.${this.state.currentSymbol}`]);
+            }
+        } catch (e) {
+            this.ui.log(`Error changing timeframe: ${e.message}`, 'error');
+            this.ui.showToast(`Error changing timeframe: ${e.message}`, 'error');
+        } finally {
+            this.dom.loadingOverlay.classList.remove('active');
+            this._updateConnectionDependentUI();
+        }
+      }
+
+      async fetchInitialData() {
+        this.ui.log('Fetching initial market data...', 'info');
+        const [klinesResult, orderbookResult] = await Promise.all([
+            this.bybitClient.getKlines(this.state.currentSymbol, this.state.currentTimeframe),
+            this.bybitClient.getOrderbook(this.state.currentSymbol)
+        ]);
+        this.state.klines = klinesResult.list.map(k => ({ time: parseInt(k[0]), open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]) })).reverse();
+        this.state.orderBook = { bids: orderbookResult.b.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) })), asks: orderbookResult.a.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) })) };
+        this._updateCharts();
+        this.ui.log('Initial market data fetched.', 'info');
+      }
+
+      async fetchAccountInfo() {
+        this.ui.log('Fetching account information...', 'info');
+        const [balance, positions, openOrders, tradeHistory] = await Promise.all([
+          this.bybitClient.getWalletBalance(),
+          this.bybitClient.getPositions(this.state.currentSymbol),
+          this.bybitClient.getOpenOrders(this.state.currentSymbol),
+          this.bybitClient.getTradeHistory(this.state.currentSymbol)
+        ]);
+        this.state.accountBalance = balance;
+        this.state.positions = positions;
+        this.state.openOrders = openOrders;
+        this.state.tradeHistory = tradeHistory;
+        this._renderAccountData();
+        this._updatePerformanceMetrics();
+        this._updateCharts(); // Update charts with new position/order data
+        this.ui.log('Account information updated.', 'info');
+      }
+
+      _getPublicTopics(symbol) { return [`kline.${this.state.currentTimeframe}.${symbol}`, `orderbook.50.${symbol}`]; }
+      _getPrivateTopics() { return ['position', 'order', 'execution']; }
+      _getWsAuthPayload() {
+        const expires = Date.now() + 10000; // Auth valid for 10 seconds
+        const signature = CryptoJS.HmacSHA256(`GET/realtime${expires}`, this.bybitClient.apiSecret).toString();
+        return { apiKey: this.bybitClient.apiKey, expires, signature };
+      }
+
+      _handleWsMessage(data) {
+        if (data.topic?.startsWith('kline')) {
+            this._updateKlines(data.data[0]);
+        } else if (data.topic?.startsWith('orderbook')) {
+            this._updateOrderBook(data.data);
+        } else if (['position', 'order', 'execution'].includes(data.topic)) {
+            // Debounce fetching account info to avoid API rate limits
+            Utils.debounce(() => this.fetchAccountInfo(), 1000)();
+        }
+      }
+
+      _updateOrderBook(data) {
+        this.state.orderBook = { 
+            bids: data.b.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) })), 
+            asks: data.a.map(d => ({ price: parseFloat(d[0]), size: parseFloat(d[1]) })) 
+        };
+        this.chartManager.updateOrderBook(this.state.orderBook.bids, this.state.orderBook.asks);
+      }
+
+      _updateKlines(kline) {
+        const newKline = { time: parseInt(kline.start), open: parseFloat(kline.open), high: parseFloat(kline.high), low: parseFloat(kline.low), close: parseFloat(kline.close), volume: parseFloat(kline.volume) };
+        if (this.state.klines.length > 0 && newKline.time === this.state.klines[this.state.klines.length - 1].time) {
+            // Update last kline if it's still forming
+            this.state.klines[this.state.klines.length - 1] = newKline;
+        } else if (newKline.time > (this.state.klines[this.state.klines.length - 1]?.time || 0)) {
+            // Add new kline
+            this.state.klines.push(newKline); 
+            if (this.state.klines.length > CONFIG.MAX_KLINES_DISPLAY) {
+                this.state.klines.shift(); // Keep array size limited
+            }
+        }
+        this._updateCharts();
+      }
+
+      _updateCharts() {
+        const currentPosition = this.state.positions.find(p => p.symbol === this.state.currentSymbol);
+        this.chartManager.updatePriceChart(this.state.klines, currentPosition, this.state.openOrders);
+        this.chartManager.updateOrderBook(this.state.orderBook.bids, this.state.orderBook.asks); // Ensure order book updates too
+        this.chartManager.updateIndicatorChart(this.state.klines); // Update indicators
+      }
+
+      _renderAccountData() {
+        this.ui.renderTable(this.dom.positionsDisplay, this.state.positions, p => {
+            const pnlColor = parseFloat(p.unrealizedPnl) >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+            return `<tr>
+                        <td>${p.symbol}</td>
+                        <td>${p.side}</td>
+                        <td>${p.size}</td>
+                        <td>${Utils.formatCurrency(p.avgPrice)}</td>
+                        <td>${Utils.formatCurrency(p.liqPrice)}</td>
+                        <td style="color:${pnlColor};">${Utils.formatCurrency(p.unrealizedPnl)}</td>
+                        <td><button class="btn btn-danger btn-sm" data-action="close" data-symbol="${p.symbol}" ${parseFloat(p.size) === 0 ? 'disabled' : ''}>Close</button></td>
+                    </tr>`;
+        });
+        this.ui.renderTable(this.dom.ordersDisplay, this.state.openOrders, o => `<tr><td>${o.orderId.slice(-6)}</td><td>${o.side}</td><td>${o.orderType}</td><td>${Utils.formatCurrency(o.price)}</td><td>${o.qty}</td><td>${o.orderStatus}</td><td><button class="btn btn-danger btn-sm" data-action="cancel" data-id="${o.orderId}" data-symbol="${o.symbol}">Cancel</button></td></tr>`);
+        this.ui.renderTable(this.dom.historyDisplay, this.state.tradeHistory, t => {
+            const pnlColor = parseFloat(t.closedPnl) >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+            return `<tr>
+                        <td>${new Date(parseInt(t.execTime)).toLocaleTimeString()}</td>
+                        <td>${t.side}</td>
+                        <td>${t.execQty}</td>
+                        <td>${Utils.formatCurrency(t.execPrice)}</td>
+                        <td>${t.execFee}</td>
+                        <td style="color:${pnlColor};">${Utils.formatCurrency(t.closedPnl)}</td>
+                    </tr>`;
+        });
+      }
+
+      _updatePerformanceMetrics() {
+        const closedTrades = this.state.tradeHistory.filter(t => parseFloat(t.closedPnl) !== 0);
+        if (closedTrades.length === 0) {
+            this.dom.totalPnL.textContent = '$0.00';
+            this.dom.winRate.textContent = '0%';
+            this.dom.totalTrades.textContent = '0';
+            this.dom.avgWin.textContent = '$0.00';
+            this.dom.avgLoss.textContent = '$0.00';
+            this.dom.sharpeRatio.textContent = '0.00';
+            return;
+        }
+
+        const pnls = closedTrades.map(t => parseFloat(t.closedPnl));
+        const totalPnl = ss.sum(pnls);
+        const winningTrades = pnls.filter(p => p > 0);
+        const losingTrades = pnls.filter(p => p < 0);
+        
+        this.dom.totalPnL.textContent = Utils.formatCurrency(totalPnl);
+        this.dom.winRate.textContent = `${(winningTrades.length / closedTrades.length * 100).toFixed(1)}%`;
+        this.dom.totalTrades.textContent = closedTrades.length;
+        this.dom.avgWin.textContent = Utils.formatCurrency(ss.mean(winningTrades) || 0);
+        this.dom.avgLoss.textContent = Utils.formatCurrency(ss.mean(losingTrades) || 0);
+
+        // Simple Sharpe Ratio (using trade PnL as returns)
+        if (pnls.length > 1) {
+            const stdDev = ss.standardDeviation(pnls);
+            const meanPnl = ss.mean(pnls);
+            const sharpe = stdDev !== 0 ? (meanPnl - CONFIG.RISK_FREE_RATE) / stdDev : 0;
+            this.dom.sharpeRatio.textContent = sharpe.toFixed(2);
+        } else {
+            this.dom.sharpeRatio.textContent = '0.00';
+        }
+      }
+
+      async handleTableAction(event, type) {
+        const target = event.target.closest('button');
+        if (!target || target.disabled) return;
+        const { action, id, symbol } = target.dataset;
+        this.dom.loadingOverlay.classList.add('active');
+        try {
+          if (type === 'orders' && action === 'cancel') {
+            this.ui.log(`Cancelling order ${id}...`, 'info');
+            await this.bybitClient.cancelOrder(symbol, id);
+            this.ui.showToast(`Order ${id.slice(-6)} cancelled.`, 'success');
+          } else if (type === 'positions' && action === 'close') {
+            const position = this.state.positions.find(p => p.symbol === symbol);
+            if (position) {
+                this.ui.log(`Closing position for ${symbol}...`, 'info');
+                await this.bybitClient.closePosition(position);
+                this.ui.showToast(`Position for ${symbol} closed.`, 'success');
+            }
+          }
+          await this.fetchAccountInfo();
+        } catch (e) { 
+            this.ui.showToast(`Action failed: ${e.message}`, 'error');
+            this.ui.log(`Action failed: ${e.message}`, 'error');
+        } finally { 
+            this.dom.loadingOverlay.classList.remove('active'); 
+        }
+      }
+
+      handleTabSwitch(event) {
+        const tabGroupElement = event.target.closest('.tab-nav');
+        if (!tabGroupElement) return;
+
+        const tabGroup = tabGroupElement.id;
+        const tabName = event.target.dataset.tab;
+
+        // Hide all content in this tab group
+        document.querySelectorAll(`#${tabGroup} ~ .tab-content`).forEach(c => c.classList.add('hidden'));
+        // Show the selected content
+        document.getElementById(tabName).classList.remove('hidden');
+        // Deactivate all buttons in this tab group
+        document.querySelectorAll(`#${tabGroup} .tab-btn`).forEach(b => b.classList.remove('active'));
+        // Activate the clicked button
+        event.target.classList.add('active');
+
+        // Special logic for strategy tabs
+        if (tabGroup === 'strategy-tabs') {
+            this.strategyManager.stop(); // Stop any running strategy
+            this.ui.log(`Switched to ${tabName.replace('strategy-', '').replace('-', ' ')} tab. Active strategy stopped.`, 'info');
+        }
+        // Special logic for chart tabs to force chart redraw if needed
+        if (tabGroup === 'chart-tabs') {
+            // Chart.js sometimes needs a resize event to render correctly when hidden
+            setTimeout(() => {
+                if (tabName === 'chart-price') this.charts.price?.resize();
+                if (tabName === 'chart-orderbook') this.charts.orderBook?.resize();
+                if (tabName === 'chart-indicators') this.charts.indicator?.resize();
+            }, 100);
+        }
+      }
+
+      async runAnalysis() {
+        this.dom.aiOutput.textContent = 'Analyzing...';
+        this.dom.loadingOverlay.classList.add('active');
+        this.dom.executeBuyBtn.disabled = true;
+        this.dom.executeSellBtn.disabled = true;
+
+        try {
+          if (!this.bybitClient.apiKey || !this.bybitClient.apiSecret) {
+              throw new Error("Bybit API credentials not set. Please save them in Configuration.");
+          }
+          if (!this.aiManager.genAI) {
+              throw new Error("Gemini AI not initialized. Please provide a Google Gemini API Key.");
+          }
+
+          const signal = await this.aiManager.analyze({ 
+              klines: this.state.klines, 
+              orderBook: this.state.orderBook, 
+              position: this.state.positions.find(p => p.symbol === this.state.currentSymbol), 
+              tradingMode: this.dom.tradingMode.value 
+          });
+          this.state.lastSignal = signal;
+          this.dom.aiOutput.textContent = JSON.stringify(signal, null, 2);
+          this.ui.showToast(`AI Signal: ${signal.action} (${signal.confidence})`, 'info');
+          
+          if (signal.action === 'BUY') this.dom.executeBuyBtn.disabled = false;
+          if (signal.action === 'SELL') this.dom.executeSellBtn.disabled = false;
+
+        } catch (e) { 
+            this.dom.aiOutput.textContent = `Error: ${e.message}`; 
+            this.ui.showToast(`AI Analysis Failed: ${e.message}`, 'error');
+        } finally {
+            this.dom.loadingOverlay.classList.remove('active');
+            this._updateConnectionDependentUI(); // Update UI after analysis
+        }
+      }
+
+      async executeAISignal(action) {
+        if (!this.state.lastSignal || this.state.lastSignal.action !== action) {
+            this.ui.showToast(`No ${action} signal available or signal mismatch.`, 'warning');
+            return;
+        }
+        const directionalStrategy = new DirectionalStrategy(this, { riskPerTrade: parseFloat(this.dom.riskPerTrade.value) });
+        directionalStrategy.start(); // Temporarily "start" the strategy to execute the signal
+        await directionalStrategy.executeSignal(this.state.lastSignal);
+        directionalStrategy.stop(); // "Stop" it afterwards as it's a one-off execution from UI
+        this.state.lastSignal = null; // Clear signal after execution attempt
+        this._updateConnectionDependentUI(); // Re-disable buttons
+      }
+
+      startMarketMaker() {
+        const options = {
+            spread: parseFloat(this.dom.mmSpread.value),
+            orderSize: parseFloat(this.dom.mmOrderSize.value),
+            layers: parseInt(this.dom.mmLayers.value),
+            maxInventory: parseFloat(this.dom.mmMaxInventory.value),
+        };
+        if (Object.values(options).some(isNaN)) {
+            this.ui.showToast('Invalid Market Maker settings. Please check your inputs.', 'error');
+            return;
+        }
+        if (!this.state.isConnected) {
+            this.ui.showToast('Not connected to Bybit. Please connect first.', 'error');
+            return;
+        }
+        this.strategyManager.start('MarketMaker', options);
+        this._updateConnectionDependentUI();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { window.app = new TradingApp(); });
+  </script>
+</body>
+</html>
