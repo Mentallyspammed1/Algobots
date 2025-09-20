@@ -1,0 +1,35 @@
+# Project TODOs for Bybit Trading Bot
+
+## High Priority
+- **Secure API Key Handling**: [COMPLETED] Implemented robust and secure handling of Bybit API keys and secrets by enforcing environment variable usage.
+- **Error Handling and Robustness**:
+    - **API Call Error Handling**: [PARTIALLY COMPLETED] Implemented comprehensive `try-except` blocks for several Bybit API calls (e.g., fetching klines, placing orders, getting order status, closing positions). Further review needed for all API interactions.
+    - **Network/Connection Issues**: [TO DO] Implement mechanisms to detect and handle network disconnections or API rate limit errors, including retry logic with exponential backoff.
+    - **Data Validation**: [PARTIALLY COMPLETED] Added validation for incoming kline data and order responses. Further review needed for all data inputs.
+    - **Graceful Shutdown**: [TO DO] Investigate the main execution loop of the bot (likely in another file) to implement a graceful shutdown mechanism for the bot in case of unrecoverable errors or external signals (e.g., `KeyboardInterrupt`).
+- **Time Synchronization**: [COMPLETED] Enhanced error message for API connection failure to suggest checking system time for synchronization issues.
+- **Configuration Management**: [COMPLETED] Moved configuration parameters from `config.py` to `config.yaml` and updated `config.py` to load from `config.yaml`, merging with API keys from environment variables.
+- **Logging**: [COMPLETED] Implemented detailed logging to both console and a file (`trading_bot.log`) for all trading activities, errors, and system events.
+
+## Medium Priority
+- **Strategy Refinement**:
+    - Review and potentially refine the Ehlers Supertrend strategy logic.
+    - Consider adding more technical indicators or confirmation signals.
+    - Implement backtesting functionality to validate strategy performance.
+- **Order Placement Precision**: Ensure precise Stop-Loss (SL) and Take-Profit (TP) order placement, especially considering Bybit's order types and execution nuances. (Reference: PSG.py context)
+- **Code Readability and Maintainability**:
+    - Add JSDoc/type hints to Python functions and classes for better readability and maintainability. (Reference: GEMINI.md, Pyrmethus's Expanded Codex)
+    - Ensure consistent naming conventions (camelCase for variables/functions, PascalCase for classes/components, UPPER_SNAKE_CASE for constants). (Reference: Pyrmethus's Expanded Codex)
+    - Minimize nesting depth and improve boolean logic clarity. (Reference: Pyrmethus's Expanded Codex)
+- **Dependency Management**: Review `requirements.txt` and ensure all listed dependencies are necessary and up-to-date.
+
+## Low Priority
+- **Documentation**: Add comprehensive documentation for the project, including setup instructions, strategy explanation, and API usage.
+- **Code Comments**: Add high-value comments for complex logic, explaining *why* something is done. (Reference: Global Development Standards)
+- **Performance Optimization**: Profile the bot's performance and identify any bottlenecks, especially in data processing or API interactions. (Reference: Pyrmethus's Expanded Codex)
+- **Alerting**: Implement alerting mechanisms for critical events (e.g., significant price movements, API errors, account balance changes).
+
+## Future Enhancements
+- **User Interface**: Consider a simple command-line interface (CLI) or a web-based dashboard for monitoring and control.
+- **Multiple Strategies**: Allow for the integration and management of multiple trading strategies.
+- **Risk Management**: Implement advanced risk management features (e.g., position sizing, daily loss limits).

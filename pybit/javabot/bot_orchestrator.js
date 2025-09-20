@@ -90,8 +90,7 @@ async function main() {
     logger.debug('main: All strategy promises have settled.');
 
     logger.info(neon.header('All enabled strategies have been processed. Orchestrator finishing.'));
-    logger.debug('main: Bot Orchestrator main function finished.
-');
+    logger.debug('main: Bot Orchestrator main function finished.');
 }
 
 /**

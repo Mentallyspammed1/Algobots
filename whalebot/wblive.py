@@ -41,6 +41,7 @@ API_KEY = config_env.get("BYBIT_API_KEY")
 API_SECRET = config_env.get("BYBIT_API_SECRET")
 BASE_URL = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
 CONFIG_FILE = "config.json"
+BOT_STATE_FILE = "bot_state.json" # New constant for bot state file
 LOG_DIRECTORY = "bot_logs/trading-bot/logs"
 Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
@@ -69,6 +70,40 @@ def round_price(price: Decimal, price_precision: int) -> Decimal:
     if price_precision < 0:
         price_precision = 0
     return price.quantize(Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN)
+
+# --- Bot State Management ---
+def save_bot_state(config: dict, position_manager: Any, performance_tracker: Any, logger: logging.Logger):
+    try:
+        state_data = {
+            "timestamp": datetime.now(TIMEZONE).isoformat(),
+            "config_summary": {
+                "symbol": config.get("symbol"),
+                "interval": config.get("interval"),
+                "loop_delay": config.get("loop_delay"),
+                "use_pybit": config.get("execution", {}).get("use_pybit", False),
+                "testnet": config.get("execution", {}).get("testnet", False),
+            },
+            "performance_summary": performance_tracker.get_summary(),
+            "open_positions": [
+                {
+                    "entry_time": pos["entry_time"].isoformat() if isinstance(pos["entry_time"], datetime) else pos["entry_time"],
+                    "symbol": pos["symbol"],
+                    "side": pos["side"],
+                    "entry_price": str(pos["entry_price"]),
+                    "qty": str(pos["qty"]),
+                    "stop_loss": str(pos["stop_loss"]),
+                    "take_profit": str(pos["take_profit"]),
+                    "status": pos["status"],
+                } for pos in position_manager.get_open_positions()
+            ],
+            "current_price": str(config.get("_last_price", "---")),
+            "last_signal": config.get("_last_signal", "HOLD"),
+            "last_signal_score": config.get("_last_score", 0.0),
+        }
+        with open(BOT_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state_data, f, indent=4)
+    except Exception as e:
+        logger.error(f"{NEON_RED}Error saving bot state: {e}{RESET}")
 
 # --- Configuration Management ---
 def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
@@ -1268,11 +1303,16 @@ def main() -> None:
             else:
                 logger.info(f"{NEON_BLUE}No strong signal. Holding. Score: {signal_score:.2f}{RESET}")
 
+            config["_last_price"] = str(current_price) # Store last price
+            config["_last_signal"] = trading_signal # Store last signal
+
             if exec_sync: exec_sync.poll()
             if heartbeat: heartbeat.tick()
 
             logger.info(f"{NEON_YELLOW}Performance: {performance_tracker.get_summary()}{RESET}")
             logger.info(f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---{RESET}")
+            
+            save_bot_state(config, position_manager, performance_tracker, logger) # Save bot state
             time.sleep(config["loop_delay"])
 
         except Exception as e:

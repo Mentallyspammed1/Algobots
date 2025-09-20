@@ -28,7 +28,7 @@ class AlertSystem {
         try {
             execSync('which termux-toast', { stdio: 'pipe' });
             return true;
-        } catch (e) {
+        } catch (e) { // eslint-disable-line no-unused-vars
             logger.warn(chalk.yellow("Termux toast notifications disabled (command not found)."));
             return false;
         }
@@ -42,18 +42,12 @@ class AlertSystem {
      * @returns {void}
      */
     send_alert(message, level = "INFO") {
-        const colorMap = {
-            INFO: chalk.blue,
-            WARNING: chalk.yellow,
-            ERROR: chalk.red
-        };
         const prefixMap = {
             INFO: "ℹ️ ",
             WARNING: "⚠️ ",
             ERROR: "⛔ "
         };
 
-        const color = colorMap[level] || chalk.white;
         const prefix = prefixMap[level] || "";
         logger.log(level.toLowerCase(), `${prefix}${message}`);
 

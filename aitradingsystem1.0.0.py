@@ -166,7 +166,7 @@ class BybitAdapter:
             logger.error(f"Error fetching klines for {symbol}: {e}")
             return pd.DataFrame()
 
-    def get_real_time_market_data(self, symbol: str, timeframe: str = "1m") -> Dict[str, Any>:
+    def get_real_time_market_data(self, symbol: str, timeframe: str = "1m") -> Dict[str, Any]:
         logger.info(f"Fetching {timeframe} data for {symbol} from Bybit")
         try:
             category = "linear" if symbol.endswith("USDT") else "inverse" if symbol.endswith("USD") else None
@@ -197,7 +197,7 @@ class BybitAdapter:
             logger.error(f"Error fetching Bybit market data for {symbol}: {e}")
             return {}
 
-    async def _get_cached_account_info(self) -> Dict[str, Any>:
+    async def _get_cached_account_info(self) -> Dict[str, Any]:
         now = datetime.utcnow()
         if self.account_info_cache and self.cache_expiry_time and now < self.cache_expiry_time:
             logger.debug("Using cached account info.")
@@ -208,7 +208,7 @@ class BybitAdapter:
         self.cache_expiry_time = now + self.CACHE_DURATION
         return account_info
 
-    def get_account_info(self) -> Dict[str, Any>:
+    def get_account_info(self) -> Dict[str, Any]:
         logger.info("Fetching Bybit account info")
         try:
             wallet_balance_response = self.session.get_wallet_balance(account_type="UNIFIED", coin="USDT")
@@ -635,61 +635,78 @@ async def main():
     if not BYBIT_API_KEY or not BYBIT_API_SECRET:
         logger.error("BYBIT_API_KEY or BYBIT_API_SECRET not set. Cannot run Bybit examples.")
         return
+
     system = TradingAISystem(api_key=GEMINI_API_KEY)
     await system.initialize()
-    logger.info("--- Quantitative Analysis for BTCUSDT ---")
-    analysis_response = await system.perform_quantitative_analysis("BTCUSDT")
-    logger.info("Quantitative analysis completed.")
-    dummy_chart_path = "dummy_chart.png"
-    if not os.path.exists(dummy_chart_path):
-        try:
-            from PIL import Image, ImageDraw
-            img = Image.new('RGB', (60, 30), color = (255, 255, 255))
-            d = ImageDraw.Draw(img)
-            d.text((10,10), "Chart", fill=(0,0,0))
-            img.save(dummy_chart_path)
-            logger.info(f"Dummy chart image created: {dummy_chart_path}")
-        except ImportError:
-            logger.warning("Pillow not installed. Skipping chart analysis.")
-            dummy_chart_path = None
-    if dummy_chart_path and os.path.exists(dummy_chart_path):
-        logger.info("--- Analyzing Market Chart for ETHUSDT ---")
-        chart_analysis = await system.analyze_market_charts(dummy_chart_path, "ETHUSDT")
-        logger.info(f"Chart Analysis Result: {json.dumps(chart_analysis, indent=2)}")
-    logger.info("--- Simulating Trade Execution ---")
-    symbol_to_trade = "BTCUSDT"
-    market_data = system.bybit_adapter.get_real_time_market_data(symbol_to_trade)
-    current_price = market_data.get("price")
-    if current_price:
-        logger.info(f"Current price for {symbol_to_trade}: {current_price}")
-        ai_suggested_side = "Buy"
-        ai_suggested_order_type = "Limit"
-        ai_suggested_qty = 0.001
-        ai_suggested_entry_price = current_price * 0.99
-        ai_suggested_stop_loss = ai_suggested_entry_price * 0.98
-        ai_suggested_take_profit = ai_suggested_entry_price * 1.05
-        logger.info(f"Simulating AI suggestion: {ai_suggested_side} {ai_suggested_order_type} {ai_suggested_qty} @ {ai_suggested_entry_price}")
-        trade_execution_result = await system.execute_ai_trade_suggestion(
-            symbol=symbol_to_trade,
-            side=ai_suggested_side,
-            order_type=ai_suggested_order_type,
-            qty=ai_suggested_qty,
-            price=ai_suggested_entry_price,
-            stop_loss=ai_suggested_stop_loss,
-            take_profit=ai_suggested_take_profit
-        )
-        logger.info(f"Trade Execution Result: {json.dumps(trade_execution_result, indent=2)}")
-        if trade_execution_result.get("status") == "success":
-            order_id_to_check = trade_execution_result["order"]["bybit_order_id"]
-            client_id_to_check = trade_execution_result["order"]["client_order_id"]
-            logger.info(f"--- Checking status of order {client_id_to_check} ---")
-            updated_order = system.bybit_adapter.get_order(symbol_to_trade, order_id=order_id_to_check, client_order_id=client_id_to_check)
-            if updated_order:
-                logger.info(f"Updated order status: {updated_order.status}")
-            else:
-                logger.warning("Could not retrieve updated order status.")
-    else:
-        logger.warning(f"Could not fetch price for {symbol_to_trade}. Skipping trade simulation.")
+
+    while True:
+        logger.info("--- Starting new trading cycle ---")
+        symbol_to_trade = "BTCUSDT"
+
+        # Perform Quantitative Analysis
+        logger.info(f"--- Quantitative Analysis for {symbol_to_trade} ---")
+        analysis_response = await system.perform_quantitative_analysis(symbol_to_trade)
+        logger.info("Quantitative analysis completed.")
+
+        # Optional: Analyze Market Charts (placeholder for now)
+        dummy_chart_path = "dummy_chart.png"
+        if not os.path.exists(dummy_chart_path):
+            try:
+                from PIL import Image, ImageDraw
+                img = Image.new('RGB', (60, 30), color = (255, 255, 255))
+                d = ImageDraw.Draw(img)
+                d.text((10,10), "Chart", fill=(0,0,0))
+                img.save(dummy_chart_path)
+                logger.info(f"Dummy chart image created: {dummy_chart_path}")
+            except ImportError:
+                logger.warning("Pillow not installed. Skipping chart analysis.")
+                dummy_chart_path = None
+        if dummy_chart_path and os.path.exists(dummy_chart_path):
+            logger.info(f"--- Analyzing Market Chart for {symbol_to_trade} (placeholder) ---")
+            chart_analysis = await system.analyze_market_charts(dummy_chart_path, symbol_to_trade)
+            logger.info(f"Chart Analysis Result: {json.dumps(chart_analysis, indent=2)}")
+
+        # Simulate Trade Execution (based on AI suggestion)
+        logger.info("--- Simulating Trade Execution ---")
+        market_data = system.bybit_adapter.get_real_time_market_data(symbol_to_trade)
+        current_price = market_data.get("price")
+
+        if current_price:
+            logger.info(f"Current price for {symbol_to_trade}: {current_price}")
+            # These would ideally come from AI analysis_response
+            ai_suggested_side = "Buy"
+            ai_suggested_order_type = "Limit"
+            ai_suggested_qty = 0.001
+            ai_suggested_entry_price = current_price * 0.99
+            ai_suggested_stop_loss = ai_suggested_entry_price * 0.98
+            ai_suggested_take_profit = ai_suggested_entry_price * 1.05
+
+            logger.info(f"Simulating AI suggestion: {ai_suggested_side} {ai_suggested_order_type} {ai_suggested_qty} @ {ai_suggested_entry_price}")
+            trade_execution_result = await system.execute_ai_trade_suggestion(
+                symbol=symbol_to_trade,
+                side=ai_suggested_side,
+                order_type=ai_suggested_order_type,
+                qty=ai_suggested_qty,
+                price=ai_suggested_entry_price,
+                stop_loss=ai_suggested_stop_loss,
+                take_profit=ai_suggested_take_profit
+            )
+            logger.info(f"Trade Execution Result: {json.dumps(trade_execution_result, indent=2)}")
+
+            if trade_execution_result.get("status") == "success":
+                order_id_to_check = trade_execution_result["order"]["bybit_order_id"]
+                client_id_to_check = trade_execution_result["order"]["client_order_id"]
+                logger.info(f"--- Checking status of order {client_id_to_check} ---")
+                updated_order = system.bybit_adapter.get_order(symbol_to_trade, order_id=order_id_to_check, client_order_id=client_id_to_check)
+                if updated_order:
+                    logger.info(f"Updated order status: {updated_order.status}")
+                else:
+                    logger.warning("Could not retrieve updated order status.")
+        else:
+            logger.warning(f"Could not fetch price for {symbol_to_trade}. Skipping trade simulation.")
+
+        logger.info("--- Trading cycle completed. Sleeping for 60 seconds ---")
+        await asyncio.sleep(60) # Sleep for 60 seconds before next cycle
 
 if __name__ == "__main__":
     asyncio.run(main())

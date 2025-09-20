@@ -10,6 +10,18 @@ export default [
       }
     },
     rules: {
+      'no-control-regex': 'off',
+    }
+  },
+  {
+    files: ["**/*.test.js", "**/tests/**/*.js"],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      }
+    },
+    rules: {
+      // You might want to add specific rules for test files here
     }
   }
 ];

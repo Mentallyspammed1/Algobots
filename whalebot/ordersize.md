@@ -1,469 +1,194 @@
+The provided Python code (`wb1.0.1.py`) already contains robust implementations for handling decimals, precision, and order sizing for Bybit, using best practices like the `decimal` module and risk-managed position sizing.
 
+Here are the key snippets and explanations:
 
-# CCXT Code Snippets for Bybit Dynamic Order Sizing and Precision
+---
 
-## Basic Setup and Authentication
+### Snippet 1: Implementing Decimal and Precision
 
-```python
-import ccxt
-import math
-from decimal import Decimal, ROUND_DOWN
+The `decimal` module is used extensively to avoid floating-point inaccuracies inherent with `float` types, which is critical for financial calculations. Precision settings are configurable and applied through quantization.
 
-# Initialize Bybit exchange
-exchange = ccxt.bybit({
-    'apiKey': 'YOUR_API_KEY',
-    'secret': 'YOUR_SECRET_KEY',
-    'enableRateLimit': True,
-    'options': {
-        'defaultType': 'spot',  # 'spot', 'linear', 'inverse'
-        'adjustForTimeDifference': True,
+**Key Code Areas:**
+
+1.  **Global Decimal Context Setup:**
+    ```python
+    from decimal import ROUND_DOWN, Decimal, getcontext
+
+    # Initialize colorama and set decimal precision
+    getcontext().prec = 28 # Sets global precision for new Decimal objects
+    init(autoreset=True)
+    load_dotenv()
+    ```
+    *   `getcontext().prec = 28`: This sets the global precision for `Decimal` operations. `28` is a common choice for high precision in financial applications.
+    *   `Decimal`: All sensitive numerical values (prices, quantities, balances, PnL) are converted to and stored as `Decimal` objects.
+
+2.  **Configuration for Precision:**
+    The `config.json` (or `default_config` in `load_config`) defines specific precision requirements for orders and prices:
+    ```python
+    # Inside load_config -> default_config
+    "trade_management": {
+        "enabled": True,
+        "account_balance": 1000.0,
+        "risk_per_trade_percent": 1.0,
+        "stop_loss_atr_multiple": 1.5,
+        "take_profit_atr_multiple": 2.0,
+        "max_open_positions": 1,
+        "order_precision": 5,  # New: Decimal places for order quantity
+        "price_precision": 3,  # New: Decimal places for price
+        "enable_trailing_stop": True,
+        "trailing_stop_atr_multiple": 0.8,
+        "break_even_atr_trigger": 0.5
+    },
+    ```
+    *   `order_precision`: Specifies the desired number of decimal places for the order quantity (e.g., `0.00001 BTC`).
+    *   `price_precision`: Specifies the desired number of decimal places for prices (e.g., `123.456 USDT`).
+
+3.  **Applying Precision (Quantization):**
+    Quantization is used to round `Decimal` values to a specific number of decimal places, typically using `ROUND_DOWN` (truncation) to be conservative.
+
+    **Example from `PositionManager._calculate_order_size`:**
+    ```python
+    # ... inside PositionManager._calculate_order_size ...
+    order_qty = order_value / current_price
+
+    # Round order_qty to appropriate precision for the symbol
+    # Ensure precision is at least 1 (e.g., 0.1, 0.01, etc.)
+    precision_exponent = max(0, self.order_precision - 1)
+    precision_str = "0." + "0" * precision_exponent + "1"
+    order_qty = order_qty.quantize(Decimal(precision_str), rounding=ROUND_DOWN)
+
+    self.logger.info(
+        f"[{self.symbol}] Calculated order size: {order_qty.normalize()} (Risk: {risk_amount.normalize():.2f} USD)"
+    )
+    return order_qty
+    ```
+    *   `precision_str`: Dynamically creates a quantization string like `"0.00001"` based on `order_precision`.
+    *   `order_qty.quantize(Decimal(precision_str), rounding=ROUND_DOWN)`: This is the core method that rounds the `order_qty` down to the specified number of decimal places.
+
+    **Example from `PositionManager.open_position` (for prices):**
+    ```python
+    # ... inside PositionManager.open_position ...
+    price_precision_exponent = max(0, self.price_precision - 1)
+    price_precision_str = "0." + "0" * price_precision_exponent + "1"
+
+    position = {
+        # ...
+        "entry_price": current_price.quantize(
+            Decimal(price_precision_str), rounding=ROUND_DOWN
+        ),
+        "qty": order_qty,
+        "stop_loss": initial_stop_loss.quantize(
+            Decimal(price_precision_str), rounding=ROUND_DOWN
+        ),
+        "take_profit": take_profit.quantize(
+            Decimal(price_precision_str), rounding=ROUND_DOWN
+        ),
+        # ...
     }
-})
+    ```
+    *   Similar logic is used to quantize `entry_price`, `stop_loss`, and `take_profit` using `price_precision`.
 
-# Set sandbox mode for testing
-exchange.set_sandbox_mode(True)
-```
+4.  **API Data Conversion:**
+    When fetching data from Bybit, prices and quantities are typically strings. They are converted to `Decimal` immediately upon receipt to ensure all subsequent calculations are precise.
 
-## Fetching Market Precision Information
+    **Example from `fetch_current_price`:**
+    ```python
+    def fetch_current_price(symbol: str, logger: logging.Logger) -> Decimal | None:
+        # ... API request ...
+        if response and response["result"] and response["result"]["list"]:
+            price = Decimal(response["result"]["list"][0]["lastPrice"])
+            logger.debug(f"Fetched current price for {symbol}: {price}")
+            return price
+        # ...
+    ```
+    *   `Decimal(response["result"]["list"][0]["lastPrice"])`: Converts the string price from the API into a `Decimal` object.
 
-```python
-def get_market_precision(exchange, symbol):
-    """Get precision requirements for a trading pair"""
-    markets = exchange.load_markets()
-    market = markets[symbol]
-    
-    return {
-        'amount_precision': market['precision']['amount'],
-        'price_precision': market['precision']['price'],
-        'cost_precision': market['precision']['cost'],
-        'min_amount': market['limits']['amount']['min'],
-        'max_amount': market['limits']['amount']['max'],
-        'min_cost': market['limits']['cost']['min'],
-        'tick_size': market['info'].get('priceFilter', {}).get('tickSize'),
-        'lot_size': market['info'].get('lotSizeFilter', {}).get('basePrecision')
-    }
+**Best Practice Note for Bybit:**
+While the current configuration-based precision is good, for a live trading bot, it's crucial to dynamically fetch the *actual* `minPrice`, `tickSize`, `minOrderQty`, and `qtyStep` for the specific trading symbol from Bybit's `/v5/market/instruments-info` endpoint. These values vary by symbol and ensure orders comply with exchange rules. The `quantize` operations should then use these exchange-provided steps.
 
-# Example usage
-precision_info = get_market_precision(exchange, 'DOGE/USDT')
-print(f"DOGE/USDT Precision: {precision_info}")
-```
+---
 
-## Dynamic Order Size Calculation
+### Snippet 2: Implementing Order Sizing for Bybit
 
-```python
-def calculate_order_size(exchange, symbol, usdt_amount, side='buy', price=None):
-    """Calculate proper order size with correct precision"""
-    market = exchange.market(symbol)
-    
-    if side == 'buy' and price:
-        # For buy orders, calculate amount based on USDT and price
-        raw_amount = usdt_amount / price
-    else:
-        raw_amount = usdt_amount
-    
-    # Apply precision
-    amount_precision = market['precision']['amount']
-    
-    # Method 1: Using decimal precision
-    if isinstance(amount_precision, int):
-        amount = round(raw_amount, amount_precision)
-    else:
-        # Method 2: Using step size
-        step_size = float(amount_precision)
-        amount = math.floor(raw_amount / step_size) * step_size
-    
-    # Check limits
-    min_amount = market['limits']['amount']['min']
-    if amount < min_amount:
-        raise ValueError(f"Amount {amount} below minimum {min_amount}")
-    
-    return amount
+Order sizing in this bot is based on a risk-per-trade percentage and the Average True Range (ATR) to determine stop-loss distance, making it dynamic and adaptable to market volatility.
 
-# Example: Calculate order size for $100 USDT worth of DOGE
-ticker = exchange.fetch_ticker('DOGE/USDT')
-current_price = ticker['last']
-order_amount = calculate_order_size(exchange, 'DOGE/USDT', 100, 'buy', current_price)
-print(f"Order amount: {order_amount} DOGE")
-```
+**Key Code Area:**
 
-## Precision Helper Functions
+The primary logic resides within the `PositionManager` class, specifically the `_calculate_order_size` method:
 
 ```python
-def round_to_precision(value, precision):
-    """Round value to exchange precision requirements"""
-    if precision is None:
-        return value
-    
-    if isinstance(precision, int):
-        return round(value, precision)
-    else:
-        # Handle step size precision
-        step = float(precision)
-        return math.floor(value / step) * step
+class PositionManager:
+    # ... initialization ...
 
-def format_price(exchange, symbol, price):
-    """Format price according to symbol requirements"""
-    market = exchange.market(symbol)
-    price_precision = market['precision']['price']
-    return round_to_precision(price, price_precision)
+    def _get_current_balance(self) -> Decimal:
+        """Fetch current account balance (simplified for simulation)."""
+        # In a real bot, this would query the exchange.
+        # For simulation, use configured account balance.
+        # Example API call for real balance (needs authentication):
+        # endpoint = "/v5/account/wallet-balance"
+        # params = {"accountType": "UNIFIED"}
+        # response = bybit_request("GET", endpoint, params, signed=True, logger=self.logger)
+        # if response and response["result"] and response["result"]["list"]:
+        #     for coin_balance in response["result"]["list"][0]["coin"]:
+        #         if coin_balance["coin"] == "USDT":
+        #             return Decimal(coin_balance["walletBalance"])
+        return Decimal(str(self.config["trade_management"]["account_balance"]))
 
-def format_amount(exchange, symbol, amount):
-    """Format amount according to symbol requirements"""
-    market = exchange.market(symbol)
-    amount_precision = market['precision']['amount']
-    return round_to_precision(amount, amount_precision)
-```
+    def _calculate_order_size(
+        self, current_price: Decimal, atr_value: Decimal
+    ) -> Decimal:
+        """Calculate order size based on risk per trade and ATR."""
+        if not self.trade_management_enabled:
+            return Decimal("0")
 
-## Placing Orders with Dynamic Sizing
+        account_balance = self._get_current_balance() # Fetches simulated or actual balance
+        risk_per_trade_percent = (
+            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"]))
+            / 100
+        )
+        stop_loss_atr_multiple = Decimal(
+            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+        )
 
-### Market Order
-```python
-def place_market_order(exchange, symbol, side, amount_usdt):
-    """Place market order with proper sizing"""
-    try:
-        # For spot market buy, specify cost in USDT
-        if side == 'buy' and exchange.options['defaultType'] == 'spot':
-            order = exchange.create_market_buy_order(
-                symbol=symbol,
-                cost=amount_usdt  # Specify in USDT for market buy
+        risk_amount = account_balance * risk_per_trade_percent
+        stop_loss_distance = atr_value * stop_loss_atr_multiple
+
+        if stop_loss_distance <= 0:
+            self.logger.warning(
+                f"{NEON_YELLOW}[{self.symbol}] Calculated stop loss distance is zero or negative ({stop_loss_distance}). Cannot determine order size.{RESET}"
             )
-        else:
-            # For sell or futures, calculate amount
-            ticker = exchange.fetch_ticker(symbol)
-            amount = calculate_order_size(exchange, symbol, amount_usdt, side, ticker['last'])
-            order = exchange.create_market_order(
-                symbol=symbol,
-                side=side,
-                amount=amount
-            )
-        
-        return order
-        
-    except ccxt.InvalidOrder as e:
-        print(f"Invalid order: {e}")
-    except ccxt.InsufficientFunds as e:
-        print(f"Insufficient funds: {e}")
-    except Exception as e:
-        print(f"Error placing order: {e}")
+            return Decimal("0")
 
-# Example
-order = place_market_order(exchange, 'BTC/USDT', 'buy', 100)
-```
+        # Order size in USD value
+        order_value = risk_amount / stop_loss_distance
+        # Convert to quantity of the asset (e.g., BTC)
+        order_qty = order_value / current_price
 
-### Limit Order
-```python
-def place_limit_order(exchange, symbol, side, amount, price):
-    """Place limit order with proper precision"""
-    try:
-        # Format values to proper precision
-        formatted_amount = format_amount(exchange, symbol, amount)
-        formatted_price = format_price(exchange, symbol, price)
-        
-        order = exchange.create_limit_order(
-            symbol=symbol,
-            side=side,
-            amount=formatted_amount,
-            price=formatted_price,
-            params={
-                'timeInForce': 'GTC',  # Good Till Cancel
-                'postOnly': False
-            }
+        # Round order_qty to appropriate precision for the symbol
+        precision_exponent = max(0, self.order_precision - 1)
+        precision_str = "0." + "0" * precision_exponent + "1"
+        order_qty = order_qty.quantize(Decimal(precision_str), rounding=ROUND_DOWN)
+
+        self.logger.info(
+            f"[{self.symbol}] Calculated order size: {order_qty.normalize()} (Risk: {risk_amount.normalize():.2f} USD)"
         )
-        
-        return order
-        
-    except Exception as e:
-        print(f"Error placing limit order: {e}")
-        return None
-
-# Example
-order = place_limit_order(exchange, 'ETH/USDT', 'buy', 0.05, 2500.50)
+        return order_qty
 ```
 
-## Leverage and Position Sizing (Futures)
+**Explanation:**
 
-```python
-def set_leverage(exchange, symbol, leverage):
-    """Set leverage for futures trading"""
-    try:
-        # Switch to futures
-        exchange.options['defaultType'] = 'linear'
-        
-        response = exchange.set_leverage(
-            leverage=leverage,
-            symbol=symbol,
-            params={'buyLeverage': leverage, 'sellLeverage': leverage}
-        )
-        
-        return response
-        
-    except Exception as e:
-        print(f"Error setting leverage: {e}")
-        return None
+1.  **`_get_current_balance()`**:
+    *   In a live scenario, this method would make an authenticated API call to Bybit (`/v5/account/wallet-balance`) to fetch the available balance in USDT (or other base currency).
+    *   In the provided code, it uses a simulated `account_balance` from the `config.json` for backtesting/simulation purposes.
 
-def calculate_position_with_leverage(balance, leverage, risk_percentage=0.01):
-    """Calculate position size based on leverage and risk"""
-    risk_amount = balance * risk_percentage
-    position_size = risk_amount * leverage
-    
-    return {
-        'risk_amount': risk_amount,
-        'position_size': position_size,
-        'required_margin': risk_amount
-    }
+2.  **Risk-Based Sizing (`_calculate_order_size`)**:
+    *   **`risk_amount`**: Calculated as `account_balance * risk_per_trade_percent`. This defines the maximum capital the bot is willing to lose on a single trade.
+        *   `risk_per_trade_percent` is configurable in `config["trade_management"]["risk_per_trade_percent"]`.
+    *   **`stop_loss_distance`**: Determined by `atr_value * stop_loss_atr_multiple`. This dynamically adjusts the stop-loss distance based on current market volatility (ATR).
+        *   `atr_value` is the latest ATR reading from the `TradingAnalyzer`.
+        *   `stop_loss_atr_multiple` is a configurable multiplier in `config["trade_management"]["stop_loss_atr_multiple"]`.
+    *   **`order_value` (in USD/base currency)**: `risk_amount / stop_loss_distance`. This calculates the total value (e.g., in USDT) of the position that can be taken while adhering to the risk limit.
+    *   **`order_qty` (in asset quantity, e.g., BTC)**: `order_value / current_price`. This converts the calculated USD value into the actual quantity of the asset to be traded.
+    *   **Precision Application**: Finally, `order_qty` is quantized using `self.order_precision` to ensure it meets Bybit's minimum quantity and step requirements (as per configuration).
 
-# Example
-balance = 1000  # USDT
-leverage = 50
-position = calculate_position_with_leverage(balance, leverage, 0.02)
-print(f"With {leverage}x leverage and 2% risk:")
-print(f"Position size: ${position['position_size']}")
-print(f"Margin required: ${position['required_margin']}")
-```
-
-## Advanced Order Types
-
-### Trailing Stop Order
-```python
-def place_trailing_stop(exchange, symbol, side, amount, activation_price, callback_rate):
-    """Place trailing stop order"""
-    try:
-        params = {
-            'triggerPrice': format_price(exchange, symbol, activation_price),
-            'trailingPercent': callback_rate,  # in percentage (e.g., 1 for 1%)
-            'triggerBy': 'LastPrice',
-            'orderType': 'Market',
-            'timeInForce': 'IOC',
-            'reduceOnly': True
-        }
-        
-        order = exchange.create_order(
-            symbol=symbol,
-            type='TrailingStop',
-            side=side,
-            amount=format_amount(exchange, symbol, amount),
-            price=None,
-            params=params
-        )
-        
-        return order
-        
-    except Exception as e:
-        print(f"Error placing trailing stop: {e}")
-        return None
-```
-
-### Order with Take Profit and Stop Loss
-```python
-def place_order_with_tp_sl(exchange, symbol, side, amount, entry_price, tp_price, sl_price):
-    """Place order with take profit and stop loss"""
-    try:
-        # Format all values
-        formatted_amount = format_amount(exchange, symbol, amount)
-        formatted_entry = format_price(exchange, symbol, entry_price)
-        formatted_tp = format_price(exchange, symbol, tp_price)
-        formatted_sl = format_price(exchange, symbol, sl_price)
-        
-        params = {
-            'takeProfit': formatted_tp,
-            'stopLoss': formatted_sl,
-            'tpTriggerBy': 'LastPrice',
-            'slTriggerBy': 'LastPrice',
-            'timeInForce': 'GTC'
-        }
-        
-        order = exchange.create_limit_order(
-            symbol=symbol,
-            side=side,
-            amount=formatted_amount,
-            price=formatted_entry,
-            params=params
-        )
-        
-        return order
-        
-    except Exception as e:
-        print(f"Error placing order with TP/SL: {e}")
-        return None
-
-# Example
-order = place_order_with_tp_sl(
-    exchange, 
-    'BTC/USDT', 
-    'buy', 
-    0.001, 
-    65000,  # entry
-    70000,  # take profit
-    63000   # stop loss
-)
-```
-
-## Iceberg Order Implementation
-
-```python
-def place_iceberg_order(exchange, symbol, side, total_amount, visible_amount, price):
-    """Place iceberg order that shows only partial quantity"""
-    try:
-        formatted_total = format_amount(exchange, symbol, total_amount)
-        formatted_visible = format_amount(exchange, symbol, visible_amount)
-        formatted_price = format_price(exchange, symbol, price)
-        
-        params = {
-            'orderType': 'Limit',
-            'icebergQty': formatted_visible,
-            'timeInForce': 'GTC'
-        }
-        
-        order = exchange.create_order(
-            symbol=symbol,
-            type='limit',
-            side=side,
-            amount=formatted_total,
-            price=formatted_price,
-            params=params
-        )
-        
-        return order
-        
-    except Exception as e:
-        print(f"Error placing iceberg order: {e}")
-        return None
-```
-
-## Error Handling for Precision Issues
-
-```python
-def safe_order_placement(exchange, symbol, side, amount, price=None, order_type='limit'):
-    """Place order with comprehensive error handling"""
-    try:
-        market = exchange.market(symbol)
-        
-        # Validate and adjust amount
-        min_amount = market['limits']['amount']['min']
-        max_amount = market['limits']['amount']['max']
-        
-        if amount < min_amount:
-            print(f"Amount {amount} adjusted to minimum {min_amount}")
-            amount = min_amount
-        elif amount > max_amount:
-            print(f"Amount {amount} adjusted to maximum {max_amount}")
-            amount = max_amount
-        
-        # Format with precision
-        formatted_amount = format_amount(exchange, symbol, amount)
-        
-        if order_type == 'market':
-            order = exchange.create_market_order(symbol, side, formatted_amount)
-        else:
-            formatted_price = format_price(exchange, symbol, price)
-            
-            # Check minimum cost
-            cost = formatted_amount * formatted_price
-            min_cost = market['limits']['cost']['min']
-            
-            if cost < min_cost:
-                raise ValueError(f"Order cost {cost} below minimum {min_cost}")
-            
-            order = exchange.create_limit_order(
-                symbol, side, formatted_amount, formatted_price
-            )
-        
-        print(f"Order placed successfully: {order['id']}")
-        return order
-        
-    except ccxt.InvalidOrder as e:
-        print(f"Invalid order parameters: {e}")
-    except ccxt.InsufficientFunds as e:
-        print(f"Insufficient balance: {e}")
-    except ccxt.ExchangeError as e:
-        print(f"Exchange error: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-    
-    return None
-```
-
-## Batch Order Processing
-
-```python
-def place_scaled_orders(exchange, symbol, side, total_amount, price_start, price_end, num_orders):
-    """Place multiple orders across a price range"""
-    orders = []
-    
-    # Calculate distribution
-    amount_per_order = total_amount / num_orders
-    price_step = (price_end - price_start) / (num_orders - 1)
-    
-    for i in range(num_orders):
-        price = price_start + (i * price_step)
-        
-        # Format values
-        formatted_amount = format_amount(exchange, symbol, amount_per_order)
-        formatted_price = format_price(exchange, symbol, price)
-        
-        try:
-            order = exchange.create_limit_order(
-                symbol=symbol,
-                side=side,
-                amount=formatted_amount,
-                price=formatted_price,
-                params={'timeInForce': 'GTC'}
-            )
-            orders.append(order)
-            print(f"Order {i+1}/{num_orders} placed at {formatted_price}")
-            
-        except Exception as e:
-            print(f"Failed to place order {i+1}: {e}")
-    
-    return orders
-
-# Example: Place 5 buy orders between $65,000 and $64,000
-orders = place_scaled_orders(
-    exchange, 
-    'BTC/USDT', 
-    'buy', 
-    0.01,  # total amount
-    64000, 
-    65000, 
-    5
-)
-```
-
-## Real-time Precision Validation
-
-```python
-def validate_order_params(exchange, symbol, amount, price=None):
-    """Validate order parameters before submission"""
-    market = exchange.market(symbol)
-    errors = []
-    
-    # Check amount
-    if amount < market['limits']['amount']['min']:
-        errors.append(f"Amount below minimum: {market['limits']['amount']['min']}")
-    if amount > market['limits']['amount']['max']:
-        errors.append(f"Amount above maximum: {market['limits']['amount']['max']}")
-    
-    # Check cost if price provided
-    if price:
-        cost = amount * price
-        if cost < market['limits']['cost']['min']:
-            errors.append(f"Order cost ${cost:.2f} below minimum: ${market['limits']['cost']['min']}")
-    
-    # Check precision
-    amount_precision = market['precision']['amount']
-    if isinstance(amount_precision, int):
-        decimal_places = len(str(amount).split('.')[-1]) if '.' in str(amount) else 0
-        if decimal_places > amount_precision:
-            errors.append(f"Amount precision exceeds {amount_precision} decimal places")
-    
-    return {'valid': len(errors) == 0, 'errors': errors}
-
-# Example validation
-validation = validate_order_params(exchange, 'DOGE/USDT', 0.12345, 0.08)
-if not validation['valid']:
-    print("Order validation failed:")
-    for error in validation['errors']:
-        print(f"  - {error}")
-```
-
-These code snippets provide comprehensive examples for working with Bybit's dynamic order sizing and precision requirements through CCXT. Remember to always test with small amounts or in sandbox mode first, and implement proper error handling for production use.
+This approach ensures that position size is dynamically adjusted based on account balance, risk tolerance, and current market volatility, preventing oversized trades during high volatility.

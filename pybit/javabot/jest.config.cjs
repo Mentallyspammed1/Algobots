@@ -1,7 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
   transform: {
-    '^.+\.js$': '<rootDir>/node_modules/babel-jest'
+    '^.+.js$': '<rootDir>/node_modules/babel-jest'
   },
   testMatch: [
     '**/__tests__/**/*.test.js',

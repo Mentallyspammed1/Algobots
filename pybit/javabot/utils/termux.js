@@ -1,11 +1,10 @@
-const chalk = require('chalk').default;
+import chalk from 'chalk';
 let termux;
 try {
-    termux = require('termux-api');
-} catch (e) {
-    console.log(chalk.gray("Termux API not found. Notifications will be disabled."));
-}
-
+    termux = await import('termux-api');
+    } catch (e) { // eslint-disable-line no-unused-vars
+        console.log(chalk.gray("Termux API not found. Notifications will be disabled."));
+    }
 function sendTermuxNotification(message, type) {
     if (!termux) return;
 
@@ -50,4 +49,4 @@ function sendTermuxNotification(message, type) {
     }
 }
 
-module.exports = { sendTermuxNotification };
+export { sendTermuxNotification };

@@ -9,7 +9,7 @@ async function sendWebhookNotification(signal) {
 
     try {
         await axios.post(CONFIG.webhookUrl, {
-            content: signal.signal.replace(/\u001b\[[0-9;]*m/g, ''), // Send plain text
+            content: signal.signal.replace(/\x1b\[[0-9;]*m/g, ''), // Send plain text
             embeds: [{
                 title: `${signal.type} - ${CONFIG.symbol}`,
                 description: `Confidence: ${signal.confidence}`,

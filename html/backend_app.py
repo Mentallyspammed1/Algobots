@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import random
 import time
+import json
+import os
 
 from indicators_api import calculate_ema, calculate_rsi, calculate_supertrend
 
@@ -12,6 +14,10 @@ app = FastAPI(
     title="Bybit Trading Bot Backend",
     description="API for fetching market data and calculating technical indicators."
 )
+
+# Define the path to the bot_state.json file
+# Assuming wblive.py is in /data/data/com.termux/files/home/Algobots/whalebot/
+BOT_STATE_FILE = "/data/data/com.termux/files/home/Algobots/whalebot/bot_state.json"
 
 class KlineData(BaseModel):
     timestamp: int
@@ -60,6 +66,23 @@ async def get_klines(
             volume=volume
         ))
     return mock_klines
+
+@app.get("/bot_status")
+async def get_bot_status():
+    """
+    Reads and returns the current state of the trading bot from bot_state.json.
+    """
+    if not os.path.exists(BOT_STATE_FILE):
+        raise HTTPException(status_code=404, detail="Bot state file not found. Is the bot running?")
+    
+    try:
+        with open(BOT_STATE_FILE, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        return state
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error decoding bot state JSON. File might be corrupted.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
 @app.post("/indicators")
 async def get_indicators(request: IndicatorRequest):

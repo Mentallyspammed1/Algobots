@@ -52,7 +52,7 @@ function createGeminiPrompt(data, config, newsSentiment, signalType) {
     prompt += `Technical Reasoning (Sorted by Influence):\n`;
     if (reasons.length > 0) {
         reasons.forEach(item => {
-            const cleanReason = String(item.reason || '').replace(/\u001b\[[0-9;]*m/g, '');
+            const cleanReason = String(item.reason || '').replace(/\x1b\[[0-9;]*m/g, '');
             const w = Number(item.weight);
             prompt += `  - ${cleanReason} (Weight: ${Number.isFinite(w) ? w.toFixed(2) : 'N/A'})\n`;
         });

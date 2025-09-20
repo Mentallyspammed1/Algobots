@@ -203,7 +203,7 @@ async function runContinuousLoop() {
             const { signal, type } = await generateComprehensiveSignal(data, { ...CONFIG, symbol }, newsSentiment);
             console.log(signal);
 
-            logSignal(signal.replace(/\u001b\[[0-9;]*m/g, ''), symbol); // Log plain text without ANSI codes
+            logSignal(signal.replace(/\x1b\[[0-9;]*m/g, ''), symbol); // Log plain text without ANSI codes
 
             if (type.includes("BUY") || type.includes("SELL")) {
                 sendTermuxNotification(signal, type);

@@ -71,6 +71,12 @@ handler = logging.StreamHandler()
 handler.setFormatter(ColoredFormatter())
 root_logger.addHandler(handler)
 
+# Add a FileHandler for persistent logs
+log_file_path = os.path.join(os.path.dirname(__file__), 'trading_bot.log')
+file_handler = logging.FileHandler(log_file_path)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+root_logger.addHandler(file_handler)
+
 # Set root logger level based on config
 root_logger.setLevel(getattr(logging, BOT_CONFIG["LOG_LEVEL"]))
 
@@ -154,7 +160,13 @@ class Bybit:
                 interval=str(timeframe), # Ensure interval is string
                 limit=limit
             )
+        except Exception as e:
+            self.logger.error(f"Error fetching kline data for {symbol}: {e}")
+            return pd.DataFrame()
             if resp['retCode'] == 0:
+                if not resp['result']['list']:
+                    logging.warning(f"{Fore.YELLOW}No kline data returned for {symbol}.{Style.RESET_ALL}")
+                    return pd.DataFrame()
                 # Define dtypes for efficiency and clarity
                 klines_dtypes = {
                     'Time': 'int64', # Timestamp is int before conversion
@@ -274,6 +286,9 @@ class Bybit:
         try:
             # Ensure prices and quantities are formatted correctly based on precision
             price_precision, qty_precision = self.get_precisions(symbol)
+            if price_precision == 0 and qty_precision == 0:
+                logging.error(f"{Fore.RED}Failed to get precisions for {symbol}. Cannot place order.{Style.RESET_ALL}")
+                return None
             
             params = {
                 'category': 'linear',
@@ -380,6 +395,9 @@ class Bybit:
                 order_info = response['result']['list'][0]
                 logging.debug(f"{Fore.BLUE}Order status for {symbol} (ID: {order_id}): {order_info['orderStatus']} (Filled Qty: {order_info.get('execQty', '0')}, Avg Price: {order_info.get('avgPrice', 'N/A')}){Style.RESET_ALL}")
                 return order_info
+            elif response['retCode'] == 0 and 'result' in response and not response['result']['list']:
+                logging.warning(f"{Fore.YELLOW}No order info found for {symbol} (ID: {order_id}). It might have been filled or cancelled.{Style.RESET_ALL}")
+                return None
             else:
                 logging.error(f"{Fore.RED}Error getting order status for {symbol} (ID: {order_id}): {response.get('retMsg', 'Unknown error')} (Code: {response['retCode']}){Style.RESET_ALL}")
                 return None
@@ -399,8 +417,11 @@ class Bybit:
         try:
             # First, get current position details to determine side and size
             positions_resp = self.session.get_positions(category='linear', symbol=symbol)
-            if positions_resp['retCode'] != 0 or not positions_resp['result']['list']:
-                logging.warning(f"{Fore.YELLOW}Could not get position details for {symbol} to close. {positions_resp.get('retMsg', 'No position found')}{Style.RESET_ALL}")
+            if positions_resp['retCode'] != 0:
+                logging.error(f"{Fore.RED}Error getting position details for {symbol} to close: {positions_resp.get('retMsg', 'Unknown error')} (Code: {positions_resp['retCode']}){Style.RESET_ALL}")
+                return None
+            if not positions_resp['result']['list']:
+                logging.warning(f"{Fore.YELLOW}No position list found for {symbol} to close. {positions_resp.get('retMsg', 'No position found')}{Style.RESET_ALL}")
                 return None
 
             position_info = None
@@ -453,7 +474,7 @@ try:
     logging.info(f"{Fore.LIGHTYELLOW_EX}Successfully connected to Bybit API in {mode_info} mode on {testnet_info}.{Style.RESET_ALL}")
     logging.debug(f"{Fore.CYAN}Bot configuration: {BOT_CONFIG}{Style.RESET_ALL}") # Log full config at DEBUG level
 except Exception as e:
-    logging.error(f"{Fore.RED}Failed to connect to Bybit API: {e}{Style.RESET_ALL}")
+    logging.error(f"{Fore.RED}Failed to connect to Bybit API: {e}. Please ensure your API keys are correct and your system clock is synchronized with NTP.{Style.RESET_ALL}")
     sys.exit(1)
 
 # --- Helper Functions ---

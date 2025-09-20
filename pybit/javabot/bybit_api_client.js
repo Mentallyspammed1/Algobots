@@ -361,7 +361,7 @@ class BybitAPIClient {
    * @param {boolean} [reduceOnly=false] - Whether the order is to reduce an existing position only.
    * @returns {Promise<string|null>} The order ID if successful, or null on failure.
    */
-  async placeConditionalOrder(symbol, side, qty, triggerPrice, orderType = 'Market', price = null, tpPrice = null, slPrice = null, reduceOnly = false) {
+  async placeConditionalOrder(symbol, side, qty, triggerPrice, orderType = 'Market', price = null, tpPrice = null, slPrice = null, timeInForce = 'GTC', reduceOnly = false) {
     if (orderType === 'Limit' && price === null) {
       price = triggerPrice;
       logger.warning(neon.warn(`Conditional limit order requested for ${symbol} without explicit price. Using trigger_price as limit execution price.`));

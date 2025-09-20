@@ -358,10 +358,9 @@ class PybitTradingClient:
                 api_key=API_KEY, api_secret=API_SECRET,
                 testnet=self.testnet, # Controls mainnet/testnet URL
                 timeout=REQUEST_TIMEOUT,
-                proxies=proxies if proxies else None # Pass proxies if configured
+
             )
-            actual_base_url = self.session.base_url if self.session else "N/A"
-            self.logger.info(f"{NEON_GREEN}PyBit HTTP client initialized. Testnet={self.testnet}, Base URL={actual_base_url}{RESET}")
+            self.logger.info(f"{NEON_GREEN}PyBit HTTP client initialized. Testnet={self.testnet}{RESET}")
 
             self._initialize_websocket() # Initialize WebSocket manager
         except (pybit.exceptions.FailedRequestError, TypeError, Exception) as e:
@@ -517,7 +516,7 @@ class PybitTradingClient:
             resp = self.session.get_kline(category=self.category, symbol=symbol, interval=interval, limit=limit)
             if self._ok(resp) and resp.get("result", {}).get("list"):
                 df = pd.DataFrame(resp["result"]["list"], columns=["start", "open", "high", "low", "close", "volume", "turnover"])
-                df["start"] = pd.to_datetime(df["start"], unit="ms")
+                df["start"] = pd.to_datetime(df["start"].astype(int), unit="ms")
                 df = df.set_index("start")
                 for col in ["open", "high", "low", "close", "volume", "turnover"]:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -810,7 +809,11 @@ class WebSocketManager:
         # Check for error or success messages directly from Bybit's API response structure
         if "op" in data and data["op"] == "subscribe":
             if data.get("success"): self.logger.info(f"WS Subscription successful for args: {data.get('req_id')}")
-            else: self.logger.error(f"WS Subscription failed for args: {data.get('req_id')} - {data.get('retMsg')}")
+            else:
+                if data.get('retMsg'):
+                    self.logger.error(f"WS Subscription failed for args: {data.get('req_id')} - {data.get('retMsg')}")
+                else:
+                    self.logger.warning(f"WS Subscription unacknowledged or failed without message for args: {data.get('req_id')}")
             return
 
         # Handle authenticated topic messages (private streams)

@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { Decimal } from 'decimal.js';
+import { Decimal } from 'decimal.js'; // eslint-disable-line no-unused-vars
 
 // --- Mock Implementations ---
 const mockGetWalletBalance = jest.fn();

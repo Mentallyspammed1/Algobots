@@ -2,11 +2,13 @@
   "name": "javabot",
   "version": "1.0.0",
   "description": "",
-  "main": "gemsignal.js",
+  "main": "main.js",
+  "type": "module",
   "scripts": {
     "start": "node bot_orchestrator.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "backtest": "node gemsignal.js --backtest"
+    "backtest": "node gemsignal.js --backtest",
+    "lint": "eslint . --ext .js"
   },
   "keywords": [],
   "author": "",
@@ -14,13 +16,13 @@
   "dependencies": {
     "@google/generative-ai": "^0.11.3",
     "axios": "^1.7.2",
-    "bybit-api": "^3.1.0",
-    "chalk": "^5.3.0",
+    "bybit-api": "^3.11.0",
+    "chalk": "^5.6.2",
     "crypto-js": "^4.2.0",
     "csv-writer": "^1.6.0",
     "dataframe-js": "^1.4.4",
     "decimal.js": "^10.4.3",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.6.1",
     "double-ended-queue": "^2.1.0-0",
     "express": "^4.19.2",
     "js-yaml": "^4.1.0",
