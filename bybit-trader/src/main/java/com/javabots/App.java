@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 public class App {
@@ -39,6 +40,9 @@ public class App {
         System.out.println("\n--- Fetching Server Time (Public Endpoint) ---");
         fetchServerTime(client);
 
+        // --- Authenticated API Service ---
+        BybitApiService apiService = new BybitApiService(client, apiKey, apiSecret);
+
         // --- Fetching Wallet Balance (Private Endpoint - Requires Auth) ---
         System.out.println("\n--- Fetching Wallet Balance (Private Endpoint) ---");
         fetchWalletBalance(client, apiKey, apiSecret);
@@ -52,12 +56,88 @@ public class App {
         try {
             TimeUnit.SECONDS.sleep(5); // Wait 5 seconds for connection to establish
             wsClient.subscribe("kline.1.BTCUSDT"); // Subscribe to 1-minute kline for BTCUSDT
-            TimeUnit.SECONDS.sleep(30); // Listen for 30 seconds
+            TimeUnit.SECONDS.sleep(10); // Listen for 10 seconds
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             System.err.println("WebSocket listening interrupted.");
+        }
+
+        // --- Order Management System (OMS) ---
+        System.out.println("\n--- Demonstrating Order Management System (OMS) ---");
+        String orderLinkId = "my-test-order-" + UUID.randomUUID().toString().substring(0, 8); // Unique ID for the order
+
+        try {
+            // 1. Place a Limit Buy Order
+            System.out.println("\nAttempting to place a LIMIT BUY order for BTCUSDT...");
+            JsonNode placeOrderResponse = apiService.placeOrder(
+                    "linear",       // category
+                    "BTCUSDT",      // symbol
+                    "Buy",          // side
+                    "Limit",        // orderType
+                    "0.001",        // qty (adjust based on your balance and min order size)
+                    "20000",        // price (set a price far from current market to avoid immediate fill)
+                    false,          // reduceOnly
+                    false,          // closeOnTrigger
+                    "GTC",          // timeInForce (Good-Till-Cancelled)
+                    orderLinkId     // custom order link ID
+            );
+            System.out.println("Place Order Response: " + placeOrderResponse.toPrettyString());
+
+            String placedOrderId = placeOrderResponse.path("result").path("orderId").asText();
+            if (!placedOrderId.isEmpty()) {
+                System.out.println("Order placed successfully with ID: " + placedOrderId);
+                System.out.println("Waiting 5 seconds before attempting to cancel...");
+                TimeUnit.SECONDS.sleep(5);
+
+                // 2. Cancel the Order
+                System.out.println("\nAttempting to cancel order with Order ID: " + placedOrderId);
+                JsonNode cancelOrderResponse = apiService.cancelOrder(
+                        "linear",
+                        "BTCUSDT",
+                        placedOrderId,
+                        null // Using orderId, so orderLinkId is null
+                );
+                System.out.println("Cancel Order Response: " + cancelOrderResponse.toPrettyString());
+                if (cancelOrderResponse.path("retCode").asInt() == 0) {
+                    System.out.println("Order cancelled successfully.");
+                } else {
+                    System.err.println("Failed to cancel order: " + cancelOrderResponse.path("retMsg").asText());
+                }
+            } else {
+                System.err.println("Failed to place order. No orderId returned.");
+            }
+
+        } catch (IOException | NoSuchAlgorithmException | InvalidKeyException | InterruptedException e) {
+            System.err.println("An error occurred during OMS operations: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        // --- Account & Wallet Management Module ---
+        System.out.println("\n--- Demonstrating Account & Wallet Management Module ---");
+        try {
+            // 1. Get Open Positions
+            System.out.println("\nAttempting to fetch Open Positions for BTCUSDT...");
+            JsonNode positionsResponse = apiService.getOpenPositions("linear", "BTCUSDT");
+            System.out.println("Open Positions Response: " + positionsResponse.toPrettyString());
+
+            // 2. Get Transaction Log (last 7 days for USDT)
+            System.out.println("\nAttempting to fetch Transaction Log for USDT (last 7 days)...");
+            long endTime = System.currentTimeMillis();
+            long startTime = endTime - TimeUnit.DAYS.toMillis(7); // Last 7 days
+            JsonNode transactionLogResponse = apiService.getTransactionLog(
+                    "UNIFIED",
+                    "USDT",
+                    startTime,
+                    endTime,
+                    10 // limit to 10 records
+            );
+            System.out.println("Transaction Log Response: " + transactionLogResponse.toPrettyString());
+
+        } catch (IOException | NoSuchAlgorithmException | InvalidKeyException e) {
+            System.err.println("An error occurred during Account & Wallet Management operations: " + e.getMessage());
+            e.printStackTrace();
         } finally {
-            wsClient.disconnect();
+            wsClient.disconnect(); // Ensure WebSocket is disconnected
         }
     }
 
@@ -123,8 +203,6 @@ public class App {
                     System.err.println("Failed to fetch wallet balance. HTTP Code: " + response.code() + ", Message: " + response.message());
                     if (response.body() != null) {
                         System.err.println("Response Body: " + response.body().string());
-                    } else {
-                        System.err.println("Response Body was null.");
                     }
                 }
             } catch (IOException e) {
