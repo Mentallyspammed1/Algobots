@@ -1,5 +1,8 @@
 package com.javabots;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 public class BybitApiUtil {
 
+    private static final Logger logger = LoggerFactory.getLogger(BybitApiUtil.class);
     private static final String HMAC_SHA256 = "HmacSHA256";
     private static final long RECV_WINDOW = 5000; // 5 seconds
 
@@ -29,13 +33,16 @@ public class BybitApiUtil {
             throws NoSuchAlgorithmException, InvalidKeyException {
 
         String payload = timestamp + apiKey + recvWindow + paramStr;
+        logger.debug("Signing payload: {}", payload);
 
         Mac sha256_HMAC = Mac.getInstance(HMAC_SHA256);
         SecretKeySpec secret_key = new SecretKeySpec(apiSecret.getBytes(StandardCharsets.UTF_8), HMAC_SHA256);
         sha256_HMAC.init(secret_key);
 
         byte[] hash = sha256_HMAC.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-        return bytesToHex(hash);
+        String signature = bytesToHex(hash);
+        logger.debug("Generated signature: {}", signature);
+        return signature;
     }
 
     /**
