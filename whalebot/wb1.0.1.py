@@ -529,31 +529,37 @@ def bybit_request(
     return None
 
 
-def fetch_current_price(symbol: str, logger: logging.Logger, ws_manager: 'BybitWebSocketManager' | None = None) -> Decimal | None:
-    """Fetch the current market price for a symbol, prioritizing WS data."""
-    if ws_manager and ws_manager.is_connected_public:
-        latest_ticker = ws_manager.get_latest_ticker()
-        if latest_ticker and latest_ticker.get("symbol") == symbol:
-            price = latest_ticker.get("lastPrice")
-            logger.debug(f"Fetched current price for {symbol} from WS: {price}")
-            return price
-        else:
-            logger.debug(f"{NEON_YELLOW}WS ticker data not available for {symbol}. Falling back to REST.{RESET}")
+    # Asynchronous function to fetch the current price of a given symbol.
+    # It tries to get the price from the WebSocket manager first, then falls back to REST API.
+    # This ensures real-time data is prioritized while having a reliable fallback.
+    def fetch_current_price(symbol: str, logger: logging.Logger, ws_manager: Optional['BybitWebSocketManager'] = None) -> Optional[Decimal]:
+        """
+        Fetches the current market price for a given symbol.
+        Prioritizes WebSocket data if available, otherwise uses the REST API.
 
-    endpoint = "/v5/market/tickers"
-    params = {"category": "linear", "symbol": symbol}
-    response = bybit_request("GET", endpoint, params, logger=logger)
-    if response and response["result"] and response["result"]["list"]:
-        price = Decimal(response["result"]["list"][0]["lastPrice"])
-        logger.debug(f"Fetched current price for {symbol} from REST: {price}")
-        return price
-    logger.warning(f"{NEON_YELLOW}[{symbol}] Could not fetch current price.{RESET}")
-    return None
+        if ws_manager and ws_manager.is_connected_public:
+            latest_ticker = ws_manager.get_latest_ticker()
+            if latest_ticker and latest_ticker.get("symbol") == symbol:
+                price = latest_ticker.get("lastPrice")
+                logger.debug(f"Fetched current price for {symbol} from WS: {price}")
+                return price
+            else:
+                logger.debug(f"{NEON_YELLOW}WS ticker data not available for {symbol}. Falling back to REST.{RESET}")
+
+        endpoint = "/v5/market/tickers"
+        params = {"category": "linear", "symbol": symbol}
+        response = bybit_request("GET", endpoint, params, logger=logger)
+        if response and response["result"] and response["result"]["list"]:
+            price = Decimal(response["result"]["list"][0]["lastPrice"])
+            logger.debug(f"Fetched current price for {symbol} from REST: {price}")
+            return price
+        logger.warning(f"{NEON_YELLOW}[{symbol}] Could not fetch current price.{RESET}")
+        return None
 
 
 def fetch_klines(
-    symbol: str, interval: str, limit: int, logger: logging.Logger, ws_manager: 'BybitWebSocketManager' | None = None
-) -> pd.DataFrame | None:
+    symbol: str, interval: str, limit: int, logger: logging.Logger, ws_manager: Optional['BybitWebSocketManager'] = None
+) -> Optional[pd.DataFrame]:
     """Fetch kline data, prioritizing WS manager's latest data."""
     if ws_manager and ws_manager.is_connected_public and ws_manager.config["interval"] == interval and ws_manager.symbol == symbol:
         ws_df = ws_manager.get_latest_kline_df()
