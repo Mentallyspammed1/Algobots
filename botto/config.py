@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv() # Load environment variables from .env file
 
 # --- API Configuration ---
-TESTNET = os.getenv("BYBIT_TESTNET", "True").lower() == "true"
+TESTNET = False # Set to False to use Bybit Mainnet
 API_KEY = os.getenv("BYBIT_API_KEY")
 API_SECRET = os.getenv("BYBIT_API_SECRET")
 
