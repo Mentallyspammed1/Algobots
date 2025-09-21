@@ -8,11 +8,14 @@ import okhttp3.WebSocketListener;
 import okio.ByteString;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
 public class BybitWebSocketClient {
 
+    private static final Logger logger = LoggerFactory.getLogger(BybitWebSocketClient.class);
     private static final String PUBLIC_WS_URL = "wss://stream-testnet.bybit.com/v5/public/linear"; // Testnet public linear
     // For mainnet: private static final String PUBLIC_WS_URL = "wss://stream.bybit.com/v5/public/linear";
 
@@ -31,23 +34,23 @@ public class BybitWebSocketClient {
     public void connect() {
         Request request = new Request.Builder().url(PUBLIC_WS_URL).build();
         webSocket = client.newWebSocket(request, new BybitWebSocketListener());
-        System.out.println("Attempting to connect to Bybit Public WebSocket: " + PUBLIC_WS_URL);
+        logger.info("Attempting to connect to Bybit Public WebSocket: {}", PUBLIC_WS_URL);
     }
 
     public void subscribe(String topic) {
         if (webSocket != null) {
             String subscribeMessage = String.format("{\"op\":\"subscribe\",\"args\":[\"%s\"]}", topic);
             webSocket.send(subscribeMessage);
-            System.out.println("Subscribed to topic: " + topic);
+            logger.info("Subscribed to topic: {}", topic);
         } else {
-            System.err.println("WebSocket not connected. Cannot subscribe to topic: " + topic);
+            logger.error("WebSocket not connected. Cannot subscribe to topic: {}", topic);
         }
     }
 
     public void disconnect() {
         if (webSocket != null) {
             webSocket.close(1000, "Client initiated disconnect");
-            System.out.println("Disconnected from Bybit Public WebSocket.");
+            logger.info("Disconnected from Bybit Public WebSocket.");
         }
         client.dispatcher().executorService().shutdown();
     }
@@ -55,7 +58,7 @@ public class BybitWebSocketClient {
     private class BybitWebSocketListener extends WebSocketListener {
         @Override
         public void onOpen(WebSocket webSocket, Response response) {
-            System.out.println("WebSocket connection opened successfully.");
+            logger.info("WebSocket connection opened successfully.");
             // You can subscribe to topics here immediately after connection
             // For example: subscribe("kline.1.BTCUSDT");
         }
@@ -67,12 +70,12 @@ public class BybitWebSocketClient {
                 String op = rootNode.path("op").asText();
 
                 if ("subscribe".equals(op)) {
-                    System.out.println("Subscription response: " + text);
+                    logger.debug("Subscription response: {}", text);
                 } else if ("pong".equals(op)) {
-                    // Handle pong response if needed, usually just indicates connection is alive
+                    logger.debug("Received pong from WebSocket.");
                 } else if (rootNode.has("topic")) {
                     String topic = rootNode.path("topic").asText();
-                    System.out.println("Received message for topic: " + topic);
+                    logger.debug("Received message for topic: {}", topic);
                     // Process kline data
                     if (topic.startsWith("kline")) {
                         JsonNode data = rootNode.path("data");
@@ -88,43 +91,41 @@ public class BybitWebSocketClient {
                                 double volume = klineNode.path("volume").asDouble();
                                 boolean confirm = klineNode.path("confirm").asBoolean();
 
-                                System.out.printf("  KLine: %s %s - O:%.2f H:%.2f L:%.2f C:%.2f V:%.2f Confirm:%b%n",
+                                logger.info("  KLine: {} {} - O:{} H:{} L:{} C:{} V:{} Confirm:{}",
                                         symbol, interval, open, high, low, close, volume, confirm);
                             }
                         }
                     }
                 } else {
-                    System.out.println("Received unknown message: " + text);
+                    logger.debug("Received unknown message: {}", text);
                 }
             } catch (Exception e) {
-                System.err.println("Error parsing WebSocket message: " + e.getMessage());
-                e.printStackTrace();
+                logger.error("Error parsing WebSocket message: {}", e.getMessage(), e);
             }
         }
 
         @Override
         public void onMessage(WebSocket webSocket, ByteString bytes) {
-            System.out.println("Received bytes: " + bytes.hex());
+            logger.debug("Received bytes: {}", bytes.hex());
         }
 
         @Override
         public void onClosing(WebSocket webSocket, int code, String reason) {
-            System.out.println("WebSocket closing: " + code + " / " + reason);
+            logger.info("WebSocket closing: {} / {}", code, reason);
         }
 
         @Override
         public void onClosed(WebSocket webSocket, int code, String reason) {
-            System.out.println("WebSocket closed: " + code + " / " + reason);
+            logger.info("WebSocket closed: {} / {}", code, reason);
         }
 
         @Override
         public void onFailure(WebSocket webSocket, Throwable t, Response response) {
-            System.err.println("WebSocket failure: " + t.getMessage());
-            t.printStackTrace();
+            logger.error("WebSocket failure: {}", t.getMessage(), t);
             if (response != null) {
-                System.err.println("Failure response: " + response.code() + " / " + response.message());
+                logger.error("Failure response: {} / {}", response.code(), response.message());
             } else {
-                System.err.println("Failure response was null.");
+                logger.error("Failure response was null.");
             }
             // Implement reconnection logic here
         }
