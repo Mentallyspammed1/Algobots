@@ -6,6 +6,9 @@ class BotConfig:
     # API Settings
     API_KEY: str = os.environ.get("BYBIT_API_KEY", "")
     API_SECRET: str = os.environ.get("BYBIT_API_SECRET", "")
+    BYBIT_API_ENDPOINT: str = "https://api-testnet.bybit.com"
+    API_RATE_LIMIT_CALLS: int = 60  # Number of API calls allowed
+    API_RATE_LIMIT_PERIOD: int = 60  # Period in seconds for rate limit
     TESTNET: bool = True  # Set to False for live trading
 
     # Trading Parameters
@@ -13,6 +16,7 @@ class BotConfig:
     CATEGORY: str = "linear"
 
     # Strategy Parameters
+    STRATEGY_NAME: str = "Supertrend"
     RISK_PER_TRADE_PERCENT: float = 0.5
 
     # Indicator Periods
@@ -42,3 +46,6 @@ class BotConfig:
     # Timeframes
     TF_1M: str = "1"
     TF_15M: str = "15"
+
+    # Data Management
+    MAX_DATAFRAME_SIZE: int = 5000  # Maximum rows to keep in DataFrame to prevent memory issues

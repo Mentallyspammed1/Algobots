@@ -22,7 +22,11 @@
         "trading_fee_percent": 0.0005,
         "enable_trailing_stop": true,
         "trailing_stop_atr_multiple": 0.8,
-        "break_even_atr_trigger": 0.5
+        "break_even_atr_trigger": 0.5,
+        "move_to_breakeven_atr_trigger": 1.0,
+        "profit_lock_in_atr_multiple": 0.5,
+        "close_on_opposite_signal": true,
+        "reverse_position_on_opposite_signal": false
     },
     "risk_guardrails": {
         "enabled": true,
@@ -86,7 +90,10 @@
             3,
             5
         ],
-        "cross_validation_folds": 5
+        "cross_validation_folds": 5,
+        "sentiment_analysis_enabled": false,
+        "bullish_sentiment_threshold": 0.6,
+        "bearish_sentiment_threshold": 0.4
     },
     "indicator_settings": {
         "atr_period": 14,
@@ -148,7 +155,13 @@
         "roc_oversold": -5.0,
         "roc_overbought": 5.0,
         "ADX_STRONG_TREND_THRESHOLD": 25,
-        "ADX_WEAK_TREND_THRESHOLD": 20
+        "ADX_WEAK_TREND_THRESHOLD": 20,
+        "enable_volume_confirmation": true,
+        "volume_confirmation_period": 20,
+        "min_volume_multiplier": 1.2,
+        "enable_volatility_filter": true,
+        "optimal_volatility_min": 0.005,
+        "optimal_volatility_max": 0.03
     },
     "indicators": {
         "ema_alignment": true,
@@ -174,7 +187,8 @@
         "cmf": true,
         "volatility_index": true,
         "vwma": true,
-        "volume_delta": true
+        "volume_delta": true,
+        "volatility_filter": true
     },
     "weight_sets": {
         "default_scalping": {
@@ -424,7 +438,8 @@
                 "cmf": true,
                 "volatility_index": true,
                 "vwma": true,
-                "volume_delta": true
+                "volume_delta": true,
+                "volatility_filter": true
             },
             "weights": {
                 "ema_alignment": 0.22,
@@ -445,7 +460,19 @@
                 "mtf_trend_confluence": 0.32,
                 "volatility_index_signal": 0.15,
                 "vwma_cross": 0.15,
-                "volume_delta_signal": 0.1
+                "volume_delta_signal": 0.1,
+                "volatility_filter": 0.1,
+                "sentiment_signal": 0.15
+            },
+            "market_condition_criteria": {
+                "adx_range": [
+                    0,
+                    25
+                ],
+                "volatility_range": [
+                    0.005,
+                    0.02
+                ]
             }
         },
         "trend_following": {
@@ -457,7 +484,11 @@
                 "adx": true,
                 "ehlers_supertrend": true,
                 "ichimoku_cloud": true,
-                "mtf_analysis": true
+                "mtf_analysis": true,
+                "volume_confirmation": true,
+                "volatility_filter": true,
+                "rsi": false,
+                "stoch_rsi": false
             },
             "weights": {
                 "ema_alignment": 0.3,
@@ -466,7 +497,20 @@
                 "adx_strength": 0.35,
                 "ehlers_supertrend_alignment": 0.6,
                 "ichimoku_confluence": 0.5,
-                "mtf_trend_confluence": 0.4
+                "mtf_trend_confluence": 0.4,
+                "volume_confirmation": 0.15,
+                "volatility_filter": 0.15,
+                "sentiment_signal": 0.2
+            },
+            "market_condition_criteria": {
+                "adx_range": [
+                    25,
+                    100
+                ],
+                "volatility_range": [
+                    0.01,
+                    0.05
+                ]
             }
         }
     },
@@ -489,6 +533,9 @@
         "mtf_trend_confluence": 0.32,
         "volatility_index_signal": 0.15,
         "vwma_cross": 0.15,
-        "volume_delta_signal": 0.1
-    }
+        "volume_delta_signal": 0.1,
+        "volatility_filter": 0.1,
+        "sentiment_signal": 0.15
+    },
+    "adaptive_strategy_enabled": true
 }
