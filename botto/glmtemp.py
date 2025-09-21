@@ -1,17 +1,3 @@
-"Improved Ultra-Advanced Bybit Trading Bot"
-A comprehensive, enterprise-grade trading bot for Bybit exchange with cutting-edge features.
-
-Enhanced Features:
-- Circuit breaker pattern for API resilience
-- Async/await for non-blocking operations
-- Online machine learning capabilities
-- Advanced error handling with retry mechanisms
-- Distributed system with leader election
-- Enhanced security with request signing
-- Performance optimizations with caching
-- Strategy backtesting and rotation
-- Fault tolerance and auto-recovery
-
 import os
 import json
 import time
