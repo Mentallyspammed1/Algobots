@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 from ta.momentum import StochasticOscillator, RSIIndicator
-from ta.trend import MACD, ADX, IchimokuIndicator, CCIIndicator, PSARIndicator, TRIXIndicator
+from ta.trend import MACD, adx, IchimokuIndicator, CCIIndicator, PSARIndicator, TRIXIndicator
 from ta.volatility import BollingerBands, KeltnerChannel, DonchianChannel
-from ta.volume import AccDistIndex, OnBalanceVolumeIndicator, ChaikinMoneyFlowIndicator, ForceIndexIndicator, VolumeWeightedAveragePrice
+from ta.volume import acc_dist_index, OnBalanceVolumeIndicator, ChaikinMoneyFlowIndicator, ForceIndexIndicator, VolumeWeightedAveragePrice
 from ta.others import DailyReturnIndicator, CumulativeReturnIndicator
 
 class EhlersFilter:

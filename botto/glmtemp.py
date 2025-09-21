@@ -1,21 +1,15 @@
-import os
-import json
-import time
-import requests
-import hmac
-import hashlib
-import urllib.parse
 import asyncio
-import websockets
-import pandas as pd
-import numpy as np
+import hashlib
+import hmac
+import json
 import logging
-from datetime import datetime, timezone
-import math
-from collections import deque
+import time
 
 # Import configuration and custom indicators
 import config
+import pandas as pd
+import requests
+import websockets
 from indicators import EhlersFilter, SuperTrend
 
 # --- Logging Setup ---
@@ -52,7 +46,7 @@ class BybitClient:
     def send_signed_request(self, method, endpoint, payload=None):
         if payload is None:
             payload = {}
-        
+
         # Add common parameters
         payload['api_key'] = self.api_key
         payload['timestamp'] = int(time.time() * 1000)
@@ -119,7 +113,7 @@ class BybitClient:
         }
         if end_time:
             params['end'] = end_time
-        
+
         response = self.send_public_request('GET', endpoint, params)
         if response and response['retCode'] == 0:
             return response['result']['list']
@@ -237,7 +231,7 @@ class EhlersSupertrendStrategy:
                  eh_fisher_overbought, eh_fisher_oversold,
                  eh_fisher_trigger_buy, eh_fisher_trigger_sell,
                  max_position_size, stop_loss_percent, take_profit_percent):
-        
+
         self.client = client
         self.symbol = symbol
         self.interval = interval
@@ -297,7 +291,7 @@ class EhlersSupertrendStrategy:
         df[['open', 'high', 'low', 'close', 'volume', 'turnover']] = \
             df[['open', 'high', 'low', 'close', 'volume', 'turnover']].astype(float)
         df = df.set_index('start_time')
-        
+
         # Ensure index is unique and sorted
         df = df[~df.index.duplicated(keep='last')]
         df = df.sort_index()
@@ -363,7 +357,7 @@ class EhlersSupertrendStrategy:
             return
 
         latest_candle = self.df.iloc[-1]
-        
+
         # --- Signal Generation ---
         buy_signal = False
         sell_signal = False
@@ -450,7 +444,7 @@ class EhlersSupertrendStrategy:
 
         # Get current price for SL/TP calculation
         current_price = self.df['close'].iloc[-1]
-        
+
         stop_loss_px = None
         take_profit_px = None
 
@@ -463,7 +457,7 @@ class EhlersSupertrendStrategy:
 
         logger.info(f"Attempting to place {side} order for {qty_to_trade} {self.symbol} "
                     f"with SL: {stop_loss_px:.2f}, TP: {take_profit_px:.2f}")
-        
+
         order_result = self.client.place_order(
             symbol=self.symbol,
             side=side,
@@ -489,9 +483,9 @@ class EhlersSupertrendStrategy:
 
         # Determine opposite side to close the position
         close_side = 'Sell' if self.position_side == 'Buy' else 'Buy'
-        
+
         logger.info(f"Attempting to close {self.position_side} position of {self.position_qty} {self.symbol}.")
-        
+
         order_result = self.client.place_order(
             symbol=self.symbol,
             side=close_side,
@@ -543,12 +537,12 @@ class WebSocketClient:
         try:
             self.private_websocket = await websockets.connect(self.private_ws_url, ping_interval=config.PING_INTERVAL, ping_timeout=config.PING_TIMEOUT)
             logger.info("Connected to private WebSocket.")
-            
+
             # Authenticate private channel
             expires = int((time.time() + 10) * 1000)
             param_str = f"GET/realtime{expires}"
             signature = hmac.new(self.api_secret.encode('utf-8'), param_str.encode('utf-8'), hashlib.sha256).hexdigest()
-            
+
             await self.private_websocket.send(json.dumps({
                 "op": "auth",
                 "args": [self.api_key, expires, signature]
@@ -564,9 +558,8 @@ class WebSocketClient:
                 }))
                 logger.info("Subscribed to private topics: position, order")
                 return True
-            else:
-                logger.error(f"Private WebSocket authentication failed: {auth_data}")
-                return False
+            logger.error(f"Private WebSocket authentication failed: {auth_data}")
+            return False
         except Exception as e:
             logger.error(f"Failed to connect or authenticate private WebSocket: {e}")
             return False
@@ -601,7 +594,7 @@ class WebSocketClient:
 
                 message = await self.public_websocket.recv()
                 data = json.loads(message)
-                
+
                 if 'data' in data and 'topic' in data:
                     if data['topic'].startswith('kline'):
                         await self.handle_websocket_kline_data(data['data'])
@@ -665,7 +658,7 @@ class WebSocketClient:
             if not isinstance(kline_data, dict):
                 logger.error(f"Expected kline_data to be a dict, got {type(kline_data)}")
                 continue
-            
+
             # Ensure the kline is closed before processing for strategy
             if kline_data.get('confirm') is True:
                 logger.info(f"Processing confirmed kline: {kline_data}")
