@@ -46,6 +46,11 @@ MAX_POSITION_SIZE = float(os.getenv("MAX_POSITION_SIZE", "0.005")) # Max positio
 STOP_LOSS_PERCENT = float(os.getenv("STOP_LOSS_PERCENT", "0.005")) # 0.5%
 TAKE_PROFIT_PERCENT = float(os.getenv("TAKE_PROFIT_PERCENT", "0.01")) # 1%
 
+# --- Dynamic Position Sizing Parameters ---
+DEFAULT_POSITION_SIZE = float(os.getenv("DEFAULT_POSITION_SIZE", "0.001")) # Default size if no trade history
+KELLY_RISK_PER_TRADE_MULTIPLIER = float(os.getenv("KELLY_RISK_PER_TRADE_MULTIPLIER", "0.02")) # Multiplier for Kelly fraction in risk calculation
+MIN_POSITION_SIZE = float(os.getenv("MIN_POSITION_SIZE", "0.0001")) # Minimum trade quantity
+
 # --- WebSocket & Order Management ---
 ORDER_TIMEOUT_SECONDS = int(os.getenv("ORDER_TIMEOUT_SECONDS", "30"))
 RECONNECT_TIMEOUT_SECONDS = int(os.getenv("RECONNECT_TIMEOUT_SECONDS", "10"))

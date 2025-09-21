@@ -1,6 +1,7 @@
 # data/data_manager.py
 import pandas as pd
 from abc import ABC, abstractmethod
+from typing import List, Dict, Any, Optional
 
 class DataProvider(ABC):
     """Abstract base class for data providers."""
@@ -61,3 +62,40 @@ class BybitDataProvider(DataProvider):
         except Exception as e:
             print(f"Error getting historical data: {str(e)}")
             return pd.DataFrame()
+
+class Trade:
+    """Represents a single trade with its PnL."""
+    def __init__(self, symbol: str, entry_price: float, exit_price: float, pnl: float, timestamp: datetime):
+        self.symbol = symbol
+        self.entry_price = entry_price
+        self.exit_price = exit_price
+        self.pnl = pnl
+        self.timestamp = timestamp
+
+class DataManager:
+    """Manages historical trade data in memory."""
+    def __init__(self):
+        self.trades: List[Trade] = []
+
+    def add_trade(self, trade: Trade):
+        """Adds a trade to the manager."""
+        self.trades.append(trade)
+        # Optional: Keep trades sorted by timestamp or limit the list size
+        self.trades.sort(key=lambda t: t.timestamp)
+        # Limit the number of stored trades if memory becomes an issue
+        # if len(self.trades) > 1000:
+        #     self.trades = self.trades[-1000:]
+
+    def get_trades(self, symbol: str, limit: int) -> List[Trade]:
+        """
+        Retrieves the last 'limit' trades for a given symbol.
+        
+        Args:
+            symbol: The trading symbol.
+            limit: The maximum number of trades to return.
+            
+        Returns:
+            A list of Trade objects.
+        """
+        symbol_trades = [trade for trade in self.trades if trade.symbol == symbol]
+        return symbol_trades[-limit:] # Return the last 'limit' trades
