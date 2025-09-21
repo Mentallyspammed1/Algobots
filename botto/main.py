@@ -85,8 +85,8 @@ class ChandelierEhlersBot:
 
 if __name__ == "__main__":
     # Example usage
-    api_key = "YOUR_API_KEY"
-    api_secret = "YOUR_API_SECRET"
+    api_key = os.getenv("BYBIT_API_KEY")
+    api_secret = os.getenv("BYBIT_API_SECRET")
     
     bot = ChandelierEhlersBot(api_key, api_secret, testnet=True)
     
