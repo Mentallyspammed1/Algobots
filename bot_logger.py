@@ -6,7 +6,9 @@ import logging
 import sys
 from typing import Any
 
-from config import LOG_FILE, LOG_LEVEL
+# Define logging parameters directly in this module
+LOG_FILE = "psg_bot.log"
+LOG_LEVEL = logging.INFO  # Default to INFO. Options: logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL
 
 
 def setup_logging():  # Renamed from setup_logger to match import
