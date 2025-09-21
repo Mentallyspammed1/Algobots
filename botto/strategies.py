@@ -9,9 +9,9 @@ STRATEGIES = {}
 
 def load_strategies():
     """Dynamically load all strategy classes from the 'strategies' directory."""
-    strategies_dir = os.path.dirname(__file__)
+    strategies_dir = os.path.join(os.path.dirname(__file__), 'strategies')
     for filename in os.listdir(strategies_dir):
-        if filename.endswith('_strategy.py'):
+        if filename.endswith('.py') and not filename.startswith('__'):
             module_name = f"strategies.{filename[:-3]}"
             try:
                 module = importlib.import_module(module_name)
