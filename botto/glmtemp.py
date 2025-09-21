@@ -1,8 +1,8 @@
-"Bybit Ultra Scalper Bot: A comprehensive, enterprise-grade trading bot for Bybit exchange.
+"""Bybit Ultra Scalper Bot: A comprehensive, enterprise-grade trading bot for Bybit exchange.
 
 This bot leverages Ehlers Fisher Transform and SuperTrend indicators for signal generation,
 and manages orders, positions, and WebSocket connections with enhanced robustness and logging.
-"
+"""
 
 import json
 import time
