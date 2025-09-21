@@ -2,27 +2,28 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 
+
 @dataclass
 class ChandelierEhlersConfig:
     """Configuration for Chandelier Exit Ehlers SuperTrend strategy."""
-    
+
     # Indicator parameters
     chandelier_period: int = 22
     chandelier_multiplier: float = 3.0
     supertrend_period: int = 10
     supertrend_multiplier: float = 3.0
-    
+
     # Signal parameters
     min_signal_strength: float = 0.5
     min_signal_confidence: float = 0.6
-    
+
     # Data parameters
     timeframe: str = "15"  # Default 15 minutes
     data_limit: int = 200
-    
+
     # Trading parameters
     symbols: List[str] = field(default_factory=lambda: ["BTCUSDT", "ETHUSDT"])
-    
+
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'ChandelierEhlersConfig':
         """Create config from dictionary."""
@@ -37,7 +38,7 @@ class ChandelierEhlersConfig:
             data_limit=config_dict.get('data_limit', 200),
             symbols=config_dict.get('symbols', ["BTCUSDT", "ETHUSDT"])
         )
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
         return {

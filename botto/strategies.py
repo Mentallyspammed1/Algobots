@@ -7,6 +7,7 @@ import inspect
 # Dictionary to hold all discovered strategy classes
 STRATEGIES = {}
 
+
 def load_strategies():
     """Dynamically load all strategy classes from the 'strategies' directory."""
     strategies_dir = os.path.join(os.path.dirname(__file__), 'strategies')
@@ -22,6 +23,7 @@ def load_strategies():
                         STRATEGIES[name] = obj
             except ImportError as e:
                 print(f"Error importing strategy from {filename}: {e}")
+
 
 # Load strategies on module import
 load_strategies()

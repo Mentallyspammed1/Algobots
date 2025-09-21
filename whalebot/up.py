@@ -34,6 +34,10 @@ getcontext().prec = 28
 init(autoreset=True)
 load_dotenv()
 
+# --- Constants ---
+API_KEY = os.getenv("BYBIT_API_KEY")
+API_SECRET = os.getenv("BYBIT_API_SECRET")
+
 # Neon Color Scheme
 NEON_GREEN = Fore.LIGHTGREEN_EX
 NEON_BLUE = Fore.CYAN
@@ -87,8 +91,6 @@ INDICATOR_COLORS = {
 }
 
 # --- Constants ---
-API_KEY = os.getenv("BYBIT_API_KEY")
-API_SECRET = os.getenv("BYBIT_API_SECRET")
 BASE_URL = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
 CONFIG_FILE = "config.json"
 LOG_DIRECTORY = "bot_logs/trading-bot/logs"

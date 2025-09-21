@@ -208,6 +208,8 @@ class AdvancedOrderbookManager:
     Provides thread-safe (asyncio-safe) operations, snapshot/delta processing,
     and access to best bid/ask.
     """
+    from contextlib import asynccontextmanager # Temporary workaround
+
     def __init__(self, symbol: str, logger: logging.Logger, use_skip_list: bool = True):
         self.symbol = symbol
         self.logger = logger
@@ -225,23 +227,19 @@ class AdvancedOrderbookManager:
         
         self.last_update_id: int = 0
 
-from contextlib import asynccontextmanager
+        @asynccontextmanager
+        async def _lock_context(self):
+            async with self._lock:
+                yield
 
-from contextlib import asynccontextmanager
-
-    @asynccontextmanager
-    async def _lock_context(self):
-        async with self._lock:
-            yield
-
-    async def _validate_price_quantity(self, price: float, quantity: float) -> bool:
-        if not (isinstance(price, (int, float)) and isinstance(quantity, (int, float))):
-            self.logger.error(f"Invalid type for price or quantity for {self.symbol}. Price: {type(price)}, Qty: {type(quantity)}")
-            return False
-        if price < 0 or quantity < 0:
-            self.logger.error(f"Negative price or quantity detected for {self.symbol}: price={price}, quantity={quantity}")
-            return False
-        return True
+        async def _validate_price_quantity(self, price: float, quantity: float) -> bool:
+            if not (isinstance(price, (int, float)) and isinstance(quantity, (int, float))):
+                self.logger.error(f"Invalid type for price or quantity for {self.symbol}. Price: {type(price)}, Qty: {type(quantity)}")
+                return False
+            if price < 0 or quantity < 0:
+                self.logger.error(f"Negative price or quantity detected for {self.symbol}: price={price}, quantity={quantity}")
+                return False
+            return True
 
     async def update_snapshot(self, data: Dict[str, Any]) -> None:
         async with self._lock_context():
