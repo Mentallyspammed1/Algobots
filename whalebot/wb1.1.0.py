@@ -1906,11 +1906,15 @@ class BybitWebSocketManager:
     def _update_ticker(self, ticker_data: dict):
         """Processes incoming ticker data from WebSocket."""
         with self._ticker_lock:
+            # Safely access 'lastPrice' and 'ask1Price' using .get() with a default value
+            last_price = ticker_data.get("lastPrice", "0")
+            ask_price = ticker_data.get("ask1Price", "0") # Assuming ask1Price is the correct key for ask price
+
             self.latest_ticker = {
-                "symbol": ticker_data["symbol"],
-                "lastPrice": Decimal(ticker_data["lastPrice"]),
-                "bidPrice": Decimal(ticker_data["bid1Price"]),
-                "askPrice": Decimal(ticker_data["ask1Price"]),
+                "symbol": ticker_data.get("symbol", self.symbol), # Safely get symbol too
+                "lastPrice": Decimal(last_price),
+                "bidPrice": Decimal(ticker_data.get("bid1Price", "0")), # Safely get bidPrice
+                "askPrice": Decimal(ask_price),
                 "timestamp": datetime.now(TIMEZONE),
             }
         self.logger.debug(
