@@ -62,6 +62,11 @@ class BybitTradingBot:
         self.logger.info(f"Symbol: {self.config.symbol}, Interval: {self.config.interval}")
         self.logger.info(f"Trade Management Enabled: {self.config.trade_management['enabled']}")
 
+        # --- DEBUGGING: Print loaded higher timeframes ---
+        loaded_higher_timeframes = self.config.mtf_analysis.get("higher_timeframes", [])
+        self.logger.debug(f"Loaded higher_timeframes from config: {loaded_higher_timeframes}")
+        # --- END DEBUGGING ---
+
         # Validate intervals
         valid_bybit_intervals = [
             "1", "3", "5", "15m", "30m", "60m", "120m", "240m", "360m", "720m", "D", "W", "M",
@@ -238,7 +243,7 @@ class BybitTradingBot:
                 )
 
         elif trading_signal == "SELL" and signal_score <= -signal_threshold:
-            self.logger.info(
+            selfP.logger.info(
                 f"{NEON_RED}[{self.config.symbol}] Strong SELL signal detected! Score: {signal_score:.2f}{RESET}"
             )
             if has_buy_position:

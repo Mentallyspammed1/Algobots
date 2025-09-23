@@ -1,0 +1,69 @@
+# Market Maker Configuration
+trading:
+  symbol: "BTCUSDT"
+  market_type: "linear"  # linear or spot
+  
+  # Order Configuration
+  order_amount: 0.001  # BTC amount per order
+  max_position: 0.01   # Maximum position size
+  
+  # Spread Configuration
+  base_spread: 0.001   # 0.1% base spread
+  min_spread: 0.0005   # Minimum spread
+  max_spread: 0.005    # Maximum spread
+  
+  # Price Levels
+  num_orders: 5        # Number of orders per side
+  order_step: 0.0002   # Price step between orders
+  
+  # Order Management
+  order_refresh_time: 10  # Seconds between order refreshes
+  order_ttl: 30           # Order time-to-live in seconds
+  
+  # Dynamic Spread Adjustment
+  volatility_factor: 1.5
+  inventory_factor: 2.0
+  
+risk_management:
+  max_drawdown: 0.05      # 5% maximum drawdown
+  daily_loss_limit: 0.02  # 2% daily loss limit
+  position_limit: 10000   # USD position limit
+  risk_per_trade: 0.02    # 2% risk per trade
+  kelly_fraction: 0.5     # Kelly criterion fraction
+  
+  # Stop Loss / Take Profit
+  stop_loss: 0.02         # 2% stop loss
+  take_profit: 0.03       # 3% take profit
+  
+  # Risk Parameters
+  max_leverage: 5
+  margin_mode: "cross"    # cross or isolated
+  
+execution:
+  slippage_tolerance: 0.001
+  min_order_size: 0.0001
+  order_type: "Limit"     # Limit or Market
+  time_in_force: "GTC"    # GTC, IOC, FOK
+  
+monitoring:
+  heartbeat_interval: 30  # Seconds
+  performance_log_interval: 300  # 5 minutes
+  balance_check_interval: 60     # 1 minute
+  
+advanced:
+  enable_hedging: false
+  enable_arbitrage: false
+  enable_websocket: true
+  enable_order_tracking: true
+  
+  # Market Making Strategy
+  strategy_type: "symmetric"  # symmetric, skewed, adaptive
+  
+  # Volatility Settings
+  volatility_window: 100     # Candles for volatility calculation
+  volatility_refresh: 60     # Seconds
+  
+  # Inventory Management
+  inventory_target: 0.5      # Target inventory ratio
+  inventory_bands: 0.2       # Inventory bands width
+  price_history_length: 1000 # Length of price history

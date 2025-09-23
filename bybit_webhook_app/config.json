@@ -1,0 +1,48 @@
+{
+    "webhook_host": "0.0.0.0",
+    "webhook_port": 5000,
+    "symbols": [
+        {
+            "symbol": "BTC/USDT:USDT",
+            "trade_enabled": true,
+            "base_spread": 0.0008,
+            "order_amount": 0.001,
+            "leverage": 25,
+            "order_refresh_time": 15,
+            "max_spread": 0.002,
+            "inventory_limit": 0.01,
+            "take_profit_percentage": 0.005,
+            "stop_loss_percentage": 0.0025,
+            "trailing_stop_pct": 0.002,
+            "dynamic_spread": {
+                "enabled": true,
+                "volatility_multiplier": 0.6
+            },
+            "inventory_skew": {
+                "enabled": true,
+                "skew_factor": 0.15
+            }
+        },
+        {
+            "symbol": "ETH/USDT:USDT",
+            "trade_enabled": true,
+            "base_spread": 0.001,
+            "order_amount": 0.01,
+            "leverage": 25,
+            "order_refresh_time": 15,
+            "max_spread": 0.0025,
+            "inventory_limit": 0.1,
+            "take_profit_percentage": 0.006,
+            "stop_loss_percentage": 0.003,
+            "trailing_stop_pct": 0.0025,
+            "dynamic_spread": {
+                "enabled": true,
+                "volatility_multiplier": 0.7
+            },
+            "inventory_skew": {
+                "enabled": true,
+                "skew_factor": 0.2
+            }
+        }
+    ]
+}
