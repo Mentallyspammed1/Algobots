@@ -1,0 +1,314 @@
+pipes:
+
+  # --- Market Data Pipes (6) ---
+
+  get-kline:
+    description: Retrieves candlestick data for a given symbol and interval.
+    input:
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+      interval: { type: string, required: true, description: "Interval, e.g., 1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M" }
+      start_time: { type: integer, description: "Start time in milliseconds (optional)" }
+      end_time: { type: integer, description: "End time in milliseconds (optional)" }
+      limit: { type: integer, default: 200, description: "Limit for data size, max 1000" }
+      category: { type: string, default: "linear", description: "Product category (spot, linear, inverse)" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {timestamp: (.[0] | tonumber | strftime("%Y-%m-%d %H:%M:%S")), open: .[1], high: .[2], low: .[3], close: .[4], volume: .[5], turnover: .[6]}'
+    exec:
+      plugin: bybit-v5
+      method: market.getKline
+
+  get-ticker:
+    description: Retrieves the latest ticker information for a symbol or all symbols.
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, description: "Trading pair, e.g., BTCUSDT (optional, for all if omitted)" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {symbol: .symbol, lastPrice: .lastPrice, high24h: .highPrice24h, low24h: .lowPrice24h, turnover24h: .turnover24h}'
+    exec:
+      plugin: bybit-v5
+      method: market.getTickers
+
+  get-orderbook:
+    description: Retrieves the orderbook for a given symbol.
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+      limit: { type: integer, default: 25, description: "Limit for data size, max 50" }
+    output:
+      type: json
+    transform:
+      - jq: '{symbol: .result.s, bids: .result.bids, asks: .result.asks}'
+    exec:
+      plugin: bybit-v5
+      method: market.getOrderbook
+
+  get-recent-trades:
+    description: Retrieves the latest public trading data for a symbol.
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+      limit: { type: integer, default: 50, description: "Limit for data size, max 1000" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {timestamp: (.time | tonumber | strftime("%Y-%m-%d %H:%M:%S")), price: .price, qty: .qty, side: .side}'
+    exec:
+      plugin: bybit-v5
+      method: market.getRecentTrades
+
+  get-instruments-info:
+    description: Retrieves instrument information for a product category.
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, description: "Trading pair, e.g., BTCUSDT (optional, for all if omitted)" }
+      limit: { type: integer, default: 50, description: "Limit for data size, max 1000" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {symbol: .symbol, contractType: .contractType, status: .status, baseCoin: .baseCoin, quoteCoin: .quoteCoin}'
+    exec:
+      plugin: bybit-v5
+      method: market.getInstrumentsInfo
+
+  get-funding-rate:
+    description: Retrieves the historical funding rate for a symbol (linear/inverse).
+    input:
+      category: { type: string, required: true, description: "Product category (linear, inverse)" }
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+      limit: { type: integer, default: 20, description: "Limit for data size, max 200" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {symbol: .symbol, fundingRate: .fundingRate, fundingTime: (.fundingRateTimestamp | tonumber | strftime("%Y-%m-%d %H:%M:%S"))}'
+    exec:
+      plugin: bybit-v5
+      method: market.getFundingRateHistory
+
+  # --- Account & Wallet Pipes (4) ---
+
+  get-wallet-balance:
+    description: Retrieves wallet balance information for a specific account type.
+    input:
+      account_type: { type: string, default: "UNIFIED", description: "Account type (SPOT, UNIFIED, CLASSIC)" }
+      coin: { type: string, description: "Coin to filter by, e.g., BTC, USDT (optional)" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {accountType: .accountType, totalEquity: .totalEquity, totalWalletBalance: .totalWalletBalance, unrealisedPNL: .unrealisedPNL, coins: .coin}'
+    exec:
+      plugin: bybit-v5
+      method: account.getWalletBalance
+
+  get-positions:
+    description: Retrieves current open positions.
+    input:
+      category: { type: string, required: true, description: "Product category (linear, inverse, option)" }
+      symbol: { type: string, description: "Trading pair, e.g., BTCUSDT (optional)" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {symbol: .symbol, side: .side, size: .size, entryPrice: .avgPrice, liqPrice: .liqPrice, unrealizedPnl: .unrealisedPnl, leverage: .leverage}'
+    exec:
+      plugin: bybit-v5
+      method: account.getPositions
+
+  get-transaction-log:
+    description: Retrieves transaction logs for the unified account.
+    input:
+      account_type: { type: string, default: "UNIFIED", description: "Account type (UNIFIED, SPOT, CLASSIC)" }
+      category: { type: string, description: "Product category (spot, linear, inverse, option)" }
+      type: { type: string, description: "Transaction type (DEPOSIT, WITHDRAW, TRANSFER, etc.)" }
+      coin: { type: string, description: "Coin to filter by (optional)" }
+      limit: { type: integer, default: 20, description: "Limit for data size, max 50" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {timestamp: (.createdTime | tonumber | strftime("%Y-%m-%d %H:%M:%S")), type: .type, coin: .coin, amount: .amount, category: .category}'
+    exec:
+      plugin: bybit-v5
+      method: account.getTransactionLog
+
+  get-borrow-history:
+    description: Retrieves borrow history for margin trading.
+    input:
+      category: { type: string, default: "spot", description: "Product category (spot)" }
+      coin: { type: string, description: "Coin to filter by (optional)" }
+      limit: { type: integer, default: 20, description: "Limit for data size, max 50" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {timestamp: (.createdTime | tonumber | strftime("%Y-%m-%d %H:%M:%S")), coin: .coin, borrowAmount: .borrowAmount, interestRate: .interestRate, loanStatus: .loanStatus}'
+    exec:
+      plugin: bybit-v5
+      method: account.getBorrowHistory
+
+  # --- Trading Pipes (10) ---
+
+  place-order:
+    description: Places a new order (limit, market, etc.).
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+      side: { type: string, required: true, description: "Order side (Buy, Sell)" }
+      order_type: { type: string, required: true, description: "Order type (Limit, Market, TakeProfit, StopLoss, TrailingStop)" }
+      qty: { type: number, required: true, description: "Order quantity" }
+      price: { type: number, description: "Order price (required for Limit orders)" }
+      time_in_force: { type: string, default: "GTC", description: "Time in force (GTC, IOC, FOK, PostOnly)" }
+      reduce_only: { type: boolean, default: false, description: "True to reduce position, False otherwise" }
+      close_on_trigger: { type: boolean, default: false, description: "True to close position when trigger price is reached (for conditional orders)" }
+      is_leverage: { type: integer, description: "Whether to use leverage for spot margin trading (0 for no, 1 for yes)" }
+      trigger_price: { type: number, description: "Trigger price for conditional orders (StopLoss, TakeProfit, TrailingStop)" }
+      tpsl_mode: { type: string, description: "TP/SL mode for linear/inverse (Full, Partial)" }
+    output:
+      type: json
+    transform:
+      - jq: '{orderId: .result.orderId, orderLinkId: .result.orderLinkId}'
+    exec:
+      plugin: bybit-v5
+      method: trade.placeOrder
+
+  cancel-order:
+    description: Cancels an active order by ID or link ID.
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+      order_id: { type: string, description: "Order ID (optional, use order_link_id if not provided)" }
+      order_link_id: { type: string, description: "Custom order link ID (optional)" }
+    output:
+      type: json
+    transform:
+      - jq: '{orderId: .result.orderId, orderLinkId: .result.orderLinkId, status: "Cancelled"}'
+    exec:
+      plugin: bybit-v5
+      method: trade.cancelOrder
+
+  cancel-all-orders:
+    description: Cancels all active orders for a symbol or category.
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, description: "Trading pair, e.g., BTCUSDT (optional, cancels all in category if omitted)" }
+    output:
+      type: json
+    transform:
+      - jq: '.result | {success: true, cancelledOrders: .list}'
+    exec:
+      plugin: bybit-v5
+      method: trade.cancelAllOrders
+
+  get-open-orders:
+    description: Retrieves active (open) orders.
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, description: "Trading pair, e.g., BTCUSDT (optional)" }
+      limit: { type: integer, default: 20, description: "Limit for data size, max 50" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {symbol: .symbol, orderId: .orderId, side: .side, orderType: .orderType, qty: .qty, price: .price, status: .orderStatus, createdTime: (.createdTime | tonumber | strftime("%Y-%m-%d %H:%M:%S"))}'
+    exec:
+      plugin: bybit-v5
+      method: trade.getOpenOrders
+
+  get-order-history:
+    description: Retrieves historical orders (filled, cancelled, etc.).
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, description: "Trading pair, e.g., BTCUSDT (optional)" }
+      limit: { type: integer, default: 20, description: "Limit for data size, max 50" }
+      start_time: { type: integer, description: "Start time in milliseconds (optional)" }
+      end_time: { type: integer, description: "End time in milliseconds (optional)" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {symbol: .symbol, orderId: .orderId, side: .side, orderType: .orderType, qty: .qty, price: .price, status: .orderStatus, createdTime: (.createdTime | tonumber | strftime("%Y-%m-%d %H:%M:%S"))}'
+    exec:
+      plugin: bybit-v5
+      method: trade.getOrderHistory
+
+  get-trade-history:
+    description: Retrieves personal trade history.
+    input:
+      category: { type: string, required: true, description: "Product category (spot, linear, inverse, option)" }
+      symbol: { type: string, description: "Trading pair, e.g., BTCUSDT (optional)" }
+      limit: { type: integer, default: 20, description: "Limit for data size, max 50" }
+      start_time: { type: integer, description: "Start time in milliseconds (optional)" }
+      end_time: { type: integer, description: "End time in milliseconds (optional)" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {symbol: .symbol, orderId: .orderId, tradeId: .execId, side: .side, price: .execPrice, qty: .execQty, fee: .execFee, tradeTime: (.execTime | tonumber | strftime("%Y-%m-%d %H:%M:%S"))}'
+    exec:
+      plugin: bybit-v5
+      method: trade.getTradeHistory
+
+  set-leverage:
+    description: Sets the leverage for a derivatives symbol.
+    input:
+      category: { type: string, required: true, description: "Product category (linear, inverse)" }
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+      buy_leverage: { type: number, required: true, description: "Leverage for long positions" }
+      sell_leverage: { type: number, required: true, description: "Leverage for short positions" }
+    output:
+      type: json
+    transform:
+      - jq: '{symbol: .result.symbol, buyLeverage: .result.buyLeverage, sellLeverage: .result.sellLeverage, status: "Success"}'
+    exec:
+      plugin: bybit-v5
+      method: position.setLeverage
+
+  set-margin-mode:
+    description: Sets the margin mode (Isolated or Cross) for a derivatives symbol.
+    input:
+      category: { type: string, required: true, description: "Product category (linear, inverse)" }
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+      trade_mode: { type: integer, required: true, description: "Trade mode (0 for cross margin, 1 for isolated margin)" }
+      buy_leverage: { type: number, description: "Leverage for long (required if isolated)" }
+      sell_leverage: { type: number, description: "Leverage for short (required if isolated)" }
+    output:
+      type: json
+    transform:
+      - jq: '{symbol: .result.symbol, tradeMode: .result.tradeMode, status: "Success"}'
+    exec:
+      plugin: bybit-v5
+      method: position.setMarginMode
+
+  get-risk-limit:
+    description: Retrieves risk limit information for a derivatives symbol.
+    input:
+      category: { type: string, required: true, description: "Product category (linear, inverse)" }
+      symbol: { type: string, required: true, description: "Trading pair, e.g., BTCUSDT" }
+    output:
+      type: json
+    transform:
+      - jq: '.result.list[] | {symbol: .symbol, riskId: .riskId, limit: .limit, maintainMargin: .maintainMargin, initialMargin: .initialMargin}'
+    exec:
+      plugin: bybit-v5
+      method: position.getRiskLimit
+
+  set-dcp:
+    description: Sets the delivery confirmation parameter for USDC derivatives.
+    input:
+      category: { type: string, required: true, description: "Product category (option, linear, inverse)" }
+      dcp: { type: string, required: true, description: "Delivery Confirmation Parameter (PERMIT_DELIVERY, AUTO_DELIVERY)" }
+    output:
+      type: json
+    transform:
+      - jq: '{status: "Success"}'
+    exec:
+      plugin: bybit-v5
+      method: account.setDCP
+
+  bybit-v5-server-time:
+    description: Get the current Bybit server time. Useful for checking API connectivity and time synchronization.
+    input: {}
+    output:
+      type: json
+    transform:
+      - jq: '.result.timeNano | tonumber | (. / 1000000) | strftime("%Y-%m-%d %H:%M:%S.%L")'
+    exec:
+      plugin: bybit-v5
+      method: market.getServerTime

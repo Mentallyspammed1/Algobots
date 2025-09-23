@@ -468,7 +468,7 @@ class PyrmethusTrader:
             print(Fore.YELLOW + f"Stochastic: %K {last_row['STOCHk_14_3_3']:.2f}, %D {last_row['STOCHd_14_3_3']:.2f}" + Style.RESET_ALL)
         else:
             print(Fore.YELLOW + "Stochastic: N/A" + Style.RESET_ALL)
-        price_str = f"{self.vp_peak_price:.2f}" if self.vp_peak_price is not None else "None"
+                    price_str = f"{self.vp_peak_price:.2f}" if self.vp_peak_price is not None else "None"
             print(Fore.YELLOW + f"Volume Profile Peak: {price_str}" + Style.RESET_ALL)
         
         # Display signals and send Termux-Toast notifications
