@@ -6,6 +6,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
+# Import asynccontextmanager
+from contextlib import asynccontextmanager
+
 # Color Scheme (for logging)
 from colorama import Fore, Style
 NEON_RED = Fore.LIGHTRED_EX
@@ -208,7 +211,7 @@ class AdvancedOrderbookManager:
     Provides thread-safe (asyncio-safe) operations, snapshot/delta processing,
     and access to best bid/ask.
     """
-    from contextlib import asynccontextmanager # Temporary workaround
+    # from contextlib import asynccontextmanager # Temporary workaround
 
     def __init__(self, symbol: str, logger: logging.Logger, use_skip_list: bool = True):
         self.symbol = symbol

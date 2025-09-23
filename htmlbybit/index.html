@@ -1,0 +1,2924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bybit Pro Trading Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-bg: #0a0a1a;
+            --secondary-bg: #13132b;
+            --tertiary-bg: #1a1a3a;
+            --quaternary-bg: #22224a;
+            --primary-text: #e0e0ff;
+            --secondary-text: #a0a0ff;
+            --accent-cyan: #00ffff;
+            --accent-green: #00ff88;
+            --accent-pink: #ff0088;
+            --accent-orange: #ff8800;
+            --accent-purple: #8800ff;
+            --border-color: #4444aa;
+            --success-color: #00ff88;
+            --danger-color: #ff0088;
+            --warning-color: #ffaa00;
+            --chart-background: #181830; /* Darker for chart */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            background: linear-gradient(135deg, var(--primary-bg) 0%, var(--secondary-bg) 100%);
+            color: var(--primary-text);
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 15px auto;
+            background-color: var(--secondary-bg);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(68, 68, 170, 0.2);
+            border: 2px solid var(--border-color);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 10px var(--accent-cyan), 0 0 20px var(--accent-cyan);
+            margin-bottom: 25px;
+            font-size: 2.5em;
+            font-weight: 700;
+            letter-spacing: 1px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px var(--accent-cyan), 0 0 20px var(--accent-cyan); }
+            to { text-shadow: 0 0 15px var(--accent-cyan), 0 0 30px var(--accent-cyan); }
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--quaternary-bg) 0%, var(--tertiary-bg) 100%);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 150px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        label {
+            margin-bottom: 5px;
+            font-size: 0.85em;
+            color: var(--secondary-text);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="number"],
+        select,
+        input[type="text"] {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--tertiary-bg) 0%, rgba(26, 26, 58, 0.8) 100%);
+            color: var(--primary-text);
+            font-size: 1em;
+            min-width: 120px;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        input[type="number"]:focus,
+        select:focus,
+        input[type="text"]:focus {
+            outline: none;
+            box-shadow: 0 0 10px var(--accent-cyan), inset 0 1px 3px rgba(0, 0, 0, 0.3);
+            border-color: var(--accent-cyan);
+            transform: translateY(-1px);
+        }
+
+        /* Enhanced Symbol Search */
+        .symbol-search-container {
+            position: relative;
+            grid-column: span 2;
+        }
+
+        #symbolSearch {
+            width: 100%;
+            padding: 12px;
+            padding-left: 40px;
+            font-size: 1.1em;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--secondary-text);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .symbol-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .symbol-dropdown.active {
+            display: block;
+        }
+
+        .symbol-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(68, 68, 170, 0.1);
+        }
+
+        .symbol-item:hover {
+            background: rgba(0, 255, 255, 0.1);
+            padding-left: 20px;
+        }
+
+        .symbol-item.selected {
+            background: rgba(0, 255, 255, 0.2);
+            font-weight: bold;
+        }
+
+        .symbol-info {
+            font-size: 0.8em;
+            color: var(--secondary-text);
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--accent-pink) 0%, #cc0066 100%);
+            color: var(--primary-text);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 0, 136, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            grid-column: span 2;
+        }
+
+        button:hover:not(:disabled) {
+            background: linear-gradient(135deg, #cc0066 0%, var(--accent-pink) 100%);
+            box-shadow: 0 6px 20px rgba(255, 0, 136, 0.5);
+            transform: translateY(-2px);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(255, 0, 136, 0.3);
+        }
+
+        button:disabled {
+            background: linear-gradient(135deg, #5f5f5f 0%, #3f3f3f 100%);
+            cursor: not-allowed;
+            box-shadow: none;
+            opacity: 0.7;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .action-button {
+            padding: 8px 16px;
+            font-size: 0.9em;
+            grid-column: span 1;
+        }
+
+        #chartContainer {
+            position: relative;
+            height: 70vh;
+            min-height: 500px;
+            width: 100%;
+            background: var(--chart-background); /* Using chart background variable */
+            border-radius: 10px;
+            padding: 15px;
+            box-sizing: border-box;
+            border: 2px solid var(--border-color);
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3), inset 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        #chartCanvas {
+            max-height: 100%;
+            max-width: 100%;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 26, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid var(--accent-cyan);
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--accent-cyan);
+            font-size: 1.2em;
+            text-shadow: 0 0 10px var(--accent-cyan);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .message {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-size: 1.05em;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .error-message {
+            background: linear-gradient(135deg, rgba(255, 0, 136, 0.2) 0%, rgba(255, 0, 136, 0.1) 100%);
+            border: 1px solid var(--danger-color);
+            color: var(--danger-color);
+            box-shadow: 0 0 10px rgba(255, 0, 136, 0.3);
+        }
+
+        .success-message {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.2) 0%, rgba(0, 255, 136, 0.1) 100%);
+            border: 1px solid var(--success-color);
+            color: var(--success-color);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .warning-message {
+            background: linear-gradient(135deg, rgba(255, 170, 0, 0.2) 0%, rgba(255, 170, 0, 0.1) 100%);
+            border: 1px solid var(--warning-color);
+            color: var(--warning-color);
+            box-shadow: 0 0 10px rgba(255, 170, 0, 0.3);
+        }
+
+        .ticker-info {
+            margin-top: 20px;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--tertiary-bg) 0%, rgba(26, 26, 58, 0.8) 100%);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .ticker-info:hover {
+            box-shadow: 0 6px 25px rgba(68, 68, 170, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .ticker-info h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: var(--accent-cyan);
+            text-align: center;
+            font-size: 1.4em;
+            text-shadow: 0 0 5px var(--accent-cyan);
+        }
+        
+        .live-price-box {
+            background: linear-gradient(135deg, var(--quaternary-bg) 0%, var(--tertiary-bg) 100%);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .live-price-box .price-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: var(--accent-green);
+            text-shadow: 0 0 10px var(--accent-green);
+            transition: color 0.5s ease-in-out;
+        }
+        
+        .live-price-box .last-update {
+            font-size: 0.8em;
+            color: var(--secondary-text);
+            margin-top: 5px;
+        }
+
+        .ticker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+        }
+
+        .ticker-item {
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            background: linear-gradient(135deg, rgba(34, 34, 74, 0.5) 0%, rgba(26, 26, 58, 0.5) 100%);
+            border-radius: 8px;
+            border: 1px solid rgba(68, 68, 170, 0.3);
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .ticker-item:hover {
+            background: linear-gradient(135deg, rgba(34, 34, 74, 0.7) 0%, rgba(26, 26, 58, 0.7) 100%);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(68, 68, 170, 0.3);
+        }
+
+        .ticker-label {
+            font-size: 0.75em;
+            color: var(--secondary-text);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ticker-value {
+            font-weight: bold;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+        }
+
+        .ticker-value.positive {
+            color: var(--accent-green);
+            text-shadow: 0 0 5px var(--accent-green);
+        }
+
+        .ticker-value.negative {
+            color: var(--accent-pink);
+            text-shadow: 0 0 5px var(--accent-pink);
+        }
+
+        .indicator-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+            padding: 15px;
+            background: linear-gradient(135deg, var(--quaternary-bg) 0%, var(--tertiary-bg) 100%);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .indicator-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(26, 26, 58, 0.5);
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .indicator-toggle:hover {
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .indicator-toggle input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--accent-cyan); /* Custom checkbox color */
+        }
+
+        .indicator-toggle label {
+            cursor: pointer;
+            margin: 0;
+            color: var(--primary-text);
+            font-size: 0.9em;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-top: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--tertiary-bg) 0%, rgba(26, 26, 58, 0.8) 100%);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .stat-card:hover::before {
+            left: 100%;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(68, 68, 170, 0.4);
+        }
+
+        .stat-title {
+            color: var(--secondary-text);
+            font-size: 0.85em;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: var(--primary-text);
+            text-shadow: 0 0 5px rgba(224, 224, 255, 0.5);
+            transition: color 0.5s ease;
+        }
+        
+        .stat-value.positive { color: var(--accent-green); }
+        .stat-value.negative { color: var(--accent-pink); }
+        .stat-value.neutral { color: var(--secondary-text); }
+
+
+        .tab-container {
+            margin-top: 25px;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            background: rgba(26, 26, 58, 0.5);
+            border-radius: 10px;
+            padding: 5px;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        }
+
+        .tab-button {
+            flex: 1;
+            min-width: 120px; /* Ensure minimum width */
+            padding: 10px;
+            background: transparent;
+            color: var(--primary-text);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: center;
+        }
+
+        .tab-button:hover {
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-purple) 100%);
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0, 255, 255, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--tertiary-bg) 0%, rgba(26, 26, 58, 0.8) 100%);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+        
+        #signals-tab .signals-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #signals-tab .signal-item {
+            background: rgba(34, 34, 74, 0.5);
+            border-radius: 6px;
+            padding: 10px;
+            border-left: 3px solid;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 10px; /* Gap between info and strength */
+        }
+
+        #signals-tab .signal-item.buy {
+            border-color: var(--accent-green);
+        }
+        
+        #signals-tab .signal-item.sell {
+            border-color: var(--accent-pink);
+        }
+        
+        #signals-tab .signal-item .signal-info {
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        
+        #signals-tab .signal-item .signal-time {
+            font-size: 0.8em;
+            color: var(--secondary-text);
+            display: block; /* Ensure time is on a new line or fits well */
+            margin-top: 4px;
+        }
+        
+        #signals-tab .signal-strength {
+            font-weight: bold;
+            padding: 5px 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            white-space: nowrap; /* Prevent breaking */
+        }
+        
+        /* Gemini Analysis Tab Specific Styles */
+        #gemini-analysis-tab .stat-card {
+            background: linear-gradient(135deg, rgba(0, 100, 150, 0.1) 0%, rgba(0, 255, 255, 0.1) 100%);
+            border-color: var(--accent-cyan);
+        }
+        #gemini-analysis-tab .stat-card .stat-title { color: var(--accent-cyan); }
+        #gemini-analysis-tab .stat-card .stat-value { font-size: 1.1em; font-weight: normal; text-align: left; }
+        #gemini-analysis-tab .stat-card .stat-value p { margin-bottom: 1em; }
+        #gemini-analysis-tab .stat-card .stat-value strong { color: var(--accent-green); }
+        #gemini-analysis-tab .stat-card .stat-value em { color: var(--accent-pink); font-style: normal;} /* Style for risk/caution */
+
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .preset-button {
+            padding: 10px;
+            background: linear-gradient(135deg, var(--tertiary-bg) 0%, rgba(26, 26, 58, 0.8) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--primary-text);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .preset-button:hover {
+            background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-cyan) 100%);
+            box-shadow: 0 4px 15px rgba(136, 0, 255, 0.4);
+            transform: translateY(-2px);
+        }
+
+        /* Notification System */
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 350px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end; /* Align notifications to the right */
+        }
+
+        .notification {
+            background: linear-gradient(135deg, var(--tertiary-bg) 0%, rgba(26, 26, 58, 0.95) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+            animation: slideInRight 0.3s ease-out;
+            position: relative;
+            overflow: hidden;
+            width: 100%; /* Take full width of container */
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .notification-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: var(--accent-cyan);
+            animation: progressBar 3s linear forwards; /* Default duration */
+        }
+
+        @keyframes progressBar {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+
+        .notification.success .notification-progress { background: var(--success-color); }
+        .notification.error .notification-progress { background: var(--danger-color); }
+        .notification.warning .notification-progress { background: var(--warning-color); }
+
+        .notification.success { border-color: var(--success-color); }
+        .notification.error { border-color: var(--danger-color); }
+        .notification.warning { border-color: var(--warning-color); }
+        .notification.info { border-color: var(--accent-cyan); }
+
+
+        .notification-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: var(--primary-text);
+        }
+        .notification.success .notification-title { color: var(--success-color); }
+        .notification.error .notification-title { color: var(--danger-color); }
+        .notification.warning .notification-title { color: var(--warning-color); }
+        .notification.info .notification-title { color: var(--accent-cyan); }
+
+
+        .notification-message {
+            font-size: 0.9em;
+            color: var(--secondary-text);
+        }
+
+        /* Responsive design improvements */
+        @media (max-width: 1200px) {
+            .container {
+                margin: 10px;
+                padding: 15px;
+            }
+            h1 {
+                font-size: 2em;
+            }
+            #chartContainer {
+                min-height: 400px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .symbol-search-container {
+                grid-column: span 1;
+            }
+            
+            button {
+                grid-column: span 1;
+            }
+            
+            .ticker-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .indicator-controls {
+                grid-template-columns: 1fr;
+            }
+            .tab-buttons {
+                flex-direction: column; /* Stack tabs vertically */
+                gap: 8px;
+            }
+            .tab-button {
+                width: 100%; /* Full width when stacked */
+            }
+            #chartContainer {
+                height: 50vh;
+                min-height: 400px;
+            }
+            
+            .stats-container {
+                grid-template-columns: 1fr; /* Stack stats */
+            }
+        }
+        
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .controls {
+                padding: 10px;
+            }
+            
+            .ticker-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .notification-container {
+                max-width: 90%; /* Smaller max width on very small screens */
+                right: 10px;
+                left: 10px; /* Center it */
+                align-items: center; /* Center align notifications */
+            }
+            .notification {
+                width: 100%; /* Ensure it takes available width */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="notification-container" id="notificationContainer"></div>
+    
+    <div class="container">
+        <h1>🚀 Bybit Pro Trading Terminal 📊</h1>
+
+        <div class="message error-message" id="errorMessage"></div>
+        <div class="message success-message" id="successMessage"></div>
+        <div class="message warning-message" id="warningMessage"></div>
+        
+        <div class="live-price-box">
+            <div id="livePrice">-</div>
+            <div class="last-update">Last Updated: <span id="lastUpdate">-</span></div>
+        </div>
+
+        <div class="controls">
+            <div class="symbol-search-container">
+                <label for="symbolSearch">Search Symbol:</label>
+                <div style="position: relative;">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="symbolSearch" placeholder="Type to search (e.g., BTC, ETH)..." autocomplete="off">
+                    <div class="symbol-dropdown" id="symbolDropdown"></div>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label for="intervalSelect">Interval:</label>
+                <select id="intervalSelect">
+                    <option value="1">1m</option>
+                    <option value="5">5m</option>
+                    <option value="15">15m</option>
+                    <option value="30">30m</option>
+                    <option value="60">1h</option>
+                    <option value="240">4h</option>
+                    <option value="D" selected>1D</option>
+                    <option value="W">1W</option>
+                    <option value="M">1M</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="limit">Data Points:</label>
+                <input type="number" id="limit" value="200" min="50" max="1000" step="50">
+            </div>
+            
+            <div class="control-group">
+                <label for="atrPeriod">ATR Period:</label>
+                <input type="number" id="atrPeriod" value="14" min="5" max="50">
+            </div>
+            
+            <div class="control-group">
+                <label for="rsiPeriod">RSI Period:</label>
+                <input type="number" id="rsiPeriod" value="14" min="5" max="50">
+            </div>
+            
+            <div class="control-group">
+                <label for="emaPeriod">EMA Period:</label>
+                <input type="number" id="emaPeriod" value="20" min="5" max="200">
+            </div>
+
+            <div class="control-group">
+                <label for="stPeriod">Supertrend Period:</label>
+                <input type="number" id="stPeriod" value="10" min="5" max="50">
+            </div>
+            
+            <div class="control-group">
+                <label for="stMultiplier">ST Multiplier:</label>
+                <input type="number" id="stMultiplier" value="3" step="0.5" min="1" max="10">
+            </div>
+            
+            <button id="fetchDataButton">📈 Load Chart</button>
+            <button id="autoRefreshButton" class="action-button">🔄 Go Live</button>
+        </div>
+
+        <div class="action-buttons">
+            <button class="action-button preset-button" data-preset="scalping">⚡ Scalping</button>
+            <button class="action-button preset-button" data-preset="daytrading">☀️ Day Trading</button>
+            <button class="action-button preset-button" data-preset="swing">🌊 Swing</button>
+            <button class="action-button preset-button" data-preset="position">🎯 Position</button>
+            <button class="action-button" id="saveSettingsButton">💾 Save Settings</button>
+            <button class="action-button" id="resetButton">🔄 Reset</button>
+        </div>
+
+        <div class="indicator-controls">
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleVolume" checked>
+                <label for="toggleVolume">Volume</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleSupertrend" checked>
+                <label for="toggleSupertrend">Supertrend</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleBollinger" checked>
+                <label for="toggleBollinger">Bollinger Bands</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleSMA" checked>
+                <label for="toggleSMA">SMA</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleEMA" checked>
+                <label for="toggleEMA">EMA</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleRSI" checked>
+                <label for="toggleRSI">RSI</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleMACD" checked>
+                <label for="toggleMACD">MACD</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleSignals" checked>
+                <label for="toggleSignals">Buy/Sell Signals</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleStochastic">
+                <label for="toggleStochastic">Stochastic</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleVWAP">
+                <label for="toggleVWAP">VWAP</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="togglePSAR">
+                <label for="togglePSAR">PSAR</label>
+            </div>
+            <div class="indicator-toggle">
+                <input type="checkbox" id="toggleIchimoku">
+                <label for="toggleIchimoku">Ichimoku</label>
+            </div>
+        </div>
+
+        <div id="chartContainer">
+            <canvas id="chartCanvas"></canvas>
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="spinner"></div>
+                <div class="loading-text" id="loadingText">Loading...</div>
+            </div>
+        </div>
+
+        <div class="ticker-info" id="tickerInfo" style="display: none;">
+            <h3 id="tickerTitle">Market Information</h3>
+            <div class="ticker-grid">
+                <div class="ticker-item">
+                    <span class="ticker-label">Last Price</span>
+                    <span id="tickerLastPrice" class="ticker-value">-</span>
+                </div>
+                <div class="ticker-item">
+                    <span class="ticker-label">24h Change</span>
+                    <span id="tickerPriceChange" class="ticker-value">-</span>
+                </div>
+                <div class="ticker-item">
+                    <span class="ticker-label">24h Change %</span>
+                    <span id="tickerPriceChangePercent" class="ticker-value">-</span>
+                </div>
+                <div class="ticker-item">
+                    <span class="ticker-label">24h High</span>
+                    <span id="tickerHigh24h" class="ticker-value">-</span>
+                </div>
+                <div class="ticker-item">
+                    <span class="ticker-label">24h Low</span>
+                    <span id="tickerLow24h" class="ticker-value">-</span>
+                </div>
+                <div class="ticker-item">
+                    <span class="ticker-label">24h Volume</span>
+                    <span id="tickerVolume24h" class="ticker-value">-</span>
+                </div>
+                <div class="ticker-item">
+                    <span class="ticker-label">Bid Price</span>
+                    <span id="tickerBidPrice" class="ticker-value">-</span>
+                </div>
+                <div class="ticker-item">
+                    <span class="ticker-label">Ask Price</span>
+                    <span id="tickerAskPrice" class="ticker-value">-</span>
+                </div>
+                <div class="ticker-item">
+                    <span class="ticker-label">Spread</span>
+                    <span id="tickerSpread" class="ticker-value">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" data-tab="analysis">Technical Analysis</button>
+                <button class="tab-button" data-tab="signals">Trading Signals</button>
+                <button class="tab-button" data-tab="statistics">Statistics</button>
+                <button class="tab-button" data-tab="gemini-analysis">Gemini Analysis</button> <!-- New Tab -->
+            </div>
+            
+            <div class="tab-content active" id="analysis-tab">
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-title">Trend Direction</div>
+                        <div class="stat-value" id="trendDirection">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">RSI Status</div>
+                        <div class="stat-value" id="rsiStatus">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Volume Trend</div>
+                        <div class="stat-value" id="volumeTrend">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Volatility</div>
+                        <div class="stat-value" id="volatility">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="signals-tab">
+                <div id="signalsContent">
+                    <p>Loading trading signals...</p>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="statistics-tab">
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-title">Average Volume</div>
+                        <div class="stat-value" id="avgVolume">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Price Range</div>
+                        <div class="stat-value" id="priceRange">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Support Level</div>
+                        <div class="stat-value" id="supportLevel">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Resistance Level</div>
+                        <div class="stat-value" id="resistanceLevel">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gemini Analysis Tab -->
+            <div class="tab-content" id="gemini-analysis-tab">
+                <div class="stat-card">
+                    <div class="stat-title">Gemini AI Insights</div>
+                    <div class="stat-value" id="geminiAnalysisResult">
+                        <p>Select a symbol and load chart data to get AI-powered insights.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <!-- Optional: Add date-fns library if needed for custom date formatting, though chartjs-adapter-date-fns should cover it -->
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/2.29.3/date_fns.min.js"></script> -->
+
+    <script>
+        // Backend API endpoint
+        const BACKEND_API_URL = 'http://127.0.0.1:5000'; // Ensure this matches your Flask server address
+
+        class TradingTerminal {
+            constructor() {
+                this.BYBIT_API_BASE = 'https://api.bybit.com/v5/market/';
+                this.BYBIT_WS_BASE = 'wss://stream.bybit.com/v5/public/spot';
+                this.chart = null;
+                this.symbols = []; // To store fetched Bybit symbols
+                this.currentSymbol = '';
+                this.chartData = []; // Array of kline objects {time, open, high, low, close, volume}
+                this.websocket = null;
+                this.symbolCache = new Map(); // For symbol list
+                this.settings = this.loadSettings();
+                this.currentInterval = 'D'; // Track current interval
+                this.isLive = false; // Track live mode
+                this.geminiAnalysisTimeout = null; // For debouncing Gemini requests on live data
+                this.lastPriceColorChangeTimeout = null; // For price animation
+                this.init();
+            }
+
+            async init() {
+                this.setupEventListeners();
+                await this.loadSymbols();
+                this.applySettings();
+                this.showNotification('Trading Terminal Ready!', 'info');
+            }
+
+            setupEventListeners() {
+                // Symbol search
+                const symbolSearch = document.getElementById('symbolSearch');
+                const symbolDropdown = document.getElementById('symbolDropdown');
+                
+                // Event listener for input in the search field
+                symbolSearch.addEventListener('input', () => this.handleSymbolSearch(symbolSearch.value));
+                
+                // Show dropdown when search input is focused, if symbols are loaded
+                symbolSearch.addEventListener('focus', () => {
+                    // Only show dropdown if symbols are loaded and there's actual input or user focus
+                    if (this.symbols.length > 0 && symbolSearch.value.length > 0) {
+                        this.showSymbolDropdown();
+                    } else if (this.symbols.length > 0 && symbolSearch === document.activeElement) {
+                        // Optionally show dropdown on focus even if input is empty, if symbols are loaded
+                        // this.showSymbolDropdown(); 
+                    }
+                });
+                
+                // Hide dropdown when clicking outside the search input and dropdown
+                document.addEventListener('click', (e) => {
+                    // Check if the click was outside the search input and the dropdown itself
+                    if (!symbolSearch.contains(e.target) && !symbolDropdown.contains(e.target)) {
+                        symbolDropdown.classList.remove('active');
+                    }
+                });
+
+                // Main buttons
+                document.getElementById('fetchDataButton').addEventListener('click', () => this.fetchDataAndRenderChart());
+                document.getElementById('autoRefreshButton').addEventListener('click', () => this.toggleLiveUpdates());
+                document.getElementById('saveSettingsButton').addEventListener('click', () => this.saveSettings());
+                document.getElementById('resetButton').addEventListener('click', () => this.resetSettings());
+
+                // Preset buttons
+                document.querySelectorAll('.preset-button').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.applyPreset(e.target.dataset.preset));
+                });
+
+                // Indicator toggles
+                document.querySelectorAll('.indicator-toggle input').forEach(toggle => {
+                    toggle.addEventListener('change', () => this.updateChartVisibility());
+                });
+
+                // Tab buttons
+                document.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+                });
+            }
+
+            // --- Symbol Management ---
+            async loadSymbols() {
+                this.showLoading('Loading available symbols...');
+                const cacheKey = 'symbols_cache';
+                const cached = this.getFromCache(cacheKey);
+                
+                if (cached) {
+                    this.symbols = cached;
+                    this.populateSymbolDropdown();
+                    this.hideLoading();
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.BYBIT_API_BASE}instruments-info?category=spot`);
+                    const data = await response.json();
+
+                    if (data.retCode !== 0) {
+                        throw new Error(data.retMsg || 'Failed to fetch symbols');
+                    }
+
+                    this.symbols = data.result.list
+                        .filter(item => item.status === 'Trading' && item.quoteCoin === 'USDT')
+                        .map(item => ({
+                            symbol: item.symbol,
+                            baseCoin: item.baseCoin,
+                            quoteCoin: item.quoteCoin
+                        }))
+                        .sort((a, b) => {
+                            // Prioritize major coins first
+                            const priority = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'USDT'];
+                            const aIndex = priority.indexOf(a.baseCoin);
+                            const bIndex = priority.indexOf(b.baseCoin);
+                            if (aIndex !== -1 && bIndex === -1) return -1;
+                            if (aIndex === -1 && bIndex !== -1) return 1;
+                            if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+                            return a.symbol.localeCompare(b.symbol);
+                        });
+
+                    this.setCache(cacheKey, this.symbols, 3600000); // Cache for 1 hour
+                    this.populateSymbolDropdown();
+                    
+                    // Set default symbol from settings or pick BTCUSDT if available
+                    const defaultSymbolFromSettings = this.settings.symbol;
+                    const defaultSymbol = this.symbols.find(s => s.symbol === defaultSymbolFromSettings) || 
+                                          this.symbols.find(s => s.symbol === 'BTCUSDT') || 
+                                          (this.symbols.length > 0 ? this.symbols[0] : null);
+                    
+                    if (defaultSymbol) {
+                        this.selectSymbol(defaultSymbol.symbol);
+                    }
+
+                } catch (error) {
+                    this.showError(`Failed to load symbols: ${error.message}`);
+                } finally {
+                    this.hideLoading();
+                }
+            }
+
+            populateSymbolDropdown(filter = '') {
+                const dropdown = document.getElementById('symbolDropdown');
+                // Ensure symbols are loaded before attempting to filter and populate
+                if (this.symbols.length === 0) {
+                    dropdown.innerHTML = '<li>No symbols loaded</li>';
+                    return;
+                }
+
+                const filtered = filter 
+                    ? this.symbols.filter(s => 
+                        s.symbol.toLowerCase().includes(filter.toLowerCase()) ||
+                        s.baseCoin.toLowerCase().includes(filter.toLowerCase())
+                      ).slice(0, 50) // Limit dropdown to 50 items
+                    : this.symbols.slice(0, 20); // Show top 20 by default
+
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<li>No matching symbols found</li>';
+                } else {
+                    dropdown.innerHTML = filtered.map(s => `
+                        <div class="symbol-item ${s.symbol === this.currentSymbol ? 'selected' : ''}" 
+                             data-symbol="${s.symbol}">
+                            <span>${s.symbol}</span>
+                            <span class="symbol-info">${s.baseCoin}/${s.quoteCoin}</span>
+                        </div>
+                    `).join('');
+                }
+
+                // Add event listeners to new dropdown items
+                dropdown.querySelectorAll('.symbol-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        this.selectSymbol(item.dataset.symbol);
+                        dropdown.classList.remove('active');
+                    });
+                });
+            }
+
+            handleSymbolSearch(value) {
+                this.populateSymbolDropdown(value);
+                // Show dropdown if symbols are loaded and there's input, or if input is cleared but focus remains
+                if (this.symbols.length > 0) { // Always show if symbols are loaded and input is active
+                    if (value.length > 0 || symbolSearch === document.activeElement) { // Show if there's text or input is focused
+                        this.showSymbolDropdown();
+                    } else {
+                        document.getElementById('symbolDropdown').classList.remove('active');
+                    }
+                } else {
+                    // Hide if no symbols are loaded
+                    document.getElementById('symbolDropdown').classList.remove('active');
+                }
+            }
+
+            showSymbolDropdown() {
+                document.getElementById('symbolDropdown').classList.add('active');
+            }
+
+            selectSymbol(symbol) {
+                if (this.currentSymbol === symbol) return; // Avoid re-selection
+
+                this.currentSymbol = symbol;
+                document.getElementById('symbolSearch').value = symbol;
+                this.updateTickerInfo(symbol);
+                this.disconnectWebSocket(); // Disconnect old WS when symbol changes
+                this.resetChartAndAnalysis(); // Clear old chart/analysis
+                this.showNotification(`Symbol set to: ${symbol}`, 'info');
+                
+                // If Gemini tab is active, re-request analysis after new data loads
+                if (document.getElementById('gemini-analysis-tab').classList.contains('active')) {
+                    this.displayGeminiAnalysis("Loading new data for analysis...");
+                }
+            }
+
+            // --- Ticker Info Display ---
+            async updateTickerInfo(symbol) {
+                if (!symbol) return;
+                document.getElementById('tickerInfo').style.display = 'block';
+                document.getElementById('tickerTitle').textContent = `${symbol} Market Information`;
+                try {
+                    // Fetch ticker info using the backend or directly (backend preferred for consistency)
+                    // For simplicity here, direct fetch. Ideally, add a / tickers route to backend.
+                    const response = await fetch(`${this.BYBIT_API_BASE}tickers?category=spot&symbol=${symbol}`);
+                    const data = await response.json();
+                    if (data.retCode === 0 && data.result.list && data.result.list.length > 0) {
+                        const ticker = data.result.list[0];
+                        this.displayTickerInfo(ticker);
+                    } else {
+                        this.showWarning(`Could not fetch ticker info for ${symbol}: ${data.retMsg}`);
+                    }
+                } catch (error) {
+                    console.error('Error fetching ticker:', error);
+                    this.showError(`Failed to fetch ticker info for ${symbol}.`);
+                }
+            }
+
+            displayTickerInfo(ticker) {
+                const price = parseFloat(ticker.lastPrice);
+                const change24h = parseFloat(ticker.price24hPcnt);
+                const bid = parseFloat(ticker.bid1Price);
+                const ask = parseFloat(ticker.ask1Price);
+                const spread = ask - bid;
+                const spreadPercent = (spread / price * 100).toFixed(3);
+                
+                this.updateLivePriceDisplay(price); // Update main live price display
+
+                // Update ticker info boxes
+                document.getElementById('tickerLastPrice').textContent = this.formatPrice(price);
+                document.getElementById('tickerBidPrice').textContent = this.formatPrice(bid);
+                document.getElementById('tickerAskPrice').textContent = this.formatPrice(ask);
+                document.getElementById('tickerSpread').textContent = `${this.formatPrice(spread)} (${spreadPercent}%)`;
+                
+                const priceChangeValue = price * change24h / 100;
+                const priceChangeEl = document.getElementById('tickerPriceChange');
+                priceChangeEl.textContent = this.formatPrice(priceChangeValue);
+                priceChangeEl.className = `ticker-value ${change24h >= 0 ? 'positive' : 'negative'}`;
+                
+                const priceChangePercentEl = document.getElementById('tickerPriceChangePercent');
+                priceChangePercentEl.textContent = `${change24h.toFixed(2)}%`;
+                priceChangePercentEl.className = `ticker-value ${change24h >= 0 ? 'positive' : 'negative'}`;
+                
+                document.getElementById('tickerHigh24h').textContent = this.formatPrice(parseFloat(ticker.highPrice24h));
+                document.getElementById('tickerLow24h').textContent = this.formatPrice(parseFloat(ticker.lowPrice24h));
+                document.getElementById('tickerVolume24h').textContent = this.formatVolume(parseFloat(ticker.volume24h));
+            }
+
+            // --- Chart Data Fetching and Rendering ---
+            async fetchDataAndRenderChart() {
+                if (!this.currentSymbol) {
+                    this.showWarning('Please select a symbol first.');
+                    return;
+                }
+
+                this.showLoading(`Loading chart data for ${this.currentSymbol}...`);
+                this.disconnectWebSocket(); // Stop live updates while fetching
+                this.isLive = false; // Exit live mode
+                document.getElementById('autoRefreshButton').textContent = '🔄 Go Live';
+                document.getElementById('autoRefreshButton').style.background = 'linear-gradient(135deg, var(--accent-pink) 0%, #cc0066 100%)';
+
+                const interval = document.getElementById('intervalSelect').value;
+                const limit = parseInt(document.getElementById('limit').value);
+                this.currentInterval = interval; // Update current interval
+
+                try {
+                    const url = `${this.BYBIT_API_BASE}kline?category=spot&symbol=${this.currentSymbol}&interval=${interval}&limit=${limit}`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (data.retCode !== 0) {
+                        throw new Error(data.retMsg || 'Failed to fetch chart data');
+                    }
+
+                    // Bybit kline format: [timestamp, open, high, low, close, volume, turnover]
+                    this.chartData = data.result.list.map(item => ({
+                        time: parseInt(item[0]), // Milliseconds timestamp
+                        open: parseFloat(item[1]),
+                        high: parseFloat(item[2]),
+                        low: parseFloat(item[3]),
+                        close: parseFloat(item[4]),
+                        volume: parseFloat(item[5])
+                    })).reverse(); // Reverse to have chronological order
+
+                    if (this.chartData.length === 0) {
+                        throw new Error('No data available for this symbol and interval.');
+                    }
+
+                    this.renderChart(this.chartData);
+                    this.updateAnalysis(this.chartData);
+                    this.updateSignals(this.chartData);
+                    this.updateStatistics(this.chartData);
+                    
+                    // Trigger Gemini analysis if tab is active
+                    if (document.getElementById('gemini-analysis-tab').classList.contains('active')) {
+                        this.requestGeminiAnalysis();
+                    }
+
+                    this.showNotification('Chart loaded successfully', 'success');
+                } catch (error) {
+                    console.error('Chart loading error:', error);
+                    this.showError(`Failed to load chart: ${error.message}`);
+                    this.resetChartAndAnalysis(); // Clear chart if loading fails
+                } finally {
+                    this.hideLoading();
+                }
+            }
+            
+            // --- Live Updates (WebSocket) ---
+            toggleLiveUpdates() {
+                const button = document.getElementById('autoRefreshButton');
+                this.isLive = !this.isLive;
+
+                if (this.isLive) {
+                    this.connectWebSocket();
+                    button.textContent = '🔴 Live Now';
+                    button.style.background = 'linear-gradient(135deg, var(--accent-green) 0%, #00aa44 100%)';
+                    this.showNotification('Live updates enabled', 'success');
+                } else {
+                    this.disconnectWebSocket();
+                    button.textContent = '🔄 Go Live';
+                    button.style.background = 'linear-gradient(135deg, var(--accent-pink) 0%, #cc0066 100%)';
+                    this.showNotification('Live updates disabled', 'warning');
+                }
+            }
+            
+            connectWebSocket() {
+                if (!this.currentSymbol) {
+                    this.showWarning("Cannot connect to WebSocket: No symbol selected.");
+                    this.isLive = false;
+                    return;
+                }
+                if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                    logging.info("WebSocket already open.");
+                    return;
+                }
+                
+                this.disconnectWebSocket(); // Ensure previous connection is closed
+
+                const symbol = this.currentSymbol.toLowerCase();
+                const interval = document.getElementById('intervalSelect').value;
+                // The Bybit WS topic format is: {symbol}.{interval} e.g., kline.1.btcusdt
+                const wsUrl = `${this.BYBIT_WS_BASE}`; // Base URL is the same, topics are sent in args
+                
+                this.websocket = new WebSocket(wsUrl);
+                
+                this.websocket.onopen = () => {
+                    logging.info(`WebSocket connected for ${this.currentSymbol}`);
+                    // Subscribe to tickers and klines
+                    const subscribeMessage = {
+                        "op": "subscribe",
+                        "args": [
+                            `tickers.${symbol}`, // Real-time ticker updates
+                            `kline.${interval}.${symbol}` // Kline updates for the selected interval
+                        ]
+                    };
+                    this.websocket.send(JSON.stringify(subscribeMessage));
+                    this.showNotification('Connected to live data stream.', 'success');
+                };
+
+                this.websocket.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.type === 'snapshot') { // Initial data for subscription
+                            logging.debug("Received snapshot data from WS");
+                            // Handle snapshot if necessary, usually for tickers or order book
+                        } else if (msg.topic && msg.data) {
+                            const dataArray = Array.isArray(msg.data) ? msg.data : [msg.data]; // Ensure it's an array
+                            
+                            if (msg.topic.includes('tickers')) {
+                                const ticker = dataArray[0];
+                                if (ticker && ticker.lastPrice) {
+                                    this.updateLivePriceDisplay(parseFloat(ticker.lastPrice));
+                                }
+                            } else if (msg.topic.includes('kline')) {
+                                const kline = dataArray[0];
+                                if (kline && kline.timestamp) {
+                                    const newCandle = {
+                                        time: parseInt(kline.timestamp), // Milliseconds timestamp
+                                        open: parseFloat(kline.open),
+                                        high: Math.max(parseFloat(kline.high), parseFloat(kline.open), parseFloat(kline.close)), // Ensure high is at least open/close
+                                        low: Math.min(parseFloat(kline.low), parseFloat(kline.open), parseFloat(kline.close)),   // Ensure low is at least open/close
+                                        close: parseFloat(kline.close),
+                                        volume: parseFloat(kline.volume)
+                                    };
+                                    
+                                    const lastKlineTime = this.chartData.length > 0 ? this.chartData[this.chartData.length - 1].time : 0;
+                                    
+                                    if (newCandle.time > lastKlineTime) { // New confirmed candle
+                                        // If interval changed while live, we need to re-fetch data.
+                                        // For now, assume interval remains constant during live session.
+                                        if (this.chartData.length >= parseInt(document.getElementById('limit').value)) {
+                                            this.chartData.shift(); // Remove oldest data point
+                                        }
+                                        this.chartData.push(newCandle);
+                                        this.updateChart();
+                                    } else if (newCandle.time === lastKlineTime) { // Update current unconfirmed candle
+                                        // Update existing last candle's OHLCV
+                                        const lastCandle = this.chartData[this.chartData.length - 1];
+                                        lastCandle.open = newCandle.open; // Open might change on very first update
+                                        lastCandle.high = newCandle.high;
+                                        lastCandle.low = newCandle.low;
+                                        lastCandle.close = newCandle.close;
+                                        lastCandle.volume = newCandle.volume;
+                                        this.updateChart(); // Update chart with new OHLCV
+                                    }
+                                    
+                                    // Trigger Gemini analysis periodically for live data
+                                    if (document.getElementById('gemini-analysis-tab').classList.contains('active')) {
+                                        if (this.geminiAnalysisTimeout) clearTimeout(this.geminiAnalysisTimeout);
+                                        this.geminiAnalysisTimeout = setTimeout(() => this.requestGeminiAnalysis(), 5000); // Analyze every 5 seconds
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error processing WebSocket message:", e, event.data);
+                    }
+                };
+                
+                this.websocket.onerror = (error) => {
+                    console.error('WebSocket Error:', error);
+                    this.showError('WebSocket connection error. Retrying in 5s...');
+                    this.disconnectWebSocket(); // Ensure proper cleanup
+                    setTimeout(() => this.connectWebSocket(), 5000);
+                };
+
+                this.websocket.onclose = () => {
+                    logging.info('WebSocket connection closed.');
+                    this.showWarning('WebSocket connection closed.', 'warning');
+                    // Attempt to reconnect if still in live mode
+                    if (this.isLive) {
+                        this.showWarning('Attempting to reconnect WebSocket...');
+                        setTimeout(() => this.connectWebSocket(), 5000);
+                    }
+                };
+            }
+            
+            disconnectWebSocket() {
+                if (this.websocket) {
+                    this.websocket.close();
+                    this.websocket = null;
+                    logging.info("WebSocket disconnected.");
+                }
+            }
+
+            // --- Price Display and Animation ---
+            updateLivePriceDisplay(price) {
+                const livePriceEl = document.getElementById('livePrice');
+                const lastUpdateEl = document.getElementById('lastUpdate');
+                
+                const currentPrice = parseFloat(livePriceEl.textContent);
+                
+                // Animate price change
+                if (!isNaN(currentPrice) && price !== currentPrice) {
+                    livePriceEl.style.color = price > currentPrice ? 'var(--accent-green)' : 'var(--accent-pink)';
+                    if (this.lastPriceColorChangeTimeout) clearTimeout(this.lastPriceColorChangeTimeout);
+                    this.lastPriceColorChangeTimeout = setTimeout(() => {
+                        livePriceEl.style.color = 'var(--accent-green)'; // Default positive color
+                    }, 1000); // Reset color after 1 second
+                } else if (isNaN(currentPrice)) {
+                    livePriceEl.style.color = 'var(--accent-green)'; // Default positive color
+                }
+                
+                livePriceEl.textContent = this.formatPrice(price);
+                lastUpdateEl.textContent = this.formatTime(Date.now());
+            }
+
+            // --- Chart Rendering and Updates ---
+            renderChart(klines) {
+                const indicators = this.calculateAllIndicators(klines);
+                
+                const candlestickData = klines.map(d => ({
+                    x: d.time, // Timestamp in milliseconds
+                    o: d.open,
+                    h: d.high,
+                    l: d.low,
+                    c: d.close
+                }));
+
+                // Volume data with dynamic coloring
+                const volumeData = klines.map(d => ({
+                    x: d.time,
+                    y: d.volume,
+                    // Color bars based on close vs open for that candle
+                    color: d.close >= d.open ? 'rgba(0, 255, 136, 0.6)' : 'rgba(255, 0, 136, 0.6)' 
+                }));
+
+                if (this.chart) {
+                    this.chart.destroy();
+                }
+
+                const ctx = document.getElementById('chartCanvas').getContext('2d');
+                this.chart = new Chart(ctx, {
+                    type: 'candlestick',
+                    data: {
+                        datasets: this.createDatasets(candlestickData, volumeData, indicators, klines)
+                    },
+                    options: this.getChartOptions()
+                });
+            }
+
+            createDatasets(candlestickData, volumeData, indicators, klines) {
+                const datasets = [
+                    // Price Dataset (Candlesticks)
+                    {
+                        label: 'Price',
+                        data: candlestickData,
+                        borderColor: (context) => { // Dynamic border color
+                            const i = context.dataIndex;
+                            if (!klines[i]) return '#e0e0ff';
+                            return klines[i].close >= klines[i].open ? 'var(--success-color)' : 'var(--danger-color)';
+                        },
+                        borderWidth: 1,
+                        color: { // Chart.js Financial Chart Color Scheme
+                            up: 'var(--success-color)',
+                            down: 'var(--danger-color)',
+                            unchanged: '#8888ff'
+                        },
+                        yAxisID: 'price',
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    // Volume Dataset
+                    {
+                        label: 'Volume',
+                        data: volumeData,
+                        backgroundColor: (context) => context.dataset.color,
+                        yAxisID: 'volume',
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += new Intl.NumberFormat('en-US').format(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                ];
+
+                // Add indicator datasets if enabled
+                if (document.getElementById('toggleSMA').checked && indicators.sma) {
+                    datasets.push({
+                        label: 'SMA',
+                        data: indicators.sma.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--accent-orange)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleSMA').checked
+                    });
+                }
+                if (document.getElementById('toggleEMA').checked && indicators.ema) {
+                    datasets.push({
+                        label: 'EMA',
+                        data: indicators.ema.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--accent-purple)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleEMA').checked
+                    });
+                }
+                if (document.getElementById('toggleRSI').checked && indicators.rsi) {
+                    datasets.push({
+                        label: 'RSI',
+                        data: indicators.rsi.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--accent-cyan)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'rsi', // Separate Y-axis for RSI
+                        hidden: !document.getElementById('toggleRSI').checked
+                    });
+                }
+                if (document.getElementById('toggleMACD').checked && indicators.macd) {
+                    datasets.push({
+                        label: 'MACD Line',
+                        data: indicators.macd.macdLine.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--accent-cyan)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'macd',
+                        hidden: !document.getElementById('toggleMACD').checked
+                    });
+                    datasets.push({
+                        label: 'MACD Signal',
+                        data: indicators.macd.signalLine.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--accent-pink)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'macd',
+                        hidden: !document.getElementById('toggleMACD').checked
+                    });
+                    // MACD Histogram can be a bar chart
+                    datasets.push({
+                        label: 'MACD Histogram',
+                        data: indicators.macd.histogram.map((value, i) => ({ x: klines[i].time, y: value })),
+                        type: 'bar',
+                        backgroundColor: (context) => {
+                            const value = context.dataset.data[context.dataIndex].y;
+                            return value >= 0 ? 'rgba(0, 255, 136, 0.6)' : 'rgba(255, 0, 136, 0.6)';
+                        },
+                        yAxisID: 'macd',
+                        hidden: !document.getElementById('toggleMACD').checked
+                    });
+                }
+                if (document.getElementById('toggleBollinger').checked && indicators.bollinger) {
+                    datasets.push({
+                        label: 'BB Upper',
+                        data: indicators.bollinger.upper.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'rgba(255, 170, 0, 0.5)',
+                        borderWidth: 1,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleBollinger').checked
+                    });
+                    datasets.push({
+                        label: 'BB Middle',
+                        data: indicators.bollinger.middle.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'rgba(255, 170, 0, 0.3)',
+                        borderWidth: 1,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleBollinger').checked
+                    });
+                    datasets.push({
+                        label: 'BB Lower',
+                        data: indicators.bollinger.lower.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'rgba(255, 170, 0, 0.5)',
+                        borderWidth: 1,
+                        fill: '-1', // Fill between BB Upper and BB Lower
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleBollinger').checked
+                    });
+                }
+                if (document.getElementById('toggleSupertrend').checked && indicators.supertrend) {
+                    datasets.push({
+                        label: 'Supertrend',
+                        data: indicators.supertrend.line.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: (context) => {
+                            const i = context.dataIndex;
+                            return indicators.supertrend.trend[i] ? 'var(--success-color)' : 'var(--danger-color)';
+                        },
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleSupertrend').checked
+                    });
+                }
+                if (document.getElementById('toggleVWAP').checked && indicators.vwap) {
+                    datasets.push({
+                        label: 'VWAP',
+                        data: indicators.vwap.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--accent-orange)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleVWAP').checked
+                    });
+                }
+                if (document.getElementById('togglePSAR').checked && indicators.psar) {
+                    datasets.push({
+                        label: 'PSAR',
+                        data: indicators.psar.map((value, i) => ({ x: klines[i].time, y: value })),
+                        backgroundColor: (context) => {
+                            const i = context.dataIndex;
+                            // PSAR value is usually the price itself, color based on trend
+                            const psarValue = indicators.psar[i];
+                            const closePrice = klines[i].close;
+                            return psarValue < closePrice ? 'var(--success-color)' : 'var(--danger-color)';
+                        },
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        showLine: false, // Only show points
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('togglePSAR').checked
+                    });
+                }
+                if (document.getElementById('toggleIchimoku').checked && indicators.ichimoku) {
+                    // Tenkan-sen
+                    datasets.push({
+                        label: 'Ichimoku Tenkan-sen',
+                        data: indicators.ichimoku.tenkan.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--accent-cyan)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleIchimoku').checked
+                    });
+                    // Kijun-sen
+                    datasets.push({
+                        label: 'Ichimoku Kijun-sen',
+                        data: indicators.ichimoku.kijun.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--accent-purple)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleIchimoku').checked
+                    });
+                    // Senkou Span A (Cloud Lead 1)
+                    datasets.push({
+                        label: 'Ichimoku Senkou A',
+                        data: indicators.ichimoku.senkouA.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'rgba(0, 255, 136, 0.3)',
+                        backgroundColor: 'rgba(0, 255, 136, 0.3)',
+                        borderWidth: 1,
+                        fill: '-1', // Fill between Senkou A and Senkou B
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleIchimoku').checked
+                    });
+                    // Senkou Span B (Cloud Lead 2)
+                    datasets.push({
+                        label: 'Ichimoku Senkou B',
+                        data: indicators.ichimoku.senkouB.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'rgba(255, 0, 136, 0.3)',
+                        backgroundColor: 'rgba(255, 0, 136, 0.3)',
+                        borderWidth: 1,
+                        fill: '-2', // Fill between Senkou A and Senkou B
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleIchimoku').checked
+                    });
+                    // Chikou Span (Lagging Span)
+                    datasets.push({
+                        label: 'Ichimoku Chikou Span',
+                        data: indicators.ichimoku.chikou.map((value, i) => ({ x: klines[i].time, y: value })),
+                        borderColor: 'var(--secondary-text)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleIchimoku').checked
+                    });
+                }
+
+                // Add Buy/Sell Signals
+                if (document.getElementById('toggleSignals').checked && indicators.signals) {
+                    const buySignals = indicators.signals.filter(s => s.direction === 'buy').map(s => ({ x: s.time, y: s.price }));
+                    const sellSignals = indicators.signals.filter(s => s.direction === 'sell').map(s => ({ x: s.time, y: s.price }));
+
+                    datasets.push({
+                        label: 'Buy Signals',
+                        data: buySignals,
+                        backgroundColor: 'var(--success-color)',
+                        borderColor: 'var(--success-color)',
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        showLine: false, // Only show points
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleSignals').checked
+                    });
+                    datasets.push({
+                        label: 'Sell Signals',
+                        data: sellSignals,
+                        backgroundColor: 'var(--danger-color)',
+                        borderColor: 'var(--danger-color)',
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        showLine: false, // Only show points
+                        yAxisID: 'price',
+                        hidden: !document.getElementById('toggleSignals').checked
+                    });
+                }
+
+                return datasets;
+            }
+
+            getChartOptions() {
+                const klines = this.chartData;
+                const indicators = this.calculateAllIndicators(klines); // Recalculate for stats
+                const { rsi, macd, ichimoku, signals } = indicators;
+
+                const priceAxis = {
+                    type: 'time',
+                    time: {
+                        unit: 'minute',
+                        tooltipFormat: 'MMM dd, yyyy HH:mm:ss',
+                        displayFormats: {
+                            minute: 'HH:mm',
+                            hour: 'HH:mm',
+                            day: 'MMM dd',
+                            week: 'MMM dd',
+                            month: 'MMM dd'
+                        }
+                    },
+                    position: 'left',
+                    grid: { color: 'rgba(68, 68, 170, 0.2)' },
+                    ticks: {
+                        color: 'var(--primary-text)',
+                        autoSkip: true,
+                        maxTicksLimit: 10
+                    },
+                    title: {
+                        display: true,
+                        text: 'Price',
+                        color: 'var(--secondary-text)',
+                        font: { size: 12 }
+                    }
+                };
+
+                const volumeAxis = {
+                    type: 'linear',
+                    position: 'right',
+                    grid: { display: false },
+                    ticks: {
+                        color: 'var(--primary-text)',
+                        callback: function(value, index, ticks) {
+                            if (value >= 1000000) return value / 1000000 + 'M';
+                            if (value >= 1000) return value / 1000 + 'K';
+                            return value;
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Volume',
+                        color: 'var(--secondary-text)',
+                        font: { size: 12 }
+                    },
+                    display: document.getElementById('toggleVolume').checked // Initially visible if checked
+                };
+
+                const rsiAxis = {
+                    type: 'linear',
+                    position: 'right',
+                    grid: { color: 'rgba(68, 68, 170, 0.2)' },
+                    ticks: {
+                        min: 0,
+                        max: 100,
+                        color: 'var(--primary-text)',
+                        stepSize: 20
+                    },
+                    title: {
+                        display: true,
+                        text: 'RSI',
+                        color: 'var(--secondary-text)',
+                        font: { size: 12 }
+                    },
+                    display: document.getElementById('toggleRSI').checked
+                };
+
+                const macdAxis = {
+                    type: 'linear',
+                    position: 'right',
+                    grid: { color: 'rgba(68, 68, 170, 0.2)' },
+                    ticks: {
+                        color: 'var(--primary-text)',
+                        callback: function(value, index, ticks) {
+                            if (value >= 1000000) return value / 1000000 + 'M';
+                            if (value >= 1000) return value / 1000 + 'K';
+                            return value;
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'MACD',
+                        color: 'var(--secondary-text)',
+                        font: { size: 12 }
+                    },
+                    display: document.getElementById('toggleMACD').checked
+                };
+
+                // Adjust layout based on visible axes
+                const scales = {
+                    price: priceAxis,
+                    volume: volumeAxis,
+                };
+                if (document.getElementById('toggleRSI').checked) scales.rsi = rsiAxis;
+                if (document.getElementById('toggleMACD').checked) scales.macd = macdAxis;
+
+                return {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 500,
+                        easing: 'easeOutQuart'
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: 'var(--primary-text)',
+                                font: { size: 12 },
+                                usePointStyle: true, // Use point style for better legend visibility
+                                padding: 20
+                            },
+                            position: 'top',
+                            align: 'start'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    if (!tooltipItems || tooltipItems.length === 0) return '';
+                                    const timestamp = tooltipItems[0].parsed.x;
+                                    return moment(timestamp).format('YYYY-MM-DD HH:mm:ss');
+                                },
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    const value = context.parsed.y;
+                                    if (value !== null) {
+                                        if (context.dataset.label === 'Volume') {
+                                            label += new Intl.NumberFormat('en-US').format(value);
+                                        } else if (context.dataset.label.includes('Price') || context.dataset.label.includes('BB') || context.dataset.label.includes('Ichimoku') || context.dataset.label.includes('SMA') || context.dataset.label.includes('EMA') || context.dataset.label.includes('VWAP') || context.dataset.label.includes('PSAR')) {
+                                            label += value.toFixed(4); // Adjust precision as needed
+                                        } else if (context.dataset.label === 'RSI') {
+                                            label += value.toFixed(2);
+                                        } else if (context.dataset.label.includes('MACD')) {
+                                            label += value.toFixed(4);
+                                        } else {
+                                            label += value;
+                                        }
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
+                                threshold: 5
+                            },
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'xy',
+                                speed: 0.1
+                            }
+                        }
+                    },
+                    scales: scales,
+                    hover: {
+                        mode: 'nearest',
+                        intersect: true
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    layout: {
+                        padding: {
+                            top: 30,
+                            right: 15,
+                            bottom: 10,
+                            left: 15
+                        }
+                    }
+                };
+            }
+
+            // --- Indicator Calculations ---
+            calculateAllIndicators(klines) {
+                const indicators = {};
+                const data = klines.map(k => ({ time: k.time, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.volume }));
+
+                // Calculate SMA if enabled
+                if (document.getElementById('toggleSMA').checked) {
+                    const period = parseInt(document.getElementById('emaPeriod').value); // Re-using EMA period input for SMA for simplicity
+                    indicators.sma = this.calculateSMA(data, period);
+                }
+                // Calculate EMA if enabled
+                if (document.getElementById('toggleEMA').checked) {
+                    const period = parseInt(document.getElementById('emaPeriod').value);
+                    indicators.ema = this.calculateEMA(data, period);
+                }
+                // Calculate RSI if enabled
+                if (document.getElementById('toggleRSI').checked) {
+                    const period = parseInt(document.getElementById('rsiPeriod').value);
+                    indicators.rsi = this.calculateRSI(data, period);
+                }
+                // Calculate MACD if enabled
+                if (document.getElementById('toggleMACD').checked) {
+                    indicators.macd = this.calculateMACD(data);
+                }
+                // Calculate Bollinger Bands if enabled
+                if (document.getElementById('toggleBollinger').checked) {
+                    const period = parseInt(document.getElementById('emaPeriod').value); // Re-using EMA period input for BB
+                    const stdDev = 2; // Standard deviation multiplier
+                    indicators.bollinger = this.calculateBollingerBands(data, period, stdDev);
+                }
+                // Calculate Supertrend if enabled
+                if (document.getElementById('toggleSupertrend').checked) {
+                    const period = parseInt(document.getElementById('stPeriod').value);
+                    const multiplier = parseFloat(document.getElementById('stMultiplier').value);
+                    const atr = this.calculateATR(data, period);
+                    const supertrendResult = this.calculateSupertrend(data, atr, multiplier, period);
+                    indicators.supertrend = supertrendResult;
+                }
+                // Calculate VWAP if enabled
+                if (document.getElementById('toggleVWAP').checked) {
+                    indicators.vwap = this.calculateVWAP(data);
+                }
+                // Calculate PSAR if enabled
+                if (document.getElementById('togglePSAR').checked) {
+                    indicators.psar = this.calculatePSAR(data);
+                }
+                // Calculate Ichimoku if enabled
+                if (document.getElementById('toggleIchimoku').checked) {
+                    indicators.ichimoku = this.calculateIchimoku(data);
+                }
+                // Calculate Signals if enabled
+                if (document.getElementById('toggleSignals').checked) {
+                    indicators.signals = this.generateSignals(data, indicators);
+                }
+                // Calculate Stochastic if enabled
+                if (document.getElementById('toggleStochastic').checked) {
+                    indicators.stochastic = this.calculateStochasticRSI(data);
+                }
+
+                return indicators;
+            }
+
+            // --- Indicator Calculation Functions ---
+            calculateSMA(data, period) {
+                const sma = new Array(data.length).fill(null);
+                for (let i = 0; i < data.length; i++) {
+                    if (i < period - 1) continue;
+                    const sum = data.slice(i - period + 1, i + 1).reduce((acc, val) => acc + val.close, 0);
+                    sma[i] = sum / period;
+                }
+                return sma;
+            }
+
+            calculateEMA(data, period) {
+                const ema = new Array(data.length).fill(null);
+                ema[period - 1] = data.slice(0, period).reduce((acc, val) => acc + val.close, 0) / period;
+                const multiplier = 2 / (period + 1);
+                for (let i = period; i < data.length; i++) {
+                    ema[i] = (data[i].close - ema[i - 1]) * multiplier + ema[i - 1];
+                }
+                return ema;
+            }
+
+            calculateRSI(data, period) {
+                const rsi = new Array(data.length).fill(null);
+                let gains = 0;
+                let losses = 0;
+                for (let i = 1; i < data.length; i++) {
+                    const difference = data[i].close - data[i - 1].close;
+                    if (difference > 0) {
+                        gains = difference;
+                        losses = 0;
+                    } else {
+                        gains = 0;
+                        losses = -difference;
+                    }
+
+                    if (i < period) continue;
+
+                    const avgGain = data.slice(i - period + 1, i + 1).reduce((acc, val, idx, arr) => {
+                        const diff = arr[idx].close - (arr[idx-1]?.close || arr[idx].close); // Handle first element
+                        return acc + Math.max(0, diff);
+                    }, 0) / period;
+
+                    const avgLoss = data.slice(i - period + 1, i + 1).reduce((acc, val, idx, arr) => {
+                        const diff = arr[idx].close - (arr[idx-1]?.close || arr[idx].close); // Handle first element
+                        return acc + Math.max(0, -diff);
+                    }, 0) / period;
+
+                    const rs = avgLoss === 0 ? Infinity : avgGain / avgLoss;
+                    rsi[i] = 100 - (100 / (1 + rs));
+                }
+                return rsi;
+            }
+
+            calculateMACD(data, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+                const macdLine = new Array(data.length).fill(null);
+                const signalLine = new Array(data.length).fill(null);
+                const histogram = new Array(data.length).fill(null);
+
+                const emaFast = this.calculateEMA(data, fastPeriod);
+                const emaSlow = this.calculateEMA(data, slowPeriod);
+
+                for (let i = 0; i < data.length; i++) {
+                    if (emaFast[i] !== null && emaSlow[i] !== null) {
+                        macdLine[i] = emaFast[i] - emaSlow[i];
+                    }
+                }
+
+                const macdDataForSignal = macdLine.map(val => ({ close: val })); // Wrap macdLine values for EMA calculation
+                signalLine = this.calculateEMA(macdDataForSignal, signalPeriod);
+
+                for (let i = 0; i < data.length; i++) {
+                    if (macdLine[i] !== null && signalLine[i] !== null) {
+                        histogram[i] = macdLine[i] - signalLine[i];
+                    }
+                }
+
+                return { macdLine, signalLine, histogram };
+            }
+
+            calculateBollingerBands(data, period, stdDev) {
+                const upper = new Array(data.length).fill(null);
+                const middle = new Array(data.length).fill(null);
+                const lower = new Array(data.length).fill(null);
+
+                const sma = this.calculateSMA(data, period);
+                
+                for (let i = 0; i < data.length; i++) {
+                    if (sma[i] === null) continue;
+                    middle[i] = sma[i];
+
+                    const stdDevValues = data.slice(i - period + 1, i + 1).map(d => d.close);
+                    const variance = stdDevValues.reduce((acc, val) => acc + Math.pow(val - sma[i], 2), 0) / period;
+                    const standardDeviation = Math.sqrt(variance);
+
+                    upper[i] = sma[i] + stdDev * standardDeviation;
+                    lower[i] = sma[i] - stdDev * standardDeviation;
+                }
+                return { upper, middle, lower };
+            }
+
+            calculateATR(data, period) {
+                const atr = new Array(data.length).fill(null);
+                let sumTR = 0;
+
+                for (let i = 1; i < data.length; i++) {
+                    const highLow = data[i].high - data[i].low;
+                    const highClose = Math.abs(data[i].high - data[i - 1].close);
+                    const lowClose = Math.abs(data[i].low - data[i - 1].close);
+                    const TR = Math.max(highLow, highClose, lowClose);
+
+                    if (i < period) {
+                        sumTR += TR;
+                    } else if (i === period) {
+                        atr[i] = sumTR / period;
+                    } else {
+                        atr[i] = ((atr[i - 1] * (period - 1)) + TR) / period;
+                    }
+                }
+                return atr;
+            }
+
+            calculateSupertrend(data, atr, multiplier, period) {
+                const line = new Array(data.length).fill(null);
+                const trend = new Array(data.length).fill(true); // true for uptrend, false for downtrend
+
+                if (atr.length === 0 || atr[period - 1] === null) return { line: line, trend: trend };
+
+                let upperBand = null;
+                let lowerBand = null;
+                let prevTrend = true; // Assume starting in uptrend
+
+                for (let i = period; i < data.length; i++) {
+                    if (atr[i] === null) continue;
+
+                    const hl2 = (data[i].high + data[i].low) / 2;
+                    const up = hl2 - multiplier * atr[i];
+                    const down = hl2 + multiplier * atr[i];
+
+                    if (prevTrend) { // Currently in uptrend
+                        lowerBand = Math.max(down, lowerBand === null ? down : lowerBand);
+                        upperBand = up;
+                        if (data[i].close < lowerBand) {
+                            prevTrend = false;
+                            lowerBand = null; // Reset for downtrend
+                        }
+                    } else { // Currently in downtrend
+                        upperBand = Math.min(up, upperBand === null ? up : upperBand);
+                        lowerBand = down;
+                        if (data[i].close > upperBand) {
+                            prevTrend = true;
+                            upperBand = null; // Reset for uptrend
+                        }
+                    }
+                    
+                    trend[i] = prevTrend;
+                    line[i] = prevTrend ? lowerBand : upperBand;
+                }
+                return { line, trend };
+            }
+
+            calculateVWAP(data) {
+                const vwap = new Array(data.length).fill(null);
+                let cumulativeTP = 0;
+                let cumulativeVolume = 0;
+
+                for (let i = 0; i < data.length; i++) {
+                    const typicalPrice = (data[i].high + data[i].low + data[i].close) / 3;
+                    cumulativeTP += typicalPrice * data[i].volume;
+                    cumulativeVolume += data[i].volume;
+                    if (cumulativeVolume > 0) {
+                        vwap[i] = cumulativeTP / cumulativeVolume;
+                    }
+                }
+                return vwap;
+            }
+
+            calculatePSAR(data, initialAF = 0.02, incrementAF = 0.02, maxAF = 0.2) {
+                const psar = new Array(data.length).fill(null);
+                let ep = 0; // Extreme point
+                let af = initialAF;
+                let trend = 0; // 1 for uptrend, -1 for downtrend
+
+                // Initialize first few points
+                for (let i = 1; i < data.length; i++) {
+                    if (data[i].close > data[i-1].close) {
+                        trend = 1;
+                        ep = data[i].high;
+                        psar[i] = data[i-1].low - af * (data[i-1].high - data[i-1].low);
+                    } else {
+                        trend = -1;
+                        ep = data[i].low;
+                        psar[i] = data[i-1].high + af * (data[i-1].high - data[i-1].low);
+                    }
+                    break; // Initialize only the first trend
+                }
+
+                for (let i = 1; i < data.length; i++) {
+                    if (psar[i] === null) continue; // Skip if not initialized
+
+                    if (trend === 1) { // Uptrend
+                        if (data[i].high > ep) {
+                            af = Math.min(af + incrementAF, maxAF);
+                            ep = data[i].high;
+                        }
+                        psar[i] = psar[i-1] + af * (ep - psar[i-1]);
+                        if (data[i].low < psar[i]) {
+                            trend = -1;
+                            psar[i] = ep; // Reverse point
+                            ep = data[i].low;
+                            af = initialAF;
+                        }
+                    } else { // Downtrend
+                        if (data[i].low < ep) {
+                            af = Math.min(af + incrementAF, maxAF);
+                            ep = data[i].low;
+                        }
+                        psar[i] = psar[i-1] + af * (psar[i-1] - ep);
+                        if (data[i].high > psar[i]) {
+                            trend = 1;
+                            psar[i] = ep; // Reverse point
+                            ep = data[i].high;
+                            af = initialAF;
+                        }
+                    }
+                }
+                return psar;
+            }
+
+            calculateIchimoku(data, tenkanPeriod = 9, kijunPeriod = 26, senkouPeriod = 52, chikouLag = 26) {
+                const ichimoku = {
+                    tenkan: new Array(data.length).fill(null),
+                    kijun: new Array(data.length).fill(null),
+                    senkouA: new Array(data.length).fill(null),
+                    senkouB: new Array(data.length).fill(null),
+                    chikou: new Array(data.length).fill(null)
+                };
+
+                if (data.length < senkouPeriod) return ichimoku;
+
+                const calculatePeriodHighLow = (period, index) => {
+                    const start = Math.max(0, index - period + 1);
+                    const window = data.slice(start, index + 1);
+                    if (window.length === 0) return { high: null, low: null };
+                    const high = Math.max(...window.map(k => k.high));
+                    const low = Math.min(...window.map(k => k.low));
+                    return { high, low };
+                };
+
+                for (let i = 0; i < data.length; i++) {
+                    if (i >= tenkanPeriod - 1) {
+                        const { high, low } = calculatePeriodHighLow(tenkanPeriod, i);
+                        if (high !== null && low !== null) ichimoku.tenkan[i] = (high + low) / 2;
+                    }
+                    if (i >= kijunPeriod - 1) {
+                        const { high, low } = calculatePeriodHighLow(kijunPeriod, i);
+                        if (high !== null && low !== null) ichimoku.kijun[i] = (high + low) / 2;
+                    }
+                    
+                    if (ichimoku.tenkan[i] !== null && ichimoku.kijun[i] !== null) {
+                        const senkouAValue = (ichimoku.tenkan[i] + ichimoku.kijun[i]) / 2;
+                        // Senkou Span A is plotted 26 periods ahead
+                        if (i + kijunPeriod < data.length) { 
+                            ichimoku.senkouA[i + kijunPeriod] = senkouAValue;
+                        }
+                    }
+
+                    if (i >= senkouPeriod - 1) {
+                        const { high, low } = calculatePeriodHighLow(senkouPeriod, i);
+                        if (high !== null && low !== null) {
+                            const senkouBValue = (high + low) / 2;
+                            // Senkou Span B is plotted 26 periods ahead
+                            if (i + kijunPeriod < data.length) {
+                                ichimoku.senkouB[i + kijunPeriod] = senkouBValue;
+                            }
+                        }
+                    }
+                    
+                    // Chikou Span (Lagging Span) is current close shifted back 26 periods
+                    if (i >= chikouLag) {
+                        ichimoku.chikou[i - chikouLag] = data[i].close;
+                    }
+                }
+                return ichimoku;
+            }
+
+            calculateStochasticRSI(data, rsiPeriod = 14, stochPeriod = 14, smoothPeriod = 3) {
+                const rsiValues = this.calculateRSI(data, rsiPeriod);
+                const k = new Array(data.length).fill(null);
+                const d = new Array(data.length).fill(null);
+
+                for (let i = 0; i < data.length; i++) {
+                    if (rsiValues[i] === null) continue;
+
+                    const rsiSlice = rsiValues.slice(i - stochPeriod + 1, i + 1).filter(v => v !== null);
+                    if (rsiSlice.length < stochPeriod) continue;
+
+                    const highestRSI = Math.max(...rsiSlice);
+                    const lowestRSI = Math.min(...rsiSlice);
+                    
+                    if (highestRSI - lowestRSI === 0) {
+                        k[i] = 50; // Avoid division by zero, set to neutral
+                    } else {
+                        k[i] = ((rsiValues[i] - lowestRSI) / (highestRSI - lowestRSI)) * 100;
+                    }
+                }
+
+                const kSmoothed = this.calculateSMA(k.map(val => ({ close: val })), smoothPeriod); // Use SMA for smoothing K
+                const dSmoothed = this.calculateSMA(kSmoothed.map((val, i) => ({ close: val })), smoothPeriod); // Use SMA for smoothing D
+
+                return { k: kSmoothed, d: dSmoothed };
+            }
+
+            // --- Signal Generation ---
+            generateSignals(data, indicators) {
+                const signals = [];
+                const { rsi, stochastic, supertrend, ichimoku, macd, bollinger } = indicators;
+                const lastKline = data[data.length - 1];
+                const prevKline = data.length > 1 ? data[data.length - 2] : null;
+
+                if (!lastKline || !prevKline) return signals;
+
+                // --- Stochastic RSI Signals ---
+                if (stochastic && stochastic.k && stochastic.d) {
+                    const lastK = stochastic.k[stochastic.k.length - 1];
+                    const lastD = stochastic.d[stochastic.d.length - 1];
+                    const prevK = stochastic.k.length > 1 ? stochastic.k[stochastic.k.length - 2] : null;
+                    const prevD = stochastic.d.length > 1 ? stochastic.d[stochastic.d.length - 2] : null;
+
+                    if (lastK !== null && lastD !== null) {
+                        const oversoldThreshold = 20;
+                        const overboughtThreshold = 80;
+                        let strength = 0;
+                        let direction = 'neutral';
+
+                        // Buy signal: K crosses above D, or both are oversold and K is rising
+                        if (lastK > lastD && (prevK <= prevD || (lastK < oversoldThreshold && lastD < oversoldThreshold))) {
+                            strength = Math.min(100, (oversoldThreshold - lastK) * 5); // Higher strength if further oversold
+                            direction = 'buy';
+                            signals.push({ type: 'Stochastic RSI', strength, direction, price: lastKline.close, time: lastKline.time });
+                        }
+                        // Sell signal: K crosses below D, or both are overbought and K is falling
+                        else if (lastK < lastD && (prevK >= prevD || (lastK > overboughtThreshold && lastD > overboughtThreshold))) {
+                            strength = Math.min(100, (lastK - overboughtThreshold) * 5); // Higher strength if further overbought
+                            direction = 'sell';
+                            signals.push({ type: 'Stochastic RSI', strength, direction, price: lastKline.close, time: lastKline.time });
+                        }
+                    }
+                }
+
+                // --- Supertrend Signals ---
+                if (supertrend && supertrend.line && supertrend.trend) {
+                    const lastTrend = supertrend.trend[supertrend.trend.length - 1];
+                    const prevTrend = supertrend.trend.length > 1 ? supertrend.trend[supertrend.trend.length - 2] : null;
+                    
+                    if (lastTrend !== null && prevTrend !== null) {
+                        if (lastTrend && !prevTrend) { // Trend changed from down to up
+                            signals.push({ type: 'Supertrend', strength: 80, direction: 'buy', price: lastKline.close, time: lastKline.time });
+                        } else if (!lastTrend && prevTrend) { // Trend changed from up to down
+                            signals.push({ type: 'Supertrend', strength: 80, direction: 'sell', price: lastKline.close, time: lastKline.time });
+                        }
+                    }
+                }
+                
+                // --- Ichimoku Signals (Basic Cloud Breakout/Rejection) ---
+                if (ichimoku && ichimoku.senkouA && ichimoku.senkouB && ichimoku.chikou) {
+                    const lastSenkouA = ichimoku.senkouA[ichimoku.senkouA.length - 1];
+                    const lastSenkouB = ichimoku.senkouB[ichimoku.senkouB.length - 1];
+                    const lastChikou = ichimoku.chikou[ichimoku.chikou.length - 1];
+                    const lastClose = lastKline.close;
+
+                    if (lastSenkouA !== null && lastSenkouB !== null && lastChikou !== null) {
+                        const cloudTop = Math.max(lastSenkouA, lastSenkouB);
+                        const cloudBottom = Math.min(lastSenkouA, lastSenkouB);
+
+                        // Bullish signal: Price breaks above cloud, Chikou is above price
+                        if (lastClose > cloudTop && lastChikou > lastClose) {
+                            signals.push({ type: 'Ichimoku Cloud', strength: 70, direction: 'buy', price: lastKline.close, time: lastKline.time });
+                        }
+                        // Bearish signal: Price breaks below cloud, Chikou is below price
+                        else if (lastClose < cloudBottom && lastChikou < lastClose) {
+                            signals.push({ type: 'Ichimoku Cloud', strength: 70, direction: 'sell', price: lastKline.close, time: lastKline.time });
+                        }
+                    }
+                }
+
+                // --- MACD Crossover Signals ---
+                if (macd && macd.macdLine && macd.signalLine) {
+                    const lastMACD = macd.macdLine[macd.macdLine.length - 1];
+                    const lastSignal = macd.signalLine[macd.signalLine.length - 1];
+                    const prevMACD = macd.macdLine.length > 1 ? macd.macdLine[macd.macdLine.length - 2] : null;
+                    const prevSignal = macd.signalLine.length > 1 ? macd.signalLine[macd.signalLine.length - 2] : null;
+
+                    if (lastMACD !== null && lastSignal !== null && prevMACD !== null && prevSignal !== null) {
+                        // Bullish crossover
+                        if (lastMACD > lastSignal && prevMACD <= prevSignal) {
+                            signals.push({ type: 'MACD Crossover', strength: 60, direction: 'buy', price: lastKline.close, time: lastKline.time });
+                        }
+                        // Bearish crossover
+                        else if (lastMACD < lastSignal && prevMACD >= prevSignal) {
+                            signals.push({ type: 'MACD Crossover', strength: 60, direction: 'sell', price: lastKline.close, time: lastKline.time });
+                        }
+                    }
+                }
+
+                // --- RSI Signals ---
+                if (rsi) {
+                    const lastRSI = rsi[rsi.length - 1];
+                    if (lastRSI !== null) {
+                        const oversoldRSI = 30;
+                        const overboughtRSI = 70;
+                        if (lastRSI < oversoldRSI) {
+                            signals.push({ type: 'RSI', strength: Math.max(0, oversoldRSI - lastRSI) * 1.5, direction: 'buy', price: lastKline.close, time: lastKline.time });
+                        } else if (lastRSI > overboughtRSI) {
+                            signals.push({ type: 'RSI', strength: Math.max(0, lastRSI - overboughtRSI) * 1.5, direction: 'sell', price: lastKline.close, time: lastKline.time });
+                        }
+                    }
+                }
+
+                // --- Bollinger Band Signals (Breakout/Reversion) ---
+                if (bollinger && bollinger.upper && bollinger.lower) {
+                    const lastClose = lastKline.close;
+                    const lastUpperBB = bollinger.upper[bollinger.upper.length - 1];
+                    const lastLowerBB = bollinger.lower[bollinger.lower.length - 1];
+
+                    if (lastUpperBB !== null && lastLowerBB !== null) {
+                        // Price breaking above upper band (potential breakout or overbought)
+                        if (lastClose > lastUpperBB) {
+                            signals.push({ type: 'Bollinger Band', strength: 50, direction: 'sell', price: lastKline.close, time: lastKline.time });
+                        }
+                        // Price breaking below lower band (potential breakout or oversold)
+                        else if (lastClose < lastLowerBB) {
+                            signals.push({ type: 'Bollinger Band', strength: 50, direction: 'buy', price: lastKline.close, time: lastKline.time });
+                        }
+                    }
+                }
+
+                // Combine signals and assign a final strength/direction if needed
+                // For now, just return individual signals.
+                return signals;
+            }
+
+            // --- Analysis & Statistics Update ---
+            updateAnalysis(klines) {
+                const indicators = this.calculateAllIndicators(klines);
+                const { rsi, volumeTrend, trendDirection, volatility } = this.getAnalysisMetrics(klines, indicators);
+
+                document.getElementById('trendDirection').textContent = trendDirection;
+                document.getElementById('rsiStatus').textContent = rsi;
+                document.getElementById('volumeTrend').textContent = volumeTrend;
+                document.getElementById('volatility').textContent = volatility;
+            }
+
+            getAnalysisMetrics(klines, indicators) {
+                let trendDirection = 'Neutral';
+                let rsiStatus = '-';
+                let volumeTrend = 'Neutral';
+                let volatility = '-';
+
+                if (indicators.rsi && indicators.rsi.length > 0) {
+                    const lastRSI = indicators.rsi[indicators.rsi.length - 1];
+                    if (lastRSI !== null) {
+                        rsiStatus = lastRSI < 30 ? 'Oversold' : (lastRSI > 70 ? 'Overbought' : 'Neutral');
+                    }
+                }
+
+                if (klines.length > 1) {
+                    const priceChange = klines[klines.length - 1].close - klines[klines.length - 2].close;
+                    trendDirection = priceChange > 0 ? 'Uptrend' : (priceChange < 0 ? 'Downtrend' : 'Sideways');
+                }
+
+                if (klines.length > 0) {
+                    const volumes = klines.map(k => k.volume);
+                    const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+                    const lastVolume = klines[klines.length - 1].volume;
+                    volumeTrend = lastVolume > avgVolume * 1.2 ? 'High' : (lastVolume < avgVolume * 0.8 ? 'Low' : 'Average');
+                }
+
+                if (indicators.atr && indicators.atr.length > 0) {
+                    const lastATR = indicators.atr[indicators.atr.length - 1];
+                    if (lastATR !== null) {
+                        volatility = lastATR.toFixed(4);
+                    }
+                }
+
+                return { trendDirection, rsiStatus, volumeTrend, volatility };
+            }
+
+            updateSignals(klines) {
+                const indicators = this.calculateAllIndicators(klines);
+                const signals = indicators.signals || [];
+                const signalsContent = document.getElementById('signalsContent');
+                
+                if (signals.length === 0) {
+                    signalsContent.innerHTML = '<p>No trading signals detected.</p>';
+                    return;
+                }
+
+                const sortedSignals = signals.sort((a, b) => a.time - b.time); // Sort by time
+
+                signalsContent.innerHTML = '<div class="signals-list">';
+                sortedSignals.forEach(signal => {
+                    const signalItem = document.createElement('div');
+                    signalItem.className = `signal-item ${signal.direction}`;
+                    signalItem.innerHTML = `
+                        <div class="signal-info">
+                            <strong>${signal.type}</strong> Signal<br>
+                            <span class="signal-time">${this.formatTime(signal.time)}</span>
+                        </div>
+                        <div class="signal-strength">${signal.direction.toUpperCase()} (${signal.strength.toFixed(0)}%)</div>
+                    `;
+                    signalsContent.appendChild(signalItem);
+                });
+                signalsContent.innerHTML += '</div>';
+            }
+
+            updateStatistics(klines) {
+                if (klines.length === 0) return;
+
+                const volumes = klines.map(k => k.volume);
+                const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+                const minPrice = Math.min(...klines.map(k => k.low));
+                const maxPrice = Math.max(...klines.map(k => k.high));
+                const priceRange = maxPrice - minPrice;
+
+                // Basic support/resistance based on min/max of recent data
+                const supportLevel = minPrice.toFixed(4);
+                const resistanceLevel = maxPrice.toFixed(4);
+
+                document.getElementById('avgVolume').textContent = this.formatVolume(avgVolume);
+                document.getElementById('priceRange').textContent = this.formatPrice(priceRange);
+                document.getElementById('supportLevel').textContent = this.formatPrice(supportLevel);
+                document.getElementById('resistanceLevel').textContent = this.formatPrice(resistanceLevel);
+            }
+
+            // --- Gemini Analysis ---
+            async requestGeminiAnalysis() {
+                if (!this.currentSymbol || this.chartData.length === 0) {
+                    this.displayGeminiAnalysis("Select a symbol and load chart data to get AI insights.");
+                    return;
+                }
+
+                this.displayGeminiAnalysis("Analyzing data with Gemini AI...");
+                const interval = document.getElementById('intervalSelect').value;
+                const indicators = this.calculateAllIndicators(this.chartData); // Ensure latest indicators are sent
+
+                try {
+                    const response = await fetch(`${BACKEND_API_URL}/analyze`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            symbol: this.currentSymbol,
+                            interval: interval,
+                            klines: this.chartData, // Send all klines for context
+                            indicators: indicators, // Send calculated indicators
+                            signals: indicators.signals || [] // Send generated signals
+                        }),
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        this.displayGeminiAnalysis(result.analysis);
+                    } else {
+                        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error('Gemini analysis error:', error);
+                    this.displayGeminiAnalysis(`Error fetching Gemini analysis: ${error.message}`);
+                    this.showError(`Failed to get Gemini analysis: ${error.message}`);
+                }
+            }
+
+            displayGeminiAnalysis(text) {
+                const geminiResultEl = document.getElementById('geminiAnalysisResult');
+                // Basic HTML parsing for emphasis (bold, italic) if Gemini returns it
+                geminiResultEl.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                             .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                                             .replace(/\n/g, '<br>'); // Replace newlines with <br> for display
+            }
+
+            // --- Settings Management ---
+            loadSettings() {
+                const settings = localStorage.getItem('tradingTerminalSettings');
+                return settings ? JSON.parse(settings) : {
+                    symbol: 'BTCUSDT',
+                    interval: 'D',
+                    limit: 200,
+                    atrPeriod: 14,
+                    rsiPeriod: 14,
+                    emaPeriod: 20,
+                    stPeriod: 10,
+                    stMultiplier: 3,
+                    indicators: {
+                        volume: true, supertrend: true, bollinger: true, sma: true, ema: true,
+                        rsi: true, macd: true, signals: true, stochastic: false, vwap: false, psar: false, ichimoku: false
+                    }
+                };
+            }
+
+            saveSettings() {
+                this.settings.symbol = this.currentSymbol;
+                this.settings.interval = document.getElementById('intervalSelect').value;
+                this.settings.limit = parseInt(document.getElementById('limit').value);
+                this.settings.atrPeriod = parseInt(document.getElementById('atrPeriod').value);
+                this.settings.rsiPeriod = parseInt(document.getElementById('rsiPeriod').value);
+                this.settings.emaPeriod = parseInt(document.getElementById('emaPeriod').value);
+                this.settings.stPeriod = parseInt(document.getElementById('stPeriod').value);
+                this.settings.stMultiplier = parseFloat(document.getElementById('stMultiplier').value);
+                
+                // Save indicator toggle states
+                this.settings.indicators = {};
+                document.querySelectorAll('.indicator-toggle input').forEach(toggle => {
+                    this.settings.indicators[toggle.id] = toggle.checked;
+                });
+
+                localStorage.setItem('tradingTerminalSettings', JSON.stringify(this.settings));
+                this.showNotification('Settings saved!', 'success');
+            }
+
+            applySettings() {
+                document.getElementById('symbolSearch').value = this.settings.symbol || 'BTCUSDT';
+                this.currentSymbol = this.settings.symbol || 'BTCUSDT';
+                document.getElementById('intervalSelect').value = this.settings.interval || 'D';
+                document.getElementById('limit').value = this.settings.limit || 200;
+                document.getElementById('atrPeriod').value = this.settings.atrPeriod || 14;
+                document.getElementById('rsiPeriod').value = this.settings.rsiPeriod || 14;
+                document.getElementById('emaPeriod').value = this.settings.emaPeriod || 20;
+                document.getElementById('stPeriod').value = this.settings.stPeriod || 10;
+                document.getElementById('stMultiplier').value = this.settings.stMultiplier || 3;
+
+                // Apply indicator toggle states
+                for (const [id, checked] of Object.entries(this.settings.indicators)) {
+                    const toggle = document.getElementById(id);
+                    if (toggle) {
+                        toggle.checked = checked;
+                    }
+                }
+            }
+
+            resetSettings() {
+                if (confirm('Are you sure you want to reset all settings to default?')) {
+                    localStorage.removeItem('tradingTerminalSettings');
+                    this.settings = this.loadSettings(); // Reload defaults
+                    this.applySettings();
+                    this.showNotification('Settings reset to default.', 'warning');
+                }
+            }
+
+            applyPreset(preset) {
+                let newSettings = { ...this.settings }; // Start with current settings
+                switch (preset) {
+                    case 'scalping':
+                        newSettings = { ...newSettings, interval: '5', limit: 100, emaPeriod: 10, rsiPeriod: 10, stPeriod: 10, stMultiplier: 2, indicators: { ...newSettings.indicators, volume: true, sma: false, ema: true, rsi: true, macd: false, bollinger: false, supertrend: true, signals: true, stochastic: true, vwap: false, psar: false, ichimoku: false } };
+                        break;
+                    case 'daytrading':
+                        newSettings = { ...newSettings, interval: '60', limit: 200, emaPeriod: 20, rsiPeriod: 14, stPeriod: 10, stMultiplier: 3, indicators: { ...newSettings.indicators, volume: true, sma: true, ema: true, rsi: true, macd: true, bollinger: true, supertrend: false, signals: true, stochastic: false, vwap: true, psar: false, ichimoku: false } };
+                        break;
+                    case 'swing':
+                        newSettings = { ...newSettings, interval: 'D', limit: 150, emaPeriod: 50, rsiPeriod: 14, stPeriod: 10, stMultiplier: 3, indicators: { ...newSettings.indicators, volume: true, sma: true, ema: true, rsi: true, macd: true, bollinger: true, supertrend: true, signals: true, stochastic: false, vwap: false, psar: true, ichimoku: true } };
+                        break;
+                    case 'position':
+                        newSettings = { ...newSettings, interval: 'D', limit: 100, emaPeriod: 50, rsiPeriod: 14, stPeriod: 10, stMultiplier: 3, indicators: { ...newSettings.indicators, volume: false, sma: false, ema: false, rsi: true, macd: false, bollinger: false, supertrend: false, signals: false, stochastic: false, vwap: false, psar: false, ichimoku: true } };
+                        break;
+                }
+                this.settings = newSettings;
+                this.applySettings();
+                this.showNotification(`Preset '${preset}' applied.`, 'info');
+                // Optionally reload chart with new settings
+                this.fetchDataAndRenderChart();
+            }
+
+            // --- Utility Functions ---
+            formatPrice(price) {
+                if (price === null || isNaN(price)) return '-';
+                // Dynamically adjust decimal places based on magnitude
+                if (Math.abs(price) >= 1000) return price.toFixed(2);
+                if (Math.abs(price) >= 100) return price.toFixed(3);
+                if (Math.abs(price) >= 1) return price.toFixed(4);
+                return price.toFixed(6); // For very small prices
+            }
+
+            formatVolume(volume) {
+                if (volume === null || isNaN(volume)) return '-';
+                if (volume >= 1e9) return (volume / 1e9).toFixed(2) + 'B';
+                if (volume >= 1e6) return (volume / 1e6).toFixed(2) + 'M';
+                if (volume >= 1e3) return (volume / 1e3).toFixed(2) + 'K';
+                return volume.toFixed(0);
+            }
+
+            formatTime(timestamp) {
+                return moment(timestamp).format('YYYY-MM-DD HH:mm:ss');
+            }
+
+            showLoading(text = 'Loading...') {
+                document.getElementById('loadingText').textContent = text;
+                document.getElementById('loadingOverlay').classList.add('active');
+            }
+
+            hideLoading() {
+                document.getElementById('loadingOverlay').classList.remove('active');
+            }
+
+            showNotification(message, type = 'info', duration = 3000) {
+                const container = document.getElementById('notificationContainer');
+                const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
+                const title = type.charAt(0).toUpperCase() + type.slice(1);
+                
+                notification.innerHTML = `
+                    <div class="notification-title">${title}</div>
+                    <div class="notification-message">${message}</div>
+                    <div class="notification-progress" style="animation-duration: ${duration}ms;"></div>
+                `;
+                container.appendChild(notification);
+                
+                // Remove notification after duration
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    notification.addEventListener('transitionend', () => notification.remove());
+                }, duration);
+            }
+
+            showError(message) {
+                this.showNotification(message, 'error');
+                document.getElementById('errorMessage').textContent = message;
+                document.getElementById('errorMessage').style.display = 'block';
+            }
+
+            showSuccess(message) {
+                this.showNotification(message, 'success');
+                document.getElementById('successMessage').textContent = message;
+                document.getElementById('successMessage').style.display = 'block';
+            }
+
+            showWarning(message) {
+                this.showNotification(message, 'warning');
+                document.getElementById('warningMessage').textContent = message;
+                document.getElementById('warningMessage').style.display = 'block';
+            }
+
+            resetChartAndAnalysis() {
+                this.chartData = [];
+                if (this.chart) {
+                    this.chart.destroy();
+                    this.chart = null;
+                }
+                document.getElementById('chartCanvas').getContext('2d').clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+                document.getElementById('geminiAnalysisResult').innerHTML = "<p>Select a symbol and load chart data to get AI insights.</p>";
+                // Reset other analysis/stats elements
+                document.getElementById('trendDirection').textContent = '-';
+                document.getElementById('rsiStatus').textContent = '-';
+                document.getElementById('volumeTrend').textContent = '-';
+                document.getElementById('volatility').textContent = '-';
+                document.getElementById('avgVolume').textContent = '-';
+                document.getElementById('priceRange').textContent = '-';
+                document.getElementById('supportLevel').textContent = '-';
+                document.getElementById('resistanceLevel').textContent = '-';
+                document.getElementById('signalsContent').innerHTML = '<p>Loading trading signals...</p>';
+            }
+
+            switchTab(tabId) {
+                document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(`${tabId}-tab`).classList.add('active');
+                document.querySelector(`.tab-button[data-tab="${tabId}"]`).classList.add('active');
+
+                // Trigger Gemini analysis if the Gemini tab is activated and data is available
+                if (tabId === 'gemini-analysis' && this.currentSymbol && this.chartData.length > 0) {
+                    this.requestGeminiAnalysis();
+                }
+            }
+        }
+
+        // Initialize the terminal when the DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new TradingTerminal();
+        });
+    </script>
+</body>
+</html>

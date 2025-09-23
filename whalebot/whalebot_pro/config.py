@@ -58,7 +58,7 @@ class Config:
             },
             "mtf_analysis": {
                 "enabled": True,
-                "higher_timeframes": ["60", "240"],
+                "higher_timeframes": ["60m", "240m"],
                 "trend_indicators": ["ema", "ehlers_supertrend"],
                 "trend_period": 50,
                 "mtf_request_delay_seconds": 0.5,

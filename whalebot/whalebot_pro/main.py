@@ -1,10 +1,17 @@
 import asyncio
 import logging
 import sys
+import os
 import time
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, Optional
+
+# Explicitly add the directory containing the 'whalebot_pro' package to sys.path
+# This directory is '/data/data/com.termux/files/home/Algobots/whalebot/'
+package_parent_dir = '/data/data/com.termux/files/home/Algobots/whalebot/'
+if package_parent_dir not in sys.path:
+    sys.path.insert(0, package_parent_dir)
 
 # Import local modules
 from whalebot_pro.config import Config
@@ -57,7 +64,7 @@ class BybitTradingBot:
 
         # Validate intervals
         valid_bybit_intervals = [
-            "1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M",
+            "1", "3", "5", "15m", "30m", "60m", "120m", "240m", "360m", "720m", "D", "W", "M",
         ]
         if self.config.interval not in valid_bybit_intervals:
             self.logger.error(f"{NEON_RED}Invalid primary interval '{self.config.interval}'. Exiting.{RESET}")

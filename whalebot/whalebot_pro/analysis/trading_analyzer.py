@@ -43,7 +43,7 @@ class TradingAnalyzer:
         self.df: pd.DataFrame = pd.DataFrame() # Current DataFrame for calculations
         self.indicator_values: dict[str, float | str | Decimal] = {}
         self.fib_levels: dict[str, Decimal] = {}
-        self.weights = config["weight_sets"]["default_scalping"] # Assuming default_scalping for now
+        self.weights = config.get("active_weights", {}) # Use active_weights from config
         self.indicator_settings = config["indicator_settings"]
         self._last_signal_ts = 0  # Initialize last signal timestamp
         self._last_signal_score = 0.0  # Initialize last signal score
