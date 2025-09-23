@@ -59,15 +59,15 @@ class BybitTrendAnalyzer:
             category (str): Product category (e.g., "linear", "inverse", "spot").
             symbol (str): Trading pair (e.g., "BTCUSDT", "ETHUSDT").
             interval (str): Klines interval (e.g., "1", "5", "15", "60", "D", "W", "M").
-            num_candles (int): Number of candles to fetch (max 1000 per request).
+            num_candles (int): Number of candles to fetch (max 5000 per request).
             end_time (int, optional): End timestamp in milliseconds. Defaults to current time.
 
         Returns:
             pd.DataFrame: DataFrame with kline data, or empty DataFrame on error.
         """
-        if num_candles > 1000:
-            logging.warning("num_candles exceeds maximum (1000). Only fetching 1000 candles.")
-            num_candles = 1000
+        if num_candles > 5000: # Increased limit to 5000
+            logging.warning("num_candles exceeds maximum (5000). Only fetching 5000 candles.")
+            num_candles = 5000
 
         if end_time is None:
             end_time = int(datetime.now().timestamp() * 1000)

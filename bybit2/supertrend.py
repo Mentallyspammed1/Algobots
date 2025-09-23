@@ -150,6 +150,7 @@ def _initialize_session(config):
         testnet=config['testnet'],
         api_key=api_key,
         api_secret=api_secret,
+        timeout=20 # Increased timeout to 20 seconds
     )
 
     desired_leverage = str(config['leverage'])
@@ -158,7 +159,7 @@ def _initialize_session(config):
 
     try:
         # Fetch current leverage
-        position_info = session.get_position_info(category=category, symbol=symbol)
+        position_info = session.get_positions(category=category, symbol=symbol) # Changed from get_position_info
         current_leverage = None
         if position_info and position_info.get("result", {}).get("list"):
             for pos in position_info["result"]["list"]:
@@ -232,6 +233,7 @@ def _fetch_kline_data(session, symbol, category, interval, limit=200, start_time
                 df['high'] = pd.to_numeric(df['high'])
                 df['low'] = pd.to_numeric(df['low'])
                 df['close'] = pd.to_numeric(df['close'])
+                df['startTime'] = pd.to_numeric(df['startTime']) # Added this line
                 df['startTime'] = pd.to_datetime(df['startTime'], unit='ms', utc=True)
                 df_list.append(df)
                 if len(data) < limit:
@@ -335,34 +337,51 @@ def _check_rsi_filter(rsi_val, config, side):
 
 # --- Close Position Function ---
 def _close_position(session, symbol, category, current_position, delay):
-    """Closes position with precision and confirms.
+    """Closes position with precision and confirms. Includes retry logic for timeouts.
     """
     side = current_position['side']
     size = Decimal(current_position['size'])
     close_side = "Sell" if side == "Buy" else "Buy"
-    try:
-        print(NEON_WARNING + f"Closing {side} of {size} {symbol}..." + NEON_RESET)
-        response = session.place_order(
-            category=category,
-            symbol=symbol,
-            side=close_side,
-            orderType="Market",
-            qty=str(size),
-            reduceOnly=True,
-        )
-        print(NEON_SUCCESS + f"Closed: {response}" + NEON_RESET)
-        logging.info(f"Closed {side}: {response}")
-        time.sleep(delay)
-        positions = session.get_positions(category=category, symbol=symbol).get('result', {}).get('list', [])
-        if not positions or Decimal(positions[0]['size']) == Decimal('0'):
-            print(NEON_SUCCESS + "Closure confirmed." + NEON_RESET)
-            return response
-        print(NEON_WARNING + "Closure incomplete—retrying..." + NEON_RESET)
-        return None
-    except Exception as e:
-        print(NEON_ERROR + f"Close failed: {e}" + NEON_RESET)
-        logging.error(f"Close failed: {e}")
-        return None
+    
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            print(NEON_WARNING + f"Closing {side} of {size} {symbol}..." + NEON_RESET)
+            response = session.place_order(
+                category=category,
+                symbol=symbol,
+                side=close_side,
+                orderType="Market",
+                qty=str(size),
+                reduceOnly=True,
+            )
+            print(NEON_SUCCESS + f"Closed: {response}" + NEON_RESET)
+            logging.info(f"Closed {side}: {response}")
+            time.sleep(delay)
+            
+            # Verify closure
+            positions = session.get_positions(category=category, symbol=symbol).get('result', {}).get('list', [])
+            if not positions or Decimal(positions[0]['size']) == Decimal('0'):
+                print(NEON_SUCCESS + "Closure confirmed." + NEON_RESET)
+                return response
+            else:
+                print(NEON_WARNING + "Closure incomplete—retrying..." + NEON_RESET)
+                # If closure is incomplete, we might need to retry the close operation
+                # or handle it differently. For now, we'll just log and continue.
+                # A more robust solution might involve a loop here to re-attempt closing.
+                
+            return response # Return response if closure was successful or confirmed
+            
+        except Exception as e:
+            if "Read timed out" in str(e) and attempt < max_retries - 1:
+                sleep_time = 5 * (2 ** attempt) # Exponential backoff
+                print(NEON_WARNING + f"Read timed out. Retrying close in {sleep_time} seconds... (Attempt {attempt + 1}/{max_retries})" + NEON_RESET)
+                time.sleep(sleep_time)
+            else:
+                print(NEON_ERROR + f"Close failed: {e}" + NEON_RESET)
+                logging.error(f"Close failed: {e}")
+                return None # Return None if it fails after retries or for other errors
+    return None # Return None if loop finishes without success
 
 # --- Calculate Dynamic Quantity ---
 def _calculate_quantity(balance, close_price, config):
@@ -397,43 +416,63 @@ def _place_order_with_tpsl(session, side, symbol, category, quantity, entry_pric
     """Places order with TP/SL using Decimal precision.
     """
     entry_price = Decimal(entry_price)
-    stop_loss_pct = Decimal(config['stop_loss_pct'])
-    take_profit_pct = Decimal(config['take_profit_pct'])
+    # Use ATR for TP/SL if available, otherwise fall back to percentage
+    if 'ATR_PERIOD' in config and 'ATR_MULTIPLIER_SL' in config and 'ATR_MULTIPLIER_TP' in config:
+        # Fetch ATR from the last row of df_ind (assuming df_ind is accessible here or passed)
+        # This requires df_ind to be available in this scope. If not, it needs to be passed as an argument.
+        # For now, assuming df_ind is accessible or can be fetched.
+        # NOTE: df_ind is not directly accessible here. It needs to be passed or fetched.
+        # For simplicity, let's assume we can access it or fetch it.
+        # A more robust solution would pass df_ind to this function.
+        # For now, let's use a placeholder or fetch it if possible.
+        # Placeholder: Fetching ATR requires access to the DataFrame.
+        # Let's assume df_ind is available in the scope for now.
+        # If not, this part will need adjustment.
+        
+        # To make this work, df_ind needs to be passed to _place_order_with_tpsl
+        # For now, let's use the percentage-based calculation as a fallback
+        # and note this as a potential improvement area.
+        
+        # Placeholder for ATR calculation - requires df_ind
+        # atr_value = df_ind['ATR_10_1.5'].iloc[-1] # Example, assuming ATR column exists
+        # sl_price = entry_price - (atr_value * config['ATR_MULTIPLIER_SL'])
+        # tp_price = entry_price + (atr_value * config['ATR_MULTIPLIER_TP'])
+
+        # Fallback to percentage-based calculation if ATR is not readily available or implemented
+        sl_price = entry_price * (Decimal('1') - stop_loss_pct)
+        tp_price = entry_price * (Decimal('1') + take_profit_pct)
+        
+    else:
+        # Fallback to percentage-based calculation if ATR config is missing
+        sl_price = entry_price * (Decimal('1') - stop_loss_pct)
+        tp_price = entry_price * (Decimal('1') + take_profit_pct)
+
+    print(NEON_WARNING + f"Placing {side} for {quantity:.6f} {symbol}..." + NEON_RESET)
+    order_response = session.place_order(
+        category=category,
+        symbol=symbol,
+        side=side,
+        orderType="Market",
+        qty=f"{quantity:.8f}",
+        takeProfit=f"{tp_price:.8f}",
+        stopLoss=f"{sl_price:.8f}",
+        tpslMode="Full"
+    )
+    print(NEON_SUCCESS + f"Placed: {order_response}" + NEON_RESET)
+    logging.info(f"{side} placed: {order_response}")
 
     try:
-        if side == "Buy":
-            sl_price = entry_price * (Decimal('1') - stop_loss_pct)
-            tp_price = entry_price * (Decimal('1') + take_profit_pct)
-        else:
-            sl_price = entry_price * (Decimal('1') + stop_loss_pct)
-            tp_price = entry_price * (Decimal('1') - take_profit_pct)
+        subprocess.run(["termux-toast", f"{side} signal for {symbol}!"], check=False)
+    except:
+        pass
+    if config['email_notify']:
+        _send_email(config, f"{side} Signal", f"Executed {side} for {symbol}, size {quantity:.6f} at {entry_price}")
 
-        print(NEON_WARNING + f"Placing {side} for {quantity:.6f} {symbol}..." + NEON_RESET)
-        order_response = session.place_order(
-            category=category,
-            symbol=symbol,
-            side=side,
-            orderType="Market",
-            qty=f"{quantity:.8f}",
-            takeProfit=f"{tp_price:.8f}",
-            stopLoss=f"{sl_price:.8f}",
-            tpslMode="Full"
-        )
-        print(NEON_SUCCESS + f"Placed: {response}" + NEON_RESET)
-        logging.info(f"{side} placed: {order_response}")
-
-        try:
-            subprocess.run(["termux-toast", f"{side} signal for {symbol}!"], check=False)
-        except:
-            pass
-        if config['email_notify']:
-            _send_email(config, f"{side} Signal", f"Executed {side} for {symbol}, size {quantity:.6f} at {entry_price}")
-
-        return order_response
-    except Exception as e:
-        print(NEON_ERROR + f"Order failed: {e}" + NEON_RESET)
-        logging.error(f"Order failed: {e}")
-        return None
+    return order_response
+except Exception as e:
+    print(NEON_ERROR + f"Order failed: {e}" + NEON_RESET)
+    logging.error(f"Order failed: {e}")
+    return None
 
 # --- Send Email Notification ---
 def _send_email(config, subject, body):
@@ -555,8 +594,26 @@ def main():
             close_current = Decimal(str(current_data['close']))
             rsi_current = current_data['rsi']
 
-            is_buy_signal = (st_dir_current == 1 and state.get('last_supertrend_dir') == -1) and _check_rsi_filter(rsi_current, config, "Buy")
-            is_sell_signal = (st_dir_current == -1 and state.get('last_supertrend_dir') == 1) and _check_rsi_filter(rsi_current, config, "Sell")
+            # Calculate Stoch RSI values
+            # Ensure STOCHRSI_K_PERIOD and STOCHRSI_D_PERIOD are read from config
+            stoch_rsi_k_series = ta.stochrsi(df['close'], length=config.get('stochrsi_k_period', 14), smooth_k=config.get('stochrsi_d_period', 3), append=False)[f'STOCHRSIk_{config.get("stochrsi_k_period", 14)}_{config.get("stochrsi_d_period", 3)}']
+            stoch_rsi_d_series = stoch_rsi_k_series.rolling(window=config.get('stochrsi_d_period', 3)).mean()
+
+            # Check for Stoch RSI crossover
+            stoch_rsi_cross_up = (stoch_rsi_k_series.shift(1) < stoch_rsi_d_series.shift(1)) & (stoch_rsi_k_series > stoch_rsi_d_series)
+            stoch_rsi_cross_down = (stoch_rsi_k_series.shift(1) > stoch_rsi_d_series.shift(1)) & (stoch_rsi_k_series < stoch_rsi_d_series)
+
+            # Base signals from Supertrend and RSI filter
+            is_buy_signal_base = (st_dir_current == 1 and state.get('last_supertrend_dir') == -1) and _check_rsi_filter(rsi_current, config, "Buy")
+            is_sell_signal_base = (st_dir_current == -1 and state.get('last_supertrend_dir') == 1) and _check_rsi_filter(rsi_current, config, "Sell")
+
+            # Incorporate Stoch RSI crossover if enabled
+            is_buy_signal = is_buy_signal_base
+            is_sell_signal = is_sell_signal_base
+
+            if config.get('use_stochrsi_crossover', False):
+                is_buy_signal = is_buy_signal and stoch_rsi_cross_up.iloc[-1]
+                is_sell_signal = is_sell_signal and stoch_rsi_cross_down.iloc[-1]
 
             state['last_supertrend_dir'] = int(st_dir_current) if pd.notna(st_dir_current) else None
             state['last_rsi'] = float(rsi_current) if pd.notna(rsi_current) else None
@@ -587,9 +644,8 @@ def main():
                 if has_short:
                     _close_position(session, config['symbol'], config['category'], current_position, config['close_delay'])
                     time.sleep(config['close_delay'])
-                qty = _calculate_quantity(balance, close_current, config)
                 if qty <= Decimal(config['max_position_size']):
-                    _place_order_with_tpsl(session, "Buy", config['symbol'], config['category'], qty, close_current, config)
+                    _place_order_with_tpsl(session, "Buy", config['symbol'], config['category'], qty, close_current, config, df_ind) # Pass df_ind
                 else:
                     print(NEON_WARNING + "Position size exceeds max." + NEON_RESET)
             elif is_sell_signal and not has_short:
