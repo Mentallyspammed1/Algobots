@@ -220,55 +220,56 @@ class PyrmethusTrader:
         fib_levels = {f"{int(level*100)}%": high - (diff * level) for level in levels}
         return fib_levels
 
-    def generate_signals(self):
-        """Divine enhanced signals, now drawing from Volume Profile depths, EMA Crossovers, and Divergences."""
+    def _generate_rsi_signals(self, last_row, prev_row):
         signals = []
-        # Ensure enough data for all relevant indicators to be calculated
-        min_data_for_signals = max(self.rsi_period, self.ema_period, 26, 52, 200, 2) # Ichimoku needs 52, EMAs 200, Divergence 2
-        if self.data.empty or len(self.data) < min_data_for_signals: 
-            return signals
-        
-        last_row = self.data.iloc[-1]
-        prev_row = self.data.iloc[-2] # For crossovers and divergences
-
-        # RSI signals
         if 'RSI_14' in last_row and not pd.isna(last_row['RSI_14']):
             if last_row['RSI_14'] < 30:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, f"RSI Oversold ({last_row['RSI_14']:.2f})"))
             elif last_row['RSI_14'] > 70:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, f"RSI Overbought ({last_row['RSI_14']:.2f})"))
-        
-        # MACD signals
+        return signals
+
+    def _generate_macd_signals(self, last_row, prev_row):
+        signals = []
         if 'MACD_12_26_9' in last_row and 'MACDs_12_26_9' in last_row and \
+           'MACD_12_26_9' in prev_row and 'MACDs_12_26_9' in prev_row and \
            not pd.isna(last_row['MACD_12_26_9']) and not pd.isna(last_row['MACDs_12_26_9']):
             if last_row['MACD_12_26_9'] > last_row['MACDs_12_26_9'] and prev_row['MACD_12_26_9'] <= prev_row['MACDs_12_26_9']:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, "MACD Bullish Crossover"))
             elif last_row['MACD_12_26_9'] < last_row['MACDs_12_26_9'] and prev_row['MACD_12_26_9'] >= prev_row['MACDs_12_26_9']:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, "MACD Bearish Crossover"))
-        
-        # Bollinger Bands signals
+        return signals
+
+    def _generate_bbands_signals(self, last_row, prev_row):
+        signals = []
         if 'BBL_20_2.0' in last_row and 'BBU_20_2.0' in last_row and \
            not pd.isna(last_row['BBL_20_2.0']) and not pd.isna(last_row['BBU_20_2.0']):
             if last_row['close'] < last_row['BBL_20_2.0']:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, "Bollinger Bands Oversold"))
             elif last_row['close'] > last_row['BBU_20_2.0']:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, "Bollinger Bands Overbought"))
-        
-        # Supertrend signals
+        return signals
+
+    def _generate_supertrend_signals(self, last_row, prev_row):
+        signals = []
         if 'SUPERT_7_3.0' in last_row and not pd.isna(last_row['SUPERT_7_3.0']):
             if last_row['close'] > last_row['SUPERT_7_3.0']:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, "Supertrend Bullish"))
             elif last_row['close'] < last_row['SUPERT_7_3.0']:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, "Supertrend Bearish"))
-        
-        # EMA signals
+        return signals
+
+    def _generate_ema_signals(self, last_row, prev_row):
+        signals = []
         if 'EMA_20' in last_row and not pd.isna(last_row['EMA_20']):
             if last_row['close'] > last_row['EMA_20']:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, "Price above EMA"))
             elif last_row['close'] < last_row['EMA_20']:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, "Price below EMA"))
-        
-        # Ichimoku signals
+        return signals
+
+    def _generate_ichimoku_signals(self, last_row, prev_row):
+        signals = []
         if all(x in last_row for x in ['ISA_9', 'ISB_26', 'ICS_26']) and \
            all(not pd.isna(last_row[x]) for x in ['ISA_9', 'ISB_26', 'ICS_26']):
             cloud_top = max(last_row['ISA_9'], last_row['ISB_26'])
@@ -277,22 +278,28 @@ class PyrmethusTrader:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, "Ichimoku Bullish Cloud Breakout"))
             elif last_row['close'] < cloud_bottom and last_row['ICS_26'] < last_row['close']:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, "Ichimoku Bearish Cloud Breakdown"))
-        
-        # Stochastic signals
+        return signals
+
+    def _generate_stochastic_signals(self, last_row, prev_row):
+        signals = []
         if 'STOCHk_14_3_3' in last_row and 'STOCHd_14_3_3' in last_row and \
            not pd.isna(last_row['STOCHk_14_3_3']) and not pd.isna(last_row['STOCHd_14_3_3']):
             if last_row['STOCHk_14_3_3'] > last_row['STOCHd_14_3_3'] and last_row['STOCHk_14_3_3'] < 20:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, f"Stochastic Oversold Crossover ({last_row['STOCHk_14_3_3']:.2f})"))
             elif last_row['STOCHk_14_3_3'] < last_row['STOCHd_14_3_3'] and last_row['STOCHk_14_3_3'] > 80:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, f"Stochastic Overbought Crossover ({last_row['STOCHk_14_3_3']:.2f})"))
-        
-        # Volume Profile signals: If price is near the peak volume, suggesting potential support/resistance.
+        return signals
+
+    def _generate_volume_profile_signals(self, last_row, prev_row):
+        signals = []
         if self.vp_peak_price is not None and not pd.isna(self.vp_peak_price):
             vp_tolerance = last_row['close'] * 0.005  # 0.5% tolerance
             if abs(last_row['close'] - self.vp_peak_price) < vp_tolerance:
                 signals.append((Fore.CYAN + "NEUTRAL" + Style.RESET_ALL, f"Price near High-Volume Node ({self.vp_peak_price:.2f}) - Potential Support/Resistance"))
-        
-        # EMA Crossover signals (Golden/Death Cross)
+        return signals
+
+    def _generate_ema_crossover_signals(self, last_row, prev_row):
+        signals = []
         if all(x in last_row for x in ['EMA_50', 'EMA_200']) and \
            all(x in prev_row for x in ['EMA_50', 'EMA_200']) and \
            not pd.isna(last_row['EMA_50']) and not pd.isna(last_row['EMA_200']) and \
@@ -301,16 +308,42 @@ class PyrmethusTrader:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, "Golden Cross (50/200 EMA)"))
             elif last_row['EMA_50'] < last_row['EMA_200'] and prev_row['EMA_50'] >= prev_row['EMA_200']:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, "Death Cross (50/200 EMA)"))
+        return signals
 
-        # Divergence signals (simplified example, more robust logic would involve identifying multiple peaks/troughs)
+    def _generate_divergence_signals(self, last_row, prev_row):
+        signals = []
         if 'RSI_14' in last_row and 'RSI_14' in prev_row and \
            not pd.isna(last_row['RSI_14']) and not pd.isna(prev_row['RSI_14']):
             if last_row['close'] > prev_row['close'] and last_row['RSI_14'] < prev_row['RSI_14']:
                 signals.append((Fore.RED + "SELL" + Style.RESET_ALL, "Bearish Divergence (Price Higher, RSI Lower)"))
             if last_row['close'] < prev_row['close'] and last_row['RSI_14'] > prev_row['RSI_14']:
                 signals.append((Fore.GREEN + "BUY" + Style.RESET_ALL, "Bullish Divergence (Price Lower, RSI Higher)"))
-
         return signals
+
+    def generate_signals(self):
+        """Divine enhanced signals, now drawing from Volume Profile depths, EMA Crossovers, and Divergences, with modular helpers."""
+        all_signals = []
+        
+        min_data_for_signals = max(self.rsi_period, self.ema_period, 26, 52, 200, 2) 
+        if self.data.empty or len(self.data) < min_data_for_signals: 
+            print(Fore.YELLOW + f"# Not enough data to generate signals (needs at least {min_data_for_signals} bars). Current: {len(self.data)}" + Style.RESET_ALL)
+            return all_signals
+        
+        last_row = self.data.iloc[-1]
+        prev_row = self.data.iloc[-2] 
+
+        all_signals.extend(self._generate_rsi_signals(last_row, prev_row))
+        all_signals.extend(self._generate_macd_signals(last_row, prev_row))
+        all_signals.extend(self._generate_bbands_signals(last_row, prev_row))
+        all_signals.extend(self._generate_supertrend_signals(last_row, prev_row))
+        all_signals.extend(self._generate_ema_signals(last_row, prev_row))
+        all_signals.extend(self._generate_ichimoku_signals(last_row, prev_row))
+        all_signals.extend(self._generate_stochastic_signals(last_row, prev_row))
+        all_signals.extend(self._generate_volume_profile_signals(last_row, prev_row))
+        all_signals.extend(self._generate_ema_crossover_signals(last_row, prev_row))
+        all_signals.extend(self._generate_divergence_signals(last_row, prev_row))
+        
+        return all_signals
 
     def render_ascii_chart(self):
         """Weave vibrant ASCII tapestries of market essences, now with toggled layers and improved data checks."""
