@@ -418,61 +418,39 @@ def _place_order_with_tpsl(session, side, symbol, category, quantity, entry_pric
     entry_price = Decimal(entry_price)
     # Use ATR for TP/SL if available, otherwise fall back to percentage
     if 'ATR_PERIOD' in config and 'ATR_MULTIPLIER_SL' in config and 'ATR_MULTIPLIER_TP' in config:
-        # Fetch ATR from the last row of df_ind (assuming df_ind is accessible here or passed)
-        # This requires df_ind to be available in this scope. If not, it needs to be passed as an argument.
-        # For now, assuming df_ind is accessible or can be fetched.
-        # NOTE: df_ind is not directly accessible here. It needs to be passed or fetched.
-        # For simplicity, let's assume we can access it or fetch it.
-        # A more robust solution would pass df_ind to this function.
-        # For now, let's use a placeholder or fetch it if possible.
-        # Placeholder: Fetching ATR requires access to the DataFrame.
-        # Let's assume df_ind is available in the scope for now.
-        # If not, this part will need adjustment.
-        
-        # To make this work, df_ind needs to be passed to _place_order_with_tpsl
-        # For now, let's use the percentage-based calculation as a fallback
-        # and note this as a potential improvement area.
-        
-        # Placeholder for ATR calculation - requires df_ind
-        # atr_value = df_ind['ATR_10_1.5'].iloc[-1] # Example, assuming ATR column exists
-        # sl_price = entry_price - (atr_value * config['ATR_MULTIPLIER_SL'])
-        # tp_price = entry_price + (atr_value * config['ATR_MULTIPLIER_TP'])
-
         # Fallback to percentage-based calculation if ATR is not readily available or implemented
         sl_price = entry_price * (Decimal('1') - stop_loss_pct)
         tp_price = entry_price * (Decimal('1') + take_profit_pct)
         
     else:
         # Fallback to percentage-based calculation if ATR config is missing
-        sl_price = entry_price * (Decimal('1') - stop_loss_pct)
-        tp_price = entry_price * (Decimal('1') + take_profit_pct)
+        try:
+            print(NEON_WARNING + f"Placing {side} for {quantity:.6f} {symbol}..." + NEON_RESET)
+            order_response = session.place_order(
+                category=category,
+                symbol=symbol,
+                side=side,
+                orderType="Market",
+                qty=f"{quantity:.8f}",
+                takeProfit=f"{tp_price:.8f}",
+                stopLoss=f"{sl_price:.8f}",
+                tpslMode="Full"
+            )
+            print(NEON_SUCCESS + f"Placed: {order_response}" + NEON_RESET)
+            logging.info(f"{side} placed: {order_response}")
 
-    print(NEON_WARNING + f"Placing {side} for {quantity:.6f} {symbol}..." + NEON_RESET)
-    order_response = session.place_order(
-        category=category,
-        symbol=symbol,
-        side=side,
-        orderType="Market",
-        qty=f"{quantity:.8f}",
-        takeProfit=f"{tp_price:.8f}",
-        stopLoss=f"{sl_price:.8f}",
-        tpslMode="Full"
-    )
-    print(NEON_SUCCESS + f"Placed: {order_response}" + NEON_RESET)
-    logging.info(f"{side} placed: {order_response}")
+            try:
+                subprocess.run(["termux-toast", f"{side} signal for {symbol}!"], check=False)
+            except:
+                pass
+            if config['email_notify']:
+                _send_email(config, f"{side} Signal", f"Executed {side} for {symbol}, size {quantity:.6f} at {entry_price}")
 
-    try:
-        subprocess.run(["termux-toast", f"{side} signal for {symbol}!"], check=False)
-    except:
-        pass
-    if config['email_notify']:
-        _send_email(config, f"{side} Signal", f"Executed {side} for {symbol}, size {quantity:.6f} at {entry_price}")
-
-    return order_response
-except Exception as e:
-    print(NEON_ERROR + f"Order failed: {e}" + NEON_RESET)
-    logging.error(f"Order failed: {e}")
-    return None
+            return order_response
+        except Exception as e:
+            print(NEON_ERROR + f"Order failed: {e}" + NEON_RESET)
+            logging.error(f"Order failed: {e}")
+            return None
 
 # --- Send Email Notification ---
 def _send_email(config, subject, body):

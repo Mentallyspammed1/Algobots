@@ -1,131 +1,88 @@
-"""
-Configuration file for the Supertrend Trading Bot.
+# config.py
+# Configuration overrides for sb3.2.py
 
-This file defines the bot's settings, including API keys, trading parameters,
-indicator settings, and risk management rules.
-"""
+# This file allows you to override default settings used by the bot.
+# Uncomment lines and modify values as needed.
+# Environment variables (e.g., in .env file) take precedence over these settings
+# if the corresponding variable is set in the environment.
 
-import os
-from dataclasses import dataclass
-from enum import Enum
+# --- API Configuration ---
+# BYBIT_API_KEY = "YOUR_API_KEY"
+# BYBIT_API_SECRET = "YOUR_API_SECRET"
+BYBIT_TESTNET = "false" # Set to "true" to use Bybit testnet
 
-# =====================================================================
-# ENUMS FOR CONFIGURATION
-# =====================================================================
+# --- Trading Configuration ---
+# BYBIT_SYMBOL = "BTCUSDT"
+# BYBIT_CATEGORY = "linear" # Options: "linear", "spot", "inverse"
+# BYBIT_LEVERAGE = "5" # Leverage for linear/inverse accounts
 
-class Signal(Enum):
-    """Trading signals"""
-    STRONG_BUY = 2
-    BUY = 1
-    NEUTRAL = 0
-    SELL = -1
-    STRONG_SELL = -2
+# --- Multi-timeframe Configuration ---
+# PRIMARY_TIMEFRAME = "15" # Base timeframe for signals (e.g., "1", "5", "15", "60", "240", "D")
+# SECONDARY_TIMEFRAMES = ["5", "60"] # Additional timeframes for confirmation
+# LOOKBACK_PERIODS = "200" # Number of candles to fetch for initial indicator calculation
 
-class OrderType(Enum):
-    """Supported order types"""
-    MARKET = "Market"
-    LIMIT = "Limit"
+# --- Adaptive SuperTrend Parameters ---
+# ST_PERIOD_BASE = "10" # Base period for SuperTrend calculation
+# ST_MULTIPLIER_BASE = "3.0" # Base multiplier for SuperTrend
+# ADAPTIVE_PARAMS = "true" # Enable adaptive SuperTrend parameters based on volatility
 
-class Category(Enum):
-    """Bybit product categories"""
-    LINEAR = "linear"
-    SPOT = "spot"
-    INVERSE = "inverse"
-    OPTION = "option"
+# --- Risk Management ---
+# RISK_PER_TRADE_PCT = "1.0" # Percentage of equity to risk per trade (e.g., 1.0 for 1%)
+# MAX_POSITION_SIZE_PCT = "30.0" # Maximum position size as a percentage of equity (e.g., 30.0 for 30%)
+# STOP_LOSS_PCT = "1.5" # Default stop loss percentage if ATR stops are not used
+# TAKE_PROFIT_PCT = "3.0" # Default take profit percentage if ATR stops are not used
+# USE_ATR_STOPS = "true" # Use ATR for dynamic stop loss and take profit levels
+# ATR_STOP_MULTIPLIER = "1.5" # Multiplier for ATR to determine stop loss distance
+# ATR_TP_MULTIPLIER = "3.0" # Multiplier for ATR to determine take profit distance
 
-# =====================================================================
-# CONFIGURATION DATACLASS
-# =====================================================================
+# --- Daily Limits ---
+# MAX_DAILY_LOSS_PCT = "5.0" # Maximum allowed daily loss percentage
+# MAX_DAILY_TRADES = "10" # Maximum number of trades allowed per day
+# MAX_CONSECUTIVE_LOSSES = "3" # Maximum number of consecutive losing trades before stopping
+# MAX_DRAWDOWN_PCT = "10.0" # Maximum allowed drawdown percentage from peak equity
 
-@dataclass
-class Config:
-    """
-    Bot configuration settings.
+# --- Order Type & Execution ---
+# ORDER_TYPE = "Market" # Options: "Market", "Limit"
+# LIMIT_ORDER_OFFSET_PCT = "0.01" # Offset for limit orders (e.g., 0.01 for 0.01% better than market)
+# POST_ONLY_LIMIT_ORDERS = "true" # Use post-only for limit orders to avoid taker fees
 
-    All parameters can be overridden by environment variables with the
-    prefix BYBIT_BOT_ (e.g., BYBIT_BOT_SYMBOL).
-    """
-    # --- API Configuration ---
-    # It's highly recommended to use environment variables for security.
-    # Set BYBIT_API_KEY, BYBIT_API_SECRET, and BYBIT_TESTNET in your environment.
-    API_KEY: str = "pXXkHX8ryNx4tJw4oQ"  # Replace with your Bybit API Key or set BYBIT_API_KEY env var
-    API_SECRET: str = "091D2RzNbFwf8IPv6HKaKtjPiTSChLDuhYyn" # Replace with your Bybit API Secret or set BYBIT_API_SECRET env var
-    TESTNET: bool = False  # Set BYBIT_TESTNET env var to 'true' or 'false'
+# --- Signal Filters ---
+# ADX_TREND_FILTER = "true" # Enable ADX filter for trend confirmation
+# ADX_MIN_THRESHOLD = "25" # Minimum ADX value to confirm a trend
+# VOLUME_FILTER = "true" # Enable volume filter for signal confirmation
+# VOLUME_MULTIPLIER = "1.5" # Volume must be this multiplier times the average volume
+# RSI_FILTER = "true" # Enable RSI filter for overbought/oversold confirmation
+# RSI_OVERSOLD = "30" # RSI value below which a buy signal might be considered
+# RSI_OVERBOUGHT = "70" # RSI value above which a sell signal might be considered
 
-    # --- Trading Configuration ---
-    SYMBOL: str = "TRUMPUSDT"  # Trading pair (e.g., "BTCUSDT", "ETHUSDT")
-    CATEGORY: Category = Category.LINEAR # Market category ('linear', 'spot', 'inverse', 'option')
-    LEVERAGE: int = 5  # Leverage to use for derivatives trading
+# --- Market Structure ---
+# USE_ORDER_BOOK = "true" # Enable order book imbalance analysis
+# ORDER_BOOK_IMBALANCE_THRESHOLD = "0.6" # Threshold for order book imbalance (e.g., 0.6 for 60%)
+# ORDER_BOOK_DEPTH_LEVELS = "10" # Number of levels to consider in the order book
+# USE_VOLUME_PROFILE = "true" # Enable volume profile analysis
 
-    # --- Position Sizing ---
-    RISK_PER_TRADE_PCT: float = 1.0  # Percentage of account balance to risk per trade (e.g., 1.0 for 1%)
-    MAX_POSITION_SIZE_USD: float = 20.0  # Maximum allowed position value in USD
-    MIN_POSITION_SIZE_USD: float = 5.0  # Minimum allowed position value in USD
+# --- Partial Take Profit ---
+# PARTIAL_TP_ENABLED = "true" # Enable partial take profit orders
+# PARTIAL_TP_TARGETS = [
+#     {"profit_pct": "1.0", "close_qty_pct": "0.3"}, # Close 30% at 1% profit
+#     {"profit_pct": "2.0", "close_qty_pct": "0.3"}, # Close another 30% at 2% profit
+#     {"profit_pct": "3.0", "close_qty_pct": "0.4"}  # Close remaining 40% at 3% profit
+# ]
 
-    # --- Strategy Parameters ---
-    TIMEFRAME: str = "3"  # Kline interval (e.g., '1', '3', '5', '15', '30', '60', 'D')
-    LOOKBACK_PERIODS: int = 100  # Number of historical klines to fetch for indicator calculations
+# --- Breakeven & Trailing Stop ---
+# BREAKEVEN_PROFIT_PCT = "0.5" # Profit percentage to activate breakeven stop loss
+# BREAKEVEN_OFFSET_PCT = "0.01" # Offset from entry price for breakeven stop loss
+# TRAILING_SL_ENABLED = "true" # Enable trailing stop loss
+# TRAILING_SL_ACTIVATION_PCT = "1.0" # Profit percentage to activate trailing stop loss
+# TRAILING_SL_DISTANCE_PCT = "0.5" # Distance (percentage) to trail the stop loss
 
-    # --- Supertrend Indicator Parameters ---
-    ST_PERIOD: int = 10  # ATR period for Supertrend calculation
-    ST_MULTIPLIER: float = 3.0  # Multiplier for ATR to determine Supertrend bands
+# --- Performance & Logging ---
+# LOG_LEVEL = "INFO" # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+# SAVE_TRADES_CSV = "true" # Save trade history to a CSV file
+# TRADES_FILE = "trades_history.csv" # Filename for trade history
+# STATE_FILE = "bot_state.pkl" # Filename for saving bot state
+# SAVE_STATE_INTERVAL = "300" # Interval in seconds to save bot state
 
-    # --- Risk Management ---
-    STOP_LOSS_PCT: float = 0.015  # Stop loss percentage from entry price (e.g., 1.5%)
-    TAKE_PROFIT_PCT: float = 0.03  # Take profit percentage from entry price (e.g., 3%)
-    TRAILING_STOP_PCT: float = 0.005 # Trailing stop percentage to trail profit (e.g., 0.5%)
-    MAX_DAILY_LOSS_PCT: float = 0.05 # Maximum allowed daily loss as a percentage of the starting balance (e.g., 5%)
-    MAX_OPEN_POSITIONS: int = 1 # Maximum number of concurrent open positions
-
-    # --- Execution Settings ---
-    ORDER_TYPE: OrderType = OrderType.MARKET # Default order type ('Market' or 'Limit')
-    TIME_IN_FORCE: str = "GTC"  # Time in force for orders ('GTC', 'IOC', 'FOK', 'PostOnly')
-    REDUCE_ONLY: bool = False # Whether orders should only reduce existing positions
-
-    # --- Bot Settings ---
-    LOOP_INTERVAL_SEC: int = 60  # How often the bot checks for new signals and updates (in seconds)
-    LOG_LEVEL: str = "INFO" # Logging level ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
-    LOG_FILE: str = "supertrend_bot.log" # Name of the log file
-
-    def __post_init__(self):
-        """
-        Post-initialization to load settings from environment variables
-        and perform basic validation.
-        """
-        # Load from environment variables, overriding defaults
-        self.API_KEY = os.getenv('BYBIT_API_KEY', self.API_KEY)
-        self.API_SECRET = os.getenv('BYBIT_API_SECRET', self.API_SECRET)
-
-        testnet_env = os.getenv('BYBIT_TESTNET', str(self.TESTNET)).lower()
-        self.TESTNET = testnet_env == 'true'
-
-        # Override other config parameters using BYBIT_BOT_ prefix
-        self.SYMBOL = os.getenv('BYBIT_BOT_SYMBOL', self.SYMBOL)
-        self.CATEGORY = Category(os.getenv('BYBIT_BOT_CATEGORY', self.CATEGORY.value))
-        self.LEVERAGE = int(os.getenv('BYBIT_BOT_LEVERAGE', self.LEVERAGE))
-        self.RISK_PER_TRADE_PCT = float(os.getenv('BYBIT_BOT_RISK_PER_TRADE_PCT', self.RISK_PER_TRADE_PCT))
-        self.MAX_POSITION_SIZE_USD = float(os.getenv('BYBIT_BOT_MAX_POSITION_SIZE_USD', self.MAX_POSITION_SIZE_USD))
-        self.MIN_POSITION_SIZE_USD = float(os.getenv('BYBIT_BOT_MIN_POSITION_SIZE_USD', self.MIN_POSITION_SIZE_USD))
-        self.TIMEFRAME = os.getenv('BYBIT_BOT_TIMEFRAME', self.TIMEFRAME)
-        self.LOOKBACK_PERIODS = int(os.getenv('BYBIT_BOT_LOOKBACK_PERIODS', self.LOOKBACK_PERIODS))
-        self.ST_PERIOD = int(os.getenv('BYBIT_BOT_ST_PERIOD', self.ST_PERIOD))
-        self.ST_MULTIPLIER = float(os.getenv('BYBIT_BOT_ST_MULTIPLIER', self.ST_MULTIPLIER))
-        self.STOP_LOSS_PCT = float(os.getenv('BYBIT_BOT_STOP_LOSS_PCT', self.STOP_LOSS_PCT))
-        self.TAKE_PROFIT_PCT = float(os.getenv('BYBIT_BOT_TAKE_PROFIT_PCT', self.TAKE_PROFIT_PCT))
-        self.TRAILING_STOP_PCT = float(os.getenv('BYBIT_BOT_TRAILING_STOP_PCT', self.TRAILING_STOP_PCT))
-        self.MAX_DAILY_LOSS_PCT = float(os.getenv('BYBIT_BOT_MAX_DAILY_LOSS_PCT', self.MAX_DAILY_LOSS_PCT))
-        self.MAX_OPEN_POSITIONS = int(os.getenv('BYBIT_BOT_MAX_OPEN_POSITIONS', self.MAX_OPEN_POSITIONS))
-        self.ORDER_TYPE = OrderType(os.getenv('BYBIT_BOT_ORDER_TYPE', self.ORDER_TYPE.value))
-        self.TIME_IN_FORCE = os.getenv('BYBIT_BOT_TIME_IN_FORCE', self.TIME_IN_FORCE)
-        self.REDUCE_ONLY = os.getenv('BYBIT_BOT_REDUCE_ONLY', str(self.REDUCE_ONLY)).lower() == 'true'
-        self.LOOP_INTERVAL_SEC = int(os.getenv('BYBIT_BOT_LOOP_INTERVAL_SEC', self.LOOP_INTERVAL_SEC))
-        self.LOG_LEVEL = os.getenv('BYBIT_BOT_LOG_LEVEL', self.LOG_LEVEL)
-        self.LOG_FILE = os.getenv('BYBIT_BOT_LOG_FILE', self.LOG_FILE)
-
-        # Basic validation for API keys
-        if self.API_KEY == "YOUR_BYBIT_API_KEY" or self.API_SECRET == "YOUR_BYBIT_API_SECRET":
-            print("\nWARNING: Bybit API Key or Secret not configured.")
-            print("Please set BYBIT_API_KEY and BYBIT_API_SECRET environment variables,")
-            print("or update the Config class in config.py directly.")
-            # In a real application, you might want to exit here if keys are mandatory.
-            # For this example, we allow it to proceed but warn the user.
+# --- Kelly Criterion ---
+# USE_KELLY_SIZING = "false" # Use Kelly Criterion for position sizing
+# KELLY_FRACTION_CAP = "0.25" # Maximum fraction of Kelly Criterion to use (e.g., 0.25 for 25%)
