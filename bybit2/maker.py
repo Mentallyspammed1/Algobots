@@ -29,54 +29,6 @@ Enhanced Features:
 - PnL tracking and risk metrics updates on trade fills
 """
 
-# --- Termux Installation and Setup Instructions ---
-TERMUX_INSTALL_INSTRUCTIONS = """
-=====================================================
- Termux Setup Instructions for Bybit Market Maker Bot
-=====================================================
-
-1. Update Termux packages:
-   pkg update && pkg upgrade -y
-
-2. Install Python and necessary libraries:
-   pkg install python -y
-   pip install --upgrade pip
-   pip install pybit colorama structlog numpy pandas python-dotenv aiohttp websockets psutil
-
-   # Note: psutil might require specific handling or might not be fully functional without root.
-   # If 'pip install psutil' fails, try 'pip install psutil --no-cache-dir'.
-
-3. Set Environment Variables:
-   You NEED to set your Bybit API Key and Secret. You can do this temporarily for the current session,
-   or permanently by editing your Termux shell profile (e.g., ~/.bashrc or ~/.zshrc).
-
-   For the current session (run these commands in Termux before running the script):
-   export BYBIT_API_KEY="YOUR_ACTUAL_BYBIT_API_KEY"
-   export BYBIT_API_SECRET="YOUR_ACTUAL_BYBIT_API_SECRET"
-   export BYBIT_TESTNET="true"  # Set to "false" for mainnet
-
-   Example:
-   export BYBIT_API_KEY="xxxxxxx"
-   export BYBIT_API_SECRET="yyyyyyy"
-   export BYBIT_TESTNET="true"
-
-4. Run the Bot:
-   python your_bot_script_name.py
-
-5. Running in Background (Recommended for long-term execution):
-   Use 'nohup' to keep the script running even if you close Termux.
-   nohup python your_bot_script_name.py > bot.log 2>&1 &
-
-   To view logs while running:
-   tail -f bot.log
-
-   To stop the bot:
-   Find its PID using 'pgrep -f your_bot_script_name.py'
-   Then kill the process using 'kill PID' (e.g., kill 12345)
-
-=====================================================
-"""
-
 # --- Standard Library Imports ---
 import asyncio
 import gc
@@ -94,9 +46,8 @@ from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
-
-import aiohttp
-import websockets
+import uuid # Added for client_order_id generation
+import threading # Added for locks in performance monitor
 
 # --- Third-Party Library Imports ---
 # Attempt to import optional libraries and handle ImportError
@@ -143,6 +94,10 @@ getcontext().rounding = ROUND_HALF_UP
 API_KEY = os.getenv("BYBIT_API_KEY")
 API_SECRET = os.getenv("BYBIT_API_SECRET")
 IS_TESTNET = os.getenv("BYBIT_TESTNET", "true").lower() in ["true", "1", "yes", "y"]
+
+BASE_URL = "https://api.bybit.com" if not IS_TESTNET else "https://api-testnet.bybit.com"
+WS_PUBLIC_URL = "wss://stream.bybit.com/v5/public/linear" if not IS_TESTNET else "wss://stream-testnet.bybit.com/v5/public/linear"
+WS_PRIVATE_URL = "wss://stream.bybit.com/v5/private/linear" if not IS_TESTNET else "wss://stream-testnet.bybit.com/v5/private/linear"
 
 STATE_DIR = os.path.join(os.path.expanduser("~"), ".bybit_market_maker_state")
 LOG_DIR = os.path.join(os.path.expanduser("~"), "bybit_bot_logs")
@@ -284,6 +239,8 @@ class WebSocketConnectionError(Exception):
     """Exception for WebSocket connection issues."""
 
 # --- Enhanced Enums ---
+from enum import Enum # IMPORTED ENUM HERE
+
 class OrderStatus(Enum):
     """Order status enumeration for enhanced readability"""
     NEW = "New"
@@ -308,7 +265,7 @@ class ConnectionState(Enum):
     AUTHENTICATED = "authenticated"
     ERROR = "error"
 
-# --- Enhanced Data Structures ---
+# --- Data Structures ---
 @dataclass
 class OrderData:
     """Enhanced order data structure with additional fields for comprehensive tracking"""
@@ -317,8 +274,8 @@ class OrderData:
     side: TradeSide
     price: Decimal
     quantity: Decimal
-    status: OrderStatus
     timestamp: float # When the order was created (seconds)
+    status: OrderStatus
     type: str = "Limit"
     time_in_force: str = "GTC"
     filled_qty: Decimal = Decimal('0')
@@ -359,7 +316,7 @@ class OrderData:
             side_str = api_data.get("side", "None")
             side = TradeSide(side_str) if side_str in TradeSide.__members__.values() else TradeSide.NONE
 
-            order_status_str = api_data.get("orderStatus", api_data.get("orderStatus", api_data.get("stopOrderType", "New"))) # Handle different fields
+            order_status_str = api_data.get("orderStatus", api_data.get("orderStatus", api_data.get("stopOrderType", "New")))
             status = OrderStatus[order_status_str.upper()] if order_status_str.upper() in OrderStatus.__members__ else OrderStatus.NEW
 
             return cls(
@@ -373,7 +330,7 @@ class OrderData:
                 filled_qty=Decimal(api_data.get("cumExecQty", "0")),
                 avg_price=Decimal(api_data.get("avgPrice", "0")),
                 type=api_data.get("orderType", api_data.get("orderType", "Limit")),
-                time_in_force=api_data.get("timeInForce", "GTC"),
+                time_in_force=api_data.get("timeInForce", "GTC") ,
                 reduce_only=api_data.get("reduceOnly", False),
                 post_only=api_data.get("postOnly", False),
                 client_order_id=api_data.get("orderLinkId", api_data.get("orderLinkId", "")),
@@ -899,7 +856,8 @@ class EnhancedRateLimiter:
 
             # Check if limit is reached
             if len(request_times) >= effective_max_requests:
-                if self.adaptive: self._adjust_adaptive_factor(endpoint, False) # Reduce factor on hit
+                if self.adaptive and self.adaptive_factors[endpoint] > 0.5: # Only reduce if factor is not already low
+                    self._adjust_adaptive_factor(endpoint, False) # Reduce factor on hit
 
                 time_to_wait = window_seconds - (now - request_times[0]) if request_times else window_seconds
                 if time_to_wait > 0:
@@ -1514,7 +1472,7 @@ class MarketMakerBot:
             self.risk_metrics.unrealized_pnl = total_unrealized_pnl
             # Update overall position for risk metrics (simplified for single symbol)
             if len(self.config.symbols) == 1 and self.config.symbols[0].symbol in self.state["current_inventory"]:
-                self.risk_metrics.current_position_base = self.state["current_inventory"][self.config.symbols[0].symbol]
+                self.risk_metrics.current_position_base = self.state["current_inventory"].get(self.config.symbols[0].symbol)
 
             self.risk_metrics.update_equity_and_drawdown() # Recalculate equity/drawdown
             logger.debug(f"Updated total unrealized PnL: {self.risk_metrics.unrealized_pnl:.4f}. Current equity: {self.risk_metrics.current_equity:.4f}")
@@ -1585,12 +1543,18 @@ class MarketMakerBot:
         existing_bid = next((o for o in current_open_orders.values() if o.side == TradeSide.BUY), None)
         existing_ask = next((o for o in current_open_orders.values() if o.side == TradeSide.SELL), None)
 
-        cancellation_threshold_abs = market_data.mid_price * (self.config.order_cancellation_deviation_bps / Decimal('10000'))
+        # Use market_data from the bot's state for cancellation threshold calculation
+        market_data = self.state["market_data"].get(symbol)
+        if not market_data:
+            logger.warning(f"Cannot calculate cancellation threshold for {symbol}: Market data missing.")
+            cancellation_threshold_abs = Decimal('0') # Default to no cancellation if market data is unavailable
+        else:
+            cancellation_threshold_abs = market_data.mid_price * (self.config.order_cancellation_deviation_bps / Decimal('10000'))
 
         # Process Bid Order Management
         if existing_bid:
             if abs(existing_bid.price - target_bid_price) > cancellation_threshold_abs or not safe_decimal(existing_bid.quantity) == target_qty:
-                logger.info(f"Cancelling stale BID order {existing_bid.order_id} for {symbol} (Price deviation or Qty mismatch).")
+                logger.info(f"Cancelling stale BID order {existing_bid.order_id} for {symbol} (Price deviation or Qty mismatch). Target Bid: {target_bid_price:.4f}, Current: {existing_bid.price:.4f}")
                 await self.cancel_order_and_update_state(existing_bid)
                 existing_bid = None # Clear reference
         if not existing_bid and target_bid_price > 0: # Place new bid if needed
@@ -1599,7 +1563,7 @@ class MarketMakerBot:
         # Process Ask Order Management
         if existing_ask:
             if abs(existing_ask.price - target_ask_price) > cancellation_threshold_abs or not safe_decimal(existing_ask.quantity) == target_qty:
-                logger.info(f"Cancelling stale ASK order {existing_ask.order_id} for {symbol} (Price deviation or Qty mismatch).")
+                logger.info(f"Cancelling stale ASK order {existing_ask.order_id} for {symbol} (Price deviation or Qty mismatch). Target Ask: {target_ask_price:.4f}, Current: {existing_ask.price:.4f}")
                 await self.cancel_order_and_update_state(existing_ask)
                 existing_ask = None
         if not existing_ask and target_ask_price > 0: # Place new ask if needed
@@ -1647,7 +1611,7 @@ class MarketMakerBot:
         if not active_tracked_orders: return
 
         orders_by_symbol = defaultdict(list)
-        for order_id in active_tracked_orders: orders_by_symbol[self.state["orders"][order_id].symbol].append(order_id)
+        for order_id in active_tracked_orders: orders_by_symbol[self.state["orders"].get(order_id).symbol].append(order_id)
 
         for symbol, order_ids_for_symbol in orders_by_symbol.items():
             try:
@@ -1655,7 +1619,8 @@ class MarketMakerBot:
                 api_orders_map = {str(o.get("orderId")): o for o in open_orders_api}
 
                 for order_id in order_ids_for_symbol:
-                    tracked_order = self.state["orders"][order_id]
+                    tracked_order = self.state["orders"].get(order_id)
+                    if not tracked_order: continue # Should not happen, but safety check
 
                     if order_id in api_orders_map: # Order still open on exchange
                         api_order_info = api_orders_map[order_id]
@@ -1736,7 +1701,8 @@ class MarketMakerBot:
                 exec_type = order_info.get('execType')
 
                 if order_id in self.state["orders"]:
-                    tracked_order: OrderData = self.state["orders"][order_id]
+                    tracked_order: OrderData = self.state["orders"].get(order_id)
+                    if not tracked_order: continue # Safety check
                     old_status = tracked_order.status
                     old_filled_qty = tracked_order.filled_qty
 
@@ -1834,7 +1800,7 @@ class MarketMakerBot:
                             try:
                                 message = await asyncio.wait_for(websocket.recv(), timeout=self.config.ws_ping_timeout + 5)
                                 data = json.loads(message)
-                                asyncio.create_task(self._handle_private_ws_message(data))
+                                asyncio.create_task(self._handle_private_ws_message(data)) # Process message in background task
                             except asyncio.TimeoutError:
                                 await websocket.ping() # Send ping if idle
                             except (websockets.exceptions.ConnectionClosedOK, websockets.exceptions.ConnectionClosedError) as e:
@@ -1923,7 +1889,7 @@ class MarketMakerBot:
         if topic.startswith("tickers."):
             symbol = topic.split('.')[-1]
             if symbol in self.state["market_data"]:
-                market_data = self.state["market_data"][symbol]
+                market_data = self.state["market_data"].get(symbol)
                 # Ticker data comes as a list, often with one element for a specific symbol request
                 if data_list and len(data_list) > 0:
                      market_data.update_from_tick(data_list[0]) # Update market data
@@ -1935,7 +1901,7 @@ class MarketMakerBot:
         elif topic.startswith("orderbook.1."):
             symbol = topic.split('.')[-1]
             if symbol in self.state["market_data"]:
-                market_data = self.state["market_data"][symbol]
+                market_data = self.state["market_data"].get(symbol)
                 if data_list and len(data_list) > 0:
                     orderbook_data = data_list[0] # Orderbook data structure
                     # Update bid/ask/size from the payload
@@ -1950,7 +1916,7 @@ class MarketMakerBot:
                     market_data._calculate_derived_metrics() # Recalculate mid/spread
                     market_data.track_volatility(symbol, market_data.last_price if market_data.last_price else market_data.mid_price) # Track price for volatility
 
-                    self.state["market_data"][symbol] = market_data
+                    self.state["market_data"].update({symbol: market_data})
                     logger.info(f"WS Orderbook Update ({symbol}): Bid={market_data.best_bid:.4f}, Ask={market_data.best_ask:.4f}")
                     self.perf_monitor.record_metric("market_data_updates")
             else: logger.warning(f"Received orderbook update for untracked symbol: {symbol}")
@@ -1998,141 +1964,176 @@ class MarketMakerBot:
         """Periodically saves the bot's state."""
         while self._running and not shutdown_event.is_set():
             await asyncio.sleep(self.config.state_save_interval)
-            if self._running and not shutdown_event.is_set():
-                self.save_state()
+            self.save_state()
 
     async def _performance_monitoring_loop(self):
-        """Periodically logs performance statistics and triggers GC."""
+        """Periodically logs performance metrics."""
         while self._running and not shutdown_event.is_set():
             await asyncio.sleep(self.config.performance_monitoring_interval)
-            if self._running and not shutdown_event.is_set():
-                perf_stats = self.perf_monitor.get_stats()
-                logger.info(f"Performance Metrics: {perf_stats}")
-                # Trigger garbage collection periodically
-                if time.time() - self.perf_monitor.last_gc_collection > 600: # Every 10 minutes
-                    self.perf_monitor.trigger_gc()
+            if time.time() - self.perf_monitor._last_perf_log_time < self.config.performance_monitoring_interval * 0.8:
+                continue # Avoid logging too frequently if interval is short
+
+            stats = self.perf_monitor.get_stats()
+            logger.info(f"Performance Stats: Uptime={stats['uptime_hours']}h, Orders={stats['total_orders_placed']}/{stats['total_orders_filled']}/{stats['total_orders_cancelled']}, WSRecon={stats['ws_reconnections']}, Mem={stats['memory_usage_mb']}MB")
+            self.perf_monitor._last_perf_log_time = time.time()
 
     async def run(self):
-        """Starts all bot tasks (strategy, WS listeners, state saving, monitoring)."""
-        await self.load_state() # Load state first
+        """Starts the bot's main components."""
+        if not API_KEY or not API_SECRET:
+            logger.critical("API Key or Secret not found. Please set BYBIT_API_KEY and BYBIT_API_SECRET environment variables.")
+            print(TERMUX_INSTALL_INSTRUCTIONS) # Print instructions if keys are missing
+            return
+
+        setup_logging() # Initialize logging first
+        logger.info("Starting Bybit Market Maker Bot...")
+        logger.info(f"Testnet mode: {IS_TESTNET}")
+
+        # Load initial state
+        await self.load_state() # Load state before fetching initial data
+
+        # Fetch initial exchange info and market data
+        await self.fetch_exchange_info()
+        for cfg in self.config.symbols:
+            await self.update_market_data(cfg.symbol)
+            await self.update_positions_and_pnl() # Fetch initial positions
 
         # Start background tasks
-        self._tasks.append(asyncio.create_task(self.main_strategy_loop(), name="main_strategy_loop"))
-        self._tasks.append(asyncio.create_task(self._state_saving_loop(), name="state_saving_loop"))
-        self._tasks.append(asyncio.create_task(self._performance_monitoring_loop(), name="perf_monitor_loop"))
-        self._tasks.append(asyncio.create_task(self.websocket_private_listener(), name="ws_private_listener"))
-        self._tasks.append(asyncio.create_task(self.websocket_public_listener(), name="ws_public_listener"))
+        self._running = True
+        loop = asyncio.get_running_loop()
+        setup_signal_handlers(loop)
 
-        logger.info("Bot tasks started. Waiting for shutdown signal...")
-        # Wait until the shutdown event is set
-        await shutdown_event.wait()
-        logger.info("Shutdown signal received. Terminating bot.")
+        self._tasks.append(asyncio.create_task(self.websocket_private_listener()))
+        self._tasks.append(asyncio.create_task(self.websocket_public_listener()))
+        self._tasks.append(asyncio.create_task(self.main_strategy_loop()))
+        self._tasks.append(asyncio.create_task(self._state_saving_loop()))
+        self._tasks.append(asyncio.create_task(self._performance_monitoring_loop()))
 
-    async def shutdown(self):
-        """Performs graceful shutdown: cancels tasks, closes connections, saves state."""
-        logger.info("Executing graceful shutdown sequence...")
-        self._running = False # Signal loops to stop
+        # Wait for all tasks to complete or shutdown signal
+        await asyncio.gather(*self._tasks, return_exceptions=True)
 
-        # Cancel all running tasks
-        for task in self._tasks:
-            if not task.done():
-                task.cancel()
-                logger.debug(f"Cancelled task: {task.get_name()}")
+        logger.info("Bot shutting down gracefully...")
+        self._running = False
 
-        # Wait for tasks to finish cancellation
-        try:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
-        except Exception as e:
-            logger.error(f"Error during task cleanup: {e}", exc_info=True)
+        # Cleanup
+        await self.api_client.close() # Close aiohttp session
+        if self._ws_private_client: self._ws_private_client.close() # Close pybit WS if used
 
-        # Close WebSocket connections
-        if self._ws_private_client:
-            self._ws_private_client.close()
-            logger.debug("Pybit private WebSocket client closed.")
-        if self._ws_public_client and not self._ws_public_client.closed:
-            await self._ws_public_client.close()
-            logger.debug("Manual public WebSocket client closed.")
-
-        # Close API session
-        await self.api_client.close()
-
-        # Save final state
-        self.save_state()
-        logger.info("Final state saved. Bot shut down successfully.")
-        sys.exit(0)
+        self.save_state() # Save final state
+        logger.info("Bot stopped.")
 
 
-# --- Main Entrypoint ---
-async def main():
-    """Sets up logging, configuration, bot instance, and runs the bot."""
-    setup_logging()
-    # Display Termux setup instructions only if running in Termux-like env or if first run
-    if 'termux' in sys.stdout.encoding.lower() or not os.getenv("BYBIT_API_KEY"): # Basic check for Termux context
-        print(Fore.CYAN + TERMUX_INSTALL_INSTRUCTIONS + Style.RESET_ALL)
-        print(Fore.YELLOW + "INFO: For continuous operation, consider using 'nohup python your_script.py > bot.log 2>&1 &' in Termux." + Style.RESET_ALL)
+# --- Main Execution ---
+def load_config() -> BotConfig | None:
+    """Loads bot configuration from environment variables and a default config file."""
+    try:
+        # Load from environment variables first
+        api_key = os.getenv("BYBIT_API_KEY")
+        api_secret = os.getenv("BYBIT_API_SECRET")
+        is_testnet = os.getenv("BYBIT_TESTNET", "true").lower() in ["true", "1", "yes", "y"]
 
-    # --- Configuration Loading ---
-    api_key = os.getenv("BYBIT_API_KEY")
-    api_secret = os.getenv("BYBIT_API_SECRET")
-    is_testnet = os.getenv("BYBIT_TESTNET", "true").lower() in ["true", "1", "yes", "y"]
+        if not api_key or not api_secret:
+            logger.error("BYBIT_API_KEY or BYBIT_API_SECRET environment variables not set.")
+            return None
 
-    if not api_key or not api_secret:
-        logger.critical("API Key or Secret is missing. Please set BYBIT_API_KEY and BYBIT_API_SECRET environment variables.")
+        # Load from config file (e.g., config.json)
+        config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+        else:
+            logger.warning(f"Config file not found at {config_path}. Using defaults and environment variables.")
+            config_data = {}
+
+        # Parse symbols
+        symbols_config = []
+        for sym_cfg in config_data.get("symbols", []):
+            symbols_config.append(SymbolConfig(
+                symbol=sym_cfg.get("symbol"),
+                base_qty=safe_decimal(sym_cfg.get("base_qty")),
+                order_levels=sym_cfg.get("order_levels", 5),
+                spread_bps=safe_decimal(sym_cfg.get("spread_bps", '0.05')),
+                inventory_target_base=safe_decimal(sym_cfg.get("inventory_target_base", '0')),
+                risk_params=sym_cfg.get("risk_params", {}),
+                min_spread_bps=safe_decimal(sym_cfg.get("min_spread_bps", '0.01')),
+                max_spread_bps=safe_decimal(sym_cfg.get("max_spread_bps", '0.20')),
+                volatility_adjustment_factor=safe_decimal(sym_cfg.get("volatility_adjustment_factor", '1.0')),
+                inventory_skew_factor=safe_decimal(sym_cfg.get("inventory_skew_factor", '0.1'))
+            ))
+
+        # Create BotConfig object
+        bot_config = BotConfig(
+            api_key=api_key,
+            api_secret=api_secret,
+            is_testnet=is_testnet,
+            symbols=symbols_config,
+            log_level=config_data.get("log_level", "INFO"),
+            debug_mode=config_data.get("debug_mode", False),
+            performance_monitoring_interval=config_data.get("performance_monitoring_interval", 60),
+            state_save_interval=config_data.get("state_save_interval", 300),
+            polling_interval_sec=config_data.get("polling_interval_sec", 5.0),
+            order_cancellation_deviation_bps=safe_decimal(config_data.get("order_cancellation_deviation_bps", '2')),
+            api_timeout_total=config_data.get("api_timeout_total", 45),
+            api_timeout_connect=config_data.get("api_timeout_connect", 10),
+            api_timeout_sock_read=config_data.get("api_timeout_sock_read", 20),
+            api_connection_limit=config_data.get("api_connection_limit", 150),
+            api_connection_limit_per_host=config_data.get("api_connection_limit_per_host", 50),
+            api_keepalive_timeout=config_data.get("api_keepalive_timeout", 60),
+            api_retry_attempts=config_data.get("api_retry_attempts", 3),
+            api_retry_delay=config_data.get("api_retry_delay", 1.0),
+            rate_limits=config_data.get("rate_limits", {{}}),
+            ws_ping_interval=config_data.get("ws_ping_interval", 30),
+            ws_ping_timeout=config_data.get("ws_ping_timeout", 10),
+            ws_close_timeout=config_data.get("ws_close_timeout", 10),
+            ws_max_size=config_data.get("ws_max_size", 2**20),
+            ws_compression=config_data.get("ws_compression"),
+            ws_reconnect_delay=config_data.get("ws_reconnect_delay", 5.0),
+            ws_max_reconnect_delay=config_data.get("ws_max_reconnect_delay", 300.0),
+            circuit_breaker_failure_threshold=config_data.get("circuit_breaker_failure_threshold", 5),
+            circuit_breaker_recovery_timeout=config_data.get("circuit_breaker_recovery_timeout", 60.0),
+            circuit_breaker_max_recovery_timeout=config_data.get("circuit_breaker_max_recovery_timeout", 300.0)
+        )
+
+        # Validate symbols
+        if not symbols_config:
+            logger.error("No symbols configured in config.json or via environment variables. Bot cannot run.")
+            return None
+
+        return bot_config
+
+    except FileNotFoundError:
+        logger.error(f"Configuration file not found at {config_path}. Please create it.")
+        return None
+    except json.JSONDecodeError:
+        logger.error(f"Error decoding JSON from config file {config_path}. Please check its format.")
+        return None
+    except Exception as e:
+        logger.error(f"Error loading configuration: {e}", exc_info=True)
+        return None
+
+if __name__ == "__main__":
+    # Check for Termux installation instructions if keys are missing
+    if not API_KEY or not API_SECRET:
+        print(TERMUX_INSTALL_INSTRUCTIONS)
         sys.exit(1)
 
-    # Define default symbol configurations (can be overridden by config file/DB)
-    symbol_configs = [
-        SymbolConfig(
-            symbol="BTCUSDT",
-            base_qty=Decimal("0.0001"), # Example quantity for testing
-            order_levels=2, # Place 1 bid, 1 ask
-            spread_bps=Decimal("0.05"), # 5 bps spread
-            inventory_target_base=Decimal("0"),
-            risk_params={ # Default risk parameters
-                "max_position_base": Decimal('0.01'), # Max 0.01 BTC position
-                "max_drawdown_pct": Decimal('5.0'),
-                "initial_equity": Decimal('1000'), # Lower equity for testing
-                "max_daily_loss_pct": Decimal('0.02')
-            },
-            min_spread_bps=Decimal('0.01'), max_spread_bps=Decimal('0.20')
-        ),
-    ]
-
-    # Create BotConfig, prioritizing environment variables
-    bot_config = BotConfig(
-        api_key=api_key, api_secret=api_secret, is_testnet=is_testnet,
-        symbols=symbol_configs,
-        debug_mode=(os.getenv("DEBUG_MODE", "false").lower() == "true"),
-        log_level=(os.getenv("DEBUG_MODE", "false").lower() == "true" and "DEBUG") or "INFO",
-        polling_interval_sec=5.0, state_save_interval=180, performance_monitoring_interval=30
-    )
-
-    # TODO: Add loading config from file (e.g., JSON) here if desired
-
-    bot = MarketMakerBot(bot_config)
-
-    # Set up signal handlers for graceful shutdown
-    loop = asyncio.get_event_loop()
-    setup_signal_handlers(loop)
-
-    logger.info(f"Market Maker Bot starting for {', '.join([s.symbol for s in bot_config.symbols])} on {'Testnet' if bot_config.is_testnet else 'Mainnet'}...")
-
-    try:
-        await bot.run() # Start the bot and wait for shutdown signal
-    except asyncio.CancelledError:
-        logger.info("Bot execution cancelled.") # Expected during shutdown
-    except Exception as e:
-        logger.critical(f"Fatal unhandled error during bot execution: {e}", exc_info=True)
-    finally:
-        await bot.shutdown() # Ensure shutdown sequence runs
-
-# --- Script Execution ---
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print(Fore.RED + "\nBot process terminated by KeyboardInterrupt." + Style.RESET_ALL)
-        # The signal handler should have already initiated shutdown, but this provides a fallback message.
-    except Exception as e:
-        print(Fore.RED + f"\nUnhandled exception during script execution: {e}" + Style.RESET_ALL)
+    bot_configuration = load_config()
+    if bot_configuration:
+        bot = MarketMakerBot(bot_configuration)
+        try:
+            asyncio.run(bot.run())
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt received. Shutting down.")
+        except Exception as e:
+            logger.critical(f"An unhandled exception occurred: {e}", exc_info=True)
+        finally:
+            shutdown_event.set() # Ensure shutdown event is set on any exit
+            # Give tasks a moment to clean up if they are still running
+            loop = asyncio.get_event_loop()
+            tasks = [t for t in asyncio.all_tasks(loop=loop) if t is not asyncio.current_task(loop=loop)]
+            if tasks:
+                logger.info(f"Waiting for {len(tasks)} remaining tasks to finish...")
+                loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+            logger.info("Bot execution finished.")
+    else:
+        logger.error("Failed to load configuration. Exiting.")
         sys.exit(1)
