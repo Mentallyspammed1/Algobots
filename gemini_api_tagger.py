@@ -12,6 +12,7 @@ def get_gemini_api_key():
         sys.exit(1)
     return api_key
 
+
 def generate_tag(text_to_tag: str) -> str:
     """Generates a tag for the given text using the Gemini API.
     In a real scenario, this would send the text to Gemini and get a tag.
@@ -19,7 +20,7 @@ def generate_tag(text_to_tag: str) -> str:
     """
     api_key = get_gemini_api_key()
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel("gemini-pro")
 
     try:
         # In a real application, you'd send a prompt to Gemini like:
@@ -35,6 +36,7 @@ def generate_tag(text_to_tag: str) -> str:
     except Exception as e:
         print(f"Error interacting with Gemini API: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

@@ -46,9 +46,11 @@ load_dotenv()
 API_KEY = os.getenv("BYBIT_API_KEY")
 API_SECRET = os.getenv("BYBIT_API_SECRET")
 
+
 @dataclass
 class BotConfig:
     """Configuration class for better organization and validation"""
+
     SYMBOL: str = "BTCUSDT"
     CATEGORY: str = "linear"
     QUANTITY: Decimal = Decimal("0.001")
@@ -81,6 +83,7 @@ class BotConfig:
         if not self.SYMBOL:
             raise ValueError("SYMBOL cannot be empty")
 
+
 def load_config() -> BotConfig:
     """Load and validate configuration from file"""
     try:
@@ -89,11 +92,17 @@ def load_config() -> BotConfig:
 
         # Convert string decimals to Decimal objects
         decimal_fields = [
-            'QUANTITY', 'SPREAD_PERCENTAGE', 'REBALANCE_THRESHOLD_QTY',
-            'PROFIT_PERCENTAGE', 'STOP_LOSS_PERCENTAGE', 'PRICE_THRESHOLD',
-            'CAPITAL_ALLOCATION_PERCENTAGE', 'ABNORMAL_SPREAD_THRESHOLD',
-            'REBALANCE_PRICE_OFFSET_PERCENTAGE', 'MAX_POSITION_SIZE',
-            'EMERGENCY_STOP_LOSS'
+            "QUANTITY",
+            "SPREAD_PERCENTAGE",
+            "REBALANCE_THRESHOLD_QTY",
+            "PROFIT_PERCENTAGE",
+            "STOP_LOSS_PERCENTAGE",
+            "PRICE_THRESHOLD",
+            "CAPITAL_ALLOCATION_PERCENTAGE",
+            "ABNORMAL_SPREAD_THRESHOLD",
+            "REBALANCE_PRICE_OFFSET_PERCENTAGE",
+            "MAX_POSITION_SIZE",
+            "EMERGENCY_STOP_LOSS",
         ]
 
         for field_name in decimal_fields:
@@ -114,6 +123,7 @@ def load_config() -> BotConfig:
         print(f"{RED}Error loading configuration: {e}{NC}")
         sys.exit(1)
 
+
 def save_default_config(config: BotConfig):
     """Save default configuration to file"""
     config_dict = {}
@@ -125,7 +135,10 @@ def save_default_config(config: BotConfig):
 
     with open("config.json", "w") as f:
         json.dump(config_dict, f, indent=2)
-    print(f"{GREEN}Default config.json created. Please review and modify as needed.{NC}")
+    print(
+        f"{GREEN}Default config.json created. Please review and modify as needed.{NC}"
+    )
+
 
 # Load configuration
 config = load_config()
@@ -138,9 +151,11 @@ WS_MONITOR_INTERVAL = 10
 PNL_MONITOR_INTERVAL = 5
 DASHBOARD_REFRESH_INTERVAL = 1
 
+
 @dataclass
 class SymbolInfo:
     """Symbol information with better type safety"""
+
     price_precision: Decimal = Decimal("0.0001")
     qty_precision: Decimal = Decimal("0.001")
     min_order_value: Decimal = Decimal("10.0")
@@ -148,9 +163,11 @@ class SymbolInfo:
     min_qty: Decimal = Decimal("0")
     max_qty: Decimal = Decimal("1000000")  # Add max quantity limit
 
+
 @dataclass
 class MarketState:
     """Market state with better organization"""
+
     mid_price: Decimal = Decimal("0")
     best_bid: Decimal = Decimal("0")
     best_ask: Decimal = Decimal("0")
@@ -164,9 +181,11 @@ class MarketState:
         """Check if market data is fresh"""
         return (time.time() - self.last_update_time) <= max_age and self.mid_price > 0
 
+
 @dataclass
 class SessionStats:
     """Session statistics tracking"""
+
     start_time: float = field(default_factory=time.time)
     orders_placed: int = 0
     orders_filled: int = 0
@@ -180,13 +199,12 @@ class SessionStats:
     def update_pnl(self, current_pnl: Decimal):
         """Update PnL tracking with drawdown calculation"""
         self.total_pnl = current_pnl
-        if current_pnl > self.peak_balance:
-            self.peak_balance = current_pnl
+        self.peak_balance = max(self.peak_balance, current_pnl)
 
         if self.peak_balance > 0:
             drawdown = (self.peak_balance - current_pnl) / self.peak_balance
-            if drawdown > self.max_drawdown:
-                self.max_drawdown = drawdown
+            self.max_drawdown = max(self.max_drawdown, drawdown)
+
 
 # Global instances
 symbol_info = SymbolInfo()
@@ -206,11 +224,14 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(),
         logging.handlers.RotatingFileHandler(
-            LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=10  # 10MB files, keep 10
+            LOG_FILE,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=10,  # 10MB files, keep 10
         ),
     ],
 )
 logger = logging.getLogger("MMXCEL")
+
 
 # Performance monitoring
 class PerformanceMonitor:
@@ -235,11 +256,19 @@ class PerformanceMonitor:
 
     def get_avg_api_time(self) -> float:
         """Get average API call time"""
-        return sum(self.api_call_times) / len(self.api_call_times) if self.api_call_times else 0
+        return (
+            sum(self.api_call_times) / len(self.api_call_times)
+            if self.api_call_times
+            else 0
+        )
 
     def get_avg_order_latency(self) -> float:
         """Get average order latency"""
-        return sum(self.order_latencies) / len(self.order_latencies) if self.order_latencies else 0
+        return (
+            sum(self.order_latencies) / len(self.order_latencies)
+            if self.order_latencies
+            else 0
+        )
 
     def should_log_performance(self) -> bool:
         """Check if it's time to log performance metrics"""
@@ -248,7 +277,9 @@ class PerformanceMonitor:
             return True
         return False
 
+
 performance_monitor = PerformanceMonitor()
+
 
 # Helper Functions
 def set_bot_state(state: str):
@@ -258,15 +289,18 @@ def set_bot_state(state: str):
         logger.info(f"{Fore.CYAN}Bot State Change: {BOT_STATE} -> {state}{NC}")
         BOT_STATE = state
 
+
 def calculate_decimal_precision(d: Decimal) -> int:
     """Determine the number of decimal places in a Decimal value for display."""
     if not isinstance(d, Decimal):
         return 0
     return abs(d.as_tuple().exponent)
 
+
 def clear_screen() -> None:
     """Clear the terminal screen."""
     os.system("cls" if os.name == "nt" else "clear")
+
 
 def print_neon_header(text: str, color: str = UNDERLINE, length: int = 80) -> None:
     """Print a styled header with border."""
@@ -281,9 +315,11 @@ def print_neon_header(text: str, color: str = UNDERLINE, length: int = 80) -> No
     full_header = f"{' ' * padding_left}{color}{header_text}{NC}{' ' * padding_right}"
     print(full_header)
 
+
 def print_neon_separator(length: int = 80, char: str = "─", color: str = CYAN) -> None:
     """Print a separator line."""
     print(f"{color}{char * length}{NC}")
+
 
 def format_metric(
     label: str,
@@ -300,10 +336,16 @@ def format_metric(
     actual_value_color = value_color if value_color else label_color
 
     if isinstance(value, Decimal):
-        current_precision = value_precision if value_precision is not None else calculate_decimal_precision(value)
+        current_precision = (
+            value_precision
+            if value_precision is not None
+            else calculate_decimal_precision(value)
+        )
         if is_pnl:
             actual_value_color = GREEN if value >= Decimal("0") else RED
-        formatted_value = f"{actual_value_color}{value:,.{current_precision}f}{unit}{NC}"
+        formatted_value = (
+            f"{actual_value_color}{value:,.{current_precision}f}{unit}{NC}"
+        )
     elif isinstance(value, (int, float)):
         if is_pnl:
             actual_value_color = GREEN if value >= 0 else RED
@@ -313,9 +355,11 @@ def format_metric(
 
     return f"{formatted_label}: {formatted_value}"
 
+
 def check_termux_toast() -> bool:
     """Checks if the termux-toast command is available."""
     return os.system("command -v termux-toast > /dev/null 2>&1") == 0
+
 
 def send_toast(message: str, color: str = "#336699", text_color: str = "white") -> None:
     """Sends a toast message if termux-toast is available."""
@@ -323,6 +367,7 @@ def send_toast(message: str, color: str = "#336699", text_color: str = "white") 
         os.system(f"termux-toast -b '{color}' -c '{text_color}' '{message}'")
     else:
         logger.debug(f"Toast (unavailable): {message}")
+
 
 # WebSocket Callbacks
 def on_public_ws_message(msg: dict[str, Any]) -> None:
@@ -339,17 +384,22 @@ def on_public_ws_message(msg: dict[str, Any]) -> None:
                 market_state.best_ask = Decimal(ask_info[0])
 
                 if market_state.best_bid > 0 and market_state.best_ask > 0:
-                    market_state.mid_price = (market_state.best_bid + market_state.best_ask) / Decimal("2")
+                    market_state.mid_price = (
+                        market_state.best_bid + market_state.best_ask
+                    ) / Decimal("2")
                 else:
                     market_state.mid_price = Decimal("0")
 
                 market_state.last_update_time = time.time()
-                logger.debug(f"WS Orderbook: Bid={market_state.best_bid:.4f}, Ask={market_state.best_ask:.4f}, Mid={market_state.mid_price:.4f}")
+                logger.debug(
+                    f"WS Orderbook: Bid={market_state.best_bid:.4f}, Ask={market_state.best_ask:.4f}, Mid={market_state.mid_price:.4f}"
+                )
 
     except (KeyError, IndexError, ValueError, TypeError, DecimalException) as e:
         logger.error(f"Error processing public WS message: {type(e).__name__} - {e}")
     except Exception as e:
         logger.error(f"Unexpected error in public WS handler: {type(e).__name__} - {e}")
+
 
 def on_private_ws_message(msg: dict[str, Any]) -> None:
     """Handle private WebSocket messages (orders, positions)."""
@@ -368,12 +418,18 @@ def on_private_ws_message(msg: dict[str, Any]) -> None:
                         order_details = market_state.open_orders.pop(order_id, None)
                         if order_details and order_status == "Filled":
                             session_stats.orders_filled += 1
-                            filled_price = Decimal(order_data.get('avgPrice', order_data.get('price', '0')))
-                            filled_qty = Decimal(order_data.get('qty', '0'))
-                            side = order_data.get('side', 'N/A')
+                            filled_price = Decimal(
+                                order_data.get("avgPrice", order_data.get("price", "0"))
+                            )
+                            filled_qty = Decimal(order_data.get("qty", "0"))
+                            side = order_data.get("side", "N/A")
 
-                            logger.info(f"Order filled: {side} {filled_qty} @ {filled_price:.4f}")
-                            send_toast(f"Order filled: {side} {filled_qty}", "green", "white")
+                            logger.info(
+                                f"Order filled: {side} {filled_qty} @ {filled_price:.4f}"
+                            )
+                            send_toast(
+                                f"Order filled: {side} {filled_qty}", "green", "white"
+                            )
                         elif order_status in ("Canceled", "Deactivated"):
                             session_stats.orders_cancelled += 1
                 else:
@@ -403,20 +459,27 @@ def on_private_ws_message(msg: dict[str, Any]) -> None:
                     }
 
                     # Update session PnL tracking
-                    total_pnl = sum(pos.get("unrealisedPnl", Decimal("0"))
-                                  for pos in market_state.positions.values())
+                    total_pnl = sum(
+                        pos.get("unrealisedPnl", Decimal("0"))
+                        for pos in market_state.positions.values()
+                    )
                     session_stats.update_pnl(total_pnl)
 
         elif topic == "wallet":
             for wallet_data in msg["data"]:
-                if wallet_data.get("coin") == 'USDT':
-                    market_state.available_balance = Decimal(wallet_data.get('availableBalance', '0'))
+                if wallet_data.get("coin") == "USDT":
+                    market_state.available_balance = Decimal(
+                        wallet_data.get("availableBalance", "0")
+                    )
                     market_state.last_balance_update = time.time()
 
     except (KeyError, ValueError, TypeError, DecimalException) as e:
         logger.error(f"Error processing private WS message: {type(e).__name__} - {e}")
     except Exception as e:
-        logger.error(f"Unexpected error in private WS handler: {type(e).__name__} - {e}")
+        logger.error(
+            f"Unexpected error in private WS handler: {type(e).__name__} - {e}"
+        )
+
 
 # Enhanced Bybit Client
 class EnhancedBybitClient:
@@ -424,8 +487,16 @@ class EnhancedBybitClient:
 
     def __init__(self, key: str, secret: str, testnet: bool):
         self.http = HTTP(testnet=testnet, api_key=key, api_secret=secret)
-        self.ws_public = WebSocket(testnet=testnet, channel_type="linear", retries=MAX_RETRIES_API)
-        self.ws_private = WebSocket(testnet=testnet, channel_type="private", api_key=key, api_secret=secret, retries=MAX_RETRIES_API)
+        self.ws_public = WebSocket(
+            testnet=testnet, channel_type="linear", retries=MAX_RETRIES_API
+        )
+        self.ws_private = WebSocket(
+            testnet=testnet,
+            channel_type="private",
+            api_key=key,
+            api_secret=secret,
+            retries=MAX_RETRIES_API,
+        )
 
         self.is_public_ws_connected = False
         self.is_private_ws_connected = False
@@ -470,7 +541,9 @@ class EnhancedBybitClient:
         self.connection_retry_count += 1
 
         if self.connection_retry_count > self.max_connection_retries:
-            logger.critical(f"{RED}Max WebSocket connection retries exceeded. Manual intervention required.{NC}")
+            logger.critical(
+                f"{RED}Max WebSocket connection retries exceeded. Manual intervention required.{NC}"
+            )
             send_toast("WebSocket connection failed!", "red", "white")
 
     @asynccontextmanager
@@ -497,13 +570,25 @@ class EnhancedBybitClient:
                     if response and response.get("retCode") == 0:
                         return response
 
-                    ret_code = response.get('retCode') if response else None
-                    ret_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
+                    ret_code = response.get("retCode") if response else None
+                    ret_msg = (
+                        response.get("retMsg", "Unknown error")
+                        if response
+                        else "No response"
+                    )
 
-                    logger.warning(f"API call failed (attempt {attempt}/{MAX_RETRIES_API}): {ret_msg}")
+                    logger.warning(
+                        f"API call failed (attempt {attempt}/{MAX_RETRIES_API}): {ret_msg}"
+                    )
 
                     # Handle specific error codes
-                    if ret_code in [10001, 10006, 30034, 30035, 10018]:  # Retryable errors
+                    if ret_code in [
+                        10001,
+                        10006,
+                        30034,
+                        30035,
+                        10018,
+                    ]:  # Retryable errors
                         if attempt < MAX_RETRIES_API:
                             delay = RETRY_DELAY_API * (2 ** (attempt - 1))
                             await asyncio.sleep(delay)
@@ -531,22 +616,30 @@ class EnhancedBybitClient:
         response = await self.api_call_with_retry(
             self.http.get_instruments_info,
             category=config.CATEGORY,
-            symbol=config.SYMBOL
+            symbol=config.SYMBOL,
         )
 
-        if response and response.get('retCode') == 0:
-            instruments = response.get('result', {}).get('list')
+        if response and response.get("retCode") == 0:
+            instruments = response.get("result", {}).get("list")
             if instruments:
                 instrument = instruments[0]
-                price_filter = instrument.get('priceFilter', {})
-                lot_size_filter = instrument.get('lotSizeFilter', {})
+                price_filter = instrument.get("priceFilter", {})
+                lot_size_filter = instrument.get("lotSizeFilter", {})
 
-                symbol_info.price_precision = Decimal(price_filter.get('tickSize', "0.0001"))
-                symbol_info.qty_precision = Decimal(lot_size_filter.get('qtyStep', "0.001"))
-                symbol_info.min_price = Decimal(price_filter.get('minPrice', "0"))
-                symbol_info.min_qty = Decimal(lot_size_filter.get('minQty', "0"))
-                symbol_info.max_qty = Decimal(lot_size_filter.get('maxOrderQty', "1000000"))
-                symbol_info.min_order_value = Decimal(lot_size_filter.get('minOrderAmt', "10.0"))
+                symbol_info.price_precision = Decimal(
+                    price_filter.get("tickSize", "0.0001")
+                )
+                symbol_info.qty_precision = Decimal(
+                    lot_size_filter.get("qtyStep", "0.001")
+                )
+                symbol_info.min_price = Decimal(price_filter.get("minPrice", "0"))
+                symbol_info.min_qty = Decimal(lot_size_filter.get("minQty", "0"))
+                symbol_info.max_qty = Decimal(
+                    lot_size_filter.get("maxOrderQty", "1000000")
+                )
+                symbol_info.min_order_value = Decimal(
+                    lot_size_filter.get("minOrderAmt", "10.0")
+                )
 
                 logger.info(f"{CYAN}Symbol info loaded for {config.SYMBOL}{NC}")
                 return True
@@ -557,8 +650,7 @@ class EnhancedBybitClient:
     async def test_credentials(self) -> bool:
         """Test API credentials"""
         response = await self.api_call_with_retry(
-            self.http.get_wallet_balance,
-            accountType="UNIFIED"
+            self.http.get_wallet_balance, accountType="UNIFIED"
         )
 
         if response and response.get("retCode") == 0:
@@ -574,9 +666,7 @@ class EnhancedBybitClient:
 
         # Start public orderbook stream
         self.ws_public.orderbook_stream(
-            symbol=config.SYMBOL,
-            depth=1,
-            callback=on_public_ws_message
+            symbol=config.SYMBOL, depth=1, callback=on_public_ws_message
         )
 
         # Start private streams
@@ -589,16 +679,17 @@ class EnhancedBybitClient:
     async def get_wallet_balance(self) -> bool:
         """Get wallet balance"""
         response = await self.api_call_with_retry(
-            self.http.get_wallet_balance,
-            accountType="UNIFIED"
+            self.http.get_wallet_balance, accountType="UNIFIED"
         )
 
-        if response and response.get('retCode') == 0:
-            balance_list = response.get('result', {}).get('list', [])
+        if response and response.get("retCode") == 0:
+            balance_list = response.get("result", {}).get("list", [])
             for balance in balance_list:
-                for coin in balance.get('coin', []):
-                    if coin.get('coin') == 'USDT':
-                        market_state.available_balance = Decimal(coin.get('availableToWithdraw', '0'))
+                for coin in balance.get("coin", []):
+                    if coin.get("coin") == "USDT":
+                        market_state.available_balance = Decimal(
+                            coin.get("availableToWithdraw", "0")
+                        )
                         market_state.last_balance_update = time.time()
                         return True
 
@@ -608,17 +699,15 @@ class EnhancedBybitClient:
     async def get_open_orders(self) -> bool:
         """Fetch open orders"""
         response = await self.api_call_with_retry(
-            self.http.get_open_orders,
-            category=config.CATEGORY,
-            symbol=config.SYMBOL
+            self.http.get_open_orders, category=config.CATEGORY, symbol=config.SYMBOL
         )
 
-        if response and response.get('retCode') == 0:
-            orders = response.get('result', {}).get('list', [])
+        if response and response.get("retCode") == 0:
+            orders = response.get("result", {}).get("list", [])
             market_state.open_orders.clear()
 
             for order in orders:
-                order_id = order.get('orderId')
+                order_id = order.get("orderId")
                 if order_id:
                     market_state.open_orders[order_id] = {
                         "client_order_id": order.get("orderLinkId", "N/A"),
@@ -637,17 +726,18 @@ class EnhancedBybitClient:
     async def get_positions(self) -> bool:
         """Fetch positions"""
         response = await self.api_call_with_retry(
-            self.http.get_positions,
-            category=config.CATEGORY,
-            symbol=config.SYMBOL
+            self.http.get_positions, category=config.CATEGORY, symbol=config.SYMBOL
         )
 
-        if response and response.get('retCode') == 0:
-            positions = response.get('result', {}).get('list', [])
+        if response and response.get("retCode") == 0:
+            positions = response.get("result", {}).get("list", [])
             market_state.positions.clear()
 
             for pos in positions:
-                if pos.get("symbol") == config.SYMBOL and Decimal(pos.get("size", "0")) > 0:
+                if (
+                    pos.get("symbol") == config.SYMBOL
+                    and Decimal(pos.get("size", "0")) > 0
+                ):
                     side = "Long" if pos.get("side") == "Buy" else "Short"
                     market_state.positions[side] = {
                         "size": Decimal(pos.get("size", "0")),
@@ -661,7 +751,9 @@ class EnhancedBybitClient:
 
         return False
 
-    async def place_order(self, side: str, order_type: str, qty: Decimal, price: Decimal | None = None) -> dict | None:
+    async def place_order(
+        self, side: str, order_type: str, qty: Decimal, price: Decimal | None = None
+    ) -> dict | None:
         """Place an order with enhanced validation"""
         start_time = time.time()
 
@@ -673,7 +765,9 @@ class EnhancedBybitClient:
                 return None
 
             if quantized_qty > symbol_info.max_qty:
-                logger.warning(f"Quantity exceeds maximum: {quantized_qty} > {symbol_info.max_qty}")
+                logger.warning(
+                    f"Quantity exceeds maximum: {quantized_qty} > {symbol_info.max_qty}"
+                )
                 return None
 
             # Prepare order parameters
@@ -690,10 +784,14 @@ class EnhancedBybitClient:
             # Add price for limit orders
             if order_type == "Limit" and price:
                 rounding = ROUND_DOWN if side == "Buy" else ROUND_UP
-                quantized_price = price.quantize(symbol_info.price_precision, rounding=rounding)
+                quantized_price = price.quantize(
+                    symbol_info.price_precision, rounding=rounding
+                )
 
                 if quantized_price < symbol_info.min_price:
-                    logger.warning(f"Price below minimum: {quantized_price} < {symbol_info.min_price}")
+                    logger.warning(
+                        f"Price below minimum: {quantized_price} < {symbol_info.min_price}"
+                    )
                     return None
 
                 order_params["price"] = str(quantized_price)
@@ -701,19 +799,25 @@ class EnhancedBybitClient:
                 # Check minimum order value
                 order_value = quantized_qty * quantized_price
                 if order_value < symbol_info.min_order_value:
-                    logger.warning(f"Order value below minimum: {order_value} < {symbol_info.min_order_value}")
+                    logger.warning(
+                        f"Order value below minimum: {order_value} < {symbol_info.min_order_value}"
+                    )
                     return None
 
             # Place the order
-            response = await self.api_call_with_retry(self.http.place_order, **order_params)
+            response = await self.api_call_with_retry(
+                self.http.place_order, **order_params
+            )
 
-            if response and response.get('retCode') == 0:
+            if response and response.get("retCode") == 0:
                 session_stats.orders_placed += 1
                 order_latency = time.time() - start_time
                 performance_monitor.record_order_latency(order_latency)
 
-                logger.info(f"{GREEN}Order placed: {side} {quantized_qty} @ {price or 'Market'}{NC}")
-                return response.get('result', {})
+                logger.info(
+                    f"{GREEN}Order placed: {side} {quantized_qty} @ {price or 'Market'}{NC}"
+                )
+                return response.get("result", {})
 
             return None
 
@@ -727,10 +831,10 @@ class EnhancedBybitClient:
             self.http.cancel_order,
             category=config.CATEGORY,
             symbol=config.SYMBOL,
-            orderId=order_id
+            orderId=order_id,
         )
 
-        if response and response.get('retCode') == 0:
+        if response and response.get("retCode") == 0:
             logger.info(f"{GREEN}Order cancelled: {order_id}{NC}")
             market_state.open_orders.pop(order_id, None)
             return True
@@ -740,12 +844,10 @@ class EnhancedBybitClient:
     async def cancel_all_orders(self) -> bool:
         """Cancel all open orders"""
         response = await self.api_call_with_retry(
-            self.http.cancel_all_orders,
-            category=config.CATEGORY,
-            symbol=config.SYMBOL
+            self.http.cancel_all_orders, category=config.CATEGORY, symbol=config.SYMBOL
         )
 
-        if response and response.get('retCode') == 0:
+        if response and response.get("retCode") == 0:
             logger.info(f"{GREEN}All orders cancelled{NC}")
             market_state.open_orders.clear()
             send_toast("All orders cancelled", "orange", "white")
@@ -766,6 +868,7 @@ class EnhancedBybitClient:
 
             await asyncio.sleep(WS_MONITOR_INTERVAL)
 
+
 # Enhanced Market Making Strategy
 class EnhancedMarketMakingStrategy:
     """Enhanced market making strategy with improved risk management"""
@@ -785,8 +888,14 @@ class EnhancedMarketMakingStrategy:
             return base_spread
 
         # Calculate current market spread
-        if market_state.mid_price > 0 and market_state.best_bid > 0 and market_state.best_ask > 0:
-            market_spread = (market_state.best_ask - market_state.best_bid) / market_state.mid_price
+        if (
+            market_state.mid_price > 0
+            and market_state.best_bid > 0
+            and market_state.best_ask > 0
+        ):
+            market_spread = (
+                market_state.best_ask - market_state.best_bid
+            ) / market_state.mid_price
 
             # Adjust spread based on market conditions
             if market_spread > base_spread * 2:
@@ -798,7 +907,9 @@ class EnhancedMarketMakingStrategy:
             else:
                 adjusted_spread = base_spread
 
-            return max(adjusted_spread, symbol_info.price_precision / market_state.mid_price)
+            return max(
+                adjusted_spread, symbol_info.price_precision / market_state.mid_price
+            )
 
         return base_spread
 
@@ -808,7 +919,9 @@ class EnhancedMarketMakingStrategy:
             return config.QUANTITY
 
         # Calculate size based on capital allocation
-        max_capital = market_state.available_balance * config.CAPITAL_ALLOCATION_PERCENTAGE
+        max_capital = (
+            market_state.available_balance * config.CAPITAL_ALLOCATION_PERCENTAGE
+        )
         size_from_capital = (max_capital / market_state.mid_price).quantize(
             symbol_info.qty_precision, rounding=ROUND_DOWN
         )
@@ -823,24 +936,25 @@ class EnhancedMarketMakingStrategy:
         optimal_size = min(config.QUANTITY, size_from_capital, max_size_from_limit)
 
         # Ensure minimum requirements are met
-        if optimal_size < symbol_info.min_qty:
-            optimal_size = symbol_info.min_qty
+        optimal_size = max(optimal_size, symbol_info.min_qty)
 
         # Check minimum order value
         if market_state.mid_price > 0:
             order_value = optimal_size * market_state.mid_price
             if order_value < symbol_info.min_order_value:
-                optimal_size = (symbol_info.min_order_value / market_state.mid_price).quantize(
-                    symbol_info.qty_precision, rounding=ROUND_UP
-                )
+                optimal_size = (
+                    symbol_info.min_order_value / market_state.mid_price
+                ).quantize(symbol_info.qty_precision, rounding=ROUND_UP)
 
         return optimal_size
 
     def check_emergency_conditions(self) -> tuple[bool, str]:
         """Check for emergency stop conditions"""
         # Check total unrealized PnL
-        total_pnl = sum(pos.get("unrealisedPnl", Decimal("0"))
-                       for pos in market_state.positions.values())
+        total_pnl = sum(
+            pos.get("unrealisedPnl", Decimal("0"))
+            for pos in market_state.positions.values()
+        )
 
         if market_state.available_balance > 0:
             pnl_percentage = abs(total_pnl) / market_state.available_balance
@@ -848,8 +962,14 @@ class EnhancedMarketMakingStrategy:
                 return True, f"Emergency stop: PnL {pnl_percentage:.2%} exceeds limit"
 
         # Check for abnormal market conditions
-        if market_state.mid_price > 0 and market_state.best_bid > 0 and market_state.best_ask > 0:
-            spread_percentage = (market_state.best_ask - market_state.best_bid) / market_state.mid_price
+        if (
+            market_state.mid_price > 0
+            and market_state.best_bid > 0
+            and market_state.best_ask > 0
+        ):
+            spread_percentage = (
+                market_state.best_ask - market_state.best_bid
+            ) / market_state.mid_price
             if spread_percentage > config.ABNORMAL_SPREAD_THRESHOLD:
                 return True, f"Abnormal spread: {spread_percentage:.2%}"
 
@@ -897,13 +1017,20 @@ class EnhancedMarketMakingStrategy:
         ask_price = max(ask_price, market_state.best_ask + symbol_info.price_precision)
 
         # Place orders if we don't have them
-        has_buy_order = any(order['side'] == 'Buy' for order in market_state.open_orders.values())
-        has_sell_order = any(order['side'] == 'Sell' for order in market_state.open_orders.values())
+        has_buy_order = any(
+            order["side"] == "Buy" for order in market_state.open_orders.values()
+        )
+        has_sell_order = any(
+            order["side"] == "Sell" for order in market_state.open_orders.values()
+        )
 
         if not has_buy_order and len(market_state.open_orders) < config.MAX_OPEN_ORDERS:
             await self.client.place_order("Buy", "Limit", position_size, bid_price)
 
-        if not has_sell_order and len(market_state.open_orders) < config.MAX_OPEN_ORDERS:
+        if (
+            not has_sell_order
+            and len(market_state.open_orders) < config.MAX_OPEN_ORDERS
+        ):
             await self.client.place_order("Sell", "Limit", position_size, ask_price)
 
     async def manage_positions(self):
@@ -912,8 +1039,8 @@ class EnhancedMarketMakingStrategy:
             return
 
         # Calculate net position
-        long_size = market_state.positions.get('Long', {}).get('size', Decimal('0'))
-        short_size = market_state.positions.get('Short', {}).get('size', Decimal('0'))
+        long_size = market_state.positions.get("Long", {}).get("size", Decimal("0"))
+        short_size = market_state.positions.get("Short", {}).get("size", Decimal("0"))
         net_position = long_size - short_size
 
         # Check if rebalancing is needed
@@ -926,7 +1053,9 @@ class EnhancedMarketMakingStrategy:
 
             # Determine rebalance side and quantity
             rebalance_side = "Sell" if net_position > 0 else "Buy"
-            rebalance_qty = abs(net_position).quantize(symbol_info.qty_precision, rounding=ROUND_DOWN)
+            rebalance_qty = abs(net_position).quantize(
+                symbol_info.qty_precision, rounding=ROUND_DOWN
+            )
 
             if rebalance_qty > 0:
                 # Cancel existing orders before rebalancing
@@ -935,7 +1064,9 @@ class EnhancedMarketMakingStrategy:
 
                 # Place rebalance order
                 if config.REBALANCE_ORDER_TYPE == "Market":
-                    await self.client.place_order(rebalance_side, "Market", rebalance_qty)
+                    await self.client.place_order(
+                        rebalance_side, "Market", rebalance_qty
+                    )
                 else:
                     # Use limit order with slight price improvement
                     if rebalance_side == "Buy":
@@ -943,11 +1074,15 @@ class EnhancedMarketMakingStrategy:
                     else:
                         price = market_state.best_bid - symbol_info.price_precision
 
-                    await self.client.place_order(rebalance_side, "Limit", rebalance_qty, price)
+                    await self.client.place_order(
+                        rebalance_side, "Limit", rebalance_qty, price
+                    )
 
                 self.last_rebalance_time = time.time()
                 session_stats.rebalances_count += 1
-                send_toast(f"Rebalanced {rebalance_qty} {config.SYMBOL}", "yellow", "black")
+                send_toast(
+                    f"Rebalanced {rebalance_qty} {config.SYMBOL}", "yellow", "black"
+                )
 
     async def cancel_stale_orders(self):
         """Cancel orders that have exceeded their lifespan"""
@@ -955,7 +1090,7 @@ class EnhancedMarketMakingStrategy:
         stale_orders = []
 
         for order_id, order_data in market_state.open_orders.items():
-            order_age = current_time - order_data.get('timestamp', current_time)
+            order_age = current_time - order_data.get("timestamp", current_time)
             if order_age > config.ORDER_LIFESPAN_SECONDS:
                 stale_orders.append(order_id)
 
@@ -973,10 +1108,10 @@ class EnhancedMarketMakingStrategy:
 
             # Check individual position PnL
             for side, position in market_state.positions.items():
-                if position['size'] <= 0 or position['avg_price'] <= 0:
+                if position["size"] <= 0 or position["avg_price"] <= 0:
                     continue
 
-                entry_price = position['avg_price']
+                entry_price = position["avg_price"]
                 current_price = market_state.mid_price
 
                 if side == "Long":
@@ -986,21 +1121,29 @@ class EnhancedMarketMakingStrategy:
 
                 # Check stop loss
                 if pnl_pct <= -config.STOP_LOSS_PERCENTAGE:
-                    logger.critical(f"{RED}{side} position stop loss triggered: {pnl_pct:.2%}{NC}")
+                    logger.critical(
+                        f"{RED}{side} position stop loss triggered: {pnl_pct:.2%}{NC}"
+                    )
                     await self.client.cancel_all_orders()
 
                     close_side = "Sell" if side == "Long" else "Buy"
-                    await self.client.place_order(close_side, "Market", position['size'])
+                    await self.client.place_order(
+                        close_side, "Market", position["size"]
+                    )
 
                     send_toast(f"{side} stop loss: {pnl_pct:.2%}", "red", "white")
 
                 # Check take profit
                 elif pnl_pct >= config.PROFIT_PERCENTAGE:
-                    logger.info(f"{GREEN}{side} position take profit triggered: {pnl_pct:.2%}{NC}")
+                    logger.info(
+                        f"{GREEN}{side} position take profit triggered: {pnl_pct:.2%}{NC}"
+                    )
                     await self.client.cancel_all_orders()
 
                     close_side = "Sell" if side == "Long" else "Buy"
-                    await self.client.place_order(close_side, "Market", position['size'])
+                    await self.client.place_order(
+                        close_side, "Market", position["size"]
+                    )
 
                     send_toast(f"{side} take profit: {pnl_pct:.2%}", "green", "white")
 
@@ -1016,7 +1159,10 @@ class EnhancedMarketMakingStrategy:
                 current_time = time.time()
 
                 # Refresh data periodically
-                if current_time - last_balance_refresh >= config.BALANCE_REFRESH_INTERVAL:
+                if (
+                    current_time - last_balance_refresh
+                    >= config.BALANCE_REFRESH_INTERVAL
+                ):
                     await self.client.get_wallet_balance()
                     await self.client.get_positions()
                     last_balance_refresh = current_time
@@ -1045,29 +1191,70 @@ class EnhancedMarketMakingStrategy:
                 set_bot_state("ERROR")
                 await asyncio.sleep(5)  # Error recovery delay
 
+
 # Dashboard and UI
 async def display_dashboard():
     """Display enhanced dashboard"""
     while not _SHUTDOWN_REQUESTED:
         try:
             clear_screen()
-            print_neon_header(f"MMXCEL v3.1 - Enhanced Market Maker ({config.SYMBOL})", UNDERLINE)
+            print_neon_header(
+                f"MMXCEL v3.1 - Enhanced Market Maker ({config.SYMBOL})", UNDERLINE
+            )
 
             # Bot status
-            status_color = GREEN if BOT_STATE == "ACTIVE_TRADING" else YELLOW if BOT_STATE == "WAITING" else RED
+            status_color = (
+                GREEN
+                if BOT_STATE == "ACTIVE_TRADING"
+                else YELLOW
+                if BOT_STATE == "WAITING"
+                else RED
+            )
             print(format_metric("Bot Status", BOT_STATE, WHITE, status_color))
-            print(format_metric("Testnet Mode", "ON" if config.USE_TESTNET else "OFF", WHITE, YELLOW if config.USE_TESTNET else GREEN))
+            print(
+                format_metric(
+                    "Testnet Mode",
+                    "ON" if config.USE_TESTNET else "OFF",
+                    WHITE,
+                    YELLOW if config.USE_TESTNET else GREEN,
+                )
+            )
             print_neon_separator()
 
             # Market data
             print(f"{CYAN}{BOLD}Market Data:{NC}")
             price_precision = calculate_decimal_precision(symbol_info.price_precision)
-            print(format_metric("Mid Price", market_state.mid_price, WHITE, value_precision=price_precision))
-            print(format_metric("Best Bid", market_state.best_bid, WHITE, value_precision=price_precision))
-            print(format_metric("Best Ask", market_state.best_ask, WHITE, value_precision=price_precision))
+            print(
+                format_metric(
+                    "Mid Price",
+                    market_state.mid_price,
+                    WHITE,
+                    value_precision=price_precision,
+                )
+            )
+            print(
+                format_metric(
+                    "Best Bid",
+                    market_state.best_bid,
+                    WHITE,
+                    value_precision=price_precision,
+                )
+            )
+            print(
+                format_metric(
+                    "Best Ask",
+                    market_state.best_ask,
+                    WHITE,
+                    value_precision=price_precision,
+                )
+            )
 
             if market_state.mid_price > 0:
-                spread_pct = (market_state.best_ask - market_state.best_bid) / market_state.mid_price * 100
+                spread_pct = (
+                    (market_state.best_ask - market_state.best_bid)
+                    / market_state.mid_price
+                    * 100
+                )
                 print(format_metric("Market Spread", f"{spread_pct:.3f}%", WHITE))
 
             data_age = time.time() - market_state.last_update_time
@@ -1077,31 +1264,80 @@ async def display_dashboard():
 
             # Account info
             print(f"{CYAN}{BOLD}Account Information:{NC}")
-            print(format_metric("Available Balance", f"{market_state.available_balance:.2f} USDT", WHITE, GREEN))
+            print(
+                format_metric(
+                    "Available Balance",
+                    f"{market_state.available_balance:.2f} USDT",
+                    WHITE,
+                    GREEN,
+                )
+            )
 
             # Positions
             print(f"{CYAN}{BOLD}Positions:{NC}")
-            long_pos = market_state.positions.get('Long', {'size': Decimal('0'), 'unrealisedPnl': Decimal('0')})
-            short_pos = market_state.positions.get('Short', {'size': Decimal('0'), 'unrealisedPnl': Decimal('0')})
+            long_pos = market_state.positions.get(
+                "Long", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")}
+            )
+            short_pos = market_state.positions.get(
+                "Short", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")}
+            )
 
             qty_precision = calculate_decimal_precision(symbol_info.qty_precision)
-            print(format_metric("Long Position", long_pos['size'], WHITE, value_precision=qty_precision))
-            print(format_metric("Long PnL", long_pos['unrealisedPnl'], WHITE, is_pnl=True, value_precision=2))
-            print(format_metric("Short Position", short_pos['size'], WHITE, value_precision=qty_precision))
-            print(format_metric("Short PnL", short_pos['unrealisedPnl'], WHITE, is_pnl=True, value_precision=2))
+            print(
+                format_metric(
+                    "Long Position",
+                    long_pos["size"],
+                    WHITE,
+                    value_precision=qty_precision,
+                )
+            )
+            print(
+                format_metric(
+                    "Long PnL",
+                    long_pos["unrealisedPnl"],
+                    WHITE,
+                    is_pnl=True,
+                    value_precision=2,
+                )
+            )
+            print(
+                format_metric(
+                    "Short Position",
+                    short_pos["size"],
+                    WHITE,
+                    value_precision=qty_precision,
+                )
+            )
+            print(
+                format_metric(
+                    "Short PnL",
+                    short_pos["unrealisedPnl"],
+                    WHITE,
+                    is_pnl=True,
+                    value_precision=2,
+                )
+            )
 
-            net_position = long_pos['size'] - short_pos['size']
-            print(format_metric("Net Position", net_position, WHITE, value_precision=qty_precision))
+            net_position = long_pos["size"] - short_pos["size"]
+            print(
+                format_metric(
+                    "Net Position", net_position, WHITE, value_precision=qty_precision
+                )
+            )
             print_neon_separator()
 
             # Open orders
             print(f"{CYAN}{BOLD}Open Orders ({len(market_state.open_orders)}):{NC}")
             if market_state.open_orders:
-                for order_id, order in list(market_state.open_orders.items())[:5]:  # Show max 5 orders
-                    side_color = GREEN if order['side'] == 'Buy' else RED
-                    age = time.time() - order['timestamp']
+                for order_id, order in list(market_state.open_orders.items())[
+                    :5
+                ]:  # Show max 5 orders
+                    side_color = GREEN if order["side"] == "Buy" else RED
+                    age = time.time() - order["timestamp"]
                     age_color = GREEN if age < 15 else YELLOW if age < 30 else RED
-                    print(f"  {side_color}{order['side']:<4}{NC} {order['qty']:.{qty_precision}f} @ {order['price']:.{price_precision}f} {age_color}({age:.0f}s){NC}")
+                    print(
+                        f"  {side_color}{order['side']:<4}{NC} {order['qty']:.{qty_precision}f} @ {order['price']:.{price_precision}f} {age_color}({age:.0f}s){NC}"
+                    )
             else:
                 print(f"  {YELLOW}No active orders{NC}")
             print_neon_separator()
@@ -1111,15 +1347,34 @@ async def display_dashboard():
             uptime = time.time() - session_stats.start_time
             hours, remainder = divmod(uptime, 3600)
             minutes, seconds = divmod(remainder, 60)
-            print(format_metric("Uptime", f"{int(hours):02d}h {int(minutes):02d}m {int(seconds):02d}s", WHITE))
+            print(
+                format_metric(
+                    "Uptime",
+                    f"{int(hours):02d}h {int(minutes):02d}m {int(seconds):02d}s",
+                    WHITE,
+                )
+            )
             print(format_metric("Orders Placed", session_stats.orders_placed, WHITE))
             print(format_metric("Orders Filled", session_stats.orders_filled, WHITE))
-            print(format_metric("Orders Cancelled", session_stats.orders_cancelled, WHITE))
+            print(
+                format_metric("Orders Cancelled", session_stats.orders_cancelled, WHITE)
+            )
             print(format_metric("Rebalances", session_stats.rebalances_count, WHITE))
 
-            total_pnl = long_pos['unrealisedPnl'] + short_pos['unrealisedPnl']
-            print(format_metric("Total PnL", total_pnl, WHITE, is_pnl=True, value_precision=2))
-            print(format_metric("Max Drawdown", f"{session_stats.max_drawdown:.2%}", WHITE, RED if session_stats.max_drawdown > 0 else GREEN))
+            total_pnl = long_pos["unrealisedPnl"] + short_pos["unrealisedPnl"]
+            print(
+                format_metric(
+                    "Total PnL", total_pnl, WHITE, is_pnl=True, value_precision=2
+                )
+            )
+            print(
+                format_metric(
+                    "Max Drawdown",
+                    f"{session_stats.max_drawdown:.2%}",
+                    WHITE,
+                    RED if session_stats.max_drawdown > 0 else GREEN,
+                )
+            )
 
             # Performance stats
             avg_api_time = performance_monitor.get_avg_api_time()
@@ -1127,16 +1382,23 @@ async def display_dashboard():
             if avg_api_time > 0:
                 print(format_metric("Avg API Time", f"{avg_api_time:.3f}s", WHITE))
             if avg_order_latency > 0:
-                print(format_metric("Avg Order Latency", f"{avg_order_latency:.3f}s", WHITE))
+                print(
+                    format_metric(
+                        "Avg Order Latency", f"{avg_order_latency:.3f}s", WHITE
+                    )
+                )
 
             print_neon_separator()
-            print(f"{YELLOW}Commands: 'q' quit | 'c' cancel all | 'r' rebalance | 's' emergency stop{NC}")
+            print(
+                f"{YELLOW}Commands: 'q' quit | 'c' cancel all | 'r' rebalance | 's' emergency stop{NC}"
+            )
 
             await asyncio.sleep(DASHBOARD_REFRESH_INTERVAL)
 
         except Exception as e:
             logger.error(f"Dashboard error: {e}")
             await asyncio.sleep(1)
+
 
 # Input handling
 async def handle_user_input(strategy: EnhancedMarketMakingStrategy):
@@ -1147,24 +1409,24 @@ async def handle_user_input(strategy: EnhancedMarketMakingStrategy):
             if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
                 key = sys.stdin.read(1).lower()
 
-                if key == 'q':
+                if key == "q":
                     logger.info("User requested shutdown")
                     global _SHUTDOWN_REQUESTED
                     _SHUTDOWN_REQUESTED = True
                     break
 
-                if key == 'c':
+                if key == "c":
                     logger.info("User requested cancel all orders")
                     await strategy.client.cancel_all_orders()
                     send_toast("All orders cancelled by user", "orange", "white")
 
-                elif key == 'r':
+                elif key == "r":
                     logger.info("User requested manual rebalance")
                     strategy.last_rebalance_time = 0  # Reset cooldown
                     await strategy.manage_positions()
                     send_toast("Manual rebalance triggered", "blue", "white")
 
-                elif key == 's':
+                elif key == "s":
                     logger.warning("User triggered emergency stop")
                     strategy.emergency_stop_triggered = True
                     await strategy.client.cancel_all_orders()
@@ -1176,6 +1438,7 @@ async def handle_user_input(strategy: EnhancedMarketMakingStrategy):
             logger.error(f"Input handling error: {e}")
             await asyncio.sleep(1)
 
+
 # Signal handling
 def signal_handler(signum, frame):
     """Handle shutdown signals"""
@@ -1183,6 +1446,7 @@ def signal_handler(signum, frame):
     logger.info(f"Received signal {signum}, initiating shutdown...")
     _SHUTDOWN_REQUESTED = True
     send_toast("MMXCEL: Shutdown signal received", "red", "white")
+
 
 # Main execution
 async def main():
@@ -1260,7 +1524,7 @@ async def main():
             client.monitor_connections(),
             display_dashboard(),
             handle_user_input(strategy),
-            return_exceptions=True
+            return_exceptions=True,
         )
 
     except KeyboardInterrupt:
@@ -1282,15 +1546,16 @@ async def main():
 
         # Close WebSocket connections
         try:
-            if hasattr(client, 'ws_public'):
+            if hasattr(client, "ws_public"):
                 client.ws_public.exit()
-            if hasattr(client, 'ws_private'):
+            if hasattr(client, "ws_private"):
                 client.ws_private.exit()
         except Exception as e:
             logger.error(f"Error closing WebSocket connections: {e}")
 
         logger.info(f"{GREEN}MMXCEL v3.1 shutdown complete{NC}")
         send_toast("MMXCEL v3.1 shutdown complete", "blue", "white")
+
 
 if __name__ == "__main__":
     try:

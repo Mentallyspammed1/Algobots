@@ -18,19 +18,19 @@ from psutil import __version__
 
 
 HERE = os.path.abspath(os.path.dirname(__file__))
-ROOT = os.path.realpath(os.path.join(HERE, '..', '..'))
-HISTORY = os.path.join(ROOT, 'HISTORY.rst')
+ROOT = os.path.realpath(os.path.join(HERE, "..", ".."))
+HISTORY = os.path.join(ROOT, "HISTORY.rst")
 PRINT_HASHES_SCRIPT = os.path.join(
-    ROOT, 'scripts', 'internal', 'print_hashes.py'
+    ROOT, "scripts", "internal", "print_hashes.py"
 )
 
-PRJ_NAME = 'psutil'
+PRJ_NAME = "psutil"
 PRJ_VERSION = __version__
-PRJ_URL_HOME = 'https://github.com/giampaolo/psutil'
-PRJ_URL_DOC = 'http://psutil.readthedocs.io'
-PRJ_URL_DOWNLOAD = 'https://pypi.org/project/psutil/#files'
+PRJ_URL_HOME = "https://github.com/giampaolo/psutil"
+PRJ_URL_DOC = "http://psutil.readthedocs.io"
+PRJ_URL_DOWNLOAD = "https://pypi.org/project/psutil/#files"
 PRJ_URL_WHATSNEW = (
-    'https://github.com/giampaolo/psutil/blob/master/HISTORY.rst'
+    "https://github.com/giampaolo/psutil/blob/master/HISTORY.rst"
 )
 
 template = """\
@@ -87,7 +87,7 @@ def get_changes():
     # eliminate the part preceding the first block
     while lines:
         line = lines.pop(0)
-        if line.startswith('===='):
+        if line.startswith("===="):
             break
     else:
         raise ValueError("something wrong")
@@ -99,7 +99,7 @@ def get_changes():
         if re.match(r"^- \d+_", line):
             line = re.sub(r"^- (\d+)_", r"- #\1", line)
 
-        if line.startswith('===='):
+        if line.startswith("===="):
             break
         block.append(line)
     else:
@@ -116,7 +116,7 @@ def get_changes():
 def main():
     changes = get_changes()
     hashes = (
-        subprocess.check_output([sys.executable, PRINT_HASHES_SCRIPT, 'dist/'])
+        subprocess.check_output([sys.executable, PRINT_HASHES_SCRIPT, "dist/"])
         .strip()
         .decode()
     )
@@ -133,5 +133,5 @@ def main():
     print(text)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

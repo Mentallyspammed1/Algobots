@@ -1164,7 +1164,7 @@ class TradingAnalyzer:
         """Calculates SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:
             self.logger.debug(
-                f"Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+                f"Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
             )
             return None
 
@@ -1961,7 +1961,6 @@ class TradingAnalyzer:
                 and not pd.isna(senkou_span_b)
                 and not pd.isna(chikou_span)
             ):
-
                 # Tenkan-sen crosses Kijun-sen
                 if (
                     tenkan_sen > kijun_sen

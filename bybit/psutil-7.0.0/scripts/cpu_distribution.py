@@ -38,7 +38,6 @@ rcu_b                                                                 cpuhp
 kwork
 """
 
-
 import collections
 import os
 import shutil
@@ -54,9 +53,9 @@ if not hasattr(psutil.Process, "cpu_num"):
 
 def clean_screen():
     if psutil.POSIX:
-        os.system('clear')
+        os.system("clear")
     else:
-        os.system('cls')
+        os.system("cls")
 
 
 def main():
@@ -83,8 +82,8 @@ def main():
 
         # processes
         procs = collections.defaultdict(list)
-        for p in psutil.process_iter(['name', 'cpu_num']):
-            procs[p.info['cpu_num']].append(p.info['name'][:5])
+        for p in psutil.process_iter(["name", "cpu_num"]):
+            procs[p.info["cpu_num"]].append(p.info["name"][:5])
 
         curr_line = 3
         while True:
@@ -102,5 +101,5 @@ def main():
         time.sleep(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

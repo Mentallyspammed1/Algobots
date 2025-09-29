@@ -2,8 +2,9 @@ import asyncio
 import logging
 
 from bybit_trading_bot import BybitTradingBot
-from config import Config
 from unanimous_logger import setup_logger
+
+from config import Config
 
 
 async def main():
@@ -23,6 +24,7 @@ async def main():
         logger.info("Bot stopped by user.")
     finally:
         await bot.shutdown()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

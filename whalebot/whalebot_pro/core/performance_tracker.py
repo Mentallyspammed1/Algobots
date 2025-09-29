@@ -1,10 +1,12 @@
 import logging
 from decimal import Decimal
+
 from colorama import Fore, Style
 
 # Color Scheme
 NEON_CYAN = Fore.CYAN
 RESET = Style.RESET_ALL
+
 
 class PerformanceTracker:
     """Tracks and reports trading performance."""
@@ -17,7 +19,9 @@ class PerformanceTracker:
         self.total_pnl = Decimal("0")
         self.wins = 0
         self.losses = 0
-        self.trading_fee_percent = Decimal(str(config["trade_management"].get("trading_fee_percent", 0.0)))
+        self.trading_fee_percent = Decimal(
+            str(config["trade_management"].get("trading_fee_percent", 0.0))
+        )
 
     def record_trade(self, position: dict, pnl: Decimal) -> None:
         """Record a completed trade."""

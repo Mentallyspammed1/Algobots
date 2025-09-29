@@ -12,17 +12,23 @@ def setup_custom_logger(name):
 
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
-    logger.propagate = False # Prevent log messages from being propagated to the root logger
+    logger.propagate = (
+        False  # Prevent log messages from being propagated to the root logger
+    )
 
     # File Handler
     file_handler = logging.FileHandler(log_filename)
-    file_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
     # Stream Handler (console output)
     stream_handler = logging.StreamHandler()
-    stream_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    stream_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     stream_handler.setFormatter(stream_formatter)
     logger.addHandler(stream_handler)
 

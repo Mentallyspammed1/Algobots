@@ -1,4 +1,3 @@
-
 import os
 import sys
 
@@ -6,8 +5,7 @@ import google.generativeai as genai
 
 
 def analyze_reports(pylint_report_path, flake8_report_path):
-    """Analyzes pylint and flake8 reports using the Gemini API and returns suggestions.
-    """
+    """Analyzes pylint and flake8 reports using the Gemini API and returns suggestions."""
     try:
         # Configure the Gemini API client
         api_key = os.environ.get("GEMINI_API_KEY")
@@ -16,7 +14,7 @@ def analyze_reports(pylint_report_path, flake8_report_path):
             return "Error: GEMINI_API_KEY not configured."
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel("gemini-pro")
 
         # Read the linter reports from the files
         try:
@@ -61,9 +59,12 @@ def analyze_reports(pylint_report_path, flake8_report_path):
         print(f"An error occurred: {e}")
         return f"An error occurred during analysis: {e}"
 
+
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: python analyze_python.py <pylint_report> <flake8_report> <output_file>")
+        print(
+            "Usage: python analyze_python.py <pylint_report> <flake8_report> <output_file>"
+        )
         sys.exit(1)
 
     pylint_file = sys.argv[1]
@@ -72,7 +73,7 @@ if __name__ == "__main__":
 
     suggestions = analyze_reports(pylint_file, flake8_file)
 
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         f.write(suggestions)
 
     print(f"Gemini analysis complete. Suggestions saved to {output_file}")

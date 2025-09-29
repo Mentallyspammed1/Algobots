@@ -14,13 +14,18 @@ from dotenv import load_dotenv
 # Initialize colorama
 init(autoreset=True)
 
+
 # --- Time Synchronization for Termux/Android ---
 def synchronize_time():
     """Sync system time using NTP in Termux environment"""
     try:
         print(Fore.YELLOW + "⌛ Synchronizing system time...")
-        result = subprocess.run(["ntpdate", "-q", "pool.ntp.org"],
-                              capture_output=True, text=True)
+        result = subprocess.run(
+            ["ntpdate", "-q", "pool.ntp.org"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
         if result.returncode == 0:
             offset = float(result.stdout.split()[-2])
             if abs(offset) > 1.0:
@@ -33,6 +38,7 @@ def synchronize_time():
         print(Fore.RED + f"❌ Time sync failed: {e!s}")
         return False
 
+
 # --- Enhanced Configuration Setup ---
 def get_user_input(prompt, default, input_type=float, validation=None):
     """Generic prompt with validation and default handling"""
@@ -44,7 +50,11 @@ def get_user_input(prompt, default, input_type=float, validation=None):
                 raise ValueError
             return converted
         except ValueError:
-            print(Fore.RED + f"⚠️ Invalid input. Please enter a valid {input_type.__name__}")
+            print(
+                Fore.RED
+                + f"⚠️ Invalid input. Please enter a valid {input_type.__name__}"
+            )
+
 
 # --- API Configuration ---
 load_dotenv()
@@ -57,15 +67,15 @@ if not BYBIT_API_KEY or not BYBIT_API_SECRET:
 
 API_ENDPOINT = "https://api.bybit.com"
 
+
 # --- Signature Generation ---
 def generate_signature(secret, params):
     """HMAC-SHA256 signature with parameter validation"""
     param_string = urllib.parse.urlencode(sorted(params.items()))
     return hmac.new(
-        secret.encode('utf-8'),
-        param_string.encode('utf-8'),
-        hashlib.sha256
+        secret.encode("utf-8"), param_string.encode("utf-8"), hashlib.sha256
     ).hexdigest()
+
 
 # --- Request Handler ---
 def bybit_request(method, endpoint, params=None, data=None):
@@ -74,19 +84,25 @@ def bybit_request(method, endpoint, params=None, data=None):
         req_params = {
             "api_key": BYBIT_API_KEY,
             "timestamp": str(int(time.time() * 1000)),
-            "recv_window": "5000"
+            "recv_window": "5000",
         }
 
-        if params: req_params.update(params)
-        if data: req_params.update(data)
+        if params:
+            req_params.update(params)
+        if data:
+            req_params.update(data)
 
         req_params["sign"] = generate_signature(BYBIT_API_SECRET, req_params)
         headers = {"Content-Type": "application/json"}
 
         if method == "GET":
-            response = requests.get(f"{API_ENDPOINT}{endpoint}", params=req_params, headers=headers)
+            response = requests.get(
+                f"{API_ENDPOINT}{endpoint}", params=req_params, headers=headers
+            )
         else:
-            response = requests.post(f"{API_ENDPOINT}{endpoint}", json=req_params, headers=headers)
+            response = requests.post(
+                f"{API_ENDPOINT}{endpoint}", json=req_params, headers=headers
+            )
 
         response.raise_for_status()
         return response.json()
@@ -95,6 +111,7 @@ def bybit_request(method, endpoint, params=None, data=None):
         print(Fore.RED + f"🚨 Request failed: {e!s}")
         return None
 
+
 # --- Data Fetching ---
 def fetch_klines(symbol, interval, limit=200):
     """Fetch OHLCV data from Bybit"""
@@ -102,35 +119,38 @@ def fetch_klines(symbol, interval, limit=200):
         "symbol": symbol,
         "interval": interval,
         "limit": limit,
-        "category": "linear"
+        "category": "linear",
     }
 
     response = bybit_request("GET", "/v5/market/kline", params)
-    if response and response['retCode'] == 0:
-        df = pd.DataFrame(response['result']['list'], columns=[
-            'timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'
-        ])
-        df = df.astype({'open': float, 'high': float, 'low': float, 'close': float})
-        df['timestamp'] = pd.to_datetime(df['timestamp'].astype(int), unit='ms')
-        df.set_index('timestamp', inplace=True)
+    if response and response["retCode"] == 0:
+        df = pd.DataFrame(
+            response["result"]["list"],
+            columns=["timestamp", "open", "high", "low", "close", "volume", "turnover"],
+        )
+        df = df.astype({"open": float, "high": float, "low": float, "close": float})
+        df["timestamp"] = pd.to_datetime(df["timestamp"].astype(int), unit="ms")
+        df.set_index("timestamp", inplace=True)
         return df.iloc[::-1]  # Reverse to chronological order
     return None
+
 
 # --- Pivot Detection ---
 def detect_pivot_points(df, pivot_left=2, pivot_right=1):
     """Detect pivot points for scalping strategy"""
     resistance, support = [], []
 
-    pivot_highs = ta.pivothigh(df['high'], pivot_left, pivot_right)
-    pivot_lows = ta.pivotlow(df['low'], pivot_left, pivot_right)
+    pivot_highs = ta.pivothigh(df["high"], pivot_left, pivot_right)
+    pivot_lows = ta.pivotlow(df["low"], pivot_left, pivot_right)
 
     for i in range(len(df)):
         if not pd.isna(pivot_highs[i]):
-            resistance.append({'price': pivot_highs[i], 'index': df.index[i]})
+            resistance.append({"price": pivot_highs[i], "index": df.index[i]})
         if not pd.isna(pivot_lows[i]):
-            support.append({'price': pivot_lows[i], 'index': df.index[i]})
+            support.append({"price": pivot_lows[i], "index": df.index[i]})
 
     return resistance, support
+
 
 # --- Signal Generation ---
 def generate_signals(df, resistance, support, stoch_k=14, stoch_d=3):
@@ -138,31 +158,38 @@ def generate_signals(df, resistance, support, stoch_k=14, stoch_d=3):
     signals = []
 
     # Calculate StochRSI
-    stoch = ta.stochrsi(df['close'], length=stoch_k, smooth_k=stoch_d)
-    df['stoch_k'] = stoch['STOCHRSI_K']
-    df['stoch_d'] = stoch['STOCHRSI_D']
+    stoch = ta.stochrsi(df["close"], length=stoch_k, smooth_k=stoch_d)
+    df["stoch_k"] = stoch["STOCHRSI_K"]
+    df["stoch_d"] = stoch["STOCHRSI_D"]
 
     # Check resistance breaks
     for level in resistance:
-        idx = df.index.get_loc(level['index'])
-        if idx >= len(df) - 1: continue
+        idx = df.index.get_loc(level["index"])
+        if idx >= len(df) - 1:
+            continue
 
-        if df['high'].iloc[idx+1] > level['price'] and \
-           df['stoch_k'].iloc[idx] > 80 and \
-           df['stoch_k'].iloc[idx] > df['stoch_d'].iloc[idx]:
-            signals.append(('BUY', level['price'], df.index[idx+1]))
+        if (
+            df["high"].iloc[idx + 1] > level["price"]
+            and df["stoch_k"].iloc[idx] > 80
+            and df["stoch_k"].iloc[idx] > df["stoch_d"].iloc[idx]
+        ):
+            signals.append(("BUY", level["price"], df.index[idx + 1]))
 
     # Check support breaks
     for level in support:
-        idx = df.index.get_loc(level['index'])
-        if idx >= len(df) - 1: continue
+        idx = df.index.get_loc(level["index"])
+        if idx >= len(df) - 1:
+            continue
 
-        if df['low'].iloc[idx+1] < level['price'] and \
-           df['stoch_k'].iloc[idx] < 20 and \
-           df['stoch_k'].iloc[idx] < df['stoch_d'].iloc[idx]:
-            signals.append(('SELL', level['price'], df.index[idx+1]))
+        if (
+            df["low"].iloc[idx + 1] < level["price"]
+            and df["stoch_k"].iloc[idx] < 20
+            and df["stoch_k"].iloc[idx] < df["stoch_d"].iloc[idx]
+        ):
+            signals.append(("SELL", level["price"], df.index[idx + 1]))
 
     return signals
+
 
 # --- Order Management ---
 def execute_trade(signal, symbol, quantity):
@@ -172,16 +199,20 @@ def execute_trade(signal, symbol, quantity):
         price = signal[1]
 
         # Place market order
-        order = bybit_request("POST", "/v5/order/create", data={
-            "symbol": symbol,
-            "side": side.capitalize(),
-            "orderType": "Market",
-            "qty": str(quantity),
-            "category": "linear",
-            "timeInForce": "IOC"
-        })
+        order = bybit_request(
+            "POST",
+            "/v5/order/create",
+            data={
+                "symbol": symbol,
+                "side": side.capitalize(),
+                "orderType": "Market",
+                "qty": str(quantity),
+                "category": "linear",
+                "timeInForce": "IOC",
+            },
+        )
 
-        if order and order['retCode'] == 0:
+        if order and order["retCode"] == 0:
             print(Fore.GREEN + f"✅ {side} order executed at {price}")
             return True
         return False
@@ -189,6 +220,7 @@ def execute_trade(signal, symbol, quantity):
     except Exception as e:
         print(Fore.RED + f"❌ Trade execution failed: {e!s}")
         return False
+
 
 # --- Main Execution Flow ---
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
+import json
 import logging
 import os
 import sys
 import time
-import json
-from datetime import timezone
+from datetime import UTC
 from decimal import Decimal, getcontext
 from pathlib import Path
 from typing import Any
@@ -38,16 +38,17 @@ CONFIG_FILE = "config.json"
 LOG_DIRECTORY = "bot_logs/trading-bot/logs"
 Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
-TIMEZONE = timezone.utc
+TIMEZONE = UTC
 MAX_API_RETRIES = 5
 RETRY_DELAY_SECONDS = 7
 REQUEST_TIMEOUT = 20
 LOOP_DELAY_SECONDS = 15
 
+
 def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any] | None:
     """Loads the configuration from a JSON file."""
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath) as f:
             config = json.load(f)
         logger.info("Configuration loaded successfully.")
         return config
@@ -58,26 +59,23 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any] | None:
         logger.error(f"Error decoding JSON from {filepath}")
         return None
 
+
 def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) -> None:
     pass
 
 
 class UnanimousLoggerConfig:
-    def __init__(self, log_directory): self.log_directory = log_directory
+    def __init__(self, log_directory):
+        self.log_directory = log_directory
 
     def setup_logging(self) -> logging.Logger:
-
         logger = logging.getLogger("WhaleBot")
 
         logger.setLevel(logging.INFO)
 
-
-
         # Ensure the log directory exists
 
         Path(self.log_directory).mkdir(parents=True, exist_ok=True)
-
-
 
         # Console handler
 
@@ -86,52 +84,42 @@ class UnanimousLoggerConfig:
         console_handler.setLevel(logging.INFO)
 
         console_formatter = logging.Formatter(
-
             f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
-
             datefmt="%Y-%m-%d %H:%M:%S",
-
         )
 
         console_handler.setFormatter(console_formatter)
 
         logger.addHandler(console_handler)
 
-
-
         # File handler (for detailed logs)
 
         log_file_path = Path(self.log_directory) / "bot_activity.log"
 
         file_handler = RotatingFileHandler(
-
             log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5
-
         )
 
         file_handler.setLevel(logging.DEBUG)
 
         file_formatter = logging.Formatter(
-
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-
             datefmt="%Y-%m-%d %H:%M:%S",
-
         )
 
         file_handler.setFormatter(file_formatter)
 
         logger.addHandler(file_handler)
 
-
-
         return logger
+
 
 from logging.handlers import RotatingFileHandler
 
 logger_config = UnanimousLoggerConfig(LOG_DIRECTORY)
 
 logger = logger_config.setup_logging()
+
 
 class BybitClient:
     def __init__(self, api_key, api_secret, base_url, logger):
@@ -142,15 +130,13 @@ class BybitClient:
 
     def fetch_klines(self, symbol, interval, limit):
         self.logger.info("Fetching klines...")
-        return None
 
     def fetch_current_price(self, symbol):
         self.logger.info("Fetching current price...")
-        return None
 
     def fetch_orderbook(self, symbol, limit):
         self.logger.info("Fetching orderbook...")
-        return None
+
 
 class PositionManager:
     def __init__(self, config, logger, symbol, bybit_client):
@@ -168,10 +154,12 @@ class PositionManager:
     def manage_positions(self, current_price, performance_tracker):
         pass
 
+
 class PerformanceTracker:
     def __init__(self, logger, config):
         self.logger = logger
         self.config = config
+
 
 class AlertSystem:
     def __init__(self, logger):
@@ -180,12 +168,14 @@ class AlertSystem:
     def send_alert(self, message, level):
         pass
 
+
 class TechnicalIndicators:
     def __init__(self, klines, config, logger, symbol):
         self.klines = klines
         self.config = config
         self.logger = logger
         self.symbol = symbol
+
 
 class TradingAnalyzer:
     def __init__(self, klines, config, logger, symbol, gemini_client):
@@ -198,6 +188,7 @@ class TradingAnalyzer:
 
     def generate_trading_signal(self, current_price, orderbook, mtf_trends):
         return None, 0, None
+
 
 def main():
     logger.info(f"{NEON_GREEN}Starting WhaleBot...{RESET}")
@@ -219,7 +210,9 @@ def main():
         sys.exit(1)
 
     # --- MODIFIED LINE: Specify the new model ---
-    gemini_client = GeminiClient(api_key=GEMINI_API_KEY, logger=logger, model="gemini-2.5-flash")
+    gemini_client = GeminiClient(
+        api_key=GEMINI_API_KEY, logger=logger, model="gemini-2.5-flash"
+    )
 
     position_manager = PositionManager(config, logger, symbol, bybit_client)
     performance_tracker = PerformanceTracker(logger, config)
@@ -229,13 +222,17 @@ def main():
         try:
             klines = bybit_client.fetch_klines(symbol, interval, 200)
             if klines is None or klines.empty:
-                logger.warning(f"{NEON_YELLOW}Could not fetch klines, skipping loop.{RESET}")
+                logger.warning(
+                    f"{NEON_YELLOW}Could not fetch klines, skipping loop.{RESET}"
+                )
                 time.sleep(config["loop_delay"])
                 continue
 
             current_price = bybit_client.fetch_current_price(symbol)
             if current_price is None:
-                logger.warning(f"{NEON_YELLOW}Could not fetch current price, skipping loop.{RESET}")
+                logger.warning(
+                    f"{NEON_YELLOW}Could not fetch current price, skipping loop.{RESET}"
+                )
                 time.sleep(config["loop_delay"])
                 continue
 
@@ -248,15 +245,24 @@ def main():
                 current_price, orderbook, mtf_trends
             )
 
-            if signal in ["BUY", "SELL"] and confidence >= config["signal_score_threshold"]:
+            if (
+                signal in ["BUY", "SELL"]
+                and confidence >= config["signal_score_threshold"]
+            ):
                 if not position_manager.get_open_positions():
                     atr_value = analyzer.indicator_values.get("ATR", Decimal("0"))
                     if atr_value > 0:
-                        position_manager.open_position(signal, current_price, atr_value, "gemini_trade")
+                        position_manager.open_position(
+                            signal, current_price, atr_value, "gemini_trade"
+                        )
                     else:
-                        logger.warning(f"{NEON_YELLOW}ATR is zero, cannot calculate order size.{RESET}")
+                        logger.warning(
+                            f"{NEON_YELLOW}ATR is zero, cannot calculate order size.{RESET}"
+                        )
                 else:
-                    logger.info(f"{NEON_YELLOW}Signal to {signal} ignored, a position is already open.{RESET}")
+                    logger.info(
+                        f"{NEON_YELLOW}Signal to {signal} ignored, a position is already open.{RESET}"
+                    )
 
             position_manager.manage_positions(current_price, performance_tracker)
 
@@ -267,9 +273,13 @@ def main():
             logger.info(f"{NEON_PURPLE}Bot stopped by user.{RESET}")
             break
         except Exception as e:
-            logger.error(f"{NEON_RED}An unexpected error occurred in the main loop: {e}{RESET}", exc_info=True)
+            logger.error(
+                f"{NEON_RED}An unexpected error occurred in the main loop: {e}{RESET}",
+                exc_info=True,
+            )
             alert_system.send_alert(f"Bot encountered a critical error: {e}", "ERROR")
             time.sleep(config["loop_delay"])
+
 
 if __name__ == "__main__":
     main()

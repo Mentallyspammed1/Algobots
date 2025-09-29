@@ -20,15 +20,21 @@ try:
 
     if balance_res.get("retCode") == 0:
         print("API Keys are VALID. Wallet Balance Check Successful.")
-        if balance_res.get('result') and balance_res['result'].get('list'):
-            for item in balance_res['result']['list']:
-                print(f"  Account Type: {item.get('accountType')}, Total Wallet Balance: {item.get('totalWalletBalance')} {item.get('coin')}")
+        if balance_res.get("result") and balance_res["result"].get("list"):
+            for item in balance_res["result"]["list"]:
+                print(
+                    f"  Account Type: {item.get('accountType')}, Total Wallet Balance: {item.get('totalWalletBalance')} {item.get('coin')}"
+                )
         else:
             print("  No balance information found.")
     else:
-        print(f"API Keys are INVALID or connection failed. Error Code: {balance_res.get('retCode')}, Message: {balance_res.get('retMsg')}")
-        if balance_res.get('retCode') == 10001:
-            print("  (Error 10001 usually means your Bybit account is not a Unified Trading Account (UTA). Please upgrade your account on Bybit.)")
+        print(
+            f"API Keys are INVALID or connection failed. Error Code: {balance_res.get('retCode')}, Message: {balance_res.get('retMsg')}"
+        )
+        if balance_res.get("retCode") == 10001:
+            print(
+                "  (Error 10001 usually means your Bybit account is not a Unified Trading Account (UTA). Please upgrade your account on Bybit.)"
+            )
 
 except Exception as e:
     print(f"An unexpected error occurred: {e}")

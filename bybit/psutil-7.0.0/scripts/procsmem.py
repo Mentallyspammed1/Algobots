@@ -35,7 +35,6 @@ PID     User    Cmdline                            USS     PSS    Swap     RSS
 
 """
 
-
 import sys
 
 import psutil
@@ -46,7 +45,7 @@ if not (psutil.LINUX or psutil.MACOS or psutil.WINDOWS):
 
 
 def convert_bytes(n):
-    symbols = ('K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
+    symbols = ("K", "M", "G", "T", "P", "E", "Z", "Y")
     prefix = {}
     for i, s in enumerate(symbols):
         prefix[s] = 1 << (i + 1) * 10
@@ -102,5 +101,5 @@ def main():
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

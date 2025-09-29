@@ -6,7 +6,7 @@ import os
 import sys
 import time
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -112,7 +112,7 @@ LOG_DIRECTORY = "bot_logs/trading-bot/logs"
 Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
 # Using UTC for consistency and to avoid timezone issues with API timestamps
-TIMEZONE = timezone.utc
+TIMEZONE = UTC
 MAX_API_RETRIES = 5
 RETRY_DELAY_SECONDS = 7
 REQUEST_TIMEOUT = 20
@@ -1070,21 +1070,40 @@ class TradingAnalyzer:
                     "senkou_span_b_period": isd["ichimoku_senkou_span_b_period"],
                     "chikou_span_offset": isd["ichimoku_chikou_span_offset"],
                 },
-                ["Tenkan_Sen", "Kijun_Sen", "Senkou_Span_A", "Senkou_Span_B", "Chikou_Span"],
-                max(isd["ichimoku_tenkan_period"], isd["ichimoku_kijun_period"], isd["ichimoku_senkou_span_b_period"])
+                [
+                    "Tenkan_Sen",
+                    "Kijun_Sen",
+                    "Senkou_Span_A",
+                    "Senkou_Span_B",
+                    "Chikou_Span",
+                ],
+                max(
+                    isd["ichimoku_tenkan_period"],
+                    isd["ichimoku_kijun_period"],
+                    isd["ichimoku_senkou_span_b_period"],
+                )
                 + isd["ichimoku_chikou_span_offset"],
             ),
             "psar": (
                 self.calculate_psar,
-                {"acceleration": isd["psar_acceleration"], "max_acceleration": isd["psar_max_acceleration"]},
+                {
+                    "acceleration": isd["psar_acceleration"],
+                    "max_acceleration": isd["psar_max_acceleration"],
+                },
                 ["PSAR_Val", "PSAR_Dir"],
                 MIN_DATA_POINTS_PSAR,
             ),
             "vwap": (self.calculate_vwap, {}, "VWAP", 1),
             "ehlers_supertrend": (  # Combined for easier config access, will be split internally
-                self._calculate_ehlers_supertrend_internal, {},
-                ["ST_Fast_Dir", "ST_Fast_Val", "ST_Slow_Dir", "ST_Slow_Val"],  # This is a placeholder, actual assignment is inside helper
-                max(isd["ehlers_fast_period"] * 3, isd["ehlers_slow_period"] * 3)
+                self._calculate_ehlers_supertrend_internal,
+                {},
+                [
+                    "ST_Fast_Dir",
+                    "ST_Fast_Val",
+                    "ST_Slow_Dir",
+                    "ST_Slow_Val",
+                ],  # This is a placeholder, actual assignment is inside helper
+                max(isd["ehlers_fast_period"] * 3, isd["ehlers_slow_period"] * 3),
             ),
             "macd": (
                 self.calculate_macd,
@@ -1150,17 +1169,33 @@ class TradingAnalyzer:
             ),
             "keltner_channels": (
                 self.calculate_keltner_channels,
-                {"period": isd["keltner_period"], "atr_multiplier": isd["keltner_atr_multiplier"]},
+                {
+                    "period": isd["keltner_period"],
+                    "atr_multiplier": isd["keltner_atr_multiplier"],
+                },
                 ["Keltner_Upper", "Keltner_Middle", "Keltner_Lower"],
                 isd["keltner_period"] + isd["atr_period"],
             ),
-            "roc": (self.calculate_roc, {"period": isd["roc_period"]}, "ROC", isd["roc_period"] + 1),
+            "roc": (
+                self.calculate_roc,
+                {"period": isd["roc_period"]},
+                "ROC",
+                isd["roc_period"] + 1,
+            ),
             "candlestick_patterns": (
-                self.detect_candlestick_patterns, {}, "Candlestick_Pattern", MIN_CANDLESTICK_PATTERNS_BARS
+                self.detect_candlestick_patterns,
+                {},
+                "Candlestick_Pattern",
+                MIN_CANDLESTICK_PATTERNS_BARS,
             ),
         }
 
-        for ind_key, (calc_func, func_kwargs, result_keys, min_dp) in indicator_map.items():
+        for ind_key, (
+            calc_func,
+            func_kwargs,
+            result_keys,
+            min_dp,
+        ) in indicator_map.items():
             if cfg["indicators"].get(ind_key, False):
                 # Special handling for SuperTrend due to its multiple outputs and internal processing
                 if ind_key == "ehlers_supertrend":
@@ -1168,8 +1203,11 @@ class TradingAnalyzer:
                 # Special handling for DEMA since it takes 'series' as an explicit argument
                 elif ind_key == "dema":
                     result = self._safe_calculate(
-                        calc_func, ind_key, min_data_points=min_dp,
-                        series=self.df["close"], period=func_kwargs["period"]
+                        calc_func,
+                        ind_key,
+                        min_data_points=min_dp,
+                        series=self.df["close"],
+                        period=func_kwargs["period"],
                     )
                     if result is not None:
                         self.df[result_keys] = result.reindex(self.df.index)
@@ -1181,26 +1219,32 @@ class TradingAnalyzer:
                     )
 
                     if result is not None:
-                        if isinstance(result_keys, list):  # Multiple return values (e.g., StochRSI, BB)
-                            if isinstance(result, tuple) and len(result) == len(result_keys):
+                        if isinstance(
+                            result_keys, list
+                        ):  # Multiple return values (e.g., StochRSI, BB)
+                            if isinstance(result, tuple) and len(result) == len(
+                                result_keys
+                            ):
                                 for i, key in enumerate(result_keys):
                                     if result[i] is not None:
                                         self.df[key] = result[i].reindex(self.df.index)
                                         if not result[i].empty:
-                                            self.indicator_values[key] = result[i].iloc[-1]
+                                            self.indicator_values[key] = result[i].iloc[
+                                                -1
+                                            ]
                             else:
                                 self.logger.warning(
                                     f"[{self.symbol}] Indicator '{ind_key}' expected {len(result_keys)} results but got {type(result)}: {result}. Skipping storage."
                                 )
-                        else:  # Single return value
-                            if isinstance(result, pd.Series):
-                                self.df[result_keys] = result.reindex(self.df.index)
-                                if not result.empty:
-                                    self.indicator_values[result_keys] = result.iloc[-1]
-                            else:  # e.g., single scalar for specific patterns
-                                self.df[result_keys] = pd.Series(result, index=self.df.index)
-                                self.indicator_values[result_keys] = result
-
+                        elif isinstance(result, pd.Series):
+                            self.df[result_keys] = result.reindex(self.df.index)
+                            if not result.empty:
+                                self.indicator_values[result_keys] = result.iloc[-1]
+                        else:  # e.g., single scalar for specific patterns
+                            self.df[result_keys] = pd.Series(
+                                result, index=self.df.index
+                            )
+                            self.indicator_values[result_keys] = result
 
         # Final dropna after all indicators are calculated
         initial_len = len(self.df)
@@ -1221,7 +1265,9 @@ class TradingAnalyzer:
                 f"[{self.symbol}] Indicators calculated. Final DataFrame size: {len(self.df)}"
             )
 
-    def _calculate_emas(self, short_period: int, long_period: int) -> tuple[pd.Series, pd.Series]:
+    def _calculate_emas(
+        self, short_period: int, long_period: int
+    ) -> tuple[pd.Series, pd.Series]:
         """Helper to calculate multiple EMAs."""
         ema_short = self.df["close"].ewm(span=short_period, adjust=False).mean()
         ema_long = self.df["close"].ewm(span=long_period, adjust=False).mean()
@@ -1229,7 +1275,9 @@ class TradingAnalyzer:
 
     def _calculate_atr_internal(self, period: int) -> pd.Series:
         """Internal helper to calculate ATR, ensuring TR is calculated first."""
-        tr = self._safe_calculate(self.calculate_true_range, "TR", min_data_points=MIN_DATA_POINTS_TR)
+        tr = self._safe_calculate(
+            self.calculate_true_range, "TR", min_data_points=MIN_DATA_POINTS_TR
+        )
         if tr is None:
             return pd.Series(np.nan, index=self.df.index)
         atr = tr.ewm(span=period, adjust=False).mean()
@@ -1311,7 +1359,7 @@ class TradingAnalyzer:
         """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:  # Need more data for smoothing and ATR
             self.logger.debug(
-                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
             )
             return None
 
@@ -1342,21 +1390,31 @@ class TradingAnalyzer:
 
         # Initialize the first valid supertrend value
         first_valid_idx_loc = 0
-        while first_valid_idx_loc < len(df_copy) and pd.isna(df_copy["close"].iloc[first_valid_idx_loc]):
+        while first_valid_idx_loc < len(df_copy) and pd.isna(
+            df_copy["close"].iloc[first_valid_idx_loc]
+        ):
             first_valid_idx_loc += 1
         if first_valid_idx_loc >= len(df_copy):
             return None  # No valid close price
 
         # Initialize direction based on first valid close relative to bands
-        if df_copy["close"].iloc[first_valid_idx_loc] > upper_band.iloc[first_valid_idx_loc]:
+        if (
+            df_copy["close"].iloc[first_valid_idx_loc]
+            > upper_band.iloc[first_valid_idx_loc]
+        ):
             direction.iloc[first_valid_idx_loc] = 1
             supertrend.iloc[first_valid_idx_loc] = lower_band.iloc[first_valid_idx_loc]
-        elif df_copy["close"].iloc[first_valid_idx_loc] < lower_band.iloc[first_valid_idx_loc]:
+        elif (
+            df_copy["close"].iloc[first_valid_idx_loc]
+            < lower_band.iloc[first_valid_idx_loc]
+        ):
             direction.iloc[first_valid_idx_loc] = -1
             supertrend.iloc[first_valid_idx_loc] = upper_band.iloc[first_valid_idx_loc]
         else:
             direction.iloc[first_valid_idx_loc] = 0
-            supertrend.iloc[first_valid_idx_loc] = lower_band.iloc[first_valid_idx_loc]  # Default to lower for 'uncertain'
+            supertrend.iloc[first_valid_idx_loc] = lower_band.iloc[
+                first_valid_idx_loc
+            ]  # Default to lower for 'uncertain'
 
         for i in range(first_valid_idx_loc + 1, len(df_copy)):
             prev_direction = direction.iloc[i - 1]
@@ -1669,7 +1727,9 @@ class TradingAnalyzer:
             if self.df["close"].iloc[0] < self.df["close"].iloc[1]
             else self.df["high"].iloc[0]
         )
-        bull.iloc[0] = self.df["close"].iloc[0] < self.df["close"].iloc[1]  # Initial bull direction
+        bull.iloc[0] = (
+            self.df["close"].iloc[0] < self.df["close"].iloc[1]
+        )  # Initial bull direction
 
         for i in range(1, len(self.df)):
             prev_bull = bull.iloc[i - 1]
@@ -1755,7 +1815,9 @@ class TradingAnalyzer:
             "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
         )
         self.fib_levels = {
-            "0.0%": Decimal(str(recent_high)).quantize(Decimal(price_precision_str), rounding=ROUND_DOWN),
+            "0.0%": Decimal(str(recent_high)).quantize(
+                Decimal(price_precision_str), rounding=ROUND_DOWN
+            ),
             "23.6%": Decimal(str(recent_high - 0.236 * diff)).quantize(
                 Decimal(price_precision_str), rounding=ROUND_DOWN
             ),
@@ -1771,7 +1833,9 @@ class TradingAnalyzer:
             "78.6%": Decimal(str(recent_high - 0.786 * diff)).quantize(
                 Decimal(price_precision_str), rounding=ROUND_DOWN
             ),
-            "100.0%": Decimal(str(recent_low)).quantize(Decimal(price_precision_str), rounding=ROUND_DOWN),
+            "100.0%": Decimal(str(recent_low)).quantize(
+                Decimal(price_precision_str), rounding=ROUND_DOWN
+            ),
         }
         self.logger.debug(
             f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}"
@@ -1867,7 +1931,9 @@ class TradingAnalyzer:
         self, period: int, fast_period: int, slow_period: int
     ) -> pd.Series:
         """Calculate Kaufman's Adaptive Moving Average (KAMA)."""
-        if len(self.df) < period + slow_period:  # KAMA requires data for period, plus fast/slow EMA
+        if (
+            len(self.df) < period + slow_period
+        ):  # KAMA requires data for period, plus fast/slow EMA
             return pd.Series(np.nan, index=self.df.index)
 
         close_prices = self.df["close"].values
@@ -1876,14 +1942,18 @@ class TradingAnalyzer:
         # Efficiency Ratio (ER)
         # Price change over the period
         price_change = np.abs(close_prices - np.roll(close_prices, period))
-        price_change[:period] = np.nan  # First 'period' values are not valid for full 'price_change'
+        price_change[:period] = (
+            np.nan
+        )  # First 'period' values are not valid for full 'price_change'
 
         # Volatility as sum of absolute differences
         # Using a rolling sum of absolute differences for volatility
         volatility_diffs = pd.Series(close_prices).diff().abs()
         # The rolling window should align with the price_change window for the ER calculation
         volatility = volatility_diffs.rolling(window=period).sum().values
-        volatility[:period] = np.nan  # Same as price_change, first 'period' values are not valid
+        volatility[:period] = (
+            np.nan
+        )  # Same as price_change, first 'period' values are not valid
 
         er = np.full_like(close_prices, np.nan)
         for i in range(period, len(close_prices)):
@@ -1899,7 +1969,9 @@ class TradingAnalyzer:
 
         # KAMA calculation
         first_valid_idx = period
-        while first_valid_idx < len(close_prices) and (np.isnan(close_prices[first_valid_idx]) or np.isnan(sc[first_valid_idx])):
+        while first_valid_idx < len(close_prices) and (
+            np.isnan(close_prices[first_valid_idx]) or np.isnan(sc[first_valid_idx])
+        ):
             first_valid_idx += 1
 
         if first_valid_idx >= len(close_prices):
@@ -1956,7 +2028,6 @@ class TradingAnalyzer:
             and not pd.isna(prev_segment_high)
             and not pd.isna(prev_segment_low)
         ):
-
             is_higher_high = recent_segment_high > prev_segment_high
             is_higher_low = recent_segment_low > prev_segment_low
             is_lower_high = recent_segment_high < prev_segment_high
@@ -1987,15 +2058,20 @@ class TradingAnalyzer:
         """Calculate Keltner Channels."""
         # Ensure ATR is calculated first. If not available, trigger it or return NaN.
         if "ATR" not in self.df.columns or self.df["ATR"].isnull().all():
-            self.logger.debug(f"[{self.symbol}] ATR not available for Keltner Channels. Attempting to calculate.")
-            atr_series = self._calculate_atr_internal(self.indicator_settings["atr_period"])
+            self.logger.debug(
+                f"[{self.symbol}] ATR not available for Keltner Channels. Attempting to calculate."
+            )
+            atr_series = self._calculate_atr_internal(
+                self.indicator_settings["atr_period"]
+            )
             if atr_series is not None and not atr_series.empty:
                 self.df["ATR"] = atr_series
             else:
                 return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
 
-
-        if len(self.df) < period or self.df["ATR"].isnull().all():  # Re-check after potential ATR calculation
+        if (
+            len(self.df) < period or self.df["ATR"].isnull().all()
+        ):  # Re-check after potential ATR calculation
             return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
 
         ema = self.df["close"].ewm(span=period, adjust=False).mean()
@@ -2033,10 +2109,20 @@ class TradingAnalyzer:
         prev_bar = self.df.iloc[i - 1]
 
         # Ensure numeric values are available
-        if any(pd.isna(val) for val in [current_bar["open"], current_bar["close"], current_bar["high"], current_bar["low"],
-                                        prev_bar["open"], prev_bar["close"], prev_bar["high"], prev_bar["low"]]):
+        if any(
+            pd.isna(val)
+            for val in [
+                current_bar["open"],
+                current_bar["close"],
+                current_bar["high"],
+                current_bar["low"],
+                prev_bar["open"],
+                prev_bar["close"],
+                prev_bar["high"],
+                prev_bar["low"],
+            ]
+        ):
             return "No Pattern"
-
 
         # Bullish Engulfing
         if (
@@ -2059,22 +2145,36 @@ class TradingAnalyzer:
         if (
             current_bar["close"] > current_bar["open"]  # Bullish candle
             and abs(current_bar["close"] - current_bar["open"])
-            <= (current_bar["high"] - current_bar["low"]) * 0.3  # Small body (30% max of range)
+            <= (current_bar["high"] - current_bar["low"])
+            * 0.3  # Small body (30% max of range)
             and (current_bar["open"] - current_bar["low"])
-            >= 2 * abs(current_bar["close"] - current_bar["open"])  # Long lower shadow (at least 2x body)
+            >= 2
+            * abs(
+                current_bar["close"] - current_bar["open"]
+            )  # Long lower shadow (at least 2x body)
             and (current_bar["high"] - current_bar["close"])
-            <= 0.5 * abs(current_bar["close"] - current_bar["open"])  # Small upper shadow (less than 0.5x body)
+            <= 0.5
+            * abs(
+                current_bar["close"] - current_bar["open"]
+            )  # Small upper shadow (less than 0.5x body)
         ):
             return "Bullish Hammer"
         # Shooting Star (similar to Hammer, but inverted for bearish)
         if (
             current_bar["close"] < current_bar["open"]  # Bearish candle
             and abs(current_bar["close"] - current_bar["open"])
-            <= (current_bar["high"] - current_bar["low"]) * 0.3  # Small body (30% max of range)
+            <= (current_bar["high"] - current_bar["low"])
+            * 0.3  # Small body (30% max of range)
             and (current_bar["high"] - current_bar["open"])
-            >= 2 * abs(current_bar["close"] - current_bar["open"])  # Long upper shadow (at least 2x body)
+            >= 2
+            * abs(
+                current_bar["close"] - current_bar["open"]
+            )  # Long upper shadow (at least 2x body)
             and (current_bar["close"] - current_bar["low"])
-            <= 0.5 * abs(current_bar["close"] - current_bar["open"])  # Small lower shadow (less than 0.5x body)
+            <= 0.5
+            * abs(
+                current_bar["close"] - current_bar["open"]
+            )  # Small lower shadow (less than 0.5x body)
         ):
             return "Bearish Shooting Star"
 
@@ -2128,9 +2228,7 @@ class TradingAnalyzer:
                 resistance_level = Decimal(ask_price_str)
 
         price_precision_str = (
-            "0."
-            + "0" * (self.config["trade_management"]["price_precision"] - 1)
-            + "1"
+            "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
         )
         if support_level > 0:
             self.indicator_values["Support_Level"] = support_level.quantize(
@@ -2231,7 +2329,6 @@ class TradingAnalyzer:
             str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close
         )
 
-
         trend_strength_multiplier = 1.0  # Initialize here for ADX impact
 
         if self.df.empty:
@@ -2244,7 +2341,6 @@ class TradingAnalyzer:
         prev_close = Decimal(
             str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close
         )
-
 
         # ADX Alignment Scoring (Modified to influence trend_strength_multiplier)
         if active_indicators.get("adx", False):
@@ -2261,13 +2357,19 @@ class TradingAnalyzer:
                         self.logger.debug(
                             f"ADX: Strong BUY trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, +DI > -DI)."
                         )
-                        trend_strength_multiplier = 1.2  # Boost trend-following indicators
+                        trend_strength_multiplier = (
+                            1.2  # Boost trend-following indicators
+                        )
                     elif minus_di > plus_di:
-                        adx_contrib = -adx_weight  # Strong confirmation of bearish trend
+                        adx_contrib = (
+                            -adx_weight
+                        )  # Strong confirmation of bearish trend
                         self.logger.debug(
                             f"ADX: Strong SELL trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, -DI > +DI)."
                         )
-                        trend_strength_multiplier = 1.2  # Boost trend-following indicators
+                        trend_strength_multiplier = (
+                            1.2  # Boost trend-following indicators
+                        )
                 elif adx_val < ADX_WEAK_TREND_THRESHOLD:
                     self.logger.debug(
                         f"ADX: Weak trend (ADX < {ADX_WEAK_TREND_THRESHOLD}). Neutral signal."
@@ -2281,7 +2383,9 @@ class TradingAnalyzer:
             ema_short = self._get_indicator_value("EMA_Short")
             ema_long = self._get_indicator_value("EMA_Long")
             if not pd.isna(ema_short) and not pd.isna(ema_long):
-                ema_contrib = weights.get("ema_alignment", 0) * trend_strength_multiplier
+                ema_contrib = (
+                    weights.get("ema_alignment", 0) * trend_strength_multiplier
+                )
                 if ema_short > ema_long:
                     signal_score += ema_contrib
                     signal_breakdown["EMA Alignment"] = ema_contrib
@@ -2295,7 +2399,9 @@ class TradingAnalyzer:
         if active_indicators.get("sma_trend_filter", False):
             sma_long = self._get_indicator_value("SMA_Long")
             if not pd.isna(sma_long):
-                sma_contrib = weights.get("sma_trend_filter", 0) * trend_strength_multiplier
+                sma_contrib = (
+                    weights.get("sma_trend_filter", 0) * trend_strength_multiplier
+                )
                 if current_close > sma_long:
                     signal_score += sma_contrib
                     signal_breakdown["SMA Trend Filter"] = sma_contrib
@@ -2412,19 +2518,27 @@ class TradingAnalyzer:
             if not pd.isna(vwap):
                 vwap_contrib = 0.0
                 if current_close > vwap:
-                    vwap_contrib = weights.get("vwap", 0) * 0.2 * trend_strength_multiplier
+                    vwap_contrib = (
+                        weights.get("vwap", 0) * 0.2 * trend_strength_multiplier
+                    )
                 elif current_close < vwap:
-                    vwap_contrib = -weights.get("vwap", 0) * 0.2 * trend_strength_multiplier
+                    vwap_contrib = (
+                        -weights.get("vwap", 0) * 0.2 * trend_strength_multiplier
+                    )
 
                 if len(self.df) > 1 and "VWAP" in self.df.columns:
                     prev_vwap = Decimal(str(self.df["VWAP"].iloc[-2]))
                     if current_close > vwap and prev_close <= prev_vwap:
-                        vwap_contrib += weights.get("vwap", 0) * 0.3 * trend_strength_multiplier
+                        vwap_contrib += (
+                            weights.get("vwap", 0) * 0.3 * trend_strength_multiplier
+                        )
                         self.logger.debug(
                             f"[{self.symbol}] VWAP: Bullish crossover detected."
                         )
                     elif current_close < vwap and prev_close >= prev_vwap:
-                        vwap_contrib -= weights.get("vwap", 0) * 0.3 * trend_strength_multiplier
+                        vwap_contrib -= (
+                            weights.get("vwap", 0) * 0.3 * trend_strength_multiplier
+                        )
                         self.logger.debug(
                             f"[{self.symbol}] VWAP: Bearish crossover detected."
                         )
@@ -2438,17 +2552,25 @@ class TradingAnalyzer:
             if not pd.isna(psar_val) and not pd.isna(psar_dir):
                 psar_contrib = 0.0
                 if psar_dir == 1:
-                    psar_contrib = weights.get("psar", 0) * 0.5 * trend_strength_multiplier
+                    psar_contrib = (
+                        weights.get("psar", 0) * 0.5 * trend_strength_multiplier
+                    )
                 elif psar_dir == -1:
-                    psar_contrib = -weights.get("psar", 0) * 0.5 * trend_strength_multiplier
+                    psar_contrib = (
+                        -weights.get("psar", 0) * 0.5 * trend_strength_multiplier
+                    )
 
                 if len(self.df) > 1 and "PSAR_Val" in self.df.columns:
                     prev_psar_val = Decimal(str(self.df["PSAR_Val"].iloc[-2]))
                     if current_close > psar_val and prev_close <= prev_psar_val:
-                        psar_contrib += weights.get("psar", 0) * 0.4 * trend_strength_multiplier
+                        psar_contrib += (
+                            weights.get("psar", 0) * 0.4 * trend_strength_multiplier
+                        )
                         self.logger.debug("PSAR: Bullish reversal detected.")
                     elif current_close < psar_val and prev_close >= prev_psar_val:
-                        psar_contrib -= weights.get("psar", 0) * 0.4 * trend_strength_multiplier
+                        psar_contrib -= (
+                            weights.get("psar", 0) * 0.4 * trend_strength_multiplier
+                        )
                         self.logger.debug("PSAR: Bearish reversal detected.")
                 signal_score += psar_contrib
                 signal_breakdown["PSAR"] = psar_contrib
@@ -2466,16 +2588,23 @@ class TradingAnalyzer:
             fib_contrib = 0.0
             for level_name, level_price in self.fib_levels.items():
                 # Check if price is within a small percentage of a Fibonacci level
-                if level_name not in ["0.0%", "100.0%"] and current_price > Decimal("0") and abs(
-                    (current_price - level_price) / current_price
-                ) < Decimal("0.001"):
+                if (
+                    level_name not in ["0.0%", "100.0%"]
+                    and current_price > Decimal("0")
+                    and abs((current_price - level_price) / current_price)
+                    < Decimal("0.001")
+                ):
                     self.logger.debug(
                         f"Price near Fibonacci level {level_name}: {level_price}"
                     )
                     if len(self.df) > 1:
-                        if current_close > prev_close and current_close > level_price:  # Price broke above level
+                        if (
+                            current_close > prev_close and current_close > level_price
+                        ):  # Price broke above level
                             fib_contrib += weights.get("fibonacci_levels", 0) * 0.1
-                        elif current_close < prev_close and current_close < level_price:  # Price broke below level
+                        elif (
+                            current_close < prev_close and current_close < level_price
+                        ):  # Price broke below level
                             fib_contrib -= weights.get("fibonacci_levels", 0) * 0.1
             signal_score += fib_contrib
             signal_breakdown["Fibonacci Levels"] = fib_contrib
@@ -2500,7 +2629,9 @@ class TradingAnalyzer:
                     signal_breakdown["Fibonacci R2 Breakout"] = fib_pivot_contrib * 1.0
                 elif current_close > pivot and prev_close <= pivot:  # Break above Pivot
                     signal_score += fib_pivot_contrib * 0.2
-                    signal_breakdown["Fibonacci Pivot Breakout"] = fib_pivot_contrib * 0.2
+                    signal_breakdown["Fibonacci Pivot Breakout"] = (
+                        fib_pivot_contrib * 0.2
+                    )
 
                 # Bearish signals
                 if current_close < s1 and prev_close >= s1:  # Break below S1
@@ -2524,7 +2655,10 @@ class TradingAnalyzer:
                 if "ST_Fast_Dir" in self.df.columns and len(self.df) > 1
                 else np.nan
             )
-            weight = weights.get("ehlers_supertrend_alignment", 0.0) * trend_strength_multiplier
+            weight = (
+                weights.get("ehlers_supertrend_alignment", 0.0)
+                * trend_strength_multiplier
+            )
 
             if (
                 not pd.isna(st_fast_dir)
@@ -2560,7 +2694,9 @@ class TradingAnalyzer:
                 not pd.isna(macd_line)
                 and not pd.isna(signal_line)
                 and not pd.isna(histogram)
-                and len(self.df) > 1 and "MACD_Line" in self.df.columns and "MACD_Signal" in self.df.columns
+                and len(self.df) > 1
+                and "MACD_Line" in self.df.columns
+                and "MACD_Signal" in self.df.columns
             ):
                 macd_contrib = 0.0
                 if (
@@ -2586,7 +2722,6 @@ class TradingAnalyzer:
                 signal_score += macd_contrib
                 signal_breakdown["MACD"] = macd_contrib
 
-
         # --- Ichimoku Cloud Alignment Scoring ---
         if active_indicators.get("ichimoku_cloud", False):
             tenkan_sen = self._get_indicator_value("Tenkan_Sen")
@@ -2603,8 +2738,10 @@ class TradingAnalyzer:
                 and not pd.isna(senkou_span_b)
                 and not pd.isna(chikou_span)
                 and len(self.df) > 1
-                and "Tenkan_Sen" in self.df.columns and "Kijun_Sen" in self.df.columns
-                and "Senkou_Span_A" in self.df.columns and "Senkou_Span_B" in self.df.columns
+                and "Tenkan_Sen" in self.df.columns
+                and "Kijun_Sen" in self.df.columns
+                and "Senkou_Span_A" in self.df.columns
+                and "Senkou_Span_B" in self.df.columns
                 and "Chikou_Span" in self.df.columns
             ):
                 ichimoku_contrib = 0.0
@@ -2669,7 +2806,13 @@ class TradingAnalyzer:
             obv_ema = self._get_indicator_value("OBV_EMA")
             weight = weights.get("obv_momentum", 0.0)
 
-            if not pd.isna(obv_val) and not pd.isna(obv_ema) and len(self.df) > 1 and "OBV" in self.df.columns and "OBV_EMA" in self.df.columns:
+            if (
+                not pd.isna(obv_val)
+                and not pd.isna(obv_ema)
+                and len(self.df) > 1
+                and "OBV" in self.df.columns
+                and "OBV_EMA" in self.df.columns
+            ):
                 obv_contrib = 0.0
                 if (
                     obv_val > obv_ema
@@ -2790,7 +2933,11 @@ class TradingAnalyzer:
         if active_indicators.get("kaufman_ama", False):
             kama = self._get_indicator_value("Kaufman_AMA")
             weight = weights.get("kaufman_ama_cross", 0.0)
-            if not pd.isna(kama) and len(self.df) > 1 and "Kaufman_AMA" in self.df.columns:
+            if (
+                not pd.isna(kama)
+                and len(self.df) > 1
+                and "Kaufman_AMA" in self.df.columns
+            ):
                 kama_contrib = 0.0
                 prev_kama = self.df["Kaufman_AMA"].iloc[-2]
                 if current_close > kama and prev_close <= prev_kama:
@@ -2848,7 +2995,13 @@ class TradingAnalyzer:
             ema_short = self._get_indicator_value("EMA_Short")
             weight = weights.get("dema_crossover", 0.0)
 
-            if not pd.isna(dema) and not pd.isna(ema_short) and len(self.df) > 1 and "DEMA" in self.df.columns and "EMA_Short" in self.df.columns:
+            if (
+                not pd.isna(dema)
+                and not pd.isna(ema_short)
+                and len(self.df) > 1
+                and "DEMA" in self.df.columns
+                and "EMA_Short" in self.df.columns
+            ):
                 dema_contrib = 0.0
                 prev_dema = self.df["DEMA"].iloc[-2]
                 prev_ema_short = self.df["EMA_Short"].iloc[-2]
@@ -2868,7 +3021,13 @@ class TradingAnalyzer:
             kc_lower = self._get_indicator_value("Keltner_Lower")
             weight = weights.get("keltner_breakout", 0.0)
 
-            if not pd.isna(kc_upper) and not pd.isna(kc_lower) and len(self.df) > 1 and "Keltner_Upper" in self.df.columns and "Keltner_Lower" in self.df.columns:
+            if (
+                not pd.isna(kc_upper)
+                and not pd.isna(kc_lower)
+                and len(self.df) > 1
+                and "Keltner_Upper" in self.df.columns
+                and "Keltner_Lower" in self.df.columns
+            ):
                 kc_contrib = 0.0
                 if (
                     current_close > kc_upper
@@ -2909,10 +3068,14 @@ class TradingAnalyzer:
                 if len(self.df) > 1 and "ROC" in self.df.columns:
                     prev_roc = self.df["ROC"].iloc[-2]
                     if roc > 0 and prev_roc <= 0:
-                        roc_contrib += weight * 0.3 * trend_strength_multiplier  # Bullish zero-line cross
+                        roc_contrib += (
+                            weight * 0.3 * trend_strength_multiplier
+                        )  # Bullish zero-line cross
                         self.logger.debug("ROC: Bullish zero-line crossover.")
                     elif roc < 0 and prev_roc >= 0:
-                        roc_contrib -= weight * 0.3 * trend_strength_multiplier  # Bearish zero-line cross
+                        roc_contrib -= (
+                            weight * 0.3 * trend_strength_multiplier
+                        )  # Bearish zero-line cross
                         self.logger.debug("ROC: Bearish zero-line crossover.")
                 signal_score += roc_contrib
                 signal_breakdown["ROC"] = roc_contrib
@@ -3026,7 +3189,6 @@ def display_indicator_values_and_price(
     """Display current price and calculated indicator values."""
     logger.info(f"{NEON_BLUE}--- Current Market Data & Indicators ---{RESET}")
     logger.info(f"{NEON_GREEN}Current Price: {current_price.normalize()}{RESET}")
-
 
     if analyzer.df.empty:
         logger.warning(
@@ -3355,7 +3517,7 @@ def main() -> None:
                 config,
                 logger,
                 current_price,
-                analyzer, # Pass the analyzer instance
+                analyzer,  # Pass the analyzer instance
                 orderbook_data,
                 mtf_trends,
                 signal_breakdown,

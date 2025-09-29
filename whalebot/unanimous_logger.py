@@ -14,7 +14,12 @@ from config import Config
 class SensitiveFormatter(logging.Formatter):
     """Formatter that redacts API keys from log records."""
 
-    SENSITIVE_WORDS: ClassVar[list[str]] = ["BYBIT_API_KEY", "BYBIT_API_SECRET", "GEMINI_API_KEY", "ALERT_TELEGRAM_BOT_TOKEN"]
+    SENSITIVE_WORDS: ClassVar[list[str]] = [
+        "BYBIT_API_KEY",
+        "BYBIT_API_SECRET",
+        "GEMINI_API_KEY",
+        "ALERT_TELEGRAM_BOT_TOKEN",
+    ]
 
     def __init__(self, fmt=None, datefmt=None, style="%"):
         """Initializes the SensitiveFormatter."""
@@ -30,16 +35,19 @@ class SensitiveFormatter(logging.Formatter):
         original_message = super().format(record)
         redacted_message = original_message
         for word in self.SENSITIVE_WORDS:
-            key_value = os.getenv(word, '')
+            key_value = os.getenv(word, "")
             if key_value:
-                redacted_message = redacted_message.replace(key_value, "*" * len(key_value))
+                redacted_message = redacted_message.replace(
+                    key_value, "*" * len(key_value)
+                )
             redacted_message = redacted_message.replace(word, "*" * len(word))
 
         return redacted_message
 
+
 class JSONFormatter(logging.Formatter):
-    """Formatter that outputs log records as a JSON string.
-    """
+    """Formatter that outputs log records as a JSON string."""
+
     def format(self, record):
         log_record = {
             "timestamp": self.formatTime(record, self.datefmt),
@@ -51,16 +59,23 @@ class JSONFormatter(logging.Formatter):
             log_record.update(record.args)
         return json.dumps(log_record)
 
+
 class TradingBotFormatter(logging.Formatter):
-    """Formatter that outputs log records in a format that the trading-bot can parse.
-    """
+    """Formatter that outputs log records in a format that the trading-bot can parse."""
+
     def format(self, record):
         message = record.getMessage()
         if record.args and isinstance(record.args, dict):
             message += " " + json.dumps(record.args)
         return f"{self.formatTime(record, self.datefmt)} - {record.name} - {record.levelname} - {message}"
 
-def setup_logger(config: Config, log_name: str = "TradingBot", json_log_file: str = None, trading_bot_log_file: str = None) -> logging.Logger:
+
+def setup_logger(
+    config: Config,
+    log_name: str = "TradingBot",
+    json_log_file: str = None,
+    trading_bot_log_file: str = None,
+) -> logging.Logger:
     """Configure and return a logger with file, console, and optional JSON handlers."""
     logger = logging.getLogger(log_name)
     logger.setLevel(getattr(logging, config.LOG_LEVEL.upper()))
@@ -99,7 +114,11 @@ def setup_logger(config: Config, log_name: str = "TradingBot", json_log_file: st
             trading_bot_handler = RotatingFileHandler(
                 trading_bot_log_path, maxBytes=10 * 1024 * 1024, backupCount=5
             )
-            trading_bot_handler.setFormatter(TradingBotFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+            trading_bot_handler.setFormatter(
+                TradingBotFormatter(
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                )
+            )
             logger.addHandler(trading_bot_handler)
 
     return logger

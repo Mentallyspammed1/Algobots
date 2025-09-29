@@ -4,12 +4,11 @@
 # It uses Flask for the web server and Flask-SocketIO for real-time communication with the browser.
 
 # --- 1. Import necessary libraries ---
-from flask import Flask, request, jsonify, render_template_string
-from flask_socketio import SocketIO
-import json
-from datetime import datetime
 import logging
+
 from dotenv import load_dotenv
+from flask import Flask
+from flask_socketio import SocketIO
 
 # --- 2. Basic Setup ---
 # Load environment variables from .env file
@@ -18,18 +17,18 @@ load_dotenv()
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
 # It's recommended to set a secret key for session management, though not strictly required for this simple app.
-app.config['SECRET_KEY'] = 'your_very_secret_key_here!'
+app.config["SECRET_KEY"] = "your_very_secret_key_here!"
 socketio = SocketIO(app)
 
 # --- 3. Configure Logging ---
 # Disable Flask's default logging to avoid duplicate messages.
-log = logging.getLogger('werkzeug')
+log = logging.getLogger("werkzeug")
 log.setLevel(logging.ERROR)
 
 # Set up a custom logger for our application.
 app.logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
 app.logger.addHandler(handler)
 

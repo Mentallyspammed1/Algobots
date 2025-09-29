@@ -7,10 +7,11 @@ from pybit.unified_trading import HTTP
 
 # Configure logging for the module
 logging.basicConfig(
-    level=logging.INFO, # Changed to INFO for less verbose default output, DEBUG for full details
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+    level=logging.INFO,  # Changed to INFO for less verbose default output, DEBUG for full details
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
 
 class BybitBrokerHelper:
     """A helper class for managing Bybit broker-related functionalities,
@@ -33,10 +34,16 @@ class BybitBrokerHelper:
         self.api_key = api_key
         self.api_secret = api_secret
         self.testnet = testnet
-        self.session = HTTP(testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret)
-        logger.info(f"BybitBrokerHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
+        self.session = HTTP(
+            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret
+        )
+        logger.info(
+            f"BybitBrokerHelper initialized for {'testnet' if self.testnet else 'mainnet'}."
+        )
 
-    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> dict[str, Any] | None:
+    def _make_request(
+        self, method: str, endpoint_name: str, **kwargs
+    ) -> dict[str, Any] | None:
         """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
 
@@ -50,11 +57,13 @@ class BybitBrokerHelper:
             func = getattr(self.session, method)
             response = func(**kwargs)
 
-            if response and response.get('retCode') == 0:
-                logger.debug(f"[{endpoint_name}] Successfully called. Response: {response.get('result')}")
-                return response.get('result')
-            ret_code = response.get('retCode', 'N/A')
-            error_msg = response.get('retMsg', 'Unknown error')
+            if response and response.get("retCode") == 0:
+                logger.debug(
+                    f"[{endpoint_name}] Successfully called. Response: {response.get('result')}"
+                )
+                return response.get("result")
+            ret_code = response.get("retCode", "N/A")
+            error_msg = response.get("retMsg", "Unknown error")
             logger.error(
                 f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
                 f"Args: {kwargs}. Full Response: {response}"
@@ -78,9 +87,11 @@ class BybitBrokerHelper:
 
         :return: A dictionary containing broker information or None on failure.
         """
-        return self._make_request('get_broker_info', 'Broker Info')
+        return self._make_request("get_broker_info", "Broker Info")
 
-    def get_broker_earnings(self, biz_type: str | None = None, **kwargs) -> dict[str, Any] | None:
+    def get_broker_earnings(
+        self, biz_type: str | None = None, **kwargs
+    ) -> dict[str, Any] | None:
         """Retrieves broker earnings records.
 
         :param biz_type: Optional. Business type (e.g., "SPOT", "LINEAR", "INVERSE", "OPTION").
@@ -94,11 +105,13 @@ class BybitBrokerHelper:
 
         params = {}
         if biz_type:
-            params['bizType'] = biz_type
+            params["bizType"] = biz_type
         params.update(kwargs)
-        return self._make_request('get_broker_earnings', 'Broker Earnings', **params)
+        return self._make_request("get_broker_earnings", "Broker Earnings", **params)
 
-    def get_broker_account_info(self, sub_member_id: int | None = None) -> dict[str, Any] | None:
+    def get_broker_account_info(
+        self, sub_member_id: int | None = None
+    ) -> dict[str, Any] | None:
         """Retrieves sub-account information for a broker.
 
         :param sub_member_id: Optional. The UID of the sub-account. If not provided,
@@ -108,10 +121,15 @@ class BybitBrokerHelper:
         params = {}
         if sub_member_id is not None:
             if not isinstance(sub_member_id, int) or sub_member_id <= 0:
-                logger.error("Invalid 'sub_member_id' provided for get_broker_account_info.")
+                logger.error(
+                    "Invalid 'sub_member_id' provided for get_broker_account_info."
+                )
                 return None
-            params['subMemberId'] = sub_member_id
-        return self._make_request('get_broker_account_info', 'Broker Account Info', **params)
+            params["subMemberId"] = sub_member_id
+        return self._make_request(
+            "get_broker_account_info", "Broker Account Info", **params
+        )
+
 
 # Example Usage
 if __name__ == "__main__":
@@ -123,8 +141,12 @@ if __name__ == "__main__":
     USE_TESTNET = True
 
     if API_KEY == "YOUR_BROKER_API_KEY" or API_SECRET == "YOUR_BROKER_API_SECRET":
-        logger.error("Please replace YOUR_BROKER_API_KEY and YOUR_BROKER_API_SECRET with your actual credentials in bybit_broker_helper.py example.")
-        logger.error("Note: Broker functions are for accounts enrolled in the Bybit Broker program.")
+        logger.error(
+            "Please replace YOUR_BROKER_API_KEY and YOUR_BROKER_API_SECRET with your actual credentials in bybit_broker_helper.py example."
+        )
+        logger.error(
+            "Note: Broker functions are for accounts enrolled in the Bybit Broker program."
+        )
         # For demonstration, we'll proceed but expect API calls to fail if not a broker account.
         # exit()
 
@@ -133,34 +155,44 @@ if __name__ == "__main__":
     print("\n--- Getting Broker Info ---")
     broker_info = broker_helper.get_broker_info()
     if broker_info:
-        print(f"  Broker ID: {broker_info.get('brokerId')}, Name: {broker_info.get('brokerName')}")
+        print(
+            f"  Broker ID: {broker_info.get('brokerId')}, Name: {broker_info.get('brokerName')}"
+        )
         print(f"  Deposit Bonus Total: {broker_info.get('depositBonusTotal')}")
     else:
         print("  Failed to retrieve broker info (Are you a broker?).")
 
     print("\n--- Getting Broker Earnings (SPOT category) ---")
     broker_earnings_spot = broker_helper.get_broker_earnings(biz_type="SPOT", limit=2)
-    if broker_earnings_spot and broker_earnings_spot.get('list'):
+    if broker_earnings_spot and broker_earnings_spot.get("list"):
         print("  SPOT Earnings Records:")
-        for record in broker_earnings_spot['list']:
-            print(f"    Date: {record.get('bizDate')}, Income: {record.get('totalIncome')}, Biz Type: {record.get('bizType')}")
+        for record in broker_earnings_spot["list"]:
+            print(
+                f"    Date: {record.get('bizDate')}, Income: {record.get('totalIncome')}, Biz Type: {record.get('bizType')}"
+            )
     else:
         print("  Failed to retrieve SPOT broker earnings or no records found.")
 
     print("\n--- Getting Broker Earnings (LINEAR category) ---")
-    broker_earnings_linear = broker_helper.get_broker_earnings(biz_type="LINEAR", limit=2)
-    if broker_earnings_linear and broker_earnings_linear.get('list'):
+    broker_earnings_linear = broker_helper.get_broker_earnings(
+        biz_type="LINEAR", limit=2
+    )
+    if broker_earnings_linear and broker_earnings_linear.get("list"):
         print("  LINEAR Earnings Records:")
-        for record in broker_earnings_linear['list']:
-            print(f"    Date: {record.get('bizDate')}, Income: {record.get('totalIncome')}, Biz Type: {record.get('bizType')}")
+        for record in broker_earnings_linear["list"]:
+            print(
+                f"    Date: {record.get('bizDate')}, Income: {record.get('totalIncome')}, Biz Type: {record.get('bizType')}"
+            )
     else:
         print("  Failed to retrieve LINEAR broker earnings or no records found.")
 
     print("\n--- Getting Broker Account Info (All Sub-Members) ---")
     broker_account_info = broker_helper.get_broker_account_info()
-    if broker_account_info and broker_account_info.get('list'):
+    if broker_account_info and broker_account_info.get("list"):
         print("  Broker Sub-Account Info:")
-        for account in broker_account_info['list']:
-            print(f"    SubMemberId: {account.get('subMemberId')}, Username: {account.get('username')}, Status: {account.get('status')}")
+        for account in broker_account_info["list"]:
+            print(
+                f"    SubMemberId: {account.get('subMemberId')}, Username: {account.get('username')}, Status: {account.get('status')}"
+            )
     else:
         print("  Failed to retrieve broker sub-account info or no records found.")

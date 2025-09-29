@@ -27,12 +27,12 @@ import psutil
 
 
 AD = "-"
-AF_INET6 = getattr(socket, 'AF_INET6', object())
+AF_INET6 = getattr(socket, "AF_INET6", object())
 proto_map = {
-    (AF_INET, SOCK_STREAM): 'tcp',
-    (AF_INET6, SOCK_STREAM): 'tcp6',
-    (AF_INET, SOCK_DGRAM): 'udp',
-    (AF_INET6, SOCK_DGRAM): 'udp6',
+    (AF_INET, SOCK_STREAM): "tcp",
+    (AF_INET6, SOCK_STREAM): "tcp6",
+    (AF_INET, SOCK_DGRAM): "udp",
+    (AF_INET6, SOCK_DGRAM): "udp6",
 }
 
 
@@ -48,14 +48,14 @@ def main():
     )
     print(header)
     proc_names = {}
-    for p in psutil.process_iter(['pid', 'name']):
-        proc_names[p.info['pid']] = p.info['name']
-    for c in psutil.net_connections(kind='inet'):
+    for p in psutil.process_iter(["pid", "name"]):
+        proc_names[p.info["pid"]] = p.info["name"]
+    for c in psutil.net_connections(kind="inet"):
         laddr = "{}:{}".format(*c.laddr)
         raddr = ""
         if c.raddr:
             raddr = "{}:{}".format(*c.raddr)
-        name = proc_names.get(c.pid, '?') or ''
+        name = proc_names.get(c.pid, "?") or ""
         line = templ.format(
             proto_map[(c.family, c.type)],
             laddr,
@@ -67,5 +67,5 @@ def main():
         print(line)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

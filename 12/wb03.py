@@ -24,29 +24,40 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore, Style, init as colorama_init
+from colorama import Fore, Style
+from colorama import init as colorama_init
 from dotenv import load_dotenv
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  GLOBAL CONSTANTS + COLOUR PALETTE
 # ─────────────────────────────────────────────────────────────────────────────
 colorama_init(autoreset=True)
-NEON_GREEN  = Fore.LIGHTGREEN_EX
-NEON_BLUE   = Fore.CYAN
+NEON_GREEN = Fore.LIGHTGREEN_EX
+NEON_BLUE = Fore.CYAN
 NEON_PURPLE = Fore.MAGENTA
 NEON_YELLOW = Fore.YELLOW
-NEON_RED    = Fore.LIGHTRED_EX
-RESET       = Style.RESET_ALL
+NEON_RED = Fore.LIGHTRED_EX
+RESET = Style.RESET_ALL
 
 VALID_INTERVALS: list[str] = [
-    "1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"
+    "1",
+    "3",
+    "5",
+    "15",
+    "30",
+    "60",
+    "120",
+    "240",
+    "D",
+    "W",
+    "M",
 ]
 
 RETRY_ERROR_CODES = {429, 500, 502, 503, 504}
 
 TIMEZONE = ZoneInfo("America/Chicago")
 BASE_DIR = Path(__file__).resolve().parent
-LOG_DIR  = BASE_DIR / "bot_logs"
+LOG_DIR = BASE_DIR / "bot_logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 # Default precision for Decimal math
@@ -56,9 +67,10 @@ getcontext().prec = 12
 # 2.  ENV-VARS + LOGGER SET-UP
 # ─────────────────────────────────────────────────────────────────────────────
 load_dotenv()
-API_KEY    = os.getenv("BYBIT_API_KEY") or ""
+API_KEY = os.getenv("BYBIT_API_KEY") or ""
 API_SECRET = os.getenv("BYBIT_API_SECRET") or ""
-BASE_URL   = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
+BASE_URL = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
+
 
 def setup_logger(name: str) -> logging.Logger:
     """Create a colourised root logger or child logger."""
@@ -72,6 +84,7 @@ def setup_logger(name: str) -> logging.Logger:
         logger.addHandler(handler)
     return logger
 
+
 LOGGER = setup_logger("whalebot")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,9 +92,11 @@ LOGGER = setup_logger("whalebot")
 # ─────────────────────────────────────────────────────────────────────────────
 CONFIG_FILE = BASE_DIR / "config.json"
 
+
 @dataclass(slots=True)
 class BotConfig:
     """Lightweight wrapper around the JSON config."""
+
     raw: dict[str, Any]
 
     @property
@@ -90,6 +105,7 @@ class BotConfig:
 
     def get(self, key: str, default: Any = None):
         return self.raw.get(key, default)
+
 
 def load_config(fp: Path = CONFIG_FILE) -> BotConfig:
     """Load config file, create defaults if missing / broken."""
@@ -135,7 +151,9 @@ def load_config(fp: Path = CONFIG_FILE) -> BotConfig:
 
     return BotConfig(merged)
 
+
 CFG = load_config()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4.  BYBIT LOW-LEVEL HELPERS
@@ -143,6 +161,7 @@ CFG = load_config()
 def _sign(secret: str, params: MutableMapping[str, Any]) -> str:
     qs = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     return hmac.new(secret.encode(), qs.encode(), hashlib.sha256).hexdigest()
+
 
 def _send_request(
     method: str,
@@ -156,9 +175,9 @@ def _send_request(
     params["timestamp"] = str(int(time.time() * 1000))
     headers = {
         "X-BAPI-API-KEY": API_KEY,
-        "X-BAPI-SIGN":    _sign(API_SECRET, params),
+        "X-BAPI-SIGN": _sign(API_SECRET, params),
         "X-BAPI-TIMESTAMP": params["timestamp"],
-        "Content-Type":   "application/json",
+        "Content-Type": "application/json",
     }
     url = f"{BASE_URL}{endpoint}"
 
@@ -169,7 +188,7 @@ def _send_request(
                 url,
                 headers=headers,
                 params=params if method == "GET" else None,
-                json=params  if method != "GET" else None,
+                json=params if method != "GET" else None,
                 timeout=10,
             )
             if resp.status_code >= 400:
@@ -185,7 +204,7 @@ def _send_request(
                 return None
             return data
         except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as err:
-            sleep_s = (2 ** attempt) + random.random()
+            sleep_s = (2**attempt) + random.random()
             logger.warning(
                 f"{NEON_YELLOW}HTTP issue {err} – retry {attempt}/{retries} in {sleep_s:.1f}s{RESET}"
             )
@@ -193,16 +212,19 @@ def _send_request(
     logger.error(f"{NEON_RED}Max retries exceeded: {method} {endpoint}{RESET}")
     return None
 
+
 def _log_api_error(resp: requests.Response, logger: logging.Logger):
     try:
         logger.error(f"{NEON_RED}API-ERR {resp.status_code}: {resp.json()}{RESET}")
     except Exception:
         logger.error(f"{NEON_RED}API-ERR {resp.status_code}: {resp.text[:100]}…{RESET}")
 
+
 # Convenience wrappers
 def fetch_price(symbol: str, log: logging.Logger) -> Decimal | None:
     data = _send_request(
-        "GET", "/v5/market/tickers",
+        "GET",
+        "/v5/market/tickers",
         params={"category": "linear", "symbol": symbol},
         logger=log,
     )
@@ -212,6 +234,7 @@ def fetch_price(symbol: str, log: logging.Logger) -> Decimal | None:
         if t["symbol"] == symbol:
             return Decimal(t["lastPrice"])
     return None
+
 
 def fetch_klines(
     symbol: str,
@@ -229,7 +252,12 @@ def fetch_klines(
     data = _send_request(
         "GET",
         "/v5/market/kline",
-        params={"symbol": symbol, "interval": interval, "limit": limit, "category": "linear"},
+        params={
+            "symbol": symbol,
+            "interval": interval,
+            "limit": limit,
+            "category": "linear",
+        },
         logger=log,
     )
     if not data or not (lst := data["result"].get("list")):
@@ -245,6 +273,7 @@ def fetch_klines(
     cache[key] = (now, df)
     return df.copy()
 
+
 def fetch_orderbook(symbol: str, depth: int, log: logging.Logger):
     return _send_request(
         "GET",
@@ -252,6 +281,7 @@ def fetch_orderbook(symbol: str, depth: int, log: logging.Logger):
         params={"symbol": symbol, "limit": depth, "category": "linear"},
         logger=log,
     )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5.  ANALYSIS / INDICATOR ENGINE
@@ -268,9 +298,12 @@ class Indicators:
         return series.ewm(span=span, adjust=False).mean()
 
     @staticmethod
-    def atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
+    def atr(
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int
+    ) -> pd.Series:
         tr = pd.concat(
-            [high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1
+            [high - low, (high - close.shift()).abs(), (low - close.shift()).abs()],
+            axis=1,
         ).max(axis=1)
         return Indicators.ema(tr, span=window)
 
@@ -293,6 +326,7 @@ class Indicators:
         hist = macd_line - signal
         return pd.DataFrame({"macd": macd_line, "signal": signal, "hist": hist})
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 @dataclass
 class TradeSignal:
@@ -300,6 +334,7 @@ class TradeSignal:
     confidence: float
     conditions: list[str]
     levels: dict[str, Decimal]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 class TradingAnalyzer:
@@ -313,10 +348,10 @@ class TradingAnalyzer:
         symbol: str,
         interval: str,
     ):
-        self.df   = df
-        self.cfg  = cfg
-        self.log  = log
-        self.sym  = symbol
+        self.df = df
+        self.cfg = cfg
+        self.log = log
+        self.sym = symbol
         self.intv = interval
         self.cache: dict[str, Any] = {}
         # quick stats
@@ -330,7 +365,9 @@ class TradingAnalyzer:
     def ema_alignment_score(self) -> float:
         ema_s = Indicators.ema(self.df.close, self.cfg["momentum_ma_short"])
         ema_l = Indicators.ema(self.df.close, self.cfg["momentum_ma_long"])
-        if len(self.df) < max(self.cfg["momentum_ma_short"], self.cfg["momentum_ma_long"]):
+        if len(self.df) < max(
+            self.cfg["momentum_ma_short"], self.cfg["momentum_ma_long"]
+        ):
             return 0.0
         # last 3 bars majority
         bullish = np.all(ema_s.iloc[-3:] > ema_l.iloc[-3:])
@@ -344,7 +381,10 @@ class TradingAnalyzer:
     # ─────────────────────────────────────────────────────────────────────
     def volume_confirmation(self) -> bool:
         vol_ma = Indicators.sma(self.df.volume, self.cfg["volume_ma_period"])
-        return bool(self.df.volume.iloc[-1] > vol_ma.iloc[-1] * self.cfg["volume_confirmation_multiplier"])
+        return bool(
+            self.df.volume.iloc[-1]
+            > vol_ma.iloc[-1] * self.cfg["volume_confirmation_multiplier"]
+        )
 
     # ─────────────────────────────────────────────────────────────────────
     # PUBLIC UTILS
@@ -375,9 +415,9 @@ EMA-Align:{ema_score:+.1f} │ Vol-Spike:{self.volume_confirmation()}"""
         conds: list[str] = []
 
         # Stoch-RSI condition quick & dirty (same as before but concise)
-        stoch_rsi = Indicators.rsi(
-            Indicators.rsi(self.df.close, 14), 14
-        ).iloc[-1]  # nested RSI → quick proxy
+        stoch_rsi = Indicators.rsi(Indicators.rsi(self.df.close, 14), 14).iloc[
+            -1
+        ]  # nested RSI → quick proxy
         if stoch_rsi < self.cfg["stoch_rsi_oversold_threshold"]:
             score += Decimal(str(w["stoch_rsi"]))
             conds.append("Stoch-RSI oversold")
@@ -395,16 +435,21 @@ EMA-Align:{ema_score:+.1f} │ Vol-Spike:{self.volume_confirmation()}"""
 
         # Convert to float for comparison
         conf_f = float(score)
-        sig: str | None = "buy" if conf_f >= self.cfg["signal_score_threshold"] else None
+        sig: str | None = (
+            "buy" if conf_f >= self.cfg["signal_score_threshold"] else None
+        )
         levels: dict[str, Decimal] = {}
         if sig and self.atr_val:
             atr_d = Decimal(str(self.atr_val))
             sl = price - atr_d * Decimal(str(self.cfg["stop_loss_multiple"]))
             tp = price + atr_d * Decimal(str(self.cfg["take_profit_multiple"]))
-            levels = {"stop_loss": sl.quantize(Decimal("0.00001")),
-                      "take_profit": tp.quantize(Decimal("0.00001"))}
+            levels = {
+                "stop_loss": sl.quantize(Decimal("0.00001")),
+                "take_profit": tp.quantize(Decimal("0.00001")),
+            }
 
         return TradeSignal(sig, conf_f, conds, levels)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6.  MAIN EVENT LOOP
@@ -415,9 +460,12 @@ def main() -> None:
         return
 
     sym = (input(f"{NEON_BLUE}Symbol (default BTCUSDT): {RESET}") or "BTCUSDT").upper()
-    intv = input(
-        f"{NEON_BLUE}Interval {VALID_INTERVALS} (default {CFG['interval']}): {RESET}"
-    ) or CFG["interval"]
+    intv = (
+        input(
+            f"{NEON_BLUE}Interval {VALID_INTERVALS} (default {CFG['interval']}): {RESET}"
+        )
+        or CFG["interval"]
+    )
     if intv not in VALID_INTERVALS:
         LOGGER.warning(f"{NEON_YELLOW}Bad interval → fallback {CFG['interval']}{RESET}")
         intv = CFG["interval"]
@@ -427,7 +475,7 @@ def main() -> None:
 
     kline_cache: dict[str, tuple[datetime, pd.DataFrame]] = {}
     last_sig_t = 0.0
-    last_ob_t  = 0.0
+    last_ob_t = 0.0
     orderbook: dict[str, Any] | None = None
 
     try:
@@ -470,6 +518,7 @@ def main() -> None:
             time.sleep(CFG["analysis_interval"])
     except KeyboardInterrupt:
         slog.info(f"{NEON_YELLOW}User aborted – bye{RESET}")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":

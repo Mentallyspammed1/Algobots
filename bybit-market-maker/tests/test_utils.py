@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import MagicMock
 
 from bybit_market_maker.utils import (
     calculate_order_sizes,

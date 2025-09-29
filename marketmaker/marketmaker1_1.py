@@ -1496,8 +1496,9 @@ class BybitMarketMaker:
                     )
                     # If within a short interval, update the last candle's high/low
                     if (
-                        current_time - last_ts
-                    ) < self.config.system.loop_interval_sec * 2:  # Arbitrary small window
+                        (current_time - last_ts)
+                        < self.config.system.loop_interval_sec * 2
+                    ):  # Arbitrary small window
                         self.state.price_candlestick_history[-1] = (
                             current_time,
                             max(last_high, new_mid_price),
@@ -1516,9 +1517,7 @@ class BybitMarketMaker:
                 if self.state.smoothed_mid_price == Decimal("0"):
                     self.state.smoothed_mid_price = new_mid_price
                 else:
-                    alpha = (
-                        self.config.strategy.dynamic_spread.price_change_smoothing_factor
-                    )
+                    alpha = self.config.strategy.dynamic_spread.price_change_smoothing_factor
                     self.state.smoothed_mid_price = (alpha * new_mid_price) + (
                         (Decimal("1") - alpha) * self.state.smoothed_mid_price
                     )
@@ -1983,7 +1982,11 @@ class BybitMarketMaker:
             await self._place_limit_order(side, price, qty)
 
     async def _log_status_summary(self):
-        async with self.balance_position_lock, self.active_orders_lock, self.market_data_lock:
+        async with (
+            self.balance_position_lock,
+            self.active_orders_lock,
+            self.market_data_lock,
+        ):
             metrics = self.state.metrics
             current_market_price = (
                 self.state.mid_price
@@ -2408,9 +2411,10 @@ class BybitMarketMaker:
             self.logger.error("Cannot place order, market info not available.")
             raise OrderPlacementError("Market information is not available.")
 
-        qty_f, price_f = self.market_info.format_quantity(
-            quantity
-        ), self.market_info.format_price(price)
+        qty_f, price_f = (
+            self.market_info.format_quantity(quantity),
+            self.market_info.format_price(price),
+        )
         if qty_f <= Decimal("0") or price_f <= Decimal("0"):
             self.logger.warning(
                 f"Attempted to place order with zero or negative quantity/price: Qty={qty_f}, Price={price_f}. Skipping."

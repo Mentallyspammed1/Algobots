@@ -1,28 +1,28 @@
-
 # strategy_interface.py
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
 
 class Signal:
     """Represents a trading signal."""
+
     def __init__(self, type: str, score: float = 0.0, reasons: list[str] | None = None):
         self.type = type  # 'BUY', 'SELL', or 'HOLD'
         self.score = score
         self.reasons = reasons if reasons is not None else []
 
     def is_buy(self) -> bool:
-        return self.type == 'BUY'
+        return self.type == "BUY"
 
     def is_sell(self) -> bool:
-        return self.type == 'SELL'
+        return self.type == "SELL"
 
     def is_hold(self) -> bool:
-        return self.type == 'HOLD'
+        return self.type == "HOLD"
 
 
 class BaseStrategy(ABC):
@@ -46,11 +46,16 @@ class BaseStrategy(ABC):
         pass
 
     @abstractmethod
-    def generate_signal(self, df: pd.DataFrame, current_market_price: float, market_conditions: dict[str, Any]) -> Signal:
+    def generate_signal(
+        self,
+        df: pd.DataFrame,
+        current_market_price: float,
+        market_conditions: dict[str, Any],
+    ) -> Signal:
         """Generate a trading signal based on the provided data."""
         pass
 
     @abstractmethod
-    def get_indicator_values(self, df: pd.DataFrame) -> Dict[str, float]:
+    def get_indicator_values(self, df: pd.DataFrame) -> dict[str, float]:
         """Extract the latest values of key indicators after calculation."""
         pass

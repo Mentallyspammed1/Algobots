@@ -26,9 +26,12 @@ from marketmaker1_0 import (
 )
 
 # Configure logging for the optimizer
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-optimizer_logger = logging.getLogger('ProfitOptimizer')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+optimizer_logger = logging.getLogger("ProfitOptimizer")
 optimizer_logger.setLevel(logging.INFO)  # Ensure optimizer logger is INFO level
+
 
 def create_trial_config(base_config: Config, trial_params: dict[str, Any]) -> Config:
     """
@@ -41,7 +44,9 @@ def create_trial_config(base_config: Config, trial_params: dict[str, Any]) -> Co
     base_spread_pct = trial_params.pop("base_spread_pct")
     base_order_size_pct_of_balance = trial_params.pop("base_order_size_pct_of_balance")
     max_outstanding_orders = trial_params.pop("max_outstanding_orders")
-    min_profit_spread_after_fees_pct = trial_params.pop("min_profit_spread_after_fees_pct")
+    min_profit_spread_after_fees_pct = trial_params.pop(
+        "min_profit_spread_after_fees_pct"
+    )
 
     dynamic_spread_enabled = trial_params.pop("dynamic_spread_enabled")
     volatility_multiplier = trial_params.pop("volatility_multiplier")
@@ -56,7 +61,7 @@ def create_trial_config(base_config: Config, trial_params: dict[str, Any]) -> Co
         base_config.strategy.inventory,  # Start with base inventory config
         enabled=inventory_enabled,
         skew_intensity=Decimal(str(skew_intensity)),
-        max_inventory_ratio=Decimal(str(max_inventory_ratio))
+        max_inventory_ratio=Decimal(str(max_inventory_ratio)),
     )
 
     # Create new nested dataclass instances for DynamicSpreadConfig
@@ -64,7 +69,7 @@ def create_trial_config(base_config: Config, trial_params: dict[str, Any]) -> Co
         base_config.strategy.dynamic_spread,  # Start with base dynamic spread config
         enabled=dynamic_spread_enabled,
         volatility_multiplier=Decimal(str(volatility_multiplier)),
-        price_change_smoothing_factor=Decimal(str(price_change_smoothing_factor))
+        price_change_smoothing_factor=Decimal(str(price_change_smoothing_factor)),
     )
 
     # Create a new StrategyConfig instance with all updated nested configs and direct parameters
@@ -75,14 +80,11 @@ def create_trial_config(base_config: Config, trial_params: dict[str, Any]) -> Co
         max_outstanding_orders=max_outstanding_orders,
         min_profit_spread_after_fees_pct=Decimal(str(min_profit_spread_after_fees_pct)),
         inventory=new_inventory_config,
-        dynamic_spread=new_dynamic_spread_config
+        dynamic_spread=new_dynamic_spread_config,
     )
 
     # Create a new FilesConfig instance to suppress verbose bot logging during trials
-    new_files_config = replace(
-        base_config.files,
-        log_level="WARNING"
-    )
+    new_files_config = replace(base_config.files, log_level="WARNING")
 
     # Finally, create the complete new Config object with the updated strategy and file settings.
     # Ensure trading_mode is always SIMULATION for optimization.
@@ -90,7 +92,7 @@ def create_trial_config(base_config: Config, trial_params: dict[str, Any]) -> Co
         base_config,
         strategy=new_strategy_config,
         files=new_files_config,
-        trading_mode="SIMULATION"
+        trading_mode="SIMULATION",
     )
 
     # Validate the new config to catch any invalid combinations early
@@ -105,11 +107,14 @@ def create_trial_config(base_config: Config, trial_params: dict[str, Any]) -> Co
 
     return new_config
 
-async def run_simulation_for_trial(trial_config: Config, trial_number: int, duration_ticks: int = 2000) -> Decimal:
+
+async def run_simulation_for_trial(
+    trial_config: Config, trial_number: int, duration_ticks: int = 2000
+) -> Decimal:
     """
     Runs a simulation of the market maker bot with the given configuration
     and returns the net realized PnL.
-    
+
     Args:
         trial_config: The Config object for the current trial.
         duration_ticks: Number of main loop iterations to run the simulation.
@@ -126,7 +131,9 @@ async def run_simulation_for_trial(trial_config: Config, trial_number: int, dura
         await bot._initialize_bot()
 
         # Run the main loop for a fixed number of ticks with progress bar
-        for _ in tqdm(range(duration_ticks), desc=f"Trial {trial_number} Simulation", leave=False):
+        for _ in tqdm(
+            range(duration_ticks), desc=f"Trial {trial_number} Simulation", leave=False
+        ):
             # In SIMULATION mode, _main_loop_tick internally handles price updates
             # via a simple random walk and simulates order fills.
             await bot._main_loop_tick()
@@ -141,16 +148,25 @@ async def run_simulation_for_trial(trial_config: Config, trial_number: int, dura
 
     except ConfigurationError as e:
         # Catch specific configuration errors which indicate an invalid parameter set
-        optimizer_logger.error(f"  Configuration error during simulation trial: {e}. Returning -infinity.", exc_info=False)
-        return Decimal('-inf')
+        optimizer_logger.error(
+            f"  Configuration error during simulation trial: {e}. Returning -infinity.",
+            exc_info=False,
+        )
+        return Decimal("-inf")
     except Exception as e:
         # Catch any other unexpected errors during the simulation
-        optimizer_logger.error(f"  Unhandled error during simulation trial: {e}. Returning -infinity.", exc_info=True)
-        return Decimal('-inf')
+        optimizer_logger.error(
+            f"  Unhandled error during simulation trial: {e}. Returning -infinity.",
+            exc_info=True,
+        )
+        return Decimal("-inf")
     finally:
         if bot:
             # Ensure bot resources are released gracefully, regardless of simulation outcome
-            await bot.stop()  # This method calls _shutdown_bot, which closes DB, clears state etc.
+            await (
+                bot.stop()
+            )  # This method calls _shutdown_bot, which closes DB, clears state etc.
+
 
 def objective(trial: optuna.Trial) -> float:
     """
@@ -181,24 +197,28 @@ def objective(trial: optuna.Trial) -> float:
         "dynamic_spread_enabled", [True, False]
     )
     # Volatility multiplier and smoothing factor are only relevant if dynamic spread is enabled
-    volatility_multiplier = trial.suggest_float(
-        "volatility_multiplier", 0.1, 5.0
-    ) if dynamic_spread_enabled else 0.0  # Set to 0 if disabled
-    price_change_smoothing_factor = trial.suggest_float(
-        "price_change_smoothing_factor", 0.1, 0.9, step=0.1
-    ) if dynamic_spread_enabled else 0.0  # Set to 0 if disabled
+    volatility_multiplier = (
+        trial.suggest_float("volatility_multiplier", 0.1, 5.0)
+        if dynamic_spread_enabled
+        else 0.0
+    )  # Set to 0 if disabled
+    price_change_smoothing_factor = (
+        trial.suggest_float("price_change_smoothing_factor", 0.1, 0.9, step=0.1)
+        if dynamic_spread_enabled
+        else 0.0
+    )  # Set to 0 if disabled
 
     # Inventory strategy parameters
-    inventory_enabled = trial.suggest_categorical(
-        "inventory_enabled", [True, False]
-    )
+    inventory_enabled = trial.suggest_categorical("inventory_enabled", [True, False])
     # Skew intensity and max inventory ratio are only relevant if inventory strategy is enabled
-    skew_intensity = trial.suggest_float(
-        "skew_intensity", 0.1, 2.0
-    ) if inventory_enabled else 0.0  # Set to 0 if disabled
-    max_inventory_ratio = trial.suggest_float(
-        "max_inventory_ratio", 0.05, 0.95, step=0.05
-    ) if inventory_enabled else 0.0  # Set to 0 if disabled
+    skew_intensity = (
+        trial.suggest_float("skew_intensity", 0.1, 2.0) if inventory_enabled else 0.0
+    )  # Set to 0 if disabled
+    max_inventory_ratio = (
+        trial.suggest_float("max_inventory_ratio", 0.05, 0.95, step=0.05)
+        if inventory_enabled
+        else 0.0
+    )  # Set to 0 if disabled
 
     # Create a dictionary of all trial parameters to pass to the helper function
     trial_params = {
@@ -225,10 +245,10 @@ def objective(trial: optuna.Trial) -> float:
         trading_mode="SIMULATION",  # Ensure we are always in simulation mode for optimization
         symbol="XLMUSDT",  # Example symbol; keep consistent for meaningful optimization
         category="linear",  # Example category; keep consistent
-        leverage=Decimal('1'),  # For simplicity in simulation, use 1x leverage
-        min_order_value_usd=Decimal('10'),  # Minimum order value
-        max_order_size_pct=Decimal('0.1'),  # Max individual order size as % of balance
-        max_net_exposure_usd=Decimal('1000'),  # Max total exposure in USD
+        leverage=Decimal("1"),  # For simplicity in simulation, use 1x leverage
+        min_order_value_usd=Decimal("10"),  # Minimum order value
+        max_order_size_pct=Decimal("0.1"),  # Max individual order size as % of balance
+        max_net_exposure_usd=Decimal("1000"),  # Max total exposure in USD
         order_type="Limit",
         time_in_force="GTC",
         post_only=True,
@@ -241,9 +261,9 @@ def objective(trial: optuna.Trial) -> float:
             log_level="INFO",
             log_file="optimizer_bot.log",
             state_file="optimizer_bot_state.pkl",
-            db_file="optimizer_bot_data.db"
+            db_file="optimizer_bot_data.db",
         ),
-        initial_dry_run_capital=Decimal('10000')  # Starting capital for the simulation
+        initial_dry_run_capital=Decimal("10000"),  # Starting capital for the simulation
     )
 
     # Create the trial-specific configuration by merging base_config with trial_params
@@ -256,20 +276,41 @@ def objective(trial: optuna.Trial) -> float:
     # If PNL is -inf, Optuna will handle it as a poor performer
     return float(net_pnl)
 
+
 if __name__ == "__main__":
     # --- Command-Line Argument Parsing ---
-    parser = argparse.ArgumentParser(description="Profit Optimizer for Bybit Market Maker Bot")
-    parser.add_argument("--num-trials", type=int, default=100, help="Number of trials to run")
-    parser.add_argument("--timeout", type=int, default=7200, help="Optimization timeout in seconds")
-    parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs. Use -1 for all available cores.")
-    parser.add_argument("--study-name", type=str, default="market_maker_profit_opt_v3", help="Optuna study name")
+    parser = argparse.ArgumentParser(
+        description="Profit Optimizer for Bybit Market Maker Bot"
+    )
+    parser.add_argument(
+        "--num-trials", type=int, default=100, help="Number of trials to run"
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=7200, help="Optimization timeout in seconds"
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=1,
+        help="Number of parallel jobs. Use -1 for all available cores.",
+    )
+    parser.add_argument(
+        "--study-name",
+        type=str,
+        default="market_maker_profit_opt_v3",
+        help="Optuna study name",
+    )
     args = parser.parse_args()
 
     # --- Pre-check: Ensure the market maker bot's code file exists ---
-    market_maker_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "marketmaker1_0.py")
+    market_maker_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "marketmaker1_0.py"
+    )
     if not os.path.exists(market_maker_file):
         optimizer_logger.error(f"Error: Required file '{market_maker_file}' not found.")
-        optimizer_logger.error("Please ensure the market maker bot's code is saved as 'marketmaker1_0.py' in the same directory.")
+        optimizer_logger.error(
+            "Please ensure the market maker bot's code is saved as 'marketmaker1_0.py' in the same directory."
+        )
         sys.exit(1)
 
     # --- Optuna Study Setup ---
@@ -277,7 +318,9 @@ if __name__ == "__main__":
     study_name = args.study_name
     storage_path = f"sqlite:///{study_name}.db"
 
-    optimizer_logger.info(f"Creating/Loading Optuna study: '{study_name}' from '{storage_path}'")
+    optimizer_logger.info(
+        f"Creating/Loading Optuna study: '{study_name}' from '{storage_path}'"
+    )
     # Create or load an existing Optuna study.
     # `load_if_exists=True` allows resuming optimization from a previous run.
     # Use TPESampler for better sampling and MedianPruner to stop bad trials early.
@@ -287,25 +330,43 @@ if __name__ == "__main__":
         storage=storage_path,
         load_if_exists=True,
         sampler=optuna.samplers.TPESampler(),  # Tree-structured Parzen Estimator for better optimization
-        pruner=optuna.pruners.MedianPruner(n_warmup_steps=10)  # Prune poor trials after 10 steps
+        pruner=optuna.pruners.MedianPruner(
+            n_warmup_steps=10
+        ),  # Prune poor trials after 10 steps
     )
 
     # --- Optimization Parameters ---
-    num_trials = args.num_trials  # Number of new trials to run in this optimization session
+    num_trials = (
+        args.num_trials
+    )  # Number of new trials to run in this optimization session
     timeout_seconds = args.timeout  # Maximum optimization time in seconds
     n_jobs = args.n_jobs  # Parallel jobs (Optuna handles process-based parallelization)
 
-    optimizer_logger.info(f"Starting optimization for {num_trials} new trials or {timeout_seconds} seconds with {n_jobs} parallel jobs.")
-    optimizer_logger.info("This process will run multiple bot simulations and might take significant time.")
-    optimizer_logger.info("Intermediate results and study state are saved to the SQLite database.")
+    optimizer_logger.info(
+        f"Starting optimization for {num_trials} new trials or {timeout_seconds} seconds with {n_jobs} parallel jobs."
+    )
+    optimizer_logger.info(
+        "This process will run multiple bot simulations and might take significant time."
+    )
+    optimizer_logger.info(
+        "Intermediate results and study state are saved to the SQLite database."
+    )
 
     # --- Run Optimization ---
     try:
-        study.optimize(objective, n_trials=num_trials, timeout=timeout_seconds, n_jobs=n_jobs, gc_after_trial=True)
+        study.optimize(
+            objective,
+            n_trials=num_trials,
+            timeout=timeout_seconds,
+            n_jobs=n_jobs,
+            gc_after_trial=True,
+        )
     except KeyboardInterrupt:
         optimizer_logger.info("Optimization interrupted by user (KeyboardInterrupt).")
     except Exception as e:
-        optimizer_logger.error(f"An unexpected error occurred during optimization: {e}", exc_info=True)
+        optimizer_logger.error(
+            f"An unexpected error occurred during optimization: {e}", exc_info=True
+        )
 
     optimizer_logger.info("\nOptimization finished.")
 
@@ -313,7 +374,9 @@ if __name__ == "__main__":
     if study.trials:  # Check if any trials were run
         if study.best_trial:
             optimizer_logger.info(f"Best trial found: Trial {study.best_trial.number}")
-            optimizer_logger.info(f"  Value (Maximized Net Realized PnL): {study.best_trial.value:.4f}")
+            optimizer_logger.info(
+                f"  Value (Maximized Net Realized PnL): {study.best_trial.value:.4f}"
+            )
             optimizer_logger.info("  Best parameters:")
             for key, value in study.best_trial.params.items():
                 optimizer_logger.info(f"    {key}: {value}")
@@ -322,26 +385,40 @@ if __name__ == "__main__":
             best_params_file = "best_market_maker_params.json"
             try:
                 # Convert Decimal values to string for proper JSON serialization
-                serializable_params = {k: str(v) if isinstance(v, Decimal) else v for k, v in study.best_trial.params.items()}
+                serializable_params = {
+                    k: str(v) if isinstance(v, Decimal) else v
+                    for k, v in study.best_trial.params.items()
+                }
                 with open(best_params_file, "w") as f:
                     json.dump(serializable_params, f, indent=4)
                 optimizer_logger.info(f"Best parameters saved to '{best_params_file}'.")
-                optimizer_logger.info("You can use these parameters to update your bot's configuration for live trading.")
+                optimizer_logger.info(
+                    "You can use these parameters to update your bot's configuration for live trading."
+                )
             except Exception as e:
-                optimizer_logger.error(f"Failed to save best parameters to JSON file: {e}", exc_info=True)
+                optimizer_logger.error(
+                    f"Failed to save best parameters to JSON file: {e}", exc_info=True
+                )
         else:
-            optimizer_logger.warning("No successful trials completed to determine best parameters.")
+            optimizer_logger.warning(
+                "No successful trials completed to determine best parameters."
+            )
     else:
         optimizer_logger.warning("No trials were run during this session.")
 
     # --- Save all trial results to CSV ---
     try:
         import pandas as pd
+
         df = study.trials_dataframe()
         csv_file = f"{study_name}_results.csv"
         df.to_csv(csv_file, index=False)
         optimizer_logger.info(f"All optimization results saved to '{csv_file}'.")
     except ImportError:
-        optimizer_logger.warning("Pandas not installed. Cannot save trials to CSV. Install with 'pip install pandas'.")
+        optimizer_logger.warning(
+            "Pandas not installed. Cannot save trials to CSV. Install with 'pip install pandas'."
+        )
     except Exception as e:
-        optimizer_logger.error(f"Failed to save trials dataframe to CSV: {e}", exc_info=True)
+        optimizer_logger.error(
+            f"Failed to save trials dataframe to CSV: {e}", exc_info=True
+        )

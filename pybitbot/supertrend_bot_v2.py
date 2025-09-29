@@ -47,22 +47,22 @@ load_dotenv()
 # --- LOGGING ---
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('supertrend_bot_v2.log'),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("supertrend_bot_v2.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
+
 
 # --- ENUMS AND DATA STRUCTURES ---
 class OrderSide(Enum):
     BUY = "Buy"
     SELL = "Sell"
 
+
 @dataclass
 class Config:
     """Trading bot configuration."""
+
     api_key: str = field(default_factory=lambda: os.getenv("BYBIT_API_KEY", ""))
     api_secret: str = field(default_factory=lambda: os.getenv("BYBIT_API_SECRET", ""))
     testnet: bool = True
@@ -75,17 +75,25 @@ class Config:
     supertrend_multiplier: float = 3.0
     lookback_periods: int = 200
 
+
 # --- SUPER TREND BOT ---
 class SupertrendBot:
     def __init__(self, config: Config):
         self.config = config
-        self.session = HTTP(testnet=config.testnet, api_key=config.api_key, api_secret=config.api_secret)
-        self.ws = WebSocket(testnet=config.testnet, channel_type=config.category, api_key=config.api_key, api_secret=config.api_secret)
+        self.session = HTTP(
+            testnet=config.testnet, api_key=config.api_key, api_secret=config.api_secret
+        )
+        self.ws = WebSocket(
+            testnet=config.testnet,
+            channel_type=config.category,
+            api_key=config.api_key,
+            api_secret=config.api_secret,
+        )
 
         self.market_info = None
         self.market_data = pd.DataFrame()
         self.position = None
-        self.balance = Decimal('0')
+        self.balance = Decimal("0")
         self.is_running = False
         self.is_processing_signal = False
 
@@ -101,14 +109,18 @@ class SupertrendBot:
     async def _load_market_info(self):
         """Load and store market information for the symbol."""
         try:
-            resp = self.session.get_instruments_info(category=self.config.category, symbol=self.config.symbol)
-            if resp['retCode'] == 0:
-                instrument = resp['result']['list'][0]
+            resp = self.session.get_instruments_info(
+                category=self.config.category, symbol=self.config.symbol
+            )
+            if resp["retCode"] == 0:
+                instrument = resp["result"]["list"][0]
                 self.market_info = {
-                    'tick_size': Decimal(instrument['priceFilter']['tickSize']),
-                    'lot_size': Decimal(instrument['lotSizeFilter']['qtyStep'])
+                    "tick_size": Decimal(instrument["priceFilter"]["tickSize"]),
+                    "lot_size": Decimal(instrument["lotSizeFilter"]["qtyStep"]),
                 }
-                logger.info(f"Market info loaded for {self.config.symbol}: {self.market_info}")
+                logger.info(
+                    f"Market info loaded for {self.config.symbol}: {self.market_info}"
+                )
             else:
                 raise Exception(f"Failed to get instrument info: {resp['retMsg']}")
         except Exception as e:
@@ -120,14 +132,27 @@ class SupertrendBot:
         logger.info(f"Loading historical data for {self.config.symbol}...")
         try:
             resp = self.session.get_kline(
-                category=self.config.category, symbol=self.config.symbol,
-                interval=self.config.timeframe, limit=self.config.lookback_periods
+                category=self.config.category,
+                symbol=self.config.symbol,
+                interval=self.config.timeframe,
+                limit=self.config.lookback_periods,
             )
-            if resp['retCode'] == 0:
-                data = resp['result']['list']
-                df = pd.DataFrame(data, columns=["time", "open", "high", "low", "close", "volume", "turnover"])
-                df['time'] = pd.to_datetime(df['time'], unit='ms')
-                df.set_index('time', inplace=True)
+            if resp["retCode"] == 0:
+                data = resp["result"]["list"]
+                df = pd.DataFrame(
+                    data,
+                    columns=[
+                        "time",
+                        "open",
+                        "high",
+                        "low",
+                        "close",
+                        "volume",
+                        "turnover",
+                    ],
+                )
+                df["time"] = pd.to_datetime(df["time"], unit="ms")
+                df.set_index("time", inplace=True)
                 df = df.astype(float).sort_index()
                 self.market_data = df
                 logger.info(f"Loaded {len(df)} historical candles.")
@@ -143,48 +168,75 @@ class SupertrendBot:
         if df.empty or len(df) < self.config.supertrend_period:
             return
 
-        high_low = df['high'] - df['low']
-        high_close = np.abs(df['high'] - df['close'].shift())
-        low_close = np.abs(df['low'] - df['close'].shift())
+        high_low = df["high"] - df["low"]
+        high_close = np.abs(df["high"] - df["close"].shift())
+        low_close = np.abs(df["low"] - df["close"].shift())
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        df['atr'] = tr.ewm(alpha=1/self.config.supertrend_period, adjust=False).mean()
+        df["atr"] = tr.ewm(alpha=1 / self.config.supertrend_period, adjust=False).mean()
 
-        hl2 = (df['high'] + df['low']) / 2
-        df['upperband'] = hl2 + (self.config.supertrend_multiplier * df['atr'])
-        df['lowerband'] = hl2 - (self.config.supertrend_multiplier * df['atr'])
-        df['in_uptrend'] = True
+        hl2 = (df["high"] + df["low"]) / 2
+        df["upperband"] = hl2 + (self.config.supertrend_multiplier * df["atr"])
+        df["lowerband"] = hl2 - (self.config.supertrend_multiplier * df["atr"])
+        df["in_uptrend"] = True
 
         for current in range(1, len(df.index)):
             previous = current - 1
-            if df.iloc[current]['close'] > df.iloc[previous]['upperband']:
-                df.iloc[current, df.columns.get_loc('in_uptrend')] = True
-            elif df.iloc[current]['close'] < df.iloc[previous]['lowerband']:
-                df.iloc[current, df.columns.get_loc('in_uptrend')] = False
+            if df.iloc[current]["close"] > df.iloc[previous]["upperband"]:
+                df.iloc[current, df.columns.get_loc("in_uptrend")] = True
+            elif df.iloc[current]["close"] < df.iloc[previous]["lowerband"]:
+                df.iloc[current, df.columns.get_loc("in_uptrend")] = False
             else:
-                df.iloc[current, df.columns.get_loc('in_uptrend')] = df.iloc[previous]['in_uptrend']
-                if df.iloc[current]['in_uptrend'] and df.iloc[current]['lowerband'] < df.iloc[previous]['lowerband']:
-                    df.iloc[current, df.columns.get_loc('lowerband')] = df.iloc[previous]['lowerband']
-                if not df.iloc[current]['in_uptrend'] and df.iloc[current]['upperband'] > df.iloc[previous]['upperband']:
-                    df.iloc[current, df.columns.get_loc('upperband')] = df.iloc[previous]['upperband']
+                df.iloc[current, df.columns.get_loc("in_uptrend")] = df.iloc[previous][
+                    "in_uptrend"
+                ]
+                if (
+                    df.iloc[current]["in_uptrend"]
+                    and df.iloc[current]["lowerband"] < df.iloc[previous]["lowerband"]
+                ):
+                    df.iloc[current, df.columns.get_loc("lowerband")] = df.iloc[
+                        previous
+                    ]["lowerband"]
+                if (
+                    not df.iloc[current]["in_uptrend"]
+                    and df.iloc[current]["upperband"] > df.iloc[previous]["upperband"]
+                ):
+                    df.iloc[current, df.columns.get_loc("upperband")] = df.iloc[
+                        previous
+                    ]["upperband"]
 
-        df['supertrend'] = np.where(df['in_uptrend'], df['lowerband'], df['upperband'])
+        df["supertrend"] = np.where(df["in_uptrend"], df["lowerband"], df["upperband"])
 
-    async def place_order(self, side: OrderSide, quantity: float, stop_loss: float | None = None):
+    async def place_order(
+        self, side: OrderSide, quantity: float, stop_loss: float | None = None
+    ):
         """Places a market order."""
         try:
-            qty_str = str(Decimal(str(quantity)).quantize(self.market_info['lot_size'], rounding=ROUND_DOWN))
+            qty_str = str(
+                Decimal(str(quantity)).quantize(
+                    self.market_info["lot_size"], rounding=ROUND_DOWN
+                )
+            )
             params = {
-                "category": self.config.category, "symbol": self.config.symbol,
-                "side": side.value, "orderType": "Market", "qty": qty_str,
+                "category": self.config.category,
+                "symbol": self.config.symbol,
+                "side": side.value,
+                "orderType": "Market",
+                "qty": qty_str,
             }
             if stop_loss:
-                params["stopLoss"] = str(Decimal(str(stop_loss)).quantize(self.market_info['tick_size'], rounding=ROUND_DOWN))
+                params["stopLoss"] = str(
+                    Decimal(str(stop_loss)).quantize(
+                        self.market_info["tick_size"], rounding=ROUND_DOWN
+                    )
+                )
                 params["slTriggerBy"] = "LastPrice"
 
             logger.info(f"Placing order: {params}")
             resp = self.session.place_order(**params)
-            if resp['retCode'] == 0:
-                logger.info(f"TRADE: Order placed successfully: {resp['result']['orderId']}")
+            if resp["retCode"] == 0:
+                logger.info(
+                    f"TRADE: Order placed successfully: {resp['result']['orderId']}"
+                )
             else:
                 logger.error(f"Failed to place order: {resp['retMsg']}")
         except Exception as e:
@@ -193,10 +245,16 @@ class SupertrendBot:
     async def get_position(self):
         """Get current position for the symbol."""
         try:
-            resp = self.session.get_positions(category=self.config.category, symbol=self.config.symbol)
-            if resp['retCode'] == 0 and resp['result']['list']:
-                pos_data = resp['result']['list'][0]
-                self.position = {'side': pos_data['side'], 'size': Decimal(pos_data['size'])} if Decimal(pos_data['size']) > 0 else None
+            resp = self.session.get_positions(
+                category=self.config.category, symbol=self.config.symbol
+            )
+            if resp["retCode"] == 0 and resp["result"]["list"]:
+                pos_data = resp["result"]["list"][0]
+                self.position = (
+                    {"side": pos_data["side"], "size": Decimal(pos_data["size"])}
+                    if Decimal(pos_data["size"]) > 0
+                    else None
+                )
             else:
                 self.position = None
         except Exception as e:
@@ -206,8 +264,8 @@ class SupertrendBot:
         """Update account balance."""
         try:
             resp = self.session.get_wallet_balance(accountType="UNIFIED")
-            if resp['retCode'] == 0:
-                self.balance = Decimal(resp['result']['list'][0]['totalEquity'])
+            if resp["retCode"] == 0:
+                self.balance = Decimal(resp["result"]["list"][0]["totalEquity"])
                 logger.info(f"Account balance updated: {self.balance:.2f} USDT")
         except Exception as e:
             logger.error(f"Error updating balance: {e}", exc_info=True)
@@ -235,63 +293,100 @@ class SupertrendBot:
             signal_action = None
             stop_loss = None
 
-            if not previous['in_uptrend'] and current['in_uptrend']:
+            if not previous["in_uptrend"] and current["in_uptrend"]:
                 signal_action = OrderSide.BUY
-                stop_loss = float(current['supertrend'])
-            elif previous['in_uptrend'] and not current['in_uptrend']:
+                stop_loss = float(current["supertrend"])
+            elif previous["in_uptrend"] and not current["in_uptrend"]:
                 signal_action = OrderSide.SELL
-                stop_loss = float(current['supertrend'])
+                stop_loss = float(current["supertrend"])
 
             if signal_action:
                 logger.info(f"Signal received: {signal_action.value}")
-                current_price = float(current['close'])
+                current_price = float(current["close"])
                 position_size = self._calculate_position_size(current_price)
 
                 if self.position:
-                    if (signal_action == OrderSide.BUY and self.position['side'] == 'Sell') or \
-                       (signal_action == OrderSide.SELL and self.position['side'] == 'Buy'):
-                        logger.info(f"Closing existing {self.position['side']} position.")
-                        close_side = OrderSide.BUY if self.position['side'] == 'Sell' else OrderSide.SELL
-                        await self.place_order(close_side, float(self.position['size']))
-                        await asyncio.sleep(3) # Wait for position to close
+                    if (
+                        signal_action == OrderSide.BUY
+                        and self.position["side"] == "Sell"
+                    ) or (
+                        signal_action == OrderSide.SELL
+                        and self.position["side"] == "Buy"
+                    ):
+                        logger.info(
+                            f"Closing existing {self.position['side']} position."
+                        )
+                        close_side = (
+                            OrderSide.BUY
+                            if self.position["side"] == "Sell"
+                            else OrderSide.SELL
+                        )
+                        await self.place_order(close_side, float(self.position["size"]))
+                        await asyncio.sleep(3)  # Wait for position to close
 
-                if (signal_action == OrderSide.BUY and (not self.position or self.position['side'] != 'Buy')) or \
-                   (signal_action == OrderSide.SELL and (not self.position or self.position['side'] != 'Sell')):
-                    await self.place_order(signal_action, position_size, stop_loss=stop_loss)
+                if (
+                    signal_action == OrderSide.BUY
+                    and (not self.position or self.position["side"] != "Buy")
+                ) or (
+                    signal_action == OrderSide.SELL
+                    and (not self.position or self.position["side"] != "Sell")
+                ):
+                    await self.place_order(
+                        signal_action, position_size, stop_loss=stop_loss
+                    )
                 else:
-                    logger.info(f"Signal to {signal_action.value} ignored, already in a position on that side.")
+                    logger.info(
+                        f"Signal to {signal_action.value} ignored, already in a position on that side."
+                    )
         finally:
             self.is_processing_signal = False
 
     def _handle_kline(self, message):
         try:
-            data = message['data'][0]
-            new_candle = pd.DataFrame([{'time': pd.to_datetime(int(data['start']), unit='ms'),
-                                        'open': float(data['open']), 'high': float(data['high']),
-                                        'low': float(data['low']), 'close': float(data['close']),
-                                        'volume': float(data['volume']), 'turnover': float(data['turnover'])}]).set_index('time')
+            data = message["data"][0]
+            new_candle = pd.DataFrame(
+                [
+                    {
+                        "time": pd.to_datetime(int(data["start"]), unit="ms"),
+                        "open": float(data["open"]),
+                        "high": float(data["high"]),
+                        "low": float(data["low"]),
+                        "close": float(data["close"]),
+                        "volume": float(data["volume"]),
+                        "turnover": float(data["turnover"]),
+                    }
+                ]
+            ).set_index("time")
 
             if new_candle.index[0] in self.market_data.index:
                 self.market_data.loc[new_candle.index[0]] = new_candle.iloc[0]
             else:
-                self.market_data = pd.concat([self.market_data, new_candle]).iloc[-self.config.lookback_periods:]
+                self.market_data = pd.concat([self.market_data, new_candle]).iloc[
+                    -self.config.lookback_periods :
+                ]
 
-            if data['confirm']: # Only run on confirmed candles
+            if data["confirm"]:  # Only run on confirmed candles
                 asyncio.create_task(self.run_strategy_cycle())
         except Exception as e:
             logger.error(f"Error handling kline: {e}", exc_info=True)
 
     def _handle_private(self, message):
-        topic = message.get('topic')
-        if topic == 'position': asyncio.create_task(self.get_position())
-        elif topic == 'wallet': asyncio.create_task(self.update_account_balance())
+        topic = message.get("topic")
+        if topic == "position":
+            asyncio.create_task(self.get_position())
+        elif topic == "wallet":
+            asyncio.create_task(self.update_account_balance())
 
     async def start(self):
         """Start the trading bot."""
         self.is_running = True
         await self.initialize()
 
-        self.ws.kline_stream(callback=self._handle_kline, symbol=self.config.symbol, interval=self.config.timeframe)
+        self.ws.kline_stream(
+            callback=self._handle_kline,
+            symbol=self.config.symbol,
+            interval=self.config.timeframe,
+        )
         self.ws.position_stream(callback=self._handle_private)
         self.ws.wallet_stream(callback=self._handle_private)
 
@@ -303,6 +398,7 @@ class SupertrendBot:
         self.is_running = False
         self.ws.exit()
         logger.info("Bot stopped.")
+
 
 if __name__ == "__main__":
     if not os.getenv("BYBIT_API_KEY") or not os.getenv("BYBIT_API_SECRET"):

@@ -3,37 +3,61 @@ import re
 from datetime import datetime
 
 # --- Configuration ---
-PROJECT_ROOT = '/data/data/com.termux/files/home/Algobots'
-TODO_FILE = os.path.join(PROJECT_ROOT, 'TODO.md')
+PROJECT_ROOT = "/data/data/com.termux/files/home/Algobots"
+TODO_FILE = os.path.join(PROJECT_ROOT, "TODO.md")
 
 # Directories to exclude from the search
 EXCLUDE_DIRS = [
-    '.git', '__pycache__', '.vscode', 'node_modules', 'bot_data', 'bot_logs',
-    '.idx', '.pytest_cache', '.snapshots', 'logs'
+    ".git",
+    "__pycache__",
+    ".vscode",
+    "node_modules",
+    "bot_data",
+    "bot_logs",
+    ".idx",
+    ".pytest_cache",
+    ".snapshots",
+    "logs",
 ]
 
 # File extensions to include in the search
 INCLUDE_EXTS = [
-    '.py', '.js', '.ts', '.jsx', '.tsx', '.md', '.sh', '.json', '.yaml', '.yml',
-    '.txt', '.html', '.css', '.java', '.c', '.cpp', '.h', '.hpp', '.go', '.rs'
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".md",
+    ".sh",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".txt",
+    ".html",
+    ".css",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".go",
+    ".rs",
 ]
 
 # Regular expression to find TODO comments (case-insensitive)
 # Captures '# TODO:', '// TODO:', '/* TODO:', '* TODO:' and variations, but excludes the pattern definition itself.
-TODO_PATTERN = re.compile(
-    r'(?i)(?:(?:#|//|/\*|\*)\s*TODO[:\s].*)'
-)
+TODO_PATTERN = re.compile(r"(?i)(?:(?:#|//|/\*|\*)\s*TODO[:\s].*)")
 
 # --- Helper Functions ---
 
+
 def find_todos_in_file(filepath):
-    """
-    Reads a file and finds all TODO comments.
+    """Reads a file and finds all TODO comments.
     Returns a list of (line_number, todo_text) tuples.
     """
     todos = []
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding="utf-8") as f:
             for i, line in enumerate(f):
                 match = TODO_PATTERN.search(line)
                 if match:
@@ -44,23 +68,23 @@ def find_todos_in_file(filepath):
         print(f"Error reading file {filepath}: {e}")
     return todos
 
+
 def read_existing_todos(filepath):
-    """
-    Reads the existing TODO.md file and returns a set of unique TODO lines
+    """Reads the existing TODO.md file and returns a set of unique TODO lines
     to prevent duplicates.
     """
     existing_todos = set()
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding="utf-8") as f:
             for line in f:
                 # We only care about the actual TODO text for deduplication
                 if "- [ ]" in line:
                     existing_todos.add(line.strip())
     return existing_todos
 
+
 def update_todo_file(filepath, new_todos_data, existing_todos):
-    """
-    Appends new, unique TODOs to the TODO.md file.
+    """Appends new, unique TODOs to the TODO.md file.
     new_todos_data is a list of (filepath, line_number, todo_text) tuples.
     """
     unique_new_todos = []
@@ -70,7 +94,7 @@ def update_todo_file(filepath, new_todos_data, existing_todos):
             unique_new_todos.append(formatted_todo)
 
     if unique_new_todos:
-        with open(filepath, 'a', encoding='utf-8') as f:
+        with open(filepath, "a", encoding="utf-8") as f:
             f.write(f"\n## Discovered Tasks ({datetime.now().strftime('%Y-%m-%d')})\n")
             for todo in unique_new_todos:
                 f.write(f"{todo}\n")
@@ -78,6 +102,7 @@ def update_todo_file(filepath, new_todos_data, existing_todos):
     else:
         print("No new TODOs found to add.")
     return len(unique_new_todos)
+
 
 # --- Main Execution ---
 def main():
@@ -102,7 +127,10 @@ def main():
     existing_todos = read_existing_todos(TODO_FILE)
     newly_added_count = update_todo_file(TODO_FILE, all_found_todos, existing_todos)
 
-    print(f"Process complete. {newly_added_count} unique TODOs were added to {TODO_FILE}.")
+    print(
+        f"Process complete. {newly_added_count} unique TODOs were added to {TODO_FILE}."
+    )
+
 
 if __name__ == "__main__":
     main()

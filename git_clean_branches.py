@@ -13,6 +13,7 @@ def run_git_command(command: list[str]) -> str:
         print(f"Stderr: {e.stderr}", file=sys.stderr)
         sys.exit(1)
 
+
 def git_clean_branches():
     """Deletes local branches that have been merged into the current branch."""
     print("Cleaning up merged local branches...")
@@ -27,10 +28,15 @@ def git_clean_branches():
         branches_to_delete = []
         for branch_line in merged_branches.splitlines():
             branch = branch_line.strip()
-            if branch.startswith('* '):
-                branch = branch[2:] # Remove '* '
+            if branch.startswith("* "):
+                branch = branch[2:]  # Remove '* '
 
-            if branch and branch != current_branch and branch != "main" and branch != "master":
+            if (
+                branch
+                and branch != current_branch
+                and branch != "main"
+                and branch != "master"
+            ):
                 branches_to_delete.append(branch)
 
         if not branches_to_delete:
@@ -46,6 +52,7 @@ def git_clean_branches():
     except Exception as e:
         print(f"Failed to clean branches: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     git_clean_branches()

@@ -2,7 +2,7 @@ import json
 import logging
 import threading
 import time
-from typing import Callable
+from collections.abc import Callable
 
 import websocket
 
@@ -66,29 +66,33 @@ class WebSocketManager:
         signature = self._generate_signature(f"GET/realtime{expires}")
 
         self.ws.send(
-            json.dumps({
-                "op": "auth",
-                "args": [self.api_key, expires, signature],
-            })
+            json.dumps(
+                {
+                    "op": "auth",
+                    "args": [self.api_key, expires, signature],
+                }
+            )
         )
         time.sleep(1)  # Allow time for authentication
 
         # Subscribe to topics
         self.ws.send(
-            json.dumps({
-                "op": "subscribe",
-                "args": [
-                    "order",
-                    "position",
-                    "tickers.BTCUSDT",
-                ],
-            })
+            json.dumps(
+                {
+                    "op": "subscribe",
+                    "args": [
+                        "order",
+                        "position",
+                        "tickers.BTCUSDT",
+                    ],
+                }
+            )
         )
 
     def _generate_signature(self, data: str) -> str:
         """Generate API signature."""
-        import hmac
         import hashlib
+        import hmac
 
         return hmac.new(
             self.api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256

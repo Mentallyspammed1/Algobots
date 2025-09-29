@@ -6,62 +6,105 @@ from pybit.unified_trading import HTTP
 
 init(autoreset=True)
 
+
 def get_all_open_positions():
-    print(Fore.MAGENTA + "\n# Scrying the battlefield to retrieve all open positions on your Bybit v5 Unified Account...\n" + Style.RESET_ALL)
+    print(
+        Fore.MAGENTA
+        + "\n# Scrying the battlefield to retrieve all open positions on your Bybit v5 Unified Account...\n"
+        + Style.RESET_ALL
+    )
 
     load_dotenv()
-    api_key = os.getenv('BYBIT_API_KEY')
-    api_secret = os.getenv('BYBIT_API_SECRET')
-    testnet_mode = os.getenv('BYBIT_TESTNET', 'True').lower() == 'true'
+    api_key = os.getenv("BYBIT_API_KEY")
+    api_secret = os.getenv("BYBIT_API_SECRET")
+    testnet_mode = os.getenv("BYBIT_TESTNET", "True").lower() == "true"
 
     if not api_key or not api_secret:
-        print(Fore.RED + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found." + Style.RESET_ALL)
-        print(Fore.YELLOW + "  # Please ensure your .env file is correctly configured." + Style.RESET_ALL)
+        print(
+            Fore.RED
+            + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
+            + Style.RESET_ALL
+        )
+        print(
+            Fore.YELLOW
+            + "  # Please ensure your .env file is correctly configured."
+            + Style.RESET_ALL
+        )
         return
 
     try:
-        session = HTTP(
-            testnet=testnet_mode,
-            api_key=api_key,
-            api_secret=api_secret
+        session = HTTP(testnet=testnet_mode, api_key=api_key, api_secret=api_secret)
+        print(
+            Fore.CYAN
+            + "  # Requesting all open positions for Unified Account..."
+            + Style.RESET_ALL
         )
-        print(Fore.CYAN + "  # Requesting all open positions for Unified Account..." + Style.RESET_ALL)
 
         # Fetch positions for Unified Account
         # category: 'unified' for Unified Trading Account
         response = session.get_positions(category="unified")
 
-        if response and response['retCode'] == 0:
-            positions = response['result']['list']
+        if response and response["retCode"] == 0:
+            positions = response["result"]["list"]
             if positions:
                 print(Fore.GREEN + "  # All Open Positions:" + Style.RESET_ALL)
                 for position in positions:
-                    print(Fore.WHITE + f"    Symbol: {position.get('symbol')}, Side: {position.get('side')}, "
-                                  f"Size: {position.get('size')}, Entry Price: {position.get('avgPrice')}, "
-                                  f"Mark Price: {position.get('markPrice')}, Unrealized PnL: {position.get('unrealisedPnl')}, "
-                                  f"Leverage: {position.get('leverage')}" + Style.RESET_ALL)
+                    print(
+                        Fore.WHITE
+                        + f"    Symbol: {position.get('symbol')}, Side: {position.get('side')}, "
+                        f"Size: {position.get('size')}, Entry Price: {position.get('avgPrice')}, "
+                        f"Mark Price: {position.get('markPrice')}, Unrealized PnL: {position.get('unrealisedPnl')}, "
+                        f"Leverage: {position.get('leverage')}" + Style.RESET_ALL
+                    )
             else:
-                print(Fore.YELLOW + "  # No open positions found on your Unified Account." + Style.RESET_ALL)
+                print(
+                    Fore.YELLOW
+                    + "  # No open positions found on your Unified Account."
+                    + Style.RESET_ALL
+                )
         else:
             print(Fore.RED + "  # Failed to retrieve open positions." + Style.RESET_ALL)
             print(Fore.RED + f"  # Response: {response}" + Style.RESET_ALL)
 
     except Exception as e:
         print(Fore.RED + f"  # A disturbance in the ether: {e}" + Style.RESET_ALL)
-        print(Fore.YELLOW + "  # Ensure your network connection is stable and API keys are valid." + Style.RESET_ALL)
+        print(
+            Fore.YELLOW
+            + "  # Ensure your network connection is stable and API keys are valid."
+            + Style.RESET_ALL
+        )
 
-    print(Fore.MAGENTA + "\n# The scroll of open positions has been fully revealed!\n" + Style.RESET_ALL)
+    print(
+        Fore.MAGENTA
+        + "\n# The scroll of open positions has been fully revealed!\n"
+        + Style.RESET_ALL
+    )
+
 
 if __name__ == "__main__":
     # Ensure a .env file exists for demonstration
-    env_file_path = '.env'
+    env_file_path = ".env"
     if not os.path.exists(env_file_path):
-        with open(env_file_path, 'w') as f:
-            f.write('BYBIT_API_KEY=YOUR_API_KEY_HERE\n')
-            f.write('BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n')
-            f.write('BYBIT_TESTNET=True\n') # Set to True for testnet, False for mainnet
-        print(Fore.YELLOW + f"  # A '.env' file has been created at {env_file_path}." + Style.RESET_ALL)
-        print(Fore.YELLOW + "  # Please edit it with your actual Bybit API Key and Secret." + Style.RESET_ALL)
-        print(Fore.YELLOW + "  # Remember to use Testnet keys for testing!" + Style.RESET_ALL)
+        with open(env_file_path, "w") as f:
+            f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
+            f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
+            f.write(
+                "BYBIT_TESTNET=True\n"
+            )  # Set to True for testnet, False for mainnet
+        print(
+            Fore.YELLOW
+            + f"  # A '.env' file has been created at {env_file_path}."
+            + Style.RESET_ALL
+        )
+        print(
+            Fore.YELLOW
+            + "  # Please edit it with your actual Bybit API Key and Secret."
+            + Style.RESET_ALL
+        )
+        print(
+            Fore.YELLOW
+            + "  # Remember to use Testnet keys for testing!"
+            + Style.RESET_ALL
+        )
 
     get_all_open_positions()

@@ -13,7 +13,7 @@ import os
 import sys
 import time
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
 from pathlib import Path
 from typing import Any, Literal
@@ -94,7 +94,7 @@ LOG_DIRECTORY = "bot_logs/trading-bot/logs"
 Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
 # Using UTC for consistency and to avoid timezone issues with API timestamps
-TIMEZONE = timezone.utc  # Changed from ZoneInfo("America/Chicago")
+TIMEZONE = UTC  # Changed from ZoneInfo("America/Chicago")
 MAX_API_RETRIES = 5
 RETRY_DELAY_SECONDS = 7
 REQUEST_TIMEOUT = 20
@@ -311,6 +311,7 @@ class UnanimousLoggerConfig:
         self.NEON_BLUE = NEON_BLUE
         self.RESET = RESET
 
+
 # Create a temporary basic logger for the initial config loading
 temp_logger = logging.getLogger("config_loader")
 temp_logger.setLevel(logging.INFO)
@@ -326,8 +327,6 @@ logger_config = UnanimousLoggerConfig(config)
 # Set up the main application logger using the loaded configuration
 logger = setup_logger(logger_config, log_name="wb", json_log_file="wb.json.log")
 # --- End Logger Setup ---
-
-
 
 
 # --- API Interaction ---
@@ -640,7 +639,9 @@ class PositionManager:
             "status": "OPEN",
         }
         self.open_positions.append(position)
-        self.logger.info(f"{NEON_GREEN}[{self.symbol}] Opened {signal} position: {position}{RESET}")
+        self.logger.info(
+            f"{NEON_GREEN}[{self.symbol}] Opened {signal} position: {position}{RESET}"
+        )
         return position
 
     def manage_positions(
@@ -770,7 +771,9 @@ class AlertSystem:
         """Initializes the AlertSystem."""
         self.logger = logger
 
-    def send_alert(self, message: str, level: Literal["INFO", "WARNING", "ERROR"]) -> None:
+    def send_alert(
+        self, message: str, level: Literal["INFO", "WARNING", "ERROR"]
+    ) -> None:
         """Send an alert (currently logs it)."""
         if level == "INFO":
             self.logger.info(f"{NEON_BLUE}ALERT: {message}{RESET}")
@@ -801,8 +804,8 @@ class TradingAnalyzer:
         self.fib_levels: dict[str, Decimal] = {}
         self.weights = config["weight_sets"]["default_scalping"]
         self.indicator_settings = config["indicator_settings"]
-        self._last_signal_ts = 0 # Initialize last signal timestamp
-        self._last_signal_score = 0.0 # Initialize last signal score
+        self._last_signal_ts = 0  # Initialize last signal timestamp
+        self._last_signal_score = 0.0  # Initialize last signal score
 
         if self.df.empty:
             self.logger.warning(
@@ -1268,7 +1271,7 @@ class TradingAnalyzer:
         """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:
             self.logger.debug(
-                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
             )
             return None
 
@@ -1307,9 +1310,7 @@ class TradingAnalyzer:
         if df_copy["close"].iloc[first_valid_idx] > upper_band.iloc[first_valid_idx]:
             direction.iloc[first_valid_idx] = 1
             supertrend.iloc[first_valid_idx] = lower_band.iloc[first_valid_idx]
-        elif (
-            df_copy["close"].iloc[first_valid_idx] < lower_band.iloc[first_valid_idx]
-        ):
+        elif df_copy["close"].iloc[first_valid_idx] < lower_band.iloc[first_valid_idx]:
             direction.iloc[first_valid_idx] = -1
             supertrend.iloc[first_valid_idx] = upper_band.iloc[first_valid_idx]
         else:  # Price is within bands, initialize with lower band, neutral direction
@@ -1339,16 +1340,15 @@ class TradingAnalyzer:
                     direction.iloc[i] = -1
                     # New ST is min of current upper_band and prev_supertrend
                     supertrend.iloc[i] = min(upper_band.iloc[i], prev_supertrend)
-            else:  # Previous was neutral or initial state (handle explicitly)
-                if curr_close > upper_band.iloc[i]:
-                    direction.iloc[i] = 1
-                    supertrend.iloc[i] = lower_band.iloc[i]
-                elif curr_close < lower_band.iloc[i]:
-                    direction.iloc[i] = -1
-                    supertrend.iloc[i] = upper_band.iloc[i]
-                else:  # Still within bands or undecided, stick to previous or default
-                    direction.iloc[i] = prev_direction  # Maintain previous direction
-                    supertrend.iloc[i] = prev_supertrend  # Maintain previous supertrend
+            elif curr_close > upper_band.iloc[i]:
+                direction.iloc[i] = 1
+                supertrend.iloc[i] = lower_band.iloc[i]
+            elif curr_close < lower_band.iloc[i]:
+                direction.iloc[i] = -1
+                supertrend.iloc[i] = upper_band.iloc[i]
+            else:  # Still within bands or undecided, stick to previous or default
+                direction.iloc[i] = prev_direction  # Maintain previous direction
+                supertrend.iloc[i] = prev_supertrend  # Maintain previous supertrend
 
         result = pd.DataFrame({"supertrend": supertrend, "direction": direction})
         return result.reindex(self.df.index)
@@ -1402,12 +1402,18 @@ class TradingAnalyzer:
         denominator = highest_rsi - lowest_rsi
         denominator[denominator == 0] = np.nan  # Replace 0 with NaN for division
         stoch_rsi_k_raw = ((rsi - lowest_rsi) / denominator) * 100
-        stoch_rsi_k_raw = stoch_rsi_k_raw.fillna(0).clip(0, 100) # Clip to [0, 100] and fill remaining NaNs with 0
+        stoch_rsi_k_raw = stoch_rsi_k_raw.fillna(0).clip(
+            0, 100
+        )  # Clip to [0, 100] and fill remaining NaNs with 0
 
-        stoch_rsi_k = stoch_rsi_k_raw.rolling(
-            window=k_period, min_periods=k_period
-        ).mean().fillna(0)
-        stoch_rsi_d = stoch_rsi_k.rolling(window=d_period, min_periods=d_period).mean().fillna(0)
+        stoch_rsi_k = (
+            stoch_rsi_k_raw.rolling(window=k_period, min_periods=k_period)
+            .mean()
+            .fillna(0)
+        )
+        stoch_rsi_d = (
+            stoch_rsi_k.rolling(window=d_period, min_periods=d_period).mean().fillna(0)
+        )
 
         return stoch_rsi_k, stoch_rsi_d
 
@@ -1651,30 +1657,39 @@ class TradingAnalyzer:
                 af = acceleration
                 ep = self.df["high"].iloc[i] if bull.iloc[i] else self.df["low"].iloc[i]
                 # Ensure PSAR does not cross price on reversal
-                if bull.iloc[i]: # if reversing to bullish, PSAR should be below current low
-                    psar.iloc[i] = min(self.df["low"].iloc[i], self.df["low"].iloc[i-1])
-                else: # if reversing to bearish, PSAR should be above current high
-                    psar.iloc[i] = max(self.df["high"].iloc[i], self.df["high"].iloc[i-1])
+                if bull.iloc[
+                    i
+                ]:  # if reversing to bullish, PSAR should be below current low
+                    psar.iloc[i] = min(
+                        self.df["low"].iloc[i], self.df["low"].iloc[i - 1]
+                    )
+                else:  # if reversing to bearish, PSAR should be above current high
+                    psar.iloc[i] = max(
+                        self.df["high"].iloc[i], self.df["high"].iloc[i - 1]
+                    )
 
             elif bull.iloc[i]:  # Continuing bullish
                 if self.df["high"].iloc[i] > ep:
                     ep = self.df["high"].iloc[i]
                     af = min(af + acceleration, max_acceleration)
                 # Keep PSAR below the lowest low of the last two bars
-                psar.iloc[i] = min(psar.iloc[i], self.df["low"].iloc[i], self.df["low"].iloc[i-1])
+                psar.iloc[i] = min(
+                    psar.iloc[i], self.df["low"].iloc[i], self.df["low"].iloc[i - 1]
+                )
             else:  # Continuing bearish
                 if self.df["low"].iloc[i] < ep:
                     ep = self.df["low"].iloc[i]
                     af = min(af + acceleration, max_acceleration)
                 # Keep PSAR above the highest high of the last two bars
-                psar.iloc[i] = max(psar.iloc[i], self.df["high"].iloc[i], self.df["high"].iloc[i-1])
+                psar.iloc[i] = max(
+                    psar.iloc[i], self.df["high"].iloc[i], self.df["high"].iloc[i - 1]
+                )
 
         direction = pd.Series(0, index=self.df.index, dtype=int)
         direction[psar < self.df["close"]] = 1  # Bullish
         direction[psar > self.df["close"]] = -1  # Bearish
 
         return psar, direction
-
 
     def calculate_fibonacci_levels(self) -> None:
         """Calculate Fibonacci retracement levels based on a recent high-low swing."""
@@ -1690,7 +1705,7 @@ class TradingAnalyzer:
 
         diff = recent_high - recent_low
 
-        if diff <= 0: # Handle cases where high and low are the same or inverted
+        if diff <= 0:  # Handle cases where high and low are the same or inverted
             self.logger.warning(
                 f"{NEON_YELLOW}[{self.symbol}] Invalid high-low range for Fibonacci calculation. Diff: {diff}{RESET}"
             )
@@ -1715,7 +1730,9 @@ class TradingAnalyzer:
             ),
             "100.0%": Decimal(str(recent_low)),
         }
-        self.logger.debug(f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}")
+        self.logger.debug(
+            f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}"
+        )
 
     def calculate_volatility_index(self, period: int) -> pd.Series:
         """Calculate a simple Volatility Index based on ATR normalized by price."""
@@ -1735,9 +1752,9 @@ class TradingAnalyzer:
         # Ensure volume is numeric and not zero
         valid_volume = self.df["volume"].replace(0, np.nan)
         pv = self.df["close"] * valid_volume
-        vwma = pv.rolling(window=period).sum() / valid_volume.rolling(
-            window=period
-        ).sum()
+        vwma = (
+            pv.rolling(window=period).sum() / valid_volume.rolling(window=period).sum()
+        )
         return vwma
 
     def calculate_volume_delta(self, period: int) -> pd.Series:
@@ -1850,7 +1867,7 @@ class TradingAnalyzer:
         Returns the final signal, the aggregated signal score, and a breakdown of contributions.
         """
         signal_score = 0.0
-        signal_breakdown: dict[str, float] = {} # Initialize breakdown dictionary
+        signal_breakdown: dict[str, float] = {}  # Initialize breakdown dictionary
         active_indicators = self.config["indicators"]
         weights = self.weights
         isd = self.indicator_settings
@@ -1919,17 +1936,21 @@ class TradingAnalyzer:
                         and stoch_k < isd["stoch_rsi_oversold"]
                     ):
                         contrib = momentum_weight * 0.6
-                        self.logger.debug(f"[{self.symbol}] StochRSI: Bullish crossover from oversold.")
+                        self.logger.debug(
+                            f"[{self.symbol}] StochRSI: Bullish crossover from oversold."
+                        )
                     elif (
                         stoch_k < stoch_d
                         and prev_stoch_k >= prev_stoch_d
                         and stoch_k > isd["stoch_rsi_overbought"]
                     ):
                         contrib = -momentum_weight * 0.6
-                        self.logger.debug(f"[{self.symbol}] StochRSI: Bearish crossover from overbought.")
-                    elif stoch_k > stoch_d and stoch_k < 50: # General bullish momentum
+                        self.logger.debug(
+                            f"[{self.symbol}] StochRSI: Bearish crossover from overbought."
+                        )
+                    elif stoch_k > stoch_d and stoch_k < 50:  # General bullish momentum
                         contrib = momentum_weight * 0.2
-                    elif stoch_k < stoch_d and stoch_k > 50: # General bearish momentum
+                    elif stoch_k < stoch_d and stoch_k > 50:  # General bearish momentum
                         contrib = -momentum_weight * 0.2
                     signal_score += contrib
                     signal_breakdown["StochRSI_Signal"] = contrib
@@ -1939,7 +1960,9 @@ class TradingAnalyzer:
                 cci = self._get_indicator_value("CCI")
                 if not pd.isna(cci):
                     # Normalize CCI (e.g., -200 to +200 range, normalize to -1 to +1)
-                    normalized_cci = float(cci) / 200 # Assuming typical range of -200 to 200
+                    normalized_cci = (
+                        float(cci) / 200
+                    )  # Assuming typical range of -200 to 200
                     contrib = 0.0
                     if cci < isd["cci_oversold"]:
                         contrib = momentum_weight * 0.4
@@ -1953,7 +1976,9 @@ class TradingAnalyzer:
                 wr = self._get_indicator_value("WR")
                 if not pd.isna(wr):
                     # Normalize WR to -1 to +1 scale (-100 to 0, so (WR + 50) / 50)
-                    normalized_wr = (float(wr) + 50) / 50 # Assuming typical range of -100 to 0
+                    normalized_wr = (
+                        float(wr) + 50
+                    ) / 50  # Assuming typical range of -100 to 0
                     contrib = 0.0
                     if wr < isd["williams_r_oversold"]:
                         contrib = momentum_weight * 0.4
@@ -2001,12 +2026,16 @@ class TradingAnalyzer:
 
                 if len(self.df) > 1:
                     prev_vwap = Decimal(str(self.df["VWAP"].iloc[-2]))
-                    if (current_close > vwap and prev_close <= prev_vwap):
+                    if current_close > vwap and prev_close <= prev_vwap:
                         contrib += weights.get("vwap", 0) * 0.3
-                        self.logger.debug(f"[{self.symbol}] VWAP: Bullish crossover detected.")
-                    elif (current_close < vwap and prev_close >= prev_vwap):
+                        self.logger.debug(
+                            f"[{self.symbol}] VWAP: Bullish crossover detected."
+                        )
+                    elif current_close < vwap and prev_close >= prev_vwap:
                         contrib -= weights.get("vwap", 0) * 0.3
-                        self.logger.debug(f"[{self.symbol}] VWAP: Bearish crossover detected.")
+                        self.logger.debug(
+                            f"[{self.symbol}] VWAP: Bearish crossover detected."
+                        )
                 signal_score += contrib
                 signal_breakdown["VWAP_Signal"] = contrib
 
@@ -2017,19 +2046,23 @@ class TradingAnalyzer:
             if not pd.isna(psar_val) and not pd.isna(psar_dir):
                 contrib = 0.0
                 # PSAR direction change is a strong signal
-                if psar_dir == 1: # Bullish PSAR
+                if psar_dir == 1:  # Bullish PSAR
                     contrib = weights.get("psar", 0) * 0.5
-                elif psar_dir == -1: # Bearish PSAR
+                elif psar_dir == -1:  # Bearish PSAR
                     contrib = -weights.get("psar", 0) * 0.5
 
                 # PSAR crossover with price
                 if len(self.df) > 1:
                     prev_psar_val = Decimal(str(self.df["PSAR_Val"].iloc[-2]))
-                    if (current_close > psar_val and prev_close <= prev_psar_val):
-                        contrib += weights.get("psar", 0) * 0.4 # Additional bullish weight on crossover
+                    if current_close > psar_val and prev_close <= prev_psar_val:
+                        contrib += (
+                            weights.get("psar", 0) * 0.4
+                        )  # Additional bullish weight on crossover
                         self.logger.debug("PSAR: Bullish reversal detected.")
-                    elif (current_close < psar_val and prev_close >= prev_psar_val):
-                        contrib -= weights.get("psar", 0) * 0.4 # Additional bearish weight on crossover
+                    elif current_close < psar_val and prev_close >= prev_psar_val:
+                        contrib -= (
+                            weights.get("psar", 0) * 0.4
+                        )  # Additional bearish weight on crossover
                         self.logger.debug("PSAR: Bearish reversal detected.")
                 signal_score += contrib
                 signal_breakdown["PSAR_Signal"] = contrib
@@ -2057,20 +2090,25 @@ class TradingAnalyzer:
         if active_indicators.get("fibonacci_levels", False) and self.fib_levels:
             for level_name, level_price in self.fib_levels.items():
                 # Check if price is near a Fibonacci level
-                if (level_name not in ["0.0%", "100.0%"] and
-                    abs(current_close - level_price) / current_close < Decimal("0.001")): # Within 0.1% of the level
-                        self.logger.debug(
-                            f"Price near Fibonacci level {level_name}: {level_price}"
-                        )
-                        contrib = 0.0
-                        # If price crosses the level, it can act as support/resistance
-                        if len(self.df) > 1:
-                            if (current_close > prev_close and current_close > level_price): # Bullish breakout
-                                contrib = weights.get("fibonacci_levels", 0) * 0.1
-                            elif (current_close < prev_close and current_close < level_price): # Bearish breakdown
-                                contrib = -weights.get("fibonacci_levels", 0) * 0.1
-                        signal_score += contrib
-                        signal_breakdown["Fibonacci_Levels_Signal"] = contrib
+                if level_name not in ["0.0%", "100.0%"] and abs(
+                    current_close - level_price
+                ) / current_close < Decimal("0.001"):  # Within 0.1% of the level
+                    self.logger.debug(
+                        f"Price near Fibonacci level {level_name}: {level_price}"
+                    )
+                    contrib = 0.0
+                    # If price crosses the level, it can act as support/resistance
+                    if len(self.df) > 1:
+                        if (
+                            current_close > prev_close and current_close > level_price
+                        ):  # Bullish breakout
+                            contrib = weights.get("fibonacci_levels", 0) * 0.1
+                        elif (
+                            current_close < prev_close and current_close < level_price
+                        ):  # Bearish breakdown
+                            contrib = -weights.get("fibonacci_levels", 0) * 0.1
+                    signal_score += contrib
+                    signal_breakdown["Fibonacci_Levels_Signal"] = contrib
 
         # --- Ehlers SuperTrend Alignment Scoring ---
         if active_indicators.get("ehlers_supertrend", False):
@@ -2160,18 +2198,18 @@ class TradingAnalyzer:
                 contrib = 0.0
                 # Strong trend confirmation
                 if adx_val > ADX_STRONG_TREND_THRESHOLD:
-                    if plus_di > minus_di: # Bullish trend
+                    if plus_di > minus_di:  # Bullish trend
                         contrib = weight
                         self.logger.debug(
                             "ADX: Strong BUY trend (ADX > 25, +DI > -DI)."
                         )
-                    elif minus_di > plus_di: # Bearish trend
+                    elif minus_di > plus_di:  # Bearish trend
                         contrib = -weight
                         self.logger.debug(
                             "ADX: Strong SELL trend (ADX > 25, -DI > +DI)."
                         )
                 elif adx_val < ADX_WEAK_TREND_THRESHOLD:
-                    contrib = 0 # Neutral signal, no contribution from ADX
+                    contrib = 0  # Neutral signal, no contribution from ADX
                     self.logger.debug("ADX: Weak trend (ADX < 20). Neutral signal.")
                 signal_score += contrib
                 signal_breakdown["ADX_Strength"] = contrib
@@ -2199,7 +2237,7 @@ class TradingAnalyzer:
                     tenkan_sen > kijun_sen
                     and self.df["Tenkan_Sen"].iloc[-2] <= self.df["Kijun_Sen"].iloc[-2]
                 ):
-                    contrib += weight * 0.5 # Bullish crossover
+                    contrib += weight * 0.5  # Bullish crossover
                     self.logger.debug(
                         "Ichimoku: Tenkan-sen crossed above Kijun-sen (bullish)."
                     )
@@ -2207,7 +2245,7 @@ class TradingAnalyzer:
                     tenkan_sen < kijun_sen
                     and self.df["Tenkan_Sen"].iloc[-2] >= self.df["Kijun_Sen"].iloc[-2]
                 ):
-                    contrib -= weight * 0.5 # Bearish crossover
+                    contrib -= weight * 0.5  # Bearish crossover
                     self.logger.debug(
                         "Ichimoku: Tenkan-sen crossed below Kijun-sen (bearish)."
                     )
@@ -2218,7 +2256,7 @@ class TradingAnalyzer:
                 ].iloc[-2] <= max(
                     self.df["Senkou_Span_A"].iloc[-2], self.df["Senkou_Span_B"].iloc[-2]
                 ):
-                    contrib += weight * 0.7 # Strong bullish breakout
+                    contrib += weight * 0.7  # Strong bullish breakout
                     self.logger.debug(
                         "Ichimoku: Price broke above Kumo (strong bullish)."
                     )
@@ -2227,7 +2265,7 @@ class TradingAnalyzer:
                 ].iloc[-2] >= min(
                     self.df["Senkou_Span_A"].iloc[-2], self.df["Senkou_Span_B"].iloc[-2]
                 ):
-                    contrib -= weight * 0.7 # Strong bearish breakdown
+                    contrib -= weight * 0.7  # Strong bearish breakdown
                     self.logger.debug(
                         "Ichimoku: Price broke below Kumo (strong bearish)."
                     )
@@ -2237,7 +2275,7 @@ class TradingAnalyzer:
                     chikou_span > current_close
                     and self.df["Chikou_Span"].iloc[-2] <= self.df["close"].iloc[-2]
                 ):
-                    contrib += weight * 0.3 # Bullish confirmation
+                    contrib += weight * 0.3  # Bullish confirmation
                     self.logger.debug(
                         "Ichimoku: Chikou Span crossed above price (bullish confirmation)."
                     )
@@ -2245,7 +2283,7 @@ class TradingAnalyzer:
                     chikou_span < current_close
                     and self.df["Chikou_Span"].iloc[-2] >= self.df["close"].iloc[-2]
                 ):
-                    contrib -= weight * 0.3 # Bearish confirmation
+                    contrib -= weight * 0.3  # Bearish confirmation
                     self.logger.debug(
                         "Ichimoku: Chikou Span crossed below price (bearish confirmation)."
                     )
@@ -2265,13 +2303,13 @@ class TradingAnalyzer:
                     obv_val > obv_ema
                     and self.df["OBV"].iloc[-2] <= self.df["OBV_EMA"].iloc[-2]
                 ):
-                    contrib = weight * 0.5 # Bullish crossover
+                    contrib = weight * 0.5  # Bullish crossover
                     self.logger.debug("OBV: Bullish crossover detected.")
                 elif (
                     obv_val < obv_ema
                     and self.df["OBV"].iloc[-2] >= self.df["OBV_EMA"].iloc[-2]
                 ):
-                    contrib = -weight * 0.5 # Bearish crossover
+                    contrib = -weight * 0.5  # Bearish crossover
                     self.logger.debug("OBV: Bearish crossover detected.")
 
                 # OBV trend confirmation (e.g., higher highs/lower lows)
@@ -2280,12 +2318,12 @@ class TradingAnalyzer:
                         obv_val > self.df["OBV"].iloc[-2]
                         and obv_val > self.df["OBV"].iloc[-3]
                     ):
-                        contrib += weight * 0.2 # OBV making higher highs
+                        contrib += weight * 0.2  # OBV making higher highs
                     elif (
                         obv_val < self.df["OBV"].iloc[-2]
                         and obv_val < self.df["OBV"].iloc[-3]
                     ):
-                        contrib -= weight * 0.2 # OBV making lower lows
+                        contrib -= weight * 0.2  # OBV making lower lows
                 signal_score += contrib
                 signal_breakdown["OBV_Momentum"] = contrib
 
@@ -2298,9 +2336,9 @@ class TradingAnalyzer:
                 contrib = 0.0
                 # CMF above/below zero line
                 if cmf_val > 0:
-                    contrib = weight * 0.5 # Bullish money flow
+                    contrib = weight * 0.5  # Bullish money flow
                 elif cmf_val < 0:
-                    contrib = -weight * 0.5 # Bearish money flow
+                    contrib = -weight * 0.5  # Bearish money flow
 
                 # CMF trend confirmation
                 if len(self.df) > 2:
@@ -2308,12 +2346,12 @@ class TradingAnalyzer:
                         cmf_val > self.df["CMF"].iloc[-2]
                         and cmf_val > self.df["CMF"].iloc[-3]
                     ):
-                        contrib += weight * 0.3 # CMF making higher highs
+                        contrib += weight * 0.3  # CMF making higher highs
                     elif (
                         cmf_val < self.df["CMF"].iloc[-2]
                         and cmf_val < self.df["CMF"].iloc[-3]
                     ):
-                        contrib -= weight * 0.3 # CMF making lower lows
+                        contrib -= weight * 0.3  # CMF making lower lows
                 signal_score += contrib
                 signal_breakdown["CMF_Flow"] = contrib
 
@@ -2327,17 +2365,25 @@ class TradingAnalyzer:
                     prev_vol_idx = self.df["Volatility_Index"].iloc[-2]
                     prev_prev_vol_idx = self.df["Volatility_Index"].iloc[-3]
 
-                    if vol_idx > prev_vol_idx > prev_prev_vol_idx:  # Increasing volatility
+                    if (
+                        vol_idx > prev_vol_idx > prev_prev_vol_idx
+                    ):  # Increasing volatility
                         # Increasing volatility can amplify existing signals
                         if signal_score > 0:
                             contrib = weight * 0.2
                         elif signal_score < 0:
                             contrib = -weight * 0.2
                         self.logger.debug("Volatility Index: Increasing volatility.")
-                    elif vol_idx < prev_vol_idx < prev_prev_vol_idx: # Decreasing volatility
+                    elif (
+                        vol_idx < prev_vol_idx < prev_prev_vol_idx
+                    ):  # Decreasing volatility
                         # Decreasing volatility might reduce confidence in strong signals
-                        if abs(signal_score) > 0: # If there's an existing signal, slightly reduce it
-                             contrib = signal_score * -0.2 # Reduce score by 20% (example)
+                        if (
+                            abs(signal_score) > 0
+                        ):  # If there's an existing signal, slightly reduce it
+                            contrib = (
+                                signal_score * -0.2
+                            )  # Reduce score by 20% (example)
                         self.logger.debug("Volatility Index: Decreasing volatility.")
                 signal_score += contrib
                 signal_breakdown["Volatility_Index_Signal"] = contrib
@@ -2351,10 +2397,10 @@ class TradingAnalyzer:
                 contrib = 0.0
                 # Price crossing VWMA
                 if current_close > vwma and prev_close <= prev_vwma:
-                    contrib = weight # Bullish crossover
+                    contrib = weight  # Bullish crossover
                     self.logger.debug("VWMA: Bullish crossover (price above VWMA).")
                 elif current_close < vwma and prev_close >= prev_vwma:
-                    contrib = -weight # Bearish crossover
+                    contrib = -weight  # Bearish crossover
                     self.logger.debug("VWMA: Bearish crossover (price below VWMA).")
                 signal_score += contrib
                 signal_breakdown["VWMA_Cross"] = contrib
@@ -2380,7 +2426,6 @@ class TradingAnalyzer:
                     contrib = -weight * 0.3
                 signal_score += contrib
                 signal_breakdown["Volume_Delta_Signal"] = contrib
-
 
         # --- Multi-Timeframe Trend Confluence Scoring ---
         if self.config["mtf_analysis"]["enabled"] and mtf_trends:
@@ -2420,10 +2465,18 @@ class TradingAnalyzer:
         # Apply hysteresis to prevent immediate flip-flops
         # If the bot previously issued a BUY signal and the current score is not a strong SELL, and not a strong BUY, it holds the BUY signal.
         # This prevents it from flipping to HOLD or SELL too quickly if the score dips slightly.
-        if self._last_signal_score > 0 and signal_score > -threshold * hysteresis_ratio and not is_strong_buy:
+        if (
+            self._last_signal_score > 0
+            and signal_score > -threshold * hysteresis_ratio
+            and not is_strong_buy
+        ):
             final_signal = "BUY"
         # If the bot previously issued a SELL signal and the current score is not a strong BUY, and not a strong SELL, it holds the SELL signal.
-        elif self._last_signal_score < 0 and signal_score < threshold * hysteresis_ratio and not is_strong_sell:
+        elif (
+            self._last_signal_score < 0
+            and signal_score < threshold * hysteresis_ratio
+            and not is_strong_sell
+        ):
             final_signal = "SELL"
         elif is_strong_buy:
             final_signal = "BUY"
@@ -2433,10 +2486,14 @@ class TradingAnalyzer:
         # Apply cooldown period
         if final_signal != "HOLD":
             if now_ts - self._last_signal_ts < cooldown_sec:
-                self.logger.info(f"{NEON_YELLOW}Signal '{final_signal}' ignored due to cooldown ({cooldown_sec - (now_ts - self._last_signal_ts)}s remaining).{RESET}")
+                self.logger.info(
+                    f"{NEON_YELLOW}Signal '{final_signal}' ignored due to cooldown ({cooldown_sec - (now_ts - self._last_signal_ts)}s remaining).{RESET}"
+                )
                 final_signal = "HOLD"
             else:
-                self._last_signal_ts = now_ts # Update timestamp only if signal is issued
+                self._last_signal_ts = (
+                    now_ts  # Update timestamp only if signal is issued
+                )
 
         # Update last signal score for next iteration's hysteresis
         self._last_signal_score = signal_score
@@ -2459,10 +2516,10 @@ class TradingAnalyzer:
 
                 if len(self.df) > 1:
                     prev_psar_val = Decimal(str(self.df["PSAR_Val"].iloc[-2]))
-                    if (current_close > psar_val and prev_close <= prev_psar_val):
+                    if current_close > psar_val and prev_close <= prev_psar_val:
                         contrib += weights.get("psar", 0) * 0.4
                         self.logger.debug("PSAR: Bullish reversal detected.")
-                    elif (current_close < psar_val and prev_close >= prev_psar_val):
+                    elif current_close < psar_val and prev_close >= prev_psar_val:
                         contrib -= weights.get("psar", 0) * 0.4
                         self.logger.debug("PSAR: Bearish reversal detected.")
                 signal_score += contrib
@@ -2478,19 +2535,20 @@ class TradingAnalyzer:
         # Fibonacci Levels (confluence with price action)
         if active_indicators.get("fibonacci_levels", False) and self.fib_levels:
             for level_name, level_price in self.fib_levels.items():
-                if (level_name not in ["0.0%", "100.0%"] and
-                    abs(current_price - level_price) / current_price < Decimal("0.001")):
-                        self.logger.debug(
-                            f"Price near Fibonacci level {level_name}: {level_price}"
-                        )
-                        contrib = 0.0
-                        if len(self.df) > 1:
-                            if (current_close > prev_close and current_close > level_price):
-                                contrib = weights.get("fibonacci_levels", 0) * 0.1
-                            elif (current_close < prev_close and current_close < level_price):
-                                contrib = -weights.get("fibonacci_levels", 0) * 0.1
-                        signal_score += contrib
-                        signal_breakdown["Fibonacci_Levels_Signal"] = contrib
+                if level_name not in ["0.0%", "100.0%"] and abs(
+                    current_price - level_price
+                ) / current_price < Decimal("0.001"):
+                    self.logger.debug(
+                        f"Price near Fibonacci level {level_name}: {level_price}"
+                    )
+                    contrib = 0.0
+                    if len(self.df) > 1:
+                        if current_close > prev_close and current_close > level_price:
+                            contrib = weights.get("fibonacci_levels", 0) * 0.1
+                        elif current_close < prev_close and current_close < level_price:
+                            contrib = -weights.get("fibonacci_levels", 0) * 0.1
+                    signal_score += contrib
+                    signal_breakdown["Fibonacci_Levels_Signal"] = contrib
 
         # --- Ehlers SuperTrend Alignment Scoring ---
         if active_indicators.get("ehlers_supertrend", False):
@@ -2584,7 +2642,7 @@ class TradingAnalyzer:
                             "ADX: Strong SELL trend (ADX > 25, -DI > +DI)."
                         )
                 elif adx_val < ADX_WEAK_TREND_THRESHOLD:
-                    contrib = 0 # Neutral signal, no contribution
+                    contrib = 0  # Neutral signal, no contribution
                     self.logger.debug("ADX: Weak trend (ADX < 20). Neutral signal.")
                 signal_score += contrib
                 signal_breakdown["ADX_Strength"] = contrib
@@ -2733,15 +2791,23 @@ class TradingAnalyzer:
                     prev_vol_idx = self.df["Volatility_Index"].iloc[-2]
                     prev_prev_vol_idx = self.df["Volatility_Index"].iloc[-3]
 
-                    if vol_idx > prev_vol_idx > prev_prev_vol_idx:  # Increasing volatility
+                    if (
+                        vol_idx > prev_vol_idx > prev_prev_vol_idx
+                    ):  # Increasing volatility
                         if signal_score > 0:
                             contrib = weight * 0.2
                         elif signal_score < 0:
                             contrib = -weight * 0.2
                         self.logger.debug("Volatility Index: Increasing volatility.")
-                    elif vol_idx < prev_vol_idx < prev_prev_vol_idx: # Decreasing volatility
-                        if abs(signal_score) > 0: # If there's an existing signal, slightly reduce it
-                             contrib = signal_score * -0.2 # Reduce score by 20% (example)
+                    elif (
+                        vol_idx < prev_vol_idx < prev_prev_vol_idx
+                    ):  # Decreasing volatility
+                        if (
+                            abs(signal_score) > 0
+                        ):  # If there's an existing signal, slightly reduce it
+                            contrib = (
+                                signal_score * -0.2
+                            )  # Reduce score by 20% (example)
                         self.logger.debug("Volatility Index: Decreasing volatility.")
                 signal_score += contrib
                 signal_breakdown["Volatility_Index_Signal"] = contrib
@@ -2784,7 +2850,6 @@ class TradingAnalyzer:
                 signal_score += contrib
                 signal_breakdown["Volume_Delta_Signal"] = contrib
 
-
         # --- Multi-Timeframe Trend Confluence Scoring ---
         if self.config["mtf_analysis"]["enabled"] and mtf_trends:
             mtf_buy_score = 0
@@ -2823,10 +2888,18 @@ class TradingAnalyzer:
         # Apply hysteresis to prevent immediate flip-flops
         # If the bot previously issued a BUY signal and the current score is not a strong SELL, and not a strong BUY, it holds the BUY signal.
         # This prevents it from flipping to HOLD or SELL too quickly if the score dips slightly.
-        if self._last_signal_score > 0 and signal_score > -threshold * hysteresis_ratio and not is_strong_buy:
+        if (
+            self._last_signal_score > 0
+            and signal_score > -threshold * hysteresis_ratio
+            and not is_strong_buy
+        ):
             final_signal = "BUY"
         # If the bot previously issued a SELL signal and the current score is not a strong BUY, and not a strong SELL, it holds the SELL signal.
-        elif self._last_signal_score < 0 and signal_score < threshold * hysteresis_ratio and not is_strong_sell:
+        elif (
+            self._last_signal_score < 0
+            and signal_score < threshold * hysteresis_ratio
+            and not is_strong_sell
+        ):
             final_signal = "SELL"
         elif is_strong_buy:
             final_signal = "BUY"
@@ -2836,10 +2909,14 @@ class TradingAnalyzer:
         # Apply cooldown period
         if final_signal != "HOLD":
             if now_ts - self._last_signal_ts < cooldown_sec:
-                self.logger.info(f"{NEON_YELLOW}Signal '{final_signal}' ignored due to cooldown ({cooldown_sec - (now_ts - self._last_signal_ts)}s remaining).{RESET}")
+                self.logger.info(
+                    f"{NEON_YELLOW}Signal '{final_signal}' ignored due to cooldown ({cooldown_sec - (now_ts - self._last_signal_ts)}s remaining).{RESET}"
+                )
                 final_signal = "HOLD"
             else:
-                self._last_signal_ts = now_ts # Update timestamp only if signal is issued
+                self._last_signal_ts = (
+                    now_ts  # Update timestamp only if signal is issued
+                )
 
         # Update last signal score for next iteration's hysteresis
         self._last_signal_score = signal_score
@@ -2859,8 +2936,9 @@ class TradingAnalyzer:
         take_profit_atr_multiple = Decimal(
             str(self.config["trade_management"]["take_profit_atr_multiple"])
         )
-        price_precision_str = "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
-
+        price_precision_str = (
+            "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
+        )
 
         if signal == "BUY":
             stop_loss = current_price - (atr_value * stop_loss_atr_multiple)
@@ -2883,7 +2961,7 @@ def display_indicator_values_and_price(
     df: pd.DataFrame,
     orderbook_data: dict | None,
     mtf_trends: dict[str, str],
-    signal_breakdown: dict | None = None # New parameter
+    signal_breakdown: dict | None = None,  # New parameter
 ) -> None:
     """Display current price and calculated indicator values."""
     logger.info(f"{NEON_BLUE}--- Current Market Data & Indicators ---{RESET}")
@@ -2912,7 +2990,9 @@ def display_indicator_values_and_price(
         logger.info(f"{NEON_CYAN}--- Fibonacci Levels ---{RESET}")
         logger.info("")  # Added newline for spacing
         for level_name, level_price in analyzer.fib_levels.items():
-            logger.info(f"  {NEON_YELLOW}{level_name}: {level_price.normalize()}{RESET}")
+            logger.info(
+                f"  {NEON_YELLOW}{level_name}: {level_price.normalize()}{RESET}"
+            )
 
     if mtf_trends:
         logger.info(f"{NEON_CYAN}--- Multi-Timeframe Trends ---{RESET}")
@@ -2923,9 +3003,15 @@ def display_indicator_values_and_price(
     if signal_breakdown:
         logger.info(f"{NEON_CYAN}--- Signal Score Breakdown ---{RESET}")
         # Sort by absolute contribution for better readability
-        sorted_breakdown = sorted(signal_breakdown.items(), key=lambda item: abs(item[1]), reverse=True)
+        sorted_breakdown = sorted(
+            signal_breakdown.items(), key=lambda item: abs(item[1]), reverse=True
+        )
         for indicator, contribution in sorted_breakdown:
-            color = (Fore.GREEN if contribution > 0 else (Fore.RED if contribution < 0 else Fore.YELLOW))
+            color = (
+                Fore.GREEN
+                if contribution > 0
+                else (Fore.RED if contribution < 0 else Fore.YELLOW)
+            )
             logger.info(f"  {color}{indicator:<25}: {contribution: .2f}{RESET}")
 
     logger.info(f"{NEON_BLUE}--------------------------------------{RESET}")
@@ -2977,11 +3063,14 @@ def main() -> None:
 
     while True:
         try:
-            logger.info(f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
+            logger.info(
+                f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+            )
             current_price = fetch_current_price(config["symbol"], logger)
             if current_price is None:
                 alert_system.send_alert(
-                    f"[{config['symbol']}] Failed to fetch current price. Skipping loop.", "WARNING"
+                    f"[{config['symbol']}] Failed to fetch current price. Skipping loop.",
+                    "WARNING",
                 )
                 time.sleep(config["loop_delay"])
                 continue
@@ -3040,18 +3129,26 @@ def main() -> None:
                 time.sleep(config["loop_delay"])
                 continue
 
-            trading_signal, signal_score, signal_breakdown = analyzer.generate_trading_signal(
-                current_price, orderbook_data, mtf_trends
+            trading_signal, signal_score, signal_breakdown = (
+                analyzer.generate_trading_signal(
+                    current_price, orderbook_data, mtf_trends
+                )
             )
             atr_value = Decimal(
                 str(analyzer._get_indicator_value("ATR", Decimal("0.01")))
-            ) # Default to a small positive value if ATR is missing
+            )  # Default to a small positive value if ATR is missing
 
             position_manager.manage_positions(current_price, performance_tracker)
 
             # Display current state after analysis and signal generation
             display_indicator_values_and_price(
-                config, logger, current_price, df, orderbook_data, mtf_trends, signal_breakdown
+                config,
+                logger,
+                current_price,
+                df,
+                orderbook_data,
+                mtf_trends,
+                signal_breakdown,
             )
 
             if (
@@ -3097,7 +3194,8 @@ def main() -> None:
 
         except Exception as e:
             alert_system.send_alert(
-                f"[{config['symbol']}] An unhandled error occurred in the main loop: {e}", "ERROR"
+                f"[{config['symbol']}] An unhandled error occurred in the main loop: {e}",
+                "ERROR",
             )
             logger.exception(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
             time.sleep(config["loop_delay"] * 2)

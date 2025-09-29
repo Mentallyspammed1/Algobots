@@ -46,9 +46,12 @@ try:
         stop_after_attempt,
         wait_exponential_jitter,
     )
+
     EXTERNAL_LIBS_AVAILABLE = True
 except ImportError as e:
-    print(f"{Fore.RED}Error: Missing required library: {e}. Please install it using pip.{Style.RESET_ALL}")
+    print(
+        f"{Fore.RED}Error: Missing required library: {e}. Please install it using pip.{Style.RESET_ALL}"
+    )
     EXTERNAL_LIBS_AVAILABLE = False
 
 # Initialize Colorama
@@ -66,13 +69,31 @@ STATE_DIR: Path = BASE_DIR / ".bot_state"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
+
 # Custom Exceptions
-class ConfigurationError(Exception): pass
-class APIAuthError(Exception): pass
-class WebSocketConnectionError(Exception): pass
-class MarketInfoError(Exception): pass
-class InitialBalanceError(Exception): pass
-class OrderPlacementError(Exception): pass
+class ConfigurationError(Exception):
+    pass
+
+
+class APIAuthError(Exception):
+    pass
+
+
+class WebSocketConnectionError(Exception):
+    pass
+
+
+class MarketInfoError(Exception):
+    pass
+
+
+class InitialBalanceError(Exception):
+    pass
+
+
+class OrderPlacementError(Exception):
+    pass
+
 
 class BybitAPIError(Exception):
     def __init__(self, message: str, ret_code: int = -1, ret_msg: str = "Unknown"):
@@ -80,11 +101,14 @@ class BybitAPIError(Exception):
         self.ret_code = ret_code
         self.ret_msg = ret_msg
 
+
 class BybitRateLimitError(BybitAPIError):
     pass
 
+
 class BybitInsufficientBalanceError(BybitAPIError):
     pass
+
 
 # Utility Classes
 class Colors:
@@ -97,22 +121,39 @@ class Colors:
     NEON_RED = Fore.RED + Style.BRIGHT
     NEON_ORANGE = Fore.LIGHTRED_EX + Style.BRIGHT
 
-def termux_notify(message: str, title: str = "Market Maker Bot", is_error: bool = False) -> None:
+
+def termux_notify(
+    message: str, title: str = "Market Maker Bot", is_error: bool = False
+) -> None:
     try:
-        subprocess.run(["termux-notification", "-h"], check=True, capture_output=True, timeout=2)
+        subprocess.run(
+            ["termux-notification", "-h"], check=True, capture_output=True, timeout=2
+        )
         cmd = ["termux-notification", "--title", title, "--content", message]
-        if is_error: cmd.extend(["--priority", "max", "--sound", "default"])
+        if is_error:
+            cmd.extend(["--priority", "max", "--sound", "default"])
         subprocess.run(cmd, check=False, capture_output=True, timeout=5)
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired, PermissionError):
-        logging.getLogger('BybitMarketMaker').warning(f"[NOTIFICATION FAILED] {title}: {message}")
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+        PermissionError,
+    ):
+        logging.getLogger("BybitMarketMaker").warning(
+            f"[NOTIFICATION FAILED] {title}: {message}"
+        )
     except Exception as e:
-        logging.getLogger('BybitMarketMaker').warning(f"Unexpected error with Termux notification: {e}")
+        logging.getLogger("BybitMarketMaker").warning(
+            f"Unexpected error with Termux notification: {e}"
+        )
+
 
 class JsonDecimalEncoder(json.JSONEncoder):
     def default(self, obj: Any) -> Any:
         if isinstance(obj, Decimal):
             return str(obj)
         return super().default(obj)
+
 
 # Pydantic Models for Configuration
 class DynamicSpreadConfig(BaseModel):
@@ -124,16 +165,19 @@ class DynamicSpreadConfig(BaseModel):
     price_change_smoothing_factor: PositiveFloat = 0.2
     atr_update_interval_sec: PositiveInt = 300
 
+
 class InventorySkewConfig(BaseModel):
     enabled: bool = True
     skew_intensity: PositiveFloat = 0.5
     max_inventory_ratio: PositiveFloat = 0.5
     inventory_sizing_factor: NonNegativeFloat = 0.5
 
+
 class OrderLayer(BaseModel):
     spread_offset_pct: NonNegativeFloat = 0.0
     quantity_multiplier: PositiveFloat = 1.0
     cancel_threshold_pct: PositiveFloat = 0.01
+
 
 class CircuitBreakerConfig(BaseModel):
     enabled: bool = True
@@ -142,6 +186,7 @@ class CircuitBreakerConfig(BaseModel):
     pause_duration_sec: PositiveInt = 60
     cool_down_after_trip_sec: PositiveInt = 300
     max_daily_loss_pct: PositiveFloat | None = None
+
 
 class StrategyConfig(BaseModel):
     base_spread_pct: PositiveFloat = 0.001
@@ -163,6 +208,7 @@ class StrategyConfig(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
+
 class SystemConfig(BaseModel):
     loop_interval_sec: PositiveFloat = 0.5
     order_refresh_interval_sec: PositiveFloat = 5.0
@@ -180,6 +226,7 @@ class SystemConfig(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
+
 class FilesConfig(BaseModel):
     log_level: str = "INFO"
     log_file: str = "market_maker.log"
@@ -191,32 +238,56 @@ class FilesConfig(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
+
 class GlobalConfig(BaseModel):
     api_key: str = Field(default_factory=lambda: os.getenv("BYBIT_API_KEY", ""))
     api_secret: str = Field(default_factory=lambda: os.getenv("BYBIT_API_SECRET", ""))
-    testnet: bool = Field(default_factory=lambda: os.getenv("BYBIT_TESTNET", "true").lower() == "true")
-    trading_mode: Literal["DRY_RUN", "SIMULATION", "TESTNET", "LIVE"] = Field(default_factory=lambda: os.getenv("TRADING_MODE", "DRY_RUN"))
-    category: Literal["linear", "inverse", "spot"] = Field(default_factory=lambda: os.getenv("TRADE_CATEGORY", "linear"))
-    main_quote_currency: str = Field(default_factory=lambda: os.getenv("MAIN_QUOTE_CURRENCY", "USDT"))
+    testnet: bool = Field(
+        default_factory=lambda: os.getenv("BYBIT_TESTNET", "true").lower() == "true"
+    )
+    trading_mode: Literal["DRY_RUN", "SIMULATION", "TESTNET", "LIVE"] = Field(
+        default_factory=lambda: os.getenv("TRADING_MODE", "DRY_RUN")
+    )
+    category: Literal["linear", "inverse", "spot"] = Field(
+        default_factory=lambda: os.getenv("TRADE_CATEGORY", "linear")
+    )
+    main_quote_currency: str = Field(
+        default_factory=lambda: os.getenv("MAIN_QUOTE_CURRENCY", "USDT")
+    )
 
     system: SystemConfig = Field(default_factory=SystemConfig)
     files: FilesConfig = Field(default_factory=FilesConfig)
 
-    initial_dry_run_capital: Decimal = Field(default_factory=lambda: Decimal(os.getenv("INITIAL_DRY_RUN_CAPITAL", "10000")))
-    dry_run_price_drift_mu: float = Field(default_factory=lambda: float(os.getenv("DRY_RUN_PRICE_DRIFT_MU", "0.0")))
-    dry_run_price_volatility_sigma: float = Field(default_factory=lambda: float(os.getenv("DRY_RUN_PRICE_VOLATILITY_SIGMA", "0.0001")))
-    dry_run_time_step_dt: float = Field(default_factory=lambda: float(os.getenv("DRY_RUN_TIME_STEP_DT", "1.0")))
+    initial_dry_run_capital: Decimal = Field(
+        default_factory=lambda: Decimal(os.getenv("INITIAL_DRY_RUN_CAPITAL", "10000"))
+    )
+    dry_run_price_drift_mu: float = Field(
+        default_factory=lambda: float(os.getenv("DRY_RUN_PRICE_DRIFT_MU", "0.0"))
+    )
+    dry_run_price_volatility_sigma: float = Field(
+        default_factory=lambda: float(
+            os.getenv("DRY_RUN_PRICE_VOLATILITY_SIGMA", "0.0001")
+        )
+    )
+    dry_run_time_step_dt: float = Field(
+        default_factory=lambda: float(os.getenv("DRY_RUN_TIME_STEP_DT", "1.0"))
+    )
 
     model_config = ConfigDict(validate_assignment=True)
 
     def model_post_init(self, __context: Any) -> None:
         if self.trading_mode == "TESTNET":
-            object.__setattr__(self, 'testnet', True)
+            object.__setattr__(self, "testnet", True)
         elif self.trading_mode == "LIVE":
-            object.__setattr__(self, 'testnet', False)
+            object.__setattr__(self, "testnet", False)
 
-        if self.trading_mode not in ["DRY_RUN", "SIMULATION"] and (not self.api_key or not self.api_secret):
-            raise ConfigurationError("API_KEY and API_SECRET must be set in .env for TESTNET or LIVE trading_mode.")
+        if self.trading_mode not in ["DRY_RUN", "SIMULATION"] and (
+            not self.api_key or not self.api_secret
+        ):
+            raise ConfigurationError(
+                "API_KEY and API_SECRET must be set in .env for TESTNET or LIVE trading_mode."
+            )
+
 
 class SymbolConfig(BaseModel):
     symbol: str
@@ -243,10 +314,10 @@ class SymbolConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
     def __pydantic_post_init__(self, __context: Any) -> None:
-        if self.symbol and ':' in self.symbol:
-            parts = self.symbol.split(':')
+        if self.symbol and ":" in self.symbol:
+            parts = self.symbol.split(":")
             self.quote_currency = parts[1]
-            self.base_currency = parts[0].split('/')[0]
+            self.base_currency = parts[0].split("/")[0]
         elif self.symbol and len(self.symbol) > 4 and self.symbol[-4:].isupper():
             self.base_currency = self.symbol[:-4]
             self.quote_currency = self.symbol[-4:]
@@ -256,40 +327,71 @@ class SymbolConfig(BaseModel):
         else:
             self.base_currency = "UNKNOWN"
             self.quote_currency = "UNKNOWN"
-            logging.getLogger('BybitMarketMaker').warning(f"[{self.symbol}] Cannot parse base/quote currency from symbol: {self.symbol}. Using UNKNOWN.")
+            logging.getLogger("BybitMarketMaker").warning(
+                f"[{self.symbol}] Cannot parse base/quote currency from symbol: {self.symbol}. Using UNKNOWN."
+            )
 
         # Additional validation
         if self.strategy.inventory_skew.enabled and self.max_net_exposure_usd <= 0:
-            raise ConfigurationError(f"[{self.symbol}] max_net_exposure_usd must be positive when inventory skew strategy is enabled.")
+            raise ConfigurationError(
+                f"[{self.symbol}] max_net_exposure_usd must be positive when inventory skew strategy is enabled."
+            )
         if not (0 < self.max_order_size_pct <= 1):
-            raise ConfigurationError(f"[{self.symbol}] max_order_size_pct must be between 0 and 1 (exclusive).")
+            raise ConfigurationError(
+                f"[{self.symbol}] max_order_size_pct must be between 0 and 1 (exclusive)."
+            )
         if self.min_order_value_usd <= 0:
-            raise ConfigurationError(f"[{self.symbol}] min_order_value_usd must be positive.")
+            raise ConfigurationError(
+                f"[{self.symbol}] min_order_value_usd must be positive."
+            )
         if self.max_net_exposure_usd < 0:
-            raise ConfigurationError(f"[{self.symbol}] max_net_exposure_usd cannot be negative.")
+            raise ConfigurationError(
+                f"[{self.symbol}] max_net_exposure_usd cannot be negative."
+            )
         if self.strategy.base_spread_pct <= 0:
-            raise ConfigurationError(f"[{self.symbol}] base_spread_pct must be positive.")
+            raise ConfigurationError(
+                f"[{self.symbol}] base_spread_pct must be positive."
+            )
         if self.strategy.max_outstanding_orders < 0:
-            raise ConfigurationError(f"[{self.symbol}] max_outstanding_orders cannot be negative.")
+            raise ConfigurationError(
+                f"[{self.symbol}] max_outstanding_orders cannot be negative."
+            )
         if self.strategy.dynamic_spread.enabled:
-            if not (0 <= self.strategy.dynamic_spread.min_spread_pct <= self.strategy.dynamic_spread.max_spread_pct):
-                raise ConfigurationError(f"[{self.symbol}] Dynamic spread min/max percentages are invalid.")
+            if not (
+                0
+                <= self.strategy.dynamic_spread.min_spread_pct
+                <= self.strategy.dynamic_spread.max_spread_pct
+            ):
+                raise ConfigurationError(
+                    f"[{self.symbol}] Dynamic spread min/max percentages are invalid."
+                )
             if not (0 < self.strategy.dynamic_spread.price_change_smoothing_factor < 1):
-                raise ConfigurationError(f"[{self.symbol}] Price change smoothing factor must be between 0 and 1 (exclusive).")
-        if self.strategy.circuit_breaker.max_daily_loss_pct is not None and not (0 <= self.strategy.circuit_breaker.max_daily_loss_pct < 1):
-            raise ConfigurationError(f"[{self.symbol}] max_daily_loss_pct must be between 0 and 1 (exclusive) if set.")
+                raise ConfigurationError(
+                    f"[{self.symbol}] Price change smoothing factor must be between 0 and 1 (exclusive)."
+                )
+        if self.strategy.circuit_breaker.max_daily_loss_pct is not None and not (
+            0 <= self.strategy.circuit_breaker.max_daily_loss_pct < 1
+        ):
+            raise ConfigurationError(
+                f"[{self.symbol}] max_daily_loss_pct must be between 0 and 1 (exclusive) if set."
+            )
 
     def format_price(self, p: Decimal) -> Decimal:
         if self.price_precision is None:
-            logging.getLogger('BybitMarketMaker').warning(f"[{self.symbol}] Price precision not set. Using default 8 decimal places.")
-            return p.quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            logging.getLogger("BybitMarketMaker").warning(
+                f"[{self.symbol}] Price precision not set. Using default 8 decimal places."
+            )
+            return p.quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
         return p.quantize(self.price_precision, rounding=ROUND_DOWN)
 
     def format_quantity(self, q: Decimal) -> Decimal:
         if self.quantity_precision is None:
-            logging.getLogger('BybitMarketMaker').warning(f"[{self.symbol}] Quantity precision not set. Using default 8 decimal places.")
-            return q.quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
+            logging.getLogger("BybitMarketMaker").warning(
+                f"[{self.symbol}] Quantity precision not set. Using default 8 decimal places."
+            )
+            return q.quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
         return q.quantize(self.quantity_precision, rounding=ROUND_DOWN)
+
 
 # Configuration Manager
 class ConfigManager:
@@ -297,7 +399,9 @@ class ConfigManager:
     _symbol_configs: dict[str, SymbolConfig] = {}
 
     @classmethod
-    def load_config(cls, single_symbol: str | None = None) -> tuple[GlobalConfig, dict[str, SymbolConfig]]:
+    def load_config(
+        cls, single_symbol: str | None = None
+    ) -> tuple[GlobalConfig, dict[str, SymbolConfig]]:
         try:
             cls._global_config = GlobalConfig()
         except ValidationError as e:
@@ -313,53 +417,89 @@ class ConfigManager:
                 "min_order_value_usd": 10.0,
                 "max_order_size_pct": 0.1,
                 "max_net_exposure_usd": 500.0,
-                "strategy": StrategyConfig().model_dump(mode='json_compatible')
+                "strategy": StrategyConfig().model_dump(mode="json_compatible"),
             }
             try:
                 cfg = SymbolConfig(**default_symbol_data)
                 cls._symbol_configs[single_symbol] = cfg
-                logging.getLogger('BybitMarketMaker').info(f"[{Colors.CYAN}Using single symbol mode for {single_symbol}.{Colors.RESET}]")
+                logging.getLogger("BybitMarketMaker").info(
+                    f"[{Colors.CYAN}Using single symbol mode for {single_symbol}.{Colors.RESET}]"
+                )
             except ValidationError as e:
-                logging.critical(f"Single symbol configuration validation error for {single_symbol}: {e}")
+                logging.critical(
+                    f"Single symbol configuration validation error for {single_symbol}: {e}"
+                )
                 raise ConfigurationError(f"Single symbol configuration failed: {e}")
         else:
-            symbol_config_path = Path(__file__).parent / cls._global_config.files.symbol_config_file
+            symbol_config_path = (
+                Path(__file__).parent / cls._global_config.files.symbol_config_file
+            )
             try:
                 with open(symbol_config_path) as f:
-                    raw_symbol_configs = json.loads(f.read(), parse_float=Decimal, parse_int=Decimal)
+                    raw_symbol_configs = json.loads(
+                        f.read(), parse_float=Decimal, parse_int=Decimal
+                    )
                 if not isinstance(raw_symbol_configs, list):
-                    raise ValueError("Symbol configuration file must contain a JSON list.")
+                    raise ValueError(
+                        "Symbol configuration file must contain a JSON list."
+                    )
 
                 for s_cfg_data in raw_symbol_configs:
                     try:
-                        s_cfg_data.setdefault('strategy', {})
-                        default_strategy_config_dict = StrategyConfig().model_dump(mode='json_compatible')
-                        for strat_field, default_value in default_strategy_config_dict.items():
-                            if strat_field not in s_cfg_data['strategy']:
-                                s_cfg_data['strategy'][strat_field] = default_value
-                            elif isinstance(default_value, dict) and isinstance(s_cfg_data['strategy'][strat_field], dict):
-                                for nested_field, nested_default_value in default_value.items():
-                                    if nested_field not in s_cfg_data['strategy'][strat_field]:
-                                        s_cfg_data['strategy'][strat_field][nested_field] = nested_default_value
+                        s_cfg_data.setdefault("strategy", {})
+                        default_strategy_config_dict = StrategyConfig().model_dump(
+                            mode="json_compatible"
+                        )
+                        for (
+                            strat_field,
+                            default_value,
+                        ) in default_strategy_config_dict.items():
+                            if strat_field not in s_cfg_data["strategy"]:
+                                s_cfg_data["strategy"][strat_field] = default_value
+                            elif isinstance(default_value, dict) and isinstance(
+                                s_cfg_data["strategy"][strat_field], dict
+                            ):
+                                for (
+                                    nested_field,
+                                    nested_default_value,
+                                ) in default_value.items():
+                                    if (
+                                        nested_field
+                                        not in s_cfg_data["strategy"][strat_field]
+                                    ):
+                                        s_cfg_data["strategy"][strat_field][
+                                            nested_field
+                                        ] = nested_default_value
 
                         cfg = SymbolConfig(**s_cfg_data)
                         cls._symbol_configs[cfg.symbol] = cfg
                     except ValidationError as e:
-                        logging.error(f"Symbol configuration validation error for {s_cfg_data.get('symbol', 'N/A')}: {e}")
+                        logging.error(
+                            f"Symbol configuration validation error for {s_cfg_data.get('symbol', 'N/A')}: {e}"
+                        )
                     except Exception as e:
-                        logging.error(f"Unexpected error processing symbol config {s_cfg_data.get('symbol', 'N/A')}: {e}")
+                        logging.error(
+                            f"Unexpected error processing symbol config {s_cfg_data.get('symbol', 'N/A')}: {e}"
+                        )
 
             except FileNotFoundError:
-                logging.critical(f"Symbol configuration file '{symbol_config_path}' not found. Please create it or use single symbol mode.")
-                raise ConfigurationError(f"Symbol config file not found: {symbol_config_path}")
+                logging.critical(
+                    f"Symbol configuration file '{symbol_config_path}' not found. Please create it or use single symbol mode."
+                )
+                raise ConfigurationError(
+                    f"Symbol config file not found: {symbol_config_path}"
+                )
             except (json.JSONDecodeError, InvalidOperation, ValueError) as e:
-                logging.critical(f"Error decoding JSON from symbol configuration file '{symbol_config_path}': {e}")
+                logging.critical(
+                    f"Error decoding JSON from symbol configuration file '{symbol_config_path}': {e}"
+                )
                 raise ConfigurationError(f"Invalid symbol config file format: {e}")
             except Exception as e:
                 logging.critical(f"Unexpected error loading symbol configs: {e}")
                 raise ConfigurationError(f"Error loading symbol configs: {e}")
 
         return cls._global_config, cls._symbol_configs
+
 
 # Logger Setup
 class JsonFormatter(logging.Formatter):
@@ -376,6 +516,7 @@ class JsonFormatter(logging.Formatter):
         if record.stack_info:
             log_record["stack_info"] = self.formatStack(record.stack_info)
         return json.dumps(log_record)
+
 
 def setup_logger(config: FilesConfig, name_suffix: str = "main") -> logging.Logger:
     logger_name = f"BybitMarketMaker.{name_suffix}"
@@ -412,8 +553,10 @@ def setup_logger(config: FilesConfig, name_suffix: str = "main") -> logging.Logg
     stream_handler.setFormatter(stream_formatter)
     logger.addHandler(stream_handler)
 
-    pybit_logger = logging.getLogger('pybit')
-    pybit_logger.setLevel(getattr(logging, config.pybit_log_level.upper(), logging.WARNING))
+    pybit_logger = logging.getLogger("pybit")
+    pybit_logger.setLevel(
+        getattr(logging, config.pybit_log_level.upper(), logging.WARNING)
+    )
     pybit_logger.propagate = False
     if not pybit_logger.handlers:
         pybit_logger.addHandler(file_handler)
@@ -421,22 +564,33 @@ def setup_logger(config: FilesConfig, name_suffix: str = "main") -> logging.Logg
 
     return logger
 
+
 # API Retry Decorator
 def retry_api_call():
     global_config = ConfigManager._global_config
     if global_config is None:
-        return retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=1, max=5))
+        return retry(
+            stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=1, max=5)
+        )
 
     return retry(
         stop=stop_after_attempt(global_config.system.api_retry_attempts),
         wait=wait_exponential_jitter(
             initial=global_config.system.api_retry_initial_delay_sec,
-            max=global_config.system.api_retry_max_delay_sec
+            max=global_config.system.api_retry_max_delay_sec,
         ),
-        retry=retry_if_exception(lambda e: isinstance(e, BybitAPIError) and e.ret_code not in [10001, 10004, 110001, 110003, 12130, 12131]),
-        before_sleep=before_sleep_log(logging.getLogger('BybitMarketMaker.api_retry'), logging.WARNING, exc_info=False),
-        reraise=True
+        retry=retry_if_exception(
+            lambda e: isinstance(e, BybitAPIError)
+            and e.ret_code not in [10001, 10004, 110001, 110003, 12130, 12131]
+        ),
+        before_sleep=before_sleep_log(
+            logging.getLogger("BybitMarketMaker.api_retry"),
+            logging.WARNING,
+            exc_info=False,
+        ),
+        reraise=True,
     )
+
 
 # Data Classes for Trading State and Metrics
 @dataclass
@@ -458,12 +612,15 @@ class TradeMetrics:
         return self.realized_pnl - self.total_fees
 
     def update_win_rate(self) -> None:
-        self.win_rate = (self.wins / self.total_trades * 100.0) if self.total_trades > 0 else 0.0
+        self.win_rate = (
+            (self.wins / self.total_trades * 100.0) if self.total_trades > 0 else 0.0
+        )
 
     def update_pnl_on_buy(self, quantity: Decimal, price: Decimal) -> None:
         if self.current_asset_holdings > DECIMAL_ZERO:
             self.average_entry_price = (
-                (self.average_entry_price * self.current_asset_holdings) + (price * quantity)
+                (self.average_entry_price * self.current_asset_holdings)
+                + (price * quantity)
             ) / (self.current_asset_holdings + quantity)
         else:
             self.average_entry_price = price
@@ -472,9 +629,12 @@ class TradeMetrics:
 
     def update_pnl_on_sell(self, quantity: Decimal, price: Decimal) -> None:
         if self.current_asset_holdings < quantity:
-            logging.getLogger('BybitMarketMaker').warning(f"Attempted to sell {quantity} but only {self.current_asset_holdings} held. Adjusting quantity.")
+            logging.getLogger("BybitMarketMaker").warning(
+                f"Attempted to sell {quantity} but only {self.current_asset_holdings} held. Adjusting quantity."
+            )
             quantity = self.current_asset_holdings
-            if quantity <= DECIMAL_ZERO: return
+            if quantity <= DECIMAL_ZERO:
+                return
 
         self.realized_pnl += (price - self.average_entry_price) * quantity
         self.current_asset_holdings -= quantity
@@ -484,9 +644,16 @@ class TradeMetrics:
         self.last_pnl_update_timestamp = datetime.now(timezone.utc)
 
     def calculate_unrealized_pnl(self, current_price: Decimal) -> Decimal:
-        if self.current_asset_holdings > DECIMAL_ZERO and self.average_entry_price > DECIMAL_ZERO and current_price > DECIMAL_ZERO:
-            return (current_price - self.average_entry_price) * self.current_asset_holdings
+        if (
+            self.current_asset_holdings > DECIMAL_ZERO
+            and self.average_entry_price > DECIMAL_ZERO
+            and current_price > DECIMAL_ZERO
+        ):
+            return (
+                current_price - self.average_entry_price
+            ) * self.current_asset_holdings
         return DECIMAL_ZERO
+
 
 @dataclass
 class TradingState:
@@ -501,8 +668,12 @@ class TradingState:
     last_ws_message_time: float = field(default_factory=time.time)
     last_status_report_time: float = 0.0
     last_health_check_time: float = 0.0
-    price_candlestick_history: deque[tuple[float, Decimal, Decimal, Decimal]] = field(default_factory=deque)
-    circuit_breaker_price_points: deque[tuple[float, Decimal]] = field(default_factory=deque)
+    price_candlestick_history: deque[tuple[float, Decimal, Decimal, Decimal]] = field(
+        default_factory=deque
+    )
+    circuit_breaker_price_points: deque[tuple[float, Decimal]] = field(
+        default_factory=deque
+    )
     is_paused: bool = False
     pause_end_time: float = 0.0
     circuit_breaker_cooldown_end_time: float = 0.0
@@ -511,6 +682,7 @@ class TradingState:
     daily_initial_capital: Decimal = DECIMAL_ZERO
     daily_pnl_reset_date: datetime | None = None
     last_dry_run_price_update_time: float = field(default_factory=time.time)
+
 
 # Enhanced WebSocket Manager with Reconnection and Batch Operations
 class WebSocketManager:
@@ -570,14 +742,13 @@ class WebSocketManager:
             try:
                 self.logger.info("Connecting to public WebSocket...")
                 self.public_ws = WebSocket(
-                    testnet=self.config.testnet,
-                    channel_type='linear'
+                    testnet=self.config.testnet, channel_type="linear"
                 )
 
                 # Subscribe to all public channels
                 for callback in self.public_subscriptions:
                     self.public_ws.orderbook_stream(200, "BTCUSDT", callback)
-                    self.public_ws.kline_stream('1m', "BTCUSDT", callback)
+                    self.public_ws.kline_stream("1m", "BTCUSDT", callback)
 
                 self.logger.info("Public WebSocket connected and subscribed")
 
@@ -585,7 +756,9 @@ class WebSocketManager:
                 await self._run_websocket(self.public_ws)
 
             except Exception as e:
-                self.logger.error(f"Public WebSocket error: {e}. Reconnecting in {self.config.system.ws_reconnect_initial_delay_sec} seconds...")
+                self.logger.error(
+                    f"Public WebSocket error: {e}. Reconnecting in {self.config.system.ws_reconnect_initial_delay_sec} seconds..."
+                )
                 await asyncio.sleep(self.config.system.ws_reconnect_initial_delay_sec)
 
     async def _manage_private_websocket(self):
@@ -595,9 +768,9 @@ class WebSocketManager:
                 self.logger.info("Connecting to private WebSocket...")
                 self.private_ws = WebSocket(
                     testnet=self.config.testnet,
-                    channel_type='private',
+                    channel_type="private",
                     api_key=self.config.api_key,
-                    api_secret=self.config.api_secret
+                    api_secret=self.config.api_secret,
                 )
 
                 # Subscribe to all private channels
@@ -612,7 +785,9 @@ class WebSocketManager:
                 await self._run_websocket(self.private_ws)
 
             except Exception as e:
-                self.logger.error(f"Private WebSocket error: {e}. Reconnecting in {self.config.system.ws_reconnect_initial_delay_sec} seconds...")
+                self.logger.error(
+                    f"Private WebSocket error: {e}. Reconnecting in {self.config.system.ws_reconnect_initial_delay_sec} seconds..."
+                )
                 await asyncio.sleep(self.config.system.ws_reconnect_initial_delay_sec)
 
     async def _run_websocket(self, ws: WebSocket):
@@ -665,7 +840,9 @@ class WebSocketManager:
             except Exception as e:
                 self.logger.error(f"Private WebSocket heartbeat error: {e}")
 
-    async def place_batch_orders(self, orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def place_batch_orders(
+        self, orders: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Place multiple orders in a single batch request"""
         if not orders:
             return []
@@ -674,12 +851,12 @@ class WebSocketManager:
 
         # Split orders into chunks of 10 (Bybit's batch limit)
         for i in range(0, len(orders), 10):
-            chunk = orders[i:i+10]
+            chunk = orders[i : i + 10]
             try:
                 response = await asyncio.to_thread(
                     self.private_ws.place_batch_order,
-                    category='linear',
-                    orderList=chunk
+                    category="linear",
+                    orderList=chunk,
                 )
                 results.append(response)
                 self.logger.info(f"Batch order placed: {len(chunk)} orders")
@@ -697,12 +874,12 @@ class WebSocketManager:
 
         # Split orders into chunks of 10 (Bybit's batch limit)
         for i in range(0, len(order_ids), 10):
-            chunk = order_ids[i:i+10]
+            chunk = order_ids[i : i + 10]
             try:
                 response = await asyncio.to_thread(
                     self.private_ws.cancel_batch_order,
-                    category='linear',
-                    request=[{'orderId': order_id} for order_id in chunk]
+                    category="linear",
+                    request=[{"orderId": order_id} for order_id in chunk],
                 )
                 results.append(response)
                 self.logger.info(f"Batch order cancelled: {len(chunk)} orders")
@@ -710,6 +887,7 @@ class WebSocketManager:
                 self.logger.error(f"Error cancelling batch orders: {e}")
 
         return results
+
 
 # Enhanced Bybit API Client with Batch Operations and Improved Error Handling
 class BybitAPIClient:
@@ -719,13 +897,11 @@ class BybitAPIClient:
         self.http_session = HTTP(
             testnet=self.config.testnet,
             api_key=self.config.api_key,
-            api_secret=self.config.api_secret
+            api_secret=self.config.api_secret,
         )
         self.last_cancel_time = 0.0
         self.rate_limiter = RateLimiter(
-            max_requests=60,
-            time_window=60,
-            logger=self.logger
+            max_requests=60, time_window=60, logger=self.logger
         )
 
         # Store original methods to apply tenacity decorator
@@ -749,13 +925,31 @@ class BybitAPIClient:
 
         # Do not retry on auth, bad params, insufficient balance, or explicit rate limit
         non_retryable_codes = {
-            10001, 10002, 10003, 10004, 30001, 30002, 30003, 30004, 30005,
-            30042, 30070, 30071
+            10001,
+            10002,
+            10003,
+            10004,
+            30001,
+            30002,
+            30003,
+            30004,
+            30005,
+            30042,
+            30070,
+            30071,
         }
         if exception.ret_code in non_retryable_codes:
             return False
 
-        if isinstance(exception, (APIAuthError, ValueError, BybitRateLimitError, BybitInsufficientBalanceError)):
+        if isinstance(
+            exception,
+            (
+                APIAuthError,
+                ValueError,
+                BybitRateLimitError,
+                BybitInsufficientBalanceError,
+            ),
+        ):
             return False
 
         return True
@@ -765,11 +959,11 @@ class BybitAPIClient:
             stop=stop_after_attempt(self.config.system.api_retry_attempts),
             wait=wait_exponential_jitter(
                 initial=self.config.system.api_retry_initial_delay_sec,
-                max=self.config.system.api_retry_max_delay_sec
+                max=self.config.system.api_retry_max_delay_sec,
             ),
             retry=retry_if_exception(self._is_retryable_bybit_error),
             before_sleep=before_sleep_log(self.logger, logging.WARNING, exc_info=False),
-            reraise=True
+            reraise=True,
         )
 
     def _initialize_api_retry_decorator(self) -> None:
@@ -778,78 +972,135 @@ class BybitAPIClient:
             setattr(self, name, api_retry(method))
         self.logger.debug("API retry decorators initialized and applied.")
 
-    async def _run_sync_api_call(self, api_method: Callable, *args: Any, **kwargs: Any) -> Any:
+    async def _run_sync_api_call(
+        self, api_method: Callable, *args: Any, **kwargs: Any
+    ) -> Any:
         """Runs a synchronous API call in a separate thread"""
         return await asyncio.to_thread(api_method, *args, **kwargs)
 
-    async def _handle_response_async(self, coro: Coroutine[Any, Any, Any], action: str) -> dict[str, Any]:
+    async def _handle_response_async(
+        self, coro: Coroutine[Any, Any, Any], action: str
+    ) -> dict[str, Any]:
         """Processes API responses, checking for errors and raising custom exceptions"""
         response = await coro
 
         if not isinstance(response, dict):
-            self.logger.error(f"API {action} failed: Invalid response format. Response: {response}")
-            raise BybitAPIError(f"Invalid API response for {action}", ret_code=-1, ret_msg="Invalid format")
+            self.logger.error(
+                f"API {action} failed: Invalid response format. Response: {response}"
+            )
+            raise BybitAPIError(
+                f"Invalid API response for {action}",
+                ret_code=-1,
+                ret_msg="Invalid format",
+            )
 
-        ret_code = response.get('retCode', -1)
-        ret_msg = response.get('retMsg', 'Unknown error')
+        ret_code = response.get("retCode", -1)
+        ret_msg = response.get("retMsg", "Unknown error")
 
         if ret_code == 0:
             self.logger.debug(f"API {action} successful.")
-            return response.get('result', {})
+            return response.get("result", {})
 
         if ret_code == 10004:
-            raise APIAuthError(f"Authentication failed: {ret_msg}. Check API key permissions and validity.")
+            raise APIAuthError(
+                f"Authentication failed: {ret_msg}. Check API key permissions and validity."
+            )
         elif ret_code in [10006, 10007, 10016, 120004, 120005]:
-            raise BybitRateLimitError(f"API rate limit hit for {action}: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+            raise BybitRateLimitError(
+                f"API rate limit hit for {action}: {ret_msg}",
+                ret_code=ret_code,
+                ret_msg=ret_msg,
+            )
         elif ret_code in [10001, 110001, 110003, 12130, 12131]:
-            raise BybitInsufficientBalanceError(f"Insufficient balance for {action}: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+            raise BybitInsufficientBalanceError(
+                f"Insufficient balance for {action}: {ret_msg}",
+                ret_code=ret_code,
+                ret_msg=ret_msg,
+            )
         elif ret_code == 10002:
-            raise BybitAPIError(f"API {action} failed: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+            raise BybitAPIError(
+                f"API {action} failed: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg
+            )
         else:
-            raise BybitAPIError(f"API {action} failed: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+            raise BybitAPIError(
+                f"API {action} failed: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg
+            )
 
     @retry_api_call()
-    async def get_instruments_info_impl(self, category: str, symbol: str = None) -> dict[str, Any]:
+    async def get_instruments_info_impl(
+        self, category: str, symbol: str = None
+    ) -> dict[str, Any]:
         """Get instrument info with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.get_instruments_info, category=category, symbol=symbol),
-            "get_instruments_info"
+            asyncio.to_thread(
+                self.http_session.get_instruments_info, category=category, symbol=symbol
+            ),
+            "get_instruments_info",
         )
 
     @retry_api_call()
-    async def get_wallet_balance_impl(self, account_type: str = 'UNIFIED') -> dict[str, Any]:
+    async def get_wallet_balance_impl(
+        self, account_type: str = "UNIFIED"
+    ) -> dict[str, Any]:
         """Get wallet balance with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.get_wallet_balance, accountType=account_type),
-            "get_wallet_balance"
+            asyncio.to_thread(
+                self.http_session.get_wallet_balance, accountType=account_type
+            ),
+            "get_wallet_balance",
         )
 
     @retry_api_call()
-    async def get_position_info_impl(self, category: str, symbol: str = None) -> dict[str, Any]:
+    async def get_position_info_impl(
+        self, category: str, symbol: str = None
+    ) -> dict[str, Any]:
         """Get position info with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.get_position_info, category=category, symbol=symbol),
-            "get_position_info"
+            asyncio.to_thread(
+                self.http_session.get_position_info, category=category, symbol=symbol
+            ),
+            "get_position_info",
         )
 
     @retry_api_call()
-    async def set_leverage_impl(self, category: str, symbol: str, buy_leverage: int, sell_leverage: int) -> dict[str, Any]:
+    async def set_leverage_impl(
+        self, category: str, symbol: str, buy_leverage: int, sell_leverage: int
+    ) -> dict[str, Any]:
         """Set leverage with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.set_leverage, category=category, symbol=symbol, buyLeverage=buy_leverage, sellLeverage=sell_leverage),
-            "set_leverage"
+            asyncio.to_thread(
+                self.http_session.set_leverage,
+                category=category,
+                symbol=symbol,
+                buyLeverage=buy_leverage,
+                sellLeverage=sell_leverage,
+            ),
+            "set_leverage",
         )
 
     @retry_api_call()
-    async def get_open_orders_impl(self, category: str, symbol: str = None) -> dict[str, Any]:
+    async def get_open_orders_impl(
+        self, category: str, symbol: str = None
+    ) -> dict[str, Any]:
         """Get open orders with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.get_open_orders, category=category, symbol=symbol),
-            "get_open_orders"
+            asyncio.to_thread(
+                self.http_session.get_open_orders, category=category, symbol=symbol
+            ),
+            "get_open_orders",
         )
 
     @retry_api_call()
-    async def place_order_impl(self, category: str, symbol: str, side: str, order_type: str, qty: str, price: str = None, **kwargs) -> dict[str, Any]:
+    async def place_order_impl(
+        self,
+        category: str,
+        symbol: str,
+        side: str,
+        order_type: str,
+        qty: str,
+        price: str = None,
+        **kwargs,
+    ) -> dict[str, Any]:
         """Place order with retry logic"""
         order_params = {
             "category": category,
@@ -857,49 +1108,77 @@ class BybitAPIClient:
             "side": side,
             "orderType": order_type,
             "qty": qty,
-            **kwargs
+            **kwargs,
         }
         if price:
             order_params["price"] = price
 
         return await self._handle_response_async(
             asyncio.to_thread(self.http_session.place_order, **order_params),
-            "place_order"
+            "place_order",
         )
 
     @retry_api_call()
-    async def cancel_order_impl(self, category: str, symbol: str, order_id: str) -> dict[str, Any]:
+    async def cancel_order_impl(
+        self, category: str, symbol: str, order_id: str
+    ) -> dict[str, Any]:
         """Cancel order with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.cancel_order, category=category, symbol=symbol, orderId=order_id),
-            "cancel_order"
+            asyncio.to_thread(
+                self.http_session.cancel_order,
+                category=category,
+                symbol=symbol,
+                orderId=order_id,
+            ),
+            "cancel_order",
         )
 
     @retry_api_call()
-    async def cancel_all_orders_impl(self, category: str, symbol: str) -> dict[str, Any]:
+    async def cancel_all_orders_impl(
+        self, category: str, symbol: str
+    ) -> dict[str, Any]:
         """Cancel all orders with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.cancel_all_orders, category=category, symbol=symbol),
-            "cancel_all_orders"
+            asyncio.to_thread(
+                self.http_session.cancel_all_orders, category=category, symbol=symbol
+            ),
+            "cancel_all_orders",
         )
 
     @retry_api_call()
-    async def set_trading_stop_impl(self, category: str, symbol: str, **kwargs) -> dict[str, Any]:
+    async def set_trading_stop_impl(
+        self, category: str, symbol: str, **kwargs
+    ) -> dict[str, Any]:
         """Set trading stop with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.set_trading_stop, category=category, symbol=symbol, **kwargs),
-            "set_trading_stop"
+            asyncio.to_thread(
+                self.http_session.set_trading_stop,
+                category=category,
+                symbol=symbol,
+                **kwargs,
+            ),
+            "set_trading_stop",
         )
 
     @retry_api_call()
-    async def get_kline_impl(self, category: str, symbol: str, interval: str, limit: int = 100) -> dict[str, Any]:
+    async def get_kline_impl(
+        self, category: str, symbol: str, interval: str, limit: int = 100
+    ) -> dict[str, Any]:
         """Get kline data with retry logic"""
         return await self._handle_response_async(
-            asyncio.to_thread(self.http_session.get_kline, category=category, symbol=symbol, interval=interval, limit=limit),
-            "get_kline"
+            asyncio.to_thread(
+                self.http_session.get_kline,
+                category=category,
+                symbol=symbol,
+                interval=interval,
+                limit=limit,
+            ),
+            "get_kline",
         )
 
-    async def place_batch_orders(self, orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def place_batch_orders(
+        self, orders: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Place multiple orders in a single batch request"""
         if not orders:
             return []
@@ -908,15 +1187,15 @@ class BybitAPIClient:
 
         # Split orders into chunks of 10 (Bybit's batch limit)
         for i in range(0, len(orders), 10):
-            chunk = orders[i:i+10]
+            chunk = orders[i : i + 10]
             try:
                 response = await self._handle_response_async(
                     asyncio.to_thread(
                         self.http_session.place_batch_order,
-                        category='linear',
-                        orderList=chunk
+                        category="linear",
+                        orderList=chunk,
                     ),
-                    "place_batch_order"
+                    "place_batch_order",
                 )
                 results.append(response)
                 self.logger.info(f"Batch order placed: {len(chunk)} orders")
@@ -934,15 +1213,15 @@ class BybitAPIClient:
 
         # Split orders into chunks of 10 (Bybit's batch limit)
         for i in range(0, len(order_ids), 10):
-            chunk = order_ids[i:i+10]
+            chunk = order_ids[i : i + 10]
             try:
                 response = await self._handle_response_async(
                     asyncio.to_thread(
                         self.http_session.cancel_batch_order,
-                        category='linear',
-                        request=[{'orderId': order_id} for order_id in chunk]
+                        category="linear",
+                        request=[{"orderId": order_id} for order_id in chunk],
                     ),
-                    "cancel_batch_order"
+                    "cancel_batch_order",
                 )
                 results.append(response)
                 self.logger.info(f"Batch order cancelled: {len(chunk)} orders")
@@ -950,6 +1229,7 @@ class BybitAPIClient:
                 self.logger.error(f"Error cancelling batch orders: {e}")
 
         return results
+
 
 # Rate Limiter
 class RateLimiter:
@@ -971,7 +1251,9 @@ class RateLimiter:
             # Check if we've exceeded the limit
             if len(self.requests) >= self.max_requests:
                 sleep_time = self.time_window + self.requests[0] - now
-                self.logger.warning(f"Rate limit reached. Sleeping for {sleep_time:.2f} seconds")
+                self.logger.warning(
+                    f"Rate limit reached. Sleeping for {sleep_time:.2f} seconds"
+                )
                 await asyncio.sleep(sleep_time)
                 # Remove expired requests after sleep
                 while self.requests and self.requests[0] <= now - self.time_window:
@@ -980,9 +1262,16 @@ class RateLimiter:
             # Add current request
             self.requests.append(now)
 
+
 # Enhanced Order Manager with Batch Operations and Risk Controls
 class OrderManager:
-    def __init__(self, global_config: GlobalConfig, symbol_config: SymbolConfig, api_client: BybitAPIClient, logger: logging.Logger):
+    def __init__(
+        self,
+        global_config: GlobalConfig,
+        symbol_config: SymbolConfig,
+        api_client: BybitAPIClient,
+        logger: logging.Logger,
+    ):
         self.global_config = global_config
         self.symbol_config = symbol_config
         self.api_client = api_client
@@ -1003,11 +1292,11 @@ class OrderManager:
 
                 # Update active orders
                 for result in results:
-                    if 'orderId' in result:
-                        self.active_orders[result['orderId']] = {
-                            'symbol': self.symbol_config.symbol,
-                            'timestamp': time.time(),
-                            **result
+                    if "orderId" in result:
+                        self.active_orders[result["orderId"]] = {
+                            "symbol": self.symbol_config.symbol,
+                            "timestamp": time.time(),
+                            **result,
                         }
 
                 return results
@@ -1027,8 +1316,8 @@ class OrderManager:
 
                 # Remove cancelled orders from active orders
                 for result in results:
-                    if 'orderId' in result:
-                        self.active_orders.pop(result['orderId'], None)
+                    if "orderId" in result:
+                        self.active_orders.pop(result["orderId"], None)
 
                 return results
             except Exception as e:
@@ -1049,7 +1338,7 @@ class OrderManager:
     async def update_order_status(self, order_id: str, status: str, **kwargs):
         """Update the status of an order"""
         if order_id in self.active_orders:
-            self.active_orders[order_id]['status'] = status
+            self.active_orders[order_id]["status"] = status
             self.active_orders[order_id].update(kwargs)
 
     async def remove_order(self, order_id: str):
@@ -1060,17 +1349,23 @@ class OrderManager:
         """Get order history with error handling"""
         try:
             response = await self.api_client.get_open_orders_impl(
-                category=self.global_config.category,
-                symbol=self.symbol_config.symbol
+                category=self.global_config.category, symbol=self.symbol_config.symbol
             )
-            return response.get('list', [])
+            return response.get("list", [])
         except Exception as e:
             self.logger.error(f"Error getting order history: {e}")
             return []
 
+
 # Enhanced Risk Manager with Trailing Stop Loss and Break-Even
 class RiskManager:
-    def __init__(self, global_config: GlobalConfig, symbol_config: SymbolConfig, api_client: BybitAPIClient, logger: logging.Logger):
+    def __init__(
+        self,
+        global_config: GlobalConfig,
+        symbol_config: SymbolConfig,
+        api_client: BybitAPIClient,
+        logger: logging.Logger,
+    ):
         self.global_config = global_config
         self.symbol_config = symbol_config
         self.api_client = api_client
@@ -1086,9 +1381,11 @@ class RiskManager:
     async def update_position(self, position_data: dict[str, Any]):
         """Update position information"""
         self.position = position_data
-        if self.position and self.position.get('size', 0) != 0:
-            self.entry_price = Decimal(str(self.position.get('avgPrice', 0)))
-            self.logger.info(f"Position updated: size={self.position['size']}, entry_price={self.entry_price}")
+        if self.position and self.position.get("size", 0) != 0:
+            self.entry_price = Decimal(str(self.position.get("avgPrice", 0)))
+            self.logger.info(
+                f"Position updated: size={self.position['size']}, entry_price={self.entry_price}"
+            )
         else:
             self.entry_price = None
             self.stop_loss_price = None
@@ -1096,22 +1393,28 @@ class RiskManager:
             self.trailing_stop_distance = None
             self.break_even_price = None
 
-    async def set_trailing_stop(self, distance: Decimal, activate_profit_bps: Decimal = Decimal('0')):
+    async def set_trailing_stop(
+        self, distance: Decimal, activate_profit_bps: Decimal = Decimal("0")
+    ):
         """Set trailing stop loss with activation condition"""
-        if not self.position or self.position.get('size', 0) == 0:
+        if not self.position or self.position.get("size", 0) == 0:
             return
 
-        position_side = 'Long' if float(self.position['size']) > 0 else 'Short'
-        trigger_direction = 2 if position_side == 'Long' else 1
-        qty = abs(Decimal(str(self.position['size'])))
+        position_side = "Long" if float(self.position["size"]) > 0 else "Short"
+        trigger_direction = 2 if position_side == "Long" else 1
+        qty = abs(Decimal(str(self.position["size"])))
 
         # Calculate activation price
         activate_price = None
         if activate_profit_bps > 0:
-            if position_side == 'Long':
-                activate_price = self.entry_price * (1 + activate_profit_bps / Decimal('10000'))
+            if position_side == "Long":
+                activate_price = self.entry_price * (
+                    1 + activate_profit_bps / Decimal("10000")
+                )
             else:
-                activate_price = self.entry_price * (1 - activate_profit_bps / Decimal('10000'))
+                activate_price = self.entry_price * (
+                    1 - activate_profit_bps / Decimal("10000")
+                )
 
         try:
             response = await self.api_client.set_trading_stop_impl(
@@ -1123,31 +1426,33 @@ class RiskManager:
                 triggerBy="MarkPrice",
                 triggerDirection=trigger_direction,
                 positionIdx=1 if self.is_hedge_mode else 0,
-                activePrice=str(activate_price) if activate_price else ""
+                activePrice=str(activate_price) if activate_price else "",
             )
 
             self.trailing_stop_distance = distance
-            self.logger.info(f"Trailing stop set: distance={distance}, activate_price={activate_price}")
+            self.logger.info(
+                f"Trailing stop set: distance={distance}, activate_price={activate_price}"
+            )
         except Exception as e:
             self.logger.error(f"Error setting trailing stop: {e}")
 
     async def set_break_even(self, profit_bps: Decimal, offset_ticks: int = 1):
         """Set break-even stop loss"""
-        if not self.position or self.position.get('size', 0) == 0:
+        if not self.position or self.position.get("size", 0) == 0:
             return
 
-        position_side = 'Long' if float(self.position['size']) > 0 else 'Short'
+        position_side = "Long" if float(self.position["size"]) > 0 else "Short"
 
         # Calculate break-even price
-        if position_side == 'Long':
-            be_price = self.entry_price * (1 + profit_bps / Decimal('10000'))
+        if position_side == "Long":
+            be_price = self.entry_price * (1 + profit_bps / Decimal("10000"))
             # Add offset ticks
-            tick_size = Decimal('0.1')  # Should be fetched from symbol config
+            tick_size = Decimal("0.1")  # Should be fetched from symbol config
             be_price += tick_size * offset_ticks
         else:
-            be_price = self.entry_price * (1 - profit_bps / Decimal('10000'))
+            be_price = self.entry_price * (1 - profit_bps / Decimal("10000"))
             # Subtract offset ticks
-            tick_size = Decimal('0.1')  # Should be fetched from symbol config
+            tick_size = Decimal("0.1")  # Should be fetched from symbol config
             be_price -= tick_size * offset_ticks
 
         try:
@@ -1158,8 +1463,8 @@ class RiskManager:
                 takeProfit="",
                 trailingStop="",
                 triggerBy="MarkPrice",
-                triggerDirection=1 if position_side == 'Long' else 2,
-                positionIdx=1 if self.is_hedge_mode else 0
+                triggerDirection=1 if position_side == "Long" else 2,
+                positionIdx=1 if self.is_hedge_mode else 0,
             )
 
             self.break_even_price = be_price
@@ -1178,7 +1483,7 @@ class RiskManager:
                 trailingStop="",
                 triggerBy="MarkPrice",
                 triggerDirection=1,
-                positionIdx=1 if self.is_hedge_mode else 0
+                positionIdx=1 if self.is_hedge_mode else 0,
             )
 
             self.stop_loss_price = None
@@ -1191,12 +1496,20 @@ class RiskManager:
 
     async def check_risk_limits(self, proposed_position: Decimal) -> bool:
         """Check if proposed position exceeds risk limits"""
-        current_position = Decimal(str(self.position.get('size', 0))) if self.position else Decimal('0')
+        current_position = (
+            Decimal(str(self.position.get("size", 0)))
+            if self.position
+            else Decimal("0")
+        )
         new_position = current_position + proposed_position
 
         # Check max position size
-        if abs(new_position) > self.symbol_config.max_net_exposure_usd / Decimal(str(self.position.get('markPrice', 10000))):
-            self.logger.warning(f"Proposed position {new_position} exceeds max position size")
+        if abs(new_position) > self.symbol_config.max_net_exposure_usd / Decimal(
+            str(self.position.get("markPrice", 10000))
+        ):
+            self.logger.warning(
+                f"Proposed position {new_position} exceeds max position size"
+            )
             return False
 
         # Check circuit breaker
@@ -1206,9 +1519,16 @@ class RiskManager:
 
         return True
 
+
 # Enhanced Market Data Manager with ATR Calculation
 class MarketDataManager:
-    def __init__(self, global_config: GlobalConfig, symbol_config: SymbolConfig, api_client: BybitAPIClient, logger: logging.Logger):
+    def __init__(
+        self,
+        global_config: GlobalConfig,
+        symbol_config: SymbolConfig,
+        api_client: BybitAPIClient,
+        logger: logging.Logger,
+    ):
         self.global_config = global_config
         self.symbol_config = symbol_config
         self.api_client = api_client
@@ -1225,11 +1545,11 @@ class MarketDataManager:
     async def update_market_data(self, data: dict[str, Any]):
         """Update market data from WebSocket"""
         try:
-            if 'topic' in data and data['topic'].startswith('orderbook.200.'):
-                book_data = data.get('data', {})
-                if 'b' in book_data and 'a' in book_data:
-                    self.bid_price = Decimal(str(book_data['b'][0][0]))
-                    self.ask_price = Decimal(str(book_data['a'][0][0]))
+            if "topic" in data and data["topic"].startswith("orderbook.200."):
+                book_data = data.get("data", {})
+                if "b" in book_data and "a" in book_data:
+                    self.bid_price = Decimal(str(book_data["b"][0][0]))
+                    self.ask_price = Decimal(str(book_data["a"][0][0]))
                     self.mid_price = (self.bid_price + self.ask_price) / 2
                     self.last_update_time = time.time()
 
@@ -1239,18 +1559,20 @@ class MarketDataManager:
                     # Update volatility
                     self._calculate_volatility()
 
-            elif 'topic' in data and data['topic'].startswith('kline.'):
-                kline_data = data.get('data', {})
+            elif "topic" in data and data["topic"].startswith("kline."):
+                kline_data = data.get("data", {})
                 if kline_data:
-                    close_price = Decimal(str(kline_data['close']))
-                    self.kline_data.append({
-                        'timestamp': kline_data['start'],
-                        'open': Decimal(str(kline_data['open'])),
-                        'high': Decimal(str(kline_data['high'])),
-                        'low': Decimal(str(kline_data['low'])),
-                        'close': close_price,
-                        'volume': Decimal(str(kline_data['volume']))
-                    })
+                    close_price = Decimal(str(kline_data["close"]))
+                    self.kline_data.append(
+                        {
+                            "timestamp": kline_data["start"],
+                            "open": Decimal(str(kline_data["open"])),
+                            "high": Decimal(str(kline_data["high"])),
+                            "low": Decimal(str(kline_data["low"])),
+                            "close": close_price,
+                            "volume": Decimal(str(kline_data["volume"])),
+                        }
+                    )
 
                     # Update ATR
                     self._calculate_atr()
@@ -1264,7 +1586,9 @@ class MarketDataManager:
             return
 
         prices = [p[1] for p in list(self.price_history)[-10:]]
-        returns = [(prices[i] - prices[i-1]) / prices[i-1] for i in range(1, len(prices))]
+        returns = [
+            (prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))
+        ]
         self.volatility = np.std(returns) * 100  # Convert to percentage
 
     def _calculate_atr(self):
@@ -1273,17 +1597,19 @@ class MarketDataManager:
             return
 
         try:
-            highs = [k['high'] for k in list(self.kline_data)[-14:]]
-            lows = [k['low'] for k in list(self.kline_data)[-14:]]
-            closes = [k['close'] for k in list(self.kline_data)[-14:]]
+            highs = [k["high"] for k in list(self.kline_data)[-14:]]
+            lows = [k["low"] for k in list(self.kline_data)[-14:]]
+            closes = [k["close"] for k in list(self.kline_data)[-14:]]
 
             tr = []
             for i in range(1, len(highs)):
-                tr.append(max(
-                    highs[i] - lows[i],
-                    abs(highs[i] - closes[i-1]),
-                    abs(lows[i] - closes[i-1])
-                ))
+                tr.append(
+                    max(
+                        highs[i] - lows[i],
+                        abs(highs[i] - closes[i - 1]),
+                        abs(lows[i] - closes[i - 1]),
+                    )
+                )
 
             self.atr_value = sum(tr) / len(tr)
         except Exception as e:
@@ -1292,7 +1618,7 @@ class MarketDataManager:
     async def get_spread(self) -> Decimal:
         """Calculate current spread with dynamic adjustment"""
         if not self.mid_price or not self.bid_price or not self.ask_price:
-            return Decimal('0')
+            return Decimal("0")
 
         base_spread = self.symbol_config.strategy.base_spread_pct
 
@@ -1302,8 +1628,13 @@ class MarketDataManager:
                 self.symbol_config.strategy.dynamic_spread.max_spread_pct,
                 max(
                     self.symbol_config.strategy.dynamic_spread.min_spread_pct,
-                    base_spread + (self.volatility * self.symbol_config.strategy.dynamic_spread.volatility_multiplier / 100)
-                )
+                    base_spread
+                    + (
+                        self.volatility
+                        * self.symbol_config.strategy.dynamic_spread.volatility_multiplier
+                        / 100
+                    ),
+                ),
             )
         else:
             dynamic_spread = base_spread
@@ -1318,7 +1649,7 @@ class MarketDataManager:
     async def get_order_prices(self) -> tuple[Decimal, Decimal]:
         """Get bid and ask prices for order placement"""
         if not self.mid_price:
-            return Decimal('0'), Decimal('0')
+            return Decimal("0"), Decimal("0")
 
         spread = await self.get_spread()
         half_spread = spread / 2
@@ -1326,28 +1657,44 @@ class MarketDataManager:
         bid_price = self.mid_price * (1 - half_spread)
         ask_price = self.mid_price * (1 + half_spread)
 
-        return self.symbol_config.format_price(bid_price), self.symbol_config.format_price(ask_price)
+        return self.symbol_config.format_price(
+            bid_price
+        ), self.symbol_config.format_price(ask_price)
 
     async def get_order_quantity(self, price: Decimal) -> Decimal:
         """Calculate order quantity based on available balance"""
         try:
-            balance_data = await self.api_client.get_wallet_balance_impl(account_type='UNIFIED')
-            usdt_balance = Decimal(str(balance_data.get('USDT', {}).get('walletBalance', 0)))
+            balance_data = await self.api_client.get_wallet_balance_impl(
+                account_type="UNIFIED"
+            )
+            usdt_balance = Decimal(
+                str(balance_data.get("USDT", {}).get("walletBalance", 0))
+            )
 
             # Calculate order size as percentage of balance
-            order_value = usdt_balance * self.symbol_config.strategy.base_order_size_pct_of_balance
+            order_value = (
+                usdt_balance
+                * self.symbol_config.strategy.base_order_size_pct_of_balance
+            )
             quantity = order_value / price
 
             return self.symbol_config.format_quantity(quantity)
         except Exception as e:
             self.logger.error(f"Error calculating order quantity: {e}")
-            return Decimal('0')
+            return Decimal("0")
+
 
 # Enhanced Market Making Strategy
 class MarketMakingStrategy:
-    def __init__(self, global_config: GlobalConfig, symbol_config: SymbolConfig,
-                 order_manager: OrderManager, risk_manager: RiskManager,
-                 market_data: MarketDataManager, logger: logging.Logger):
+    def __init__(
+        self,
+        global_config: GlobalConfig,
+        symbol_config: SymbolConfig,
+        order_manager: OrderManager,
+        risk_manager: RiskManager,
+        market_data: MarketDataManager,
+        logger: logging.Logger,
+    ):
         self.global_config = global_config
         self.symbol_config = symbol_config
         self.order_manager = order_manager
@@ -1360,7 +1707,9 @@ class MarketMakingStrategy:
     async def run(self):
         """Main market making strategy loop"""
         self.is_running = True
-        self.logger.info(f"Starting market making strategy for {self.symbol_config.symbol}")
+        self.logger.info(
+            f"Starting market making strategy for {self.symbol_config.symbol}"
+        )
 
         while self.is_running:
             try:
@@ -1395,7 +1744,9 @@ class MarketMakingStrategy:
     async def stop(self):
         """Stop market making strategy"""
         self.is_running = False
-        self.logger.info(f"Stopping market making strategy for {self.symbol_config.symbol}")
+        self.logger.info(
+            f"Stopping market making strategy for {self.symbol_config.symbol}"
+        )
 
         # Cancel all orders
         await self.order_manager.cancel_all_orders()
@@ -1410,17 +1761,26 @@ class MarketMakingStrategy:
             pass
 
         # Check if we're in trading hours
-        if self.symbol_config.trading_hours_start and self.symbol_config.trading_hours_end:
+        if (
+            self.symbol_config.trading_hours_start
+            and self.symbol_config.trading_hours_end
+        ):
             now = datetime.now(timezone.utc).time()
-            start_time = datetime.strptime(self.symbol_config.trading_hours_start, "%H:%M").time()
-            end_time = datetime.strptime(self.symbol_config.trading_hours_end, "%H:%M").time()
+            start_time = datetime.strptime(
+                self.symbol_config.trading_hours_start, "%H:%M"
+            ).time()
+            end_time = datetime.strptime(
+                self.symbol_config.trading_hours_end, "%H:%M"
+            ).time()
 
             if not (start_time <= now <= end_time):
                 return True
 
         return False
 
-    async def _adjust_orders(self, bid_price: Decimal, ask_price: Decimal, bid_qty: Decimal, ask_qty: Decimal):
+    async def _adjust_orders(
+        self, bid_price: Decimal, ask_price: Decimal, bid_qty: Decimal, ask_qty: Decimal
+    ):
         """Adjust orders based on market conditions"""
         try:
             # Get current orders
@@ -1429,8 +1789,11 @@ class MarketMakingStrategy:
             # Check if we need to cancel stale orders
             stale_orders = []
             for order_id, order in active_orders.items():
-                order_price = Decimal(str(order.get('price', 0)))
-                if abs(order_price - bid_price) / bid_price > self.symbol_config.strategy.order_stale_threshold_pct:
+                order_price = Decimal(str(order.get("price", 0)))
+                if (
+                    abs(order_price - bid_price) / bid_price
+                    > self.symbol_config.strategy.order_stale_threshold_pct
+                ):
                     stale_orders.append(order_id)
 
             # Cancel stale orders
@@ -1438,41 +1801,61 @@ class MarketMakingStrategy:
                 await self.order_manager.cancel_orders(stale_orders)
 
             # Place new orders if needed
-            current_bid_orders = [o for o in active_orders.values() if o.get('side') == 'Buy']
-            current_ask_orders = [o for o in active_orders.values() if o.get('side') == 'Sell']
+            current_bid_orders = [
+                o for o in active_orders.values() if o.get("side") == "Buy"
+            ]
+            current_ask_orders = [
+                o for o in active_orders.values() if o.get("side") == "Sell"
+            ]
 
             # Place bid orders if needed
-            if len(current_bid_orders) < self.symbol_config.strategy.max_outstanding_orders:
+            if (
+                len(current_bid_orders)
+                < self.symbol_config.strategy.max_outstanding_orders
+            ):
                 new_bid_orders = []
-                for i in range(self.symbol_config.strategy.max_outstanding_orders - len(current_bid_orders)):
+                for i in range(
+                    self.symbol_config.strategy.max_outstanding_orders
+                    - len(current_bid_orders)
+                ):
                     order_id = str(uuid.uuid4())
-                    new_bid_orders.append({
-                        'symbol': self.symbol_config.symbol,
-                        'side': 'Buy',
-                        'orderType': 'Limit',
-                        'qty': str(bid_qty),
-                        'price': str(bid_price),
-                        'timeInForce': 'GoodTillCancel',
-                        'orderLinkId': f"BID_{order_id}"
-                    })
+                    new_bid_orders.append(
+                        {
+                            "symbol": self.symbol_config.symbol,
+                            "side": "Buy",
+                            "orderType": "Limit",
+                            "qty": str(bid_qty),
+                            "price": str(bid_price),
+                            "timeInForce": "GoodTillCancel",
+                            "orderLinkId": f"BID_{order_id}",
+                        }
+                    )
 
                 if new_bid_orders:
                     await self.order_manager.place_orders(new_bid_orders)
 
             # Place ask orders if needed
-            if len(current_ask_orders) < self.symbol_config.strategy.max_outstanding_orders:
+            if (
+                len(current_ask_orders)
+                < self.symbol_config.strategy.max_outstanding_orders
+            ):
                 new_ask_orders = []
-                for i in range(self.symbol_config.strategy.max_outstanding_orders - len(current_ask_orders)):
+                for i in range(
+                    self.symbol_config.strategy.max_outstanding_orders
+                    - len(current_ask_orders)
+                ):
                     order_id = str(uuid.uuid4())
-                    new_ask_orders.append({
-                        'symbol': self.symbol_config.symbol,
-                        'side': 'Sell',
-                        'orderType': 'Limit',
-                        'qty': str(ask_qty),
-                        'price': str(ask_price),
-                        'timeInForce': 'GoodTillCancel',
-                        'orderLinkId': f"ASK_{order_id}"
-                    })
+                    new_ask_orders.append(
+                        {
+                            "symbol": self.symbol_config.symbol,
+                            "side": "Sell",
+                            "orderType": "Limit",
+                            "qty": str(ask_qty),
+                            "price": str(ask_price),
+                            "timeInForce": "GoodTillCancel",
+                            "orderLinkId": f"ASK_{order_id}",
+                        }
+                    )
 
                 if new_ask_orders:
                     await self.order_manager.place_orders(new_ask_orders)
@@ -1485,28 +1868,38 @@ class MarketMakingStrategy:
         try:
             # Get position data
             position_data = await self.api_client.get_position_info(
-                category=self.global_config.category,
-                symbol=self.symbol_config.symbol
+                category=self.global_config.category, symbol=self.symbol_config.symbol
             )
 
             # Update risk manager
             await self.risk_manager.update_position(position_data)
 
             # Set trailing stop if enabled
-            if self.symbol_config.strategy.enable_auto_sl_tp and position_data.get('size', 0) != 0:
+            if (
+                self.symbol_config.strategy.enable_auto_sl_tp
+                and position_data.get("size", 0) != 0
+            ):
                 if not self.risk_manager.trailing_stop_distance:
                     # Set initial trailing stop
-                    trailing_distance = self.symbol_config.strategy.stop_loss_trigger_pct * self.market_data.mid_price / 100
+                    trailing_distance = (
+                        self.symbol_config.strategy.stop_loss_trigger_pct
+                        * self.market_data.mid_price
+                        / 100
+                    )
                     await self.risk_manager.set_trailing_stop(trailing_distance)
-                elif self.risk_manager.break_even_price and self.market_data.mid_price > self.risk_manager.break_even_price:
+                elif (
+                    self.risk_manager.break_even_price
+                    and self.market_data.mid_price > self.risk_manager.break_even_price
+                ):
                     # Move to break-even if in profit
                     await self.risk_manager.set_break_even(
                         self.symbol_config.strategy.take_profit_target_pct,
-                        offset_ticks=1
+                        offset_ticks=1,
                     )
 
         except Exception as e:
             self.logger.error(f"Error updating risk management: {e}")
+
 
 # Enhanced State Manager with Persistence
 class StateManager:
@@ -1518,12 +1911,14 @@ class StateManager:
         """Saves the bot's current state to a JSON file atomically"""
         try:
             temp_path = self.file_path.with_suffix(f".tmp_{os.getpid()}")
-            async with aiofiles.open(temp_path, 'w') as f:
+            async with aiofiles.open(temp_path, "w") as f:
                 await f.write(json.dumps(state, indent=4, cls=JsonDecimalEncoder))
             os.replace(temp_path, self.file_path)
             self.logger.info(f"State saved successfully to {self.file_path.name}.")
         except Exception as e:
-            self.logger.error(f"Error saving state to {self.file_path.name}: {e}", exc_info=True)
+            self.logger.error(
+                f"Error saving state to {self.file_path.name}: {e}", exc_info=True
+            )
 
     async def load_state(self) -> dict[str, Any] | None:
         """Loads the bot's state from a JSON file"""
@@ -1531,14 +1926,24 @@ class StateManager:
             return None
         try:
             async with aiofiles.open(self.file_path) as f:
-                return json.loads(await f.read(), parse_float=Decimal, parse_int=Decimal)
+                return json.loads(
+                    await f.read(), parse_float=Decimal, parse_int=Decimal
+                )
         except Exception as e:
-            self.logger.error(f"Error loading state from {self.file_path.name}: {e}. Starting fresh.", exc_info=True)
+            self.logger.error(
+                f"Error loading state from {self.file_path.name}: {e}. Starting fresh.",
+                exc_info=True,
+            )
             try:
-                self.file_path.rename(self.file_path.with_suffix(f".corrupted_{int(time.time())}"))
+                self.file_path.rename(
+                    self.file_path.with_suffix(f".corrupted_{int(time.time())}")
+                )
             except OSError as ose:
-                self.logger.warning(f"Could not rename corrupted state file {self.file_path.name}: {ose}")
+                self.logger.warning(
+                    f"Could not rename corrupted state file {self.file_path.name}: {ose}"
+                )
             return None
+
 
 # Enhanced Database Manager
 class DBManager:
@@ -1565,7 +1970,8 @@ class DBManager:
 
     async def create_tables(self) -> None:
         """Creates necessary tables if they do not already exist"""
-        if not self.conn: await self.connect()
+        if not self.conn:
+            await self.connect()
 
         await self.conn.executescript("""
             CREATE TABLE IF NOT EXISTS order_events (
@@ -1595,12 +2001,18 @@ class DBManager:
             );
         """)
 
-        async def _add_column_if_not_exists(table: str, column: str, type: str, default: str) -> None:
+        async def _add_column_if_not_exists(
+            table: str, column: str, type: str, default: str
+        ) -> None:
             cursor = await self.conn.execute(f"PRAGMA table_info({table})")
             columns = [row[1] for row in await cursor.fetchall()]
             if column not in columns:
-                self.logger.warning(f"Adding '{column}' column to '{table}' table for existing database.")
-                await self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {type} DEFAULT {default}")
+                self.logger.warning(
+                    f"Adding '{column}' column to '{table}' table for existing database."
+                )
+                await self.conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {type} DEFAULT {default}"
+                )
                 await self.conn.commit()
 
         # Ensure all columns exist
@@ -1613,88 +2025,137 @@ class DBManager:
         await self.conn.commit()
         self.logger.info("Database tables checked/created and migrated.")
 
-    async def log_order_event(self, symbol: str, order_data: dict[str, Any], message: str | None = None) -> None:
-        if not self.conn: return
+    async def log_order_event(
+        self, symbol: str, order_data: dict[str, Any], message: str | None = None
+    ) -> None:
+        if not self.conn:
+            return
         try:
             await self.conn.execute(
                 "INSERT INTO order_events (timestamp, symbol, order_id, order_link_id, side, order_type, price, qty, cum_exec_qty, status, reduce_only, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     datetime.now(timezone.utc).isoformat(),
                     symbol,
-                    order_data.get('orderId'),
-                    order_data.get('orderLinkId'),
-                    order_data.get('side'),
-                    order_data.get('orderType'),
-                    str(order_data.get('price', DECIMAL_ZERO)),
-                    str(order_data.get('qty', DECIMAL_ZERO)),
-                    str(order_data.get('cumExecQty', DECIMAL_ZERO)),
-                    order_data.get('orderStatus'),
-                    order_data.get('reduceOnly', False),
-                    message
-                )
+                    order_data.get("orderId"),
+                    order_data.get("orderLinkId"),
+                    order_data.get("side"),
+                    order_data.get("orderType"),
+                    str(order_data.get("price", DECIMAL_ZERO)),
+                    str(order_data.get("qty", DECIMAL_ZERO)),
+                    str(order_data.get("cumExecQty", DECIMAL_ZERO)),
+                    order_data.get("orderStatus"),
+                    order_data.get("reduceOnly", False),
+                    message,
+                ),
             )
             await self.conn.commit()
         except Exception as e:
-            self.logger.error(f"Error logging order event to DB for {symbol}: {e}", exc_info=True)
+            self.logger.error(
+                f"Error logging order event to DB for {symbol}: {e}", exc_info=True
+            )
 
-    async def log_trade_fill(self, symbol: str, trade_data: dict[str, Any], realized_pnl_impact: Decimal) -> None:
-        if not self.conn: return
+    async def log_trade_fill(
+        self, symbol: str, trade_data: dict[str, Any], realized_pnl_impact: Decimal
+    ) -> None:
+        if not self.conn:
+            return
         try:
             await self.conn.execute(
                 "INSERT INTO trade_fills (timestamp, symbol, order_id, trade_id, side, exec_price, exec_qty, fee, fee_currency, pnl, realized_pnl_impact, liquidity_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     datetime.now(timezone.utc).isoformat(),
                     symbol,
-                    trade_data.get('orderId'),
-                    trade_data.get('execId'),
-                    trade_data.get('side'),
-                    str(trade_data.get('execPrice', DECIMAL_ZERO)),
-                    str(trade_data.get('execQty', DECIMAL_ZERO)),
-                    str(trade_data.get('execFee', DECIMAL_ZERO)),
-                    trade_data.get('feeCurrency'),
-                    str(trade_data.get('pnl', DECIMAL_ZERO)),
+                    trade_data.get("orderId"),
+                    trade_data.get("execId"),
+                    trade_data.get("side"),
+                    str(trade_data.get("execPrice", DECIMAL_ZERO)),
+                    str(trade_data.get("execQty", DECIMAL_ZERO)),
+                    str(trade_data.get("execFee", DECIMAL_ZERO)),
+                    trade_data.get("feeCurrency"),
+                    str(trade_data.get("pnl", DECIMAL_ZERO)),
                     str(realized_pnl_impact),
-                    trade_data.get('execType', 'UNKNOWN')
-                )
+                    trade_data.get("execType", "UNKNOWN"),
+                ),
             )
             await self.conn.commit()
         except Exception as e:
-            self.logger.error(f"Error logging trade fill to DB for {symbol}: {e}", exc_info=True)
+            self.logger.error(
+                f"Error logging trade fill to DB for {symbol}: {e}", exc_info=True
+            )
 
-    async def log_balance_update(self, currency: str, wallet_balance: Decimal, available_balance: Decimal | None = None) -> None:
-        if not self.conn: return
+    async def log_balance_update(
+        self,
+        currency: str,
+        wallet_balance: Decimal,
+        available_balance: Decimal | None = None,
+    ) -> None:
+        if not self.conn:
+            return
         try:
             await self.conn.execute(
                 "INSERT INTO balance_updates (timestamp, currency, wallet_balance, available_balance) VALUES (?, ?, ?, ?)",
-                (datetime.now(timezone.utc).isoformat(), currency, str(wallet_balance), str(available_balance) if available_balance else None)
+                (
+                    datetime.now(timezone.utc).isoformat(),
+                    currency,
+                    str(wallet_balance),
+                    str(available_balance) if available_balance else None,
+                ),
             )
             await self.conn.commit()
         except Exception as e:
             self.logger.error(f"Error logging balance update to DB: {e}", exc_info=True)
 
-    async def log_bot_metrics(self, symbol: str, metrics: TradeMetrics, unrealized_pnl: Decimal, daily_pnl: Decimal, daily_loss_pct: float, mid_price: Decimal) -> None:
-        if not self.conn: return
+    async def log_bot_metrics(
+        self,
+        symbol: str,
+        metrics: TradeMetrics,
+        unrealized_pnl: Decimal,
+        daily_pnl: Decimal,
+        daily_loss_pct: float,
+        mid_price: Decimal,
+    ) -> None:
+        if not self.conn:
+            return
         try:
             await self.conn.execute(
                 "INSERT INTO bot_metrics (timestamp, symbol, total_trades, net_realized_pnl, realized_pnl, unrealized_pnl, gross_profit, gross_loss, total_fees, wins, losses, win_rate, current_asset_holdings, average_entry_price, daily_pnl, daily_loss_pct, mid_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    datetime.now(timezone.utc).isoformat(), symbol, metrics.total_trades, str(metrics.net_realized_pnl),
-                    str(metrics.realized_pnl), str(unrealized_pnl), str(metrics.gross_profit), str(metrics.gross_loss),
-                    str(metrics.total_fees), metrics.wins, metrics.losses, metrics.win_rate,
-                    str(metrics.current_asset_holdings), str(metrics.average_entry_price), str(daily_pnl),
-                    daily_loss_pct, str(mid_price)
-                )
+                    datetime.now(timezone.utc).isoformat(),
+                    symbol,
+                    metrics.total_trades,
+                    str(metrics.net_realized_pnl),
+                    str(metrics.realized_pnl),
+                    str(unrealized_pnl),
+                    str(metrics.gross_profit),
+                    str(metrics.gross_loss),
+                    str(metrics.total_fees),
+                    metrics.wins,
+                    metrics.losses,
+                    metrics.win_rate,
+                    str(metrics.current_asset_holdings),
+                    str(metrics.average_entry_price),
+                    str(daily_pnl),
+                    daily_loss_pct,
+                    str(mid_price),
+                ),
             )
             await self.conn.commit()
         except Exception as e:
-            self.logger.error(f"Error logging bot metrics to DB for {symbol}: {e}", exc_info=True)
+            self.logger.error(
+                f"Error logging bot metrics to DB for {symbol}: {e}", exc_info=True
+            )
+
 
 # Enhanced Main Bot Class
 class MarketMakerBot:
     def __init__(self, single_symbol: str | None = None):
         # Load configuration
-        self.global_config, self.symbol_configs = ConfigManager.load_config(single_symbol)
-        self.symbol = single_symbol if single_symbol else next(iter(self.symbol_configs.keys()))
+        self.global_config, self.symbol_configs = ConfigManager.load_config(
+            single_symbol
+        )
+        self.symbol = (
+            single_symbol if single_symbol else next(iter(self.symbol_configs.keys()))
+        )
         self.symbol_config = self.symbol_configs[self.symbol]
 
         # Setup logger
@@ -1703,12 +2164,29 @@ class MarketMakerBot:
         # Initialize components
         self.api_client = BybitAPIClient(self.global_config, self.logger)
         self.ws_manager = WebSocketManager(self.global_config, self.logger)
-        self.order_manager = OrderManager(self.global_config, self.symbol_config, self.api_client, self.logger)
-        self.risk_manager = RiskManager(self.global_config, self.symbol_config, self.api_client, self.logger)
-        self.market_data = MarketDataManager(self.global_config, self.symbol_config, self.api_client, self.logger)
-        self.strategy = MarketMakingStrategy(self.global_config, self.symbol_config, self.order_manager, self.risk_manager, self.market_data, self.logger)
-        self.state_manager = StateManager(STATE_DIR / self.global_config.files.state_file, self.logger)
-        self.db_manager = DBManager(LOG_DIR / self.global_config.files.db_file, self.logger)
+        self.order_manager = OrderManager(
+            self.global_config, self.symbol_config, self.api_client, self.logger
+        )
+        self.risk_manager = RiskManager(
+            self.global_config, self.symbol_config, self.api_client, self.logger
+        )
+        self.market_data = MarketDataManager(
+            self.global_config, self.symbol_config, self.api_client, self.logger
+        )
+        self.strategy = MarketMakingStrategy(
+            self.global_config,
+            self.symbol_config,
+            self.order_manager,
+            self.risk_manager,
+            self.market_data,
+            self.logger,
+        )
+        self.state_manager = StateManager(
+            STATE_DIR / self.global_config.files.state_file, self.logger
+        )
+        self.db_manager = DBManager(
+            LOG_DIR / self.global_config.files.db_file, self.logger
+        )
 
         # Trading state
         self.trading_state = TradingState()
@@ -1740,10 +2218,12 @@ class MarketMakerBot:
                     category=self.global_config.category,
                     symbol=self.symbol_config.symbol,
                     buy_leverage=self.symbol_config.leverage,
-                    sell_leverage=self.symbol_config.leverage
+                    sell_leverage=self.symbol_config.leverage,
                 )
             else:
-                self.logger.info(f"Skipping leverage setting in {self.global_config.trading_mode} mode.")
+                self.logger.info(
+                    f"Skipping leverage setting in {self.global_config.trading_mode} mode."
+                )
 
             # Load saved state if available
             saved_state = await self.state_manager.load_state()
@@ -1763,8 +2243,7 @@ class MarketMakerBot:
         try:
             # Get order book
             orderbook = await self.api_client.get_instruments_info_impl(
-                category=self.global_config.category,
-                symbol=self.symbol_config.symbol
+                category=self.global_config.category, symbol=self.symbol_config.symbol
             )
 
             # Get kline data for ATR calculation
@@ -1772,7 +2251,7 @@ class MarketMakerBot:
                 category=self.global_config.category,
                 symbol=self.symbol_config.symbol,
                 interval=self.symbol_config.strategy.kline_interval,
-                limit=100
+                limit=100,
             )
 
             # Process initial data
@@ -1790,7 +2269,7 @@ class MarketMakerBot:
             # Start WebSocket connections
             await self.ws_manager.start(
                 public_callback=self._handle_public_message,
-                private_callback=self._handle_private_message
+                private_callback=self._handle_private_message,
             )
 
             # Start strategy
@@ -1835,9 +2314,9 @@ class MarketMakerBot:
     def _get_state_dict(self) -> dict[str, Any]:
         """Get current state as dictionary"""
         return {
-            'symbol': self.symbol,
-            'timestamp': datetime.now(timezone.utc).isoformat(),
-            'trading_state': dataclasses.asdict(self.trading_state),
+            "symbol": self.symbol,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "trading_state": dataclasses.asdict(self.trading_state),
             # Add other state information as needed
         }
 
@@ -1851,28 +2330,30 @@ class MarketMakerBot:
     async def _handle_private_message(self, msg: dict[str, Any]):
         """Handle private WebSocket messages"""
         try:
-            if 'topic' in msg:
-                if msg['topic'] == 'position':
+            if "topic" in msg:
+                if msg["topic"] == "position":
                     # Update position
-                    position_data = msg.get('data', {})
+                    position_data = msg.get("data", {})
                     await self.risk_manager.update_position(position_data)
 
-                elif msg['topic'] == 'order':
+                elif msg["topic"] == "order":
                     # Update order status
-                    order_data = msg.get('data', {})
-                    order_id = order_data.get('orderId')
-                    status = order_data.get('orderStatus')
+                    order_data = msg.get("data", {})
+                    order_id = order_data.get("orderId")
+                    status = order_data.get("orderStatus")
 
                     if order_id:
-                        if status == 'Filled':
+                        if status == "Filled":
                             # Handle fill
                             await self._handle_order_fill(order_data)
-                        elif status in ['Cancelled', 'Rejected']:
+                        elif status in ["Cancelled", "Rejected"]:
                             # Remove order
                             await self.order_manager.remove_order(order_id)
                         else:
                             # Update order status
-                            await self.order_manager.update_order_status(order_id, status)
+                            await self.order_manager.update_order_status(
+                                order_id, status
+                            )
 
         except Exception as e:
             self.logger.error(f"Error handling private message: {e}")
@@ -1881,11 +2362,11 @@ class MarketMakerBot:
         """Handle order fill"""
         try:
             # Calculate realized PnL
-            side = order_data.get('side')
-            qty = Decimal(str(order_data.get('cumExecQty', 0)))
-            price = Decimal(str(order_data.get('price', 0)))
+            side = order_data.get("side")
+            qty = Decimal(str(order_data.get("cumExecQty", 0)))
+            price = Decimal(str(order_data.get("price", 0)))
 
-            if side == 'Buy':
+            if side == "Buy":
                 self.trading_state.metrics.update_pnl_on_buy(qty, price)
             else:
                 self.trading_state.metrics.update_pnl_on_sell(qty, price)
@@ -1894,18 +2375,20 @@ class MarketMakerBot:
             await self.db_manager.log_trade_fill(
                 symbol=self.symbol,
                 trade_data=order_data,
-                realized_pnl_impact=Decimal('0')  # Calculate actual PnL
+                realized_pnl_impact=Decimal("0"),  # Calculate actual PnL
             )
 
             # Log metrics
-            unrealized_pnl = self.trading_state.metrics.calculate_unrealized_pnl(self.market_data.mid_price)
+            unrealized_pnl = self.trading_state.metrics.calculate_unrealized_pnl(
+                self.market_data.mid_price
+            )
             await self.db_manager.log_bot_metrics(
                 symbol=self.symbol,
                 metrics=self.trading_state.metrics,
                 unrealized_pnl=unrealized_pnl,
                 daily_pnl=self.trading_state.metrics.realized_pnl,
                 daily_loss_pct=0.0,  # Calculate actual daily loss percentage
-                mid_price=self.market_data.mid_price
+                mid_price=self.market_data.mid_price,
             )
 
         except Exception as e:
@@ -1916,7 +2399,9 @@ class MarketMakerBot:
         while self.is_running:
             try:
                 # Calculate metrics
-                unrealized_pnl = self.trading_state.metrics.calculate_unrealized_pnl(self.market_data.mid_price)
+                unrealized_pnl = self.trading_state.metrics.calculate_unrealized_pnl(
+                    self.market_data.mid_price
+                )
 
                 # Log status
                 self.logger.info(
@@ -1928,11 +2413,16 @@ class MarketMakerBot:
                 )
 
                 # Sleep until next report
-                await asyncio.sleep(self.global_config.system.status_report_interval_sec)
+                await asyncio.sleep(
+                    self.global_config.system.status_report_interval_sec
+                )
 
             except Exception as e:
                 self.logger.error(f"Error in status reporter: {e}")
-                await asyncio.sleep(self.global_config.system.status_report_interval_sec)
+                await asyncio.sleep(
+                    self.global_config.system.status_report_interval_sec
+                )
+
 
 # Main entry point
 async def main():
@@ -1944,6 +2434,7 @@ async def main():
     # Create and run bot
     bot = MarketMakerBot(single_symbol)
     await bot.run()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

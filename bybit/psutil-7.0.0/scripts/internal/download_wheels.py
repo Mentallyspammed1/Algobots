@@ -51,7 +51,7 @@ def download_zip(url):
     )
     res.raise_for_status()
     totbytes = 0
-    with open(OUTFILE, 'wb') as f:
+    with open(OUTFILE, "wb") as f:
         for chunk in res.iter_content(chunk_size=16384):
             f.write(chunk)
             totbytes += len(chunk)
@@ -60,17 +60,17 @@ def download_zip(url):
 
 def run():
     data = get_artifacts()
-    download_zip(data['artifacts'][0]['archive_download_url'])
-    os.makedirs('dist', exist_ok=True)
-    with zipfile.ZipFile(OUTFILE, 'r') as zf:
-        zf.extractall('dist')
+    download_zip(data["artifacts"][0]["archive_download_url"])
+    os.makedirs("dist", exist_ok=True)
+    with zipfile.ZipFile(OUTFILE, "r") as zf:
+        zf.extractall("dist")
 
 
 def main():
     global TOKEN
-    parser = argparse.ArgumentParser(description='GitHub wheels downloader')
-    parser.add_argument('--token')
-    parser.add_argument('--tokenfile')
+    parser = argparse.ArgumentParser(description="GitHub wheels downloader")
+    parser.add_argument("--token")
+    parser.add_argument("--tokenfile")
     args = parser.parse_args()
 
     if args.tokenfile:
@@ -79,7 +79,7 @@ def main():
     elif args.token:
         TOKEN = args.token
     else:
-        return sys.exit('specify --token or --tokenfile args')
+        return sys.exit("specify --token or --tokenfile args")
 
     try:
         run()
@@ -87,5 +87,5 @@ def main():
         safe_rmpath(OUTFILE)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

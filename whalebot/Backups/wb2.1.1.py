@@ -45,7 +45,9 @@ TIMEZONE = UTC
 REQUEST_TIMEOUT = 30
 LOOP_DELAY_SECONDS = 15
 WS_RECONNECT_DELAY_SECONDS = 5
-API_CALL_RETRY_DELAY_SECONDS = 3 # Used for individual CCXT calls if specific retries are needed
+API_CALL_RETRY_DELAY_SECONDS = (
+    3  # Used for individual CCXT calls if specific retries are needed
+)
 
 # Magic Numbers as Constants (expanded and named for clarity)
 MIN_DATA_POINTS_TRUE_RANGE = 2
@@ -56,7 +58,7 @@ ADX_STRONG_TREND_THRESHOLD = 25
 ADX_WEAK_TREND_THRESHOLD = 20
 MIN_DATA_POINTS_VWMA = 2
 MIN_DATA_POINTS_VOLATILITY = 2
-MIN_DATA_POINTS_VOLUME_DELTA = 2 # Volume Delta requires at least 2 bars for comparison
+MIN_DATA_POINTS_VOLUME_DELTA = 2  # Volume Delta requires at least 2 bars for comparison
 
 # Neon Color Scheme
 NEON_GREEN = Fore.LIGHTGREEN_EX
@@ -116,7 +118,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
     default_config = {
         # Core Settings
         "symbol": "BTCUSDT",
-        "interval": "15m", # Bybit CCXT uses '15m', '1h', '4h', '1d', etc.
+        "interval": "15m",  # Bybit CCXT uses '15m', '1h', '4h', '1d', etc.
         "loop_delay": LOOP_DELAY_SECONDS,
         "orderbook_limit": 50,
         "testnet": True,
@@ -144,7 +146,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         # Multi-Timeframe Analysis
         "mtf_analysis": {
             "enabled": True,
-            "higher_timeframes": ["1h", "4h"], # Bybit CCXT intervals
+            "higher_timeframes": ["1h", "4h"],  # Bybit CCXT intervals
             "trend_indicators": ["ema", "ehlers_supertrend"],
             "trend_period": 50,  # Period for MTF trend indicators like SMA/EMA
             "mtf_request_delay_seconds": 0.5,
@@ -300,6 +302,8 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         except OSError as e_save:
             logger.error(f"{NEON_RED}Could not save default config: {e_save}{RESET}")
         return default_config
+
+
 def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) -> None:
     """Recursively ensure all keys from default_config are in config."""
     for key, default_value in default_config.items():
@@ -332,6 +336,8 @@ class SensitiveFormatter(logging.Formatter):
             if word in redacted_message:
                 redacted_message = redacted_message.replace(word, "*" * len(word))
         return redacted_message
+
+
 def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
     """Configure and return a logger with file and console handlers."""
     logger = logging.getLogger(log_name)
@@ -377,7 +383,7 @@ class ExchangeClient:
         """Initializes the ExchangeClient with CCXT."""
         self.logger = logger
         self.exchange_id = exchange_id
-        self.symbol_to_ccxt = {} # Cache for CCXT symbol conversion
+        self.symbol_to_ccxt = {}  # Cache for CCXT symbol conversion
         self.markets_loaded = False
 
         try:
@@ -391,16 +397,22 @@ class ExchangeClient:
                         "defaultType": "linear",  # Assuming perpetual futures
                         "adjustForTimeDifference": True,
                     },
-                    "timeout": REQUEST_TIMEOUT * 1000 # CCXT timeout is in ms
+                    "timeout": REQUEST_TIMEOUT * 1000,  # CCXT timeout is in ms
                 }
             )
             if testnet:
                 self.exchange.set_sandbox_mode(True)
-                self.logger.info(f"{NEON_YELLOW}CCXT {exchange_id} set to sandbox mode.{RESET}")
+                self.logger.info(
+                    f"{NEON_YELLOW}CCXT {exchange_id} set to sandbox mode.{RESET}"
+                )
 
-            self.logger.info(f"{NEON_GREEN}CCXT {exchange_id} client initialized.{RESET}")
+            self.logger.info(
+                f"{NEON_GREEN}CCXT {exchange_id} client initialized.{RESET}"
+            )
         except Exception as e:
-            self.logger.critical(f"{NEON_RED}Failed to initialize CCXT exchange client: {e}{RESET}")
+            self.logger.critical(
+                f"{NEON_RED}Failed to initialize CCXT exchange client: {e}{RESET}"
+            )
             sys.exit(1)
 
     async def load_markets(self) -> None:
@@ -409,12 +421,14 @@ class ExchangeClient:
             try:
                 await self.exchange.load_markets()
                 self.markets_loaded = True
-                self.logger.info(f"{NEON_GREEN}Markets loaded for {self.exchange_id}.{RESET}")
+                self.logger.info(
+                    f"{NEON_GREEN}Markets loaded for {self.exchange_id}.{RESET}"
+                )
 
                 # Pre-build a mapping for common symbols like BTCUSDT -> BTC/USDT
                 for market_id, market_data in self.exchange.markets_by_id.items():
-                    if market_id.endswith('USDT'): # Common pattern for perp markets
-                         self.symbol_to_ccxt[market_id] = market_data['symbol']
+                    if market_id.endswith("USDT"):  # Common pattern for perp markets
+                        self.symbol_to_ccxt[market_id] = market_data["symbol"]
 
             except Exception as e:
                 self.logger.error(f"{NEON_RED}Failed to load markets: {e}{RESET}")
@@ -424,8 +438,10 @@ class ExchangeClient:
     def get_ccxt_symbol(self, bybit_symbol: str) -> str:
         """Converts a Bybit symbol (e.g., BTCUSDT) to a CCXT symbol (e.g., BTC/USDT)."""
         if not self.markets_loaded:
-            self.logger.warning(f"Markets not loaded, cannot convert symbol {bybit_symbol}.")
-            return bybit_symbol # Return original, hope it works or fails later
+            self.logger.warning(
+                f"Markets not loaded, cannot convert symbol {bybit_symbol}."
+            )
+            return bybit_symbol  # Return original, hope it works or fails later
 
         # Check cache first
         if bybit_symbol in self.symbol_to_ccxt:
@@ -433,20 +449,22 @@ class ExchangeClient:
 
         # Attempt to find it
         for market in self.exchange.markets.values():
-            if market['id'] == bybit_symbol:
-                self.symbol_to_ccxt[bybit_symbol] = market['symbol']
-                return market['symbol']
+            if market["id"] == bybit_symbol:
+                self.symbol_to_ccxt[bybit_symbol] = market["symbol"]
+                return market["symbol"]
 
             # For futures, sometimes CCXT symbol is different, e.g., BTC/USDT:USDT
             # Bybit often just uses BTCUSDT (ID) for perpetual.
             # Let's assume for now Bybit symbol is the market ID.
             # Example: bybit_symbol = 'BTCUSDT' (market ID) -> market['symbol'] = 'BTC/USDT'
-            if market['symbol'].replace('/', '') == bybit_symbol: # crude heuristic
-                self.symbol_to_ccxt[bybit_symbol] = market['symbol']
-                return market['symbol']
+            if market["symbol"].replace("/", "") == bybit_symbol:  # crude heuristic
+                self.symbol_to_ccxt[bybit_symbol] = market["symbol"]
+                return market["symbol"]
 
-        self.logger.warning(f"{NEON_YELLOW}Could not find CCXT symbol for Bybit symbol: {bybit_symbol}. Using as is.{RESET}")
-        return bybit_symbol # Fallback to using the Bybit symbol directly
+        self.logger.warning(
+            f"{NEON_YELLOW}Could not find CCXT symbol for Bybit symbol: {bybit_symbol}. Using as is.{RESET}"
+        )
+        return bybit_symbol  # Fallback to using the Bybit symbol directly
 
     async def fetch_current_price(self, symbol: str) -> Decimal | None:
         """Fetch the current market price for a symbol using CCXT."""
@@ -457,9 +475,13 @@ class ExchangeClient:
             self.logger.debug(f"Fetched current price for {symbol}: {price}")
             return price
         except ccxt.ExchangeError as e:
-            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching ticker for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}CCXT Exchange Error fetching ticker for {symbol}: {e}{RESET}"
+            )
         except Exception as e:
-            self.logger.error(f"{NEON_RED}Error fetching ticker for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error fetching ticker for {symbol}: {e}{RESET}"
+            )
         return None
 
     async def fetch_klines(
@@ -501,9 +523,13 @@ class ExchangeClient:
             self.logger.debug(f"Fetched {len(df)} {interval} klines for {symbol}.")
             return df
         except ccxt.ExchangeError as e:
-            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching klines for {symbol} {interval}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}CCXT Exchange Error fetching klines for {symbol} {interval}: {e}{RESET}"
+            )
         except Exception as e:
-            self.logger.error(f"{NEON_RED}Error fetching klines for {symbol} {interval}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error fetching klines for {symbol} {interval}: {e}{RESET}"
+            )
         return None
 
     async def fetch_orderbook(self, symbol: str, limit: int) -> dict | None:
@@ -514,9 +540,13 @@ class ExchangeClient:
             self.logger.debug(f"Fetched orderbook for {symbol} with limit {limit}.")
             return orderbook
         except ccxt.ExchangeError as e:
-            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching orderbook for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}CCXT Exchange Error fetching orderbook for {symbol}: {e}{RESET}"
+            )
         except Exception as e:
-            self.logger.error(f"{NEON_RED}Error fetching orderbook for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error fetching orderbook for {symbol}: {e}{RESET}"
+            )
         return None
 
     async def get_wallet_balance(self, coin: str) -> Decimal | None:
@@ -527,11 +557,17 @@ class ExchangeClient:
                 coin_balance = Decimal(str(balance["free"][coin]))
                 self.logger.debug(f"Fetched {coin} wallet balance: {coin_balance}")
                 return coin_balance
-            self.logger.warning(f"{NEON_YELLOW}Coin {coin} not found in balance.{RESET}")
+            self.logger.warning(
+                f"{NEON_YELLOW}Coin {coin} not found in balance.{RESET}"
+            )
         except ccxt.ExchangeError as e:
-            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching balance for {coin}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}CCXT Exchange Error fetching balance for {coin}: {e}{RESET}"
+            )
         except Exception as e:
-            self.logger.error(f"{NEON_RED}Error fetching balance for {coin}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error fetching balance for {coin}: {e}{RESET}"
+            )
         return None
 
     async def get_exchange_open_positions(self, symbol: str) -> list[dict] | None:
@@ -541,12 +577,18 @@ class ExchangeClient:
             # Bybit positions might need specific params for linear/inverse
             positions = await self.exchange.fetch_positions(symbols=[ccxt_symbol])
             # Filter for non-zero size positions
-            open_positions = [p for p in positions if Decimal(str(p['info']['size'])) > 0]
+            open_positions = [
+                p for p in positions if Decimal(str(p["info"]["size"])) > 0
+            ]
             return open_positions
         except ccxt.ExchangeError as e:
-            self.logger.error(f"{NEON_RED}CCXT Exchange Error fetching positions for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}CCXT Exchange Error fetching positions for {symbol}: {e}{RESET}"
+            )
         except Exception as e:
-            self.logger.error(f"{NEON_RED}Error fetching positions for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error fetching positions for {symbol}: {e}{RESET}"
+            )
         return []
 
     async def place_order(
@@ -588,11 +630,11 @@ class ExchangeClient:
                     ccxt_symbol,
                     ccxt_order_type,
                     ccxt_side,
-                    float(qty), # CCXT expects float
+                    float(qty),  # CCXT expects float
                     price=None,
                     params=params,
                 )
-            else: # Limit order
+            else:  # Limit order
                 if price is None:
                     self.logger.error(f"{NEON_RED}Limit order requires a price.{RESET}")
                     return None
@@ -601,7 +643,7 @@ class ExchangeClient:
                     ccxt_order_type,
                     ccxt_side,
                     float(qty),
-                    float(price), # CCXT expects float
+                    float(price),  # CCXT expects float
                     params=params,
                 )
             self.logger.info(
@@ -609,13 +651,21 @@ class ExchangeClient:
             )
             return order
         except ccxt.InsufficientFunds as e:
-            self.logger.error(f"{NEON_RED}Insufficient funds to place order for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Insufficient funds to place order for {symbol}: {e}{RESET}"
+            )
         except ccxt.InvalidOrder as e:
-            self.logger.error(f"{NEON_RED}Invalid order parameters for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Invalid order parameters for {symbol}: {e}{RESET}"
+            )
         except ccxt.NetworkError as e:
-            self.logger.error(f"{NEON_RED}Network error placing order for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Network error placing order for {symbol}: {e}{RESET}"
+            )
         except ccxt.ExchangeError as e:
-            self.logger.error(f"{NEON_RED}CCXT Exchange Error placing order for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}CCXT Exchange Error placing order for {symbol}: {e}{RESET}"
+            )
         except Exception as e:
             self.logger.error(f"{NEON_RED}Error placing order for {symbol}: {e}{RESET}")
         return None
@@ -630,13 +680,21 @@ class ExchangeClient:
             )
             return response
         except ccxt.OrderNotFound as e:
-            self.logger.warning(f"{NEON_YELLOW}Order {order_id} not found for {symbol}: {e}{RESET}")
+            self.logger.warning(
+                f"{NEON_YELLOW}Order {order_id} not found for {symbol}: {e}{RESET}"
+            )
         except ccxt.NetworkError as e:
-            self.logger.error(f"{NEON_RED}Network error canceling order {order_id} for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Network error canceling order {order_id} for {symbol}: {e}{RESET}"
+            )
         except ccxt.ExchangeError as e:
-            self.logger.error(f"{NEON_RED}CCXT Exchange Error canceling order {order_id} for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}CCXT Exchange Error canceling order {order_id} for {symbol}: {e}{RESET}"
+            )
         except Exception as e:
-            self.logger.error(f"{NEON_RED}Error canceling order {order_id} for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error canceling order {order_id} for {symbol}: {e}{RESET}"
+            )
         return None
 
     async def set_leverage(self, symbol: str, leverage: int) -> bool:
@@ -647,7 +705,7 @@ class ExchangeClient:
             response = await self.exchange.set_leverage(
                 leverage=leverage,
                 symbol=ccxt_symbol,
-                params={'buyLeverage': leverage, 'sellLeverage': leverage}
+                params={"buyLeverage": leverage, "sellLeverage": leverage},
             )
             self.logger.info(
                 f"{NEON_GREEN}[{symbol}] Leverage set to {leverage}x.{RESET}"
@@ -659,7 +717,9 @@ class ExchangeClient:
             )
             return False
         except Exception as e:
-            self.logger.error(f"{NEON_RED}Error setting leverage for {symbol}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error setting leverage for {symbol}: {e}{RESET}"
+            )
             return False
 
 
@@ -683,11 +743,15 @@ class PrecisionManager:
         self.market_info: dict | None = None
 
         # Fallback values from config if market info cannot be fetched
-        self.qty_step: Decimal = Decimal("1") / (Decimal("10") ** config["trade_management"]["order_precision"])
-        self.price_tick_size: Decimal = Decimal("1") / (Decimal("10") ** config["trade_management"]["price_precision"])
-        self.min_order_qty: Decimal = Decimal("0.0001") # Reasonable default
+        self.qty_step: Decimal = Decimal("1") / (
+            Decimal("10") ** config["trade_management"]["order_precision"]
+        )
+        self.price_tick_size: Decimal = Decimal("1") / (
+            Decimal("10") ** config["trade_management"]["price_precision"]
+        )
+        self.min_order_qty: Decimal = Decimal("0.0001")  # Reasonable default
 
-        asyncio.create_task(self._fetch_precision_info()) # Fetch asynchronously
+        asyncio.create_task(self._fetch_precision_info())  # Fetch asynchronously
 
     async def _fetch_precision_info(self) -> None:
         """Fetch and store precision info from the exchange using CCXT."""
@@ -695,27 +759,57 @@ class PrecisionManager:
         try:
             # Ensure markets are loaded
             if not self.exchange_client.markets_loaded:
-                await self.exchange_client.load_markets() # Load if not already
+                await self.exchange_client.load_markets()  # Load if not already
                 if not self.exchange_client.markets_loaded:
-                     self.logger.error(f"{NEON_RED}[{self.symbol}] Markets not loaded, cannot fetch precision info.{RESET}")
-                     return
+                    self.logger.error(
+                        f"{NEON_RED}[{self.symbol}] Markets not loaded, cannot fetch precision info.{RESET}"
+                    )
+                    return
 
             # CCXT stores market info after load_markets()
             self.market_info = self.exchange_client.exchange.market(self.ccxt_symbol)
 
             if self.market_info:
                 # Use CCXT's standardized precision fields
-                self.qty_step = Decimal(str(self.market_info["limits"]["amount"]["min"])) if self.market_info["limits"]["amount"]["min"] else self.qty_step
-                self.min_order_qty = Decimal(str(self.market_info["limits"]["amount"]["min"])) if self.market_info["limits"]["amount"]["min"] else self.min_order_qty
+                self.qty_step = (
+                    Decimal(str(self.market_info["limits"]["amount"]["min"]))
+                    if self.market_info["limits"]["amount"]["min"]
+                    else self.qty_step
+                )
+                self.min_order_qty = (
+                    Decimal(str(self.market_info["limits"]["amount"]["min"]))
+                    if self.market_info["limits"]["amount"]["min"]
+                    else self.min_order_qty
+                )
 
                 # For Bybit, tickSize and lotSizeFilter are usually in 'info' dict
-                if 'info' in self.market_info and 'priceFilter' in self.market_info['info']:
-                    self.price_tick_size = Decimal(str(self.market_info['info']['priceFilter'].get('tickSize', self.price_tick_size)))
-                if 'info' in self.market_info and 'lotSizeFilter' in self.market_info['info']:
+                if (
+                    "info" in self.market_info
+                    and "priceFilter" in self.market_info["info"]
+                ):
+                    self.price_tick_size = Decimal(
+                        str(
+                            self.market_info["info"]["priceFilter"].get(
+                                "tickSize", self.price_tick_size
+                            )
+                        )
+                    )
+                if (
+                    "info" in self.market_info
+                    and "lotSizeFilter" in self.market_info["info"]
+                ):
                     # qtyStep is sometimes more granular than minOrderQty
                     # Take max of default config and market's 'qtyStep'
-                    self.qty_step = max(self.qty_step, Decimal(str(self.market_info['info']['lotSizeFilter'].get('qtyStep', self.qty_step))))
-
+                    self.qty_step = max(
+                        self.qty_step,
+                        Decimal(
+                            str(
+                                self.market_info["info"]["lotSizeFilter"].get(
+                                    "qtyStep", self.qty_step
+                                )
+                            )
+                        ),
+                    )
 
                 self.logger.info(
                     f"[{self.symbol}] Precision loaded: Qty Step={self.qty_step.normalize()}, "
@@ -735,17 +829,25 @@ class PrecisionManager:
     def format_quantity(self, quantity: Decimal) -> Decimal:
         """Formats the order quantity according to the symbol's qtyStep."""
         if self.market_info:
-            return Decimal(str(self.exchange_client.exchange.amount_to_precision(
-                self.ccxt_symbol, float(quantity)
-            )))
+            return Decimal(
+                str(
+                    self.exchange_client.exchange.amount_to_precision(
+                        self.ccxt_symbol, float(quantity)
+                    )
+                )
+            )
         return (quantity // self.qty_step) * self.qty_step
 
     def format_price(self, price: Decimal) -> Decimal:
         """Formats the order price according to the symbol's tickSize."""
         if self.market_info:
-            return Decimal(str(self.exchange_client.exchange.price_to_precision(
-                self.ccxt_symbol, float(price)
-            )))
+            return Decimal(
+                str(
+                    self.exchange_client.exchange.price_to_precision(
+                        self.ccxt_symbol, float(price)
+                    )
+                )
+            )
         return (price // self.price_tick_size) * self.price_tick_size
 
 
@@ -767,11 +869,13 @@ class PositionManager:
         self.exchange_client = exchange_client
         self.ccxt_symbol = self.exchange_client.get_ccxt_symbol(symbol)
 
-        self.open_positions: dict[str, dict] = (
-            {}
-        )  # Tracks positions opened by the bot locally
+        self.open_positions: dict[
+            str, dict
+        ] = {}  # Tracks positions opened by the bot locally
         self.trade_management_enabled = config["trade_management"]["enabled"]
-        self.precision_manager = PrecisionManager(symbol, logger, config, exchange_client)
+        self.precision_manager = PrecisionManager(
+            symbol, logger, config, exchange_client
+        )
         self.max_open_positions = config["trade_management"]["max_open_positions"]
         self.leverage = config["trade_management"]["leverage"]
         self.order_mode = config["trade_management"]["order_mode"]
@@ -811,7 +915,9 @@ class PositionManager:
         if not self.trade_management_enabled:
             return Decimal("0")
 
-        account_balance = self._get_available_balance() # This would be an async call, needs await
+        account_balance = (
+            self._get_available_balance()
+        )  # This would be an async call, needs await
 
         # For a synchronous function like this, we'd need to assume balance is available or pass it in.
         # Let's make this method async and await the balance.
@@ -881,16 +987,24 @@ class PositionManager:
             return None
 
         # Fetch actual open positions from the exchange to check limits
-        exchange_open_positions = await self.exchange_client.get_exchange_open_positions(self.symbol)
+        exchange_open_positions = (
+            await self.exchange_client.get_exchange_open_positions(self.symbol)
+        )
 
-        if exchange_open_positions and len(exchange_open_positions) >= self.max_open_positions:
+        if (
+            exchange_open_positions
+            and len(exchange_open_positions) >= self.max_open_positions
+        ):
             self.logger.warning(
                 f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached on exchange. Cannot open new position.{RESET}"
             )
             return None
 
         # Check for existing positions locally and their status
-        if self.symbol in self.open_positions and self.open_positions[self.symbol]["status"] == "OPEN":
+        if (
+            self.symbol in self.open_positions
+            and self.open_positions[self.symbol]["status"] == "OPEN"
+        ):
             self.logger.warning(
                 f"{NEON_YELLOW}[{self.symbol}] Locally tracked position for {self.symbol} is already open. Skipping.{RESET}"
             )
@@ -904,11 +1018,15 @@ class PositionManager:
 
         # Calculate order size using the async balance fetch
         available_balance = await self._get_available_balance()
-        order_qty = self._calculate_order_size(current_price, atr_value) # This needs available_balance passed or refactored
+        order_qty = self._calculate_order_size(
+            current_price, atr_value
+        )  # This needs available_balance passed or refactored
 
         # Refactor _calculate_order_size to take balance explicitly to avoid recursive async calls/complexity
         # For now, let's simplify and make _calculate_order_size assume a direct balance input
-        order_qty = self._calculate_order_size_with_balance(current_price, atr_value, available_balance)
+        order_qty = self._calculate_order_size_with_balance(
+            current_price, atr_value, available_balance
+        )
 
         if order_qty <= Decimal("0"):
             return None
@@ -949,7 +1067,7 @@ class PositionManager:
             take_profit=take_profit_price,
             stop_loss=stop_loss_price,
             # tp_sl_mode is generally handled by CCXT parameters now
-            position_idx=None, # CCXT abstracts this for 'linear' defaultType
+            position_idx=None,  # CCXT abstracts this for 'linear' defaultType
         )
 
         if placed_order:
@@ -961,7 +1079,7 @@ class PositionManager:
                 "entry_time": datetime.now(TIMEZONE),
                 "symbol": self.symbol,
                 "side": signal,
-                "entry_price": entry_price, # This is target entry, actual fill price might differ for market orders
+                "entry_price": entry_price,  # This is target entry, actual fill price might differ for market orders
                 "qty": order_qty,
                 "stop_loss": stop_loss_price,
                 "take_profit": take_profit_price,
@@ -1036,14 +1154,22 @@ class PositionManager:
         if not self.trade_management_enabled:
             return
 
-        exchange_positions = await self.exchange_client.get_exchange_open_positions(self.symbol)
+        exchange_positions = await self.exchange_client.get_exchange_open_positions(
+            self.symbol
+        )
 
         # Convert exchange positions to a dictionary for easier lookup
         exchange_positions_map = {}
         for pos in exchange_positions:
             # CCXT 'side' can be 'long' or 'short', convert to 'BUY'/'SELL'
-            ccxt_side = pos.get('side')
-            bot_side = "BUY" if ccxt_side == "long" else "SELL" if ccxt_side == "short" else "UNKNOWN"
+            ccxt_side = pos.get("side")
+            bot_side = (
+                "BUY"
+                if ccxt_side == "long"
+                else "SELL"
+                if ccxt_side == "short"
+                else "UNKNOWN"
+            )
 
             # Position key might need to be unique, e.g., by symbol and side for hedge mode
             pos_key = f"{self.symbol}_{bot_side}"
@@ -1052,25 +1178,38 @@ class PositionManager:
         # Update local open_positions based on exchange data and manage trailing stops
         positions_to_remove = []
         for pos_key, local_position in list(self.open_positions.items()):
-            bot_side = local_position['side']
+            bot_side = local_position["side"]
 
             # Check if this local position still exists on the exchange
             if pos_key in exchange_positions_map:
                 exchange_pos_data = exchange_positions_map[pos_key]
                 # Ensure it's truly an open position (size > 0)
-                if Decimal(str(exchange_pos_data.get('contracts', 0))) > 0: # 'contracts' is CCXT's standardized size field
+                if (
+                    Decimal(str(exchange_pos_data.get("contracts", 0))) > 0
+                ):  # 'contracts' is CCXT's standardized size field
                     # Position is still open on exchange. Update local info and manage trailing stop.
 
                     # Update local entry price with actual entry price from exchange if available
-                    if 'entryPrice' in exchange_pos_data and exchange_pos_data['entryPrice'] is not None:
-                        local_position['entry_price'] = Decimal(str(exchange_pos_data['entryPrice']))
+                    if (
+                        "entryPrice" in exchange_pos_data
+                        and exchange_pos_data["entryPrice"] is not None
+                    ):
+                        local_position["entry_price"] = Decimal(
+                            str(exchange_pos_data["entryPrice"])
+                        )
 
                     # --- Trailing Stop Logic ---
                     trailing_stop_atr_multiple = Decimal(
-                        str(self.config["trade_management"]["trailing_stop_atr_multiple"])
+                        str(
+                            self.config["trade_management"][
+                                "trailing_stop_atr_multiple"
+                            ]
+                        )
                     )
 
-                    is_trailing_activated = local_position.get("is_trailing_activated", False)
+                    is_trailing_activated = local_position.get(
+                        "is_trailing_activated", False
+                    )
                     entry_price = local_position["entry_price"]
 
                     if not is_trailing_activated:
@@ -1086,11 +1225,17 @@ class PositionManager:
 
                             # Calculate initial trailing stop price
                             if bot_side == "BUY":
-                                initial_trailing_sl = current_price - (atr_value * trailing_stop_atr_multiple)
+                                initial_trailing_sl = current_price - (
+                                    atr_value * trailing_stop_atr_multiple
+                                )
                             else:  # SELL
-                                initial_trailing_sl = current_price + (atr_value * trailing_stop_atr_multiple)
+                                initial_trailing_sl = current_price + (
+                                    atr_value * trailing_stop_atr_multiple
+                                )
 
-                            local_position["current_trailing_sl"] = self.precision_manager.format_price(initial_trailing_sl)
+                            local_position["current_trailing_sl"] = (
+                                self.precision_manager.format_price(initial_trailing_sl)
+                            )
                             self.logger.info(
                                 f"[{self.symbol}] Trailing stop activated. Initial SL: {local_position['current_trailing_sl'].normalize()}"
                             )
@@ -1112,19 +1257,31 @@ class PositionManager:
                         current_trailing_sl = local_position["current_trailing_sl"]
 
                         if bot_side == "BUY":
-                            potential_new_sl = current_price - (atr_value * trailing_stop_atr_multiple)
+                            potential_new_sl = current_price - (
+                                atr_value * trailing_stop_atr_multiple
+                            )
                             # Only move trailing SL up (for buy)
                             if potential_new_sl > current_trailing_sl:
-                                local_position["current_trailing_sl"] = self.precision_manager.format_price(potential_new_sl)
+                                local_position["current_trailing_sl"] = (
+                                    self.precision_manager.format_price(
+                                        potential_new_sl
+                                    )
+                                )
                                 self.logger.info(
                                     f"[{self.symbol}] Updating trailing stop to {local_position['current_trailing_sl'].normalize()}"
                                 )
                                 # Call CCXT to update the trailing stop on the exchange
                         elif bot_side == "SELL":
-                            potential_new_sl = current_price + (atr_value * trailing_stop_atr_multiple)
+                            potential_new_sl = current_price + (
+                                atr_value * trailing_stop_atr_multiple
+                            )
                             # Only move trailing SL down (for sell)
                             if potential_new_sl < current_trailing_sl:
-                                local_position["current_trailing_sl"] = self.precision_manager.format_price(potential_new_sl)
+                                local_position["current_trailing_sl"] = (
+                                    self.precision_manager.format_price(
+                                        potential_new_sl
+                                    )
+                                )
                                 self.logger.info(
                                     f"[{self.symbol}] Updating trailing stop to {local_position['current_trailing_sl'].normalize()}"
                                 )
@@ -1138,14 +1295,22 @@ class PositionManager:
                     local_position["exit_time"] = datetime.now(TIMEZONE)
                     # Attempt to get exit price from exchange data or assume current price for simulation
                     local_position["exit_price"] = self.precision_manager.format_price(
-                        Decimal(str(exchange_pos_data.get('markPrice', current_price))) # Use markPrice or current
+                        Decimal(
+                            str(exchange_pos_data.get("markPrice", current_price))
+                        )  # Use markPrice or current
                     )
-                    local_position["closed_by"] = "EXCHANGE_CLOSURE" # Or based on actual order status
+                    local_position["closed_by"] = (
+                        "EXCHANGE_CLOSURE"  # Or based on actual order status
+                    )
 
                     pnl = (
-                        (local_position["exit_price"] - local_position["entry_price"]) * local_position["qty"]
+                        (local_position["exit_price"] - local_position["entry_price"])
+                        * local_position["qty"]
                         if bot_side == "BUY"
-                        else (local_position["entry_price"] - local_position["exit_price"]) * local_position["qty"]
+                        else (
+                            local_position["entry_price"] - local_position["exit_price"]
+                        )
+                        * local_position["qty"]
                     )
                     performance_tracker.record_trade(local_position, pnl)
                     positions_to_remove.append(pos_key)
@@ -1156,13 +1321,17 @@ class PositionManager:
                 )
                 local_position["status"] = "CLOSED"
                 local_position["exit_time"] = datetime.now(TIMEZONE)
-                local_position["exit_price"] = self.precision_manager.format_price(current_price)
+                local_position["exit_price"] = self.precision_manager.format_price(
+                    current_price
+                )
                 local_position["closed_by"] = "EXTERNAL_CLOSURE"
 
                 pnl = (
-                    (local_position["exit_price"] - local_position["entry_price"]) * local_position["qty"]
+                    (local_position["exit_price"] - local_position["entry_price"])
+                    * local_position["qty"]
                     if bot_side == "BUY"
-                    else (local_position["entry_price"] - local_position["exit_price"]) * local_position["qty"]
+                    else (local_position["entry_price"] - local_position["exit_price"])
+                    * local_position["qty"]
                 )
                 performance_tracker.record_trade(local_position, pnl)
                 positions_to_remove.append(pos_key)
@@ -1213,13 +1382,13 @@ class PerformanceTracker:
                                 try:
                                     trade[key] = Decimal(str(trade[key]))
                                 except Exception:
-                                    trade[key] = None # Or Decimal("0") if preferred
+                                    trade[key] = None  # Or Decimal("0") if preferred
                         for key in ["entry_time", "exit_time"]:
                             if key in trade and trade[key] is not None:
                                 try:
                                     trade[key] = datetime.fromisoformat(trade[key])
                                 except Exception:
-                                    trade[key] = None # Or datetime.now(TIMEZONE)
+                                    trade[key] = None  # Or datetime.now(TIMEZONE)
                         loaded_trades.append(trade)
                     return loaded_trades
             except (json.JSONDecodeError, OSError) as e:
@@ -1263,7 +1432,7 @@ class PerformanceTracker:
         self.wins = 0
         self.losses = 0
         for trade in self.trades:
-            pnl = Decimal(str(trade.get("pnl", "0"))) # Ensure pnl is Decimal
+            pnl = Decimal(str(trade.get("pnl", "0")))  # Ensure pnl is Decimal
             self.total_pnl += pnl
             if pnl > 0:
                 self.wins += 1
@@ -1339,7 +1508,7 @@ class TradingAnalyzer:
         config: dict[str, Any],
         logger: logging.Logger,
         symbol: str,
-        exchange_client: ExchangeClient
+        exchange_client: ExchangeClient,
     ):
         """Initializes the TradingAnalyzer."""
         self.df = df.copy()
@@ -1369,7 +1538,7 @@ class TradingAnalyzer:
                 self.logger.warning(
                     f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is a placeholder (not implemented).{RESET}"
                 )
-                self.gemini_client = lambda: None # Simple callable placeholder
+                self.gemini_client = lambda: None  # Simple callable placeholder
 
         if not self.df.empty:
             self._calculate_all_indicators()
@@ -1388,7 +1557,9 @@ class TradingAnalyzer:
             self.logger.debug(
                 f"Series '{name}' contains all NaNs. Returning Series with NaNs."
             )
-            return pd.Series(np.nan, index=self.df.index) # Ensure index matches main DF
+            return pd.Series(
+                np.nan, index=self.df.index
+            )  # Ensure index matches main DF
         return series
 
     def _safe_calculate(
@@ -1521,7 +1692,9 @@ class TradingAnalyzer:
             stoch_rsi_k, stoch_rsi_d = self._safe_calculate(
                 self.calculate_stoch_rsi,
                 "StochRSI",
-                min_data_points=isd["stoch_rsi_period"] + isd["stoch_k_period"] + isd["stoch_d_period"],
+                min_data_points=isd["stoch_rsi_period"]
+                + isd["stoch_k_period"]
+                + isd["stoch_d_period"],
                 period=isd["stoch_rsi_period"],
                 k_period=isd["stoch_k_period"],
                 d_period=isd["stoch_d_period"],
@@ -1608,9 +1781,8 @@ class TradingAnalyzer:
             obv_val, obv_ema = self._safe_calculate(
                 self.calculate_obv,
                 "OBV",
-                min_data_points=isd[
-                    "obv_ema_period"
-                ] + 1,  # OBV itself has no period, but EMA needs data
+                min_data_points=isd["obv_ema_period"]
+                + 1,  # OBV itself has no period, but EMA needs data
                 ema_period=isd["obv_ema_period"],
             )
             if obv_val is not None:
@@ -1651,7 +1823,8 @@ class TradingAnalyzer:
                         isd["ichimoku_kijun_period"],
                         isd["ichimoku_senkou_span_b_period"],
                     )
-                    + isd["ichimoku_chikou_span_offset"] + 1,
+                    + isd["ichimoku_chikou_span_offset"]
+                    + 1,
                     tenkan_period=isd["ichimoku_tenkan_period"],
                     kijun_period=isd["ichimoku_kijun_period"],
                     senkou_span_b_period=isd["ichimoku_senkou_span_b_period"],
@@ -1778,7 +1951,8 @@ class TradingAnalyzer:
             adx_val, plus_di, minus_di = self._safe_calculate(
                 self.calculate_adx,
                 "ADX",
-                min_data_points=isd["adx_period"] * 2, # ATR is dependency and needs period, ADX needs another period for smoothing
+                min_data_points=isd["adx_period"]
+                * 2,  # ATR is dependency and needs period, ADX needs another period for smoothing
                 period=isd["adx_period"],
             )
             if adx_val is not None:
@@ -1872,7 +2046,7 @@ class TradingAnalyzer:
             return pd.Series(np.nan, index=series.index)
 
         # Avoid division by zero for period in numpy calculations
-        period_safe = max(period, 1e-9) # Use a very small number if period is zero
+        period_safe = max(period, 1e-9)  # Use a very small number if period is zero
 
         a1 = np.exp(-np.sqrt(2) * np.pi / period_safe)
         b1 = 2 * a1 * np.cos(np.sqrt(2) * np.pi / period_safe)
@@ -1901,7 +2075,7 @@ class TradingAnalyzer:
         """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:
             self.logger.debug(
-                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
             )
             return None
 
@@ -1937,10 +2111,7 @@ class TradingAnalyzer:
 
         first_valid_idx_loc = df_clean.index.get_loc(first_valid_loc)
 
-        if (
-            df_clean["close"].loc[first_valid_loc]
-            > upper_band.loc[first_valid_loc]
-        ):
+        if df_clean["close"].loc[first_valid_loc] > upper_band.loc[first_valid_loc]:
             direction.loc[first_valid_loc] = 1  # 1 for Up
             supertrend.loc[first_valid_loc] = lower_band.loc[first_valid_loc]
         else:
@@ -1966,9 +2137,13 @@ class TradingAnalyzer:
                 # Continue in the same direction
                 direction.loc[current_index] = prev_direction
                 if prev_direction == 1:
-                    supertrend.loc[current_index] = max(lower_band.loc[current_index], prev_supertrend)
+                    supertrend.loc[current_index] = max(
+                        lower_band.loc[current_index], prev_supertrend
+                    )
                 else:
-                    supertrend.loc[current_index] = min(upper_band.loc[current_index], prev_supertrend)
+                    supertrend.loc[current_index] = min(
+                        upper_band.loc[current_index], prev_supertrend
+                    )
 
         result = pd.DataFrame({"supertrend": supertrend, "direction": direction})
         return result.reindex(self.df.index)
@@ -1993,9 +2168,11 @@ class TradingAnalyzer:
         signal_line = macd_result[f"MACDs_{fast_period}_{slow_period}_{signal_period}"]
         histogram = macd_result[f"MACDh_{fast_period}_{slow_period}_{signal_period}"]
 
-        return self._safe_series_op(macd_line, "MACD_Line"), self._safe_series_op(
-            signal_line, "MACD_Signal"
-        ), self._safe_series_op(histogram, "MACD_Hist")
+        return (
+            self._safe_series_op(macd_line, "MACD_Line"),
+            self._safe_series_op(signal_line, "MACD_Signal"),
+            self._safe_series_op(histogram, "MACD_Hist"),
+        )
 
     def calculate_rsi(self, period: int) -> pd.Series:
         """Calculate Relative Strength Index (RSI)."""
@@ -2046,11 +2223,13 @@ class TradingAnalyzer:
 
     def calculate_adx(self, period: int) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate Average Directional Index (ADX)."""
-        if len(self.df) < period * 2: # Requires ATR (period) and then ADX (period)
+        if len(self.df) < period * 2:  # Requires ATR (period) and then ADX (period)
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series, nan_series
 
-        tr_series = self.df["TR"] # Should have been calculated by _calculate_all_indicators
+        tr_series = self.df[
+            "TR"
+        ]  # Should have been calculated by _calculate_all_indicators
         if tr_series.isnull().all():
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series, nan_series
@@ -2090,9 +2269,9 @@ class TradingAnalyzer:
         adx = dx.ewm(span=period, adjust=False, min_periods=period).mean()
 
         return (
-            self._safe_series_op(adx, "ADX").fillna(0).clip(0,100),
-            self._safe_series_op(plus_di, "PlusDI").fillna(0).clip(0,100),
-            self._safe_series_op(minus_di, "MinusDI").fillna(0).clip(0,100),
+            self._safe_series_op(adx, "ADX").fillna(0).clip(0, 100),
+            self._safe_series_op(plus_di, "PlusDI").fillna(0).clip(0, 100),
+            self._safe_series_op(minus_di, "MinusDI").fillna(0).clip(0, 100),
         )
 
     def calculate_bollinger_bands(
@@ -2109,10 +2288,12 @@ class TradingAnalyzer:
         middle_col = f"BBM_{period}_{std_dev}"
         lower_col = f"BBL_{period}_{std_dev}"
 
-        if upper_col not in bbands.columns: # Fallback if specific column name not found
-             upper_col = bbands.columns[bbands.columns.str.startswith('BBU_')][0]
-             middle_col = bbands.columns[bbands.columns.str.startswith('BBM_')][0]
-             lower_col = bbands.columns[bbands.columns.str.startswith('BBL_')][0]
+        if (
+            upper_col not in bbands.columns
+        ):  # Fallback if specific column name not found
+            upper_col = bbands.columns[bbands.columns.str.startswith("BBU_")][0]
+            middle_col = bbands.columns[bbands.columns.str.startswith("BBM_")][0]
+            lower_col = bbands.columns[bbands.columns.str.startswith("BBL_")][0]
 
         upper_band = self._safe_series_op(bbands[upper_col], "BB_Upper")
         middle_band = self._safe_series_op(bbands[middle_col], "BB_Middle")
@@ -2143,7 +2324,7 @@ class TradingAnalyzer:
                 vwap_series.append(group_tp_vol / group_vol.replace(0, np.nan))
 
             if not vwap_series:
-                 return pd.Series(np.nan, index=self.df.index)
+                return pd.Series(np.nan, index=self.df.index)
 
             vwap = pd.concat(vwap_series).reindex(self.df.index)
         else:
@@ -2207,7 +2388,9 @@ class TradingAnalyzer:
         ) / 2
 
         # Calculate Senkou Span A (Future Kumo boundary)
-        senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(kijun_period) # Future projection
+        senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(
+            kijun_period
+        )  # Future projection
 
         # Calculate Senkou Span B (Future Kumo boundary)
         senkou_span_b = (
@@ -2220,7 +2403,7 @@ class TradingAnalyzer:
                 .min()
             )
             / 2
-        ).shift(kijun_period) # Future projection
+        ).shift(kijun_period)  # Future projection
 
         # Calculate Chikou Span (Past price projection)
         chikou_span = self.df["close"].shift(-chikou_span_offset)
@@ -2316,32 +2499,48 @@ class TradingAnalyzer:
 
         first_valid_idx = psar_val.first_valid_index()
         if first_valid_idx is None:
-            return pd.Series(np.nan, index=self.df.index), pd.Series(np.nan, index=self.df.index)
+            return pd.Series(np.nan, index=self.df.index), pd.Series(
+                np.nan, index=self.df.index
+            )
 
         # Initial direction based on first valid PSAR point
         if self.df["close"].loc[first_valid_idx] > psar_val.loc[first_valid_idx]:
-            direction.loc[first_valid_idx] = 1 # Up trend
+            direction.loc[first_valid_idx] = 1  # Up trend
         else:
-            direction.loc[first_valid_idx] = -1 # Down trend
+            direction.loc[first_valid_idx] = -1  # Down trend
 
         for i in range(self.df.index.get_loc(first_valid_idx) + 1, len(self.df)):
             current_idx = self.df.index[i]
             prev_idx = self.df.index[i - 1]
 
-            if pd.isna(psar_val.loc[current_idx]) or pd.isna(self.df["close"].loc[current_idx]):
-                direction.loc[current_idx] = direction.loc[prev_idx] # Carry forward if current data is NaN
+            if pd.isna(psar_val.loc[current_idx]) or pd.isna(
+                self.df["close"].loc[current_idx]
+            ):
+                direction.loc[current_idx] = direction.loc[
+                    prev_idx
+                ]  # Carry forward if current data is NaN
                 continue
 
             # If previous direction was up, and price falls below PSAR, reverse
-            if direction.loc[prev_idx] == 1 and self.df["close"].loc[current_idx] < psar_val.loc[current_idx]:
+            if (
+                direction.loc[prev_idx] == 1
+                and self.df["close"].loc[current_idx] < psar_val.loc[current_idx]
+            ):
                 direction.loc[current_idx] = -1
             # If previous direction was down, and price rises above PSAR, reverse
-            elif direction.loc[prev_idx] == -1 and self.df["close"].loc[current_idx] > psar_val.loc[current_idx]:
+            elif (
+                direction.loc[prev_idx] == -1
+                and self.df["close"].loc[current_idx] > psar_val.loc[current_idx]
+            ):
                 direction.loc[current_idx] = 1
             else:
-                direction.loc[current_idx] = direction.loc[prev_idx] # Continue current direction
+                direction.loc[current_idx] = direction.loc[
+                    prev_idx
+                ]  # Continue current direction
 
-        psar_val = self._safe_series_op(psar_val, "PSAR_Val").ffill() # Forward fill any gaps for PSAR value
+        psar_val = self._safe_series_op(
+            psar_val, "PSAR_Val"
+        ).ffill()  # Forward fill any gaps for PSAR value
         direction = self._safe_series_op(direction, "PSAR_Dir")
 
         return psar_val, direction
@@ -2393,7 +2592,9 @@ class TradingAnalyzer:
         # ATR is already calculated
         # Avoid division by zero for close price
         normalized_atr = self.df["ATR"] / self.df["close"].replace(0, np.nan)
-        volatility_index = normalized_atr.rolling(window=period, min_periods=period).mean()
+        volatility_index = normalized_atr.rolling(
+            window=period, min_periods=period
+        ).mean()
         return self._safe_series_op(volatility_index, "Volatility_Index").fillna(0)
 
     def calculate_vwma(self, period: int) -> pd.Series:
@@ -2438,7 +2639,9 @@ class TradingAnalyzer:
         """Safely retrieve an indicator value."""
         return self.indicator_values.get(key, default)
 
-    async def _check_orderbook(self, current_price: Decimal, orderbook_manager: Any) -> float:
+    async def _check_orderbook(
+        self, current_price: Decimal, orderbook_manager: Any
+    ) -> float:
         """Analyze orderbook imbalance. Placeholder as AdvancedOrderbookManager is not provided."""
         # The original code's orderbook_manager was passed, but it's not implemented.
         # For now, this will return 0.0. If a real orderbook_manager were provided,
@@ -2492,13 +2695,17 @@ class TradingAnalyzer:
         if indicator_type == "ehlers_supertrend":
             # Temporarily create an analyzer for the higher timeframe data to get ST direction
             temp_config = self.config.copy()
-            temp_config["indicators"][
-                "ehlers_supertrend"
-            ] = True  # Ensure ST is enabled for temp analyzer
+            temp_config["indicators"]["ehlers_supertrend"] = (
+                True  # Ensure ST is enabled for temp analyzer
+            )
 
             # Pass the same exchange client to the temporary analyzer
             temp_analyzer = TradingAnalyzer(
-                higher_tf_df, temp_config, self.logger, self.symbol, self.exchange_client
+                higher_tf_df,
+                temp_config,
+                self.logger,
+                self.symbol,
+                self.exchange_client,
             )
             st_dir = temp_analyzer._get_indicator_value("ST_Slow_Dir")
             if not pd.isna(st_dir):
@@ -2512,9 +2719,9 @@ class TradingAnalyzer:
     async def generate_trading_signal(
         self,
         current_price: Decimal,
-        orderbook_manager: Any, # This remains Any as it's a placeholder
+        orderbook_manager: Any,  # This remains Any as it's a placeholder
         mtf_trends: dict[str, str],
-        gemini_analysis: dict | None = None, # Added Gemini AI analysis parameter
+        gemini_analysis: dict | None = None,  # Added Gemini AI analysis parameter
     ) -> tuple[str, float]:
         """Generate a signal using confluence of indicators, including Ehlers SuperTrend."""
         signal_score = 0.0
@@ -3213,13 +3420,17 @@ class TradingAnalyzer:
                 if trend == "UP":
                     mtf_buy_score += 1
                 elif trend == "DOWN":
-                    mtf_sell_score += 1  # Add for bearish MTF trend (for absolute comparison)
+                    mtf_sell_score += (
+                        1  # Add for bearish MTF trend (for absolute comparison)
+                    )
 
             mtf_weight = weights.get("mtf_trend_confluence", 0.0)
             if mtf_trends:
                 total_mtf_indicators = len(mtf_trends)
                 # Normalize the difference between bullish and bearish trends
-                normalized_mtf_score = (mtf_buy_score - mtf_sell_score) / total_mtf_indicators
+                normalized_mtf_score = (
+                    mtf_buy_score - mtf_sell_score
+                ) / total_mtf_indicators
 
                 signal_score += mtf_weight * normalized_mtf_score
                 self.logger.debug(
@@ -3227,7 +3438,11 @@ class TradingAnalyzer:
                 )
 
         # --- Gemini AI Analysis Scoring ---
-        if self.config["gemini_ai_analysis"]["enabled"] and self.gemini_client and gemini_analysis:
+        if (
+            self.config["gemini_ai_analysis"]["enabled"]
+            and self.gemini_client
+            and gemini_analysis
+        ):
             self.logger.info(
                 f"{NEON_PURPLE}Gemini AI Analysis: {json.dumps(gemini_analysis, indent=2)}{RESET}"
             )
@@ -3292,7 +3507,9 @@ class TradingAnalyzer:
         else:
             return Decimal("0"), Decimal("0")
 
-        return self.precision_manager.format_price(take_profit), self.precision_manager.format_price(stop_loss)
+        return self.precision_manager.format_price(
+            take_profit
+        ), self.precision_manager.format_price(stop_loss)
 
 
 async def display_indicator_values_and_price(
@@ -3381,7 +3598,7 @@ async def main_async_loop(
                 continue
 
             # AdvancedOrderbookManager is not implemented, so this will remain None
-            orderbook_data = None # Or await exchange_client.fetch_orderbook(config["symbol"], config["orderbook_limit"])
+            orderbook_data = None  # Or await exchange_client.fetch_orderbook(config["symbol"], config["orderbook_limit"])
 
             mtf_trends: dict[str, str] = {}
             if config["mtf_analysis"]["enabled"]:
@@ -3394,7 +3611,11 @@ async def main_async_loop(
                         for trend_ind in config["mtf_analysis"]["trend_indicators"]:
                             # A new TradingAnalyzer is created for each HTF to avoid cross-contamination
                             temp_htf_analyzer = TradingAnalyzer(
-                                htf_df, config, logger, config["symbol"], exchange_client
+                                htf_df,
+                                config,
+                                logger,
+                                config["symbol"],
+                                exchange_client,
                             )
                             trend = temp_htf_analyzer._get_mtf_trend(
                                 htf_df,
@@ -3412,7 +3633,9 @@ async def main_async_loop(
                         config["mtf_analysis"]["mtf_request_delay_seconds"]
                     )  # Delay between MTF requests
 
-            analyzer = TradingAnalyzer(df, config, logger, config["symbol"], exchange_client)
+            analyzer = TradingAnalyzer(
+                df, config, logger, config["symbol"], exchange_client
+            )
 
             if analyzer.df.empty:
                 alert_system.send_alert(
@@ -3427,7 +3650,9 @@ async def main_async_loop(
             if config["gemini_ai_analysis"]["enabled"] and gemini_client:
                 # In a real scenario, this would involve sending data to GeminiClient
                 # gemini_ai_result = await gemini_client.analyze_market(current_price, analyzer.indicator_values, mtf_trends)
-                logger.debug(f"Gemini AI analysis placeholder triggered for {config['symbol']}.")
+                logger.debug(
+                    f"Gemini AI analysis placeholder triggered for {config['symbol']}."
+                )
 
             trading_signal, signal_score = await analyzer.generate_trading_signal(
                 current_price, orderbook_data, mtf_trends, gemini_ai_result
@@ -3467,9 +3692,9 @@ async def main_async_loop(
                 logger.info(f"{NEON_CYAN}Open Positions: {len(open_positions)}{RESET}")
                 for pos in open_positions:
                     current_trailing_sl_display = (
-                        pos.get('current_trailing_sl').normalize()
-                        if isinstance(pos.get('current_trailing_sl'), Decimal)
-                        else pos.get('current_trailing_sl', 'N/A')
+                        pos.get("current_trailing_sl").normalize()
+                        if isinstance(pos.get("current_trailing_sl"), Decimal)
+                        else pos.get("current_trailing_sl", "N/A")
                     )
                     logger.info(
                         f"  - {pos['side']} {pos['qty'].normalize()} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}, Trailing SL: {current_trailing_sl_display}){RESET}"
@@ -3488,7 +3713,7 @@ async def main_async_loop(
                 logger,
                 current_price,
                 analyzer,
-                orderbook_data, # Pass orderbook_data (could be None)
+                orderbook_data,  # Pass orderbook_data (could be None)
                 mtf_trends,
             )
 
@@ -3521,7 +3746,19 @@ async def start_bot():
     # Validate intervals
     # Bybit CCXT intervals: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d, 1w, 1M
     valid_ccxt_bybit_intervals = [
-        "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w", "1M"
+        "1m",
+        "3m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "4h",
+        "6h",
+        "12h",
+        "1d",
+        "1w",
+        "1M",
     ]
     if config["interval"] not in valid_ccxt_bybit_intervals:
         logger.error(
@@ -3545,9 +3782,7 @@ async def start_bot():
 
     logger.info(f"{NEON_GREEN}--- Whalebot Trading Bot Initialized ---{RESET}")
     logger.info(f"Symbol: {config['symbol']}, Interval: {config['interval']}")
-    logger.info(
-        f"Trade Management Enabled: {config['trade_management']['enabled']}"
-    )
+    logger.info(f"Trade Management Enabled: {config['trade_management']['enabled']}")
     if config["trade_management"]["enabled"]:
         logger.info(
             f"Leverage: {config['trade_management']['leverage']}x, Order Mode: {config['trade_management']['order_mode']}"
@@ -3567,7 +3802,9 @@ async def start_bot():
     )
     await exchange_client.load_markets()
 
-    position_manager = PositionManager(config, logger, config["symbol"], exchange_client)
+    position_manager = PositionManager(
+        config, logger, config["symbol"], exchange_client
+    )
     performance_tracker = PerformanceTracker(
         logger, config_file="bot_logs/trading-bot/trades.json"
     )
@@ -3589,11 +3826,13 @@ async def start_bot():
             logger.warning(
                 f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is a placeholder (not implemented).{RESET}"
             )
+
             class MockGeminiClient:
                 async def analyze_market(self, *args, **kwargs):
                     logger.warning("Mock GeminiClient.analyze_market called.")
                     # Simulate a response or return None
                     return {"entry": "HOLD", "confidence_level": 50}
+
             gemini_client = MockGeminiClient()
         else:
             logger.error(
@@ -3612,17 +3851,19 @@ async def start_bot():
         gemini_client,
     )
 
+
 if __name__ == "__main__":
     try:
         asyncio.run(start_bot())
     except KeyboardInterrupt:
-        logger = setup_logger("whalebot_main") # Get logger again for shutdown message
-        logger.info(f"{NEON_BLUE}KeyboardInterrupt detected. Shutting down bot...{RESET}")
+        logger = setup_logger("whalebot_main")  # Get logger again for shutdown message
+        logger.info(
+            f"{NEON_BLUE}KeyboardInterrupt detected. Shutting down bot...{RESET}"
+        )
     except Exception as e:
-        logger = setup_logger("whalebot_main") # Get logger again for critical errors
+        logger = setup_logger("whalebot_main")  # Get logger again for critical errors
         logger.critical(
             f"{NEON_RED}Critical error during bot startup or top-level execution: {e}{RESET}",
             exc_info=True,
         )
         sys.exit(1)
-

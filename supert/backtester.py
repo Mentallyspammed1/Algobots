@@ -19,7 +19,9 @@ class BybitHistoricalDataDownloader:
     def __init__(self, testnet=True):
         self.session = HTTP(testnet=testnet)
 
-    def fetch_historical_klines(self, symbol, interval, start_date, end_date, category='linear'):
+    def fetch_historical_klines(
+        self, symbol, interval, start_date, end_date, category="linear"
+    ):
         """
         Fetch historical kline data for backtesting
 
@@ -40,31 +42,42 @@ class BybitHistoricalDataDownloader:
                 symbol=symbol,
                 interval=interval,
                 end=int(current_end.timestamp() * 1000),
-                limit=1000
+                limit=1000,
             )
 
-            if response['retCode'] == 0:
-                klines = response['result']['list']
+            if response["retCode"] == 0:
+                klines = response["result"]["list"]
 
                 if not klines:
                     break
 
                 # Convert to DataFrame
-                df_batch = pd.DataFrame(klines, columns=[
-                    'timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'
-                ])
+                df_batch = pd.DataFrame(
+                    klines,
+                    columns=[
+                        "timestamp",
+                        "open",
+                        "high",
+                        "low",
+                        "close",
+                        "volume",
+                        "turnover",
+                    ],
+                )
 
                 # Convert timestamp to datetime
-                df_batch['timestamp'] = pd.to_datetime(df_batch['timestamp'].astype(float), unit='ms')
+                df_batch["timestamp"] = pd.to_datetime(
+                    df_batch["timestamp"].astype(float), unit="ms"
+                )
 
                 # Convert price columns to float
-                for col in ['open', 'high', 'low', 'close', 'volume', 'turnover']:
+                for col in ["open", "high", "low", "close", "volume", "turnover"]:
                     df_batch[col] = df_batch[col].astype(float)
 
                 all_klines.append(df_batch)
 
                 # Update current_end to the oldest timestamp from this batch
-                current_end = df_batch['timestamp'].min() - timedelta(minutes=1)
+                current_end = df_batch["timestamp"].min() - timedelta(minutes=1)
 
                 # Rate limiting to avoid API restrictions
                 time.sleep(0.1)
@@ -83,9 +96,9 @@ class BybitHistoricalDataDownloader:
             df = pd.concat(all_klines, ignore_index=True)
 
             # Remove duplicates and sort by timestamp
-            df = df.drop_duplicates(subset=['timestamp'])
-            df = df.sort_values('timestamp')
-            df = df.set_index('timestamp')
+            df = df.drop_duplicates(subset=["timestamp"])
+            df = df.sort_values("timestamp")
+            df = df.set_index("timestamp")
 
             # Filter to requested date range
             df = df[(df.index >= start_date) & (df.index <= end_date)]
@@ -99,9 +112,11 @@ class BybitHistoricalDataDownloader:
         df.to_csv(filename)
         print(f"Data saved to {filename}")
 
+
 @dataclass
 class Trade:
     """Store individual trade information"""
+
     entry_time: datetime
     exit_time: datetime | None
     side: str  # 'Buy' or 'Sell'
@@ -114,9 +129,11 @@ class Trade:
     pnl_pct: float | None = None
     exit_reason: str | None = None  # 'SL', 'TP', 'Signal', 'Trailing'
 
+
 @dataclass
 class BacktestResults:
     """Store backtest results and metrics"""
+
     initial_capital: float
     final_capital: float
     total_return: float
@@ -135,6 +152,7 @@ class BacktestResults:
     trades: list[Trade] = field(default_factory=list)
     equity_curve: pd.Series = field(default_factory=pd.Series)
 
+
 class SupertrendBacktester:
     """Backtest the Supertrend strategy with historical data"""
 
@@ -146,28 +164,35 @@ class SupertrendBacktester:
     def calculate_indicators(self, df):
         """Calculate Supertrend and other indicators"""
         # Calculate ATR
-        df['atr'] = ta.atr(df['high'], df['low'], df['close'],
-                          length=self.config.ST_PERIOD)
+        df["atr"] = ta.atr(
+            df["high"], df["low"], df["close"], length=self.config.ST_PERIOD
+        )
 
         # Calculate Supertrend
         st = ta.supertrend(
-            high=df['high'],
-            low=df['low'],
-            close=df['close'],
+            high=df["high"],
+            low=df["low"],
+            close=df["close"],
             length=self.config.ST_PERIOD,
-            multiplier=self.config.ST_MULTIPLIER
+            multiplier=self.config.ST_MULTIPLIER,
         )
 
         # Merge Supertrend columns
         df = pd.concat([df, st], axis=1)
 
         # Generate signals
-        df['signal'] = 0
-        df.loc[df[f'SUPERTd_{self.config.ST_PERIOD}_{self.config.ST_MULTIPLIER}'] == 1, 'signal'] = 1
-        df.loc[df[f'SUPERTd_{self.config.ST_PERIOD}_{self.config.ST_MULTIPLIER}'] == -1, 'signal'] = -1
+        df["signal"] = 0
+        df.loc[
+            df[f"SUPERTd_{self.config.ST_PERIOD}_{self.config.ST_MULTIPLIER}"] == 1,
+            "signal",
+        ] = 1
+        df.loc[
+            df[f"SUPERTd_{self.config.ST_PERIOD}_{self.config.ST_MULTIPLIER}"] == -1,
+            "signal",
+        ] = -1
 
         # Detect signal changes
-        df['signal_change'] = df['signal'].diff()
+        df["signal_change"] = df["signal"].diff()
 
         return df
 
@@ -198,13 +223,13 @@ class SupertrendBacktester:
 
         for i in range(1, len(df)):
             current = df.iloc[i]
-            previous = df.iloc[i-1]
+            previous = df.iloc[i - 1]
 
             # Check for entry signals
             if position is None:
                 # Buy signal
-                if previous['signal'] == -1 and current['signal'] == 1:
-                    entry_price = current['close']
+                if previous["signal"] == -1 and current["signal"] == 1:
+                    entry_price = current["close"]
                     stop_loss = entry_price * (1 - self.config.STOP_LOSS_PCT)
                     take_profit = entry_price * (1 + self.config.TAKE_PROFIT_PCT)
 
@@ -216,17 +241,21 @@ class SupertrendBacktester:
                         position = Trade(
                             entry_time=current.name,
                             exit_time=None,
-                            side='Buy',
+                            side="Buy",
                             entry_price=entry_price,
                             exit_price=None,
                             quantity=quantity,
                             stop_loss=stop_loss,
-                            take_profit=take_profit
+                            take_profit=take_profit,
                         )
 
                 # Sell signal (for short positions if enabled)
-                elif self.config.ALLOW_SHORT and previous['signal'] == 1 and current['signal'] == -1:
-                    entry_price = current['close']
+                elif (
+                    self.config.ALLOW_SHORT
+                    and previous["signal"] == 1
+                    and current["signal"] == -1
+                ):
+                    entry_price = current["close"]
                     stop_loss = entry_price * (1 + self.config.STOP_LOSS_PCT)
                     take_profit = entry_price * (1 - self.config.TAKE_PROFIT_PCT)
 
@@ -238,12 +267,12 @@ class SupertrendBacktester:
                         position = Trade(
                             entry_time=current.name,
                             exit_time=None,
-                            side='Sell',
+                            side="Sell",
                             entry_price=entry_price,
                             exit_price=None,
                             quantity=quantity,
                             stop_loss=stop_loss,
-                            take_profit=take_profit
+                            take_profit=take_profit,
                         )
 
             # Check for exit conditions
@@ -251,33 +280,33 @@ class SupertrendBacktester:
                 exit_price = None
                 exit_reason = None
 
-                if position.side == 'Buy':
+                if position.side == "Buy":
                     # Check stop loss
-                    if current['low'] <= position.stop_loss:
+                    if current["low"] <= position.stop_loss:
                         exit_price = position.stop_loss
-                        exit_reason = 'SL'
+                        exit_reason = "SL"
                     # Check take profit
-                    elif current['high'] >= position.take_profit:
+                    elif current["high"] >= position.take_profit:
                         exit_price = position.take_profit
-                        exit_reason = 'TP'
+                        exit_reason = "TP"
                     # Check signal reversal
-                    elif current['signal'] == -1:
-                        exit_price = current['close']
-                        exit_reason = 'Signal'
+                    elif current["signal"] == -1:
+                        exit_price = current["close"]
+                        exit_reason = "Signal"
 
-                elif position.side == 'Sell':
+                elif position.side == "Sell":
                     # Check stop loss
-                    if current['high'] >= position.stop_loss:
+                    if current["high"] >= position.stop_loss:
                         exit_price = position.stop_loss
-                        exit_reason = 'SL'
+                        exit_reason = "SL"
                     # Check take profit
-                    elif current['low'] <= position.take_profit:
+                    elif current["low"] <= position.take_profit:
                         exit_price = position.take_profit
-                        exit_reason = 'TP'
+                        exit_reason = "TP"
                     # Check signal reversal
-                    elif current['signal'] == 1:
-                        exit_price = current['close']
-                        exit_reason = 'Signal'
+                    elif current["signal"] == 1:
+                        exit_price = current["close"]
+                        exit_reason = "Signal"
 
                 # Execute exit
                 if exit_price:
@@ -286,12 +315,20 @@ class SupertrendBacktester:
                     position.exit_reason = exit_reason
 
                     # Calculate PnL
-                    if position.side == 'Buy':
-                        position.pnl = (exit_price - position.entry_price) * position.quantity
-                        position.pnl_pct = ((exit_price - position.entry_price) / position.entry_price) * 100
+                    if position.side == "Buy":
+                        position.pnl = (
+                            exit_price - position.entry_price
+                        ) * position.quantity
+                        position.pnl_pct = (
+                            (exit_price - position.entry_price) / position.entry_price
+                        ) * 100
                     else:  # Sell
-                        position.pnl = (position.entry_price - exit_price) * position.quantity
-                        position.pnl_pct = ((position.entry_price - exit_price) / position.entry_price) * 100
+                        position.pnl = (
+                            position.entry_price - exit_price
+                        ) * position.quantity
+                        position.pnl_pct = (
+                            (position.entry_price - exit_price) / position.entry_price
+                        ) * 100
 
                     capital += position.pnl
                     trades.append(position)
@@ -302,21 +339,31 @@ class SupertrendBacktester:
         # Close any open position at the end
         if position is not None:
             position.exit_time = df.index[-1]
-            position.exit_price = df.iloc[-1]['close']
-            position.exit_reason = 'End'
+            position.exit_price = df.iloc[-1]["close"]
+            position.exit_reason = "End"
 
-            if position.side == 'Buy':
-                position.pnl = (position.exit_price - position.entry_price) * position.quantity
-                position.pnl_pct = ((position.exit_price - position.entry_price) / position.entry_price) * 100
+            if position.side == "Buy":
+                position.pnl = (
+                    position.exit_price - position.entry_price
+                ) * position.quantity
+                position.pnl_pct = (
+                    (position.exit_price - position.entry_price) / position.entry_price
+                ) * 100
             else:
-                position.pnl = (position.entry_price - position.exit_price) * position.quantity
-                position.pnl_pct = ((position.entry_price - position.exit_price) / position.entry_price) * 100
+                position.pnl = (
+                    position.entry_price - position.exit_price
+                ) * position.quantity
+                position.pnl_pct = (
+                    (position.entry_price - position.exit_price) / position.entry_price
+                ) * 100
 
             capital += position.pnl
             trades.append(position)
 
         # Calculate metrics
-        results = self.calculate_metrics(trades, equity_curve, self.config.INITIAL_CAPITAL)
+        results = self.calculate_metrics(
+            trades, equity_curve, self.config.INITIAL_CAPITAL
+        )
         return results
 
     def calculate_metrics(self, trades, equity_curve, initial_capital):
@@ -339,7 +386,7 @@ class SupertrendBacktester:
                 sharpe_ratio=0,
                 sortino_ratio=0,
                 trades=[],
-                equity_curve=pd.Series(equity_curve)
+                equity_curve=pd.Series(equity_curve),
             )
 
         # Basic metrics
@@ -362,7 +409,7 @@ class SupertrendBacktester:
         # Profit factor
         gross_profit = sum([t.pnl for t in winning_trades]) if winning_trades else 0
         gross_loss = abs(sum([t.pnl for t in losing_trades])) if losing_trades else 0
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
 
         # Drawdown calculation
         equity_series = pd.Series(equity_curve)
@@ -373,10 +420,16 @@ class SupertrendBacktester:
 
         # Risk-adjusted returns
         returns = equity_series.pct_change().dropna()
-        sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
+        sharpe_ratio = (
+            returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
+        )
 
         downside_returns = returns[returns < 0]
-        sortino_ratio = returns.mean() / downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 and downside_returns.std() > 0 else 0
+        sortino_ratio = (
+            returns.mean() / downside_returns.std() * np.sqrt(252)
+            if len(downside_returns) > 0 and downside_returns.std() > 0
+            else 0
+        )
 
         return BacktestResults(
             initial_capital=initial_capital,
@@ -395,8 +448,9 @@ class SupertrendBacktester:
             sharpe_ratio=sharpe_ratio,
             sortino_ratio=sortino_ratio,
             trades=trades,
-            equity_curve=equity_series
+            equity_curve=equity_series,
         )
+
 
 class ParameterOptimizer:
     """Optimize strategy parameters using grid search"""
@@ -435,20 +489,24 @@ class ParameterOptimizer:
             result = backtester.run_backtest(self.data)
 
             # Store results with parameters
-            results.append({
-                'parameters': dict(zip(keys, combo, strict=False)),
-                'total_return_pct': result.total_return_pct,
-                'sharpe_ratio': result.sharpe_ratio,
-                'max_drawdown_pct': result.max_drawdown_pct,
-                'win_rate': result.win_rate,
-                'profit_factor': result.profit_factor,
-                'num_trades': result.num_trades
-            })
+            results.append(
+                {
+                    "parameters": dict(zip(keys, combo, strict=False)),
+                    "total_return_pct": result.total_return_pct,
+                    "sharpe_ratio": result.sharpe_ratio,
+                    "max_drawdown_pct": result.max_drawdown_pct,
+                    "win_rate": result.win_rate,
+                    "profit_factor": result.profit_factor,
+                    "num_trades": result.num_trades,
+                }
+            )
 
-            print(f"Tested: {dict(zip(keys, combo, strict=False))} -> Return: {result.total_return_pct:.2f}%")
+            print(
+                f"Tested: {dict(zip(keys, combo, strict=False))} -> Return: {result.total_return_pct:.2f}%"
+            )
 
         # Sort by return
-        results.sort(key=lambda x: x['total_return_pct'], reverse=True)
+        results.sort(key=lambda x: x["total_return_pct"], reverse=True)
 
         return pd.DataFrame(results)
 
@@ -469,7 +527,7 @@ class ParameterOptimizer:
             results = pool.map(backtest_func, combinations)
 
         # Convert to DataFrame
-        return pd.DataFrame(results).sort_values('total_return_pct', ascending=False)
+        return pd.DataFrame(results).sort_values("total_return_pct", ascending=False)
 
     def _run_single_backtest(self, combo, keys):
         """Run a single backtest with given parameters"""
@@ -481,14 +539,15 @@ class ParameterOptimizer:
         result = backtester.run_backtest(self.data)
 
         return {
-            'parameters': dict(zip(keys, combo, strict=False)),
-            'total_return_pct': result.total_return_pct,
-            'sharpe_ratio': result.sharpe_ratio,
-            'max_drawdown_pct': result.max_drawdown_pct,
-            'win_rate': result.win_rate,
-            'profit_factor': result.profit_factor,
-            'num_trades': result.num_trades
+            "parameters": dict(zip(keys, combo, strict=False)),
+            "total_return_pct": result.total_return_pct,
+            "sharpe_ratio": result.sharpe_ratio,
+            "max_drawdown_pct": result.max_drawdown_pct,
+            "win_rate": result.win_rate,
+            "profit_factor": result.profit_factor,
+            "num_trades": result.num_trades,
         }
+
 
 class BacktestVisualizer:
     """Visualize backtest results"""
@@ -499,21 +558,29 @@ class BacktestVisualizer:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
 
         # Equity curve
-        ax1.plot(results.equity_curve.index, results.equity_curve.values, label='Equity Curve')
-        ax1.fill_between(results.equity_curve.index, results.equity_curve.values,
-                         results.initial_capital, alpha=0.3)
-        ax1.set_ylabel('Capital ($)')
-        ax1.set_title('Equity Curve')
+        ax1.plot(
+            results.equity_curve.index,
+            results.equity_curve.values,
+            label="Equity Curve",
+        )
+        ax1.fill_between(
+            results.equity_curve.index,
+            results.equity_curve.values,
+            results.initial_capital,
+            alpha=0.3,
+        )
+        ax1.set_ylabel("Capital ($)")
+        ax1.set_title("Equity Curve")
         ax1.grid(True, alpha=0.3)
         ax1.legend()
 
         # Drawdown
         cummax = results.equity_curve.cummax()
         drawdown = (results.equity_curve - cummax) / cummax * 100
-        ax2.fill_between(drawdown.index, drawdown.values, 0, color='red', alpha=0.3)
-        ax2.set_ylabel('Drawdown (%)')
-        ax2.set_xlabel('Date')
-        ax2.set_title('Drawdown')
+        ax2.fill_between(drawdown.index, drawdown.values, 0, color="red", alpha=0.3)
+        ax2.set_ylabel("Drawdown (%)")
+        ax2.set_xlabel("Date")
+        ax2.set_title("Drawdown")
         ax2.grid(True, alpha=0.3)
 
         plt.tight_layout()
@@ -526,42 +593,43 @@ class BacktestVisualizer:
 
         # PnL distribution
         pnls = [t.pnl for t in results.trades]
-        axes[0].hist(pnls, bins=30, edgecolor='black', alpha=0.7)
-        axes[0].axvline(x=0, color='red', linestyle='--')
-        axes[0].set_xlabel('PnL ($)')
-        axes[0].set_ylabel('Frequency')
-        axes[0].set_title('Trade PnL Distribution')
+        axes[0].hist(pnls, bins=30, edgecolor="black", alpha=0.7)
+        axes[0].axvline(x=0, color="red", linestyle="--")
+        axes[0].set_xlabel("PnL ($)")
+        axes[0].set_ylabel("Frequency")
+        axes[0].set_title("Trade PnL Distribution")
 
         # Win/Loss pie chart
         sizes = [results.winning_trades, results.losing_trades]
-        labels = ['Winning Trades', 'Losing Trades']
-        colors = ['green', 'red']
-        axes[1].pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%')
-        axes[1].set_title('Win/Loss Ratio')
+        labels = ["Winning Trades", "Losing Trades"]
+        colors = ["green", "red"]
+        axes[1].pie(sizes, labels=labels, colors=colors, autopct="%1.1f%%")
+        axes[1].set_title("Win/Loss Ratio")
 
         plt.tight_layout()
         plt.show()
 
     @staticmethod
-    def plot_optimization_heatmap(optimization_results, x_param, y_param, z_metric='total_return_pct'):
+    def plot_optimization_heatmap(
+        optimization_results, x_param, y_param, z_metric="total_return_pct"
+    ):
         """Plot optimization results as heatmap"""
         # Pivot data for heatmap
         pivot = optimization_results.pivot_table(
-            values=z_metric,
-            index=y_param,
-            columns=x_param,
-            aggfunc='mean'
+            values=z_metric, index=y_param, columns=x_param, aggfunc="mean"
         )
 
         plt.figure(figsize=(10, 8))
-        sns.heatmap(pivot, annot=True, fmt='.1f', cmap='RdYlGn', center=0)
-        plt.title(f'{z_metric} Heatmap')
+        sns.heatmap(pivot, annot=True, fmt=".1f", cmap="RdYlGn", center=0)
+        plt.title(f"{z_metric} Heatmap")
         plt.tight_layout()
         plt.show()
+
 
 @dataclass
 class BacktestConfig:
     """Backtest configuration"""
+
     # Data parameters
     SYMBOL: str = "BTCUSDT"
     CATEGORY: str = "linear"
@@ -585,6 +653,7 @@ class BacktestConfig:
     ALLOW_SHORT: bool = False
     COMMISSION: float = 0.0006
 
+
 def main():
     """Main backtest execution"""
 
@@ -599,7 +668,7 @@ def main():
         interval=config.TIMEFRAME,
         start_date=config.START_DATE,
         end_date=config.END_DATE,
-        category=config.CATEGORY
+        category=config.CATEGORY,
     )
 
     # Save data for future use
@@ -613,19 +682,23 @@ def main():
     results = backtester.run_backtest(data)
 
     # Display results
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("BACKTEST RESULTS")
-    print("="*60)
+    print("=" * 60)
     print(f"Initial Capital: ${results.initial_capital:,.2f}")
     print(f"Final Capital: ${results.final_capital:,.2f}")
-    print(f"Total Return: ${results.total_return:,.2f} ({results.total_return_pct:.2f}%)")
+    print(
+        f"Total Return: ${results.total_return:,.2f} ({results.total_return_pct:.2f}%)"
+    )
     print(f"Number of Trades: {results.num_trades}")
     print(f"Winning Trades: {results.winning_trades} ({results.win_rate:.2f}%)")
     print(f"Losing Trades: {results.losing_trades}")
     print(f"Average Win: ${results.avg_win:,.2f}")
     print(f"Average Loss: ${results.avg_loss:,.2f}")
     print(f"Profit Factor: {results.profit_factor:.2f}")
-    print(f"Max Drawdown: ${results.max_drawdown:,.2f} ({results.max_drawdown_pct:.2f}%)")
+    print(
+        f"Max Drawdown: ${results.max_drawdown:,.2f} ({results.max_drawdown_pct:.2f}%)"
+    )
     print(f"Sharpe Ratio: {results.sharpe_ratio:.2f}")
     print(f"Sortino Ratio: {results.sortino_ratio:.2f}")
 
@@ -640,10 +713,10 @@ def main():
     optimizer = ParameterOptimizer(data, config)
 
     param_grid = {
-        'ST_PERIOD': [7, 10, 14, 20],
-        'ST_MULTIPLIER': [2.0, 2.5, 3.0, 3.5],
-        'STOP_LOSS_PCT': [0.01, 0.015, 0.02],
-        'TAKE_PROFIT_PCT': [0.02, 0.03, 0.04]
+        "ST_PERIOD": [7, 10, 14, 20],
+        "ST_MULTIPLIER": [2.0, 2.5, 3.0, 3.5],
+        "STOP_LOSS_PCT": [0.01, 0.015, 0.02],
+        "TAKE_PROFIT_PCT": [0.02, 0.03, 0.04],
     }
 
     optimization_results = optimizer.optimize_parameters(param_grid)
@@ -653,10 +726,12 @@ def main():
     print(optimization_results.head(10))
 
     # Save results
-    optimization_results.to_csv('optimization_results.csv', index=False)
+    optimization_results.to_csv("optimization_results.csv", index=False)
 
     # Step 5: Run backtest with best parameters
-    best_params = optimization_results.iloc[0]['parameters'] # Corrected to get the parameters dict
+    best_params = optimization_results.iloc[0][
+        "parameters"
+    ]  # Corrected to get the parameters dict
     print(f"\nBest parameters found: {best_params}")
 
     # Update config with best parameters
@@ -673,20 +748,26 @@ def main():
     print(f"Optimized Max Drawdown: {results_optimized.max_drawdown_pct:.2f}%")
 
     # Export detailed trade log
-    trades_df = pd.DataFrame([{
-        'entry_time': t.entry_time,
-        'exit_time': t.exit_time,
-        'side': t.side,
-        'entry_price': t.entry_price,
-        'exit_price': t.exit_price,
-        'quantity': t.quantity,
-        'pnl': t.pnl,
-        'pnl_pct': t.pnl_pct,
-        'exit_reason': t.exit_reason
-    } for t in results_optimized.trades])
+    trades_df = pd.DataFrame(
+        [
+            {
+                "entry_time": t.entry_time,
+                "exit_time": t.exit_time,
+                "side": t.side,
+                "entry_price": t.entry_price,
+                "exit_price": t.exit_price,
+                "quantity": t.quantity,
+                "pnl": t.pnl,
+                "pnl_pct": t.pnl_pct,
+                "exit_reason": t.exit_reason,
+            }
+            for t in results_optimized.trades
+        ]
+    )
 
-    trades_df.to_csv('backtest_trades.csv', index=False)
+    trades_df.to_csv("backtest_trades.csv", index=False)
     print("\nTrade log saved to 'backtest_trades.csv'")
+
 
 if __name__ == "__main__":
     main()

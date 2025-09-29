@@ -40,12 +40,12 @@ def safe_print(s):
     try:
         print(s)
     except UnicodeEncodeError:
-        print(s.encode('ascii', 'ignore').decode())
+        print(s.encode("ascii", "ignore").decode())
 
 
 def main():
     if len(sys.argv) != 2:
-        sys.exit('usage: pmap <pid>')
+        sys.exit("usage: pmap <pid>")
     p = psutil.Process(int(sys.argv[1]))
     templ = "{:<20} {:>10}  {:<7} {}"
     print(templ.format("Address", "RSS", "Mode", "Mapping"))
@@ -53,7 +53,7 @@ def main():
     for m in p.memory_maps(grouped=False):
         total_rss += m.rss
         line = templ.format(
-            m.addr.split('-')[0].zfill(16),
+            m.addr.split("-")[0].zfill(16),
             bytes2human(m.rss),
             m.perms,
             m.path,
@@ -64,5 +64,5 @@ def main():
     safe_print(f"PID = {p.pid}, name = {p.name()}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

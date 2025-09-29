@@ -6,7 +6,7 @@ import os
 import sys
 import time
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -112,7 +112,7 @@ LOG_DIRECTORY = "bot_logs/trading-bot/logs"
 Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
 # Using UTC for consistency and to avoid timezone issues with API timestamps
-TIMEZONE = timezone.utc
+TIMEZONE = UTC
 MAX_API_RETRIES = 5
 RETRY_DELAY_SECONDS = 7
 REQUEST_TIMEOUT = 20
@@ -1622,7 +1622,7 @@ class TradingAnalyzer:
         """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:
             self.logger.debug(
-                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
             )
             return None
 
@@ -2265,7 +2265,6 @@ class TradingAnalyzer:
             and not pd.isna(prev_segment_high)
             and not pd.isna(prev_segment_low)
         ):
-
             # Simplified for snippet: checking recent high/low relative to previous
             is_higher_high = recent_segment_high > prev_segment_high
             is_higher_low = recent_segment_low > prev_segment_low
@@ -2424,9 +2423,7 @@ class TradingAnalyzer:
                 resistance_level = Decimal(ask_price)
 
         price_precision_str = (
-            "0."
-            + "0" * (self.config["trade_management"]["price_precision"] - 1)
-            + "1"
+            "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
         )
         if support_level > 0:
             self.indicator_values["Support_Level"] = support_level.quantize(
@@ -2510,9 +2507,9 @@ class TradingAnalyzer:
     ) -> tuple[str, float, dict]:  # Modified return type to include signal breakdown
         """Generate a signal using confluence of indicators, including Ehlers SuperTrend."""
         signal_score = 0.0
-        signal_breakdown: dict[str, float] = (
-            {}
-        )  # New: stores individual indicator contributions
+        signal_breakdown: dict[
+            str, float
+        ] = {}  # New: stores individual indicator contributions
         active_indicators = self.config["indicators"]
         weights = self.weights
         isd = self.indicator_settings
@@ -2766,9 +2763,7 @@ class TradingAnalyzer:
                     signal_breakdown["Fibonacci S2 Breakout"] = -fib_contrib * 1.0
                 elif current_close < pivot and prev_close >= pivot:  # Break below Pivot
                     signal_score -= fib_contrib * 0.2
-                    signal_breakdown["Fibonacci Pivot Breakdown"] = (
-                        -fib_contrib * 0.2
-                    )
+                    signal_breakdown["Fibonacci Pivot Breakdown"] = -fib_contrib * 0.2
 
         # Ehlers SuperTrend Alignment Scoring
         if active_indicators.get("ehlers_supertrend", False):
@@ -3373,19 +3368,19 @@ def display_indicator_values_and_price(
         ):
             logger.info(f"{NEON_CYAN}--- Fibonacci Pivot Points ---{RESET}")
             logger.info(
-                f"  {NEON_YELLOW}Pivot: {analyzer.indicator_values["Pivot"].normalize()}{RESET}"
+                f"  {NEON_YELLOW}Pivot: {analyzer.indicator_values['Pivot'].normalize()}{RESET}"
             )
             logger.info(
-                f"  {NEON_GREEN}R1: {analyzer.indicator_values["R1"].normalize()}{RESET}"
+                f"  {NEON_GREEN}R1: {analyzer.indicator_values['R1'].normalize()}{RESET}"
             )
             logger.info(
-                f"  {NEON_GREEN}R2: {analyzer.indicator_values["R2"].normalize()}{RESET}"
+                f"  {NEON_GREEN}R2: {analyzer.indicator_values['R2'].normalize()}{RESET}"
             )
             logger.info(
-                f"  {NEON_RED}S1: {analyzer.indicator_values["S1"].normalize()}{RESET}"
+                f"  {NEON_RED}S1: {analyzer.indicator_values['S1'].normalize()}{RESET}"
             )
             logger.info(
-                f"  {NEON_RED}S2: {analyzer.indicator_values["S2"].normalize()}{RESET}"
+                f"  {NEON_RED}S2: {analyzer.indicator_values['S2'].normalize()}{RESET}"
             )
 
     # Display Support and Resistance Levels (from orderbook)
@@ -3396,11 +3391,11 @@ def display_indicator_values_and_price(
         logger.info(f"{NEON_CYAN}--- Orderbook S/R Levels ---{RESET}")
         if "Support_Level" in analyzer.indicator_values:
             logger.info(
-                f"  {NEON_YELLOW}Support Level: {analyzer.indicator_values["Support_Level"].normalize()}{RESET}"
+                f"  {NEON_YELLOW}Support Level: {analyzer.indicator_values['Support_Level'].normalize()}{RESET}"
             )
         if "Resistance_Level" in analyzer.indicator_values:
             logger.info(
-                f"  {NEON_YELLOW}Resistance Level: {analyzer.indicator_values["Resistance_Level"].normalize()}{RESET}"
+                f"  {NEON_YELLOW}Resistance Level: {analyzer.indicator_values['Resistance_Level'].normalize()}{RESET}"
             )
 
     if mtf_trends:

@@ -10,7 +10,6 @@ against the files which were modified in the commit. Install this with
 "make install-git-hooks".
 """
 
-
 import os
 import shlex
 import subprocess
@@ -40,11 +39,11 @@ def hilite(s, ok=True, bold=False):
     if ok is None:  # no color
         pass
     elif ok:  # green
-        attr.append('32')
+        attr.append("32")
     else:  # red
-        attr.append('31')
+        attr.append("31")
     if bold:
-        attr.append('1')
+        attr.append("1")
     return f"\x1b[{';'.join(attr)}m{s}\x1b[0m"
 
 
@@ -67,7 +66,7 @@ def sh(cmd):
         raise RuntimeError(stderr)
     if stderr:
         print(stderr, file=sys.stderr)
-    if stdout.endswith('\n'):
+    if stdout.endswith("\n"):
         stdout = stdout[:-1]
     return stdout
 
@@ -75,15 +74,15 @@ def sh(cmd):
 def git_commit_files():
     out = sh(["git", "diff", "--cached", "--name-only"])
     py_files = [
-        x for x in out.split('\n') if x.endswith('.py') and os.path.exists(x)
+        x for x in out.split("\n") if x.endswith(".py") and os.path.exists(x)
     ]
     c_files = [
         x
-        for x in out.split('\n')
-        if x.endswith(('.c', '.h')) and os.path.exists(x)
+        for x in out.split("\n")
+        if x.endswith((".c", ".h")) and os.path.exists(x)
     ]
     rst_files = [
-        x for x in out.split('\n') if x.endswith('.rst') and os.path.exists(x)
+        x for x in out.split("\n") if x.endswith(".rst") and os.path.exists(x)
     ]
     toml_files = [
         x for x in out.split("\n") if x.endswith(".toml") and os.path.exists(x)

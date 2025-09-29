@@ -13,6 +13,7 @@ def run_git_command(command: list[str]) -> str:
         print(f"Stderr: {e.stderr}", file=sys.stderr)
         sys.exit(1)
 
+
 def git_pull_rebase():
     """Pulls changes from the remote and rebases the current branch."""
     print("Attempting to pull and rebase current branch...")
@@ -23,6 +24,7 @@ def git_pull_rebase():
     except Exception as e:
         print(f"Git pull --rebase failed: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     git_pull_rebase()

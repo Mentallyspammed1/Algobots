@@ -9,7 +9,7 @@
 # --- API Configuration ---
 # BYBIT_API_KEY = "YOUR_API_KEY"
 # BYBIT_API_SECRET = "YOUR_API_SECRET"
-BYBIT_TESTNET = "false" # Set to "true" to use Bybit testnet
+BYBIT_TESTNET = "false"  # Set to "true" to use Bybit testnet
 
 # --- Trading Configuration ---
 # BYBIT_SYMBOL = "BTCUSDT"

@@ -5,7 +5,7 @@ from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app) # Enable CORS for the frontend
+CORS(app)  # Enable CORS for the frontend
 
 # Bybit API URL
 BYBIT_API_URL = "https://api.bybit.com/v5/market/kline"
@@ -17,6 +17,7 @@ LIMIT = 500  # Number of bars to fetch
 # These functions are implemented manually for a lightweight, dependency-free solution.
 # They are more accurate now, especially for formulas like RSI and ATR.
 
+
 def calculate_ema(data, period):
     """Calculates Exponential Moving Average (EMA)."""
     if len(data) < period:
@@ -26,13 +27,13 @@ def calculate_ema(data, period):
     smoothing_factor = 2 / (period + 1)
 
     # Initial EMA is a simple average of the first 'period' values
-    initial_sum = sum(d['close'] for d in data[:period])
+    initial_sum = sum(d["close"] for d in data[:period])
     ema_values.append(initial_sum / period)
 
     # Calculate subsequent EMA values
     for i in range(period, len(data)):
         prev_ema = ema_values[-1]
-        current_close = data[i]['close']
+        current_close = data[i]["close"]
         current_ema = (current_close - prev_ema) * smoothing_factor + prev_ema
         ema_values.append(current_ema)
 
@@ -47,14 +48,14 @@ def calculate_rsi(data, period):
     gains = [0.0] * len(data)
     losses = [0.0] * len(data)
     for i in range(1, len(data)):
-        change = data[i]['close'] - data[i-1]['close']
+        change = data[i]["close"] - data[i - 1]["close"]
         if change > 0:
             gains[i] = change
         else:
             losses[i] = abs(change)
 
-    avg_gain = sum(gains[1:period+1]) / period
-    avg_loss = sum(losses[1:period+1]) / period
+    avg_gain = sum(gains[1 : period + 1]) / period
+    avg_loss = sum(losses[1 : period + 1]) / period
 
     rs_values = []
     rsi_values = [None] * period
@@ -62,7 +63,7 @@ def calculate_rsi(data, period):
     if avg_loss != 0:
         rs_values.append(avg_gain / avg_loss)
     else:
-        rs_values.append(100) # Avoid division by zero
+        rs_values.append(100)  # Avoid division by zero
 
     for i in range(period + 1, len(data)):
         avg_gain = ((avg_gain * (period - 1)) + gains[i]) / period
@@ -71,12 +72,13 @@ def calculate_rsi(data, period):
         if avg_loss != 0:
             rs_values.append(avg_gain / avg_loss)
         else:
-            rs_values.append(100) # Avoid division by zero
+            rs_values.append(100)  # Avoid division by zero
 
     for rs in rs_values:
         rsi_values.append(100 - (100 / (1 + rs)))
 
     return rsi_values
+
 
 def calculate_atr(data, period):
     """Calculates Average True Range (ATR) using Wilder's smoothing."""
@@ -85,9 +87,9 @@ def calculate_atr(data, period):
 
     tr_values = []
     for i in range(1, len(data)):
-        high = data[i]['high']
-        low = data[i]['low']
-        prev_close = data[i-1]['close']
+        high = data[i]["high"]
+        low = data[i]["low"]
+        prev_close = data[i - 1]["close"]
         tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
         tr_values.append(tr)
 
@@ -103,6 +105,7 @@ def calculate_atr(data, period):
 
     return atr_values
 
+
 def calculate_macd(data, short_period, long_period, signal_period):
     """Calculates MACD, Signal Line, and Histogram."""
     short_ema = calculate_ema(data, short_period)
@@ -115,18 +118,23 @@ def calculate_macd(data, short_period, long_period, signal_period):
         else:
             macd_line.append(None)
 
-    signal_line = calculate_ema([{'close': val} for val in macd_line if val is not None], signal_period)
+    signal_line = calculate_ema(
+        [{"close": val} for val in macd_line if val is not None], signal_period
+    )
 
     hist = []
     for i in range(len(macd_line)):
         if macd_line[i] is not None and i >= len(macd_line) - len(signal_line):
-            hist.append(macd_line[i] - signal_line[i - (len(macd_line) - len(signal_line))])
+            hist.append(
+                macd_line[i] - signal_line[i - (len(macd_line) - len(signal_line))]
+            )
         else:
             hist.append(None)
 
     return macd_line, signal_line, hist
 
-@app.route('/api/data')
+
+@app.route("/api/data")
 def get_bybit_data():
     """Fetches and processes Bybit data for the frontend."""
     try:
@@ -134,7 +142,7 @@ def get_bybit_data():
             "category": "linear",
             "symbol": SYMBOL,
             "interval": INTERVAL,
-            "limit": LIMIT
+            "limit": LIMIT,
         }
         response = requests.get(BYBIT_API_URL, params=params)
         response.raise_for_status()
@@ -144,14 +152,16 @@ def get_bybit_data():
         # Format and reverse the data to have the oldest first
         formatted_data = []
         for bar in raw_data[::-1]:
-            formatted_data.append({
-                "time": int(bar[0]) / 1000,
-                "open": float(bar[1]),
-                "high": float(bar[2]),
-                "low": float(bar[3]),
-                "close": float(bar[4]),
-                "volume": float(bar[5])
-            })
+            formatted_data.append(
+                {
+                    "time": int(bar[0]) / 1000,
+                    "open": float(bar[1]),
+                    "high": float(bar[2]),
+                    "low": float(bar[3]),
+                    "close": float(bar[4]),
+                    "volume": float(bar[5]),
+                }
+            )
 
         # Pine Script Parameters (match your strategy)
         atr_period = 14
@@ -167,7 +177,9 @@ def get_bybit_data():
         short_ema = calculate_ema(formatted_data, short_ema_period)
         long_ema = calculate_ema(formatted_data, long_ema_period)
         rsi = calculate_rsi(formatted_data, rsi_period)
-        macd_line, signal_line, macd_hist = calculate_macd(formatted_data, short_ema_period, long_ema_period, macd_signal_period)
+        macd_line, signal_line, macd_hist = calculate_macd(
+            formatted_data, short_ema_period, long_ema_period, macd_signal_period
+        )
         atr = calculate_atr(formatted_data, atr_period)
 
         # Chandelier Exit with dynamic calculation
@@ -175,23 +187,31 @@ def get_bybit_data():
         chandelier_short_vals = [None] * len(formatted_data)
         for i in range(len(formatted_data)):
             if atr[i] is not None:
-                high_range = max(d['high'] for d in formatted_data[max(0, i-atr_period+1):i+1])
-                low_range = min(d['low'] for d in formatted_data[max(0, i-atr_period+1):i+1])
+                high_range = max(
+                    d["high"]
+                    for d in formatted_data[max(0, i - atr_period + 1) : i + 1]
+                )
+                low_range = min(
+                    d["low"] for d in formatted_data[max(0, i - atr_period + 1) : i + 1]
+                )
                 chandelier_long_vals[i] = high_range - (atr[i] * chandelier_multiplier)
                 chandelier_short_vals[i] = low_range + (atr[i] * chandelier_multiplier)
 
         # Generate Trading Signal
-        current_signal = 'neutral'
+        current_signal = "neutral"
         last_data = formatted_data[-1]
         last_short_ema = short_ema[-1]
         last_long_ema = long_ema[-1]
         last_chandelier_long = chandelier_long_vals[-1]
         last_chandelier_short = chandelier_short_vals[-1]
 
-        if last_short_ema > last_long_ema and last_data['close'] > last_chandelier_long:
-            current_signal = 'buy'
-        elif last_short_ema < last_long_ema and last_data['close'] < last_chandelier_short:
-            current_signal = 'sell'
+        if last_short_ema > last_long_ema and last_data["close"] > last_chandelier_long:
+            current_signal = "buy"
+        elif (
+            last_short_ema < last_long_ema
+            and last_data["close"] < last_chandelier_short
+        ):
+            current_signal = "sell"
 
         # Combine all data for the frontend
         response_data = {
@@ -206,20 +226,27 @@ def get_bybit_data():
             "chandelier_long": chandelier_long_vals,
             "chandelier_short": chandelier_short_vals,
             "current_signal": current_signal,
-            "last_close": last_data['close'],
+            "last_close": last_data["close"],
         }
 
         return jsonify(response_data)
 
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Error fetching data from Bybit: {e}")
-        return jsonify({"error": "Failed to fetch data from Bybit API. Check your internet connection or try again later."}), 500
+        return jsonify(
+            {
+                "error": "Failed to fetch data from Bybit API. Check your internet connection or try again later."
+            }
+        ), 500
 
-@app.route('/')
+
+@app.route("/")
 def serve_index():
-    return send_from_directory('.', 'index.html')
+    return send_from_directory(".", "index.html")
 
-if __name__ == '__main__':
-    print("Starting server. To access the app, open your web browser and go to http://127.0.0.1:5000")
-    app.run(host='0.0.0.0', port=5000)
 
+if __name__ == "__main__":
+    print(
+        "Starting server. To access the app, open your web browser and go to http://127.0.0.1:5000"
+    )
+    app.run(host="0.0.0.0", port=5000)

@@ -1,11 +1,10 @@
-
 import json
 import logging
-from pathlib import Path
-from typing import Any, Dict
-from colorama import Fore, Style
-from zoneinfo import ZoneInfo
 import os
+from pathlib import Path
+from typing import Any
+
+from colorama import Fore, Style
 
 # Neon Color Scheme
 NEON_YELLOW = Fore.YELLOW
@@ -16,12 +15,13 @@ RESET = Style.RESET_ALL
 # --- Constants ---
 DEFAULT_CONFIG_FILE = "config.json"
 
+
 class Config:
     """Loads and manages bot configuration from a JSON file and environment variables."""
 
     def __init__(self, logger: logging.Logger):
         self.logger = logger
-        self._config_data: Dict[str, Any] = {}
+        self._config_data: dict[str, Any] = {}
         self._load_config_from_file(DEFAULT_CONFIG_FILE)
         self._load_env_vars()
         self._apply_strategy_profile()
@@ -254,7 +254,9 @@ class Config:
                 with Path(filepath).open("w", encoding="utf-8") as f:
                     json.dump(default_config, f, indent=4)
             except OSError as e:
-                self.logger.error(f"{NEON_RED}Error creating default config file: {e}{RESET}")
+                self.logger.error(
+                    f"{NEON_RED}Error creating default config file: {e}{RESET}"
+                )
             self._config_data = default_config
         else:
             try:
@@ -272,15 +274,21 @@ class Config:
                     with Path(filepath).open("w", encoding="utf-8") as f_default:
                         json.dump(default_config, f_default, indent=4)
                 except OSError as e_save:
-                    self.logger.error(f"{NEON_RED}Could not save default config: {e_save}{RESET}")
+                    self.logger.error(
+                        f"{NEON_RED}Could not save default config: {e_save}{RESET}"
+                    )
 
-    def _ensure_config_keys(self, config: Dict[str, Any], default_config: Dict[str, Any]) -> None:
+    def _ensure_config_keys(
+        self, config: dict[str, Any], default_config: dict[str, Any]
+    ) -> None:
         for key, default_value in default_config.items():
             if key not in config:
                 config[key] = default_value
             elif isinstance(default_value, dict) and isinstance(config.get(key), dict):
                 self._ensure_config_keys(config[key], default_value)
-            elif isinstance(default_value, dict) and not isinstance(config.get(key), dict):
+            elif isinstance(default_value, dict) and not isinstance(
+                config.get(key), dict
+            ):
                 config[key] = default_value
 
     def _load_env_vars(self) -> None:
@@ -289,7 +297,9 @@ class Config:
         # Add other environment variables if needed
 
     def _apply_strategy_profile(self) -> None:
-        active_profile_name = self._config_data.get("current_strategy_profile", "default_scalping")
+        active_profile_name = self._config_data.get(
+            "current_strategy_profile", "default_scalping"
+        )
         if active_profile_name in self._config_data.get("strategy_profiles", {}):
             active_profile = self._config_data["strategy_profiles"][active_profile_name]
             if "indicators_enabled" in active_profile:
@@ -304,22 +314,32 @@ class Config:
                 f"{NEON_YELLOW}Configured strategy profile '{active_profile_name}' not found. Falling back to default.{RESET}"
             )
             if "indicators" not in self._config_data:
-                self._config_data["indicators"] = self._config_data["strategy_profiles"]["default_scalping"]["indicators_enabled"]
+                self._config_data["indicators"] = self._config_data[
+                    "strategy_profiles"
+                ]["default_scalping"]["indicators_enabled"]
             if "active_weights" not in self._config_data:
-                self._config_data["active_weights"] = self._config_data["strategy_profiles"]["default_scalping"]["weights"]
+                self._config_data["active_weights"] = self._config_data[
+                    "strategy_profiles"
+                ]["default_scalping"]["weights"]
 
     def __getattr__(self, name: str) -> Any:
         if name in self._config_data:
             return self._config_data[name]
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self) -> dict[str, Any]:
         return self._config_data
 
     def set_active_strategy_profile(self, profile_name: str) -> None:
         if profile_name in self._config_data.get("strategy_profiles", {}):
             self._config_data["current_strategy_profile"] = profile_name
             self._apply_strategy_profile()
-            self.logger.info(f"{NEON_BLUE}Switched active strategy profile to '{profile_name}'.{RESET}")
+            self.logger.info(
+                f"{NEON_BLUE}Switched active strategy profile to '{profile_name}'.{RESET}"
+            )
         else:
-            self.logger.warning(f"{NEON_YELLOW}Strategy profile '{profile_name}' not found. Current profile remains '{self.current_strategy_profile}'.{RESET}")
+            self.logger.warning(
+                f"{NEON_YELLOW}Strategy profile '{profile_name}' not found. Current profile remains '{self.current_strategy_profile}'.{RESET}"
+            )

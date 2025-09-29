@@ -29,14 +29,13 @@ binpath: C:\Windows\system32\svchost.exe -k netsvcs
 ...
 """
 
-
 import os
 import sys
 
 import psutil
 
 
-if os.name != 'nt':
+if os.name != "nt":
     sys.exit("platform not supported (Windows only)")
 
 
@@ -45,15 +44,15 @@ def main():
         info = service.as_dict()
         print(f"{info['name']!r} ({info['display_name']!r})")
         s = "status: {}, start: {}, username: {}, pid: {}".format(
-            info['status'],
-            info['start_type'],
-            info['username'],
-            info['pid'],
+            info["status"],
+            info["start_type"],
+            info["username"],
+            info["pid"],
         )
         print(s)
         print(f"binpath: {info['binpath']}")
         print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

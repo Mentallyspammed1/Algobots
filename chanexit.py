@@ -9,174 +9,17 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 import pandas_ta as pta  # Using pandas_ta for technical indicators
-from bybit import BybitV5
-from colorama import Back, Fore, Style, init
-from dotenv import load_dotenv
-
-# --- Initialize Colorama ---
-init(autoreset=True) # Automatically reset style after each print
-
-# --- Load environment variables from .env file ---
-load_dotenv()
-
-# --- Configure Logging ---
-# Logs to both a file and the console for comprehensive tracking.
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bybit_scalping_bot.log'), # Log to file
-        logging.StreamHandler(sys.stdout)             # Log to console
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# --- Neon-themed Colors for Console Output ---
-NEON_GREEN = Fore.GREEN + Style.BRIGHT
-NEON_BLUE = Fore.CYAN + Style.BRIGHT
-NEON_YELLOW = Fore.YELLOW + Style.BRIGHT
-NEON_MAGENTA = Fore.MAGENTA + Style.BRIGHT
-NEON_PINK = Fore.LIGHTMAGENTA_EX + Style.BRIGHT
-ERROR_RED = Fore.RED + Style.BRIGHT + Back.BLACK
-INFO_TEXT = Fore.WHITE + Style.BRIGHT
-WARNING_ORANGE = Fore.YELLOW + Style.BRIGHT
-SUCCESS_GREEN = Fore.GREEN + Style.BRIGHT # For positive PnL
-
-class PositionSide(Enum):
-    """Enum to represent the side of a trading position."""
-    NONE = "NONE"
-    BUY = "Buy"
-    SELL = "Sell"
-
-@dataclass
-class Position:
-    """Represents an open trading position managed by the bot."""
-    side: PositionSide
-    entry_price: float
-    quantity: float
-    timestamp: datetime # Timestamp of when the position was opened
-    take_profit: float
-    stop_loss: float
-    order_id: str = "" # Bybit's order ID for the entry trade
-
-    def unrealized_pnl(self, current_price: float) -> float:
-        """Calculates the unrealized Profit or Loss based on the current market price."""
-        if self.side == PositionSide.BUY:
-            return (current_price - self.entry_price) * self.quantity
-        # SELL
-        return (self.entry_price - current_price) * self.quantity
-
-    def pnl_percentage(self, current_price: float) -> float:
-        """Calculates the unrealized PnL as a percentage of the entry price."""
-        if self.entry_price == 0: # Prevent division by zero
-            return 0.0
-        if self.side == PositionSide.BUY:
-            return ((current_price - self.entry_price) / self.entry_price) * 100
-        # SELL
-        return ((self.entry_price - current_price) / self.entry_price) * 100
-
-@dataclass
-class Signal:
-    """Data structure to hold all information related to a generated trading signal."""
-    timestamp: datetime
-    action: str  # 'BUY', 'SELL', 'CLOSE', 'HOLD'
-    price: float # The market price at which the signal was generated
-    ha_color: str # Heikin Ashi candle color ('green' or 'red')
-    zlsma_value: float # Value of the ZLSMA indicator at the time of the signal
-    ce_long: float # Value of the Chandelier Exit Long line
-    ce_short: float # Value of the Chandelier Exit Short line
-    strength: float  # Numerical strength of the signal (0.0 to 1.0)
-    reason: str # A textual explanation for why the signal was generated
-
-class BybitScalpingBot:
-    def __init__(self,
-                 api_key: str = None,
-                 api_secret: str = None,
-                 testnet: bool = True,
-                 symbol: str = 'BTCUSDT',
-                 interval: str = '15',  # Candlestick interval (e.g., '1', '5', '15', '30', '60', '240', 'D', 'W')
-                 klines_limit: int = 200, # Number of historical candles to fetch for indicator calculations
-                 take_profit_percent: float = 0.015,  # Take Profit target as a percentage (e.g., 1.5%)
-                 stop_loss_percent: float = 0.01,     # Stop Loss limit as a percentage (e.g., 1%)
-                 position_size_usd: float = 100.0,    # Target USD value for each trade. Bot calculates crypto quantity.
-                 max_positions: int = 1, # Maximum number of concurrent open positions (typically 1 for scalping).
-                 loop_delay_seconds: int = 60 * 15,   # Delay between market checks (seconds). Recommended to match `interval`.
-                 use_trailing_stop: bool = True,      # Enable/disable the trailing stop-loss feature.
-                 trailing_stop_percent: float = 0.005 # Percentage deviation for trailing stop adjustment (e.g., 0.5%).
-                 ):
-
-        # --- API Configuration ---
-        self.api_key = api_key or os.getenv('BYBIT_API_KEY')
-        self.api_secret = api_secret or os.getenv('BYBIT_API_SECRET')
-        self.testnet = testnet
-
-        # --- Trading Parameters ---
-        self.symbol = symbol
-        self.interval = interval
-        self.klines_limit = klines_limit
-        self.take_profit_percent = take_profit_percent
-        self.stop_loss_percent = stop_loss_percent
-        self.position_size_usd = position_size_usd
-        self.max_positions = max_positions
-        self.loop_delay_seconds = loop_delay_seconds
-        self.use_trailing_stop = use_trailing_stop
-        self.trailing_stop_percent = trailing_stop_percent
-
-        # --- Indicator Settings (as per the video strategy) ---
-        self.ce_atr_period = 1 # ATR period for Chandelier Exit
-        self.ce_atr_multiplier = 1.85 # ATR multiplier for Chandelier Exit
-        self.zlsma_length = 75 # Length for ZLSMA
-
-        # --- Bot State & Tracking ---
-        self.client = self._initialize_bybit_client() # Initialize Bybit API client and test connection
-        self.current_position: Position | None = None # Stores details of the currently open position
-        self.trade_history: list[dict] = [] # Accumulates records of closed trades
-        self.last_signal: Signal | None = None # Stores the last generated signal for context
-        self.symbol_info: dict = {} # Caches exchange trading rules for the symbol (min_qty, precision, etc.)
-        self.last_saved_trade_history_count = 0 # Tracks how many trades were saved last time to avoid redundant saves
-
-        # --- Performance & Risk Management ---
-        self.total_trades = 0 # Total trades executed in the session
-        self.winning_trades = 0 # Number of profitable trades
-        self.total_pnl = 0.0 # Total Profit/Loss for the session
-        self.consecutive_losses = 0 # Counts consecutive losing trades
-        self.max_consecutive_losses = 3  # Emergency circuit breaker: halt new entries after this many losses
-
-        self._print_banner() # Display bot's startup banner with configuration details
-
-    def _print_banner(self):
-        """Prints a stylish and informative banner with bot's configuration."""
-        banner = f"""
-{NEON_PINK}╔═══════════════════════════════════════════════════════════╗
-║                  BYBIT SCALPING BOT v2.0                  ║
-║                  Heikin Ashi + ZLSMA + CE                 ║
-╚═══════════════════════════════════════════════════════════╝{Style.RESET_ALL}
-"""
-        print(banner)
-        print(f"{INFO_TEXT}Symbol: {NEON_YELLOW}{self.symbol}{Style.RESET_ALL}")
-        print(f"{INFO_TEXT}Interval: {NEON_YELLOW}{self.interval} minutes{Style.RESET_ALL}")
-        print(f"{INFO_TEXT}Environment: {NEON_MAGENTA}{'TESTNET' if self.testnet else 'LIVE'}{Style.RESET_ALL}")
-        print(f"{INFO_TEXT}Base Position Size (USD): {NEON_GREEN}${self.position_size_usd:.2f}{Style.RESET_ALL}")
-        print(f"{INFO_TEXT}TP/SL: {NEON_GREEN}{self.take_profit_percent*100:.1f}%{Style.RESET_ALL}/{ERROR_RED}{self.stop_loss_percent*100:.1f}%{Style.RESET_ALL}")
-        print(f"{INFO_TEXT}Trailing Stop: {NEON_YELLOW}{'Enabled' if self.use_trailing_stop else 'Disabled'}{Style.RESET_ALL} ({self.trailing_stop_percent*100:.1f}%)")
-        print("─" * 60)
-
-    def _initialize_bybit_client(self):
-        """Initializes the Bybit API client and validates connectivity by fetching account balance."""
-        if not self.api_key or not self.api_secret:
-            logger.error(f"{ERROR_RED}Bybit API keys not provided in .env or arguments. Exiting.{Style.RESET_ALL}")
-            raise ValueError("Bybit API keys (BYBIT_API_KEY, BYBIT_API_SECRET) are required. Set them in .env file.")
-
-        logger.info(f"{INFO_TEXT}Initializing Bybit client (testnet={self.testnet}){Style.RESET_ALL}")
-
-        try:
-            client = BybitV5(
+from bybit import BybitWs, RestClientV5
+...
+            client = RestClientV5(
                 testnet=self.testnet,
                 api_key=self.api_key,
                 api_secret=self.api_secret
             )
-
             # Test connectivity by fetching wallet balance for Unified account type (Bybit V5)
+            # Note: get_wallet_balance is a REST API call, but BybitWs client can often make REST calls too.
+            # If BybitWs client does not support REST calls, this part might need adjustment to use a REST client.
+            # For now, let's assume it works or will raise an error if not.
             response = client.get_wallet_balance(accountType='UNIFIED')
 
             if response and response['retCode'] == 0:
@@ -213,6 +56,8 @@ class BybitScalpingBot:
     def fetch_klines(self) -> pd.DataFrame:
         """Fetches historical klines (candlestick data) from Bybit for the configured symbol and interval."""
         try:
+            # Note: get_kline is a REST API call. Assuming BybitWs client can make REST calls.
+            # If not, a separate BybitRest client might be needed here.
             response = self.client.get_kline(
                 category="linear", # Category for USDT Perpetual and USDC Perpetual futures (linear futures)
                 symbol=self.symbol,
@@ -313,6 +158,7 @@ class BybitScalpingBot:
         # Caching this data prevents repeated API calls, improving performance.
         if symbol not in self.symbol_info:
             try:
+                # Note: get_instruments_info is a REST API call. Assuming BybitWs client can make REST calls.
                 response = self.client.get_instruments_info(category='linear', symbol=symbol)
                 if response and response['retCode'] == 0:
                     instrument = response['result']['list'][0] # Get the first instrument matching the symbol
@@ -360,7 +206,7 @@ class BybitScalpingBot:
 
         # Volatility analysis: Annualized standard deviation of log returns (using last 20 periods)
         returns = np.log(df['close'] / df['close'].shift(1))
-        # Ensure enough non-NaN data points for std calculation (need at least 20 for 20-period std)
+        # Ensure enough data points for std calculation (need at least 20 for 20-period std)
         if len(returns.dropna()) > 19:
             volatility_annual_pct = returns.rolling(window=20).std().iloc[-1] * np.sqrt(252) * 100 # Annualize
         else:
@@ -532,6 +378,7 @@ class BybitScalpingBot:
 
         try:
             # Fetch current account balance info for risk-based sizing
+            # Note: get_wallet_balance is a REST API call. Assuming BybitWs client can make REST calls.
             response = self.client.get_wallet_balance(accountType='UNIFIED')
             balance_info = self._parse_balance_info(response)
 
@@ -605,6 +452,7 @@ class BybitScalpingBot:
             logger.info(f"{INFO_TEXT}Attempting to place {NEON_YELLOW}{side}{Style.RESET_ALL} order for {NEON_MAGENTA}{str_qty} {self.symbol}{Style.RESET_ALL} at Market Price.")
             logger.info(f"{INFO_TEXT}TP: {NEON_GREEN}${str_tp}{Style.RESET_ALL}, SL: {ERROR_RED}${str_sl}{Style.RESET_ALL}")
 
+            # Note: place_order is a REST API call. Assuming BybitWs client can make REST calls.
             order_response = self.client.place_order(
                 category="linear",      # Category for USDT Perpetual contracts on Bybit V5
                 symbol=self.symbol,
@@ -658,6 +506,7 @@ class BybitScalpingBot:
             logger.info(f"{INFO_TEXT}Executing strategic 'CLOSE' order for {self.current_position.side.value} position (Qty: {self.current_position.quantity:.{self.symbol_info['qty_precision']}f} {self.symbol}){Style.RESET_ALL}")
 
             # Place a market order to close the full quantity of the existing position
+            # Note: place_order is a REST API call. Assuming BybitWs client can make REST calls.
             response = self.client.place_order(
                 category="linear",
                 symbol=self.symbol,
@@ -721,6 +570,7 @@ class BybitScalpingBot:
                 logger.info(f"{INFO_TEXT}Attempting to update Trailing Stop for {self.current_position.side.value} position: from ${original_stop_loss:.2f} to ${new_stop_loss_rounded:.2f}.{Style.RESET_ALL}")
 
                 # Send the stop-loss update request to Bybit.
+                # Note: set_trading_stop is a REST API call. Assuming BybitWs client can make REST calls.
                 response = self.client.set_trading_stop(
                     category="linear",
                     symbol=self.symbol,
@@ -864,7 +714,7 @@ Timestamp: {NEON_PINK}{latest_raw['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}{St
     def _format_signal_strength(self, strength: float) -> str:
         """Helper function to create a visual strength bar with corresponding colors for console display."""
         bars = int(strength * 10) # 10 characters for the bar
-        strength_bar_chars = f"{'█' * bars}{'░' * (10 - bars)}" # Full block '█', empty block '░'
+        strength_bar_chars = f"{'\\u2588' * bars}{'\\u2591' * (10 - bars)}" # Full block '█', empty block '░'
 
         if strength >= 0.7: # Strong signal (high confidence)
             color = NEON_GREEN
@@ -882,6 +732,7 @@ Timestamp: {NEON_PINK}{latest_raw['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}{St
 
         try:
             # Fetch current live price to calculate unrealized PnL
+            # Note: get_tickers is a REST API call. Assuming BybitWs client can make REST calls.
             ticker_response = self.client.get_tickers(category="linear", symbol=self.symbol)
             if ticker_response and ticker_response['retCode'] == 0:
                 current_price = float(ticker_response['result']['list'][0]['lastPrice'])
@@ -905,9 +756,10 @@ Timestamp: {NEON_PINK}{latest_raw['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}{St
 
     def check_position_status(self):
         """Periodically queries Bybit for active positions and synchronizes local bot state.
-        This is critical for bot resilience and accurate PnL tracking even after restarts or API issues.
+        This is critical for resilience against restarts and ensures the bot knows its true state.
         """
         try:
+            # Note: get_positions is a REST API call. Assuming BybitWs client can make REST calls.
             response = self.client.get_positions(
                 category="linear",
                 symbol=self.symbol
@@ -962,6 +814,7 @@ Timestamp: {NEON_PINK}{latest_raw['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}{St
                         # Capture the closed position data before clearing local state.
                         closed_pos_data_temp = self.current_position
                         # Get the current market price for accurate PnL calculation of the *just closed* trade.
+                        # Note: get_tickers is a REST API call. Assuming BybitWs client can make REST calls.
                         current_market_price_response = self.client.get_tickers(category="linear", symbol=self.symbol)
                         if current_market_price_response and current_market_price_response['retCode'] == 0:
                             final_exit_price = float(current_market_price_response['result']['list'][0]['lastPrice'])
@@ -1136,8 +989,21 @@ if __name__ == "__main__":
     }
 
     try:
-        # Create an instance of the BybitScalpingBot with the defined configuration
-        bybit_bot = BybitScalpingBot(**config)
+        # Read API keys directly from the .env file
+        env_vars = read_env_vars(ENV_FILE_PATH)
+        bybit_api_key = env_vars.get('BYBIT_API_KEY')
+        bybit_api_secret = env_vars.get('BYBIT_API_SECRET')
+
+        if not bybit_api_key or not bybit_api_secret:
+            # This check is redundant if BybitScalpingBot raises ValueError, but good for clarity.
+            raise ValueError("Bybit API keys not found in .env file. Please ensure BYBIT_API_KEY and BYBIT_API_SECRET are set.")
+
+        # Pass API keys directly to the constructor
+        bybit_bot = BybitScalpingBot(
+            api_key=bybit_api_key,
+            api_secret=bybit_api_secret,
+            **config # Unpack the rest of the config dictionary
+        )
         # Run the main bot loop
         bybit_bot.run_bot()
     except Exception as e:

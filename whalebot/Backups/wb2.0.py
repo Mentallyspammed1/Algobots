@@ -747,9 +747,9 @@ class PositionManager:
         self.config = config
         self.logger = logger
         self.symbol = symbol
-        self.open_positions: dict[str, dict] = (
-            {}
-        )  # Tracks positions opened by the bot locally
+        self.open_positions: dict[
+            str, dict
+        ] = {}  # Tracks positions opened by the bot locally
         self.trade_management_enabled = config["trade_management"]["enabled"]
         self.precision_manager = PrecisionManager(symbol, logger, config)
         self.max_open_positions = config["trade_management"]["max_open_positions"]
@@ -1080,7 +1080,6 @@ class PositionManager:
                         <= entry_price
                         * (Decimal("1") - self.trailing_stop_activation_percent)
                     ):
-
                         position["is_trailing_activated"] = True
 
                         # Calculate initial trailing stop price
@@ -1874,7 +1873,7 @@ class TradingAnalyzer:
         """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:
             self.logger.debug(
-                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
             )
             return None
 
@@ -2195,9 +2194,7 @@ class TradingAnalyzer:
                 .min()
             )
             / 2
-        ).shift(
-            kijun_period
-        )  # Future projection
+        ).shift(kijun_period)  # Future projection
 
         # Past projection
         chikou_span = self.df["close"].shift(-chikou_span_offset)
@@ -2495,9 +2492,9 @@ class TradingAnalyzer:
         if indicator_type == "ehlers_supertrend":
             # Temporarily create an analyzer for the higher timeframe data to get ST direction
             temp_config = self.config.copy()
-            temp_config["indicators"][
-                "ehlers_supertrend"
-            ] = True  # Ensure ST is enabled for temp analyzer
+            temp_config["indicators"]["ehlers_supertrend"] = (
+                True  # Ensure ST is enabled for temp analyzer
+            )
             temp_analyzer = TradingAnalyzer(
                 higher_tf_df, temp_config, self.logger, self.symbol
             )
@@ -3232,7 +3229,6 @@ class TradingAnalyzer:
 
         # --- Gemini AI Analysis Scoring ---
         if self.config["gemini_ai_analysis"]["enabled"] and self.gemini_client:
-
             if gemini_analysis:
                 self.logger.info(
                     f"{NEON_PURPLE}Gemini AI Analysis: {json.dumps(gemini_analysis, indent=2)}{RESET}"

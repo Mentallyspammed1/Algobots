@@ -14,11 +14,15 @@ from typing import Any
 from pybit.unified_trading import HTTP, WebSocket
 
 # --- Global Decimal Precision for financial calc ---
-getcontext().prec = 28  # Improvement #1: Increased precision for better financial accuracy
+getcontext().prec = (
+    28  # Improvement #1: Increased precision for better financial accuracy
+)
+
 
 # Improvement #2: Enhanced error handling with retry decorator
 def retry_on_exception(max_retries: int = 3, delay: float = 1.0):
     """Decorator for retrying failed operations."""
+
     def decorator(func):
         async def async_wrapper(*args, **kwargs):
             for attempt in range(max_retries):
@@ -27,7 +31,9 @@ def retry_on_exception(max_retries: int = 3, delay: float = 1.0):
                 except Exception as e:
                     if attempt == max_retries - 1:
                         raise
-                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                    logger.warning(
+                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s..."
+                    )
                     await asyncio.sleep(delay * (attempt + 1))
             return None
 
@@ -38,17 +44,21 @@ def retry_on_exception(max_retries: int = 3, delay: float = 1.0):
                 except Exception as e:
                     if attempt == max_retries - 1:
                         raise
-                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                    logger.warning(
+                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s..."
+                    )
                     time.sleep(delay * (attempt + 1))
             return None
 
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+
     return decorator
+
 
 def _dec(value: Any, default: Decimal = Decimal(0)) -> Decimal:
     """Robust Decimal parser with default value support."""
     try:
-        if value is None or value == '':
+        if value is None or value == "":
             return default
         if isinstance(value, Decimal):
             return value
@@ -56,6 +66,7 @@ def _dec(value: Any, default: Decimal = Decimal(0)) -> Decimal:
     except (InvalidOperation, ValueError, TypeError) as e:
         logger.debug(f"Decimal conversion failed for {value}: {e}")
         return default
+
 
 # --- Configuration ---
 API_KEY = os.getenv("BYBIT_API_KEY")
@@ -81,9 +92,9 @@ console_handler.setFormatter(log_formatter)
 
 # File handler with rotation
 file_handler = RotatingFileHandler(
-    'bybit_trading_bot.log',
-    maxBytes=10*1024*1024,  # 10MB
-    backupCount=5
+    "bybit_trading_bot.log",
+    maxBytes=10 * 1024 * 1024,  # 10MB
+    backupCount=5,
 )
 file_handler.setFormatter(log_formatter)
 
@@ -92,10 +103,12 @@ logger.setLevel(getattr(logging, LOG_LEVEL))
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
+
 # Improvement #5: Performance metrics tracking
 @dataclass
 class PerformanceMetrics:
     """Track bot performance metrics."""
+
     total_trades: int = 0
     successful_trades: int = 0
     failed_trades: int = 0
@@ -114,6 +127,7 @@ class PerformanceMetrics:
         if self.total_trades == 0:
             return 0.0
         return (self.successful_trades / self.total_trades) * 100
+
 
 # --- WebSocket Manager ---
 class BybitWebSocketManager:
@@ -148,7 +162,7 @@ class BybitWebSocketManager:
                 testnet=self.testnet,
                 channel_type="private",
                 api_key=self.api_key,
-                api_secret=self.api_secret
+                api_secret=self.api_secret,
             )
             self._private_ready = True
             self._last_heartbeat["private"] = datetime.now()
@@ -245,7 +259,9 @@ class BybitWebSocketManager:
             for exe in message.get("data", []):
                 oid = exe.get("orderId")
                 if oid:
-                    logger.info(f"Execution: {oid}, Price: {exe.get('execPrice')}, Qty: {exe.get('execQty')}")
+                    logger.info(
+                        f"Execution: {oid}, Price: {exe.get('execPrice')}, Qty: {exe.get('execQty')}"
+                    )
                     self._message_count["private"] += 1
         except Exception as e:
             logger.error(f"Error handling execution: {e}", exc_info=True)
@@ -271,7 +287,9 @@ class BybitWebSocketManager:
 
         for ws_type in ["public", "private"]:
             if ws_type in self._last_heartbeat:
-                time_since_heartbeat = (current_time - self._last_heartbeat[ws_type]).seconds
+                time_since_heartbeat = (
+                    current_time - self._last_heartbeat[ws_type]
+                ).seconds
                 health[ws_type] = time_since_heartbeat < WS_PING_INTERVAL * 2
             else:
                 health[ws_type] = False
@@ -279,7 +297,11 @@ class BybitWebSocketManager:
         return health
 
     @retry_on_exception(max_retries=3, delay=2.0)
-    async def subscribe_public_channels(self, symbols: list[str], channels: list[str] = ["orderbook", "publicTrade", "tickers"]):
+    async def subscribe_public_channels(
+        self,
+        symbols: list[str],
+        channels: list[str] = ["orderbook", "publicTrade", "tickers"],
+    ):
         """Subscribe to public market data channels with retry logic."""
         self._init_public_ws()
         await asyncio.sleep(1)
@@ -287,27 +309,35 @@ class BybitWebSocketManager:
         for symbol in symbols:
             if "orderbook" in channels:
                 try:
-                    self.ws_public.orderbook_stream(depth=1, symbol=symbol, callback=self.handle_orderbook)
+                    self.ws_public.orderbook_stream(
+                        depth=1, symbol=symbol, callback=self.handle_orderbook
+                    )
                     logger.debug(f"Subscribed to orderbook for {symbol}")
                 except Exception as e:
                     logger.error(f"Subscribing orderbook {symbol} failed: {e}")
 
             if "publicTrade" in channels:
                 try:
-                    self.ws_public.trade_stream(symbol=symbol, callback=self.handle_trades)
+                    self.ws_public.trade_stream(
+                        symbol=symbol, callback=self.handle_trades
+                    )
                     logger.debug(f"Subscribed to trades for {symbol}")
                 except Exception as e:
                     logger.error(f"Subscribing trades {symbol} failed: {e}")
 
             if "tickers" in channels:
                 try:
-                    self.ws_public.ticker_stream(symbol=symbol, callback=self.handle_ticker)
+                    self.ws_public.ticker_stream(
+                        symbol=symbol, callback=self.handle_ticker
+                    )
                     logger.debug(f"Subscribed to ticker for {symbol}")
                 except Exception as e:
                     logger.error(f"Subscribing ticker {symbol} failed: {e}")
 
     @retry_on_exception(max_retries=3, delay=2.0)
-    async def subscribe_private_channels(self, channels: list[str] = ["position", "order", "execution", "wallet"]):
+    async def subscribe_private_channels(
+        self, channels: list[str] = ["position", "order", "execution", "wallet"]
+    ):
         """Subscribe to private channels with retry logic."""
         self._init_private_ws()
         await asyncio.sleep(1)
@@ -316,7 +346,7 @@ class BybitWebSocketManager:
             "position": (self.ws_private.position_stream, self.handle_position),
             "order": (self.ws_private.order_stream, self.handle_order),
             "execution": (self.ws_private.execution_stream, self.handle_execution),
-            "wallet": (self.ws_private.wallet_stream, self.handle_wallet)
+            "wallet": (self.ws_private.wallet_stream, self.handle_wallet),
         }
 
         for channel in channels:
@@ -328,10 +358,13 @@ class BybitWebSocketManager:
                 except Exception as e:
                     logger.error(f"Failed to subscribe to {channel}: {e}")
 
+
 # --- Trading Bot Core ---
 class BybitTradingBot:
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
-        self.session = HTTP(testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000)
+        self.session = HTTP(
+            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000
+        )
         self.ws_manager = BybitWebSocketManager(api_key, api_secret, testnet)
         self.strategy: Callable[[dict, dict, HTTP, Any, list[str]], None] | None = None
         self.symbol_info: dict[str, Any] = {}
@@ -350,6 +383,7 @@ class BybitTradingBot:
 
     def _setup_signal_handlers(self):
         """Setup graceful shutdown handlers."""
+
         def signal_handler(sig, frame):
             logger.info(f"Received signal {sig}. Initiating graceful shutdown...")
             self._emergency_stop = True
@@ -363,12 +397,13 @@ class BybitTradingBot:
         """Check and enforce rate limiting."""
         current_time = datetime.now()
         self._api_call_timestamps = [
-            ts for ts in self._api_call_timestamps
-            if (current_time - ts).seconds < 1
+            ts for ts in self._api_call_timestamps if (current_time - ts).seconds < 1
         ]
 
         if len(self._api_call_timestamps) >= self._rate_limit_per_second:
-            sleep_time = 1 - (current_time - self._api_call_timestamps[0]).total_seconds()
+            sleep_time = (
+                1 - (current_time - self._api_call_timestamps[0]).total_seconds()
+            )
             if sleep_time > 0:
                 await asyncio.sleep(sleep_time)
 
@@ -389,12 +424,12 @@ class BybitTradingBot:
                     sym = item.get("symbol")
                     if sym in symbols:
                         self.symbol_info[sym] = {
-                            "minOrderQty": _dec(item['lotSizeFilter']['minOrderQty']),
-                            "qtyStep": _dec(item['lotSizeFilter']['qtyStep']),
-                            "tickSize": _dec(item['priceFilter']['tickSize']),
-                            "minPrice": _dec(item['priceFilter']['minPrice']),
-                            "maxPrice": _dec(item['priceFilter']['maxPrice']),
-                            "fetched_at": datetime.now()
+                            "minOrderQty": _dec(item["lotSizeFilter"]["minOrderQty"]),
+                            "qtyStep": _dec(item["lotSizeFilter"]["qtyStep"]),
+                            "tickSize": _dec(item["priceFilter"]["tickSize"]),
+                            "minPrice": _dec(item["priceFilter"]["minPrice"]),
+                            "maxPrice": _dec(item["priceFilter"]["maxPrice"]),
+                            "fetched_at": datetime.now(),
                         }
 
                 # Check if all symbols were found
@@ -407,7 +442,9 @@ class BybitTradingBot:
             logger.error(f"Error fetching symbol info: {e}", exc_info=True)
             raise
 
-    def set_strategy(self, strategy_func: Callable[[dict, dict, HTTP, Any, list[str]], None]):
+    def set_strategy(
+        self, strategy_func: Callable[[dict, dict, HTTP, Any, list[str]], None]
+    ):
         """Set trading strategy with validation."""
         if not callable(strategy_func):
             raise ValueError("Strategy must be callable")
@@ -416,8 +453,9 @@ class BybitTradingBot:
 
     def get_open_positions_count(self) -> int:
         """Get count of open positions with caching."""
-        return sum(1 for p in self.ws_manager.positions.values()
-                  if _dec(p.get('size', 0)) != 0)
+        return sum(
+            1 for p in self.ws_manager.positions.values() if _dec(p.get("size", 0)) != 0
+        )
 
     # Improvement #14: Parallel execution for market data fetching
     async def run(self, symbols: list[str], interval: int = 5):
@@ -443,11 +481,15 @@ class BybitTradingBot:
                 # Check connection health
                 connection_health = await self.ws_manager.check_connection_health()
                 if not all(connection_health.values()):
-                    logger.warning(f"Connection health check failed: {connection_health}")
+                    logger.warning(
+                        f"Connection health check failed: {connection_health}"
+                    )
 
                 # Fetch market data in parallel
                 tasks = [self.get_market_data(sym) for sym in symbols]
-                market_data_results = await asyncio.gather(*tasks, return_exceptions=True)
+                market_data_results = await asyncio.gather(
+                    *tasks, return_exceptions=True
+                )
 
                 mkt_data = {}
                 for sym, result in zip(symbols, market_data_results, strict=False):
@@ -459,16 +501,23 @@ class BybitTradingBot:
                 acct_info = await self.get_account_info()
 
                 if mkt_data and acct_info:
-                    await self.strategy(mkt_data, acct_info, self.session, self, symbols)
+                    await self.strategy(
+                        mkt_data, acct_info, self.session, self, symbols
+                    )
                     self.metrics.update()
 
                 await self.log_current_pnl()
 
                 # Log performance metrics periodically
-                if self.metrics.total_trades % 10 == 0 and self.metrics.total_trades > 0:
-                    logger.info(f"Performance - Success Rate: {self.metrics.get_success_rate():.2f}%, "
-                              f"Total Trades: {self.metrics.total_trades}, "
-                              f"Uptime: {self.metrics.get_uptime()}")
+                if (
+                    self.metrics.total_trades % 10 == 0
+                    and self.metrics.total_trades > 0
+                ):
+                    logger.info(
+                        f"Performance - Success Rate: {self.metrics.get_success_rate():.2f}%, "
+                        f"Total Trades: {self.metrics.total_trades}, "
+                        f"Uptime: {self.metrics.get_uptime()}"
+                    )
 
                 # Dynamic sleep to maintain consistent interval
                 loop_duration = time.time() - loop_start
@@ -487,17 +536,23 @@ class BybitTradingBot:
             logger.info("Bot shutdown complete.")
 
     @retry_on_exception(max_retries=2, delay=0.5)
-    async def get_market_data(self, symbol: str, category: str = "linear") -> dict | None:
+    async def get_market_data(
+        self, symbol: str, category: str = "linear"
+    ) -> dict | None:
         """Fetch market data with error handling and rate limiting."""
         try:
             await self._check_rate_limit()
 
             # Parallel fetch orderbook and ticker
             ob_task = asyncio.create_task(
-                asyncio.to_thread(self.session.get_orderbook, category=category, symbol=symbol)
+                asyncio.to_thread(
+                    self.session.get_orderbook, category=category, symbol=symbol
+                )
             )
             tk_task = asyncio.create_task(
-                asyncio.to_thread(self.session.get_tickers, category=category, symbol=symbol)
+                asyncio.to_thread(
+                    self.session.get_tickers, category=category, symbol=symbol
+                )
             )
 
             ob, tk = await asyncio.gather(ob_task, tk_task, return_exceptions=True)
@@ -510,7 +565,7 @@ class BybitTradingBot:
                 return {
                     "orderbook": ob.get("result", {}).get("list", []),
                     "ticker": tk.get("result", {}).get("list", []),
-                    "timestamp": datetime.now()
+                    "timestamp": datetime.now(),
                 }
         except Exception as e:
             logger.error(f"Market data fetch error for {symbol}: {e}")
@@ -548,6 +603,7 @@ class BybitTradingBot:
             logger.info(f"Positions: {', '.join(position_details)}")
             logger.info(f"Total Unrealized PnL: {total:.4f}")
 
+
 # Improvement #15: Configuration validation
 def validate_configuration() -> bool:
     """Validate required configuration."""
@@ -562,6 +618,7 @@ def validate_configuration() -> bool:
 
     return True
 
+
 # --- Main ---
 async def main():
     """Main entry point with improved initialization."""
@@ -575,6 +632,7 @@ async def main():
     # Dynamic strategy import
     try:
         from market_making_strategy import market_making_strategy
+
         bot.set_strategy(market_making_strategy)
     except ImportError:
         logger.error("Could not import market_making_strategy")
@@ -586,6 +644,7 @@ async def main():
     logger.info(f"Trading symbols: {symbols}, Interval: {interval}s")
 
     await bot.run(symbols, interval=interval)
+
 
 if __name__ == "__main__":
     try:

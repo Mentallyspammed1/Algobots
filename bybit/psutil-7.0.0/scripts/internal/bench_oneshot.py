@@ -9,7 +9,6 @@ Process.oneshot() ctx manager.
 See: https://github.com/giampaolo/psutil/issues/799.
 """
 
-
 import sys
 import textwrap
 import timeit
@@ -22,85 +21,85 @@ ITERATIONS = 1000
 # The list of Process methods which gets collected in one shot and
 # as such get advantage of the speedup.
 names = [
-    'cpu_times',
-    'cpu_percent',
-    'memory_info',
-    'memory_percent',
-    'ppid',
-    'parent',
+    "cpu_times",
+    "cpu_percent",
+    "memory_info",
+    "memory_percent",
+    "ppid",
+    "parent",
 ]
 
 if psutil.POSIX:
-    names.extend(('uids', 'username'))
+    names.extend(("uids", "username"))
 
 if psutil.LINUX:
     names += [
         # 'memory_full_info',
         # 'memory_maps',
-        'cpu_num',
-        'cpu_times',
-        'gids',
-        'name',
-        'num_ctx_switches',
-        'num_threads',
-        'ppid',
-        'status',
-        'terminal',
-        'uids',
+        "cpu_num",
+        "cpu_times",
+        "gids",
+        "name",
+        "num_ctx_switches",
+        "num_threads",
+        "ppid",
+        "status",
+        "terminal",
+        "uids",
     ]
 elif psutil.BSD:
     names = [
-        'cpu_times',
-        'gids',
-        'io_counters',
-        'memory_full_info',
-        'memory_info',
-        'name',
-        'num_ctx_switches',
-        'ppid',
-        'status',
-        'terminal',
-        'uids',
+        "cpu_times",
+        "gids",
+        "io_counters",
+        "memory_full_info",
+        "memory_info",
+        "name",
+        "num_ctx_switches",
+        "ppid",
+        "status",
+        "terminal",
+        "uids",
     ]
     if psutil.FREEBSD:
-        names.append('cpu_num')
+        names.append("cpu_num")
 elif psutil.SUNOS:
     names += [
-        'cmdline',
-        'gids',
-        'memory_full_info',
-        'memory_info',
-        'name',
-        'num_threads',
-        'ppid',
-        'status',
-        'terminal',
-        'uids',
+        "cmdline",
+        "gids",
+        "memory_full_info",
+        "memory_info",
+        "name",
+        "num_threads",
+        "ppid",
+        "status",
+        "terminal",
+        "uids",
     ]
 elif psutil.MACOS:
     names += [
-        'cpu_times',
-        'create_time',
-        'gids',
-        'memory_info',
-        'name',
-        'num_ctx_switches',
-        'num_threads',
-        'ppid',
-        'terminal',
-        'uids',
+        "cpu_times",
+        "create_time",
+        "gids",
+        "memory_info",
+        "name",
+        "num_ctx_switches",
+        "num_threads",
+        "ppid",
+        "terminal",
+        "uids",
     ]
 elif psutil.WINDOWS:
     names += [
-        'num_ctx_switches',
-        'num_threads',
+        "num_ctx_switches",
+        "num_threads",
         # dual implementation, called in case of AccessDenied
-        'num_handles',
-        'cpu_times',
-        'create_time',
-        'num_threads',
-        'io_counters',
-        'memory_info',
+        "num_handles",
+        "cpu_times",
+        "create_time",
+        "num_threads",
+        "io_counters",
+        "memory_info",
     ]
 
 names = sorted(set(names))
@@ -153,5 +152,5 @@ def main():
         print("same speed")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

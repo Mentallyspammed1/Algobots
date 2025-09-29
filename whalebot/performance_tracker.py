@@ -1,15 +1,16 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
 # Assuming these are defined in a common constants file or main script
 # For now, defining them here for self-containment
-NEON_RED = "\033[91m" # Example, replace with actual colorama codes if used
-NEON_CYAN = "\033[96m" # Example
-RESET = "\033[0m" # Example
-TIMEZONE = timezone.utc # Example, replace with actual timezone if needed
+NEON_RED = "\033[91m"  # Example, replace with actual colorama codes if used
+NEON_CYAN = "\033[96m"  # Example
+RESET = "\033[0m"  # Example
+TIMEZONE = UTC  # Example, replace with actual timezone if needed
+
 
 class PerformanceTracker:
     """Tracks and reports trading performance. Trades are saved to a file."""
@@ -22,7 +23,7 @@ class PerformanceTracker:
         self.total_pnl = Decimal("0")
         self.wins = 0
         self.losses = 0
-        self._recalculate_summary() # Recalculate summary from loaded trades
+        self._recalculate_summary()  # Recalculate summary from loaded trades
 
     def _load_trades(self) -> list[dict]:
         """Load trade history from file."""
@@ -42,7 +43,9 @@ class PerformanceTracker:
                         loaded_trades.append(trade)
                     return loaded_trades
             except (json.JSONDecodeError, OSError) as e:
-                self.logger.error(f"{NEON_RED}Error loading trades from {self.config_file}: {e}{RESET}")
+                self.logger.error(
+                    f"{NEON_RED}Error loading trades from {self.config_file}: {e}{RESET}"
+                )
         return []
 
     def _save_trades(self) -> None:
@@ -62,7 +65,9 @@ class PerformanceTracker:
                     serializable_trades.append(s_trade)
                 json.dump(serializable_trades, f, indent=4)
         except OSError as e:
-            self.logger.error(f"{NEON_RED}Error saving trades to {self.config_file}: {e}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error saving trades to {self.config_file}: {e}{RESET}"
+            )
 
     def _recalculate_summary(self) -> None:
         """Recalculate summary metrics from the list of trades."""
@@ -90,8 +95,8 @@ class PerformanceTracker:
             "closed_by": position.get("closed_by", "UNKNOWN"),
         }
         self.trades.append(trade_record)
-        self._recalculate_summary() # Update summary immediately
-        self._save_trades() # Save to file
+        self._recalculate_summary()  # Update summary immediately
+        self._save_trades()  # Save to file
         self.logger.info(
             f"{NEON_CYAN}[{position['symbol']}] Trade recorded. Current Total PnL: {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}"
         )

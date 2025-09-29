@@ -42,7 +42,6 @@ wlp3s0:
          broadcast : ff:ff:ff:ff:ff:ff
 """
 
-
 import socket
 
 import psutil
@@ -50,9 +49,9 @@ from psutil._common import bytes2human
 
 
 af_map = {
-    socket.AF_INET: 'IPv4',
-    socket.AF_INET6: 'IPv6',
-    psutil.AF_LINK: 'MAC',
+    socket.AF_INET: "IPv4",
+    socket.AF_INET6: "IPv6",
+    psutil.AF_LINK: "MAC",
 }
 
 duplex_map = {
@@ -69,7 +68,7 @@ def main():
         print(f"{nic}:")
         if nic in stats:
             st = stats[nic]
-            print("    stats          : ", end='')
+            print("    stats          : ", end="")
             print(
                 "speed={}MB, duplex={}, mtu={}, up={}".format(
                     st.speed,
@@ -80,7 +79,7 @@ def main():
             )
         if nic in io_counters:
             io = io_counters[nic]
-            print("    incoming       : ", end='')
+            print("    incoming       : ", end="")
             print(
                 "bytes={}, pkts={}, errs={}, drops={}".format(
                     bytes2human(io.bytes_recv),
@@ -89,7 +88,7 @@ def main():
                     io.dropin,
                 )
             )
-            print("    outgoing       : ", end='')
+            print("    outgoing       : ", end="")
             print(
                 "bytes={}, pkts={}, errs={}, drops={}".format(
                     bytes2human(io.bytes_sent),
@@ -111,5 +110,5 @@ def main():
         print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

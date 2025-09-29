@@ -19,7 +19,8 @@ from dotenv import load_dotenv
 
 # Pybit specific imports
 from pybit.exceptions import FailedRequestError, InvalidRequestError
-from pybit.unified_trading import HTTP, WebSocket as UnifiedWebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket as UnifiedWebSocket
 
 # Scikit-learn is explicitly excluded as per user request.
 SKLEARN_AVAILABLE = False
@@ -468,9 +469,11 @@ class AlertSystem:
     def __init__(self, config: dict[str, Any], logger: logging.Logger):
         """Initializes the AlertSystem."""
         self.logger = logger
-        self.config = config # Keep config for potential future integrations (e.g., Telegram API keys)
+        self.config = config  # Keep config for potential future integrations (e.g., Telegram API keys)
 
-    def send_alert(self, message: str, level: Literal["INFO", "WARNING", "ERROR"]) -> None:
+    def send_alert(
+        self, message: str, level: Literal["INFO", "WARNING", "ERROR"]
+    ) -> None:
         """Send an alert (currently logs it)."""
         if level == "INFO":
             self.logger.info(f"{NEON_BLUE}ALERT: {message}{RESET}")
@@ -547,21 +550,35 @@ class BybitWebSocketManager:
         self.ws_public = None
         self.ws_private = None
         self.data_queue = queue.Queue()
-        self.kline_buffer: dict[str, list[dict]] = defaultdict(list) # {symbol_interval: [kline_data]}
-        self.orderbook_snapshot: dict[str, dict] = {} # {symbol: {bids: [], asks: []}}
-        self.ticker_data: dict[str, dict] = {} # {symbol: {last_price: Decimal, bid: Decimal, ask: Decimal}}
+        self.kline_buffer: dict[str, list[dict]] = defaultdict(
+            list
+        )  # {symbol_interval: [kline_data]}
+        self.orderbook_snapshot: dict[str, dict] = {}  # {symbol: {bids: [], asks: []}}
+        self.ticker_data: dict[
+            str, dict
+        ] = {}  # {symbol: {last_price: Decimal, bid: Decimal, ask: Decimal}}
 
     def start_public_websocket_thread(self, symbol: str, interval: str):
         """Starts a thread for public WebSocket connection."""
-        self.logger.info(f"Starting public WebSocket thread for {symbol} interval {interval}")
-        thread = threading.Thread(target=self._connect_public_websocket_loop, args=(symbol, interval), daemon=True)
+        self.logger.info(
+            f"Starting public WebSocket thread for {symbol} interval {interval}"
+        )
+        thread = threading.Thread(
+            target=self._connect_public_websocket_loop,
+            args=(symbol, interval),
+            daemon=True,
+        )
         thread.start()
         return thread
 
     def start_private_websocket_thread(self, position_tracker_callbacks: dict):
         """Starts a thread for private WebSocket connection."""
         self.logger.info("Starting private WebSocket thread.")
-        thread = threading.Thread(target=self._connect_private_websocket_loop, args=(position_tracker_callbacks,), daemon=True)
+        thread = threading.Thread(
+            target=self._connect_private_websocket_loop,
+            args=(position_tracker_callbacks,),
+            daemon=True,
+        )
         thread.start()
         return thread
 
@@ -584,10 +601,10 @@ class BybitWebSocketManager:
                     depth=50, symbol=symbol, callback=self.handle_orderbook
                 )
 
-                self.ws_public.ticker_stream(
-                    symbol=symbol, callback=self.handle_ticker
+                self.ws_public.ticker_stream(symbol=symbol, callback=self.handle_ticker)
+                self.logger.info(
+                    f"Public WebSocket connected for {symbol} interval {interval}"
                 )
-                self.logger.info(f"Public WebSocket connected for {symbol} interval {interval}")
                 while True:
                     time.sleep(1)
             except Exception as e:
@@ -606,17 +623,26 @@ class BybitWebSocketManager:
                 )
 
                 # Subscribe to private topics, passing tracker's methods as callbacks
-                self.ws_private.position_stream(callback=position_tracker_callbacks["position_update"])
-                self.ws_private.order_stream(callback=position_tracker_callbacks["order_update"])
-                self.ws_private.execution_stream(callback=position_tracker_callbacks["execution_update"])
-                self.ws_private.wallet_stream(callback=position_tracker_callbacks["wallet_update"])
+                self.ws_private.position_stream(
+                    callback=position_tracker_callbacks["position_update"]
+                )
+                self.ws_private.order_stream(
+                    callback=position_tracker_callbacks["order_update"]
+                )
+                self.ws_private.execution_stream(
+                    callback=position_tracker_callbacks["execution_update"]
+                )
+                self.ws_private.wallet_stream(
+                    callback=position_tracker_callbacks["wallet_update"]
+                )
                 self.logger.info("Private WebSocket connected.")
                 while True:
                     time.sleep(1)
             except Exception as e:
-                self.logger.error(f"Private WebSocket error: {e}. Reconnecting in 5s...")
+                self.logger.error(
+                    f"Private WebSocket error: {e}. Reconnecting in 5s..."
+                )
                 time.sleep(5)
-
 
     def handle_kline(self, message):
         """Process incoming kline data."""
@@ -625,29 +651,37 @@ class BybitWebSocketManager:
                 # Buffer all klines (in-progress and confirmed) for real-time analysis
                 kline_data = {
                     "type": "kline",
-                    "timestamp": int(data_item.get("start")), # 'start' is the timestamp
+                    "timestamp": int(
+                        data_item.get("start")
+                    ),  # 'start' is the timestamp
                     "open": Decimal(str(data_item.get("open", 0))),
                     "high": Decimal(str(data_item.get("high", 0))),
                     "low": Decimal(str(data_item.get("low", 0))),
                     "close": Decimal(str(data_item.get("close", 0))),
                     "volume": Decimal(str(data_item.get("volume", 0))),
                     "turnover": Decimal(str(data_item.get("turnover", 0))),
-                    "interval": message["topic"].split('.')[-1], # e.g., "15" from "kline.15.BTCUSDT"
-                    "symbol": message["topic"].split('.')[-2], # e.g., "BTCUSDT" from "kline.15.BTCUSDT"
-                    "confirm": data_item.get("confirm") # True for finished, False for in-progress
+                    "interval": message["topic"].split(".")[
+                        -1
+                    ],  # e.g., "15" from "kline.15.BTCUSDT"
+                    "symbol": message["topic"].split(".")[
+                        -2
+                    ],  # e.g., "BTCUSDT" from "kline.15.BTCUSDT"
+                    "confirm": data_item.get(
+                        "confirm"
+                    ),  # True for finished, False for in-progress
                 }
                 key = f"{kline_data['symbol']}_{kline_data['interval']}"
                 self.kline_buffer[key].append(kline_data)
                 # Trim buffer to maintain a reasonable size for indicator calculation
-                if len(self.kline_buffer[key]) > 1500: # Keep more data for indicators
+                if len(self.kline_buffer[key]) > 1500:  # Keep more data for indicators
                     self.kline_buffer[key].pop(0)
-                self.data_queue.put(kline_data) # Also put in general queue if needed
+                self.data_queue.put(kline_data)  # Also put in general queue if needed
 
     def handle_orderbook(self, message):
         """Process orderbook updates."""
         if message.get("topic", "").startswith("orderbook"):
             data = message.get("data")
-            symbol = message["topic"].split('.')[-1] # Extract symbol from topic
+            symbol = message["topic"].split(".")[-1]  # Extract symbol from topic
             if data and symbol:
                 # Pybit WS handles orderbook deltas internally to provide a full snapshot to the callback
                 orderbook_data = {
@@ -655,7 +689,7 @@ class BybitWebSocketManager:
                     "bids": data.get("b", []),
                     "asks": data.get("a", []),
                     "timestamp": message.get("ts"),
-                    "symbol": symbol
+                    "symbol": symbol,
                 }
                 self.orderbook_snapshot[symbol] = orderbook_data
                 self.data_queue.put(orderbook_data)
@@ -664,7 +698,7 @@ class BybitWebSocketManager:
         """Process ticker updates for real-time price."""
         if message.get("topic", "").startswith("tickers"):
             data = message.get("data")
-            symbol = message["topic"].split('.')[-1] # Extract symbol from topic
+            symbol = message["topic"].split(".")[-1]  # Extract symbol from topic
             if data and symbol:
                 ticker_data = {
                     "type": "ticker",
@@ -672,7 +706,7 @@ class BybitWebSocketManager:
                     "bid": Decimal(str(data.get("bid1Price", 0))),
                     "ask": Decimal(str(data.get("ask1Price", 0))),
                     "volume_24h": Decimal(str(data.get("volume24h", 0))),
-                    "symbol": symbol
+                    "symbol": symbol,
                 }
                 self.ticker_data[symbol] = ticker_data
                 self.data_queue.put(ticker_data)
@@ -684,7 +718,9 @@ class BybitWebSocketManager:
         if not buffer:
             return None
         df = pd.DataFrame(buffer)
-        df["start_time"] = pd.to_datetime(df["timestamp"].astype(int), unit="ms", utc=True).dt.tz_convert(TIMEZONE)
+        df["start_time"] = pd.to_datetime(
+            df["timestamp"].astype(int), unit="ms", utc=True
+        ).dt.tz_convert(TIMEZONE)
         for col in ["open", "high", "low", "close", "volume", "turnover"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
         df.set_index("start_time", inplace=True)
@@ -711,7 +747,7 @@ class RealTimePositionTracker:
         self.positions: dict[str, dict] = {}  # {symbol: position_details}
         self.orders: dict[str, dict] = {}  # {order_id: order_details}
         self.wallet_balance: Decimal = Decimal("0")
-        self.update_lock = threading.Lock() # To prevent race conditions on shared data
+        self.update_lock = threading.Lock()  # To prevent race conditions on shared data
 
     def get_account_balance(self, coin: str = "USDT") -> Decimal:
         """Get current account balance for specified coin using HTTP, or cached if available."""
@@ -732,35 +768,39 @@ class RealTimePositionTracker:
     def handle_position_update(self, message):
         """Process incoming position updates from WebSocket."""
         with self.update_lock:
-            for data in message.get('data', []):
-                symbol = data.get('symbol')
-                size = Decimal(data.get('size', '0'))
+            for data in message.get("data", []):
+                symbol = data.get("symbol")
+                size = Decimal(data.get("size", "0"))
                 if symbol:
-                    if size > 0: # Position open or updated
+                    if size > 0:  # Position open or updated
                         self.positions[symbol] = {
                             "symbol": symbol,
-                            "side": data.get('side'),
+                            "side": data.get("side"),
                             "size": size,
-                            "avg_price": Decimal(data.get('avgPrice', '0')),
-                            "unrealized_pnl": Decimal(data.get('unrealisedPnl', '0')),
-                            "leverage": Decimal(data.get('leverage', '1'))
+                            "avg_price": Decimal(data.get("avgPrice", "0")),
+                            "unrealized_pnl": Decimal(data.get("unrealisedPnl", "0")),
+                            "leverage": Decimal(data.get("leverage", "1")),
                         }
-                        self.logger.debug(f"WS Position update for {symbol}: {self.positions[symbol]}")
-                    elif symbol in self.positions: # Position closed
-                        self.logger.info(f"WS Position for {symbol} closed. Old data: {self.positions.pop(symbol)}")
+                        self.logger.debug(
+                            f"WS Position update for {symbol}: {self.positions[symbol]}"
+                        )
+                    elif symbol in self.positions:  # Position closed
+                        self.logger.info(
+                            f"WS Position for {symbol} closed. Old data: {self.positions.pop(symbol)}"
+                        )
 
     def handle_order_update(self, message):
         """Process incoming order updates from WebSocket."""
         with self.update_lock:
-            for data in message.get('data', []):
-                order_id = data.get('orderId')
-                self.orders[order_id] = data # Store full order details
+            for data in message.get("data", []):
+                order_id = data.get("orderId")
+                self.orders[order_id] = data  # Store full order details
                 self.logger.debug(f"WS Order update for {order_id}: {data}")
 
     def handle_execution(self, message):
         """Process incoming execution (trade) updates from WebSocket."""
         with self.update_lock:
-            for data in message.get('data', []):
+            for data in message.get("data", []):
                 self.logger.info(f"WS Execution update: {data}")
                 # This is where you would link trades to your performance tracker
                 # e.g., performance_tracker.record_trade(...)
@@ -769,11 +809,15 @@ class RealTimePositionTracker:
     def handle_wallet_update(self, message):
         """Process incoming wallet balance updates from WebSocket."""
         with self.update_lock:
-            for data in message.get('data', []):
-                for coin_data in data.get('coin', []):
-                    if coin_data.get('coin') == 'USDT':
-                        self.wallet_balance = Decimal(coin_data.get('walletBalance', '0'))
-                        self.logger.debug(f"WS Wallet balance updated to {self.wallet_balance} USDT")
+            for data in message.get("data", []):
+                for coin_data in data.get("coin", []):
+                    if coin_data.get("coin") == "USDT":
+                        self.wallet_balance = Decimal(
+                            coin_data.get("walletBalance", "0")
+                        )
+                        self.logger.debug(
+                            f"WS Wallet balance updated to {self.wallet_balance} USDT"
+                        )
                         break
 
 
@@ -848,7 +892,7 @@ class PositionManagerPybit:
 
         # Check current positions
         positions = get_positions_pybit(self.client, self.symbol, self.logger)
-        open_positions = [p for p in positions if Decimal(p['size']) > 0]
+        open_positions = [p for p in positions if Decimal(p["size"]) > 0]
         if len(open_positions) >= self.max_open_positions:
             self.logger.info(
                 f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}"
@@ -881,8 +925,12 @@ class PositionManagerPybit:
 
         # Apply price precision
         price_precision_str = "0." + "0" * (self.price_precision - 1) + "1"
-        stop_loss = stop_loss.quantize(Decimal(price_precision_str), rounding=ROUND_DOWN)
-        take_profit = take_profit.quantize(Decimal(price_precision_str), rounding=ROUND_DOWN)
+        stop_loss = stop_loss.quantize(
+            Decimal(price_precision_str), rounding=ROUND_DOWN
+        )
+        take_profit = take_profit.quantize(
+            Decimal(price_precision_str), rounding=ROUND_DOWN
+        )
 
         # Place order with SL/TP
         result = place_order_with_sl_tp_pybit(
@@ -902,7 +950,9 @@ class PositionManagerPybit:
 
         return result
 
-    def manage_positions(self, current_price: Decimal, performance_tracker: Any) -> None:
+    def manage_positions(
+        self, current_price: Decimal, performance_tracker: Any
+    ) -> None:
         """Check and manage open positions using pybit.
         Note: This function primarily monitors positions. SL/TP are managed by Bybit.
         Performance tracking for real trades should be integrated with WebSocket execution stream.
@@ -912,7 +962,7 @@ class PositionManagerPybit:
 
         # Fetch positions to get latest status (though WS is more real-time)
         positions = get_positions_pybit(self.client, self.symbol, self.logger)
-        open_positions = [p for p in positions if Decimal(p['size']) > 0]
+        open_positions = [p for p in positions if Decimal(p["size"]) > 0]
 
         for position in open_positions:
             side = position["side"]
@@ -1413,7 +1463,7 @@ class TradingAnalyzer:
         """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:
             self.logger.debug(
-                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
             )
             return None
 
@@ -1452,9 +1502,7 @@ class TradingAnalyzer:
         if df_copy["close"].iloc[first_valid_idx] > upper_band.iloc[first_valid_idx]:
             direction.iloc[first_valid_idx] = 1
             supertrend.iloc[first_valid_idx] = lower_band.iloc[first_valid_idx]
-        elif (
-            df_copy["close"].iloc[first_valid_idx] < lower_band.iloc[first_valid_idx]
-        ):
+        elif df_copy["close"].iloc[first_valid_idx] < lower_band.iloc[first_valid_idx]:
             direction.iloc[first_valid_idx] = -1
             supertrend.iloc[first_valid_idx] = upper_band.iloc[first_valid_idx]
         else:  # Price is within bands, initialize with lower band, neutral direction
@@ -1546,12 +1594,18 @@ class TradingAnalyzer:
         denominator = highest_rsi - lowest_rsi
         denominator[denominator == 0] = np.nan  # Replace 0 with NaN for division
         stoch_rsi_k_raw = ((rsi - lowest_rsi) / denominator) * 100
-        stoch_rsi_k_raw = stoch_rsi_k_raw.fillna(0).clip(0, 100) # Clip to [0, 100] and fill remaining NaNs with 0
+        stoch_rsi_k_raw = stoch_rsi_k_raw.fillna(0).clip(
+            0, 100
+        )  # Clip to [0, 100] and fill remaining NaNs with 0
 
-        stoch_rsi_k = stoch_rsi_k_raw.rolling(
-            window=k_period, min_periods=k_period
-        ).mean().fillna(0)
-        stoch_rsi_d = stoch_rsi_k.rolling(window=d_period, min_periods=d_period).mean().fillna(0)
+        stoch_rsi_k = (
+            stoch_rsi_k_raw.rolling(window=k_period, min_periods=k_period)
+            .mean()
+            .fillna(0)
+        )
+        stoch_rsi_d = (
+            stoch_rsi_k.rolling(window=d_period, min_periods=d_period).mean().fillna(0)
+        )
 
         return stoch_rsi_k, stoch_rsi_d
 
@@ -1795,30 +1849,39 @@ class TradingAnalyzer:
                 af = acceleration
                 ep = self.df["high"].iloc[i] if bull.iloc[i] else self.df["low"].iloc[i]
                 # Ensure PSAR does not cross price on reversal
-                if bull.iloc[i]: # if reversing to bullish, PSAR should be below current low
-                    psar.iloc[i] = min(self.df["low"].iloc[i], self.df["low"].iloc[i-1])
-                else: # if reversing to bearish, PSAR should be above current high
-                    psar.iloc[i] = max(self.df["high"].iloc[i], self.df["high"].iloc[i-1])
+                if bull.iloc[
+                    i
+                ]:  # if reversing to bullish, PSAR should be below current low
+                    psar.iloc[i] = min(
+                        self.df["low"].iloc[i], self.df["low"].iloc[i - 1]
+                    )
+                else:  # if reversing to bearish, PSAR should be above current high
+                    psar.iloc[i] = max(
+                        self.df["high"].iloc[i], self.df["high"].iloc[i - 1]
+                    )
 
             elif bull.iloc[i]:  # Continuing bullish
                 if self.df["high"].iloc[i] > ep:
                     ep = self.df["high"].iloc[i]
                     af = min(af + acceleration, max_acceleration)
                 # Keep PSAR below the lowest low of the last two bars
-                psar.iloc[i] = min(psar.iloc[i], self.df["low"].iloc[i], self.df["low"].iloc[i-1])
+                psar.iloc[i] = min(
+                    psar.iloc[i], self.df["low"].iloc[i], self.df["low"].iloc[i - 1]
+                )
             else:  # Continuing bearish
                 if self.df["low"].iloc[i] < ep:
                     ep = self.df["low"].iloc[i]
                     af = min(af + acceleration, max_acceleration)
                 # Keep PSAR above the highest high of the last two bars
-                psar.iloc[i] = max(psar.iloc[i], self.df["high"].iloc[i], self.df["high"].iloc[i-1])
+                psar.iloc[i] = max(
+                    psar.iloc[i], self.df["high"].iloc[i], self.df["high"].iloc[i - 1]
+                )
 
         direction = pd.Series(0, index=self.df.index, dtype=int)
         direction[psar < self.df["close"]] = 1  # Bullish
         direction[psar > self.df["close"]] = -1  # Bearish
 
         return psar, direction
-
 
     def calculate_fibonacci_levels(self) -> None:
         """Calculate Fibonacci retracement levels based on a recent high-low swing."""
@@ -1834,7 +1897,7 @@ class TradingAnalyzer:
 
         diff = recent_high - recent_low
 
-        if diff <= 0: # Handle cases where high and low are the same or inverted
+        if diff <= 0:  # Handle cases where high and low are the same or inverted
             self.logger.warning(
                 f"{NEON_YELLOW}[{self.symbol}] Invalid high-low range for Fibonacci calculation. Diff: {diff}{RESET}"
             )
@@ -1859,7 +1922,9 @@ class TradingAnalyzer:
             ),
             "100.0%": Decimal(str(recent_low)),
         }
-        self.logger.debug(f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}")
+        self.logger.debug(
+            f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}"
+        )
 
     def calculate_volatility_index(self, period: int) -> pd.Series:
         """Calculate a simple Volatility Index based on ATR normalized by price."""
@@ -1879,9 +1944,9 @@ class TradingAnalyzer:
         # Ensure volume is numeric and not zero
         valid_volume = self.df["volume"].replace(0, np.nan)
         pv = self.df["close"] * valid_volume
-        vwma = pv.rolling(window=period).sum() / valid_volume.rolling(
-            window=period
-        ).sum()
+        vwma = (
+            pv.rolling(window=period).sum() / valid_volume.rolling(window=period).sum()
+        )
         return vwma
 
     def calculate_volume_delta(self, period: int) -> pd.Series:
@@ -1910,8 +1975,8 @@ class TradingAnalyzer:
 
     def _check_orderbook(self, current_price: Decimal, orderbook_data: dict) -> float:
         """Analyze orderbook imbalance."""
-        bids = orderbook_data.get("bids", []) # Changed from 'b' to 'bids'
-        asks = orderbook_data.get("asks", []) # Changed from 'a' to 'asks'
+        bids = orderbook_data.get("bids", [])  # Changed from 'b' to 'bids'
+        asks = orderbook_data.get("asks", [])  # Changed from 'a' to 'asks'
 
         bid_volume = sum(Decimal(b[1]) for b in bids)
         ask_volume = sum(Decimal(a[1]) for a in asks)
@@ -2022,11 +2087,15 @@ class TradingAnalyzer:
                 if ema_short > ema_long:
                     score_contribution = weights.get("ema_alignment", 0)
                     signal_score += score_contribution
-                    reasons.append(f"EMA Alignment: Bullish (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"EMA Alignment: Bullish (Score +{score_contribution:.2f})"
+                    )
                 elif ema_short < ema_long:
                     score_contribution = -weights.get("ema_alignment", 0)
                     signal_score += score_contribution
-                    reasons.append(f"EMA Alignment: Bearish (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"EMA Alignment: Bearish (Score {score_contribution:.2f})"
+                    )
 
         # SMA Trend Filter
         if active_indicators.get("sma_trend_filter", False):
@@ -2035,11 +2104,15 @@ class TradingAnalyzer:
                 if current_close > sma_long:
                     score_contribution = weights.get("sma_trend_filter", 0)
                     signal_score += score_contribution
-                    reasons.append(f"SMA Trend Filter: Bullish (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"SMA Trend Filter: Bullish (Score +{score_contribution:.2f})"
+                    )
                 elif current_close < sma_long:
                     score_contribution = -weights.get("sma_trend_filter", 0)
                     signal_score += score_contribution
-                    reasons.append(f"SMA Trend Filter: Bearish (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"SMA Trend Filter: Bearish (Score {score_contribution:.2f})"
+                    )
 
         # Momentum Indicators (RSI, StochRSI, CCI, WR, MFI)
         if active_indicators.get("momentum", False):
@@ -2052,11 +2125,15 @@ class TradingAnalyzer:
                     if rsi < isd["rsi_oversold"]:
                         score_contribution = momentum_weight * 0.5
                         signal_score += score_contribution
-                        reasons.append(f"RSI: Oversold (Score +{score_contribution:.2f})")
+                        reasons.append(
+                            f"RSI: Oversold (Score +{score_contribution:.2f})"
+                        )
                     elif rsi > isd["rsi_overbought"]:
                         score_contribution = -momentum_weight * 0.5
                         signal_score += score_contribution
-                        reasons.append(f"RSI: Overbought (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"RSI: Overbought (Score {score_contribution:.2f})"
+                        )
 
             # StochRSI Crossover
             if active_indicators.get("stoch_rsi", False):
@@ -2072,7 +2149,9 @@ class TradingAnalyzer:
                     ):
                         score_contribution = momentum_weight * 0.6
                         signal_score += score_contribution
-                        reasons.append(f"StochRSI: Bullish Crossover (Score +{score_contribution:.2f})")
+                        reasons.append(
+                            f"StochRSI: Bullish Crossover (Score +{score_contribution:.2f})"
+                        )
                     elif (
                         stoch_k < stoch_d
                         and prev_stoch_k >= prev_stoch_d
@@ -2080,15 +2159,21 @@ class TradingAnalyzer:
                     ):
                         score_contribution = -momentum_weight * 0.6
                         signal_score += score_contribution
-                        reasons.append(f"StochRSI: Bearish Crossover (Score {score_contribution:.2f})")
-                    elif stoch_k > stoch_d and stoch_k < 50: # General bullish momentum
+                        reasons.append(
+                            f"StochRSI: Bearish Crossover (Score {score_contribution:.2f})"
+                        )
+                    elif stoch_k > stoch_d and stoch_k < 50:  # General bullish momentum
                         score_contribution = momentum_weight * 0.2
                         signal_score += score_contribution
-                        reasons.append(f"StochRSI: Bullish Momentum (Score +{score_contribution:.2f})")
-                    elif stoch_k < stoch_d and stoch_k > 50: # General bearish momentum
+                        reasons.append(
+                            f"StochRSI: Bullish Momentum (Score +{score_contribution:.2f})"
+                        )
+                    elif stoch_k < stoch_d and stoch_k > 50:  # General bearish momentum
                         score_contribution = -momentum_weight * 0.2
                         signal_score += score_contribution
-                        reasons.append(f"StochRSI: Bearish Momentum (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"StochRSI: Bearish Momentum (Score {score_contribution:.2f})"
+                        )
 
             # CCI
             if active_indicators.get("cci", False):
@@ -2097,11 +2182,15 @@ class TradingAnalyzer:
                     if cci < isd["cci_oversold"]:
                         score_contribution = momentum_weight * 0.4
                         signal_score += score_contribution
-                        reasons.append(f"CCI: Oversold (Score +{score_contribution:.2f})")
+                        reasons.append(
+                            f"CCI: Oversold (Score +{score_contribution:.2f})"
+                        )
                     elif cci > isd["cci_overbought"]:
                         score_contribution = -momentum_weight * 0.4
                         signal_score += score_contribution
-                        reasons.append(f"CCI: Overbought (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"CCI: Overbought (Score {score_contribution:.2f})"
+                        )
 
             # Williams %R
             if active_indicators.get("wr", False):
@@ -2110,11 +2199,15 @@ class TradingAnalyzer:
                     if wr < isd["williams_r_oversold"]:
                         score_contribution = momentum_weight * 0.4
                         signal_score += score_contribution
-                        reasons.append(f"Williams %R: Oversold (Score +{score_contribution:.2f})")
+                        reasons.append(
+                            f"Williams %R: Oversold (Score +{score_contribution:.2f})"
+                        )
                     elif wr > isd["williams_r_overbought"]:
                         score_contribution = -momentum_weight * 0.4
                         signal_score += score_contribution
-                        reasons.append(f"Williams %R: Overbought (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"Williams %R: Overbought (Score {score_contribution:.2f})"
+                        )
 
             # MFI
             if active_indicators.get("mfi", False):
@@ -2123,11 +2216,15 @@ class TradingAnalyzer:
                     if mfi < isd["mfi_oversold"]:
                         score_contribution = momentum_weight * 0.4
                         signal_score += score_contribution
-                        reasons.append(f"MFI: Oversold (Score +{score_contribution:.2f})")
+                        reasons.append(
+                            f"MFI: Oversold (Score +{score_contribution:.2f})"
+                        )
                     elif mfi > isd["mfi_overbought"]:
                         score_contribution = -momentum_weight * 0.4
                         signal_score += score_contribution
-                        reasons.append(f"MFI: Overbought (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"MFI: Overbought (Score {score_contribution:.2f})"
+                        )
 
         # Bollinger Bands
         if active_indicators.get("bollinger_bands", False):
@@ -2137,11 +2234,15 @@ class TradingAnalyzer:
                 if current_close < bb_lower:
                     score_contribution = weights.get("bollinger_bands", 0) * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"Bollinger Bands: Price below lower band (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"Bollinger Bands: Price below lower band (Score +{score_contribution:.2f})"
+                    )
                 elif current_close > bb_upper:
                     score_contribution = -weights.get("bollinger_bands", 0) * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"Bollinger Bands: Price above upper band (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"Bollinger Bands: Price above upper band (Score {score_contribution:.2f})"
+                    )
 
         # VWAP
         if active_indicators.get("vwap", False):
@@ -2150,22 +2251,30 @@ class TradingAnalyzer:
                 if current_close > vwap:
                     score_contribution = weights.get("vwap", 0) * 0.2
                     signal_score += score_contribution
-                    reasons.append(f"VWAP: Price above VWAP (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"VWAP: Price above VWAP (Score +{score_contribution:.2f})"
+                    )
                 elif current_close < vwap:
                     score_contribution = -weights.get("vwap", 0) * 0.2
                     signal_score += score_contribution
-                    reasons.append(f"VWAP: Price below VWAP (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"VWAP: Price below VWAP (Score {score_contribution:.2f})"
+                    )
 
                 if len(self.df) > 1:
                     prev_vwap = Decimal(str(self.df["VWAP"].iloc[-2]))
-                    if (current_close > vwap and prev_close <= prev_vwap):
+                    if current_close > vwap and prev_close <= prev_vwap:
                         score_contribution = weights.get("vwap", 0) * 0.3
                         signal_score += score_contribution
-                        reasons.append(f"VWAP: Bullish crossover detected (Score +{score_contribution:.2f})")
-                    elif (current_close < vwap and prev_close >= prev_vwap):
+                        reasons.append(
+                            f"VWAP: Bullish crossover detected (Score +{score_contribution:.2f})"
+                        )
+                    elif current_close < vwap and prev_close >= prev_vwap:
                         score_contribution = -weights.get("vwap", 0) * 0.3
                         signal_score += score_contribution
-                        reasons.append(f"VWAP: Bearish crossover detected (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"VWAP: Bearish crossover detected (Score {score_contribution:.2f})"
+                        )
 
         # PSAR
         if active_indicators.get("psar", False):
@@ -2175,47 +2284,66 @@ class TradingAnalyzer:
                 if psar_dir == 1:
                     score_contribution = weights.get("psar", 0) * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"PSAR: Bullish trend (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"PSAR: Bullish trend (Score +{score_contribution:.2f})"
+                    )
                 elif psar_dir == -1:
                     score_contribution = -weights.get("psar", 0) * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"PSAR: Bearish trend (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"PSAR: Bearish trend (Score {score_contribution:.2f})"
+                    )
 
                 if len(self.df) > 1:
                     prev_psar_val = Decimal(str(self.df["PSAR_Val"].iloc[-2]))
-                    if (current_close > psar_val and prev_close <= prev_psar_val):
+                    if current_close > psar_val and prev_close <= prev_psar_val:
                         score_contribution = weights.get("psar", 0) * 0.4
                         signal_score += score_contribution
-                        reasons.append(f"PSAR: Bullish reversal detected (Score +{score_contribution:.2f})")
-                    elif (current_close < psar_val and prev_close >= prev_psar_val):
+                        reasons.append(
+                            f"PSAR: Bullish reversal detected (Score +{score_contribution:.2f})"
+                        )
+                    elif current_close < psar_val and prev_close >= prev_psar_val:
                         score_contribution = -weights.get("psar", 0) * 0.4
                         signal_score += score_contribution
-                        reasons.append(f"PSAR: Bearish reversal detected (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"PSAR: Bearish reversal detected (Score {score_contribution:.2f})"
+                        )
 
         # Orderbook Imbalance
         if active_indicators.get("orderbook_imbalance", False) and orderbook_data:
             imbalance = self._check_orderbook(current_price, orderbook_data)
             score_contribution = imbalance * weights.get("orderbook_imbalance", 0)
             signal_score += score_contribution
-            reasons.append(f"Orderbook Imbalance: {imbalance:.2f} (Score {score_contribution:.2f})")
+            reasons.append(
+                f"Orderbook Imbalance: {imbalance:.2f} (Score {score_contribution:.2f})"
+            )
 
         # Fibonacci Levels (confluence with price action)
         if active_indicators.get("fibonacci_levels", False) and self.fib_levels:
             for level_name, level_price in self.fib_levels.items():
-                if (level_name not in ["0.0%", "100.0%"] and
-                    abs(current_price - level_price) / current_price < Decimal("0.001")):
-                        self.logger.debug(
-                            f"Price near Fibonacci level {level_name}: {level_price}"
-                        )
-                        if len(self.df) > 1:
-                            if (current_close > prev_close and current_close > level_price):
-                                score_contribution = weights.get("fibonacci_levels", 0) * 0.1
-                                signal_score += score_contribution
-                                reasons.append(f"Fibonacci: Bullish bounce from {level_name} (Score +{score_contribution:.2f})")
-                            elif (current_close < prev_close and current_close < level_price):
-                                score_contribution = -weights.get("fibonacci_levels", 0) * 0.1
-                                signal_score += score_contribution
-                                reasons.append(f"Fibonacci: Bearish rejection from {level_name} (Score {score_contribution:.2f})")
+                if level_name not in ["0.0%", "100.0%"] and abs(
+                    current_price - level_price
+                ) / current_price < Decimal("0.001"):
+                    self.logger.debug(
+                        f"Price near Fibonacci level {level_name}: {level_price}"
+                    )
+                    if len(self.df) > 1:
+                        if current_close > prev_close and current_close > level_price:
+                            score_contribution = (
+                                weights.get("fibonacci_levels", 0) * 0.1
+                            )
+                            signal_score += score_contribution
+                            reasons.append(
+                                f"Fibonacci: Bullish bounce from {level_name} (Score +{score_contribution:.2f})"
+                            )
+                        elif current_close < prev_close and current_close < level_price:
+                            score_contribution = (
+                                -weights.get("fibonacci_levels", 0) * 0.1
+                            )
+                            signal_score += score_contribution
+                            reasons.append(
+                                f"Fibonacci: Bearish rejection from {level_name} (Score {score_contribution:.2f})"
+                            )
 
         # --- Ehlers SuperTrend Alignment Scoring ---
         if active_indicators.get("ehlers_supertrend", False):
@@ -2236,19 +2364,27 @@ class TradingAnalyzer:
                 if st_slow_dir == 1 and st_fast_dir == 1 and prev_st_fast_dir == -1:
                     score_contribution = weight
                     signal_score += score_contribution
-                    reasons.append(f"Ehlers SuperTrend: Strong BUY (fast flip aligned with slow trend) (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"Ehlers SuperTrend: Strong BUY (fast flip aligned with slow trend) (Score +{score_contribution:.2f})"
+                    )
                 elif st_slow_dir == -1 and st_fast_dir == -1 and prev_st_fast_dir == 1:
                     score_contribution = -weight
                     signal_score += score_contribution
-                    reasons.append(f"Ehlers SuperTrend: Strong SELL (fast flip aligned with slow trend) (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"Ehlers SuperTrend: Strong SELL (fast flip aligned with slow trend) (Score {score_contribution:.2f})"
+                    )
                 elif st_slow_dir == 1 and st_fast_dir == 1:
                     score_contribution = weight * 0.3
                     signal_score += score_contribution
-                    reasons.append(f"Ehlers SuperTrend: Bullish alignment (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"Ehlers SuperTrend: Bullish alignment (Score +{score_contribution:.2f})"
+                    )
                 elif st_slow_dir == -1 and st_fast_dir == -1:
                     score_contribution = -weight * 0.3
                     signal_score += score_contribution
-                    reasons.append(f"Ehlers SuperTrend: Bearish alignment (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"Ehlers SuperTrend: Bearish alignment (Score {score_contribution:.2f})"
+                    )
 
         # --- MACD Alignment Scoring ---
         if active_indicators.get("macd", False):
@@ -2269,22 +2405,30 @@ class TradingAnalyzer:
                 ):
                     score_contribution = weight
                     signal_score += score_contribution
-                    reasons.append(f"MACD: Bullish crossover (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"MACD: Bullish crossover (Score +{score_contribution:.2f})"
+                    )
                 elif (
                     macd_line < signal_line
                     and self.df["MACD_Line"].iloc[-2] >= self.df["MACD_Signal"].iloc[-2]
                 ):
                     score_contribution = -weight
                     signal_score += score_contribution
-                    reasons.append(f"MACD: Bearish crossover (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"MACD: Bearish crossover (Score {score_contribution:.2f})"
+                    )
                 elif histogram > 0 and self.df["MACD_Hist"].iloc[-2] < 0:
                     score_contribution = weight * 0.2
                     signal_score += score_contribution
-                    reasons.append(f"MACD: Bullish histogram flip (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"MACD: Bullish histogram flip (Score +{score_contribution:.2f})"
+                    )
                 elif histogram < 0 and self.df["MACD_Hist"].iloc[-2] > 0:
                     score_contribution = -weight * 0.2
                     signal_score += score_contribution
-                    reasons.append(f"MACD: Bearish histogram flip (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"MACD: Bearish histogram flip (Score {score_contribution:.2f})"
+                    )
 
         # --- ADX Alignment Scoring ---
         if active_indicators.get("adx", False):
@@ -2298,11 +2442,15 @@ class TradingAnalyzer:
                     if plus_di > minus_di:
                         score_contribution = weight
                         signal_score += score_contribution
-                        reasons.append(f"ADX: Strong BUY trend (ADX > 25, +DI > -DI) (Score +{score_contribution:.2f})")
+                        reasons.append(
+                            f"ADX: Strong BUY trend (ADX > 25, +DI > -DI) (Score +{score_contribution:.2f})"
+                        )
                     elif minus_di > plus_di:
                         score_contribution = -weight
                         signal_score += score_contribution
-                        reasons.append(f"ADX: Strong SELL trend (ADX > 25, -DI > +DI) (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"ADX: Strong SELL trend (ADX > 25, -DI > +DI) (Score {score_contribution:.2f})"
+                        )
                 elif adx_val < ADX_WEAK_TREND_THRESHOLD:
                     reasons.append("ADX: Weak trend (ADX < 20). Neutral signal.")
 
@@ -2329,14 +2477,18 @@ class TradingAnalyzer:
                 ):
                     score_contribution = weight * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"Ichimoku: Tenkan-sen crossed above Kijun-sen (bullish) (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"Ichimoku: Tenkan-sen crossed above Kijun-sen (bullish) (Score +{score_contribution:.2f})"
+                    )
                 elif (
                     tenkan_sen < kijun_sen
                     and self.df["Tenkan_Sen"].iloc[-2] >= self.df["Kijun_Sen"].iloc[-2]
                 ):
                     score_contribution = -weight * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"Ichimoku: Tenkan-sen crossed below Kijun-sen (bearish) (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"Ichimoku: Tenkan-sen crossed below Kijun-sen (bearish) (Score {score_contribution:.2f})"
+                    )
 
                 if current_close > max(senkou_span_a, senkou_span_b) and self.df[
                     "close"
@@ -2345,7 +2497,9 @@ class TradingAnalyzer:
                 ):
                     score_contribution = weight * 0.7
                     signal_score += score_contribution
-                    reasons.append(f"Ichimoku: Price broke above Kumo (strong bullish) (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"Ichimoku: Price broke above Kumo (strong bullish) (Score +{score_contribution:.2f})"
+                    )
                 elif current_close < min(senkou_span_a, senkou_span_b) and self.df[
                     "close"
                 ].iloc[-2] >= min(
@@ -2353,7 +2507,9 @@ class TradingAnalyzer:
                 ):
                     score_contribution = -weight * 0.7
                     signal_score += score_contribution
-                    reasons.append(f"Ichimoku: Price broke below Kumo (strong bearish) (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"Ichimoku: Price broke below Kumo (strong bearish) (Score {score_contribution:.2f})"
+                    )
 
                 if (
                     chikou_span > current_close
@@ -2361,14 +2517,18 @@ class TradingAnalyzer:
                 ):
                     score_contribution = weight * 0.3
                     signal_score += score_contribution
-                    reasons.append(f"Ichimoku: Chikou Span crossed above price (bullish confirmation) (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"Ichimoku: Chikou Span crossed above price (bullish confirmation) (Score +{score_contribution:.2f})"
+                    )
                 elif (
                     chikou_span < current_close
                     and self.df["Chikou_Span"].iloc[-2] >= self.df["close"].iloc[-2]
                 ):
                     score_contribution = -weight * 0.3
                     signal_score += score_contribution
-                    reasons.append(f"Ichimoku: Chikou Span crossed below price (bearish confirmation) (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"Ichimoku: Chikou Span crossed below price (bearish confirmation) (Score {score_contribution:.2f})"
+                    )
 
         # --- OBV Alignment Scoring ---
         if active_indicators.get("obv", False):
@@ -2383,14 +2543,18 @@ class TradingAnalyzer:
                 ):
                     score_contribution = weight * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"OBV: Bullish crossover (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"OBV: Bullish crossover (Score +{score_contribution:.2f})"
+                    )
                 elif (
                     obv_val < obv_ema
                     and self.df["OBV"].iloc[-2] >= self.df["OBV_EMA"].iloc[-2]
                 ):
                     score_contribution = -weight * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"OBV: Bearish crossover (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"OBV: Bearish crossover (Score {score_contribution:.2f})"
+                    )
 
                 if len(self.df) > 2:
                     if (
@@ -2399,14 +2563,18 @@ class TradingAnalyzer:
                     ):
                         score_contribution = weight * 0.2
                         signal_score += score_contribution
-                        reasons.append(f"OBV: Increasing momentum (Score +{score_contribution:.2f})")
+                        reasons.append(
+                            f"OBV: Increasing momentum (Score +{score_contribution:.2f})"
+                        )
                     elif (
                         obv_val < self.df["OBV"].iloc[-2]
                         and obv_val < self.df["OBV"].iloc[-3]
                     ):
                         score_contribution = -weight * 0.2
                         signal_score += score_contribution
-                        reasons.append(f"OBV: Decreasing momentum (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"OBV: Decreasing momentum (Score {score_contribution:.2f})"
+                        )
 
         # --- CMF Alignment Scoring ---
         if active_indicators.get("cmf", False):
@@ -2417,11 +2585,15 @@ class TradingAnalyzer:
                 if cmf_val > 0:
                     score_contribution = weight * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"CMF: Positive money flow (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"CMF: Positive money flow (Score +{score_contribution:.2f})"
+                    )
                 elif cmf_val < 0:
                     score_contribution = -weight * 0.5
                     signal_score += score_contribution
-                    reasons.append(f"CMF: Negative money flow (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"CMF: Negative money flow (Score {score_contribution:.2f})"
+                    )
 
                 if len(self.df) > 2:
                     if (
@@ -2430,14 +2602,18 @@ class TradingAnalyzer:
                     ):
                         score_contribution = weight * 0.3
                         signal_score += score_contribution
-                        reasons.append(f"CMF: Increasing money flow (Score +{score_contribution:.2f})")
+                        reasons.append(
+                            f"CMF: Increasing money flow (Score +{score_contribution:.2f})"
+                        )
                     elif (
                         cmf_val < self.df["CMF"].iloc[-2]
                         and cmf_val < self.df["CMF"].iloc[-3]
                     ):
                         score_contribution = -weight * 0.3
                         signal_score += score_contribution
-                        reasons.append(f"CMF: Decreasing money flow (Score {score_contribution:.2f})")
+                        reasons.append(
+                            f"CMF: Decreasing money flow (Score {score_contribution:.2f})"
+                        )
 
         # --- Volatility Index Scoring ---
         if active_indicators.get("volatility_index", False):
@@ -2448,19 +2624,31 @@ class TradingAnalyzer:
                     prev_vol_idx = self.df["Volatility_Index"].iloc[-2]
                     prev_prev_vol_idx = self.df["Volatility_Index"].iloc[-3]
 
-                    if vol_idx > prev_vol_idx > prev_prev_vol_idx:  # Increasing volatility
+                    if (
+                        vol_idx > prev_vol_idx > prev_prev_vol_idx
+                    ):  # Increasing volatility
                         if signal_score > 0:
                             score_contribution = weight * 0.2
                             signal_score += score_contribution
-                            reasons.append(f"Volatility Index: Increasing volatility, reinforcing BUY (Score +{score_contribution:.2f})")
+                            reasons.append(
+                                f"Volatility Index: Increasing volatility, reinforcing BUY (Score +{score_contribution:.2f})"
+                            )
                         elif signal_score < 0:
                             score_contribution = -weight * 0.2
                             signal_score += score_contribution
-                            reasons.append(f"Volatility Index: Increasing volatility, reinforcing SELL (Score {score_contribution:.2f})")
-                    elif vol_idx < prev_vol_idx < prev_prev_vol_idx: # Decreasing volatility
-                        if abs(signal_score) > 0: # If there's an existing signal, slightly reduce it
-                             signal_score *= Decimal("0.8")
-                             reasons.append("Volatility Index: Decreasing volatility, reducing signal conviction.")
+                            reasons.append(
+                                f"Volatility Index: Increasing volatility, reinforcing SELL (Score {score_contribution:.2f})"
+                            )
+                    elif (
+                        vol_idx < prev_vol_idx < prev_prev_vol_idx
+                    ):  # Decreasing volatility
+                        if (
+                            abs(signal_score) > 0
+                        ):  # If there's an existing signal, slightly reduce it
+                            signal_score *= Decimal("0.8")
+                            reasons.append(
+                                "Volatility Index: Decreasing volatility, reducing signal conviction."
+                            )
 
         # --- VWMA Cross Scoring ---
         if active_indicators.get("vwma", False):
@@ -2471,11 +2659,15 @@ class TradingAnalyzer:
                 if current_close > vwma and prev_close <= prev_vwma:
                     score_contribution = weight
                     signal_score += score_contribution
-                    reasons.append(f"VWMA: Bullish crossover (price above VWMA) (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"VWMA: Bullish crossover (price above VWMA) (Score +{score_contribution:.2f})"
+                    )
                 elif current_close < vwma and prev_close >= prev_vwma:
                     score_contribution = -weight
                     signal_score += score_contribution
-                    reasons.append(f"VWMA: Bearish crossover (price below VWMA) (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"VWMA: Bearish crossover (price below VWMA) (Score {score_contribution:.2f})"
+                    )
 
         # --- Volume Delta Scoring ---
         if active_indicators.get("volume_delta", False):
@@ -2487,20 +2679,27 @@ class TradingAnalyzer:
                 if volume_delta > volume_delta_threshold:  # Strong buying pressure
                     score_contribution = weight
                     signal_score += score_contribution
-                    reasons.append(f"Volume Delta: Strong buying pressure (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"Volume Delta: Strong buying pressure (Score +{score_contribution:.2f})"
+                    )
                 elif volume_delta < -volume_delta_threshold:  # Strong selling pressure
                     score_contribution = -weight
                     signal_score += score_contribution
-                    reasons.append(f"Volume Delta: Strong selling pressure (Score {score_contribution:.2f})")
+                    reasons.append(
+                        f"Volume Delta: Strong selling pressure (Score {score_contribution:.2f})"
+                    )
                 elif volume_delta > 0:
                     score_contribution = weight * 0.3
                     signal_score += score_contribution
-                    reasons.append(f"Volume Delta: Moderate buying pressure (Score +{score_contribution:.2f})")
+                    reasons.append(
+                        f"Volume Delta: Moderate buying pressure (Score +{score_contribution:.2f})"
+                    )
                 elif volume_delta < 0:
                     score_contribution = -weight * 0.3
                     signal_score += score_contribution
-                    reasons.append(f"Volume Delta: Moderate selling pressure (Score {score_contribution:.2f})")
-
+                    reasons.append(
+                        f"Volume Delta: Moderate selling pressure (Score {score_contribution:.2f})"
+                    )
 
         # --- Multi-Timeframe Trend Confluence Scoring ---
         if self.config["mtf_analysis"]["enabled"] and mtf_trends:
@@ -2520,8 +2719,9 @@ class TradingAnalyzer:
                 )
                 score_contribution = mtf_weight * normalized_mtf_score
                 signal_score += score_contribution
-                reasons.append(f"MTF Confluence: Score {normalized_mtf_score:.2f} (Buy: {mtf_buy_score}, Sell: {mtf_sell_score}). Total MTF contribution: {score_contribution:.2f}")
-
+                reasons.append(
+                    f"MTF Confluence: Score {normalized_mtf_score:.2f} (Buy: {mtf_buy_score}, Sell: {mtf_sell_score}). Total MTF contribution: {score_contribution:.2f}"
+                )
 
         # --- Final Signal Determination ---
         threshold = self.config["signal_score_threshold"]
@@ -2549,8 +2749,9 @@ class TradingAnalyzer:
         take_profit_atr_multiple = Decimal(
             str(self.config["trade_management"]["take_profit_atr_multiple"])
         )
-        price_precision_str = "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
-
+        price_precision_str = (
+            "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
+        )
 
         if signal == "BUY":
             stop_loss = current_price - (atr_value * stop_loss_atr_multiple)
@@ -2601,7 +2802,9 @@ def display_indicator_values_and_price(
         logger.info(f"{NEON_CYAN}--- Fibonacci Levels ---{RESET}")
         logger.info("")  # Added newline for spacing
         for level_name, level_price in analyzer.fib_levels.items():
-            logger.info(f"  {NEON_YELLOW}{level_name}: {level_price.normalize()}{RESET}")
+            logger.info(
+                f"  {NEON_YELLOW}{level_name}: {level_price.normalize()}{RESET}"
+            )
 
     if mtf_trends:
         logger.info(f"{NEON_CYAN}--- Multi-Timeframe Trends ---{RESET}")
@@ -2653,15 +2856,19 @@ def main() -> None:
     logger.info(f"Symbol: {config['symbol']}, Interval: {config['interval']}")
     logger.info(f"Trade Management Enabled: {config['trade_management']['enabled']}")
 
-    pybit_http_client = create_pybit_client(testnet=False) # Main HTTP client
+    pybit_http_client = create_pybit_client(testnet=False)  # Main HTTP client
     position_manager = PositionManagerPybit(config, logger, config["symbol"])
     performance_tracker = PerformanceTracker(logger)
 
     # Setup WebSocket Manager
-    ws_manager = BybitWebSocketManager(API_KEY, API_SECRET, testnet=False, logger=logger)
+    ws_manager = BybitWebSocketManager(
+        API_KEY, API_SECRET, testnet=False, logger=logger
+    )
 
     # Callbacks for RealTimePositionTracker
-    position_tracker_instance = RealTimePositionTracker(ws_manager, pybit_http_client, logger)
+    position_tracker_instance = RealTimePositionTracker(
+        ws_manager, pybit_http_client, logger
+    )
     private_ws_callbacks = {
         "position_update": position_tracker_instance.handle_position_update,
         "order_update": position_tracker_instance.handle_order_update,
@@ -2679,24 +2886,29 @@ def main() -> None:
 
     # Give some time for WS connections to establish and initial data to be received
     logger.info(f"{NEON_BLUE}Waiting for WebSocket data to populate...{RESET}")
-    time.sleep(10) # Adjust as needed based on network/API speed
+    time.sleep(10)  # Adjust as needed based on network/API speed
 
     while True:
         try:
-            logger.info(f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
+            logger.info(
+                f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+            )
 
             # --- Fetch data from WebSocket buffers ---
             current_price = ws_manager.get_current_price(config["symbol"])
             if current_price is None:
                 alert_system.send_alert(
-                    f"[{config['symbol']}] Failed to get current price from WebSocket. Skipping loop.", "WARNING"
+                    f"[{config['symbol']}] Failed to get current price from WebSocket. Skipping loop.",
+                    "WARNING",
                 )
                 time.sleep(config["loop_delay"])
                 continue
 
             # Get primary timeframe klines from WS buffer
             df = ws_manager.get_kline_df(config["symbol"], config["interval"])
-            if df is None or df.empty or len(df) < 200: # Ensure enough data for indicators
+            if (
+                df is None or df.empty or len(df) < 200
+            ):  # Ensure enough data for indicators
                 alert_system.send_alert(
                     f"[{config['symbol']}] Not enough primary kline data from WebSocket buffer ({len(df) if df is not None else 0} bars). Skipping loop.",
                     "WARNING",
@@ -2709,14 +2921,22 @@ def main() -> None:
             if config["indicators"].get("orderbook_imbalance", False):
                 orderbook_data = ws_manager.get_orderbook(config["symbol"])
                 if orderbook_data is None:
-                    logger.warning(f"{NEON_YELLOW}Orderbook data not yet available from WebSocket.{RESET}")
+                    logger.warning(
+                        f"{NEON_YELLOW}Orderbook data not yet available from WebSocket.{RESET}"
+                    )
 
             mtf_trends: dict[str, str] = {}
             if config["mtf_analysis"]["enabled"]:
                 for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
-                    logger.debug(f"Fetching klines for MTF interval from WS buffer: {htf_interval}")
+                    logger.debug(
+                        f"Fetching klines for MTF interval from WS buffer: {htf_interval}"
+                    )
                     htf_df = ws_manager.get_kline_df(config["symbol"], htf_interval)
-                    if htf_df is not None and not htf_df.empty and len(htf_df) >= config["mtf_analysis"]["trend_period"] * 3:
+                    if (
+                        htf_df is not None
+                        and not htf_df.empty
+                        and len(htf_df) >= config["mtf_analysis"]["trend_period"] * 3
+                    ):
                         for trend_ind in config["mtf_analysis"]["trend_indicators"]:
                             temp_htf_analyzer = TradingAnalyzer(
                                 htf_df, config, logger, config["symbol"]
@@ -2754,7 +2974,7 @@ def main() -> None:
             )
             atr_value = Decimal(
                 str(analyzer._get_indicator_value("ATR", Decimal("0.01")))
-            ) # Default to a small positive value if ATR is missing
+            )  # Default to a small positive value if ATR is missing
 
             # Use pybit-specific position manager
             position_manager.manage_positions(current_price, performance_tracker)
@@ -2782,8 +3002,12 @@ def main() -> None:
 
             # Fetch actual open positions from exchange via HTTP client (or use WS cache)
             # For this example, we'll fetch from HTTP as position_manager uses it
-            open_positions_raw = get_positions_pybit(pybit_http_client, config["symbol"], logger)
-            open_positions = [p for p in open_positions_raw if Decimal(p['size']) > 0] # Filter for actually open positions
+            open_positions_raw = get_positions_pybit(
+                pybit_http_client, config["symbol"], logger
+            )
+            open_positions = [
+                p for p in open_positions_raw if Decimal(p["size"]) > 0
+            ]  # Filter for actually open positions
 
             if open_positions:
                 logger.info(f"{NEON_CYAN}Open Positions: {len(open_positions)}{RESET}")
@@ -2811,7 +3035,8 @@ def main() -> None:
 
         except Exception as e:
             alert_system.send_alert(
-                f"[{config['symbol']}] An unhandled error occurred in the main loop: {e}", "ERROR"
+                f"[{config['symbol']}] An unhandled error occurred in the main loop: {e}",
+                "ERROR",
             )
             logger.exception(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
             time.sleep(config["loop_delay"] * 2)

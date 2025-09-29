@@ -27,14 +27,13 @@ $ python3 scripts/pstree.py
 ...
 """
 
-
 import collections
 import sys
 
 import psutil
 
 
-def print_tree(parent, tree, indent=''):
+def print_tree(parent, tree, indent=""):
     try:
         name = psutil.Process(parent).name()
     except psutil.Error:
@@ -66,5 +65,5 @@ def main():
     print_tree(min(tree), tree)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,9 +1,9 @@
 import logging
-from typing import Any, Literal
+from decimal import ROUND_DOWN, Decimal
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from decimal import Decimal, ROUND_DOWN
 
 # Magic Numbers as Constants
 MIN_DATA_POINTS_TR = 2
@@ -12,8 +12,16 @@ MIN_DATA_POINTS_OBV = 2
 MIN_DATA_POINTS_PSAR = 2
 MIN_DATA_POINTS_VOLATILITY = 2
 
+
 def safe_calculate(
-    df: pd.DataFrame, logger: logging.Logger, symbol: str, func: callable, name: str, min_data_points: int = 0, *args, **kwargs
+    df: pd.DataFrame,
+    logger: logging.Logger,
+    symbol: str,
+    func: callable,
+    name: str,
+    min_data_points: int = 0,
+    *args,
+    **kwargs,
 ) -> Any | None:
     """Safely calculate indicators and log errors, with min_data_points check."""
     if len(df) < min_data_points:
@@ -29,8 +37,7 @@ def safe_calculate(
             or (
                 isinstance(result, tuple)
                 and all(
-                    r is None or (isinstance(r, pd.Series) and r.empty)
-                    for r in result
+                    r is None or (isinstance(r, pd.Series) and r.empty) for r in result
                 )
             )
         ):
@@ -40,10 +47,9 @@ def safe_calculate(
             return None
         return result
     except Exception as e:
-        logger.error(
-            f"[{symbol}] Error calculating indicator '{name}': {e}"
-        )
+        logger.error(f"[{symbol}] Error calculating indicator '{name}': {e}")
         return None
+
 
 def calculate_true_range(df: pd.DataFrame) -> pd.Series:
     """Calculate True Range (TR)."""
@@ -52,11 +58,12 @@ def calculate_true_range(df: pd.DataFrame) -> pd.Series:
     high_low = df["high"] - df["low"]
     high_prev_close = (df["high"] - df["close"].shift()).abs()
     low_prev_close = (df["low"] - df["close"].shift()).abs()
-    return pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(
-        axis=1
-    )
+    return pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(axis=1)
 
-def calculate_super_smoother(df: pd.DataFrame, series: pd.Series, period: int) -> pd.Series:
+
+def calculate_super_smoother(
+    df: pd.DataFrame, series: pd.Series, period: int
+) -> pd.Series:
     """Apply Ehlers SuperSmoother filter to reduce lag and noise."""
     if period <= 0 or len(series) < MIN_DATA_POINTS_SMOOTHER:
         return pd.Series(np.nan, index=series.index)
@@ -85,13 +92,18 @@ def calculate_super_smoother(df: pd.DataFrame, series: pd.Series, period: int) -
         )
     return filt.reindex(df.index)
 
+
 def calculate_ehlers_supertrend(
-    df: pd.DataFrame, logger: logging.Logger, symbol: str, period: int, multiplier: float
+    df: pd.DataFrame,
+    logger: logging.Logger,
+    symbol: str,
+    period: int,
+    multiplier: float,
 ) -> pd.DataFrame | None:
     """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
     if len(df) < period * 3:
         logger.debug(
-            f"[{symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+            f"[{symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
         )
         return None
 
@@ -128,9 +140,7 @@ def calculate_ehlers_supertrend(
     if df_copy["close"].iloc[first_valid_idx] > upper_band.iloc[first_valid_idx]:
         direction.iloc[first_valid_idx] = 1
         supertrend.iloc[first_valid_idx] = lower_band.iloc[first_valid_idx]
-    elif (
-        df_copy["close"].iloc[first_valid_idx] < lower_band.iloc[first_valid_idx]
-    ):
+    elif df_copy["close"].iloc[first_valid_idx] < lower_band.iloc[first_valid_idx]:
         direction.iloc[first_valid_idx] = -1
         supertrend.iloc[first_valid_idx] = upper_band.iloc[first_valid_idx]
     else:
@@ -156,19 +166,19 @@ def calculate_ehlers_supertrend(
             else:
                 direction.iloc[i] = -1
                 supertrend.iloc[i] = min(upper_band.iloc[i], prev_supertrend)
+        elif curr_close > upper_band.iloc[i]:
+            direction.iloc[i] = 1
+            supertrend.iloc[i] = lower_band.iloc[i]
+        elif curr_close < lower_band.iloc[i]:
+            direction.iloc[i] = -1
+            supertrend.iloc[i] = upper_band.iloc[i]
         else:
-            if curr_close > upper_band.iloc[i]:
-                direction.iloc[i] = 1
-                supertrend.iloc[i] = lower_band.iloc[i]
-            elif curr_close < lower_band.iloc[i]:
-                direction.iloc[i] = -1
-                supertrend.iloc[i] = upper_band.iloc[i]
-            else:
-                direction.iloc[i] = prev_direction
-                supertrend.iloc[i] = prev_supertrend
+            direction.iloc[i] = prev_direction
+            supertrend.iloc[i] = prev_supertrend
 
     result = pd.DataFrame({"supertrend": supertrend, "direction": direction})
     return result.reindex(df.index)
+
 
 def calculate_macd(
     df: pd.DataFrame, fast_period: int, slow_period: int, signal_period: int
@@ -186,6 +196,7 @@ def calculate_macd(
 
     return macd_line, signal_line, histogram
 
+
 def calculate_rsi(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculate Relative Strength Index (RSI)."""
     if len(df) <= period:
@@ -201,14 +212,13 @@ def calculate_rsi(df: pd.DataFrame, period: int) -> pd.Series:
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
+
 def calculate_stoch_rsi(
     df: pd.DataFrame, period: int, k_period: int, d_period: int
 ) -> tuple[pd.Series, pd.Series]:
     """Calculate Stochastic RSI."""
     if len(df) <= period:
-        return pd.Series(np.nan, index=df.index), pd.Series(
-            np.nan, index=df.index
-        )
+        return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
     rsi_series = calculate_rsi(df, period)
 
     lowest_rsi = rsi_series.rolling(window=period, min_periods=period).min()
@@ -219,14 +229,19 @@ def calculate_stoch_rsi(
     stoch_rsi_k_raw = ((rsi_series - lowest_rsi) / denominator) * 100
     stoch_rsi_k_raw = stoch_rsi_k_raw.fillna(0).clip(0, 100)
 
-    stoch_rsi_k = stoch_rsi_k_raw.rolling(
-        window=k_period, min_periods=k_period
-    ).mean().fillna(0)
-    stoch_rsi_d = stoch_rsi_k.rolling(window=d_period, min_periods=d_period).mean().fillna(0)
+    stoch_rsi_k = (
+        stoch_rsi_k_raw.rolling(window=k_period, min_periods=k_period).mean().fillna(0)
+    )
+    stoch_rsi_d = (
+        stoch_rsi_k.rolling(window=d_period, min_periods=d_period).mean().fillna(0)
+    )
 
     return stoch_rsi_k, stoch_rsi_d
 
-def calculate_adx(df: pd.DataFrame, period: int) -> tuple[pd.Series, pd.Series, pd.Series]:
+
+def calculate_adx(
+    df: pd.DataFrame, period: int
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculate Average Directional Index (ADX)."""
     if len(df) < period * 2:
         return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
@@ -257,6 +272,7 @@ def calculate_adx(df: pd.DataFrame, period: int) -> tuple[pd.Series, pd.Series, 
 
     return adx, plus_di, minus_di
 
+
 def calculate_bollinger_bands(
     df: pd.DataFrame, period: int, std_dev: float
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
@@ -273,6 +289,7 @@ def calculate_bollinger_bands(
     lower_band = middle_band - (std * std_dev)
     return upper_band, middle_band, lower_band
 
+
 def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     """Calculate Volume Weighted Average Price (VWAP)."""
     if df.empty:
@@ -282,6 +299,7 @@ def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     cumulative_vol = df["volume"].cumsum()
     vwap = cumulative_tp_vol / cumulative_vol
     return vwap.reindex(df.index)
+
 
 def calculate_cci(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculate Commodity Channel Index (CCI)."""
@@ -295,6 +313,7 @@ def calculate_cci(df: pd.DataFrame, period: int) -> pd.Series:
     cci = (tp - sma_tp) / (0.015 * mad.replace(0, np.nan))
     return cci
 
+
 def calculate_williams_r(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculate Williams %R."""
     if len(df) < period:
@@ -304,6 +323,7 @@ def calculate_williams_r(df: pd.DataFrame, period: int) -> pd.Series:
     denominator = highest_high - lowest_low
     wr = -100 * ((highest_high - df["close"]) / denominator.replace(0, np.nan))
     return wr
+
 
 def calculate_ichimoku_cloud(
     df: pd.DataFrame,
@@ -315,8 +335,7 @@ def calculate_ichimoku_cloud(
     """Calculate Ichimoku Cloud components."""
     if (
         len(df)
-        < max(tenkan_period, kijun_period, senkou_span_b_period)
-        + chikou_span_offset
+        < max(tenkan_period, kijun_period, senkou_span_b_period) + chikou_span_offset
     ):
         return (
             pd.Series(np.nan),
@@ -350,6 +369,7 @@ def calculate_ichimoku_cloud(
 
     return tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span
 
+
 def calculate_mfi(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculate Money Flow Index (MFI)."""
     if len(df) <= period:
@@ -368,6 +388,7 @@ def calculate_mfi(df: pd.DataFrame, period: int) -> pd.Series:
     mfi = 100 - (100 / (1 + mf_ratio))
     return mfi
 
+
 def calculate_obv(df: pd.DataFrame, ema_period: int) -> tuple[pd.Series, pd.Series]:
     """Calculate On-Balance Volume (OBV) and its EMA."""
     if len(df) < MIN_DATA_POINTS_OBV:
@@ -379,6 +400,7 @@ def calculate_obv(df: pd.DataFrame, ema_period: int) -> tuple[pd.Series, pd.Seri
     obv_ema = obv.ewm(span=ema_period, adjust=False).mean()
 
     return obv, obv_ema
+
 
 def calculate_cmf(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculate Chaikin Money Flow (CMF)."""
@@ -399,14 +421,13 @@ def calculate_cmf(df: pd.DataFrame, period: int) -> pd.Series:
 
     return cmf
 
+
 def calculate_psar(
     df: pd.DataFrame, acceleration: float, max_acceleration: float
 ) -> tuple[pd.Series, pd.Series]:
     """Calculate Parabolic SAR."""
     if len(df) < MIN_DATA_POINTS_PSAR:
-        return pd.Series(np.nan, index=df.index), pd.Series(
-            np.nan, index=df.index
-        )
+        return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
 
     psar = df["close"].copy()
     bull = pd.Series(True, index=df.index)
@@ -440,20 +461,20 @@ def calculate_psar(
             af = acceleration
             ep = df["high"].iloc[i] if bull.iloc[i] else df["low"].iloc[i]
             if bull.iloc[i]:
-                psar.iloc[i] = min(df["low"].iloc[i], df["low"].iloc[i-1])
+                psar.iloc[i] = min(df["low"].iloc[i], df["low"].iloc[i - 1])
             else:
-                psar.iloc[i] = max(df["high"].iloc[i], df["high"].iloc[i-1])
+                psar.iloc[i] = max(df["high"].iloc[i], df["high"].iloc[i - 1])
 
         elif bull.iloc[i]:
             if df["high"].iloc[i] > ep:
                 ep = df["high"].iloc[i]
                 af = min(af + acceleration, max_acceleration)
-            psar.iloc[i] = min(psar.iloc[i], df["low"].iloc[i], df["low"].iloc[i-1])
+            psar.iloc[i] = min(psar.iloc[i], df["low"].iloc[i], df["low"].iloc[i - 1])
         else:
             if df["low"].iloc[i] < ep:
                 ep = df["low"].iloc[i]
                 af = min(af + acceleration, max_acceleration)
-            psar.iloc[i] = max(psar.iloc[i], df["high"].iloc[i], df["high"].iloc[i-1])
+            psar.iloc[i] = max(psar.iloc[i], df["high"].iloc[i], df["high"].iloc[i - 1])
 
     direction = pd.Series(0, index=df.index, dtype=int)
     direction[psar < df["close"]] = 1
@@ -461,7 +482,10 @@ def calculate_psar(
 
     return psar, direction
 
-def calculate_fibonacci_levels(df: pd.DataFrame, logger: logging.Logger, symbol: str, window: int) -> dict[str, Decimal] | None:
+
+def calculate_fibonacci_levels(
+    df: pd.DataFrame, logger: logging.Logger, symbol: str, window: int
+) -> dict[str, Decimal] | None:
     """Calculate Fibonacci retracement levels based on a recent high-low swing."""
     if len(df) < window:
         logger.warning(
@@ -502,7 +526,10 @@ def calculate_fibonacci_levels(df: pd.DataFrame, logger: logging.Logger, symbol:
     logger.debug(f"[{symbol}] Calculated Fibonacci levels: {fib_levels}")
     return fib_levels
 
-def calculate_fibonacci_pivot_points(df: pd.DataFrame, logger: logging.Logger, symbol: str) -> dict[str, Decimal] | None:
+
+def calculate_fibonacci_pivot_points(
+    df: pd.DataFrame, logger: logging.Logger, symbol: str
+) -> dict[str, Decimal] | None:
     """Calculate Fibonacci Pivot Points (Pivot, R1, R2, S1, S2)."""
     if df.empty:
         logger.warning(
@@ -531,6 +558,7 @@ def calculate_fibonacci_pivot_points(df: pd.DataFrame, logger: logging.Logger, s
     logger.debug(f"[{symbol}] Calculated Fibonacci Pivot Points.")
     return pivot_points
 
+
 def calculate_volatility_index(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculate a simple Volatility Index based on ATR normalized by price."""
     if len(df) < period or "ATR" not in df.columns:
@@ -540,6 +568,7 @@ def calculate_volatility_index(df: pd.DataFrame, period: int) -> pd.Series:
     volatility_index = normalized_atr.rolling(window=period).mean()
     return volatility_index
 
+
 def calculate_vwma(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculate Volume Weighted Moving Average (VWMA)."""
     if len(df) < period or df["volume"].isnull().any():
@@ -547,10 +576,9 @@ def calculate_vwma(df: pd.DataFrame, period: int) -> pd.Series:
 
     valid_volume = df["volume"].replace(0, np.nan)
     pv = df["close"] * valid_volume
-    vwma = pv.rolling(window=period).sum() / valid_volume.rolling(
-        window=period
-    ).sum()
+    vwma = pv.rolling(window=period).sum() / valid_volume.rolling(window=period).sum()
     return vwma
+
 
 def calculate_volume_delta(df: pd.DataFrame, period: int) -> pd.Series:
     """Calculate Volume Delta, indicating buying vs selling pressure."""
@@ -569,7 +597,10 @@ def calculate_volume_delta(df: pd.DataFrame, period: int) -> pd.Series:
     )
     return volume_delta.fillna(0)
 
-def calculate_kaufman_ama(df: pd.DataFrame, period: int, fast_period: int, slow_period: int) -> pd.Series:
+
+def calculate_kaufman_ama(
+    df: pd.DataFrame, period: int, fast_period: int, slow_period: int
+) -> pd.Series:
     """Calculate Kaufman's Adaptive Moving Average (KAMA)."""
     if len(df) < period + slow_period:
         return pd.Series(np.nan, index=df.index)
@@ -578,14 +609,16 @@ def calculate_kaufman_ama(df: pd.DataFrame, period: int, fast_period: int, slow_
     kama = np.full_like(close_prices, np.nan)
 
     er_numerator = np.abs(close_prices - np.roll(close_prices, period))
-    
-    volatility_series = pd.Series(np.abs(np.diff(close_prices))).rolling(window=period-1).sum()
+
+    volatility_series = (
+        pd.Series(np.abs(np.diff(close_prices))).rolling(window=period - 1).sum()
+    )
     volatility_series = volatility_series.reindex(df.index, fill_value=0)
-    
+
     er_denominator = volatility_series.values
-    
+
     er = np.full_like(close_prices, np.nan)
-    
+
     for i in range(period, len(close_prices)):
         if er_denominator[i] != 0:
             er[i] = er_numerator[i] / er_denominator[i]
@@ -594,9 +627,11 @@ def calculate_kaufman_ama(df: pd.DataFrame, period: int, fast_period: int, slow_
 
     fast_alpha = 2 / (fast_period + 1)
     slow_alpha = 2 / (slow_period + 1)
-    sc = (er * (fast_alpha - slow_alpha) + slow_alpha)**2
+    sc = (er * (fast_alpha - slow_alpha) + slow_alpha) ** 2
 
-    first_valid_idx = np.where(~np.isnan(sc))[0][0] if np.where(~np.isnan(sc))[0].size > 0 else period
+    first_valid_idx = (
+        np.where(~np.isnan(sc))[0][0] if np.where(~np.isnan(sc))[0].size > 0 else period
+    )
 
     if first_valid_idx >= len(close_prices):
         return pd.Series(np.nan, index=df.index)
@@ -605,8 +640,8 @@ def calculate_kaufman_ama(df: pd.DataFrame, period: int, fast_period: int, slow_
 
     for i in range(first_valid_idx + 1, len(close_prices)):
         if not np.isnan(sc[i]):
-            kama[i] = kama[i-1] + sc[i] * (close_prices[i] - kama[i-1])
+            kama[i] = kama[i - 1] + sc[i] * (close_prices[i] - kama[i - 1])
         else:
-            kama[i] = kama[i-1]
+            kama[i] = kama[i - 1]
 
     return pd.Series(kama, index=df.index)

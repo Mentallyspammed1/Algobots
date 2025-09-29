@@ -29,24 +29,24 @@ class MockLogger:
         self.exception_messages.append(message)
 
 
-
 class TestTradingAnalyzerIndicators(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         """Set up a sample DataFrame and config that can be used for all tests."""
         # Create a more realistic and longer sample DataFrame
         data = {
-            'start_time': pd.to_datetime(pd.date_range(start='2023-01-01', periods=100, freq='H')),
-            'open': np.random.uniform(90, 110, 100),
-            'high': np.random.uniform(100, 120, 100),
-            'low': np.random.uniform(80, 100, 100),
-            'close': np.random.uniform(95, 115, 100),
-            'volume': np.random.uniform(1000, 5000, 100)
+            "start_time": pd.to_datetime(
+                pd.date_range(start="2023-01-01", periods=100, freq="H")
+            ),
+            "open": np.random.uniform(90, 110, 100),
+            "high": np.random.uniform(100, 120, 100),
+            "low": np.random.uniform(80, 100, 100),
+            "close": np.random.uniform(95, 115, 100),
+            "volume": np.random.uniform(1000, 5000, 100),
         }
         # Ensure high is always >= close and low is always <= close
-        data['high'] = data['close'] + np.random.uniform(0, 5, 100)
-        data['low'] = data['close'] - np.random.uniform(0, 5, 100)
+        data["high"] = data["close"] + np.random.uniform(0, 5, 100)
+        data["low"] = data["close"] - np.random.uniform(0, 5, 100)
 
         cls.df = pd.DataFrame(data)
 
@@ -54,7 +54,13 @@ class TestTradingAnalyzerIndicators(unittest.TestCase):
         cls.config = load_config("config.json")
 
         # Instantiate the analyzer once for all tests to use
-        cls.analyzer = TradingAnalyzer(cls.df, cls.config, symbol_logger=MockLogger(), symbol="TESTUSDT", interval="1H")
+        cls.analyzer = TradingAnalyzer(
+            cls.df,
+            cls.config,
+            symbol_logger=MockLogger(),
+            symbol="TESTUSDT",
+            interval="1H",
+        )
 
     def test_setup_and_initialization(self):
         """Test that the analyzer is initialized correctly."""
@@ -63,6 +69,8 @@ class TestTradingAnalyzerIndicators(unittest.TestCase):
         self.assertIn("close", self.analyzer.df.columns)
 
     #    def test_calculate_sma(self):
+
+
 #        """Test the SMA calculation."""
 #        window = 10
 #        sma_series = self.analyzer._calculate_sma(window)
@@ -196,5 +204,5 @@ class TestTradingAnalyzerIndicators(unittest.TestCase):
 #        # but with 100 data points, it should calculate.
 #        self.assertFalse(pd.isna(fve_series.iloc[-1]))
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

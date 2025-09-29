@@ -199,7 +199,7 @@ if hasattr(_psplatform.Process, "rlimit"):
     _globals = globals()
     _name = None
     for _name in dir(_psutil_posix):
-        if _name.startswith('RLIM') and _name.isupper():
+        if _name.startswith("RLIM") and _name.isupper():
             _globals[_name] = getattr(_psutil_posix, _name)
             __all__.append(_name)
     del _globals, _name
@@ -208,9 +208,9 @@ AF_LINK = _psplatform.AF_LINK
 
 __author__ = "Giampaolo Rodola'"
 __version__ = "7.0.0"
-version_info = tuple(int(num) for num in __version__.split('.'))
+version_info = tuple(int(num) for num in __version__.split("."))
 
-_timer = getattr(time, 'monotonic', time.time)
+_timer = getattr(time, "monotonic", time.time)
 _TOTAL_PHYMEM = None
 _LOWEST_PID = None
 _SENTINEL = object()
@@ -221,12 +221,12 @@ _SENTINEL = object()
 # was compiled for a different version of psutil.
 # We want to prevent that by failing sooner rather than later.
 # See: https://github.com/giampaolo/psutil/issues/564
-if int(__version__.replace('.', '')) != getattr(
-    _psplatform.cext, 'version', None
+if int(__version__.replace(".", "")) != getattr(
+    _psplatform.cext, "version", None
 ):
     msg = f"version conflict: {_psplatform.cext.__file__!r} C extension "
     msg += "module was built for another version of psutil"
-    if hasattr(_psplatform.cext, 'version'):
+    if hasattr(_psplatform.cext, "version"):
         v = ".".join(list(str(_psplatform.cext.version)))
         msg += f" ({v} instead of {__version__})"
     else:
@@ -246,7 +246,7 @@ if int(__version__.replace('.', '')) != getattr(
 # =====================================================================
 
 
-if hasattr(_psplatform, 'ppid_map'):
+if hasattr(_psplatform, "ppid_map"):
     # Faster version (Windows and Linux).
     _ppid_map = _psplatform.ppid_map
 else:  # pragma: no cover
@@ -393,7 +393,7 @@ class Process:
         info = collections.OrderedDict()
         info["pid"] = self.pid
         if self._name:
-            info['name'] = self._name
+            info["name"] = self._name
         with self.oneshot():
             if self._pid_reused:
                 info["status"] = "terminated + PID reused"
@@ -411,7 +411,7 @@ class Process:
             if self._exitcode not in {_SENTINEL, None}:
                 info["exitcode"] = self._exitcode
             if self._create_time is not None:
-                info['started'] = _pprint_secs(self._create_time)
+                info["started"] = _pprint_secs(self._create_time)
 
             return "{}.{}({})".format(
                 self.__class__.__module__,
@@ -566,7 +566,7 @@ class Process:
         with self.oneshot():
             for name in ls:
                 try:
-                    if name == 'pid':
+                    if name == "pid":
                         ret = self.pid
                     else:
                         meth = getattr(self, name)
@@ -702,7 +702,7 @@ class Process:
             # try to guess exe from cmdline[0] in absence of a native
             # exe representation
             cmdline = self.cmdline()
-            if cmdline and hasattr(os, 'access') and hasattr(os, 'X_OK'):
+            if cmdline and hasattr(os, "access") and hasattr(os, "X_OK"):
                 exe = cmdline[0]  # the possible exe
                 # Attempt to guess only in case of an absolute path.
                 # It is not safe otherwise as the process might have
@@ -1209,7 +1209,7 @@ class Process:
         """
         return self._proc.open_files()
 
-    def net_connections(self, kind='inet'):
+    def net_connections(self, kind="inet"):
         """Return socket connections opened by process as a list of
         (fd, family, type, laddr, raddr, status) namedtuples.
         The *kind* parameter filters for connections that match the
@@ -1405,12 +1405,12 @@ class Popen(Process):
         return sorted(set(dir(Popen) + dir(subprocess.Popen)))
 
     def __enter__(self):
-        if hasattr(self.__subproc, '__enter__'):
+        if hasattr(self.__subproc, "__enter__"):
             self.__subproc.__enter__()
         return self
 
     def __exit__(self, *args, **kwargs):
-        if hasattr(self.__subproc, '__exit__'):
+        if hasattr(self.__subproc, "__exit__"):
             return self.__subproc.__exit__(*args, **kwargs)
         else:
             if self.stdout:
@@ -2098,7 +2098,7 @@ def disk_io_counters(perdisk=False, nowrap=True):
     if not rawdict:
         return {} if perdisk else None
     if nowrap:
-        rawdict = _wrap_numbers(rawdict, 'psutil.disk_io_counters')
+        rawdict = _wrap_numbers(rawdict, "psutil.disk_io_counters")
     nt = getattr(_psplatform, "sdiskio", _common.sdiskio)
     if perdisk:
         for disk, fields in rawdict.items():
@@ -2109,7 +2109,7 @@ def disk_io_counters(perdisk=False, nowrap=True):
 
 
 disk_io_counters.cache_clear = functools.partial(
-    _wrap_numbers.cache_clear, 'psutil.disk_io_counters'
+    _wrap_numbers.cache_clear, "psutil.disk_io_counters"
 )
 disk_io_counters.cache_clear.__doc__ = "Clears nowrap argument cache"
 
@@ -2149,7 +2149,7 @@ def net_io_counters(pernic=False, nowrap=True):
     if not rawdict:
         return {} if pernic else None
     if nowrap:
-        rawdict = _wrap_numbers(rawdict, 'psutil.net_io_counters')
+        rawdict = _wrap_numbers(rawdict, "psutil.net_io_counters")
     if pernic:
         for nic, fields in rawdict.items():
             rawdict[nic] = _common.snetio(*fields)
@@ -2159,12 +2159,12 @@ def net_io_counters(pernic=False, nowrap=True):
 
 
 net_io_counters.cache_clear = functools.partial(
-    _wrap_numbers.cache_clear, 'psutil.net_io_counters'
+    _wrap_numbers.cache_clear, "psutil.net_io_counters"
 )
 net_io_counters.cache_clear.__doc__ = "Clears nowrap argument cache"
 
 
-def net_connections(kind='inet'):
+def net_connections(kind="inet"):
     """Return system-wide socket connections as a list of
     (fd, family, type, laddr, raddr, status, pid) namedtuples.
     In case of limited privileges 'fd' and 'pid' may be set to -1
