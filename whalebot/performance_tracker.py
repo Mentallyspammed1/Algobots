@@ -44,7 +44,7 @@ class PerformanceTracker:
                     return loaded_trades
             except (json.JSONDecodeError, OSError) as e:
                 self.logger.error(
-                    f"{NEON_RED}Error loading trades from {self.config_file}: {e}{RESET}"
+                    f"{NEON_RED}Error loading trades from {self.config_file}: {e}{RESET}",
                 )
         return []
 
@@ -66,7 +66,7 @@ class PerformanceTracker:
                 json.dump(serializable_trades, f, indent=4)
         except OSError as e:
             self.logger.error(
-                f"{NEON_RED}Error saving trades to {self.config_file}: {e}{RESET}"
+                f"{NEON_RED}Error saving trades to {self.config_file}: {e}{RESET}",
             )
 
     def _recalculate_summary(self) -> None:
@@ -98,7 +98,7 @@ class PerformanceTracker:
         self._recalculate_summary()  # Update summary immediately
         self._save_trades()  # Save to file
         self.logger.info(
-            f"{NEON_CYAN}[{position['symbol']}] Trade recorded. Current Total PnL: {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}"
+            f"{NEON_CYAN}[{position['symbol']}] Trade recorded. Current Total PnL: {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}",
         )
 
     def get_summary(self) -> dict:

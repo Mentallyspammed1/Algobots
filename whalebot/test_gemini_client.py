@@ -32,12 +32,12 @@ class TestGeminiClient(unittest.TestCase):
                     "content": {
                         "parts": [
                             {
-                                "text": '```json\n{"signal": "BUY", "confidence": 0.85, "reasoning": "RSI is oversold and MACD is showing bullish momentum."}\n```'
-                            }
-                        ]
-                    }
-                }
-            ]
+                                "text": '```json\n{"signal": "BUY", "confidence": 0.85, "reasoning": "RSI is oversold and MACD is showing bullish momentum."}\n```',
+                            },
+                        ],
+                    },
+                },
+            ],
         }
         mock_response.json.return_value = api_response_content
         mock_post.return_value = mock_response
@@ -56,7 +56,7 @@ class TestGeminiClient(unittest.TestCase):
 
         mock_response = Mock()
         mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            response=error_response
+            response=error_response,
         )
         mock_post.return_value = mock_response
 
@@ -68,7 +68,9 @@ class TestGeminiClient(unittest.TestCase):
         mock_response = Mock()
         mock_response.status_code = 200
         api_response_content = {
-            "candidates": [{"content": {"parts": [{"text": "This is not valid JSON"}]}}]
+            "candidates": [
+                {"content": {"parts": [{"text": "This is not valid JSON"}]}},
+            ],
         }
         mock_response.json.return_value = api_response_content
         mock_post.return_value = mock_response

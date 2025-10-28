@@ -38,7 +38,7 @@ try:
     load_dotenv()
 except ImportError:
     print(
-        "Warning: python-dotenv not installed. Install with: pip install python-dotenv"
+        "Warning: python-dotenv not installed. Install with: pip install python-dotenv",
     )
 
 try:
@@ -56,14 +56,13 @@ try:
 except ImportError:
     WEBSOCKET_AVAILABLE = False
     print(
-        "Warning: websocket-client not installed. Install with: pip install websocket-client"
+        "Warning: websocket-client not installed. Install with: pip install websocket-client",
     )
 
 # Pybit imports with fallback
 try:
     import pybit.exceptions
-    from pybit.unified_trading import HTTP as PybitHTTP
-    from pybit.unified_trading import WebSocket
+    from pybit.unified_trading import HTTP as PybitHTTP, WebSocket
 
     PYBIT_AVAILABLE = True
 except ImportError:
@@ -228,7 +227,9 @@ def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> f
 
 
 def safe_decimal_divide(
-    numerator: Decimal, denominator: Decimal, default: Decimal = Decimal("0")
+    numerator: Decimal,
+    denominator: Decimal,
+    default: Decimal = Decimal("0"),
 ) -> Decimal:
     """Safely divides two Decimals."""
     try:
@@ -390,7 +391,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict:
                 "adx": 0.10,
                 "candlestick_patterns": 0.05,
                 "mtf_confluence": 0.10,
-            }
+            },
         },
     }
 
@@ -454,18 +455,20 @@ def setup_logger(name: str, level=logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
 
         # File handler
         log_file = Path(LOG_DIRECTORY) / f"{name}.log"
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
 
@@ -521,7 +524,9 @@ class PybitTradingClient:
 
         try:
             self.session = PybitHTTP(
-                api_key=API_KEY, api_secret=API_SECRET, testnet=False
+                api_key=API_KEY,
+                api_secret=API_SECRET,
+                testnet=False,
             )
             self.enabled = True
             self.logger.info("Bybit API client initialized successfully.")
@@ -545,7 +550,10 @@ class PybitTradingClient:
         return None
 
     def fetch_klines(
-        self, symbol: str, interval: str, limit: int = 200
+        self,
+        symbol: str,
+        interval: str,
+        limit: int = 200,
     ) -> pd.DataFrame | None:
         """Fetches historical kline data."""
         if not self.enabled:
@@ -553,7 +561,10 @@ class PybitTradingClient:
 
         try:
             response = self.session.get_kline(
-                category=self.category, symbol=symbol, interval=interval, limit=limit
+                category=self.category,
+                symbol=symbol,
+                interval=interval,
+                limit=limit,
             )
 
             if response["retCode"] == 0 and response["result"]["list"]:
@@ -594,7 +605,9 @@ class PybitTradingClient:
 
         try:
             response = self.session.get_orderbook(
-                category=self.category, symbol=symbol, limit=limit
+                category=self.category,
+                symbol=symbol,
+                limit=limit,
             )
 
             if response["retCode"] == 0:
@@ -645,14 +658,16 @@ class PybitTradingClient:
             if response["retCode"] == 0:
                 self.logger.info(f"Order placed: {side} {qty} {symbol}")
                 return response["result"]
-            else:
-                self.logger.error(f"Order failed: {response.get('retMsg')}")
+            self.logger.error(f"Order failed: {response.get('retMsg')}")
         except Exception as e:
             self.logger.error(f"Error placing order: {e}")
         return None
 
     def cancel_order(
-        self, symbol: str, order_id: str = None, order_link_id: str = None
+        self,
+        symbol: str,
+        order_id: str = None,
+        order_link_id: str = None,
     ) -> bool:
         """Cancels an order."""
         if not self.enabled:
@@ -710,7 +725,7 @@ class PybitTradingClient:
 
             if response["retCode"] == 0:
                 self.logger.info(
-                    f"Leverage set: {symbol} Buy={buy_leverage}x, Sell={sell_leverage}x"
+                    f"Leverage set: {symbol} Buy={buy_leverage}x, Sell={sell_leverage}x",
                 )
                 return True
         except Exception as e:
@@ -749,7 +764,10 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_macd(
-        df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9
+        df: pd.DataFrame,
+        fast: int = 12,
+        slow: int = 26,
+        signal: int = 9,
     ) -> pd.DataFrame:
         """MACD indicator"""
         if not PANDAS_TA_AVAILABLE:
@@ -759,13 +777,15 @@ class TechnicalIndicators:
             signal_line = macd.ewm(span=signal, adjust=False).mean()
             histogram = macd - signal_line
             return pd.DataFrame(
-                {"MACD": macd, "Signal": signal_line, "Histogram": histogram}
+                {"MACD": macd, "Signal": signal_line, "Histogram": histogram},
             )
         return ta.macd(df["close"], fast=fast, slow=slow, signal=signal)
 
     @staticmethod
     def calculate_bollinger_bands(
-        df: pd.DataFrame, period: int = 20, std_dev: float = 2.0
+        df: pd.DataFrame,
+        period: int = 20,
+        std_dev: float = 2.0,
     ) -> pd.DataFrame:
         """Bollinger Bands"""
         if not PANDAS_TA_AVAILABLE:
@@ -774,7 +794,7 @@ class TechnicalIndicators:
             upper = sma + (std * std_dev)
             lower = sma - (std * std_dev)
             return pd.DataFrame(
-                {"BB_Upper": upper, "BB_Middle": sma, "BB_Lower": lower}
+                {"BB_Upper": upper, "BB_Middle": sma, "BB_Lower": lower},
             )
         return ta.bbands(df["close"], length=period, std=std_dev)
 
@@ -792,7 +812,10 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_stochastic_rsi(
-        df: pd.DataFrame, period: int = 14, k_period: int = 3, d_period: int = 3
+        df: pd.DataFrame,
+        period: int = 14,
+        k_period: int = 3,
+        d_period: int = 3,
     ) -> pd.DataFrame:
         """Stochastic RSI"""
         if not PANDAS_TA_AVAILABLE:
@@ -804,7 +827,11 @@ class TechnicalIndicators:
             stoch_rsi_d = stoch_rsi_k.rolling(d_period).mean()
             return pd.DataFrame({"K": stoch_rsi_k, "D": stoch_rsi_d})
         return ta.stochrsi(
-            df["close"], length=period, rsi_length=period, k=k_period, d=d_period
+            df["close"],
+            length=period,
+            rsi_length=period,
+            k=k_period,
+            d=d_period,
         )
 
     @staticmethod
@@ -844,7 +871,10 @@ class PositionManager:
     """Manages trading positions and orders."""
 
     def __init__(
-        self, config: dict, logger: logging.Logger, client: PybitTradingClient
+        self,
+        config: dict,
+        logger: logging.Logger,
+        client: PybitTradingClient,
     ):
         self.config = config
         self.logger = logger
@@ -857,7 +887,10 @@ class PositionManager:
         )
 
     def calculate_position_size(
-        self, price: Decimal, stop_loss: Decimal, account_balance: Decimal
+        self,
+        price: Decimal,
+        stop_loss: Decimal,
+        account_balance: Decimal,
     ) -> Decimal:
         """Calculates position size based on risk management."""
         risk_amount = account_balance * self.risk_per_trade
@@ -876,7 +909,11 @@ class PositionManager:
         return position_size
 
     def open_position(
-        self, signal: str, price: Decimal, atr: Decimal, conviction: float = 1.0
+        self,
+        signal: str,
+        price: Decimal,
+        atr: Decimal,
+        conviction: float = 1.0,
     ) -> dict | None:
         """Opens a new trading position."""
         if len(self.positions) >= self.max_positions:
@@ -885,10 +922,10 @@ class PositionManager:
 
         # Calculate stop loss and take profit
         sl_multiplier = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         tp_multiplier = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
 
         if signal == "BUY":
@@ -900,7 +937,7 @@ class PositionManager:
 
         # Calculate position size
         account_balance = Decimal(
-            str(self.config["trade_management"]["account_balance"])
+            str(self.config["trade_management"]["account_balance"]),
         )
         position_size = self.calculate_position_size(price, stop_loss, account_balance)
 
@@ -910,10 +947,12 @@ class PositionManager:
         # Round to appropriate precision
         position_size = round_qty(position_size, Decimal("0.001"))
         stop_loss = round_price(
-            stop_loss, self.config["trade_management"]["price_precision"]
+            stop_loss,
+            self.config["trade_management"]["price_precision"],
         )
         take_profit = round_price(
-            take_profit, self.config["trade_management"]["price_precision"]
+            take_profit,
+            self.config["trade_management"]["price_precision"],
         )
 
         # Create position object
@@ -1044,7 +1083,8 @@ class PositionManager:
         if self.config["execution"]["use_pybit"] and self.client.enabled:
             if "order_id" in position:
                 self.client.cancel_order(
-                    symbol=position["symbol"], order_id=position["order_id"]
+                    symbol=position["symbol"],
+                    order_id=position["order_id"],
                 )
 
 
@@ -1138,30 +1178,36 @@ class TradingAnalyzer:
 
         # ATR (always needed for position sizing)
         self.indicators["ATR"] = indicator_calc.calculate_atr(
-            self.df, settings["atr_period"]
+            self.df,
+            settings["atr_period"],
         )
 
         # Moving Averages
         if self.config["indicators"].get("ema_alignment"):
             self.indicators["EMA_short"] = indicator_calc.calculate_ema(
-                self.df, settings["ema_short_period"]
+                self.df,
+                settings["ema_short_period"],
             )
             self.indicators["EMA_long"] = indicator_calc.calculate_ema(
-                self.df, settings["ema_long_period"]
+                self.df,
+                settings["ema_long_period"],
             )
 
         if self.config["indicators"].get("sma_trend_filter"):
             self.indicators["SMA_short"] = indicator_calc.calculate_sma(
-                self.df, settings["sma_short_period"]
+                self.df,
+                settings["sma_short_period"],
             )
             self.indicators["SMA_long"] = indicator_calc.calculate_sma(
-                self.df, settings["sma_long_period"]
+                self.df,
+                settings["sma_long_period"],
             )
 
         # Momentum Indicators
         if self.config["indicators"].get("rsi"):
             self.indicators["RSI"] = indicator_calc.calculate_rsi(
-                self.df, settings["rsi_period"]
+                self.df,
+                settings["rsi_period"],
             )
 
         if self.config["indicators"].get("stoch_rsi"):
@@ -1415,7 +1461,7 @@ def display_status(
         for pos in open_positions:
             pnl_color = NEON_GREEN if pos["pnl"] >= 0 else NEON_RED
             logger.info(
-                f"  {pos['side']} {pos['size']} @ {pos['entry_price']} | PnL: {pnl_color}{pos['pnl']:.2f}{RESET}"
+                f"  {pos['side']} {pos['size']} @ {pos['entry_price']} | PnL: {pnl_color}{pos['pnl']:.2f}{RESET}",
             )
     else:
         logger.info("No open positions")
@@ -1425,7 +1471,7 @@ def display_status(
     pnl_color = NEON_GREEN if stats["total_pnl"] >= 0 else NEON_RED
     logger.info(f"Total PnL: {pnl_color}{stats['total_pnl']:.2f}{RESET}")
     logger.info(
-        f"Win Rate: {stats['win_rate']:.1f}% ({stats['win_count']}/{stats['total_trades']})"
+        f"Win Rate: {stats['win_rate']:.1f}% ({stats['win_count']}/{stats['total_trades']})",
     )
     logger.info(f"Max Drawdown: {stats['max_drawdown']:.2f}")
 
@@ -1446,7 +1492,7 @@ async def main():
     if config["execution"]["use_pybit"]:
         if not API_KEY or not API_SECRET:
             logger.error(
-                f"{NEON_RED}API credentials not set. Cannot use live trading.{RESET}"
+                f"{NEON_RED}API credentials not set. Cannot use live trading.{RESET}",
             )
             config["execution"]["use_pybit"] = False
 
@@ -1469,7 +1515,7 @@ async def main():
     logger.info(f"Trading Symbol: {config['symbol']}")
     logger.info(f"Interval: {config['interval']}")
     logger.info(
-        f"Live Trading: {'Enabled' if config['execution']['use_pybit'] else 'Disabled'}"
+        f"Live Trading: {'Enabled' if config['execution']['use_pybit'] else 'Disabled'}",
     )
 
     # Main loop
@@ -1495,11 +1541,11 @@ async def main():
 
                 if stats["daily_pnl"] <= -max_daily_loss:
                     logger.error(
-                        f"{NEON_RED}Daily loss limit reached. Stopping trading.{RESET}"
+                        f"{NEON_RED}Daily loss limit reached. Stopping trading.{RESET}",
                     )
                     alert_system.send_alert("Daily loss limit reached", "ERROR")
                     await asyncio.sleep(
-                        config["risk_guardrails"]["cooldown_after_kill_min"] * 60
+                        config["risk_guardrails"]["cooldown_after_kill_min"] * 60,
                     )
                     continue
 
@@ -1512,11 +1558,11 @@ async def main():
 
                 if stats["max_drawdown"] >= max_drawdown:
                     logger.error(
-                        f"{NEON_RED}Max drawdown reached. Stopping trading.{RESET}"
+                        f"{NEON_RED}Max drawdown reached. Stopping trading.{RESET}",
                     )
                     alert_system.send_alert("Max drawdown reached", "ERROR")
                     await asyncio.sleep(
-                        config["risk_guardrails"]["cooldown_after_kill_min"] * 60
+                        config["risk_guardrails"]["cooldown_after_kill_min"] * 60,
                     )
                     continue
 
@@ -1535,7 +1581,9 @@ async def main():
 
             # Fetch market data
             df = pybit_client.fetch_klines(
-                config["symbol"], config["interval"], limit=200
+                config["symbol"],
+                config["interval"],
+                limit=200,
             )
 
             if df is None or df.empty:
@@ -1547,7 +1595,8 @@ async def main():
             orderbook_data = None
             if config["indicators"].get("orderbook_imbalance"):
                 orderbook_data = pybit_client.fetch_orderbook(
-                    config["symbol"], config["orderbook_limit"]
+                    config["symbol"],
+                    config["orderbook_limit"],
                 )
 
             # Multi-timeframe analysis
@@ -1570,13 +1619,15 @@ async def main():
                                 mtf_trends[f"HTF_{htf}"] = "DOWN"
 
                     await asyncio.sleep(
-                        config["mtf_analysis"]["mtf_request_delay_seconds"]
+                        config["mtf_analysis"]["mtf_request_delay_seconds"],
                     )
 
             # Analyze and generate signal
             analyzer = TradingAnalyzer(df, config, logger)
             signal, score, breakdown = analyzer.generate_signal(
-                current_price, orderbook_data, mtf_trends
+                current_price,
+                orderbook_data,
+                mtf_trends,
             )
 
             # Store ATR for position sizing
@@ -1595,25 +1646,35 @@ async def main():
 
             # Display status
             display_status(
-                analyzer, position_manager, performance_tracker, signal, score, logger
+                analyzer,
+                position_manager,
+                performance_tracker,
+                signal,
+                score,
+                logger,
             )
 
             # Execute signal
             if signal != "HOLD" and abs(score) >= config["signal_score_threshold"]:
                 # Calculate conviction
                 conviction = min(
-                    1.0, abs(score) / (config["signal_score_threshold"] * 2)
+                    1.0,
+                    abs(score) / (config["signal_score_threshold"] * 2),
                 )
 
                 # Open position
                 atr_value = Decimal(str(config.get("_last_atr_value", 1.0)))
                 position = position_manager.open_position(
-                    signal, current_price, atr_value, conviction
+                    signal,
+                    current_price,
+                    atr_value,
+                    conviction,
                 )
 
                 if position:
                     alert_system.send_alert(
-                        f"Position opened: {signal} @ {current_price}", "INFO"
+                        f"Position opened: {signal} @ {current_price}",
+                        "INFO",
                     )
 
             # Sleep before next iteration

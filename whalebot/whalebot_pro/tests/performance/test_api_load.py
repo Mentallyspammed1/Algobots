@@ -97,7 +97,7 @@ async def test_concurrent_api_calls_performance(bybit_client_for_performance):
 
     total_mocked_calls = num_calls * 3  # 3 types of calls per iteration
     bybit_client_for_performance.logger.info(
-        f"Performed {total_mocked_calls} mocked API calls in {duration:.4f} seconds."
+        f"Performed {total_mocked_calls} mocked API calls in {duration:.4f} seconds.",
     )
 
     # Assert that the mocked HTTP session methods were called the expected number of times

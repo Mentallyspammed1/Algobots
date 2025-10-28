@@ -20,7 +20,7 @@ class PerformanceTracker:
         self.wins = 0
         self.losses = 0
         self.trading_fee_percent = Decimal(
-            str(config["trade_management"].get("trading_fee_percent", 0.0))
+            str(config["trade_management"].get("trading_fee_percent", 0.0)),
         )
 
     def record_trade(self, position: dict, pnl: Decimal) -> None:
@@ -50,7 +50,7 @@ class PerformanceTracker:
         else:
             self.losses += 1
         self.logger.info(
-            f"{NEON_CYAN}[{position['symbol']}] Trade recorded. PnL (before fees): {pnl.normalize():.2f}, Total Fees: {total_fees.normalize():.2f}, Current Total PnL (after fees): {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}"
+            f"{NEON_CYAN}[{position['symbol']}] Trade recorded. PnL (before fees): {pnl.normalize():.2f}, Total Fees: {total_fees.normalize():.2f}, Current Total PnL (after fees): {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}",
         )
         # self.logger.info("Trade recorded", extra=trade_record) # This requires a logger configured to handle 'extra'
 

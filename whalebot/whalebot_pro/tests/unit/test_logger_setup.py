@@ -23,7 +23,8 @@ def mock_os_path_join():
 # Test basic logging setup (when unanimous_logger is not available)
 def test_basic_logging_setup(mock_path_mkdir, mock_os_path_join):
     with patch.dict(
-        sys.modules, {"unanimous_logger": None}
+        sys.modules,
+        {"unanimous_logger": None},
     ):  # Simulate unanimous_logger not found
         config_dict = {"log_level": "DEBUG", "log_filename": "test_basic.log"}
         logger = setup_logging(config_dict)

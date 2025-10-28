@@ -55,7 +55,7 @@ def setup_logging(config):
             logger.setLevel(getattr(logging, config_obj.LOG_LEVEL))
 
             formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             )
 
             # Stream handler
@@ -85,7 +85,7 @@ def setup_logging(config):
                     for h in logger.handlers
                 ):
                     json_formatter = logging.Formatter(
-                        """{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}"""
+                        """{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}""",
                     )
                     json_fh = logging.FileHandler(json_log_path)
                     json_fh.setLevel(getattr(logging, config_obj.LOG_LEVEL))
@@ -95,7 +95,9 @@ def setup_logging(config):
 
         logger_config = BasicLoggerConfig(config)
         logger = setup_basic_logger(
-            logger_config, log_name="wb", json_log_file="wb.json.log"
+            logger_config,
+            log_name="wb",
+            json_log_file="wb.json.log",
         )
         return logger
 

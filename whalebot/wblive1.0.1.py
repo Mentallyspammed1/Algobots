@@ -253,7 +253,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "orderbook_imbalance": 0.10,
                 "mtf_trend_confluence": 0.25,
                 "volatility_index_signal": 0.10,
-            }
+            },
         },
         "execution": {
             "use_pybit": False,
@@ -371,16 +371,18 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
         log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
     return logger
@@ -416,7 +418,7 @@ class PybitTradingClient:
                 timeout=REQUEST_TIMEOUT,
             )
             self.logger.info(
-                f"{NEON_GREEN}PyBit client initialized. Testnet={self.testnet}{RESET}"
+                f"{NEON_GREEN}PyBit client initialized. Testnet={self.testnet}{RESET}",
             )
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.enabled = False
@@ -432,7 +434,7 @@ class PybitTradingClient:
             overrides.get(
                 "HEDGE_BUY" if side == "BUY" else "HEDGE_SELL",
                 1 if side == "BUY" else 2,
-            )
+            ),
         )
 
     def _side_to_bybit(self, side: Literal["BUY", "SELL"]) -> str:
@@ -450,7 +452,7 @@ class PybitTradingClient:
             return
         if not self._ok(resp):
             self.logger.error(
-                f"{NEON_RED}{action}: Error {resp.get('retCode')} - {resp.get('retMsg')}{RESET}"
+                f"{NEON_RED}{action}: Error {resp.get('retCode')} - {resp.get('retMsg')}{RESET}",
             )
 
     def set_leverage(self, symbol: str, buy: str, sell: str) -> bool:
@@ -470,7 +472,7 @@ class PybitTradingClient:
             pybit.exceptions.PybitHTTPException,
         ) as e:
             self.logger.error(
-                f"{NEON_RED}set_leverage failed: {e}. Please check symbol, leverage, and account status.{RESET}"
+                f"{NEON_RED}set_leverage failed: {e}. Please check symbol, leverage, and account status.{RESET}",
             )
             return False
 
@@ -521,7 +523,7 @@ class PybitTradingClient:
             ):
                 return Decimal(response["result"]["list"][0]["lastPrice"])
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}"
+                f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
@@ -533,7 +535,8 @@ class PybitTradingClient:
             return None
         try:
             response = self.session.get_instruments_info(
-                category="linear", symbol=symbol
+                category="linear",
+                symbol=symbol,
             )
             if (
                 response
@@ -542,7 +545,7 @@ class PybitTradingClient:
             ):
                 return response["result"]["list"][0]
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch instrument info for {symbol}.{RESET}"
+                f"{NEON_YELLOW}Could not fetch instrument info for {symbol}.{RESET}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
@@ -550,7 +553,10 @@ class PybitTradingClient:
             return None
 
     def fetch_klines(
-        self, symbol: str, interval: str, limit: int
+        self,
+        symbol: str,
+        interval: str,
+        limit: int,
     ) -> pd.DataFrame | None:
         if not self.enabled:
             return None
@@ -576,7 +582,9 @@ class PybitTradingClient:
                     ],
                 )
                 df["start_time"] = pd.to_datetime(
-                    df["start_time"].astype(int), unit="ms", utc=True
+                    df["start_time"].astype(int),
+                    unit="ms",
+                    utc=True,
                 ).dt.tz_convert(TIMEZONE)
                 for col in ["open", "high", "low", "close", "volume", "turnover"]:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -584,7 +592,7 @@ class PybitTradingClient:
                 df.sort_index(inplace=True)
                 return df if not df.empty else None
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}.{RESET}"
+                f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}.{RESET}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
@@ -596,12 +604,14 @@ class PybitTradingClient:
             return None
         try:
             response = self.session.get_orderbook(
-                category="linear", symbol=symbol, limit=limit
+                category="linear",
+                symbol=symbol,
+                limit=limit,
             )
             if response and response.get("result"):
                 return response["result"]
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch orderbook for {symbol}.{RESET}"
+                f"{NEON_YELLOW}Could not fetch orderbook for {symbol}.{RESET}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
@@ -634,7 +644,7 @@ class PositionManager:
     def _update_precision_from_exchange(self):
         if not self.pybit or not self.pybit.enabled:
             self.logger.warning(
-                f"Pybit client not enabled. Using config precision for {self.symbol}."
+                f"Pybit client not enabled. Using config precision for {self.symbol}.",
             )
             return
         info = self.pybit.fetch_instrument_info(self.symbol)
@@ -644,7 +654,7 @@ class PositionManager:
                 if not self.qty_step.is_zero():
                     self.order_precision = abs(self.qty_step.as_tuple().exponent)
                 self.logger.info(
-                    f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}"
+                    f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}",
                 )
             if "priceFilter" in info:
                 tick_size = Decimal(str(info["priceFilter"].get("tickSize")))
@@ -653,7 +663,7 @@ class PositionManager:
                 self.logger.info(f"Updated price_precision: {self.price_precision}")
         else:
             self.logger.warning(
-                f"Could not fetch precision for {self.symbol}. Using config values."
+                f"Could not fetch precision for {self.symbol}. Using config values.",
             )
 
     def _get_current_balance(self) -> Decimal:
@@ -666,7 +676,10 @@ class PositionManager:
         return Decimal(str(self.config["trade_management"]["account_balance"]))
 
     def _calculate_order_size(
-        self, current_price: Decimal, atr_value: Decimal, conviction: float = 1.0
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
+        conviction: float = 1.0,
     ) -> Decimal:
         if not self.trade_management_enabled:
             return Decimal("0")
@@ -678,13 +691,13 @@ class PositionManager:
         # Scale risk by conviction (e.g., 0.5x to 1.5x of base risk)
         risk_pct = base_risk_pct * Decimal(str(np.clip(0.5 + conviction, 0.5, 1.5)))
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         risk_amount = account_balance * risk_pct
         stop_loss_distance = atr_value * stop_loss_atr_multiple
         if stop_loss_distance <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}Stop loss distance is zero. Cannot calculate order size.{RESET}"
+                f"{NEON_YELLOW}Stop loss distance is zero. Cannot calculate order size.{RESET}",
             )
             return Decimal("0")
         order_qty = (risk_amount / stop_loss_distance) / current_price
@@ -692,7 +705,8 @@ class PositionManager:
             round_qty(order_qty, self.qty_step)
             if self.qty_step
             else order_qty.quantize(
-                Decimal(f"1e-{self.order_precision}"), rounding=ROUND_DOWN
+                Decimal(f"1e-{self.order_precision}"),
+                rounding=ROUND_DOWN,
             )
         )
 
@@ -708,18 +722,20 @@ class PositionManager:
             or len(self.open_positions) >= self.max_open_positions
         ):
             self.logger.info(
-                f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}"
+                f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}",
             )
             return None
         order_qty = self._calculate_order_size(current_price, atr_value, conviction)
         if order_qty <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}Order quantity is zero. Cannot open position.{RESET}"
+                f"{NEON_YELLOW}Order quantity is zero. Cannot open position.{RESET}",
             )
             return None
         stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
         take_profit = self._calculate_take_profit_price(
-            signal, current_price, atr_value
+            signal,
+            current_price,
+            atr_value,
         )
         position = {
             "entry_time": datetime.now(TIMEZONE),
@@ -735,7 +751,7 @@ class PositionManager:
         }
         self.open_positions.append(position)
         self.logger.info(
-            f"{NEON_GREEN}Opened {signal} position (simulated): {position}{RESET}"
+            f"{NEON_GREEN}Opened {signal} position (simulated): {position}{RESET}",
         )
         # Live trading logic would go here
         return position
@@ -762,7 +778,7 @@ class PositionManager:
                             "exit_time": datetime.now(TIMEZONE),
                             "exit_price": current_price,
                             "closed_by": closed_by,
-                        }
+                        },
                     )
                     pnl = (
                         ((current_price - pos["entry_price"]) * pos["qty"])
@@ -771,7 +787,7 @@ class PositionManager:
                     )
                     performance_tracker.record_trade(pos, pnl)
                     self.logger.info(
-                        f"{NEON_PURPLE}Closed {pos['side']} by {closed_by}. PnL: {pnl:.2f}{RESET}"
+                        f"{NEON_PURPLE}Closed {pos['side']} by {closed_by}. PnL: {pnl:.2f}{RESET}",
                     )
                     positions_to_close.append(i)
         self.open_positions = [
@@ -782,10 +798,13 @@ class PositionManager:
         return [pos for pos in self.open_positions if pos["status"] == "OPEN"]
 
     def _compute_stop_loss_price(
-        self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
+        self,
+        side: Literal["BUY", "SELL"],
+        entry_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         sl_mult = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         sl = (
             (entry_price - atr_value * sl_mult)
@@ -795,10 +814,13 @@ class PositionManager:
         return round_price(sl, self.price_precision)
 
     def _calculate_take_profit_price(
-        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+        self,
+        signal: Literal["BUY", "SELL"],
+        current_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         tp_mult = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
         tp = (
             (current_price + (atr_value * tp_mult))
@@ -811,20 +833,22 @@ class PositionManager:
         if pos.get("status") != "OPEN" or self.live:
             return
         atr_mult = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         side = pos["side"]
         pos["best_price"] = pos.get("best_price", pos["entry_price"])
         if side == "BUY":
             pos["best_price"] = max(pos["best_price"], current_price)
             new_sl = round_price(
-                pos["best_price"] - atr_mult * atr_value, self.price_precision
+                pos["best_price"] - atr_mult * atr_value,
+                self.price_precision,
             )
             pos["stop_loss"] = max(pos["stop_loss"], new_sl)
         else:  # SELL
             pos["best_price"] = min(pos["best_price"], current_price)
             new_sl = round_price(
-                pos["best_price"] + atr_mult * atr_value, self.price_precision
+                pos["best_price"] + atr_mult * atr_value,
+                self.price_precision,
             )
             pos["stop_loss"] = min(pos["stop_loss"], new_sl)
 
@@ -862,7 +886,7 @@ class PositionManager:
                     pos["entry_price"] = total_cost / pos["qty"]
                     pos["adds"] = adds + 1
                     self.logger.info(
-                        f"{NEON_GREEN}Pyramiding add #{pos['adds']} qty={add_qty}. New avg price: {pos['entry_price']:.2f}{RESET}"
+                        f"{NEON_GREEN}Pyramiding add #{pos['adds']} qty={add_qty}. New avg price: {pos['entry_price']:.2f}{RESET}",
                     )
 
 
@@ -892,7 +916,7 @@ class PerformanceTracker:
         drawdown = self.peak_pnl - self.total_pnl
         self.max_drawdown = max(self.max_drawdown, drawdown)
         self.logger.info(
-            f"{NEON_CYAN}Trade recorded. PnL: {pnl:.4f}. Total PnL: {self.total_pnl:.4f}{RESET}"
+            f"{NEON_CYAN}Trade recorded. PnL: {pnl:.4f}. Total PnL: {self.total_pnl:.4f}{RESET}",
         )
 
     def day_pnl(self) -> Decimal:
@@ -949,7 +973,7 @@ class TradingAnalyzer:
         self.indicator_settings = config["indicator_settings"]
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}TradingAnalyzer initialized with empty DataFrame.{RESET}"
+                f"{NEON_YELLOW}TradingAnalyzer initialized with empty DataFrame.{RESET}",
             )
             return
         self._calculate_all_indicators()
@@ -976,12 +1000,12 @@ class TradingAnalyzer:
             )
             if is_empty:
                 self.logger.warning(
-                    f"{NEON_YELLOW}[{self.symbol}] Indicator '{name}' returned empty.{RESET}"
+                    f"{NEON_YELLOW}[{self.symbol}] Indicator '{name}' returned empty.{RESET}",
                 )
             return result if not is_empty else None
         except Exception as e:
             self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Error calculating '{name}': {e}{RESET}"
+                f"{NEON_RED}[{self.symbol}] Error calculating '{name}': {e}{RESET}",
             )
             return None
 
@@ -995,7 +1019,9 @@ class TradingAnalyzer:
         # Example:
         if cfg["indicators"].get("sma_10", False):
             self.df["SMA_10"] = self._safe_calculate(
-                indicators.calculate_sma, "SMA_10", period=isd["sma_short_period"]
+                indicators.calculate_sma,
+                "SMA_10",
+                period=isd["sma_short_period"],
             )
             if self.df["SMA_10"] is not None and not self.df["SMA_10"].empty:
                 self.indicator_values["SMA_10"] = self.df["SMA_10"].iloc[-1]
@@ -1005,7 +1031,7 @@ class TradingAnalyzer:
         self.df.fillna(0, inplace=True)
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}DataFrame empty after indicator calculations.{RESET}"
+                f"{NEON_YELLOW}DataFrame empty after indicator calculations.{RESET}",
             )
 
     def _get_indicator_value(self, key: str, default: Any = np.nan) -> Any:
@@ -1064,8 +1090,9 @@ class TradingAnalyzer:
             return 0.0, None
         imb = self._clip(
             self._check_orderbook(
-                Decimal(str(self.df["close"].iloc[-1])), orderbook_data
-            )
+                Decimal(str(self.df["close"].iloc[-1])),
+                orderbook_data,
+            ),
         )
         if abs(imb) < 0.05:
             return 0.0, None
@@ -1175,7 +1202,7 @@ class TradingAnalyzer:
         if notes_sell:
             self.logger.info(f"{NEON_RED}Sell Factors: {', '.join(notes_sell)}{RESET}")
         self.logger.info(
-            f"{NEON_YELLOW}Regime: {regime} | Score: {score:.2f} | DynThresh: {dyn_th:.2f} | Final: {final_signal}{RESET}"
+            f"{NEON_YELLOW}Regime: {regime} | Score: {score:.2f} | DynThresh: {dyn_th:.2f} | Final: {final_signal}{RESET}",
         )
         return final_signal, float(score)
 
@@ -1282,7 +1309,7 @@ def main() -> None:
     while True:
         try:
             logger.info(
-                f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+                f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}",
             )
 
             # --- GUARDRAILS & FILTERS ---
@@ -1303,7 +1330,7 @@ def main() -> None:
                     performance_tracker.max_drawdown >= max_dd
                 ):
                     logger.error(
-                        f"{NEON_RED}KILL SWITCH: Risk limits hit. Cooling down.{RESET}"
+                        f"{NEON_RED}KILL SWITCH: Risk limits hit. Cooling down.{RESET}",
                     )
                     time.sleep(int(guard.get("cooldown_after_kill_min", 120)) * 60)
                     continue
@@ -1326,7 +1353,8 @@ def main() -> None:
 
             orderbook_data = (
                 pybit_client.fetch_orderbook(
-                    config["symbol"], config["orderbook_limit"]
+                    config["symbol"],
+                    config["orderbook_limit"],
                 )
                 if config["indicators"].get("orderbook_imbalance")
                 else None
@@ -1336,7 +1364,7 @@ def main() -> None:
                 spread_bps = get_spread_bps(orderbook_data)
                 if spread_bps > float(guard.get("spread_filter_bps", 5.0)):
                     logger.warning(
-                        f"{NEON_YELLOW}Spread too high ({spread_bps:.1f} bps). Holding.{RESET}"
+                        f"{NEON_YELLOW}Spread too high ({spread_bps:.1f} bps). Holding.{RESET}",
                     )
                     time.sleep(config["loop_delay"])
                     continue
@@ -1365,10 +1393,12 @@ def main() -> None:
                 continue
 
             atr_value = Decimal(
-                str(analyzer._get_indicator_value("ATR", Decimal("0.1")))
+                str(analyzer._get_indicator_value("ATR", Decimal("0.1"))),
             )
             trading_signal, signal_score = analyzer.generate_trading_signal(
-                current_price, orderbook_data, mtf_trends
+                current_price,
+                orderbook_data,
+                mtf_trends,
             )
 
             # --- POSITION MANAGEMENT (SIMULATION) ---
@@ -1387,21 +1417,24 @@ def main() -> None:
                             abs(signal_score)
                             / max(config["signal_score_threshold"], 1.0),
                         ),
-                    )
+                    ),
                 )
                 position_manager.open_position(
-                    trading_signal, current_price, atr_value, conviction
+                    trading_signal,
+                    current_price,
+                    atr_value,
+                    conviction,
                 )
             else:
                 logger.info(
-                    f"{NEON_BLUE}No strong signal. Holding. Score: {signal_score:.2f}{RESET}"
+                    f"{NEON_BLUE}No strong signal. Holding. Score: {signal_score:.2f}{RESET}",
                 )
 
             logger.info(
-                f"{NEON_YELLOW}Performance: {performance_tracker.get_summary()}{RESET}"
+                f"{NEON_YELLOW}Performance: {performance_tracker.get_summary()}{RESET}",
             )
             logger.info(
-                f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---{RESET}"
+                f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---{RESET}",
             )
             time.sleep(config["loop_delay"])
 

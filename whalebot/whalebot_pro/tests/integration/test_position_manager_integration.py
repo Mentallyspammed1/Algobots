@@ -49,7 +49,7 @@ def mock_bybit_client(mock_config):
     client.symbol = mock_config.symbol
     client.precision_manager = MagicMock()
     client.precision_manager.round_qty.side_effect = lambda qty, sym: qty.quantize(
-        Decimal("0.001")
+        Decimal("0.001"),
     )
     client.precision_manager.round_price.side_effect = (
         lambda price, sym: price.quantize(Decimal("0.01"))
@@ -79,7 +79,7 @@ async def test_sync_positions_from_exchange(position_manager, mock_bybit_client)
             "stopLoss": "39000",
             "takeProfit": "41000",
             "positionIdx": 0,
-        }
+        },
     ]
     await position_manager.sync_positions_from_exchange()
     assert len(position_manager.open_positions) == 1
@@ -89,7 +89,9 @@ async def test_sync_positions_from_exchange(position_manager, mock_bybit_client)
 
 @pytest.mark.asyncio
 async def test_open_position_success(
-    position_manager, mock_bybit_client, performance_tracker
+    position_manager,
+    mock_bybit_client,
+    performance_tracker,
 ):
     mock_bybit_client.get_wallet_balance.return_value = Decimal("1000")
     mock_bybit_client.get_positions.return_value = []  # No open positions
@@ -101,7 +103,9 @@ async def test_open_position_success(
     mock_bybit_client.set_trading_stop.return_value = True
 
     new_pos = await position_manager.open_position(
-        "Buy", Decimal("40000"), Decimal("100")
+        "Buy",
+        Decimal("40000"),
+        Decimal("100"),
     )
     assert new_pos is not None
     assert new_pos["side"] == "Buy"
@@ -112,7 +116,9 @@ async def test_open_position_success(
 
 @pytest.mark.asyncio
 async def test_close_position_success(
-    position_manager, mock_bybit_client, performance_tracker
+    position_manager,
+    mock_bybit_client,
+    performance_tracker,
 ):
     # Setup an existing position
     existing_pos = {
@@ -141,7 +147,9 @@ async def test_close_position_success(
     performance_tracker.record_trade = MagicMock()
 
     await position_manager.close_position(
-        existing_pos, Decimal("40050"), performance_tracker
+        existing_pos,
+        Decimal("40050"),
+        performance_tracker,
     )
     assert len(position_manager.open_positions) == 0
     mock_bybit_client.place_order.assert_called_once()
@@ -150,7 +158,9 @@ async def test_close_position_success(
 
 @pytest.mark.asyncio
 async def test_manage_positions_breakeven_activated(
-    position_manager, mock_bybit_client, performance_tracker
+    position_manager,
+    mock_bybit_client,
+    performance_tracker,
 ):
     # Setup an existing position that should trigger breakeven
     existing_pos = {
@@ -181,7 +191,7 @@ async def test_manage_positions_breakeven_activated(
             "stopLoss": "39000",
             "takeProfit": "42000",
             "positionIdx": 0,
-        }
+        },
     ]
     mock_bybit_client.set_trading_stop.return_value = True
 
@@ -191,7 +201,9 @@ async def test_manage_positions_breakeven_activated(
     atr_value = Decimal("100")
 
     await position_manager.manage_positions(
-        current_price, performance_tracker, atr_value
+        current_price,
+        performance_tracker,
+        atr_value,
     )
 
     # Verify set_trading_stop was called to move SL to breakeven
@@ -203,7 +215,9 @@ async def test_manage_positions_breakeven_activated(
 
 @pytest.mark.asyncio
 async def test_manage_positions_trailing_stop_activated(
-    position_manager, mock_bybit_client, performance_tracker
+    position_manager,
+    mock_bybit_client,
+    performance_tracker,
 ):
     # Setup an existing position that should trigger trailing stop
     existing_pos = {
@@ -233,7 +247,7 @@ async def test_manage_positions_trailing_stop_activated(
             "stopLoss": "39000",
             "takeProfit": "45000",
             "positionIdx": 0,
-        }
+        },
     ]
     mock_bybit_client.set_trading_stop.return_value = True
 
@@ -245,7 +259,9 @@ async def test_manage_positions_trailing_stop_activated(
     atr_value = Decimal("100")
 
     await position_manager.manage_positions(
-        current_price, performance_tracker, atr_value
+        current_price,
+        performance_tracker,
+        atr_value,
     )
 
     mock_bybit_client.set_trading_stop.assert_called_once()
@@ -253,5 +269,5 @@ async def test_manage_positions_trailing_stop_activated(
     assert kwargs["stop_loss"] == Decimal("40020.00")  # SL moved up
     assert position_manager.open_positions[0]["trailing_stop_activated"] is True
     assert position_manager.open_positions[0]["trailing_stop_price"] == Decimal(
-        "40020.00"
+        "40020.00",
     )

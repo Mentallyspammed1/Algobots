@@ -264,7 +264,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "volatility_index_signal": 0.15,
                 "vwma_cross": 0.15,
                 "volume_delta_signal": 0.10,
-            }
+            },
         },
         # Gemini AI Analysis (Optional)
         "gemini_ai_analysis": {
@@ -282,7 +282,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             logger.warning(
                 f"{NEON_YELLOW}Configuration file not found. "
                 f"Created default config at {filepath} for symbol "
-                f"{default_config['symbol']}{RESET}"
+                f"{default_config['symbol']}{RESET}",
             )
             return default_config
         except OSError as e:
@@ -299,7 +299,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         return config
     except (OSError, FileNotFoundError, json.JSONDecodeError) as e:
         logger.error(
-            f"{NEON_RED}Error loading config: {e}. Using default and attempting to save.{RESET}"
+            f"{NEON_RED}Error loading config: {e}. Using default and attempting to save.{RESET}",
         )
         try:
             with Path(filepath).open("w", encoding="utf-8") as f_default:
@@ -358,18 +358,20 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
 
         # File Handler
         log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
 
@@ -467,7 +469,9 @@ async def fetch_klines(
             ],
         )
         df["start_time"] = pd.to_datetime(
-            df["start_time"].astype(int), unit="ms", utc=True
+            df["start_time"].astype(int),
+            unit="ms",
+            utc=True,
         ).dt.tz_convert(TIMEZONE)
         for col in ["open", "high", "low", "close", "volume", "turnover"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -479,14 +483,14 @@ async def fetch_klines(
 
         if df.empty:
             logger.warning(
-                f"{NEON_YELLOW}Fetched klines for {symbol} {interval} but DataFrame is empty after processing/cleaning. Raw response: {response}{RESET}"
+                f"{NEON_YELLOW}Fetched klines for {symbol} {interval} but DataFrame is empty after processing/cleaning. Raw response: {response}{RESET}",
             )
             return None
 
         logger.debug(f"Fetched {len(df)} {interval} klines for {symbol}.")
         return df
     logger.warning(
-        f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}. API response might be empty or invalid. Raw response: {response}{RESET}"
+        f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}. API response might be empty or invalid. Raw response: {response}{RESET}",
     )
     return None
 
@@ -571,20 +575,25 @@ async def get_exchange_open_positions(
 
 
 async def fetch_bybit_server_time(
-    logger: logging.Logger, client: httpx.AsyncClient
+    logger: logging.Logger,
+    client: httpx.AsyncClient,
 ) -> int | None:
     """Fetch Bybit's server time in milliseconds."""
     endpoint = "/v5/market/time"  # V5 public endpoint for server time
     response = await bybit_request_async(
-        "GET", endpoint, signed=False, logger=logger, client=client
+        "GET",
+        endpoint,
+        signed=False,
+        logger=logger,
+        client=client,
     )
     if response and response.get("retCode") == 0:
         server_time_ms = response["result"]["timeNano"]  # timeNano is in nanoseconds
         return int(
-            int(server_time_ms) / 1_000_000
+            int(server_time_ms) / 1_000_000,
         )  # Convert nanoseconds to milliseconds
     logger.error(
-        f"{NEON_RED}Failed to fetch Bybit server time. Response: {response}{RESET}"
+        f"{NEON_RED}Failed to fetch Bybit server time. Response: {response}{RESET}",
     )
     return None
 
@@ -644,7 +653,7 @@ async def place_order(
     )
     if response:
         logger.info(
-            f"{NEON_GREEN}Order placed successfully for {symbol}: {response['result']}{RESET}"
+            f"{NEON_GREEN}Order placed successfully for {symbol}: {response['result']}{RESET}",
         )
         return response["result"]
     logger.error(f"{NEON_RED}Failed to place order for {symbol}: {params}{RESET}")
@@ -677,7 +686,7 @@ async def cancel_order(
     )
     if response:
         logger.info(
-            f"{NEON_GREEN}Order {order_id} cancelled for {symbol}: {response['result']}{RESET}"
+            f"{NEON_GREEN}Order {order_id} cancelled for {symbol}: {response['result']}{RESET}",
         )
         return response["result"]
     logger.error(f"{NEON_RED}Failed to cancel order {order_id} for {symbol}.{RESET}")
@@ -729,11 +738,11 @@ async def set_trailing_stop(
     )
     if response and response.get("retCode") == 0:
         logger.info(
-            f"{NEON_GREEN}Successfully set/updated trailing stop for {symbol} ({side}) to {stop_loss.normalize()}.{RESET}"
+            f"{NEON_GREEN}Successfully set/updated trailing stop for {symbol} ({side}) to {stop_loss.normalize()}.{RESET}",
         )
         return response["result"]
     logger.error(
-        f"{NEON_RED}Failed to set/update trailing stop for {symbol} ({side}) to {stop_loss.normalize()}. Response: {response}{RESET}"
+        f"{NEON_RED}Failed to set/update trailing stop for {symbol} ({side}) to {stop_loss.normalize()}. Response: {response}{RESET}",
     )
     return None
 
@@ -795,12 +804,12 @@ class PrecisionManager:
             self.logger.info(
                 f"[{self.symbol}] Precision loaded: Qty Step={self.qty_step.normalize()}, "
                 f"Price Tick Size={self.price_tick_size.normalize()}, "
-                f"Min Qty={self.min_order_qty.normalize()}"
+                f"Min Qty={self.min_order_qty.normalize()}",
             )
         else:
             self.logger.error(
                 f"{NEON_RED}[{self.symbol}] Failed to fetch precision info. Using default values from config. "
-                f"This may cause order placement errors.{RESET}"
+                f"This may cause order placement errors.{RESET}",
             )
             # Fallback to config values if API fails
             order_precision = self.config["trade_management"]["order_precision"]
@@ -815,7 +824,7 @@ class PrecisionManager:
             order_precision = self.config["trade_management"]["order_precision"]
             fallback_step = Decimal("0." + "0" * (order_precision - 1) + "1")
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] qty_step is not set or zero. Using fallback precision {fallback_step} for quantity.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] qty_step is not set or zero. Using fallback precision {fallback_step} for quantity.{RESET}",
             )
             return quantity.quantize(fallback_step, rounding=ROUND_DOWN)
         return (quantity // self.qty_step) * self.qty_step
@@ -826,7 +835,7 @@ class PrecisionManager:
             price_precision = self.config["trade_management"]["price_precision"]
             fallback_tick = Decimal("0." + "0" * (price_precision - 1) + "1")
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] price_tick_size is not set or zero. Using fallback precision {fallback_tick} for price.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] price_tick_size is not set or zero. Using fallback precision {fallback_tick} for price.{RESET}",
             )
             return price.quantize(fallback_tick, rounding=ROUND_DOWN)
         return (price // self.price_tick_size) * self.price_tick_size
@@ -849,7 +858,8 @@ class PositionManager:
         self.symbol = symbol
         self.client = client
         self.open_positions: dict[
-            str, dict
+            str,
+            dict,
         ] = {}  # Tracks positions opened by the bot locally
         self.trade_management_enabled = config["trade_management"]["enabled"]
         self.precision_manager = PrecisionManager(symbol, logger, config, client)
@@ -893,11 +903,11 @@ class PositionManager:
         )
         if response and response.get("retCode") == 0:
             self.logger.info(
-                f"{NEON_GREEN}[{self.symbol}] Leverage set to {self.leverage}x.{RESET}"
+                f"{NEON_GREEN}[{self.symbol}] Leverage set to {self.leverage}x.{RESET}",
             )
         else:
             self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Failed to set leverage to {self.leverage}x. Error: {response.get('retMsg') if response else 'Unknown'}{RESET}"
+                f"{NEON_RED}[{self.symbol}] Failed to set leverage to {self.leverage}x. Error: {response.get('retMsg') if response else 'Unknown'}{RESET}",
             )
 
     async def _get_available_balance(self, time_offset_ms: int = 0) -> Decimal:
@@ -914,13 +924,15 @@ class PositionManager:
         )  # Assuming USDT for linear contracts
         if balance is None:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Failed to fetch actual balance. Using simulated balance for calculation.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Failed to fetch actual balance. Using simulated balance for calculation.{RESET}",
             )
             return Decimal(str(self.config["trade_management"]["account_balance"]))
         return balance
 
     def _calculate_order_size(
-        self, current_price: Decimal, atr_value: Decimal
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         """Calculate order size based on risk per trade, ATR, and available balance."""
         if not self.trade_management_enabled:
@@ -934,7 +946,7 @@ class PositionManager:
             / 100
         )
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
 
         risk_amount = account_balance * risk_per_trade_percent
@@ -942,7 +954,7 @@ class PositionManager:
 
         if stop_loss_distance_usd <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Calculated stop loss distance is zero or negative ({stop_loss_distance_usd}). Cannot determine order size.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Calculated stop loss distance is zero or negative ({stop_loss_distance_usd}). Cannot determine order size.{RESET}",
             )
             return Decimal("0")
 
@@ -975,18 +987,18 @@ class PositionManager:
             self.logger.warning(
                 f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity ({order_qty.normalize()}) is below the minimum "
                 f"({self.precision_manager.min_order_qty.normalize()}). Cannot open position. "
-                f"Consider reducing risk per trade or using a larger account balance.{RESET}"
+                f"Consider reducing risk per trade or using a larger account balance.{RESET}",
             )
             return Decimal("0")
 
         if order_qty <= Decimal("0"):
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity ({order_qty.normalize()}) is too small or zero. Cannot open position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity ({order_qty.normalize()}) is too small or zero. Cannot open position.{RESET}",
             )
             return Decimal("0")
 
         self.logger.info(
-            f"[{self.symbol}] Calculated order size: {order_qty.normalize()} (Risk: {risk_amount.normalize():.2f} USDT, SL Distance: {stop_loss_distance_usd.normalize():.4f})"
+            f"[{self.symbol}] Calculated order size: {order_qty.normalize()} (Risk: {risk_amount.normalize():.2f} USDT, SL Distance: {stop_loss_distance_usd.normalize():.4f})",
         )
         return order_qty
 
@@ -1000,7 +1012,7 @@ class PositionManager:
         """Open a new position if conditions allow by placing an order on the exchange."""
         if not self.trade_management_enabled:
             self.logger.info(
-                f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Skipping opening position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Skipping opening position.{RESET}",
             )
             return None
 
@@ -1010,7 +1022,7 @@ class PositionManager:
             and self.open_positions[self.symbol]["status"] == "OPEN"
         ):
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Already have an open position. Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Already have an open position. Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}",
             )
             return None
 
@@ -1020,7 +1032,7 @@ class PositionManager:
             and len(self.open_positions) >= self.max_open_positions
         ):
             self.logger.info(
-                f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}",
             )
             return None
 
@@ -1033,10 +1045,10 @@ class PositionManager:
             return None
 
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         take_profit_atr_multiple = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
 
         side = "Buy" if signal == "BUY" else "Sell"
@@ -1064,7 +1076,7 @@ class PositionManager:
         take_profit_price = self.precision_manager.format_price(take_profit_price)
 
         self.logger.info(
-            f"[{self.symbol}] Attempting to place {side} order: Qty={order_qty.normalize()}, SL={stop_loss_price.normalize()}, TP={take_profit_price.normalize()}"
+            f"[{self.symbol}] Attempting to place {side} order: Qty={order_qty.normalize()}, SL={stop_loss_price.normalize()}, TP={take_profit_price.normalize()}",
         )
 
         placed_order = await place_order(
@@ -1084,7 +1096,7 @@ class PositionManager:
 
         if placed_order:
             self.logger.info(
-                f"{NEON_GREEN}[{self.symbol}] Successfully initiated {signal} trade with order ID: {placed_order.get('orderId')}{RESET}"
+                f"{NEON_GREEN}[{self.symbol}] Successfully initiated {signal} trade with order ID: {placed_order.get('orderId')}{RESET}",
             )
             # For logging/tracking purposes, return a simplified representation
             position_info = {
@@ -1106,7 +1118,7 @@ class PositionManager:
             )
             return position_info
         self.logger.error(
-            f"{NEON_RED}[{self.symbol}] Failed to place {signal} order. Check API logs for details.{RESET}"
+            f"{NEON_RED}[{self.symbol}] Failed to place {signal} order. Check API logs for details.{RESET}",
         )
         return None
 
@@ -1125,7 +1137,7 @@ class PositionManager:
 
         if exchange_positions is None:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Could not fetch open positions from exchange for reconciliation.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Could not fetch open positions from exchange for reconciliation.{RESET}",
             )
             return
 
@@ -1148,13 +1160,13 @@ class PositionManager:
                         local_pos["qty"] = Decimal(ex_pos["size"])
                         local_pos["entry_price"] = Decimal(ex_pos["avgPrice"])
                         local_pos["stop_loss"] = Decimal(
-                            ex_pos.get("stopLoss", str(local_pos["stop_loss"]))
+                            ex_pos.get("stopLoss", str(local_pos["stop_loss"])),
                         )  # Use existing if not on exchange
                         local_pos["take_profit"] = Decimal(
-                            ex_pos.get("takeProfit", str(local_pos["take_profit"]))
+                            ex_pos.get("takeProfit", str(local_pos["take_profit"])),
                         )  # Use existing if not on exchange
                         local_pos["current_trailing_sl"] = Decimal(
-                            ex_pos.get("trailingStop", str(local_pos["stop_loss"]))
+                            ex_pos.get("trailingStop", str(local_pos["stop_loss"])),
                         )
                         if Decimal(ex_pos.get("trailingStop", "0")) > 0:
                             local_pos["is_trailing_activated"] = True
@@ -1165,7 +1177,7 @@ class PositionManager:
                         break
                 if not found_on_exchange:
                     self.logger.info(
-                        f"{NEON_PURPLE}Local position for {symbol} not found on exchange. Marking as closed (EXTERNAL_CLOSURE).{RESET}"
+                        f"{NEON_PURPLE}Local position for {symbol} not found on exchange. Marking as closed (EXTERNAL_CLOSURE).{RESET}",
                     )
                     local_pos["status"] = "CLOSED"
                     local_pos["exit_time"] = datetime.now(TIMEZONE)
@@ -1183,7 +1195,7 @@ class PositionManager:
                 and ex_pos["symbol"] not in self.open_positions
             ):
                 self.logger.info(
-                    f"{NEON_CYAN}Found new open position on exchange for {ex_pos['symbol']}. Adding to local tracking.{RESET}"
+                    f"{NEON_CYAN}Found new open position on exchange for {ex_pos['symbol']}. Adding to local tracking.{RESET}",
                 )
                 side = "BUY" if ex_pos["side"] == "Buy" else "SELL"
                 new_pos_info = {
@@ -1205,7 +1217,7 @@ class PositionManager:
                 self.open_positions[ex_pos["symbol"]] = new_pos_info
 
         self.logger.info(
-            f"[{self.symbol}] Positions reconciled. Currently tracking {len(self.open_positions)} open positions locally."
+            f"[{self.symbol}] Positions reconciled. Currently tracking {len(self.open_positions)} open positions locally.",
         )
 
     async def manage_positions(
@@ -1236,7 +1248,8 @@ class PositionManager:
                 is_trailing_activated = position.get("is_trailing_activated", False)
                 current_trailing_sl = position.get("current_trailing_sl", stop_loss)
                 position_idx = position.get(
-                    "position_idx", 0
+                    "position_idx",
+                    0,
                 )  # Default to 0 for one-way
 
                 # Calculate current PnL for trailing stop activation
@@ -1255,8 +1268,8 @@ class PositionManager:
                         str(
                             self.config["trade_management"][
                                 "trailing_stop_atr_multiple"
-                            ]
-                        )
+                            ],
+                        ),
                     )
 
                     # Calculate profit percentage relative to entry price (assuming entry_price is not zero)
@@ -1279,7 +1292,8 @@ class PositionManager:
                             )
                             # Ensure trailing SL doesn't go below initial SL
                             new_trailing_sl_price = max(
-                                new_trailing_sl_price, stop_loss
+                                new_trailing_sl_price,
+                                stop_loss,
                             )
                         else:  # SELL
                             new_trailing_sl_price = current_price + (
@@ -1287,14 +1301,15 @@ class PositionManager:
                             )
                             # Ensure trailing SL doesn't go above initial SL
                             new_trailing_sl_price = min(
-                                new_trailing_sl_price, stop_loss
+                                new_trailing_sl_price,
+                                stop_loss,
                             )
 
                         position["current_trailing_sl"] = (
                             self.precision_manager.format_price(new_trailing_sl_price)
                         )
                         self.logger.info(
-                            f"{NEON_GREEN}Trailing stop activated for {symbol} ({side}). Initial SL: {position['current_trailing_sl'].normalize()}{RESET}"
+                            f"{NEON_GREEN}Trailing stop activated for {symbol} ({side}). Initial SL: {position['current_trailing_sl'].normalize()}{RESET}",
                         )
                         await set_trailing_stop(
                             self.symbol,
@@ -1318,7 +1333,7 @@ class PositionManager:
                             # Only move trailing SL up (for buy)
                             if potential_new_sl > current_trailing_sl:
                                 potential_new_sl = self.precision_manager.format_price(
-                                    potential_new_sl
+                                    potential_new_sl,
                                 )
                                 position["current_trailing_sl"] = potential_new_sl
                                 moved_sl = True
@@ -1329,14 +1344,14 @@ class PositionManager:
                             # Only move trailing SL down (for sell)
                             if potential_new_sl < current_trailing_sl:
                                 potential_new_sl = self.precision_manager.format_price(
-                                    potential_new_sl
+                                    potential_new_sl,
                                 )
                                 position["current_trailing_sl"] = potential_new_sl
                                 moved_sl = True
 
                         if moved_sl:
                             self.logger.info(
-                                f"{NEON_GREEN}Updating trailing stop for {symbol} ({side}) to {position['current_trailing_sl'].normalize()}{RESET}"
+                                f"{NEON_GREEN}Updating trailing stop for {symbol} ({side}) to {position['current_trailing_sl'].normalize()}{RESET}",
                             )
                             await set_trailing_stop(
                                 self.symbol,
@@ -1385,14 +1400,14 @@ class PositionManager:
 
                 if closed_by:
                     self.logger.info(
-                        f"{NEON_PURPLE}Position for {symbol} closed by {closed_by} locally. Recording trade.{RESET}"
+                        f"{NEON_PURPLE}Position for {symbol} closed by {closed_by} locally. Recording trade.{RESET}",
                     )
                     # We expect reconciliation to handle actual exchange closure,
                     # but for local tracking completeness, we log and mark.
                     position["status"] = "CLOSED"
                     position["exit_time"] = datetime.now(TIMEZONE)
                     position["exit_price"] = self.precision_manager.format_price(
-                        exit_price
+                        exit_price,
                     )
                     position["closed_by"] = closed_by
 
@@ -1511,7 +1526,8 @@ class PerformanceTracker:
         """Record a completed trade."""
         trade_record = {
             "entry_time": position.get(
-                "entry_time", datetime.now(TIMEZONE)
+                "entry_time",
+                datetime.now(TIMEZONE),
             ).isoformat(),
             "exit_time": position.get("exit_time", datetime.now(TIMEZONE)).isoformat(),
             "symbol": position["symbol"],
@@ -1529,7 +1545,7 @@ class PerformanceTracker:
         self._recalculate_summary()  # Update summary immediately
         self._save_trades()  # Save to file
         self.logger.info(
-            f"{NEON_CYAN}[{position['symbol']}] Trade recorded. Current Total PnL: {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}"
+            f"{NEON_CYAN}[{position['symbol']}] Trade recorded. Current Total PnL: {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}",
         )
 
     def get_summary(self) -> dict:
@@ -1555,7 +1571,9 @@ class AlertSystem:
         self.logger = logger
 
     def send_alert(
-        self, message: str, level: Literal["INFO", "WARNING", "ERROR"]
+        self,
+        message: str,
+        level: Literal["INFO", "WARNING", "ERROR"],
     ) -> None:
         """Send an alert (currently logs it)."""
         if level == "INFO":
@@ -1597,7 +1615,7 @@ class TradingAnalyzer:
             gemini_api_key = os.getenv("GEMINI_API_KEY")
             if not gemini_api_key:
                 self.logger.error(
-                    f"{NEON_RED}GEMINI_API_KEY environment variable is not set, but gemini_ai_analysis is enabled. Disabling Gemini AI analysis.{RESET}"
+                    f"{NEON_RED}GEMINI_API_KEY environment variable is not set, but gemini_ai_analysis is enabled. Disabling Gemini AI analysis.{RESET}",
                 )
                 self.config["gemini_ai_analysis"]["enabled"] = False
             else:
@@ -1611,14 +1629,14 @@ class TradingAnalyzer:
                 #     logger=logger
                 # )
                 self.logger.warning(
-                    f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is not implemented/imported. Placeholder used.{RESET}"
+                    f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is not implemented/imported. Placeholder used.{RESET}",
                 )
 
                 # Placeholder for GeminiClient if not available
                 class DummyGeminiClient:  # Define a dummy class for a cleaner placeholder
                     def analyze_market_data(self, data):
                         self.logger.info(
-                            "Dummy Gemini AI: Analyzing market data (no actual analysis)."
+                            "Dummy Gemini AI: Analyzing market data (no actual analysis).",
                         )
                         return {
                             "entry": "HOLD",
@@ -1637,20 +1655,25 @@ class TradingAnalyzer:
         """Safely perform operations on a Series, handling potential NaNs and logging."""
         if series is None or series.empty:
             self.logger.debug(
-                f"Series '{name}' is empty or None. Returning empty Series."
+                f"Series '{name}' is empty or None. Returning empty Series.",
             )
             # Return an empty Series with float dtype
             return pd.Series(dtype=float)
         # Ensure the series is numeric before checking for all NaNs
         if not pd.api.types.is_numeric_dtype(series) or series.isnull().all():
             self.logger.debug(
-                f"Series '{name}' contains all NaNs or is not numeric. Returning Series with NaNs."
+                f"Series '{name}' contains all NaNs or is not numeric. Returning Series with NaNs.",
             )
             return pd.Series(np.nan, index=series.index, dtype=float)
         return series
 
     def _safe_calculate(
-        self, func: callable, name: str, min_data_points: int = 0, *args, **kwargs
+        self,
+        func: callable,
+        name: str,
+        min_data_points: int = 0,
+        *args,
+        **kwargs,
     ) -> Any | None:
         """Safely calculate indicators and log errors, with min_data_points check."""
         if self.df.empty:
@@ -1658,7 +1681,7 @@ class TradingAnalyzer:
             return None
         if len(self.df) < min_data_points:
             self.logger.debug(
-                f"Skipping indicator '{name}': Not enough data. Need {min_data_points}, have {len(self.df)}."
+                f"Skipping indicator '{name}': Not enough data. Need {min_data_points}, have {len(self.df)}.",
             )
             return None
         try:
@@ -1669,7 +1692,7 @@ class TradingAnalyzer:
                 result.empty or result.isnull().all()
             ):
                 self.logger.warning(
-                    f"{NEON_YELLOW}Indicator '{name}' returned an empty or all-NaN Series. Not enough valid data?{RESET}"
+                    f"{NEON_YELLOW}Indicator '{name}' returned an empty or all-NaN Series. Not enough valid data?{RESET}",
                 )
                 return None
             if isinstance(result, tuple) and all(
@@ -1677,7 +1700,7 @@ class TradingAnalyzer:
                 for r in result
             ):
                 self.logger.warning(
-                    f"{NEON_YELLOW}Indicator '{name}' returned all-empty or all-NaN Series in tuple. Not enough valid data?{RESET}"
+                    f"{NEON_YELLOW}Indicator '{name}' returned all-empty or all-NaN Series in tuple. Not enough valid data?{RESET}",
                 )
                 return None
             return result
@@ -1696,7 +1719,9 @@ class TradingAnalyzer:
 
         # Ensure True Range is calculated first as it's a dependency for many indicators
         self.df["TR"] = self._safe_calculate(
-            self.calculate_true_range, "TR", min_data_points=MIN_DATA_POINTS_TRUE_RANGE
+            self.calculate_true_range,
+            "TR",
+            min_data_points=MIN_DATA_POINTS_TRUE_RANGE,
         )
         # ATR (depends on TR, pandas_ta handles this internally if 'TR' column is missing but uses high/low/close)
         self.df["ATR"] = self._safe_calculate(
@@ -1712,7 +1737,7 @@ class TradingAnalyzer:
         )
         if self.df["ATR"] is not None and not self.df["ATR"].empty:
             self.indicator_values["ATR"] = Decimal(
-                str(self.df["ATR"].iloc[-1].item())
+                str(self.df["ATR"].iloc[-1].item()),
             )  # .item() to convert numpy float to Python float
         else:
             self.indicator_values["ATR"] = Decimal("0.01")  # Default to a small value
@@ -1726,7 +1751,7 @@ class TradingAnalyzer:
             )
             if self.df["SMA_10"] is not None and not self.df["SMA_10"].empty:
                 self.indicator_values["SMA_10"] = Decimal(
-                    str(self.df["SMA_10"].iloc[-1].item())
+                    str(self.df["SMA_10"].iloc[-1].item()),
                 )
         if cfg["indicators"].get("sma_trend_filter", False):
             self.df["SMA_Long"] = self._safe_calculate(
@@ -1736,7 +1761,7 @@ class TradingAnalyzer:
             )
             if self.df["SMA_Long"] is not None and not self.df["SMA_Long"].empty:
                 self.indicator_values["SMA_Long"] = Decimal(
-                    str(self.df["SMA_Long"].iloc[-1].item())
+                    str(self.df["SMA_Long"].iloc[-1].item()),
                 )
 
         # EMA
@@ -1753,11 +1778,11 @@ class TradingAnalyzer:
             )
             if self.df["EMA_Short"] is not None and not self.df["EMA_Short"].empty:
                 self.indicator_values["EMA_Short"] = Decimal(
-                    str(self.df["EMA_Short"].iloc[-1].item())
+                    str(self.df["EMA_Short"].iloc[-1].item()),
                 )
             if self.df["EMA_Long"] is not None and not self.df["EMA_Long"].empty:
                 self.indicator_values["EMA_Long"] = Decimal(
-                    str(self.df["EMA_Long"].iloc[-1].item())
+                    str(self.df["EMA_Long"].iloc[-1].item()),
                 )
 
         # RSI
@@ -1808,15 +1833,15 @@ class TradingAnalyzer:
                 self.df["BB_Lower"] = bb_lower
             if bb_upper is not None and not bb_upper.empty:
                 self.indicator_values["BB_Upper"] = Decimal(
-                    str(bb_upper.iloc[-1].item())
+                    str(bb_upper.iloc[-1].item()),
                 )
             if bb_middle is not None and not bb_middle.empty:
                 self.indicator_values["BB_Middle"] = Decimal(
-                    str(bb_middle.iloc[-1].item())
+                    str(bb_middle.iloc[-1].item()),
                 )
             if bb_lower is not None and not bb_lower.empty:
                 self.indicator_values["BB_Lower"] = Decimal(
-                    str(bb_lower.iloc[-1].item())
+                    str(bb_lower.iloc[-1].item()),
                 )
 
         # CCI
@@ -1933,23 +1958,23 @@ class TradingAnalyzer:
 
             if tenkan_sen is not None and not tenkan_sen.empty:
                 self.indicator_values["Tenkan_Sen"] = Decimal(
-                    str(tenkan_sen.iloc[-1].item())
+                    str(tenkan_sen.iloc[-1].item()),
                 )
             if kijun_sen is not None and not kijun_sen.empty:
                 self.indicator_values["Kijun_Sen"] = Decimal(
-                    str(kijun_sen.iloc[-1].item())
+                    str(kijun_sen.iloc[-1].item()),
                 )
             if senkou_span_a is not None and not senkou_span_a.empty:
                 self.indicator_values["Senkou_Span_A"] = Decimal(
-                    str(senkou_span_a.iloc[-1].item())
+                    str(senkou_span_a.iloc[-1].item()),
                 )
             if senkou_span_b is not None and not senkou_span_b.empty:
                 self.indicator_values["Senkou_Span_B"] = Decimal(
-                    str(senkou_span_b.iloc[-1].item())
+                    str(senkou_span_b.iloc[-1].item()),
                 )
             if chikou_span is not None and not chikou_span.empty:
                 self.indicator_values["Chikou_Span"] = Decimal(
-                    str(chikou_span.fillna(0).iloc[-1].item())
+                    str(chikou_span.fillna(0).iloc[-1].item()),
                 )
 
         # PSAR
@@ -1967,7 +1992,7 @@ class TradingAnalyzer:
                 self.df["PSAR_Dir"] = psar_dir
             if psar_val is not None and not psar_val.empty:
                 self.indicator_values["PSAR_Val"] = Decimal(
-                    str(psar_val.iloc[-1].item())
+                    str(psar_val.iloc[-1].item()),
                 )
             if psar_dir is not None and not psar_dir.empty:
                 self.indicator_values["PSAR_Dir"] = float(psar_dir.iloc[-1].item())
@@ -1976,14 +2001,17 @@ class TradingAnalyzer:
         if cfg["indicators"].get("vwap", False):
             self.df["VWAP"] = self._safe_calculate(
                 lambda: ta.vwap(
-                    self.df["high"], self.df["low"], self.df["close"], self.df["volume"]
+                    self.df["high"],
+                    self.df["low"],
+                    self.df["close"],
+                    self.df["volume"],
                 ),
                 "VWAP",
                 min_data_points=1,
             )
             if self.df["VWAP"] is not None and not self.df["VWAP"].empty:
                 self.indicator_values["VWAP"] = Decimal(
-                    str(self.df["VWAP"].iloc[-1].item())
+                    str(self.df["VWAP"].iloc[-1].item()),
                 )
 
         # --- Ehlers SuperTrend Calculation ---
@@ -1999,10 +2027,10 @@ class TradingAnalyzer:
                 self.df["st_fast_dir"] = st_fast_result["direction"]
                 self.df["st_fast_val"] = st_fast_result["supertrend"]
                 self.indicator_values["ST_Fast_Dir"] = float(
-                    st_fast_result["direction"].iloc[-1].item()
+                    st_fast_result["direction"].iloc[-1].item(),
                 )
                 self.indicator_values["ST_Fast_Val"] = Decimal(
-                    str(st_fast_result["supertrend"].iloc[-1].item())
+                    str(st_fast_result["supertrend"].iloc[-1].item()),
                 )
 
             st_slow_result = self._safe_calculate(
@@ -2016,10 +2044,10 @@ class TradingAnalyzer:
                 self.df["st_slow_dir"] = st_slow_result["direction"]
                 self.df["st_slow_val"] = st_slow_result["supertrend"]
                 self.indicator_values["ST_Slow_Dir"] = float(
-                    st_slow_result["direction"].iloc[-1].item()
+                    st_slow_result["direction"].iloc[-1].item(),
                 )
                 self.indicator_values["ST_Slow_Val"] = Decimal(
-                    str(st_slow_result["supertrend"].iloc[-1].item())
+                    str(st_slow_result["supertrend"].iloc[-1].item()),
                 )
 
         # MACD
@@ -2042,7 +2070,7 @@ class TradingAnalyzer:
                 self.indicator_values["MACD_Line"] = float(macd_line.iloc[-1].item())
             if signal_line is not None and not signal_line.empty:
                 self.indicator_values["MACD_Signal"] = float(
-                    signal_line.iloc[-1].item()
+                    signal_line.iloc[-1].item(),
                 )
             if histogram is not None and not histogram.empty:
                 self.indicator_values["MACD_Hist"] = float(histogram.iloc[-1].item())
@@ -2074,7 +2102,7 @@ class TradingAnalyzer:
         if cfg["indicators"].get("volatility_index", False):
             self.df["Volatility_Index"] = self._safe_calculate(
                 lambda: self.calculate_volatility_index(
-                    period=isd["volatility_index_period"]
+                    period=isd["volatility_index_period"],
                 ),
                 "Volatility_Index",
                 min_data_points=isd["volatility_index_period"] + 1,
@@ -2084,7 +2112,7 @@ class TradingAnalyzer:
                 and not self.df["Volatility_Index"].empty
             ):
                 self.indicator_values["Volatility_Index"] = float(
-                    self.df["Volatility_Index"].iloc[-1].item()
+                    self.df["Volatility_Index"].iloc[-1].item(),
                 )
 
         # VWMA
@@ -2096,7 +2124,7 @@ class TradingAnalyzer:
             )
             if self.df["VWMA"] is not None and not self.df["VWMA"].empty:
                 self.indicator_values["VWMA"] = Decimal(
-                    str(self.df["VWMA"].iloc[-1].item())
+                    str(self.df["VWMA"].iloc[-1].item()),
                 )
 
         # Volume Delta
@@ -2111,7 +2139,7 @@ class TradingAnalyzer:
                 and not self.df["Volume_Delta"].empty
             ):
                 self.indicator_values["Volume_Delta"] = float(
-                    self.df["Volume_Delta"].iloc[-1].item()
+                    self.df["Volume_Delta"].iloc[-1].item(),
                 )
 
         # Fill any remaining NaNs in indicator columns with 0 after all calculations,
@@ -2122,11 +2150,11 @@ class TradingAnalyzer:
 
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty after calculating all indicators and cleaning NaNs.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty after calculating all indicators and cleaning NaNs.{RESET}",
             )
         else:
             self.logger.debug(
-                f"[{self.symbol}] Indicators calculated. Final DataFrame size: {len(self.df)}"
+                f"[{self.symbol}] Indicators calculated. Final DataFrame size: {len(self.df)}",
             )
 
     def calculate_true_range(self) -> pd.Series:
@@ -2138,7 +2166,7 @@ class TradingAnalyzer:
         low_prev_close = (self.df["low"] - self.df["close"].shift()).abs()
 
         tr_series = pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(
-            axis=1
+            axis=1,
         )
         return self._safe_series_op(tr_series, "TR")
 
@@ -2174,12 +2202,14 @@ class TradingAnalyzer:
         return filt.reindex(self.df.index)
 
     def calculate_ehlers_supertrend(
-        self, period: int, multiplier: float
+        self,
+        period: int,
+        multiplier: float,
     ) -> pd.DataFrame | None:
         """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(self.df) < period * 3:
             self.logger.debug(
-                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
+                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars.",
             )
             return None
 
@@ -2196,11 +2226,11 @@ class TradingAnalyzer:
 
         # Drop NaNs introduced by smoothing to work with complete data for SuperTrend calculation
         df_clean = df_copy.dropna(
-            subset=["smoothed_price", "smoothed_atr", "close", "high", "low"]
+            subset=["smoothed_price", "smoothed_atr", "close", "high", "low"],
         )
         if df_clean.empty:
             self.logger.warning(
-                f"[{self.symbol}] Ehlers SuperTrend (period={period}): DataFrame empty after smoothing and NaN drop. Returning None."
+                f"[{self.symbol}] Ehlers SuperTrend (period={period}): DataFrame empty after smoothing and NaN drop. Returning None.",
             )
             return None
 
@@ -2258,12 +2288,18 @@ class TradingAnalyzer:
         return result.reindex(self.df.index)
 
     def calculate_macd(
-        self, fast_period: int, slow_period: int, signal_period: int
+        self,
+        fast_period: int,
+        slow_period: int,
+        signal_period: int,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate Moving Average Convergence Divergence (MACD)."""
         # pandas_ta automatically handles min_periods and NaNs
         macd_result = ta.macd(
-            self.df["close"], fast=fast_period, slow=slow_period, signal=signal_period
+            self.df["close"],
+            fast=fast_period,
+            slow=slow_period,
+            signal=signal_period,
         )
         if macd_result is None or macd_result.empty:
             nan_series = pd.Series(np.nan, index=self.df.index)
@@ -2290,12 +2326,19 @@ class TradingAnalyzer:
         return self._safe_series_op(rsi, "RSI").fillna(0).clip(0, 100)
 
     def calculate_stoch_rsi(
-        self, period: int, k_period: int, d_period: int
+        self,
+        period: int,
+        k_period: int,
+        d_period: int,
     ) -> tuple[pd.Series, pd.Series]:
         """Calculate Stochastic RSI."""
         # pandas_ta can calculate StochRSI directly
         stoch_rsi = ta.stochrsi(
-            self.df["close"], length=period, rsi_length=period, k=k_period, d=d_period
+            self.df["close"],
+            length=period,
+            rsi_length=period,
+            k=k_period,
+            d=d_period,
         )
         if stoch_rsi is None or stoch_rsi.empty:
             nan_series = pd.Series(np.nan, index=self.df.index)
@@ -2324,7 +2367,10 @@ class TradingAnalyzer:
         """Calculate Average Directional Index (ADX)."""
         # pandas_ta can calculate ADX directly
         adx_df = ta.adx(
-            self.df["high"], self.df["low"], self.df["close"], length=period
+            self.df["high"],
+            self.df["low"],
+            self.df["close"],
+            length=period,
         )
         if adx_df is None or adx_df.empty:
             nan_series = pd.Series(np.nan, index=self.df.index)
@@ -2347,7 +2393,9 @@ class TradingAnalyzer:
         return adx_val, plus_di, minus_di
 
     def calculate_bollinger_bands(
-        self, period: int, std_dev: float
+        self,
+        period: int,
+        std_dev: float,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate Bollinger Bands."""
         bbands = ta.bbands(self.df["close"], length=period, std=std_dev)
@@ -2356,7 +2404,8 @@ class TradingAnalyzer:
             return nan_series, nan_series, nan_series
         upper_band = self._safe_series_op(bbands[f"BBU_{period}_{std_dev}"], "BB_Upper")
         middle_band = self._safe_series_op(
-            bbands[f"BBM_{period}_{std_dev}"], "BB_Middle"
+            bbands[f"BBM_{period}_{std_dev}"],
+            "BB_Middle",
         )
         lower_band = self._safe_series_op(bbands[f"BBL_{period}_{std_dev}"], "BB_Lower")
         return upper_band, middle_band, lower_band
@@ -2385,11 +2434,12 @@ class TradingAnalyzer:
             cumulative_tp_vol = (typical_price * valid_volume).cumsum()
             cumulative_vol = valid_volume.cumsum()
             vwap = (cumulative_tp_vol / cumulative_vol.replace(0, np.nan)).reindex(
-                self.df.index
+                self.df.index,
             )
 
         return self._safe_series_op(
-            vwap, "VWAP"
+            vwap,
+            "VWAP",
         ).ffill()  # Forward fill NaNs if volume is zero, as VWAP typically holds
 
     def calculate_cci(self, period: int) -> pd.Series:
@@ -2416,7 +2466,7 @@ class TradingAnalyzer:
         )
         if len(self.df.dropna()) < min_ichimoku_data:
             self.logger.warning(
-                f"{NEON_YELLOW}Not enough clean data for Ichimoku calculation. Need at least {min_ichimoku_data} bars, have {len(self.df.dropna())}. Returning NaN series.{RESET}"
+                f"{NEON_YELLOW}Not enough clean data for Ichimoku calculation. Need at least {min_ichimoku_data} bars, have {len(self.df.dropna())}. Returning NaN series.{RESET}",
             )
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series, nan_series, nan_series, nan_series
@@ -2437,7 +2487,7 @@ class TradingAnalyzer:
         # The second DataFrame contains the Chikou Span
         if ichimoku_result is None or len(ichimoku_result) < 2:
             self.logger.warning(
-                f"{NEON_YELLOW}pandas_ta.ichimoku returned insufficient data.{RESET}"
+                f"{NEON_YELLOW}pandas_ta.ichimoku returned insufficient data.{RESET}",
             )
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series, nan_series, nan_series, nan_series
@@ -2452,20 +2502,26 @@ class TradingAnalyzer:
             if df_to_check is not None and col_name in df_to_check.columns:
                 return self._safe_series_op(df_to_check[col_name], default_name)
             self.logger.warning(
-                f"{NEON_YELLOW}Ichimoku column '{col_name}' not found. Returning NaN series for {default_name}.{RESET}"
+                f"{NEON_YELLOW}Ichimoku column '{col_name}' not found. Returning NaN series for {default_name}.{RESET}",
             )
             return nan_series
 
         tenkan_sen = _get_safe_series(ichimoku_df, f"ITS_{tenkan_period}", "Tenkan_Sen")
         kijun_sen = _get_safe_series(ichimoku_df, f"KJS_{kijun_period}", "Kijun_Sen")
         senkou_span_a = _get_safe_series(
-            ichimoku_df, f"SSA_{kijun_period}", "Senkou_Span_A"
+            ichimoku_df,
+            f"SSA_{kijun_period}",
+            "Senkou_Span_A",
         )  # SSA uses kijun_period for offset
         senkou_span_b = _get_safe_series(
-            ichimoku_df, f"SSB_{senkou_span_b_period}", "Senkou_Span_B"
+            ichimoku_df,
+            f"SSB_{senkou_span_b_period}",
+            "Senkou_Span_B",
         )
         chikou_span = _get_safe_series(
-            chikou_span_df, f"CS_{chikou_span_offset}", "Chikou_Span"
+            chikou_span_df,
+            f"CS_{chikou_span_offset}",
+            "Chikou_Span",
         ).fillna(0)
 
         return (
@@ -2493,7 +2549,8 @@ class TradingAnalyzer:
         obv_ema = ta.ema(obv, length=ema_period)
 
         return self._safe_series_op(obv, "OBV"), self._safe_series_op(
-            obv_ema, "OBV_EMA"
+            obv_ema,
+            "OBV_EMA",
         )
 
     def calculate_cmf(self, period: int) -> pd.Series:
@@ -2508,7 +2565,9 @@ class TradingAnalyzer:
         return self._safe_series_op(cmf, "CMF").fillna(0).clip(-1, 1)
 
     def calculate_psar(
-        self, acceleration: float, max_acceleration: float
+        self,
+        acceleration: float,
+        max_acceleration: float,
     ) -> tuple[pd.Series, pd.Series]:
         """Calculate Parabolic SAR."""
         # Use pandas_ta for PSAR calculation
@@ -2531,7 +2590,7 @@ class TradingAnalyzer:
 
         if psar_val_col not in psar_result.columns:
             self.logger.error(
-                f"{NEON_RED}Missing expected PSAR column '{psar_val_col}' in result: {psar_result.columns.tolist()}{RESET}"
+                f"{NEON_RED}Missing expected PSAR column '{psar_val_col}' in result: {psar_result.columns.tolist()}{RESET}",
             )
             nan_series = pd.Series(np.nan, index=self.df.index)
             return nan_series, nan_series
@@ -2555,7 +2614,7 @@ class TradingAnalyzer:
         window = self.config["indicator_settings"]["fibonacci_window"]
         if len(self.df) < window:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Not enough data for Fibonacci levels (need {window} bars).{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Not enough data for Fibonacci levels (need {window} bars).{RESET}",
             )
             return
 
@@ -2572,24 +2631,24 @@ class TradingAnalyzer:
         self.fib_levels = {
             "0.0%": self.precision_manager.format_price(decimal_high),
             "23.6%": self.precision_manager.format_price(
-                decimal_high - Decimal("0.236") * decimal_diff
+                decimal_high - Decimal("0.236") * decimal_diff,
             ),
             "38.2%": self.precision_manager.format_price(
-                decimal_high - Decimal("0.382") * decimal_diff
+                decimal_high - Decimal("0.382") * decimal_diff,
             ),
             "50.0%": self.precision_manager.format_price(
-                decimal_high - Decimal("0.500") * decimal_diff
+                decimal_high - Decimal("0.500") * decimal_diff,
             ),
             "61.8%": self.precision_manager.format_price(
-                decimal_high - Decimal("0.618") * decimal_diff
+                decimal_high - Decimal("0.618") * decimal_diff,
             ),
             "78.6%": self.precision_manager.format_price(
-                decimal_high - Decimal("0.786") * decimal_diff
+                decimal_high - Decimal("0.786") * decimal_diff,
             ),
             "100.0%": self.precision_manager.format_price(decimal_low),
         }
         self.logger.debug(
-            f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}"
+            f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}",
         )
 
     def calculate_volatility_index(self, period: int) -> pd.Series:
@@ -2605,7 +2664,8 @@ class TradingAnalyzer:
         # Avoid division by zero for close price
         normalized_atr = self.df["ATR"] / self.df["close"].replace(0, np.nan)
         volatility_index = normalized_atr.rolling(
-            window=period, min_periods=MIN_DATA_POINTS_VOLATILITY
+            window=period,
+            min_periods=MIN_DATA_POINTS_VOLATILITY,
         ).mean()
         return self._safe_series_op(volatility_index, "Volatility_Index").fillna(0)
 
@@ -2619,10 +2679,12 @@ class TradingAnalyzer:
         pv = self.df["close"] * valid_volume
         # Use min_periods for rolling sums
         vwma = pv.rolling(window=period, min_periods=1).sum() / valid_volume.rolling(
-            window=period, min_periods=1
+            window=period,
+            min_periods=1,
         ).sum().replace(0, np.nan)
         return self._safe_series_op(
-            vwma, "VWMA"
+            vwma,
+            "VWMA",
         ).ffill()  # Forward fill NaNs if volume is zero, as VWMA typically holds
 
     def calculate_volume_delta(self, period: int) -> pd.Series:
@@ -2641,10 +2703,12 @@ class TradingAnalyzer:
         total_volume_sum = buy_volume_sum + sell_volume_sum
         # Avoid division by zero
         volume_delta = (buy_volume_sum - sell_volume_sum) / total_volume_sum.replace(
-            0, np.nan
+            0,
+            np.nan,
         )
         return self._safe_series_op(volume_delta.fillna(0), "Volume_Delta").clip(
-            -1, 1
+            -1,
+            1,
         )  # Fill NaNs with 0, clip to [-1, 1]
 
     def _get_indicator_value(self, key: str, default: Any = np.nan) -> Any:
@@ -2659,12 +2723,12 @@ class TradingAnalyzer:
         # via WebSocket and calculating bid/ask volume imbalance.
         if not orderbook_manager:
             self.logger.debug(
-                "Orderbook manager not available for imbalance check. Returning 0.0."
+                "Orderbook manager not available for imbalance check. Returning 0.0.",
             )
             return 0.0
 
         self.logger.warning(
-            f"{NEON_YELLOW}Orderbook imbalance calculation is a placeholder and not fully implemented. Returning 0.0.{RESET}"
+            f"{NEON_YELLOW}Orderbook imbalance calculation is a placeholder and not fully implemented. Returning 0.0.{RESET}",
         )
         # Placeholder logic if orderbook_manager were implemented:
         # bids, asks = orderbook_manager.get_depth(self.config["orderbook_limit"])
@@ -2691,7 +2755,11 @@ class TradingAnalyzer:
         # Create a temporary TradingAnalyzer for the HTF data to calculate indicators
         # This ensures proper initialization and data handling for HTF specific indicators
         temp_htf_analyzer = TradingAnalyzer(
-            higher_tf_df, self.config, self.logger, self.symbol, self.precision_manager
+            higher_tf_df,
+            self.config,
+            self.logger,
+            self.symbol,
+            self.precision_manager,
         )
 
         if indicator_type == "sma":
@@ -2760,7 +2828,9 @@ class TradingAnalyzer:
         return signal_score
 
     def _score_sma_trend_filter(
-        self, current_close: Decimal, signal_score: float
+        self,
+        current_close: Decimal,
+        signal_score: float,
     ) -> float:
         sma_long = self._get_indicator_value("SMA_Long")
         weight = self.weights.get("sma_trend_filter", 0)
@@ -2789,7 +2859,7 @@ class TradingAnalyzer:
                 elif rsi > isd["rsi_overbought"]:
                     signal_score -= momentum_weight * 0.5
                     self.logger.debug(
-                        f"  RSI: Overbought (-{momentum_weight * 0.5:.2f})"
+                        f"  RSI: Overbought (-{momentum_weight * 0.5:.2f})",
                     )
 
         # StochRSI Crossover
@@ -2816,7 +2886,7 @@ class TradingAnalyzer:
                 ):
                     signal_score += momentum_weight * 0.6
                     self.logger.debug(
-                        f"  StochRSI: Bullish crossover from oversold (+{momentum_weight * 0.6:.2f})"
+                        f"  StochRSI: Bullish crossover from oversold (+{momentum_weight * 0.6:.2f})",
                     )
                 elif (
                     stoch_k < stoch_d
@@ -2825,17 +2895,17 @@ class TradingAnalyzer:
                 ):
                     signal_score -= momentum_weight * 0.6
                     self.logger.debug(
-                        f"  StochRSI: Bearish crossover from overbought (-{momentum_weight * 0.6:.2f})"
+                        f"  StochRSI: Bearish crossover from overbought (-{momentum_weight * 0.6:.2f})",
                     )
                 elif stoch_k > stoch_d and stoch_k < 50:  # General bullish momentum
                     signal_score += momentum_weight * 0.2
                     self.logger.debug(
-                        f"  StochRSI: General bullish momentum (+{momentum_weight * 0.2:.2f})"
+                        f"  StochRSI: General bullish momentum (+{momentum_weight * 0.2:.2f})",
                     )
                 elif stoch_k < stoch_d and stoch_k > 50:  # General bearish momentum
                     signal_score -= momentum_weight * 0.2
                     self.logger.debug(
-                        f"  StochRSI: General bearish momentum (-{momentum_weight * 0.2:.2f})"
+                        f"  StochRSI: General bearish momentum (-{momentum_weight * 0.2:.2f})",
                     )
 
             # CCI
@@ -2845,12 +2915,12 @@ class TradingAnalyzer:
                     if cci < isd["cci_oversold"]:
                         signal_score += momentum_weight * 0.4
                         self.logger.debug(
-                            f"  CCI: Oversold (+{momentum_weight * 0.4:.2f})"
+                            f"  CCI: Oversold (+{momentum_weight * 0.4:.2f})",
                         )
                     elif cci > isd["cci_overbought"]:
                         signal_score -= momentum_weight * 0.4
                         self.logger.debug(
-                            f"  CCI: Overbought (-{momentum_weight * 0.4:.2f})"
+                            f"  CCI: Overbought (-{momentum_weight * 0.4:.2f})",
                         )
 
             # Williams %R
@@ -2860,12 +2930,12 @@ class TradingAnalyzer:
                     if wr < isd["williams_r_oversold"]:
                         signal_score += momentum_weight * 0.4
                         self.logger.debug(
-                            f"  WR: Oversold (+{momentum_weight * 0.4:.2f})"
+                            f"  WR: Oversold (+{momentum_weight * 0.4:.2f})",
                         )
                     elif wr > isd["williams_r_overbought"]:
                         signal_score -= momentum_weight * 0.4
                         self.logger.debug(
-                            f"  WR: Overbought (-{momentum_weight * 0.4:.2f})"
+                            f"  WR: Overbought (-{momentum_weight * 0.4:.2f})",
                         )
 
             # MFI
@@ -2875,17 +2945,19 @@ class TradingAnalyzer:
                     if mfi < isd["mfi_oversold"]:
                         signal_score += momentum_weight * 0.4
                         self.logger.debug(
-                            f"  MFI: Oversold (+{momentum_weight * 0.4:.2f})"
+                            f"  MFI: Oversold (+{momentum_weight * 0.4:.2f})",
                         )
                     elif mfi > isd["mfi_overbought"]:
                         signal_score -= momentum_weight * 0.4
                         self.logger.debug(
-                            f"  MFI: Overbought (-{momentum_weight * 0.4:.2f})"
+                            f"  MFI: Overbought (-{momentum_weight * 0.4:.2f})",
                         )
         return signal_score
 
     def _score_bollinger_bands(
-        self, current_close: Decimal, signal_score: float
+        self,
+        current_close: Decimal,
+        signal_score: float,
     ) -> float:
         bb_upper = self._get_indicator_value("BB_Upper")
         bb_lower = self._get_indicator_value("BB_Lower")
@@ -2901,7 +2973,10 @@ class TradingAnalyzer:
         return signal_score
 
     def _score_vwap(
-        self, current_close: Decimal, prev_close: Decimal, signal_score: float
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
+        signal_score: float,
     ) -> float:
         vwap = self._get_indicator_value("VWAP")
         weight = self.weights.get("vwap", 0)
@@ -2929,17 +3004,20 @@ class TradingAnalyzer:
                 if current_close > vwap and prev_close <= prev_vwap:
                     signal_score += weight * 0.3
                     self.logger.debug(
-                        f"  VWAP: Bullish crossover detected (+{weight * 0.3:.2f})"
+                        f"  VWAP: Bullish crossover detected (+{weight * 0.3:.2f})",
                     )
                 elif current_close < vwap and prev_close >= prev_vwap:
                     signal_score -= weight * 0.3
                     self.logger.debug(
-                        f"  VWAP: Bearish crossover detected (-{weight * 0.3:.2f})"
+                        f"  VWAP: Bearish crossover detected (-{weight * 0.3:.2f})",
                     )
         return signal_score
 
     def _score_psar(
-        self, current_close: Decimal, prev_close: Decimal, signal_score: float
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
+        signal_score: float,
     ) -> float:
         psar_val = self._get_indicator_value("PSAR_Val")
         psar_dir = self._get_indicator_value("PSAR_Dir")
@@ -2968,17 +3046,20 @@ class TradingAnalyzer:
                 if current_close > psar_val and prev_close <= prev_psar_val:
                     signal_score += weight * 0.4
                     self.logger.debug(
-                        f"  PSAR: Bullish reversal detected (+{weight * 0.4:.2f})"
+                        f"  PSAR: Bullish reversal detected (+{weight * 0.4:.2f})",
                     )
                 elif current_close < psar_val and prev_close >= prev_psar_val:
                     signal_score -= weight * 0.4
                     self.logger.debug(
-                        f"  PSAR: Bearish reversal detected (-{weight * 0.4:.2f})"
+                        f"  PSAR: Bearish reversal detected (-{weight * 0.4:.2f})",
                     )
         return signal_score
 
     def _score_fibonacci_levels(
-        self, current_price: Decimal, prev_close: Decimal, signal_score: float
+        self,
+        current_price: Decimal,
+        prev_close: Decimal,
+        signal_score: float,
     ) -> float:
         weight = self.weights.get("fibonacci_levels", 0)
 
@@ -2992,18 +3073,18 @@ class TradingAnalyzer:
                     (level_price - epsilon) <= current_price <= (level_price + epsilon)
                 ):
                     self.logger.debug(
-                        f"  Price near Fibonacci level {level_name}: {level_price.normalize()}"
+                        f"  Price near Fibonacci level {level_name}: {level_price.normalize()}",
                     )
                     if len(self.df) > 1 and not pd.isna(prev_close):
                         if current_price > prev_close and current_price > level_price:
                             signal_score += weight * 0.1
                             self.logger.debug(
-                                f"  Fibonacci: Bullish breakout/bounce (+{weight * 0.1:.2f})"
+                                f"  Fibonacci: Bullish breakout/bounce (+{weight * 0.1:.2f})",
                             )
                         elif current_price < prev_close and current_price < level_price:
                             signal_score -= weight * 0.1
                             self.logger.debug(
-                                f"  Fibonacci: Bearish breakout/bounce (-{weight * 0.1:.2f})"
+                                f"  Fibonacci: Bearish breakout/bounce (-{weight * 0.1:.2f})",
                             )
         return signal_score
 
@@ -3033,22 +3114,22 @@ class TradingAnalyzer:
             if st_slow_dir == 1 and st_fast_dir == 1 and prev_st_fast_dir == -1:
                 signal_score += weight
                 self.logger.debug(
-                    f"Ehlers SuperTrend: Strong BUY signal (fast flip aligned with slow trend) (+{weight:.2f})."
+                    f"Ehlers SuperTrend: Strong BUY signal (fast flip aligned with slow trend) (+{weight:.2f}).",
                 )
             elif st_slow_dir == -1 and st_fast_dir == -1 and prev_st_fast_dir == 1:
                 signal_score -= weight
                 self.logger.debug(
-                    f"Ehlers SuperTrend: Strong SELL signal (fast flip aligned with slow trend) (-{weight:.2f})."
+                    f"Ehlers SuperTrend: Strong SELL signal (fast flip aligned with slow trend) (-{weight:.2f}).",
                 )
             elif st_slow_dir == 1 and st_fast_dir == 1:
                 signal_score += weight * 0.3
                 self.logger.debug(
-                    f"Ehlers SuperTrend: Bullish alignment (+{weight * 0.3:.2f})."
+                    f"Ehlers SuperTrend: Bullish alignment (+{weight * 0.3:.2f}).",
                 )
             elif st_slow_dir == -1 and st_fast_dir == -1:
                 signal_score -= weight * 0.3
                 self.logger.debug(
-                    f"Ehlers SuperTrend: Bearish alignment (-{weight * 0.3:.2f})."
+                    f"Ehlers SuperTrend: Bearish alignment (-{weight * 0.3:.2f}).",
                 )
         return signal_score
 
@@ -3082,14 +3163,14 @@ class TradingAnalyzer:
             ):
                 signal_score += weight
                 self.logger.debug(
-                    f"MACD: BUY signal (MACD line crossed above Signal line) (+{weight:.2f})."
+                    f"MACD: BUY signal (MACD line crossed above Signal line) (+{weight:.2f}).",
                 )
             elif macd_line < signal_line and (
                 pd.isna(prev_macd_line) or prev_macd_line >= prev_signal_line
             ):
                 signal_score -= weight
                 self.logger.debug(
-                    f"MACD: SELL signal (MACD line crossed below Signal line) (-{weight:.2f})."
+                    f"MACD: SELL signal (MACD line crossed below Signal line) (-{weight:.2f}).",
                 )
             elif histogram > 0 and (
                 len(self.df) > 2
@@ -3098,7 +3179,7 @@ class TradingAnalyzer:
             ):
                 signal_score += weight * 0.2
                 self.logger.debug(
-                    f"MACD: Histogram turned positive (+{weight * 0.2:.2f})."
+                    f"MACD: Histogram turned positive (+{weight * 0.2:.2f}).",
                 )
             elif histogram < 0 and (
                 len(self.df) > 2
@@ -3107,7 +3188,7 @@ class TradingAnalyzer:
             ):
                 signal_score -= weight * 0.2
                 self.logger.debug(
-                    f"MACD: Histogram turned negative (-{weight * 0.2:.2f})."
+                    f"MACD: Histogram turned negative (-{weight * 0.2:.2f}).",
                 )
         return signal_score
 
@@ -3122,22 +3203,25 @@ class TradingAnalyzer:
                 if plus_di > minus_di:
                     signal_score += weight
                     self.logger.debug(
-                        f"ADX: Strong BUY trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, +DI > -DI) (+{weight:.2f})."
+                        f"ADX: Strong BUY trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, +DI > -DI) (+{weight:.2f}).",
                     )
                 elif minus_di > plus_di:
                     signal_score -= weight
                     self.logger.debug(
-                        f"ADX: Strong SELL trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, -DI > +DI) (-{weight:.2f})."
+                        f"ADX: Strong SELL trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, -DI > +DI) (-{weight:.2f}).",
                     )
             elif adx_val < ADX_WEAK_TREND_THRESHOLD:
                 # Neutral signal if trend is weak
                 self.logger.debug(
-                    f"ADX: Weak trend (ADX < {ADX_WEAK_TREND_THRESHOLD}). Neutral signal."
+                    f"ADX: Weak trend (ADX < {ADX_WEAK_TREND_THRESHOLD}). Neutral signal.",
                 )
         return signal_score
 
     def _score_ichimoku_confluence(
-        self, current_close: Decimal, prev_close: Decimal, signal_score: float
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
+        signal_score: float,
     ) -> float:
         tenkan_sen = self._get_indicator_value("Tenkan_Sen")
         kijun_sen = self._get_indicator_value("Kijun_Sen")
@@ -3191,14 +3275,14 @@ class TradingAnalyzer:
             ):
                 signal_score += weight * 0.5
                 self.logger.debug(
-                    f"Ichimoku: Tenkan-sen crossed above Kijun-sen (bullish) (+{weight * 0.5:.2f})."
+                    f"Ichimoku: Tenkan-sen crossed above Kijun-sen (bullish) (+{weight * 0.5:.2f}).",
                 )
             elif tenkan_sen < kijun_sen and (
                 pd.isna(prev_tenkan) or prev_tenkan >= prev_kijun
             ):
                 signal_score -= weight * 0.5
                 self.logger.debug(
-                    f"Ichimoku: Tenkan-sen crossed below Kijun-sen (bearish) (-{weight * 0.5:.2f})."
+                    f"Ichimoku: Tenkan-sen crossed below Kijun-sen (bearish) (-{weight * 0.5:.2f}).",
                 )
 
             # Price breaking above/below Kumo (Cloud)
@@ -3218,12 +3302,12 @@ class TradingAnalyzer:
             if current_close > kumo_top and prev_close <= prev_kumo_top:
                 signal_score += weight * 0.7
                 self.logger.debug(
-                    f"Ichimoku: Price broke above Kumo (strong bullish) (+{weight * 0.7:.2f})."
+                    f"Ichimoku: Price broke above Kumo (strong bullish) (+{weight * 0.7:.2f}).",
                 )
             elif current_close < kumo_bottom and prev_close >= prev_kumo_bottom:
                 signal_score -= weight * 0.7
                 self.logger.debug(
-                    f"Ichimoku: Price broke below Kumo (strong bearish) (-{weight * 0.7:.2f})."
+                    f"Ichimoku: Price broke below Kumo (strong bearish) (-{weight * 0.7:.2f}).",
                 )
 
             # Chikou Span crossing price (confirmation)
@@ -3232,14 +3316,14 @@ class TradingAnalyzer:
             ):
                 signal_score += weight * 0.3
                 self.logger.debug(
-                    f"Ichimoku: Chikou Span crossed above price (bullish confirmation) (+{weight * 0.3:.2f})."
+                    f"Ichimoku: Chikou Span crossed above price (bullish confirmation) (+{weight * 0.3:.2f}).",
                 )
             elif chikou_span < current_close and (
                 pd.isna(prev_chikou) or prev_chikou >= prev_close
             ):
                 signal_score -= weight * 0.3
                 self.logger.debug(
-                    f"Ichimoku: Chikou Span crossed below price (bearish confirmation) (-{weight * 0.3:.2f})."
+                    f"Ichimoku: Chikou Span crossed below price (bearish confirmation) (-{weight * 0.3:.2f}).",
                 )
         return signal_score
 
@@ -3266,14 +3350,14 @@ class TradingAnalyzer:
             ):
                 signal_score += weight * 0.5
                 self.logger.debug(
-                    f"  OBV: Bullish crossover detected (+{weight * 0.5:.2f})."
+                    f"  OBV: Bullish crossover detected (+{weight * 0.5:.2f}).",
                 )
             elif obv_val < obv_ema and (
                 pd.isna(prev_obv_val) or prev_obv_val >= prev_obv_ema
             ):
                 signal_score -= weight * 0.5
                 self.logger.debug(
-                    f"  OBV: Bearish crossover detected (-{weight * 0.5:.2f})."
+                    f"  OBV: Bearish crossover detected (-{weight * 0.5:.2f}).",
                 )
 
             if len(self.df) > 2 and "OBV" in self.df.columns:
@@ -3283,7 +3367,7 @@ class TradingAnalyzer:
                 ):
                     signal_score += weight * 0.2
                     self.logger.debug(
-                        f"  OBV: Increasing momentum (+{weight * 0.2:.2f})."
+                        f"  OBV: Increasing momentum (+{weight * 0.2:.2f}).",
                     )
                 elif (
                     obv_val < self.df["OBV"].iloc[-2].item()
@@ -3291,7 +3375,7 @@ class TradingAnalyzer:
                 ):
                     signal_score -= weight * 0.2
                     self.logger.debug(
-                        f"  OBV: Decreasing momentum (-{weight * 0.2:.2f})."
+                        f"  OBV: Decreasing momentum (-{weight * 0.2:.2f}).",
                     )
         return signal_score
 
@@ -3314,7 +3398,7 @@ class TradingAnalyzer:
                 ):
                     signal_score += weight * 0.3
                     self.logger.debug(
-                        f"  CMF: Increasing bullish flow (+{weight * 0.3:.2f})."
+                        f"  CMF: Increasing bullish flow (+{weight * 0.3:.2f}).",
                     )
                 elif (
                     cmf_val < self.df["CMF"].iloc[-2].item()
@@ -3322,7 +3406,7 @@ class TradingAnalyzer:
                 ):
                     signal_score -= weight * 0.3
                     self.logger.debug(
-                        f"  CMF: Increasing bearish flow (-{weight * 0.3:.2f})."
+                        f"  CMF: Increasing bearish flow (-{weight * 0.3:.2f}).",
                     )
         return signal_score
 
@@ -3341,12 +3425,12 @@ class TradingAnalyzer:
                 if signal_score > 0:
                     signal_score += weight * 0.2
                     self.logger.debug(
-                        f"  Volatility Index: Increasing volatility, adds confidence to BUY (+{weight * 0.2:.2f})."
+                        f"  Volatility Index: Increasing volatility, adds confidence to BUY (+{weight * 0.2:.2f}).",
                     )
                 elif signal_score < 0:
                     signal_score -= weight * 0.2
                     self.logger.debug(
-                        f"  Volatility Index: Increasing volatility, adds confidence to SELL (-{weight * 0.2:.2f})."
+                        f"  Volatility Index: Increasing volatility, adds confidence to SELL (-{weight * 0.2:.2f}).",
                     )
             elif vol_idx < prev_vol_idx < prev_prev_vol_idx:  # Decreasing volatility
                 if (
@@ -3354,12 +3438,15 @@ class TradingAnalyzer:
                 ):  # If there's an existing signal, slightly reduce its conviction
                     signal_score *= 1 - weight * 0.1  # Reduce by 10% of the weight
                     self.logger.debug(
-                        f"  Volatility Index: Decreasing volatility, reduces signal conviction (x{(1 - weight * 0.1):.2f})."
+                        f"  Volatility Index: Decreasing volatility, reduces signal conviction (x{(1 - weight * 0.1):.2f}).",
                     )
         return signal_score
 
     def _score_vwma_cross(
-        self, current_close: Decimal, prev_close: Decimal, signal_score: float
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
+        signal_score: float,
     ) -> float:
         vwma = self._get_indicator_value("VWMA")
         weight = self.weights.get("vwma_cross", 0.0)
@@ -3377,12 +3464,12 @@ class TradingAnalyzer:
             if current_close > vwma and prev_close <= prev_vwma:
                 signal_score += weight
                 self.logger.debug(
-                    f"  VWMA: Bullish crossover (price above VWMA) (+{weight:.2f})."
+                    f"  VWMA: Bullish crossover (price above VWMA) (+{weight:.2f}).",
                 )
             elif current_close < vwma and prev_close >= prev_vwma:
                 signal_score -= weight
                 self.logger.debug(
-                    f"  VWMA: Bearish crossover (price below VWMA) (-{weight:.2f})."
+                    f"  VWMA: Bearish crossover (price below VWMA) (-{weight:.2f}).",
                 )
         return signal_score
 
@@ -3395,27 +3482,29 @@ class TradingAnalyzer:
             if volume_delta > volume_delta_threshold:  # Strong buying pressure
                 signal_score += weight
                 self.logger.debug(
-                    f"  Volume Delta: Strong buying pressure detected (+{weight:.2f})."
+                    f"  Volume Delta: Strong buying pressure detected (+{weight:.2f}).",
                 )
             elif volume_delta < -volume_delta_threshold:  # Strong selling pressure
                 signal_score -= weight
                 self.logger.debug(
-                    f"  Volume Delta: Strong selling pressure detected (-{weight:.2f})."
+                    f"  Volume Delta: Strong selling pressure detected (-{weight:.2f}).",
                 )
             elif volume_delta > 0:
                 signal_score += weight * 0.3
                 self.logger.debug(
-                    f"  Volume Delta: Moderate buying pressure detected (+{weight * 0.3:.2f})."
+                    f"  Volume Delta: Moderate buying pressure detected (+{weight * 0.3:.2f}).",
                 )
             elif volume_delta < 0:
                 signal_score -= weight * 0.3
                 self.logger.debug(
-                    f"  Volume Delta: Moderate selling pressure detected (-{weight * 0.3:.2f})."
+                    f"  Volume Delta: Moderate selling pressure detected (-{weight * 0.3:.2f}).",
                 )
         return signal_score
 
     def _score_mtf_trend_confluence(
-        self, mtf_trends: dict[str, str], signal_score: float
+        self,
+        mtf_trends: dict[str, str],
+        signal_score: float,
     ) -> float:
         if self.config["mtf_analysis"]["enabled"] and mtf_trends:
             mtf_buy_score = 0
@@ -3430,11 +3519,11 @@ class TradingAnalyzer:
             if mtf_trends:
                 # Calculate a normalized score based on the balance of buy/sell trends
                 normalized_mtf_score = (mtf_buy_score + mtf_sell_score) / len(
-                    mtf_trends
+                    mtf_trends,
                 )
                 signal_score += mtf_weight * normalized_mtf_score
                 self.logger.debug(
-                    f"MTF Confluence: Score {normalized_mtf_score:.2f} (Buy: {mtf_buy_score}, Sell: {abs(mtf_sell_score)}). Total MTF contribution: {mtf_weight * normalized_mtf_score:.2f}"
+                    f"MTF Confluence: Score {normalized_mtf_score:.2f} (Buy: {mtf_buy_score}, Sell: {abs(mtf_sell_score)}). Total MTF contribution: {mtf_weight * normalized_mtf_score:.2f}",
                 )
         return signal_score
 
@@ -3450,7 +3539,7 @@ class TradingAnalyzer:
 
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty in generate_trading_signal. Cannot generate signal.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty in generate_trading_signal. Cannot generate signal.{RESET}",
             )
             return "HOLD", 0.0
 
@@ -3492,12 +3581,14 @@ class TradingAnalyzer:
             imbalance = self._check_orderbook(current_price, orderbook_manager)
             signal_score += imbalance * self.weights.get("orderbook_imbalance", 0)
             self.logger.debug(
-                f"  Orderbook Imbalance: {imbalance:.2f} (Contribution: {imbalance * self.weights.get('orderbook_imbalance', 0):.2f})"
+                f"  Orderbook Imbalance: {imbalance:.2f} (Contribution: {imbalance * self.weights.get('orderbook_imbalance', 0):.2f})",
             )
 
         if active_indicators.get("fibonacci_levels", False):
             signal_score = self._score_fibonacci_levels(
-                current_price, prev_close, signal_score
+                current_price,
+                prev_close,
+                signal_score,
             )
 
         if active_indicators.get("ehlers_supertrend", False):
@@ -3511,7 +3602,9 @@ class TradingAnalyzer:
 
         if active_indicators.get("ichimoku_cloud", False):
             signal_score = self._score_ichimoku_confluence(
-                current_close, prev_close, signal_score
+                current_close,
+                prev_close,
+                signal_score,
             )
 
         if active_indicators.get("obv", False):
@@ -3525,7 +3618,9 @@ class TradingAnalyzer:
 
         if active_indicators.get("vwma", False):
             signal_score = self._score_vwma_cross(
-                current_close, prev_close, signal_score
+                current_close,
+                prev_close,
+                signal_score,
             )
 
         if active_indicators.get("volume_delta", False):
@@ -3550,7 +3645,7 @@ class TradingAnalyzer:
 
             if gemini_analysis:
                 self.logger.info(
-                    f"{NEON_PURPLE}Gemini AI Analysis: {json.dumps(gemini_analysis, indent=2)}{RESET}"
+                    f"{NEON_PURPLE}Gemini AI Analysis: {json.dumps(gemini_analysis, indent=2)}{RESET}",
                 )
                 gemini_entry = gemini_analysis.get("entry")
                 gemini_confidence = gemini_analysis.get("confidence_level", 0)
@@ -3560,24 +3655,24 @@ class TradingAnalyzer:
                     if gemini_entry == "BUY":
                         signal_score += gemini_weight
                         self.logger.info(
-                            f"{NEON_GREEN}Gemini AI recommends BUY (Confidence: {gemini_confidence}). Adding {gemini_weight} to signal score.{RESET}"
+                            f"{NEON_GREEN}Gemini AI recommends BUY (Confidence: {gemini_confidence}). Adding {gemini_weight} to signal score.{RESET}",
                         )
                     elif gemini_entry == "SELL":
                         signal_score -= gemini_weight
                         self.logger.info(
-                            f"{NEON_RED}Gemini AI recommends SELL (Confidence: {gemini_confidence}). Subtracting {gemini_weight} from signal score.{RESET}"
+                            f"{NEON_RED}Gemini AI recommends SELL (Confidence: {gemini_confidence}). Subtracting {gemini_weight} from signal score.{RESET}",
                         )
                     else:
                         self.logger.info(
-                            f"{NEON_YELLOW}Gemini AI recommends HOLD (Confidence: {gemini_confidence}). No change to signal score.{RESET}"
+                            f"{NEON_YELLOW}Gemini AI recommends HOLD (Confidence: {gemini_confidence}). No change to signal score.{RESET}",
                         )
                 else:
                     self.logger.info(
-                        f"{NEON_YELLOW}Gemini AI confidence ({gemini_confidence}) too low. Skipping influence on signal score.{RESET}"
+                        f"{NEON_YELLOW}Gemini AI confidence ({gemini_confidence}) too low. Skipping influence on signal score.{RESET}",
                     )
             else:
                 self.logger.warning(
-                    f"{NEON_YELLOW}Gemini AI analysis failed or returned no data. Skipping influence on signal score.{RESET}"
+                    f"{NEON_YELLOW}Gemini AI analysis failed or returned no data. Skipping influence on signal score.{RESET}",
                 )
 
         # --- Final Signal Determination ---
@@ -3589,19 +3684,22 @@ class TradingAnalyzer:
             final_signal = "SELL"
 
         self.logger.info(
-            f"{NEON_YELLOW}Raw Signal Score: {signal_score:.2f}, Final Signal: {final_signal}{RESET}"
+            f"{NEON_YELLOW}Raw Signal Score: {signal_score:.2f}, Final Signal: {final_signal}{RESET}",
         )
         return final_signal, signal_score
 
     def calculate_entry_tp_sl(
-        self, current_price: Decimal, atr_value: Decimal, signal: Literal["BUY", "SELL"]
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
+        signal: Literal["BUY", "SELL"],
     ) -> tuple[Decimal, Decimal]:
         """Calculate Take Profit and Stop Loss levels."""
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         take_profit_atr_multiple = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
 
         if signal == "BUY":
@@ -3634,7 +3732,7 @@ def display_indicator_values_and_price(
 
     if analyzer.df.empty:
         logger.warning(
-            f"{NEON_YELLOW}Cannot display indicators: DataFrame is empty after calculations.{RESET}"
+            f"{NEON_YELLOW}Cannot display indicators: DataFrame is empty after calculations.{RESET}",
         )
         return
 
@@ -3646,7 +3744,7 @@ def display_indicator_values_and_price(
             logger.info(f"  {color}{indicator_name}: {value.normalize()}{RESET}")
         elif isinstance(value, float):
             logger.info(
-                f"  {color}{indicator_name}: {value:.8f}{RESET}"
+                f"  {color}{indicator_name}: {value:.8f}{RESET}",
             )  # Display floats with more reasonable precision
         else:
             logger.info(f"  {color}{indicator_name}: {value}{RESET}")
@@ -3655,7 +3753,7 @@ def display_indicator_values_and_price(
         logger.info(f"{NEON_CYAN}--- Fibonacci Levels ---{RESET}")
         for level_name, level_price in analyzer.fib_levels.items():
             logger.info(
-                f"  {NEON_YELLOW}{level_name}: {level_price.normalize()}{RESET}"
+                f"  {NEON_YELLOW}{level_name}: {level_price.normalize()}{RESET}",
             )
 
     if mtf_trends:
@@ -3691,24 +3789,27 @@ async def main_async_loop(
             local_time_ms = int(time.time() * 1000)
             time_offset_ms = server_time_response - local_time_ms
             logger.info(
-                f"{NEON_GREEN}Bybit server time synchronized. Offset: {time_offset_ms} ms.{RESET}"
+                f"{NEON_GREEN}Bybit server time synchronized. Offset: {time_offset_ms} ms.{RESET}",
             )
         else:
             logger.warning(
-                f"{NEON_YELLOW}Could not synchronize with Bybit server time. Using local time. This may cause signature errors.{RESET}"
+                f"{NEON_YELLOW}Could not synchronize with Bybit server time. Using local time. This may cause signature errors.{RESET}",
             )
 
         await position_manager.initialize(
-            time_offset_ms
+            time_offset_ms,
         )  # Now time_offset_ms is defined
 
         while True:
             try:
                 logger.info(
-                    f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+                    f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}",
                 )
                 current_price = await fetch_current_price(
-                    config["symbol"], logger, client, time_offset_ms
+                    config["symbol"],
+                    logger,
+                    client,
+                    time_offset_ms,
                 )
                 if current_price is None:
                     alert_system.send_alert(
@@ -3741,7 +3842,7 @@ async def main_async_loop(
                 if config["mtf_analysis"]["enabled"]:
                     for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
                         logger.debug(
-                            f"Fetching klines for MTF interval: {htf_interval}"
+                            f"Fetching klines for MTF interval: {htf_interval}",
                         )
                         htf_df = await fetch_klines(
                             config["symbol"],
@@ -3767,14 +3868,14 @@ async def main_async_loop(
                                 )
                                 mtf_trends[f"{htf_interval}_{trend_ind}"] = trend
                                 logger.debug(
-                                    f"MTF Trend ({htf_interval}, {trend_ind}): {trend}"
+                                    f"MTF Trend ({htf_interval}, {trend_ind}): {trend}",
                                 )
                         else:
                             logger.warning(
-                                f"{NEON_YELLOW}Could not fetch klines for higher timeframe {htf_interval} or it was empty. Skipping MTF trend for this TF.{RESET}"
+                                f"{NEON_YELLOW}Could not fetch klines for higher timeframe {htf_interval} or it was empty. Skipping MTF trend for this TF.{RESET}",
                             )
                         await asyncio.sleep(
-                            config["mtf_analysis"]["mtf_request_delay_seconds"]
+                            config["mtf_analysis"]["mtf_request_delay_seconds"],
                         )  # Delay between MTF requests
 
                 analyzer = TradingAnalyzer(
@@ -3795,15 +3896,20 @@ async def main_async_loop(
 
                 # Pass None for orderbook_manager as it's not implemented
                 trading_signal, signal_score = await analyzer.generate_trading_signal(
-                    current_price, None, mtf_trends
+                    current_price,
+                    None,
+                    mtf_trends,
                 )
                 atr_value = Decimal(
-                    str(analyzer._get_indicator_value("ATR", Decimal("0.01")))
+                    str(analyzer._get_indicator_value("ATR", Decimal("0.01"))),
                 )  # Default to a small positive value if ATR is missing
 
                 # Manage existing positions before potentially opening new ones
                 await position_manager.manage_positions(
-                    current_price, atr_value, performance_tracker, time_offset_ms
+                    current_price,
+                    atr_value,
+                    performance_tracker,
+                    time_offset_ms,
                 )
 
                 if (
@@ -3811,41 +3917,47 @@ async def main_async_loop(
                     and signal_score >= config["signal_score_threshold"]
                 ):
                     logger.info(
-                        f"{NEON_GREEN}Strong BUY signal detected! Score: {signal_score:.2f}. Attempting to open position.{RESET}"
+                        f"{NEON_GREEN}Strong BUY signal detected! Score: {signal_score:.2f}. Attempting to open position.{RESET}",
                     )
                     await position_manager.open_position(
-                        "BUY", current_price, atr_value, time_offset_ms
+                        "BUY",
+                        current_price,
+                        atr_value,
+                        time_offset_ms,
                     )
                 elif (
                     trading_signal == "SELL"
                     and signal_score <= -config["signal_score_threshold"]
                 ):
                     logger.info(
-                        f"{NEON_RED}Strong SELL signal detected! Score: {signal_score:.2f}. Attempting to open position.{RESET}"
+                        f"{NEON_RED}Strong SELL signal detected! Score: {signal_score:.2f}. Attempting to open position.{RESET}",
                     )
                     await position_manager.open_position(
-                        "SELL", current_price, atr_value, time_offset_ms
+                        "SELL",
+                        current_price,
+                        atr_value,
+                        time_offset_ms,
                     )
                 else:
                     logger.info(
-                        f"{NEON_BLUE}No strong trading signal. Holding. Score: {signal_score:.2f}{RESET}"
+                        f"{NEON_BLUE}No strong trading signal. Holding. Score: {signal_score:.2f}{RESET}",
                     )
 
                 open_positions = position_manager.get_open_positions()
                 if open_positions:
                     logger.info(
-                        f"{NEON_CYAN}Open Positions: {len(open_positions)}{RESET}"
+                        f"{NEON_CYAN}Open Positions: {len(open_positions)}{RESET}",
                     )
                     for pos in open_positions:
                         logger.info(
-                            f"  - {pos['side']} {pos['qty'].normalize()} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}, Trailing SL: {pos.get('current_trailing_sl', 'N/A').normalize() if isinstance(pos.get('current_trailing_sl'), Decimal) else pos.get('current_trailing_sl', 'N/A')}){RESET}"
+                            f"  - {pos['side']} {pos['qty'].normalize()} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}, Trailing SL: {pos.get('current_trailing_sl', 'N/A').normalize() if isinstance(pos.get('current_trailing_sl'), Decimal) else pos.get('current_trailing_sl', 'N/A')}){RESET}",
                         )
                 else:
                     logger.info(f"{NEON_CYAN}No open positions.{RESET}")
 
                 perf_summary = performance_tracker.get_summary()
                 logger.info(
-                    f"{NEON_YELLOW}Performance Summary: Total PnL: {perf_summary['total_pnl'].normalize():.2f}, Wins: {perf_summary['wins']}, Losses: {perf_summary['losses']}, Win Rate: {perf_summary['win_rate']}{RESET}"
+                    f"{NEON_YELLOW}Performance Summary: Total PnL: {perf_summary['total_pnl'].normalize():.2f}, Wins: {perf_summary['wins']}, Losses: {perf_summary['losses']}, Win Rate: {perf_summary['win_rate']}{RESET}",
                 )
 
                 # Display indicator values and price
@@ -3859,7 +3971,7 @@ async def main_async_loop(
                 )
 
                 logger.info(
-                    f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {config['loop_delay']}s ---{RESET}"
+                    f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {config['loop_delay']}s ---{RESET}",
                 )
                 await asyncio.sleep(config["loop_delay"])
 
@@ -3902,39 +4014,40 @@ if __name__ == "__main__":
         ]
         if config["interval"] not in valid_bybit_intervals:
             logger.error(
-                f"{NEON_RED}Invalid primary interval '{config['interval']}' in config.json. Please use Bybit's valid string formats (e.g., '15', '60', 'D'). Exiting.{RESET}"
+                f"{NEON_RED}Invalid primary interval '{config['interval']}' in config.json. Please use Bybit's valid string formats (e.g., '15', '60', 'D'). Exiting.{RESET}",
             )
             sys.exit(1)
         for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
             if htf_interval not in valid_bybit_intervals:
                 logger.error(
-                    f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}' in config.json. Please use Bybit's valid string formats (e.g., '60', '240'). Exiting.{RESET}"
+                    f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}' in config.json. Please use Bybit's valid string formats (e.g., '60', '240'). Exiting.{RESET}",
                 )
                 sys.exit(1)
 
         if not API_KEY or not API_SECRET:
             logger.critical(
-                f"{NEON_RED}BYBIT_API_KEY or BYBIT_API_SECRET environment variables are not set. Please set them before running the bot. Exiting.{RESET}"
+                f"{NEON_RED}BYBIT_API_KEY or BYBIT_API_SECRET environment variables are not set. Please set them before running the bot. Exiting.{RESET}",
             )
             sys.exit(1)
 
         logger.info(f"{NEON_GREEN}--- Whalebot Trading Bot Initialized ---{RESET}")
         logger.info(f"Symbol: {config['symbol']}, Interval: {config['interval']}")
         logger.info(
-            f"Trade Management Enabled: {config['trade_management']['enabled']}"
+            f"Trade Management Enabled: {config['trade_management']['enabled']}",
         )
         if config["trade_management"]["enabled"]:
             logger.info(
-                f"Leverage: {config['trade_management']['leverage']}x, Order Mode: {config['trade_management']['order_mode']}"
+                f"Leverage: {config['trade_management']['leverage']}x, Order Mode: {config['trade_management']['order_mode']}",
             )
         else:
             logger.info(
-                f"Using simulated balance for position sizing: {config['trade_management']['account_balance']:.2f} USDT"
+                f"Using simulated balance for position sizing: {config['trade_management']['account_balance']:.2f} USDT",
             )
 
         # Initialize PerformanceTracker here
         performance_tracker = PerformanceTracker(
-            logger, config_file="bot_logs/trading-bot/trades.json"
+            logger,
+            config_file="bot_logs/trading-bot/trades.json",
         )  # Save trades to a file
 
         # Initialize other components needed by the main loop or analyzer
@@ -3952,7 +4065,7 @@ if __name__ == "__main__":
                 #     logger=logger
                 # )
                 logger.warning(
-                    f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is not implemented/imported. Placeholder used.{RESET}"
+                    f"{NEON_YELLOW}Gemini AI analysis enabled, but GeminiClient is not implemented/imported. Placeholder used.{RESET}",
                 )
 
                 class DummyGeminiClient:
@@ -3961,7 +4074,7 @@ if __name__ == "__main__":
 
                     def analyze_market_data(self, data):
                         self.logger.info(
-                            "Dummy Gemini AI: Analyzing market data (no actual analysis)."
+                            "Dummy Gemini AI: Analyzing market data (no actual analysis).",
                         )
                         return {
                             "entry": "HOLD",
@@ -3972,7 +4085,7 @@ if __name__ == "__main__":
                 gemini_client = DummyGeminiClient(logger)
             else:
                 logger.error(
-                    f"{NEON_RED}GEMINI_API_KEY not set, disabling Gemini AI analysis.{RESET}"
+                    f"{NEON_RED}GEMINI_API_KEY not set, disabling Gemini AI analysis.{RESET}",
                 )
                 config["gemini_ai_analysis"]["enabled"] = False
 
@@ -3990,12 +4103,12 @@ if __name__ == "__main__":
                 performance_tracker,
                 alert_system,
                 gemini_client,
-            )
+            ),
         )
 
     except KeyboardInterrupt:
         logger.info(
-            f"{NEON_BLUE}KeyboardInterrupt detected. Shutting down bot...{RESET}"
+            f"{NEON_BLUE}KeyboardInterrupt detected. Shutting down bot...{RESET}",
         )
         # The shutdown logic is handled within main_async_loop's finally block
     except Exception as e:

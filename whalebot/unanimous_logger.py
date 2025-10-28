@@ -38,7 +38,8 @@ class SensitiveFormatter(logging.Formatter):
             key_value = os.getenv(word, "")
             if key_value:
                 redacted_message = redacted_message.replace(
-                    key_value, "*" * len(key_value)
+                    key_value,
+                    "*" * len(key_value),
                 )
             redacted_message = redacted_message.replace(word, "*" * len(word))
 
@@ -88,23 +89,27 @@ def setup_logger(
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{config.NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{config.RESET}"
-            )
+                f"{config.NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{config.RESET}",
+            ),
         )
         logger.addHandler(console_handler)
 
         file_handler = RotatingFileHandler(
-            config.LOG_FILE_PATH, maxBytes=10 * 1024 * 1024, backupCount=5
+            config.LOG_FILE_PATH,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
 
         if json_log_file:
             json_log_path = log_dir / json_log_file
             json_handler = RotatingFileHandler(
-                json_log_path, maxBytes=10 * 1024 * 1024, backupCount=5
+                json_log_path,
+                maxBytes=10 * 1024 * 1024,
+                backupCount=5,
             )
             json_handler.setFormatter(JSONFormatter())
             logger.addHandler(json_handler)
@@ -112,12 +117,14 @@ def setup_logger(
         if trading_bot_log_file:
             trading_bot_log_path = log_dir / trading_bot_log_file
             trading_bot_handler = RotatingFileHandler(
-                trading_bot_log_path, maxBytes=10 * 1024 * 1024, backupCount=5
+                trading_bot_log_path,
+                maxBytes=10 * 1024 * 1024,
+                backupCount=5,
             )
             trading_bot_handler.setFormatter(
                 TradingBotFormatter(
-                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-                )
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                ),
             )
             logger.addHandler(trading_bot_handler)
 

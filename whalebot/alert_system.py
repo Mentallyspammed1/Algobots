@@ -38,20 +38,23 @@ class AlertSystem:
             # Using subprocess.run to send a toast notification
             # The '-s' flag allows the toast to be shown for a shorter duration
             subprocess.run(
-                ["termux-toast", message], check=True, capture_output=True, text=True
+                ["termux-toast", message],
+                check=True,
+                capture_output=True,
+                text=True,
             )
             self.logger.info("Termux toast alert sent successfully.")
         except FileNotFoundError:
             self.logger.error(
                 f"{NEON_RED}The 'termux-toast' command was not found. "
-                f"Please ensure the Termux:API app is installed and that you have run 'pkg install termux-api'.{Style.RESET_ALL}"
+                f"Please ensure the Termux:API app is installed and that you have run 'pkg install termux-api'.{Style.RESET_ALL}",
             )
         except subprocess.CalledProcessError as e:
             self.logger.error(
                 f"{NEON_RED}Failed to send Termux toast notification.{Style.RESET_ALL}\n"
-                f"{NEON_YELLOW}Stderr: {e.stderr}{Style.RESET_ALL}"
+                f"{NEON_YELLOW}Stderr: {e.stderr}{Style.RESET_ALL}",
             )
         except Exception as e:
             self.logger.error(
-                f"{NEON_RED}An unexpected error occurred while sending a toast: {e}{Style.RESET_ALL}"
+                f"{NEON_RED}An unexpected error occurred while sending a toast: {e}{Style.RESET_ALL}",
             )

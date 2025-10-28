@@ -178,11 +178,13 @@ class EnhancedHeap:
             left = self._left_child(i)
             right = self._right_child(i)
             if left < len(self.heap) and self._compare(
-                self.heap[left], self.heap[largest]
+                self.heap[left],
+                self.heap[largest],
             ):
                 largest = left
             if right < len(self.heap) and self._compare(
-                self.heap[right], self.heap[largest]
+                self.heap[right],
+                self.heap[largest],
             ):
                 largest = right
             if largest == i:
@@ -264,12 +266,12 @@ class AdvancedOrderbookManager:
                 isinstance(price, (int, float)) and isinstance(quantity, (int, float))
             ):
                 self.logger.error(
-                    f"Invalid type for price or quantity for {self.symbol}. Price: {type(price)}, Qty: {type(quantity)}"
+                    f"Invalid type for price or quantity for {self.symbol}. Price: {type(price)}, Qty: {type(quantity)}",
                 )
                 return False
             if price < 0 or quantity < 0:
                 self.logger.error(
-                    f"Negative price or quantity detected for {self.symbol}: price={price}, quantity={quantity}"
+                    f"Negative price or quantity detected for {self.symbol}: price={price}, quantity={quantity}",
                 )
                 return False
             return True
@@ -283,7 +285,7 @@ class AdvancedOrderbookManager:
                 or "u" not in data
             ):
                 self.logger.error(
-                    f"Invalid snapshot data format for {self.symbol}: {data}"
+                    f"Invalid snapshot data format for {self.symbol}: {data}",
                 )
                 return
 
@@ -309,7 +311,7 @@ class AdvancedOrderbookManager:
                             self.bids_ds.insert(level)
                 except (ValueError, TypeError) as e:
                     self.logger.error(
-                        f"Failed to parse bid in snapshot for {self.symbol}: {price_str}/{qty_str}, error={e}"
+                        f"Failed to parse bid in snapshot for {self.symbol}: {price_str}/{qty_str}, error={e}",
                     )
 
             for price_str, qty_str in data.get("a", []):
@@ -327,12 +329,12 @@ class AdvancedOrderbookManager:
                             self.asks_ds.insert(level)
                 except (ValueError, TypeError) as e:
                     self.logger.error(
-                        f"Failed to parse ask in snapshot for {self.symbol}: {price_str}/{qty_str}, error={e}"
+                        f"Failed to parse ask in snapshot for {self.symbol}: {price_str}/{qty_str}, error={e}",
                     )
 
             self.last_update_id = data.get("u", 0)
             self.logger.info(
-                f"Orderbook {self.symbol} snapshot updated. Last Update ID: {self.last_update_id}"
+                f"Orderbook {self.symbol} snapshot updated. Last Update ID: {self.last_update_id}",
             )
 
     async def update_delta(self, data: dict[str, Any]) -> None:
@@ -343,14 +345,14 @@ class AdvancedOrderbookManager:
                 or "u" not in data
             ):
                 self.logger.error(
-                    f"Invalid delta data format for {self.symbol}: {data}"
+                    f"Invalid delta data format for {self.symbol}: {data}",
                 )
                 return
 
             current_update_id = data.get("u", 0)
             if current_update_id <= self.last_update_id:
                 self.logger.debug(
-                    f"Outdated OB update for {self.symbol}: current={current_update_id}, last={self.last_update_id}. Skipping."
+                    f"Outdated OB update for {self.symbol}: current={current_update_id}, last={self.last_update_id}. Skipping.",
                 )
                 return
 
@@ -363,7 +365,7 @@ class AdvancedOrderbookManager:
 
                     if quantity == 0.0:
                         self.bids_ds.delete(
-                            price
+                            price,
                         ) if self.use_skip_list else self.bids_ds.remove(price)
                     else:
                         level = PriceLevel(price, quantity, int(time.time() * 1000))
@@ -373,7 +375,7 @@ class AdvancedOrderbookManager:
                             self.bids_ds.insert(level)
                 except (ValueError, TypeError) as e:
                     self.logger.error(
-                        f"Failed to parse bid delta for {self.symbol}: {price_str}/{qty_str}, error={e}"
+                        f"Failed to parse bid delta for {self.symbol}: {price_str}/{qty_str}, error={e}",
                     )
 
             for price_str, qty_str in data.get("a", []):
@@ -385,7 +387,7 @@ class AdvancedOrderbookManager:
 
                     if quantity == 0.0:
                         self.asks_ds.delete(
-                            price
+                            price,
                         ) if self.use_skip_list else self.asks_ds.remove(price)
                     else:
                         level = PriceLevel(price, quantity, int(time.time() * 1000))
@@ -395,12 +397,12 @@ class AdvancedOrderbookManager:
                             self.asks_ds.insert(level)
                 except (ValueError, TypeError) as e:
                     self.logger.error(
-                        f"Failed to parse ask delta for {self.symbol}: {price_str}/{qty_str}, error={e}"
+                        f"Failed to parse ask delta for {self.symbol}: {price_str}/{qty_str}, error={e}",
                     )
 
             self.last_update_id = current_update_id
             self.logger.debug(
-                f"Orderbook {self.symbol} delta applied. Last Update ID: {self.last_update_id}"
+                f"Orderbook {self.symbol} delta applied. Last Update ID: {self.last_update_id}",
             )
 
     async def get_best_bid_ask(self) -> tuple[float | None, float | None]:

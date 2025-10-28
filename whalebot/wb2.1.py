@@ -35,7 +35,7 @@ except ImportError:
     logging.basicConfig(level=logging.ERROR)
     logger_mod_err = logging.getLogger(__name__)
     logger_mod_err.error(
-        "indicators.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH."
+        "indicators.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH.",
     )
     sys.exit(1)
 
@@ -45,7 +45,7 @@ except ImportError:
     logging.basicConfig(level=logging.ERROR)
     logger_mod_err = logging.getLogger(__name__)
     logger_mod_err.error(
-        "alert_system.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH."
+        "alert_system.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH.",
     )
     sys.exit(1)
 
@@ -161,7 +161,8 @@ def round_qty(qty: Decimal, qty_step: Decimal) -> Decimal:
     """Rounds quantity down to the nearest multiple of qty_step."""
     if qty_step is None or qty_step.is_zero():
         return qty.quantize(
-            Decimal("1e-6"), rounding=ROUND_DOWN
+            Decimal("1e-6"),
+            rounding=ROUND_DOWN,
         )  # Default to 6 decimal places
     return (qty // qty_step) * qty_step
 
@@ -173,7 +174,9 @@ def round_price(price: Decimal, price_precision: int) -> Decimal:
 
 
 def _safe_divide_decimal(
-    numerator: Decimal, denominator: Decimal, default: Decimal = Decimal("0")
+    numerator: Decimal,
+    denominator: Decimal,
+    default: Decimal = Decimal("0"),
 ) -> Decimal:
     """Safely divides two Decimals, returning default on zero/NaN denominator or InvalidOperation."""
     try:
@@ -185,7 +188,9 @@ def _safe_divide_decimal(
 
 
 def _clean_series(
-    series: pd.Series | None, df_index: pd.Index, default_val: Any = np.nan
+    series: pd.Series | None,
+    df_index: pd.Index,
+    default_val: Any = np.nan,
 ) -> pd.Series:
     """Cleans a Pandas Series: re-indexes, handles NaNs, and returns as Series."""
     if series is None:
@@ -370,7 +375,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "roc_signal": 0.12,
                 "candlestick_confirmation": 0.15,
                 "fibonacci_pivot_points_confluence": 0.20,
-            }
+            },
         },
         "execution": {  # Execution parameters for live trading
             "use_pybit": False,
@@ -472,7 +477,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         return config
     except (OSError, json.JSONDecodeError) as e:
         logger.error(
-            f"{NEON_RED}Error loading config file '{filepath}': {e}. Using default configuration.{RESET}"
+            f"{NEON_RED}Error loading config file '{filepath}': {e}. Using default configuration.{RESET}",
         )
         return default_config  # Fallback to default if loading fails
 
@@ -513,18 +518,20 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
 
         # File Handler with rotation and sensitive formatting
         log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
     return logger
@@ -552,13 +559,13 @@ class PybitTradingClient:
         if not PYBIT_AVAILABLE:
             self.enabled = False
             self.logger.error(
-                f"{NEON_RED}PyBit library not found. Please install it: pip install pybit.{RESET}"
+                f"{NEON_RED}PyBit library not found. Please install it: pip install pybit.{RESET}",
             )
             return
         if not API_KEY or not API_SECRET:
             self.enabled = False
             self.logger.error(
-                f"{NEON_RED}API keys (BYBIT_API_KEY, BYBIT_API_SECRET) not set in .env.{RESET}"
+                f"{NEON_RED}API keys (BYBIT_API_KEY, BYBIT_API_SECRET) not set in .env.{RESET}",
             )
             return
 
@@ -574,7 +581,7 @@ class PybitTradingClient:
                 self.logger.info(f"{NEON_BLUE}Using proxies: {proxies}.{RESET}")
             else:
                 self.logger.warning(
-                    f"{NEON_YELLOW}Proxy enabled but no URLs provided.{RESET}"
+                    f"{NEON_YELLOW}Proxy enabled but no URLs provided.{RESET}",
                 )
 
         try:
@@ -586,14 +593,14 @@ class PybitTradingClient:
                 timeout=REQUEST_TIMEOUT,
             )
             self.logger.info(
-                f"{NEON_GREEN}PyBit HTTP client initialized. Testnet={self.testnet}{RESET}"
+                f"{NEON_GREEN}PyBit HTTP client initialized. Testnet={self.testnet}{RESET}",
             )
 
             self._initialize_websocket()  # Initialize WebSocket manager
         except (pybit.exceptions.FailedRequestError, TypeError, Exception) as e:
             self.enabled = False  # Disable client if initialization fails
             self.logger.error(
-                f"{NEON_RED}Failed to initialize PyBit client: {e}\n{traceback.format_exc()}{RESET}"
+                f"{NEON_RED}Failed to initialize PyBit client: {e}\n{traceback.format_exc()}{RESET}",
             )
             self.session = None  # Ensure session is None on failure
 
@@ -602,12 +609,12 @@ class PybitTradingClient:
         """Logs API response status using specified level."""
         if not resp:
             getattr(self.logger, log_level)(
-                f"{NEON_RED}{action}: No response received.{RESET}"
+                f"{NEON_RED}{action}: No response received.{RESET}",
             )
             return
         if not self._ok(resp):
             getattr(self.logger, log_level)(
-                f"{NEON_RED}{action}: Failed with code {resp.get('retCode')} - {resp.get('retMsg')}{RESET}"
+                f"{NEON_RED}{action}: Failed with code {resp.get('retCode')} - {resp.get('retMsg')}{RESET}",
             )
 
     def _ok(self, resp: dict | None) -> bool:
@@ -632,7 +639,7 @@ class PybitTradingClient:
         """Specifically handles 403 Forbidden errors for API calls."""
         if isinstance(e, pybit.exceptions.FailedRequestError) and e.status_code == 403:
             self.logger.error(
-                f"{NEON_RED}API Error 403 Forbidden: Check API key permissions and IP whitelist settings on Bybit. Disabling Pybit client temporarily.{RESET}"
+                f"{NEON_RED}API Error 403 Forbidden: Check API key permissions and IP whitelist settings on Bybit. Disabling Pybit client temporarily.{RESET}",
             )
             self.enabled = False  # Temporarily disable to prevent spamming
             self.stop_event.set()  # Signal shutdown for other components as well
@@ -652,7 +659,7 @@ class PybitTradingClient:
             return self._ok(resp)
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"set_leverage failed for {symbol}: {e}\n{traceback.format_exc()}"
+                f"set_leverage failed for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return False
@@ -677,13 +684,14 @@ class PybitTradingClient:
             return None
         try:
             resp = self.session.get_wallet_balance(
-                accountType=self.cfg["execution"]["account_type"], coin=coin
+                accountType=self.cfg["execution"]["account_type"],
+                coin=coin,
             )
             self._log_api("get_wallet_balance", resp, "debug")
             return resp
         except pybit.exceptions.FailedRequestError as e:
             self.logger.error(
-                f"get_wallet_balance exception: {e}\n{traceback.format_exc()}"
+                f"get_wallet_balance exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -716,13 +724,16 @@ class PybitTradingClient:
             return resp
         except pybit.exceptions.FailedRequestError as e:
             self.logger.error(
-                f"batch_place_orders exception: {e}\n{traceback.format_exc()}"
+                f"batch_place_orders exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
 
     def cancel_order(
-        self, symbol: str, order_id: str | None = None, order_link_id: str | None = None
+        self,
+        symbol: str,
+        order_id: str | None = None,
+        order_link_id: str | None = None,
     ) -> dict | None:
         if not self.enabled or not self.session:
             return None
@@ -734,7 +745,7 @@ class PybitTradingClient:
                 params["orderLinkId"] = order_link_id
             else:
                 self.logger.warning(
-                    "No orderId or orderLinkId provided for cancel_order."
+                    "No orderId or orderLinkId provided for cancel_order.",
                 )
                 return None
             resp = self.session.cancel_order(**params)
@@ -742,7 +753,7 @@ class PybitTradingClient:
             return resp
         except pybit.exceptions.FailedRequestError as e:
             self.logger.error(
-                f"cancel_order exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"cancel_order exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -764,7 +775,7 @@ class PybitTradingClient:
             return []
         except pybit.exceptions.FailedRequestError as e:
             self.logger.error(
-                f"get_open_orders exception: {e}\n{traceback.format_exc()}"
+                f"get_open_orders exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return []
@@ -779,24 +790,30 @@ class PybitTradingClient:
                 price = Decimal(response["result"]["list"][0]["lastPrice"])
                 return price
             self.logger.warning(
-                f"Could not fetch current price for {symbol}. Response: {response}"
+                f"Could not fetch current price for {symbol}. Response: {response}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
             self.logger.error(
-                f"fetch_current_price exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"fetch_current_price exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
 
     def fetch_klines(
-        self, symbol: str, interval: str, limit: int
+        self,
+        symbol: str,
+        interval: str,
+        limit: int,
     ) -> pd.DataFrame | None:
         if not self.enabled or not self.session:
             return None
         try:
             resp = self.session.get_kline(
-                category=self.category, symbol=symbol, interval=interval, limit=limit
+                category=self.category,
+                symbol=symbol,
+                interval=interval,
+                limit=limit,
             )
             if self._ok(resp) and resp.get("result", {}).get("list"):
                 df = pd.DataFrame(
@@ -816,16 +833,16 @@ class PybitTradingClient:
                 for col in ["open", "high", "low", "close", "volume", "turnover"]:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
                 df.dropna(
-                    inplace=True
+                    inplace=True,
                 )  # Drop rows with any NaN values after conversion
                 return df
             self.logger.warning(
-                f"Failed to fetch klines for {symbol} {interval}. Response: {resp}"
+                f"Failed to fetch klines for {symbol} {interval}. Response: {resp}",
             )
             return None
         except (pybit.exceptions.FailedRequestError, KeyError, ValueError) as e:
             self.logger.error(
-                f"fetch_klines exception for {symbol} {interval}: {e}\n{traceback.format_exc()}"
+                f"fetch_klines exception for {symbol} {interval}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -835,17 +852,19 @@ class PybitTradingClient:
             return None
         try:
             resp = self.session.get_orderbook(
-                category=self.category, symbol=symbol, limit=limit
+                category=self.category,
+                symbol=symbol,
+                limit=limit,
             )
             if self._ok(resp) and resp.get("result"):
                 return resp["result"]
             self.logger.warning(
-                f"Failed to fetch orderbook for {symbol}. Response: {resp}"
+                f"Failed to fetch orderbook for {symbol}. Response: {resp}",
             )
             return None
         except (pybit.exceptions.FailedRequestError, KeyError) as e:
             self.logger.error(
-                f"fetch_orderbook exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"fetch_orderbook exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -855,23 +874,27 @@ class PybitTradingClient:
             return None
         try:
             resp = self.session.get_instruments_info(
-                category=self.category, symbol=symbol
+                category=self.category,
+                symbol=symbol,
             )
             if self._ok(resp) and resp.get("result", {}).get("list"):
                 return resp["result"]["list"][0]
             self.logger.warning(
-                f"Failed to fetch instrument info for {symbol}. Response: {resp}"
+                f"Failed to fetch instrument info for {symbol}. Response: {resp}",
             )
             return None
         except (pybit.exceptions.FailedRequestError, KeyError) as e:
             self.logger.error(
-                f"fetch_instrument_info exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"fetch_instrument_info exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
 
     def get_executions(
-        self, symbol: str, start_time_ms: int, limit: int
+        self,
+        symbol: str,
+        start_time_ms: int,
+        limit: int,
     ) -> dict | None:
         if not self.enabled or not self.session:
             return None
@@ -886,7 +909,7 @@ class PybitTradingClient:
             return resp
         except pybit.exceptions.FailedRequestError as e:
             self.logger.error(
-                f"get_executions exception: {e}\n{traceback.format_exc()}"
+                f"get_executions exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -903,7 +926,7 @@ class PybitTradingClient:
             # For the unified trading WS, authentication is part of the `subscribe` message or initial connection.
             # Returning a dummy structure or adjusting based on Pybit's actual authentication mechanism.
             self.logger.debug(
-                "Pybit unified trading WebSocket authentication typically uses signed messages, not a separate 'listenKey' endpoint."
+                "Pybit unified trading WebSocket authentication typically uses signed messages, not a separate 'listenKey' endpoint.",
             )
             # If the Pybit library has an equivalent for a 'user stream URL' or token, implement it here.
             # For now, return a placeholder that the WS manager can handle if it expects a specific format.
@@ -913,7 +936,7 @@ class PybitTradingClient:
             }  # Placeholder
         except Exception as e:
             self.logger.error(
-                f"get_private_url (placeholder) exception: {e}\n{traceback.format_exc()}"
+                f"get_private_url (placeholder) exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -929,7 +952,7 @@ class PybitTradingClient:
             self.ws_manager.start()  # Start the WS thread
         except Exception as e:
             self.logger.error(
-                f"Failed to initialize WebSocket Manager: {e}\n{traceback.format_exc()}"
+                f"Failed to initialize WebSocket Manager: {e}\n{traceback.format_exc()}",
             )
 
     def shutdown(self):
@@ -970,13 +993,14 @@ class PybitTradingClient:
                 self.ws_manager.positions = state_data.get("positions", {})
                 self.ws_manager.orders = state_data.get("orders", {})
                 self.ws_manager.last_exec_time_ms = state_data.get(
-                    "last_exec_time_ms", 0
+                    "last_exec_time_ms",
+                    0,
                 )
                 self.state_data = (
                     state_data  # Store loaded data for other components if needed
                 )
                 self.logger.info(
-                    f"Bot state loaded. Positions: {len(self.ws_manager.positions)}, Orders: {len(self.ws_manager.orders)}"
+                    f"Bot state loaded. Positions: {len(self.ws_manager.positions)}, Orders: {len(self.ws_manager.orders)}",
                 )
             return True
         except (OSError, json.JSONDecodeError) as e:
@@ -989,7 +1013,10 @@ class WebSocketManager:
     """Manages WebSocket connections, subscriptions, and message routing."""
 
     def __init__(
-        self, api_client: PybitTradingClient, config: dict, logger: logging.Logger
+        self,
+        api_client: PybitTradingClient,
+        config: dict,
+        logger: logging.Logger,
     ):
         self.api_client, self.cfg, self.logger = api_client, config, logger
         self.stop_event = api_client.stop_event  # Use parent client's stop event
@@ -1076,21 +1103,24 @@ class WebSocketManager:
                 except Exception:
                     ws_app.close()  # Force reconnect on ping failure
                 time.sleep(
-                    HEARTBEAT_INTERVAL_MS / 1000.0
+                    HEARTBEAT_INTERVAL_MS / 1000.0,
                 )  # Wait for next ping interval
                 continue
 
             # Attempt to connect if not connected or connection lost
             try:
                 self.logger.info(
-                    f"Attempting {ws_type} WebSocket connection to {url}..."
+                    f"Attempting {ws_type} WebSocket connection to {url}...",
                 )
                 ws = websocket.WebSocketApp(
                     url,
                     on_message=self.on_message,
                     on_error=self.on_error,
                     on_close=lambda ws, status, msg, ws_type=ws_type: self.on_close(
-                        ws, status, msg, ws_type
+                        ws,
+                        status,
+                        msg,
+                        ws_type,
                     ),
                     on_open=lambda ws, ws_type=ws_type: self.on_open(ws, ws_type),
                 )
@@ -1101,11 +1131,12 @@ class WebSocketManager:
                 )  # Blocks
             except Exception as e:
                 self.logger.error(
-                    f"WebSocket run_forever error ({ws_type}): {e}. Retrying in {self.connect_delay}s.\n{traceback.format_exc()}"
+                    f"WebSocket run_forever error ({ws_type}): {e}. Retrying in {self.connect_delay}s.\n{traceback.format_exc()}",
                 )
                 time.sleep(self.connect_delay)
                 self.connect_delay = min(
-                    self.connect_delay * 2, 60
+                    self.connect_delay * 2,
+                    60,
                 )  # Exponential backoff
 
     def on_message(self, ws, message):
@@ -1123,7 +1154,7 @@ class WebSocketManager:
     def on_close(self, ws, close_status_code, close_msg, ws_type: str):
         """Handles WebSocket closure, triggering reconnection."""
         self.logger.warning(
-            f"{ws_type} WebSocket closed: {close_status_code} {close_msg}. Reconnecting..."
+            f"{ws_type} WebSocket closed: {close_status_code} {close_msg}. Reconnecting...",
         )
         if ws_type == "public":
             self.ws_public = None
@@ -1148,10 +1179,10 @@ class WebSocketManager:
             # Public topics: kline, orderbook
             subscriptions.append(f"kline.{self.cfg['interval']}.{symbol}")
             subscriptions.append(
-                f"orderbook.1.{symbol}"
+                f"orderbook.1.{symbol}",
             )  # Level 1 orderbook, check config for limit
             self.logger.info(
-                f"Subscribing to public WS topics for {symbol}: {', '.join(subscriptions)}"
+                f"Subscribing to public WS topics for {symbol}: {', '.join(subscriptions)}",
             )
         elif ws_type == "private":
             # Private topics: position, order, execution, wallet
@@ -1161,10 +1192,10 @@ class WebSocketManager:
                     "order",  # All order updates
                     "execution",  # All execution updates
                     "wallet",  # Account balance updates
-                ]
+                ],
             )
             self.logger.info(
-                f"Subscribing to private WS topics: {', '.join(subscriptions)}"
+                f"Subscribing to private WS topics: {', '.join(subscriptions)}",
             )
 
         if subscriptions:
@@ -1185,7 +1216,7 @@ class WebSocketManager:
                 self.logger.info(f"Sent subscription payload for {ws_type} topics.")
             except Exception as e:
                 self.logger.error(
-                    f"Error sending WS subscription for {ws_type} topics: {e}\n{traceback.format_exc()}"
+                    f"Error sending WS subscription for {ws_type} topics: {e}\n{traceback.format_exc()}",
                 )
 
     def _sync_initial_state(self):
@@ -1203,7 +1234,7 @@ class WebSocketManager:
                     break
         else:
             self.logger.warning(
-                f"Could not sync initial positions for {symbol}. Response: {pos_data}"
+                f"Could not sync initial positions for {symbol}. Response: {pos_data}",
             )
 
         # Sync open orders
@@ -1219,7 +1250,8 @@ class WebSocketManager:
         # Initialize last_exec_time_ms for fetching executions
         now_ms = int(time.time() * 1000)
         self.last_exec_time_ms = max(
-            self.last_exec_time_ms, now_ms - 5 * 60 * 1000
+            self.last_exec_time_ms,
+            now_ms - 5 * 60 * 1000,
         )  # Start fetch from 5 mins ago
 
     def _process_ws_message(self, data):
@@ -1233,15 +1265,15 @@ class WebSocketManager:
         if "op" in data and data["op"] == "subscribe":
             if data.get("success"):
                 self.logger.info(
-                    f"WS Subscription successful for args: {data.get('req_id')}"
+                    f"WS Subscription successful for args: {data.get('req_id')}",
                 )
             elif data.get("retMsg"):
                 self.logger.error(
-                    f"WS Subscription failed for args: {data.get('req_id')} - {data.get('retMsg')}"
+                    f"WS Subscription failed for args: {data.get('req_id')} - {data.get('retMsg')}",
                 )
             else:
                 self.logger.warning(
-                    f"WS Subscription unacknowledged or failed without message for args: {data.get('req_id')}"
+                    f"WS Subscription unacknowledged or failed without message for args: {data.get('req_id')}",
                 )
             return
 
@@ -1265,7 +1297,7 @@ class WebSocketManager:
             self.logger.debug(f"WS General Success: {data.get('retMsg', 'OK')}")
         elif data.get("retCode") is not None and data.get("retCode") != 0:
             self.logger.error(
-                f"WS Error Response: {data.get('retCode')} - {data.get('retMsg')}"
+                f"WS Error Response: {data.get('retCode')} - {data.get('retMsg')}",
             )
 
     def _handle_order_update(self, order_list: list[dict]):
@@ -1321,7 +1353,7 @@ class WebSocketManager:
             self.listeners[event_type].append(callback)
         else:
             self.logger.warning(
-                f"Attempted to add listener for unknown event type: {event_type}"
+                f"Attempted to add listener for unknown event type: {event_type}",
             )
 
     def notify_listeners(self, event_type: str, data):
@@ -1331,7 +1363,7 @@ class WebSocketManager:
                 callback(data)  # Call the listener function
             except Exception:
                 self.logger.exception(
-                    f"Error executing listener for event '{event_type}'"
+                    f"Error executing listener for event '{event_type}'",
                 )
 
 
@@ -1357,13 +1389,13 @@ class PositionManager:
         self.price_precision = config["trade_management"]["price_precision"]
         self.qty_step = Decimal("0.000001")
         self.slippage_percent = Decimal(
-            str(config["trade_management"].get("slippage_percent", 0.0))
+            str(config["trade_management"].get("slippage_percent", 0.0)),
         )
         self.stop_loss_atr_multiple = Decimal(
-            str(config["trade_management"]["stop_loss_atr_multiple"])
+            str(config["trade_management"]["stop_loss_atr_multiple"]),
         )
         self.take_profit_atr_multiple = Decimal(
-            str(config["trade_management"]["take_profit_atr_multiple"])
+            str(config["trade_management"]["take_profit_atr_multiple"]),
         )
 
         self._update_precision_from_exchange()  # Fetch precision settings from exchange
@@ -1377,7 +1409,7 @@ class PositionManager:
             # Adjust if multiple positions per symbol are managed differently.
             self.open_positions = [self._convert_ws_position_to_local(ws_pos_data)]
             self.logger.info(
-                f"Loaded initial position state from WS for {self.symbol}."
+                f"Loaded initial position state from WS for {self.symbol}.",
             )
 
     def _convert_ws_position_to_local(self, ws_pos: dict) -> dict:
@@ -1386,14 +1418,15 @@ class PositionManager:
         # Adjust based on the precise format of 'pos_info' from _handle_position_update.
         return {
             "entry_time": datetime.fromtimestamp(
-                int(ws_pos.get("createdTime", 0)) / 1000, tz=TIMEZONE
+                int(ws_pos.get("createdTime", 0)) / 1000,
+                tz=TIMEZONE,
             ),  # 'time' is deprecated, use 'createdTime'
             "symbol": ws_pos.get("symbol"),
             "side": "BUY" if ws_pos.get("side") == "Buy" else "SELL",
             "entry_price": Decimal(ws_pos.get("avgPrice", "0")),
             "qty": Decimal(ws_pos.get("size", "0")),
             "stop_loss": Decimal(
-                ws_pos.get("stopLoss", "0")
+                ws_pos.get("stopLoss", "0"),
             ),  # Note: SL/TP might need separate tracking if not in position update
             "take_profit": Decimal(ws_pos.get("takeProfit", "0")),
             "status": "OPEN",  # Assume OPEN if it's in the positions list
@@ -1409,7 +1442,7 @@ class PositionManager:
         """Fetches instrument info to get accurate quantity step and price precision."""
         if not self.live or not self.pybit or not self.pybit.enabled:
             self.logger.warning(
-                f"Pybit client not ready. Cannot fetch precision for {self.symbol}. Using config values."
+                f"Pybit client not ready. Cannot fetch precision for {self.symbol}. Using config values.",
             )
             return
 
@@ -1420,7 +1453,7 @@ class PositionManager:
             if not self.qty_step.is_zero():
                 self.order_precision = abs(self.qty_step.as_tuple().exponent)
             self.logger.info(
-                f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}"
+                f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}",
             )
 
             price_filter = info.get("priceFilter", {})
@@ -1430,7 +1463,7 @@ class PositionManager:
             self.logger.info(f"Updated price_precision: {self.price_precision}")
         else:
             self.logger.warning(
-                f"Could not fetch instrument info for {self.symbol}. Using config values."
+                f"Could not fetch instrument info for {self.symbol}. Using config values.",
             )
 
     def _get_current_balance(self) -> Decimal:
@@ -1445,7 +1478,10 @@ class PositionManager:
         return Decimal(str(self.config["trade_management"]["account_balance"]))
 
     def _calculate_order_size(
-        self, current_price: Decimal, atr_value: Decimal, conviction: float = 1.0
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
+        conviction: float = 1.0,
     ) -> Decimal:
         """Calculates the order quantity based on risk parameters, ATR, and conviction level."""
         if not self.config["trade_management"]["enabled"]:
@@ -1465,7 +1501,7 @@ class PositionManager:
         # Validate inputs to prevent division by zero or invalid calculations
         if stop_loss_distance <= 0 or current_price <= 0:
             self.logger.warning(
-                f"Invalid SL distance ({stop_loss_distance}) or current price ({current_price}). Cannot calculate order size."
+                f"Invalid SL distance ({stop_loss_distance}) or current price ({current_price}). Cannot calculate order size.",
             )
             return Decimal("0")
 
@@ -1475,11 +1511,15 @@ class PositionManager:
         order_qty = order_value / current_price  # Convert USD risk to quantity
 
         return round_qty(
-            order_qty, self.qty_step
+            order_qty,
+            self.qty_step,
         )  # Round quantity to nearest valid step
 
     def _compute_stop_loss_price(
-        self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
+        self,
+        side: Literal["BUY", "SELL"],
+        entry_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         """Computes the Stop Loss price based on configuration (ATR multiple or percentage)."""
         sl_cfg = self.config["execution"]["sl_scheme"]
@@ -1500,7 +1540,10 @@ class PositionManager:
         return round_price(sl, self.price_precision)
 
     def _calculate_take_profit_price(
-        self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
+        self,
+        side: Literal["BUY", "SELL"],
+        entry_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         """Computes the Take Profit price based on ATR multiples."""
         tp = (
@@ -1530,20 +1573,22 @@ class PositionManager:
             or len(self.get_open_positions()) >= self.max_open_positions
         ):
             self.logger.info(
-                f"Cannot open position: Max limits reached ({len(self.get_open_positions())}/{self.max_open_positions}) or trade management disabled."
+                f"Cannot open position: Max limits reached ({len(self.get_open_positions())}/{self.max_open_positions}) or trade management disabled.",
             )
             return None
 
         order_qty = self._calculate_order_size(current_price, atr_value, conviction)
         if order_qty <= 0:
             self.logger.warning(
-                "Order quantity calculated as zero. Cannot open position."
+                "Order quantity calculated as zero. Cannot open position.",
             )
             return None
 
         stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
         take_profit = self._calculate_take_profit_price(
-            signal, current_price, atr_value
+            signal,
+            current_price,
+            atr_value,
         )
 
         # Adjust entry price for slippage in simulated trades
@@ -1585,17 +1630,17 @@ class PositionManager:
                 if self.pybit._ok(resp):
                     position_data["order_id"] = resp["result"]["orderId"]
                     self.logger.info(
-                        f"Live entry submitted (Order ID: {position_data['order_id']}). Setting TP/SL."
+                        f"Live entry submitted (Order ID: {position_data['order_id']}). Setting TP/SL.",
                     )
                     # Set TP/SL orders immediately after successful entry
                     self.set_tpsl_for_position(position_data, current_price, atr_value)
                 else:
                     self.logger.error(
-                        f"Live entry failed. Simulating only. Response: {resp}"
+                        f"Live entry failed. Simulating only. Response: {resp}",
                     )
             except Exception as e:
                 self.logger.error(
-                    f"Exception during live entry: {e}\n{traceback.format_exc()}. Simulating only."
+                    f"Exception during live entry: {e}\n{traceback.format_exc()}. Simulating only.",
                 )
 
         self.open_positions.append(position_data)  # Add to local state
@@ -1603,7 +1648,10 @@ class PositionManager:
         return position_data
 
     def set_tpsl_for_position(
-        self, position: dict, current_price: Decimal, atr_value: Decimal
+        self,
+        position: dict,
+        current_price: Decimal,
+        atr_value: Decimal,
     ):
         """Sets Take Profit and Stop Loss orders for a live position using partial TP/SL schemes."""
         if not self.live or not self.pybit or not self.pybit.enabled:
@@ -1612,26 +1660,28 @@ class PositionManager:
         sl_cfg = self.config["execution"]["sl_scheme"]
         tp_scheme = self.config["execution"]["tp_scheme"]
         pos_idx = self.pybit._pos_idx(
-            position["side"]
+            position["side"],
         )  # Get correct positionIdx if hedge mode
 
         # --- Place Stop Loss Order ---
         if sl_cfg["use_conditional_stop"]:
             sl_price = self._compute_stop_loss_price(
-                position["side"], position["entry_price"], atr_value
+                position["side"],
+                position["entry_price"],
+                atr_value,
             )
             sl_link_id = (
                 f"{position.get('link_prefix', 'pos')}_sl"  # Generate unique link ID
             )
 
             self.logger.info(
-                f"Placing conditional SL for {self.symbol} at {sl_price}..."
+                f"Placing conditional SL for {self.symbol} at {sl_price}...",
             )
             sl_resp = self.pybit.place_order(
                 category=self.pybit.category,
                 symbol=self.symbol,
                 side=self.pybit._side_to_bybit(
-                    "SELL" if position["side"] == "BUY" else "BUY"
+                    "SELL" if position["side"] == "BUY" else "BUY",
                 ),
                 orderType=sl_cfg["stop_order_type"],
                 qty=self.pybit._q(position["qty"]),
@@ -1647,11 +1697,11 @@ class PositionManager:
             if self.pybit._ok(sl_resp):
                 position["stop_loss_order_id"] = sl_resp["result"]["orderId"]
                 self.logger.info(
-                    f"Conditional SL placed successfully at {sl_price} (Order ID: {position['stop_loss_order_id']})."
+                    f"Conditional SL placed successfully at {sl_price} (Order ID: {position['stop_loss_order_id']}).",
                 )
             else:
                 self.logger.error(
-                    f"Failed to place conditional SL: {sl_resp.get('retMsg')}"
+                    f"Failed to place conditional SL: {sl_resp.get('retMsg')}",
                 )
 
         # --- Place Take Profit Orders (Partial TP) ---
@@ -1673,7 +1723,7 @@ class PositionManager:
                 payload = {
                     "symbol": self.symbol,
                     "side": self.pybit._side_to_bybit(
-                        "SELL" if position["side"] == "BUY" else "BUY"
+                        "SELL" if position["side"] == "BUY" else "BUY",
                     ),
                     "orderType": target_detail["order_type"],
                     "qty": self.pybit._q(target_detail["qty"]),
@@ -1689,7 +1739,7 @@ class PositionManager:
 
             if batch_orders:
                 self.logger.info(
-                    f"Placing {len(batch_orders)} partial TP orders for {self.symbol}..."
+                    f"Placing {len(batch_orders)} partial TP orders for {self.symbol}...",
                 )
                 batch_resp = self.pybit.batch_place_orders(batch_orders)
                 if self.pybit._ok(batch_resp):
@@ -1697,15 +1747,15 @@ class PositionManager:
                         if res.get("orderId"):
                             position["take_profit_order_ids"].append(res["orderId"])
                             self.logger.info(
-                                f"Partial TP placed successfully (Order ID: {res['orderId']})."
+                                f"Partial TP placed successfully (Order ID: {res['orderId']}).",
                             )
                         else:
                             self.logger.warning(
-                                f"Failed to place one partial TP: {res.get('retMsg')}"
+                                f"Failed to place one partial TP: {res.get('retMsg')}",
                             )
                 else:
                     self.logger.error(
-                        f"Batch TP placement failed: {batch_resp.get('retMsg')}"
+                        f"Batch TP placement failed: {batch_resp.get('retMsg')}",
                     )
             else:
                 self.logger.info("No valid partial TP targets generated.")
@@ -1756,7 +1806,7 @@ class PositionManager:
                     "tif": target_cfg.get("tif", "GoodTillCancel"),
                     "post_only": target_cfg.get("post_only", False),
                     "order_link_id": f"{link_prefix}_tp{i + 1}",
-                }
+                },
             )
             cumulative_qty_pct += target_qty_pct
 
@@ -1768,7 +1818,8 @@ class PositionManager:
                     remaining_qty  # Add remaining to the last target
                 )
                 tp_requests[-1]["qty"] = round_qty(
-                    tp_requests[-1]["qty"], qty_step
+                    tp_requests[-1]["qty"],
+                    qty_step,
                 )  # Re-round
 
         return tp_requests
@@ -1811,10 +1862,11 @@ class PositionManager:
                             "status": "CLOSED",
                             "exit_time": datetime.now(TIMEZONE),
                             "exit_price": round_price(
-                                adjusted_exit_price_sim, self.price_precision
+                                adjusted_exit_price_sim,
+                                self.price_precision,
                             ),
                             "closed_by": closed_by,
-                        }
+                        },
                     )
                     # Calculate PnL for the simulated trade
                     pnl = (
@@ -1824,10 +1876,11 @@ class PositionManager:
                     )
 
                     performance_tracker.record_trade(
-                        pos, pnl
+                        pos,
+                        pnl,
                     )  # Record in performance tracker
                     self.logger.info(
-                        f"Closed {pos['side']} simulated position by {closed_by}. PnL: {pnl.normalize():.4f}"
+                        f"Closed {pos['side']} simulated position by {closed_by}. PnL: {pnl.normalize():.4f}",
                     )
                     indices_to_remove.append(i)
 
@@ -1843,13 +1896,15 @@ class PositionManager:
 
         side, atr_mult = pos["side"], self.stop_loss_atr_multiple
         pos["best_price"] = pos.get(
-            "best_price", pos["entry_price"]
+            "best_price",
+            pos["entry_price"],
         )  # Track best price achieved
 
         new_sl = pos["stop_loss"]  # Current stop loss
         if side == "BUY":
             pos["best_price"] = max(
-                pos["best_price"], current_price
+                pos["best_price"],
+                current_price,
             )  # Update best price if higher
             calculated_sl = pos["best_price"] - atr_mult * atr_value  # Calculate new SL
             if calculated_sl > new_sl:  # Only raise SL
@@ -1857,7 +1912,8 @@ class PositionManager:
                 self.logger.debug(f"Trailing BUY SL to {new_sl:.4f}")
         else:  # SELL
             pos["best_price"] = min(
-                pos["best_price"], current_price
+                pos["best_price"],
+                current_price,
             )  # Update best price if lower
             calculated_sl = pos["best_price"] + atr_mult * atr_value  # Calculate new SL
             if calculated_sl < new_sl:  # Only lower SL
@@ -1901,10 +1957,11 @@ class PositionManager:
 
             if should_add:
                 size_pct_of_initial = Decimal(
-                    str(py_cfg.get("size_pct_of_initial", 0.5))
+                    str(py_cfg.get("size_pct_of_initial", 0.5)),
                 )
                 add_qty = round_qty(
-                    pos["qty"] * size_pct_of_initial, self.qty_step
+                    pos["qty"] * size_pct_of_initial,
+                    self.qty_step,
                 )  # Calculate quantity for the add
 
                 if add_qty > 0:
@@ -1918,7 +1975,7 @@ class PositionManager:
                     )  # New average entry price
                     pos["adds"] = adds + 1  # Increment add count
                     self.logger.info(
-                        f"Pyramiding add #{pos['adds']} qty={add_qty.normalize()}. New avg price: {pos['entry_price'].normalize():.4f}"
+                        f"Pyramiding add #{pos['adds']} qty={add_qty.normalize()}. New avg price: {pos['entry_price'].normalize():.4f}",
                     )
 
     def get_open_positions(self) -> list[dict]:
@@ -1942,11 +1999,11 @@ class PerformanceTracker:
         self.peak_pnl = Decimal("0")  # Tracks highest cumulative PnL
         self.max_drawdown = Decimal("0")  # Tracks maximum drawdown from peak PnL
         self.trading_fee_percent = Decimal(
-            str(config["trade_management"].get("trading_fee_percent", 0.0))
+            str(config["trade_management"].get("trading_fee_percent", 0.0)),
         )
         self._daily_pnl = Decimal("0")  # PnL accumulated for the current day
         self._last_day_reset = datetime.now(
-            TIMEZONE
+            TIMEZONE,
         ).date()  # Date when daily stats were last reset
 
     def _reset_daily_stats(self):
@@ -2009,7 +2066,7 @@ class PerformanceTracker:
 
         self.logger.info(
             f"{NEON_CYAN}Trade recorded. Gross PnL: {pnl.normalize():.4f}, Fees: {total_fees.normalize():.4f}, Net PnL: {pnl_net.normalize():.4f}. "
-            f"Total PnL: {self.total_pnl.normalize():.4f}, Daily PnL: {self._daily_pnl.normalize():.4f}{RESET}"
+            f"Total PnL: {self.total_pnl.normalize():.4f}, Daily PnL: {self._daily_pnl.normalize():.4f}{RESET}",
         )
 
     def day_pnl(self) -> Decimal:
@@ -2051,7 +2108,8 @@ class PerformanceTracker:
         if not state_data:
             return False
         summary = state_data.get(
-            "performance_tracker", {}
+            "performance_tracker",
+            {},
         )  # Assume performance tracker state is nested
         try:
             self.total_pnl = Decimal(summary.get("total_pnl", "0"))
@@ -2064,12 +2122,12 @@ class PerformanceTracker:
             # Note: Full trade history (self.trades) is not loaded here for simplicity.
             # Bot will start calculating performance from scratch after restart, using loaded PnL totals.
             self.logger.info(
-                f"Performance tracker state loaded. Total PnL: {self.total_pnl:.4f}"
+                f"Performance tracker state loaded. Total PnL: {self.total_pnl:.4f}",
             )
             return True
         except (InvalidOperation, TypeError, ValueError, KeyError) as e:
             self.logger.error(
-                f"Error loading performance tracker state: {e}. Starting fresh.{traceback.format_exc()}"
+                f"Error loading performance tracker state: {e}. Starting fresh.{traceback.format_exc()}",
             )
             return False
 
@@ -2077,7 +2135,7 @@ class PerformanceTracker:
         """Returns the current state of the performance tracker for saving."""
         return {
             "total_pnl": str(
-                self.total_pnl
+                self.total_pnl,
             ),  # Convert Decimals to string for JSON serialization
             "gross_profit": str(self.gross_profit),
             "gross_loss": str(self.gross_loss),
@@ -2122,11 +2180,14 @@ class ExchangeExecutionSync:
         if not self.cfg["execution"]["live_sync"]["only_track_linked"]:
             return True  # If not tracking linked, assume all are ours
         return link_id.startswith("wgx_") or link_id.startswith(
-            "ws_"
+            "ws_",
         )  # Check known prefixes
 
     def _compute_breakeven_price(
-        self, side: str, entry_price: Decimal, atr_value: Decimal
+        self,
+        side: str,
+        entry_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         """Calculates the breakeven stop loss price with configured offset."""
         be_cfg = self.cfg["execution"]["breakeven_after_tp1"]
@@ -2171,11 +2232,12 @@ class ExchangeExecutionSync:
                 self.pybit.cancel_order(self.symbol, order_id=old_sl_id)
             elif old_sl_link:
                 self.pybit.cancel_order(
-                    self.symbol, order_link_id=old_sl_link
+                    self.symbol,
+                    order_link_id=old_sl_link,
                 )  # Try cancel by link ID
             else:
                 self.pybit.logger.warning(
-                    f"Could not find order ID or link ID for old SL of position {open_pos.get('link_prefix')}."
+                    f"Could not find order ID or link ID for old SL of position {open_pos.get('link_prefix')}.",
                 )
 
             # Place the new breakeven stop loss order
@@ -2184,7 +2246,7 @@ class ExchangeExecutionSync:
             remaining_qty = open_pos.get("qty", Decimal("0"))
             if remaining_qty <= 0:
                 self.pybit.logger.warning(
-                    f"No remaining quantity for position {open_pos.get('link_prefix')} to place breakeven SL."
+                    f"No remaining quantity for position {open_pos.get('link_prefix')} to place breakeven SL.",
                 )
                 return
 
@@ -2208,16 +2270,16 @@ class ExchangeExecutionSync:
                 open_pos["stop_loss_order_id"] = sresp["result"]["orderId"]
                 open_pos["breakeven_set"] = True  # Mark breakeven as set
                 self.pybit.logger.info(
-                    f"Moved SL to breakeven at {new_sl_price} (Order ID: {open_pos['stop_loss_order_id']})."
+                    f"Moved SL to breakeven at {new_sl_price} (Order ID: {open_pos['stop_loss_order_id']}).",
                 )
             else:
                 self.pybit.logger.error(
-                    f"Failed to place breakeven SL: {sresp.get('retMsg')}"
+                    f"Failed to place breakeven SL: {sresp.get('retMsg')}",
                 )
 
         except Exception as e:
             self.pybit.logger.error(
-                f"Breakeven move exception for {self.symbol}: {e}\n{traceback.format_exc()}"
+                f"Breakeven move exception for {self.symbol}: {e}\n{traceback.format_exc()}",
             )
 
     def poll(self):
@@ -2240,7 +2302,7 @@ class ExchangeExecutionSync:
 
             rows = resp.get("result", {}).get("list", [])
             rows.sort(
-                key=lambda r: int(r.get("execTime", 0))
+                key=lambda r: int(r.get("execTime", 0)),
             )  # Process chronologically
 
             for r in rows:
@@ -2291,7 +2353,8 @@ class ExchangeExecutionSync:
                         {
                             **open_pos,
                             "exit_time": datetime.fromtimestamp(
-                                exec_time_ms / 1000, tz=TIMEZONE
+                                exec_time_ms / 1000,
+                                tz=TIMEZONE,
                             ),
                             "exit_price": exec_price,
                             "qty": exec_qty,
@@ -2307,18 +2370,19 @@ class ExchangeExecutionSync:
                             {
                                 "status": "CLOSED",
                                 "exit_time": datetime.fromtimestamp(
-                                    exec_time_ms / 1000, tz=TIMEZONE
+                                    exec_time_ms / 1000,
+                                    tz=TIMEZONE,
                                 ),
                                 "exit_price": exec_price,
                                 "closed_by": tag,
-                            }
+                            },
                         )
                         self.pybit.logger.info(
-                            f"Position for {self.symbol} fully closed by {tag}."
+                            f"Position for {self.symbol} fully closed by {tag}.",
                         )
                     else:
                         self.pybit.logger.info(
-                            f"Partial execution for {self.symbol} by {tag}. Remaining Qty: {open_pos['qty'].normalize()}"
+                            f"Partial execution for {self.symbol} by {tag}. Remaining Qty: {open_pos['qty'].normalize()}",
                         )
 
                     # Trigger breakeven logic if TP1 was hit and enabled
@@ -2330,7 +2394,7 @@ class ExchangeExecutionSync:
                     ):
                         # Retrieve last known ATR for breakeven calculation
                         atr_val = Decimal(
-                            str(self.cfg.get("_last_atr_value", "0.1"))
+                            str(self.cfg.get("_last_atr_value", "0.1")),
                         )  # Default ATR if unavailable
                         self._move_stop_to_breakeven(open_pos, atr_val)
 
@@ -2341,7 +2405,7 @@ class ExchangeExecutionSync:
 
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.pybit.logger.error(
-                f"Execution sync error for {self.symbol}: {e}\n{traceback.format_exc()}"
+                f"Execution sync error for {self.symbol}: {e}\n{traceback.format_exc()}",
             )
 
 
@@ -2374,11 +2438,11 @@ class PositionHeartbeat:
 
         try:
             resp = self.pybit.get_positions(
-                self.symbol
+                self.symbol,
             )  # Fetch positions from exchange
             if not self.pybit._ok(resp):
                 self.pybit.logger.warning(
-                    f"Heartbeat: Failed to fetch positions for {self.symbol}. Response: {resp}"
+                    f"Heartbeat: Failed to fetch positions for {self.symbol}. Response: {resp}",
                 )
                 return
 
@@ -2395,7 +2459,7 @@ class PositionHeartbeat:
                         if p.get("side") == "Buy":
                             net_qty_exchange += pos_size
                             avg_price_exchange = Decimal(
-                                p.get("avgPrice", "0")
+                                p.get("avgPrice", "0"),
                             )  # Use avgPrice from exchange
                         elif p.get("side") == "Sell":
                             net_qty_exchange -= pos_size
@@ -2411,7 +2475,7 @@ class PositionHeartbeat:
                 ) in local_open_positions:  # Mark all local open positions as closed
                     pos.update({"status": "CLOSED", "closed_by": "HEARTBEAT_SYNC"})
                 self.pybit.logger.info(
-                    f"Heartbeat: Closed local position(s) for {self.symbol} (exchange is flat)."
+                    f"Heartbeat: Closed local position(s) for {self.symbol} (exchange is flat).",
                 )
                 self.pm.open_positions = []  # Clear local state
 
@@ -2424,7 +2488,8 @@ class PositionHeartbeat:
                     "symbol": self.symbol,
                     "side": side_exchange,
                     "entry_price": round_price(
-                        avg_price_exchange, self.pm.price_precision
+                        avg_price_exchange,
+                        self.pm.price_precision,
                     ),
                     "qty": round_qty(abs(net_qty_exchange), self.pm.qty_step),
                     "stop_loss": Decimal("0"),
@@ -2439,7 +2504,7 @@ class PositionHeartbeat:
                 }
                 self.pm.open_positions.append(synthetic_pos)
                 self.pybit.logger.warning(
-                    f"Heartbeat: Created synthetic local position for {self.symbol} to match exchange state."
+                    f"Heartbeat: Created synthetic local position for {self.symbol} to match exchange state.",
                 )
 
             # Scenario 3: Both have positions; compare and log mismatches
@@ -2450,13 +2515,13 @@ class PositionHeartbeat:
                 # Compare quantities and log if they differ
                 if abs(net_qty_exchange) != local_pos["qty"]:
                     self.pybit.logger.warning(
-                        f"Heartbeat: Quantity mismatch for {self.symbol}. Local: {local_pos['qty'].normalize()}, Exchange: {abs(net_qty_exchange).normalize()}."
+                        f"Heartbeat: Quantity mismatch for {self.symbol}. Local: {local_pos['qty'].normalize()}, Exchange: {abs(net_qty_exchange).normalize()}.",
                     )
                 # Add more checks here if needed (e.g., avgPrice, SL/TP)
 
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.pybit.logger.error(
-                f"Heartbeat error for {self.symbol}: {e}\n{traceback.format_exc()}"
+                f"Heartbeat error for {self.symbol}: {e}\n{traceback.format_exc()}",
             )
 
 
@@ -2465,7 +2530,11 @@ class TradingAnalyzer:
     """Analyzes market data using technical indicators to generate trading signals."""
 
     def __init__(
-        self, df: pd.DataFrame, config: dict, logger: logging.Logger, symbol: str
+        self,
+        df: pd.DataFrame,
+        config: dict,
+        logger: logging.Logger,
+        symbol: str,
     ):
         self.df = df.copy()
         self.config, self.logger, self.symbol = config, logger, symbol
@@ -2479,7 +2548,7 @@ class TradingAnalyzer:
 
         if self.df.empty:
             self.logger.warning(
-                f"[{self.symbol}] Initialized with empty DataFrame. Indicators cannot be calculated."
+                f"[{self.symbol}] Initialized with empty DataFrame. Indicators cannot be calculated.",
             )
             return
 
@@ -2491,17 +2560,24 @@ class TradingAnalyzer:
             self.calculate_fibonacci_pivot_points()
 
     def _safe_calculate(
-        self, func: Callable, name: str, min_data_points: int = 0, *args, **kwargs
+        self,
+        func: Callable,
+        name: str,
+        min_data_points: int = 0,
+        *args,
+        **kwargs,
     ) -> Any | None:
         """Safely calculates an indicator, handling errors and insufficient data."""
         if len(self.df) < min_data_points:
             self.logger.debug(
-                f"[{self.symbol}] Skipping indicator '{name}': Not enough data (need {min_data_points}, have {len(self.df)})."
+                f"[{self.symbol}] Skipping indicator '{name}': Not enough data (need {min_data_points}, have {len(self.df)}).",
             )
             return None
         try:
             result = func(
-                self.df, *args, **kwargs
+                self.df,
+                *args,
+                **kwargs,
             )  # Execute the indicator calculation function
             # Check if the result is effectively empty or all NaNs
             is_empty_or_nan = (
@@ -2519,12 +2595,12 @@ class TradingAnalyzer:
             )
             if is_empty_or_nan:
                 self.logger.warning(
-                    f"[{self.symbol}] Indicator '{name}' returned empty or all NaNs. Check data quality or parameters."
+                    f"[{self.symbol}] Indicator '{name}' returned empty or all NaNs. Check data quality or parameters.",
                 )
             return result
         except Exception as e:
             self.logger.error(
-                f"Error calculating indicator '{name}': {e}\n{traceback.format_exc()}"
+                f"Error calculating indicator '{name}': {e}\n{traceback.format_exc()}",
             )
             return None
 
@@ -2565,16 +2641,16 @@ class TradingAnalyzer:
                 period=isd["ema_long_period"],
             )
             if "EMA_Short" in self.df.columns and not pd.isna(
-                self.df["EMA_Short"].iloc[-1]
+                self.df["EMA_Short"].iloc[-1],
             ):
                 self.indicator_values["EMA_Short"] = Decimal(
-                    str(self.df["EMA_Short"].iloc[-1])
+                    str(self.df["EMA_Short"].iloc[-1]),
                 )
             if "EMA_Long" in self.df.columns and not pd.isna(
-                self.df["EMA_Long"].iloc[-1]
+                self.df["EMA_Long"].iloc[-1],
             ):
                 self.indicator_values["EMA_Long"] = Decimal(
-                    str(self.df["EMA_Long"].iloc[-1])
+                    str(self.df["EMA_Long"].iloc[-1]),
                 )
 
         if cfg["indicators"].get("sma_trend_filter", False):
@@ -2591,16 +2667,16 @@ class TradingAnalyzer:
                 period=isd["sma_long_period"],
             )
             if "SMA_Short" in self.df.columns and not pd.isna(
-                self.df["SMA_Short"].iloc[-1]
+                self.df["SMA_Short"].iloc[-1],
             ):
                 self.indicator_values["SMA_Short"] = Decimal(
-                    str(self.df["SMA_Short"].iloc[-1])
+                    str(self.df["SMA_Short"].iloc[-1]),
                 )
             if "SMA_Long" in self.df.columns and not pd.isna(
-                self.df["SMA_Long"].iloc[-1]
+                self.df["SMA_Long"].iloc[-1],
             ):
                 self.indicator_values["SMA_Long"] = Decimal(
-                    str(self.df["SMA_Long"].iloc[-1])
+                    str(self.df["SMA_Long"].iloc[-1]),
                 )
 
         if cfg["indicators"].get("rsi", False):
@@ -2627,11 +2703,11 @@ class TradingAnalyzer:
                 self.df["StochRSI_D"] = stoch_rsi_res["D"]
                 if not pd.isna(self.df["StochRSI_K"].iloc[-1]):
                     self.indicator_values["StochRSI_K"] = Decimal(
-                        str(self.df["StochRSI_K"].iloc[-1])
+                        str(self.df["StochRSI_K"].iloc[-1]),
                     )
                 if not pd.isna(self.df["StochRSI_D"].iloc[-1]):
                     self.indicator_values["StochRSI_D"] = Decimal(
-                        str(self.df["StochRSI_D"].iloc[-1])
+                        str(self.df["StochRSI_D"].iloc[-1]),
                     )
 
         if cfg["indicators"].get("bollinger_bands", False):
@@ -2648,15 +2724,15 @@ class TradingAnalyzer:
                 self.df["BB_Lower"] = bb_res["Lower"]
                 if not pd.isna(self.df["BB_Upper"].iloc[-1]):
                     self.indicator_values["BB_Upper"] = Decimal(
-                        str(self.df["BB_Upper"].iloc[-1])
+                        str(self.df["BB_Upper"].iloc[-1]),
                     )
                 if not pd.isna(self.df["BB_Middle"].iloc[-1]):
                     self.indicator_values["BB_Middle"] = Decimal(
-                        str(self.df["BB_Middle"].iloc[-1])
+                        str(self.df["BB_Middle"].iloc[-1]),
                     )
                 if not pd.isna(self.df["BB_Lower"].iloc[-1]):
                     self.indicator_values["BB_Lower"] = Decimal(
-                        str(self.df["BB_Lower"].iloc[-1])
+                        str(self.df["BB_Lower"].iloc[-1]),
                     )
 
         if cfg["indicators"].get("cci", False):
@@ -2702,14 +2778,16 @@ class TradingAnalyzer:
                 self.df["PSAR_Dir"] = psar_res["Direction"]
                 if not pd.isna(self.df["PSAR_Val"].iloc[-1]):
                     self.indicator_values["PSAR_Val"] = Decimal(
-                        str(self.df["PSAR_Val"].iloc[-1])
+                        str(self.df["PSAR_Val"].iloc[-1]),
                     )
                 if not pd.isna(self.df["PSAR_Dir"].iloc[-1]):
                     self.indicator_values["PSAR_Dir"] = self.df["PSAR_Dir"].iloc[-1]
 
         if cfg["indicators"].get("vwap", False):
             self.df["VWAP"] = self._safe_calculate(
-                indicators.calculate_vwap, "VWAP", min_data_points=1
+                indicators.calculate_vwap,
+                "VWAP",
+                min_data_points=1,
             )
             if "VWAP" in self.df.columns and not pd.isna(self.df["VWAP"].iloc[-1]):
                 self.indicator_values["VWAP"] = Decimal(str(self.df["VWAP"].iloc[-1]))
@@ -2735,7 +2813,7 @@ class TradingAnalyzer:
                     ]
                 if not pd.isna(self.df["ST_Slow_Val"].iloc[-1]):
                     self.indicator_values["ST_Slow_Val"] = Decimal(
-                        str(self.df["ST_Slow_Val"].iloc[-1])
+                        str(self.df["ST_Slow_Val"].iloc[-1]),
                     )
 
         if cfg["indicators"].get("macd", False):
@@ -2753,15 +2831,15 @@ class TradingAnalyzer:
                 self.df["MACD_Hist"] = macd_res["Histogram"]
                 if not pd.isna(self.df["MACD_Line"].iloc[-1]):
                     self.indicator_values["MACD_Line"] = Decimal(
-                        str(self.df["MACD_Line"].iloc[-1])
+                        str(self.df["MACD_Line"].iloc[-1]),
                     )
                 if not pd.isna(self.df["MACD_Signal"].iloc[-1]):
                     self.indicator_values["MACD_Signal"] = Decimal(
-                        str(self.df["MACD_Signal"].iloc[-1])
+                        str(self.df["MACD_Signal"].iloc[-1]),
                     )
                 if not pd.isna(self.df["MACD_Hist"].iloc[-1]):
                     self.indicator_values["MACD_Hist"] = Decimal(
-                        str(self.df["MACD_Hist"].iloc[-1])
+                        str(self.df["MACD_Hist"].iloc[-1]),
                     )
 
         if cfg["indicators"].get("adx", False):
@@ -2779,11 +2857,11 @@ class TradingAnalyzer:
                     self.indicator_values["ADX"] = Decimal(str(self.df["ADX"].iloc[-1]))
                 if not pd.isna(self.df["PlusDI"].iloc[-1]):
                     self.indicator_values["PlusDI"] = Decimal(
-                        str(self.df["PlusDI"].iloc[-1])
+                        str(self.df["PlusDI"].iloc[-1]),
                     )
                 if not pd.isna(self.df["MinusDI"].iloc[-1]):
                     self.indicator_values["MinusDI"] = Decimal(
-                        str(self.df["MinusDI"].iloc[-1])
+                        str(self.df["MinusDI"].iloc[-1]),
                     )
 
         if cfg["indicators"].get("ichimoku_cloud", False):
@@ -2804,23 +2882,23 @@ class TradingAnalyzer:
                 self.df["Chikou_Span"] = ichimoku_res["Chikou_Span"]
                 if not pd.isna(self.df["Tenkan_Sen"].iloc[-1]):
                     self.indicator_values["Tenkan_Sen"] = Decimal(
-                        str(self.df["Tenkan_Sen"].iloc[-1])
+                        str(self.df["Tenkan_Sen"].iloc[-1]),
                     )
                 if not pd.isna(self.df["Kijun_Sen"].iloc[-1]):
                     self.indicator_values["Kijun_Sen"] = Decimal(
-                        str(self.df["Kijun_Sen"].iloc[-1])
+                        str(self.df["Kijun_Sen"].iloc[-1]),
                     )
                 if not pd.isna(self.df["Senkou_Span_A"].iloc[-1]):
                     self.indicator_values["Senkou_Span_A"] = Decimal(
-                        str(self.df["Senkou_Span_A"].iloc[-1])
+                        str(self.df["Senkou_Span_A"].iloc[-1]),
                     )
                 if not pd.isna(self.df["Senkou_Span_B"].iloc[-1]):
                     self.indicator_values["Senkou_Span_B"] = Decimal(
-                        str(self.df["Senkou_Span_B"].iloc[-1])
+                        str(self.df["Senkou_Span_B"].iloc[-1]),
                     )
                 if not pd.isna(self.df["Chikou_Span"].iloc[-1]):
                     self.indicator_values["Chikou_Span"] = Decimal(
-                        str(self.df["Chikou_Span"].iloc[-1])
+                        str(self.df["Chikou_Span"].iloc[-1]),
                     )
 
         if cfg["indicators"].get("obv", False):
@@ -2835,10 +2913,10 @@ class TradingAnalyzer:
             if "OBV" in self.df.columns and not pd.isna(self.df["OBV"].iloc[-1]):
                 self.indicator_values["OBV"] = Decimal(str(self.df["OBV"].iloc[-1]))
             if "OBV_EMA" in self.df.columns and not pd.isna(
-                self.df["OBV_EMA"].iloc[-1]
+                self.df["OBV_EMA"].iloc[-1],
             ):
                 self.indicator_values["OBV_EMA"] = Decimal(
-                    str(self.df["OBV_EMA"].iloc[-1])
+                    str(self.df["OBV_EMA"].iloc[-1]),
                 )
 
         if cfg["indicators"].get("cmf", False):
@@ -2859,10 +2937,10 @@ class TradingAnalyzer:
                 period=isd["volatility_index_period"],
             )
             if "Volatility_Index" in self.df.columns and not pd.isna(
-                self.df["Volatility_Index"].iloc[-1]
+                self.df["Volatility_Index"].iloc[-1],
             ):
                 self.indicator_values["Volatility_Index"] = Decimal(
-                    str(self.df["Volatility_Index"].iloc[-1])
+                    str(self.df["Volatility_Index"].iloc[-1]),
                 )
 
         if cfg["indicators"].get("vwma", False):
@@ -2883,10 +2961,10 @@ class TradingAnalyzer:
                 period=isd["volume_delta_period"],
             )
             if "Volume_Delta" in self.df.columns and not pd.isna(
-                self.df["Volume_Delta"].iloc[-1]
+                self.df["Volume_Delta"].iloc[-1],
             ):
                 self.indicator_values["Volume_Delta"] = Decimal(
-                    str(self.df["Volume_Delta"].iloc[-1])
+                    str(self.df["Volume_Delta"].iloc[-1]),
                 )
 
         if cfg["indicators"].get("kaufman_ama", False):
@@ -2899,10 +2977,10 @@ class TradingAnalyzer:
                 slow_period=isd["kama_slow_period"],
             )
             if "Kaufman_AMA" in self.df.columns and not pd.isna(
-                self.df["Kaufman_AMA"].iloc[-1]
+                self.df["Kaufman_AMA"].iloc[-1],
             ):
                 self.indicator_values["Kaufman_AMA"] = Decimal(
-                    str(self.df["Kaufman_AMA"].iloc[-1])
+                    str(self.df["Kaufman_AMA"].iloc[-1]),
                 )
 
         if cfg["indicators"].get("relative_volume", False):
@@ -2913,10 +2991,10 @@ class TradingAnalyzer:
                 period=isd["relative_volume_period"],
             )
             if "Relative_Volume" in self.df.columns and not pd.isna(
-                self.df["Relative_Volume"].iloc[-1]
+                self.df["Relative_Volume"].iloc[-1],
             ):
                 self.indicator_values["Relative_Volume"] = Decimal(
-                    str(self.df["Relative_Volume"].iloc[-1])
+                    str(self.df["Relative_Volume"].iloc[-1]),
                 )
 
         if cfg["indicators"].get("market_structure", False):
@@ -2956,15 +3034,15 @@ class TradingAnalyzer:
                 self.df["Keltner_Lower"] = kc_res["Lower"]
                 if not pd.isna(self.df["Keltner_Upper"].iloc[-1]):
                     self.indicator_values["Keltner_Upper"] = Decimal(
-                        str(self.df["Keltner_Upper"].iloc[-1])
+                        str(self.df["Keltner_Upper"].iloc[-1]),
                     )
                 if not pd.isna(self.df["Keltner_Middle"].iloc[-1]):
                     self.indicator_values["Keltner_Middle"] = Decimal(
-                        str(self.df["Keltner_Middle"].iloc[-1])
+                        str(self.df["Keltner_Middle"].iloc[-1]),
                     )
                 if not pd.isna(self.df["Keltner_Lower"].iloc[-1]):
                     self.indicator_values["Keltner_Lower"] = Decimal(
-                        str(self.df["Keltner_Lower"].iloc[-1])
+                        str(self.df["Keltner_Lower"].iloc[-1]),
                     )
 
         if cfg["indicators"].get("roc", False):
@@ -3004,21 +3082,22 @@ class TradingAnalyzer:
             self.df.dropna(subset=["ATR"], inplace=True)
 
         self.df.fillna(
-            0, inplace=True
+            0,
+            inplace=True,
         )  # Fill remaining NaNs, potentially after calculations
 
         # Log cleanup results
         if len(self.df) < initial_len:
             self.logger.debug(
-                f"Dropped {initial_len - len(self.df)} rows with NaNs after indicator calculations."
+                f"Dropped {initial_len - len(self.df)} rows with NaNs after indicator calculations.",
             )
         if self.df.empty:
             self.logger.warning(
-                "DataFrame became empty after calculations and cleanup. Cannot proceed."
+                "DataFrame became empty after calculations and cleanup. Cannot proceed.",
             )
         else:
             self.logger.debug(
-                f"Indicator calculations complete. Final DataFrame shape: {self.df.shape}"
+                f"Indicator calculations complete. Final DataFrame shape: {self.df.shape}",
             )
 
     def calculate_fibonacci_levels(self) -> None:
@@ -3029,7 +3108,8 @@ class TradingAnalyzer:
             price_precision = self.config["trade_management"]["price_precision"]
             self.fib_levels = {
                 k: Decimal(str(v)).quantize(
-                    Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN
+                    Decimal(f"1e-{price_precision}"),
+                    rounding=ROUND_DOWN,
                 )
                 for k, v in fib_levels.items()
             }
@@ -3045,11 +3125,12 @@ class TradingAnalyzer:
             for key, value in pivot_data.items():
                 try:
                     self.indicator_values[key.upper()] = Decimal(str(value)).quantize(
-                        Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN
+                        Decimal(f"1e-{price_precision}"),
+                        rounding=ROUND_DOWN,
                     )
                 except InvalidOperation:
                     self.logger.warning(
-                        f"Could not convert pivot point value '{value}' to Decimal. Skipping."
+                        f"Could not convert pivot point value '{value}' to Decimal. Skipping.",
                     )
             self.logger.debug("Calculated Fibonacci Pivot Points.")
         else:
@@ -3098,7 +3179,9 @@ class TradingAnalyzer:
         }
 
     def _score_ema_alignment(
-        self, current_close: Decimal, trend_multiplier: float
+        self,
+        current_close: Decimal,
+        trend_multiplier: float,
     ) -> tuple[float, dict]:
         """Scores EMA alignment, adjusted by trend multiplier."""
         ema_short = self._get_indicator_value("EMA_Short")
@@ -3257,7 +3340,9 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_vwap(
-        self, current_close: Decimal, prev_close: Decimal
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
     ) -> tuple[float, dict]:
         """Scores based on VWAP crossover."""
         vwap = self._get_indicator_value("VWAP")
@@ -3282,12 +3367,14 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_psar(
-        self, current_close: Decimal, prev_close: Decimal
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
     ) -> tuple[float, dict]:
         """Scores based on PSAR direction and crossover."""
         psar_val = self._get_indicator_value("PSAR_Val")
         psar_dir = self._get_indicator_value(
-            "PSAR_Dir"
+            "PSAR_Dir",
         )  # 1 for uptrend, -1 for downtrend
 
         score = 0.0
@@ -3315,7 +3402,9 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_fibonacci_levels(
-        self, current_close: Decimal, prev_close: Decimal
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
     ) -> tuple[float, dict]:
         """Scores based on interaction with Fibonacci retracement levels."""
         score = 0.0
@@ -3367,7 +3456,9 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_fibonacci_pivot_points(
-        self, current_close: Decimal, prev_close: Decimal
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
     ) -> tuple[float, dict]:
         """Scores based on interaction with Fibonacci Pivot Points (Pivot, R1, R2, S1, S2)."""
         score = 0.0
@@ -3380,7 +3471,7 @@ class TradingAnalyzer:
 
         if not pd.isna(pivot) and not pd.isna(r1) and not pd.isna(s1):
             tolerance = current_close * Decimal(
-                "0.0005"
+                "0.0005",
             )  # Small price-relative tolerance
 
             if current_close > pivot and prev_close <= pivot:  # Cross above Pivot
@@ -3582,7 +3673,8 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_volatility_index(
-        self, signal_score_current: float
+        self,
+        signal_score_current: float,
     ) -> tuple[float, dict]:
         """Adjusts signal score based on Volatility Index. High volatility can amplify or suppress."""
         volatility_index = self._get_indicator_value("Volatility_Index")
@@ -3618,7 +3710,9 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_vwma_cross(
-        self, current_close: Decimal, prev_close: Decimal
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
     ) -> tuple[float, dict]:
         """Scores based on VWMA crossover with price."""
         vwma = self._get_indicator_value("VWMA")
@@ -3655,7 +3749,9 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_kaufman_ama_cross(
-        self, current_close: Decimal, prev_close: Decimal
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
     ) -> tuple[float, dict]:
         """Scores based on Kaufman Adaptive Moving Average (KAMA) crossover with price."""
         kama = self._get_indicator_value("Kaufman_AMA")
@@ -3674,7 +3770,9 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_relative_volume(
-        self, current_close: Decimal, prev_close: Decimal
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
     ) -> tuple[float, dict]:
         """Scores based on Relative Volume (above average volume)."""
         relative_volume = self._get_indicator_value("Relative_Volume")
@@ -3685,7 +3783,7 @@ class TradingAnalyzer:
         if not pd.isna(relative_volume):
             rv_weight = self.weights.get("relative_volume_confirmation", 0.0)
             threshold = Decimal(
-                str(self.indicator_settings["relative_volume_threshold"])
+                str(self.indicator_settings["relative_volume_threshold"]),
             )
             if (
                 relative_volume > threshold
@@ -3740,7 +3838,9 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_keltner_channels(
-        self, current_close: Decimal, prev_close: Decimal
+        self,
+        current_close: Decimal,
+        prev_close: Decimal,
     ) -> tuple[float, dict]:
         """Scores based on Keltner Channels breakout/reversion."""
         kc_upper = self._get_indicator_value("Keltner_Upper")
@@ -3831,7 +3931,8 @@ class TradingAnalyzer:
         return score, {"breakdown": breakdown}
 
     def _score_orderbook_imbalance(
-        self, orderbook_data: dict | None
+        self,
+        orderbook_data: dict | None,
     ) -> tuple[float, dict]:
         """Scores order book imbalance and identifies potential Support/Resistance levels."""
         imbalance_contrib = 0.0
@@ -3848,10 +3949,12 @@ class TradingAnalyzer:
 
                 if total_volume > 0:
                     imbalance = _safe_divide_decimal(
-                        bid_volume - ask_volume, total_volume
+                        bid_volume - ask_volume,
+                        total_volume,
                     )
                     imbalance_contrib = imbalance * self.weights.get(
-                        "orderbook_imbalance", 0
+                        "orderbook_imbalance",
+                        0,
                     )
                     self.logger.debug(f"Orderbook Imbalance: {imbalance:.4f}")
 
@@ -3860,7 +3963,7 @@ class TradingAnalyzer:
                 signal_breakdown_contrib["Orderbook Imbalance"] = imbalance_contrib
             except Exception as e:
                 self.logger.error(
-                    f"Error processing orderbook data for scoring: {e}\n{traceback.format_exc()}"
+                    f"Error processing orderbook data for scoring: {e}\n{traceback.format_exc()}",
                 )
         return imbalance_contrib, signal_breakdown_contrib
 
@@ -3887,12 +3990,14 @@ class TradingAnalyzer:
         price_precision = self.config["trade_management"]["price_precision"]
         if support_level > 0:
             self.indicator_values["Support_Level"] = support_level.quantize(
-                Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN
+                Decimal(f"1e-{price_precision}"),
+                rounding=ROUND_DOWN,
             )
             self.logger.debug(f"Identified Support Level: {support_level}")
         if resistance_level > 0:
             self.indicator_values["Resistance_Level"] = resistance_level.quantize(
-                Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN
+                Decimal(f"1e-{price_precision}"),
+                rounding=ROUND_DOWN,
             )
             self.logger.debug(f"Identified Resistance Level: {resistance_level}")
 
@@ -3914,7 +4019,7 @@ class TradingAnalyzer:
                 mtf_contribution = mtf_weight * normalized_mtf_score
 
                 self.logger.debug(
-                    f"MTF Confluence: Buy={mtf_buy_count}, Sell={mtf_sell_count}, Total={total_mtf_indicators}. Score contribution: {mtf_contribution:.2f}"
+                    f"MTF Confluence: Buy={mtf_buy_count}, Sell={mtf_sell_count}, Total={total_mtf_indicators}. Score contribution: {mtf_contribution:.2f}",
                 )
                 signal_breakdown_contrib["MTF Confluence"] = mtf_contribution
         return mtf_contribution, signal_breakdown_contrib
@@ -3988,7 +4093,7 @@ class TradingAnalyzer:
             else Decimal("0")
         )
         prev_close = Decimal(
-            str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close
+            str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close,
         )
 
         trend_strength_multiplier = 1.0  # Initial multiplier
@@ -4037,7 +4142,7 @@ class TradingAnalyzer:
         signal_score += vol_contrib
         signal_breakdown.update(vol_breakdown)
         imbalance_score, imbalance_breakdown = self._score_orderbook_imbalance(
-            orderbook_data
+            orderbook_data,
         )
         signal_score += imbalance_score
         signal_breakdown.update(imbalance_breakdown)
@@ -4048,7 +4153,7 @@ class TradingAnalyzer:
         # --- Final Signal Decision ---
         base_threshold = max(float(self.config.get("signal_score_threshold", 2.0)), 1.0)
         dynamic_threshold = self._dynamic_threshold(
-            base_threshold
+            base_threshold,
         )  # Adjust threshold based on volatility
 
         final_signal = "HOLD"  # Default signal
@@ -4078,7 +4183,7 @@ class TradingAnalyzer:
             and signal_score < (dynamic_threshold * hysteresis_ratio)
         ):
             self.logger.debug(
-                f"Hysteresis check: Prev score {self.config['_last_score']:.2f}, Current score {signal_score:.2f}, Threshold {dynamic_threshold:.2f}, Hysteresis ratio {hysteresis_ratio}. Signal might be filtered."
+                f"Hysteresis check: Prev score {self.config['_last_score']:.2f}, Current score {signal_score:.2f}, Threshold {dynamic_threshold:.2f}, Hysteresis ratio {hysteresis_ratio}. Signal might be filtered.",
             )
             should_override_hold = (
                 False  # Do not issue a signal if hysteresis prevents it
@@ -4093,7 +4198,7 @@ class TradingAnalyzer:
         if final_signal != "HOLD":
             if now_ts - self._last_signal_ts < cooldown_sec:
                 self.logger.info(
-                    f"Signal '{final_signal}' ignored due to cooldown ({cooldown_sec - (now_ts - self._last_signal_ts)}s remaining)."
+                    f"Signal '{final_signal}' ignored due to cooldown ({cooldown_sec - (now_ts - self._last_signal_ts)}s remaining).",
                 )
                 final_signal = "HOLD"
             else:
@@ -4106,7 +4211,7 @@ class TradingAnalyzer:
         self.config["_last_signal_ts"] = self._last_signal_ts
 
         self.logger.info(
-            f"Generated Signal: {final_signal} (Score: {signal_score:.2f}, Threshold: {dynamic_threshold:.2f})"
+            f"Generated Signal: {final_signal} (Score: {signal_score:.2f}, Threshold: {dynamic_threshold:.2f})",
         )
         return final_signal, float(signal_score), signal_breakdown
 
@@ -4205,7 +4310,8 @@ def expected_value(performance_tracker: PerformanceTracker) -> Decimal:
 
 
 def adapt_exit_params(
-    performance_tracker: PerformanceTracker, config: dict
+    performance_tracker: PerformanceTracker,
+    config: dict,
 ) -> tuple[Decimal, Decimal]:
     """Dynamically adapts TP/SL multiples based on recent performance."""
     base_tp = Decimal(str(config["trade_management"]["take_profit_atr_multiple"]))
@@ -4248,7 +4354,7 @@ def display_indicator_values_and_price(
 
     if analyzer.df.empty:
         logger.warning(
-            f"{NEON_YELLOW}Cannot display indicators: DataFrame is empty after calculations.{RESET}"
+            f"{NEON_YELLOW}Cannot display indicators: DataFrame is empty after calculations.{RESET}",
         )
         return
 
@@ -4268,7 +4374,7 @@ def display_indicator_values_and_price(
         logger.info(f"{NEON_CYAN}--- Fibonacci Retracement Levels ---{RESET}")
         for level_name, level_price in analyzer.fib_levels.items():
             logger.info(
-                f"  {NEON_YELLOW}{level_name:<20}: {level_price.normalize()}{RESET}"
+                f"  {NEON_YELLOW}{level_name:<20}: {level_price.normalize()}{RESET}",
             )
 
     # Display Fibonacci Pivot Points if enabled and calculated
@@ -4279,7 +4385,7 @@ def display_indicator_values_and_price(
         for key in ["PIVOT", "R1", "R2", "S1", "S2"]:
             if key in analyzer.indicator_values:
                 logger.info(
-                    f"  {INDICATOR_COLORS.get(key, NEON_YELLOW)}{key:<20}: {analyzer.indicator_values[key].normalize()}{RESET}"
+                    f"  {INDICATOR_COLORS.get(key, NEON_YELLOW)}{key:<20}: {analyzer.indicator_values[key].normalize()}{RESET}",
                 )
 
     # Display Orderbook Support/Resistance Levels if found
@@ -4290,11 +4396,11 @@ def display_indicator_values_and_price(
         logger.info(f"{NEON_CYAN}--- Orderbook S/R Levels ---{RESET}")
         if "Support_Level" in analyzer.indicator_values:
             logger.info(
-                f"  {INDICATOR_COLORS.get('Support_Level', NEON_YELLOW)}{'Support Level':<20}: {analyzer.indicator_values['Support_Level'].normalize()}{RESET}"
+                f"  {INDICATOR_COLORS.get('Support_Level', NEON_YELLOW)}{'Support Level':<20}: {analyzer.indicator_values['Support_Level'].normalize()}{RESET}",
             )
         if "Resistance_Level" in analyzer.indicator_values:
             logger.info(
-                f"  {INDICATOR_COLORS.get('Resistance_Level', NEON_YELLOW)}{'Resistance Level':<20}: {analyzer.indicator_values['Resistance_Level'].normalize()}{RESET}"
+                f"  {INDICATOR_COLORS.get('Resistance_Level', NEON_YELLOW)}{'Resistance Level':<20}: {analyzer.indicator_values['Resistance_Level'].normalize()}{RESET}",
             )
 
     # Display Multi-Timeframe Trend Confluence
@@ -4307,7 +4413,9 @@ def display_indicator_values_and_price(
     if signal_breakdown:
         logger.info(f"{NEON_CYAN}--- Signal Score Breakdown ---{RESET}")
         sorted_breakdown = sorted(
-            signal_breakdown.items(), key=lambda item: abs(item[1]), reverse=True
+            signal_breakdown.items(),
+            key=lambda item: abs(item[1]),
+            reverse=True,
         )
         for indicator, contribution in sorted_breakdown:
             color = (
@@ -4326,13 +4434,13 @@ def display_indicator_values_and_price(
     )
     if not pd.isna(ema_short) and not pd.isna(ema_long):
         trend_summary_lines.append(
-            f"{Fore.GREEN if ema_short > ema_long else (Fore.RED if ema_short < ema_long else Fore.YELLOW)}EMA Cross  : {'▲ Up' if ema_short > ema_long else ('▼ Down' if ema_short < ema_long else '↔ Sideways')}{RESET}"
+            f"{Fore.GREEN if ema_short > ema_long else (Fore.RED if ema_short < ema_long else Fore.YELLOW)}EMA Cross  : {'▲ Up' if ema_short > ema_long else ('▼ Down' if ema_short < ema_long else '↔ Sideways')}{RESET}",
         )
 
     st_slow_dir = analyzer._get_indicator_value("ST_Slow_Dir")
     if not pd.isna(st_slow_dir):
         trend_summary_lines.append(
-            f"{Fore.GREEN if st_slow_dir == 1 else (Fore.RED if st_slow_dir == -1 else Fore.YELLOW)}SuperTrend : {'▲ Up' if st_slow_dir == 1 else ('▼ Down' if st_slow_dir == -1 else '↔ Sideways')}{RESET}"
+            f"{Fore.GREEN if st_slow_dir == 1 else (Fore.RED if st_slow_dir == -1 else Fore.YELLOW)}SuperTrend : {'▲ Up' if st_slow_dir == 1 else ('▼ Down' if st_slow_dir == -1 else '↔ Sideways')}{RESET}",
         )
 
     macd_hist = analyzer._get_indicator_value("MACD_Hist")
@@ -4344,13 +4452,13 @@ def display_indicator_values_and_price(
         prev_macd_hist = Decimal(str(analyzer.df["MACD_Hist"].iloc[-2]))
         if macd_hist > 0 and prev_macd_hist <= 0:
             trend_summary_lines.append(
-                f"{Fore.GREEN}MACD Hist  : ↑ Bullish Cross{RESET}"
+                f"{Fore.GREEN}MACD Hist  : ↑ Bullish Cross{RESET}",
             )
         elif macd_hist < 0 and prev_macd_hist >= 0:
             trend_summary_lines.append(f"{Fore.RED}MACD Hist  : ↓ Bearish Cross{RESET}")
         elif macd_hist > 0:
             trend_summary_lines.append(
-                f"{Fore.LIGHTGREEN_EX}MACD Hist  : Above 0{RESET}"
+                f"{Fore.LIGHTGREEN_EX}MACD Hist  : Above 0{RESET}",
             )
         elif macd_hist < 0:
             trend_summary_lines.append(f"{Fore.LIGHTRED_EX}MACD Hist  : Below 0{RESET}")
@@ -4366,19 +4474,19 @@ def display_indicator_values_and_price(
             if not pd.isna(plus_di) and not pd.isna(minus_di):
                 if plus_di > minus_di:
                     trend_summary_lines.append(
-                        f"{Fore.LIGHTGREEN_EX}ADX Trend  : Strong Up {strength}{RESET}"
+                        f"{Fore.LIGHTGREEN_EX}ADX Trend  : Strong Up {strength}{RESET}",
                     )
                 else:
                     trend_summary_lines.append(
-                        f"{Fore.LIGHTRED_EX}ADX Trend  : Strong Down {strength}{RESET}"
+                        f"{Fore.LIGHTRED_EX}ADX Trend  : Strong Down {strength}{RESET}",
                     )
         elif adx_val <= ADX_WEAK_TREND_THRESHOLD:
             trend_summary_lines.append(
-                f"{Fore.YELLOW}ADX Trend  : Weak/Ranging ({adx_val:.0f}){RESET}"
+                f"{Fore.YELLOW}ADX Trend  : Weak/Ranging ({adx_val:.0f}){RESET}",
             )
         else:
             trend_summary_lines.append(
-                f"{Fore.CYAN}ADX Trend  : Moderate ({adx_val:.0f}){RESET}"
+                f"{Fore.CYAN}ADX Trend  : Moderate ({adx_val:.0f}){RESET}",
             )
 
     senkou_span_a, senkou_span_b = (
@@ -4404,23 +4512,23 @@ def display_indicator_values_and_price(
         if total > 0:
             if up_count == total:
                 trend_summary_lines.append(
-                    f"{Fore.GREEN}MTF Confl. : All Bullish ({up_count}/{total}){RESET}"
+                    f"{Fore.GREEN}MTF Confl. : All Bullish ({up_count}/{total}){RESET}",
                 )
             elif down_count == total:
                 trend_summary_lines.append(
-                    f"{Fore.RED}MTF Confl. : All Bearish ({down_count}/{total}){RESET}"
+                    f"{Fore.RED}MTF Confl. : All Bearish ({down_count}/{total}){RESET}",
                 )
             elif up_count > down_count:
                 trend_summary_lines.append(
-                    f"{Fore.LIGHTGREEN_EX}MTF Confl. : Mostly Bullish ({up_count}/{total}){RESET}"
+                    f"{Fore.LIGHTGREEN_EX}MTF Confl. : Mostly Bullish ({up_count}/{total}){RESET}",
                 )
             elif down_count > up_count:
                 trend_summary_lines.append(
-                    f"{Fore.LIGHTRED_EX}MTF Confl. : Mostly Bearish ({down_count}/{total}){RESET}"
+                    f"{Fore.LIGHTRED_EX}MTF Confl. : Mostly Bearish ({down_count}/{total}){RESET}",
                 )
             else:
                 trend_summary_lines.append(
-                    f"{Fore.YELLOW}MTF Confl. : Mixed ({up_count}/{total} Bull, {down_count}/{total} Bear){RESET}"
+                    f"{Fore.YELLOW}MTF Confl. : Mixed ({up_count}/{total} Bull, {down_count}/{total} Bear){RESET}",
                 )
 
     for line in trend_summary_lines:
@@ -4439,7 +4547,7 @@ def main():
     # Validate API keys early to prevent unnecessary startup
     if not API_KEY or not API_SECRET:
         global_logger.error(
-            f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in .env. Exiting.{RESET}"
+            f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in .env. Exiting.{RESET}",
         )
         sys.exit(1)
 
@@ -4465,13 +4573,13 @@ def main():
     ]
     if config["interval"] not in valid_bybit_intervals:
         global_logger.error(
-            f"{NEON_RED}Invalid primary interval '{config['interval']}'. Use Bybit formats. Exiting.{RESET}"
+            f"{NEON_RED}Invalid primary interval '{config['interval']}'. Use Bybit formats. Exiting.{RESET}",
         )
         sys.exit(1)
     for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
         if htf_interval not in valid_bybit_intervals:
             global_logger.error(
-                f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}'. Exiting.{RESET}"
+                f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}'. Exiting.{RESET}",
             )
             sys.exit(1)
 
@@ -4479,7 +4587,7 @@ def main():
     global_logger.info(f"Symbol: {config['symbol']}, Interval: {config['interval']}")
     global_logger.info(f"Live Trading Enabled: {config['execution']['use_pybit']}")
     global_logger.info(
-        f"Trade Management Enabled: {config['trade_management']['enabled']}"
+        f"Trade Management Enabled: {config['trade_management']['enabled']}",
     )
 
     # Initialize API Client (also initializes WS Manager)
@@ -4487,7 +4595,10 @@ def main():
 
     # Initialize Position Manager and Performance Tracker
     position_manager = PositionManager(
-        config, global_logger, config["symbol"], pybit_client
+        config,
+        global_logger,
+        config["symbol"],
+        pybit_client,
     )
     performance_tracker = PerformanceTracker(global_logger, config)
 
@@ -4502,7 +4613,7 @@ def main():
         # Load performance state using pybit_client.state_data
         if not performance_tracker.load_state(pybit_client.state_data):
             global_logger.warning(
-                "Failed to load performance tracker state, starting fresh."
+                "Failed to load performance tracker state, starting fresh.",
             )
 
         # Set leverage on startup if live trading is enabled
@@ -4515,7 +4626,7 @@ def main():
             global_logger.info(f"{NEON_GREEN}Leverage set successfully.{RESET}")
         else:
             global_logger.error(
-                f"{NEON_RED}Failed to set leverage. Check API permissions or account status.{RESET}"
+                f"{NEON_RED}Failed to set leverage. Check API permissions or account status.{RESET}",
             )
             alert_system.send_alert(
                 f"Failed to set leverage for {config['symbol']}. Check API settings.",
@@ -4533,15 +4644,18 @@ def main():
                 performance_tracker,
             )
             heartbeat = PositionHeartbeat(
-                config["symbol"], pybit_client, config, position_manager
+                config["symbol"],
+                pybit_client,
+                config,
+                position_manager,
             )
         else:
             global_logger.info(
-                "Live sync components (Execution Poll, Heartbeat) are disabled."
+                "Live sync components (Execution Poll, Heartbeat) are disabled.",
             )
     else:  # If Pybit client is not enabled or failed to initialize
         global_logger.error(
-            f"{NEON_RED}Pybit client is not enabled or failed to initialize. Cannot proceed with live trading.{RESET}"
+            f"{NEON_RED}Pybit client is not enabled or failed to initialize. Cannot proceed with live trading.{RESET}",
         )
         exec_sync, heartbeat = None, None  # Ensure sync components are None
 
@@ -4549,7 +4663,7 @@ def main():
     while not pybit_client.stop_event.is_set():
         try:
             global_logger.info(
-                f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+                f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}",
             )
 
             # --- Risk Guardrails & Filters ---
@@ -4572,21 +4686,21 @@ def main():
                     performance_tracker.max_drawdown >= max_dd
                 ):
                     global_logger.critical(
-                        f"{NEON_RED}KILL SWITCH ACTIVATED: Risk limits hit! Day PnL: {day_loss.normalize():.2f} / Max Allowed: {max_day_loss.normalize():.2f}. Max DD: {performance_tracker.max_drawdown.normalize():.2f} / Allowed: {max_dd.normalize():.2f}. Cooling down.{RESET}"
+                        f"{NEON_RED}KILL SWITCH ACTIVATED: Risk limits hit! Day PnL: {day_loss.normalize():.2f} / Max Allowed: {max_day_loss.normalize():.2f}. Max DD: {performance_tracker.max_drawdown.normalize():.2f} / Allowed: {max_dd.normalize():.2f}. Cooling down.{RESET}",
                     )
                     alert_system.send_alert(
                         f"KILL SWITCH: Risk limits hit for {config['symbol']}. Cooling down.",
                         "ERROR",
                     )
                     time.sleep(
-                        int(guard.get("cooldown_after_kill_min", 120)) * 60
+                        int(guard.get("cooldown_after_kill_min", 120)) * 60,
                     )  # Long cooldown period
                     continue  # Skip the rest of the loop and wait
 
             # Check if current time is within allowed trading sessions
             if not in_allowed_session(config):
                 global_logger.info(
-                    f"{NEON_BLUE}Outside allowed trading session. Holding.{RESET}"
+                    f"{NEON_BLUE}Outside allowed trading session. Holding.{RESET}",
                 )
                 time.sleep(config["loop_delay"])
                 continue
@@ -4603,7 +4717,9 @@ def main():
 
             # Fetch historical klines for analysis
             df = pybit_client.fetch_klines(
-                config["symbol"], config["interval"], 1000
+                config["symbol"],
+                config["interval"],
+                1000,
             )  # Fetch sufficient history
             if df is None or df.empty:
                 alert_system.send_alert(
@@ -4617,7 +4733,8 @@ def main():
             orderbook_data = None
             if config["indicators"].get("orderbook_imbalance", False):
                 orderbook_data = pybit_client.fetch_orderbook(
-                    config["symbol"], config["orderbook_limit"]
+                    config["symbol"],
+                    config["orderbook_limit"],
                 )
                 if orderbook_data is None:
                     global_logger.warning("Failed to fetch orderbook data.")
@@ -4627,7 +4744,7 @@ def main():
                 spread_bps = get_spread_bps(orderbook_data)
                 if spread_bps > float(guard.get("spread_filter_bps", 5.0)):
                     global_logger.warning(
-                        f"Spread too high ({spread_bps:.1f} bps). Holding.{RESET}"
+                        f"Spread too high ({spread_bps:.1f} bps). Holding.{RESET}",
                     )
                     time.sleep(config["loop_delay"])
                     continue
@@ -4637,7 +4754,7 @@ def main():
                 current_ev = expected_value(performance_tracker)
                 if current_ev <= 0:
                     global_logger.warning(
-                        f"Negative Expected Value ({current_ev:.2f}) detected. Holding.{RESET}"
+                        f"Negative Expected Value ({current_ev:.2f}) detected. Holding.{RESET}",
                     )
                     time.sleep(config["loop_delay"])
                     continue
@@ -4645,13 +4762,14 @@ def main():
             # --- Adaptive Parameters ---
             # Dynamically adjust TP/SL multiples based on recent performance
             tp_mult_adapted, sl_mult_adapted = adapt_exit_params(
-                performance_tracker, config
+                performance_tracker,
+                config,
             )
             config["trade_management"]["take_profit_atr_multiple"] = float(
-                tp_mult_adapted
+                tp_mult_adapted,
             )
             config["trade_management"]["stop_loss_atr_multiple"] = float(
-                sl_mult_adapted
+                sl_mult_adapted,
             )
 
             # --- Multi-Timeframe Analysis ---
@@ -4659,7 +4777,9 @@ def main():
             if config["mtf_analysis"]["enabled"]:
                 for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
                     htf_df = pybit_client.fetch_klines(
-                        config["symbol"], htf_interval, 1000
+                        config["symbol"],
+                        htf_interval,
+                        1000,
                     )  # Fetch historical data
                     if htf_df is not None and not htf_df.empty:
                         for trend_ind in config["mtf_analysis"]["trend_indicators"]:
@@ -4673,14 +4793,14 @@ def main():
                             )
                             mtf_trends[f"{htf_interval}_{trend_ind}"] = trend
                             global_logger.debug(
-                                f"MTF Trend ({htf_interval}, {trend_ind}): {trend}"
+                                f"MTF Trend ({htf_interval}, {trend_ind}): {trend}",
                             )
                     else:
                         global_logger.warning(
-                            f"Could not fetch klines for MTF {htf_interval} or it was empty. Skipping."
+                            f"Could not fetch klines for MTF {htf_interval} or it was empty. Skipping.",
                         )
                     time.sleep(
-                        config["mtf_analysis"]["mtf_request_delay_seconds"]
+                        config["mtf_analysis"]["mtf_request_delay_seconds"],
                     )  # Delay between MTF requests
 
             # --- Analysis and Signal Generation ---
@@ -4695,15 +4815,17 @@ def main():
 
             # Retrieve ATR value for potential use in position management (e.g., breakeven)
             atr_value = Decimal(
-                str(analyzer._get_indicator_value("ATR", Decimal("0.1")))
+                str(analyzer._get_indicator_value("ATR", Decimal("0.1"))),
             )
             config["_last_atr_value"] = str(
-                atr_value
+                atr_value,
             )  # Store for potential use by other modules
 
             trading_signal, signal_score, signal_breakdown = (
                 analyzer.generate_trading_signal(
-                    current_price, orderbook_data, mtf_trends
+                    current_price,
+                    orderbook_data,
+                    mtf_trends,
                 )
             )
 
@@ -4737,7 +4859,7 @@ def main():
                             (abs(signal_score) - config["signal_score_threshold"])
                             / config["signal_score_threshold"],
                         ),
-                    )
+                    ),
                 )
                 if (
                     conviction < 0.1
@@ -4748,15 +4870,18 @@ def main():
                 # Open position only if score significantly exceeds threshold
                 if abs(signal_score) >= config["signal_score_threshold"]:
                     position_manager.open_position(
-                        trading_signal, current_price, atr_value, conviction
+                        trading_signal,
+                        current_price,
+                        atr_value,
+                        conviction,
                     )
                 else:
                     global_logger.info(
-                        f"Signal ({trading_signal}) below threshold ({config['signal_score_threshold']:.2f}). Holding. Score: {signal_score:.2f}"
+                        f"Signal ({trading_signal}) below threshold ({config['signal_score_threshold']:.2f}). Holding. Score: {signal_score:.2f}",
                     )
             else:
                 global_logger.info(
-                    f"No strong trading signal. Holding. Score: {signal_score:.2f}"
+                    f"No strong trading signal. Holding. Score: {signal_score:.2f}",
                 )
 
             # --- Live Synchronization & Heartbeat ---
@@ -4769,35 +4894,36 @@ def main():
             open_positions_summary = position_manager.get_open_positions()
             if open_positions_summary:
                 global_logger.info(
-                    f"{NEON_CYAN}Open Positions: {len(open_positions_summary)}{RESET}"
+                    f"{NEON_CYAN}Open Positions: {len(open_positions_summary)}{RESET}",
                 )
                 for pos in open_positions_summary:  # Log details of open positions
                     global_logger.info(
-                        f"  - {pos['side']} {pos['qty'].normalize()} {pos['symbol']} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}, Adds: {pos['adds']}){RESET}"
+                        f"  - {pos['side']} {pos['qty'].normalize()} {pos['symbol']} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}, Adds: {pos['adds']}){RESET}",
                     )
             else:
                 global_logger.info(f"{NEON_CYAN}No open positions.{RESET}")
 
             perf_summary = performance_tracker.get_summary()  # Get performance summary
             global_logger.info(
-                f"{NEON_YELLOW}Performance Summary: Total PnL: {perf_summary['total_pnl']}, Daily PnL: {perf_summary['daily_pnl']}, Win Rate: {perf_summary['win_rate']}, Max Drawdown: {perf_summary['max_drawdown']}{RESET}"
+                f"{NEON_YELLOW}Performance Summary: Total PnL: {perf_summary['total_pnl']}, Daily PnL: {perf_summary['daily_pnl']}, Win Rate: {perf_summary['win_rate']}, Max Drawdown: {perf_summary['max_drawdown']}{RESET}",
             )
 
             global_logger.info(
-                f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {config['loop_delay']}s ---{RESET}"
+                f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {config['loop_delay']}s ---{RESET}",
             )
             time.sleep(config["loop_delay"])  # Wait before next loop iteration
 
         except Exception as e:
             # Catch any unhandled exceptions in the main loop for graceful recovery
             alert_system.send_alert(
-                f"[{config['symbol']}] Unhandled error in main loop: {e}", "ERROR"
+                f"[{config['symbol']}] Unhandled error in main loop: {e}",
+                "ERROR",
             )
             global_logger.exception(
-                f"{NEON_RED}Unhandled exception in main loop:{RESET}"
+                f"{NEON_RED}Unhandled exception in main loop:{RESET}",
             )
             time.sleep(
-                config["loop_delay"] * 2
+                config["loop_delay"] * 2,
             )  # Wait longer after an error before retrying
 
         finally:
@@ -4814,7 +4940,7 @@ if __name__ == "__main__":
     # Check for essential configuration early
     if not API_KEY or not API_SECRET:
         global_logger.error(
-            f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in .env. Exiting.{RESET}"
+            f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in .env. Exiting.{RESET}",
         )
         sys.exit(1)
 
@@ -4832,16 +4958,16 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         global_logger.info(
-            f"{NEON_YELLOW}Bot stopped by user (KeyboardInterrupt). Shutting down...{RESET}"
+            f"{NEON_YELLOW}Bot stopped by user (KeyboardInterrupt). Shutting down...{RESET}",
         )
     except Exception as e:
         global_logger.exception(
-            f"{NEON_RED}An unhandled error occurred outside the main loop: {e}{RESET}"
+            f"{NEON_RED}An unhandled error occurred outside the main loop: {e}{RESET}",
         )
     finally:
         if "pybit_client" in globals() and pybit_client.enabled:
             pybit_client.shutdown()  # Ensure proper shutdown and state saving
         else:
             global_logger.info(
-                "Pybit client not initialized or enabled, skipping client shutdown."
+                "Pybit client not initialized or enabled, skipping client shutdown.",
             )

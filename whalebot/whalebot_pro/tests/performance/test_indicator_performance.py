@@ -32,7 +32,7 @@ def large_sample_df():
     df = pd.DataFrame(
         data,
         index=pd.to_datetime(
-            pd.date_range(start="2023-01-01", periods=num_rows, freq="min")
+            pd.date_range(start="2023-01-01", periods=num_rows, freq="min"),
         ),
     )
     return df
@@ -44,7 +44,8 @@ def test_all_indicators_performance(indicator_calculator, large_sample_df):
 
     # Temporarily add ATR for indicators that depend on it
     large_sample_df["ATR"] = indicator_calculator.calculate_atr(
-        large_sample_df, period=14
+        large_sample_df,
+        period=14,
     )
 
     start_time = time.perf_counter()
@@ -56,18 +57,28 @@ def test_all_indicators_performance(indicator_calculator, large_sample_df):
     indicator_calculator.calculate_atr(large_sample_df, period=14)
     indicator_calculator.calculate_super_smoother(large_sample_df["close"], period=10)
     indicator_calculator.calculate_ehlers_supertrend(
-        large_sample_df, period=10, multiplier=2.0
+        large_sample_df,
+        period=10,
+        multiplier=2.0,
     )
     indicator_calculator.calculate_macd(
-        large_sample_df, fast_period=12, slow_period=26, signal_period=9
+        large_sample_df,
+        fast_period=12,
+        slow_period=26,
+        signal_period=9,
     )
     indicator_calculator.calculate_rsi(large_sample_df, period=14)
     indicator_calculator.calculate_stoch_rsi(
-        large_sample_df, period=14, k_period=3, d_period=3
+        large_sample_df,
+        period=14,
+        k_period=3,
+        d_period=3,
     )
     indicator_calculator.calculate_adx(large_sample_df, period=14)
     indicator_calculator.calculate_bollinger_bands(
-        large_sample_df, period=20, std_dev=2.0
+        large_sample_df,
+        period=20,
+        std_dev=2.0,
     )
     indicator_calculator.calculate_vwap(large_sample_df)
     indicator_calculator.calculate_cci(large_sample_df, period=20)
@@ -83,32 +94,40 @@ def test_all_indicators_performance(indicator_calculator, large_sample_df):
     indicator_calculator.calculate_obv(large_sample_df, ema_period=20)
     indicator_calculator.calculate_cmf(large_sample_df, period=20)
     indicator_calculator.calculate_psar(
-        large_sample_df, acceleration=0.02, max_acceleration=0.2
+        large_sample_df,
+        acceleration=0.02,
+        max_acceleration=0.2,
     )
     indicator_calculator.calculate_volatility_index(large_sample_df, period=20)
     indicator_calculator.calculate_vwma(large_sample_df, period=20)
     indicator_calculator.calculate_volume_delta(large_sample_df, period=5)
     indicator_calculator.calculate_kaufman_ama(
-        large_sample_df, period=10, fast_period=2, slow_period=30
+        large_sample_df,
+        period=10,
+        fast_period=2,
+        slow_period=30,
     )
     indicator_calculator.calculate_relative_volume(large_sample_df, period=20)
     indicator_calculator.calculate_market_structure(large_sample_df, lookback_period=10)
     indicator_calculator.calculate_dema(large_sample_df, period=14)
     indicator_calculator.calculate_keltner_channels(
-        large_sample_df, period=20, atr_multiplier=2.0
+        large_sample_df,
+        period=20,
+        atr_multiplier=2.0,
     )
     indicator_calculator.calculate_roc(large_sample_df, period=12)
     indicator_calculator.detect_candlestick_patterns(large_sample_df)
     indicator_calculator.calculate_fibonacci_pivot_points(large_sample_df)
     indicator_calculator.calculate_support_resistance_from_orderbook(
-        [["1", "1"]], [["2", "1"]]
+        [["1", "1"]],
+        [["2", "1"]],
     )
 
     end_time = time.perf_counter()
     duration = end_time - start_time
 
     indicator_calculator.logger.info(
-        f"Calculated all indicators for {len(large_sample_df)} rows in {duration:.4f} seconds."
+        f"Calculated all indicators for {len(large_sample_df)} rows in {duration:.4f} seconds.",
     )
 
     # Assert that the duration is within a reasonable limit (e.g., < 1 second for 10,000 rows)

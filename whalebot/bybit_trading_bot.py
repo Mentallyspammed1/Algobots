@@ -4,12 +4,11 @@ import asyncio
 import importlib
 import logging
 
+from config import Config
 from logger_setup import setup_logger
 from pybit.unified_trading import HTTP
 from strategy_interface import BaseStrategy
 from utilities import InMemoryCache, KlineDataFetcher
-
-from config import Config
 
 
 class BybitTradingBot:
@@ -22,7 +21,9 @@ class BybitTradingBot:
             api_secret=self.config.BYBIT_API_SECRET,
         )
         self.kline_data_fetcher = KlineDataFetcher(
-            self.http_session, self.logger, self.config
+            self.http_session,
+            self.logger,
+            self.config,
         )
         self.kline_cache = InMemoryCache(
             ttl_seconds=self.config.TRADING_LOGIC_LOOP_INTERVAL_SECONDS * 0.8,
@@ -56,7 +57,7 @@ class BybitTradingBot:
             }
             self.strategy = strategy_class(self.logger, **strategy_params)
             self.logger.info(
-                f"Successfully loaded strategy: {self.strategy.strategy_name}"
+                f"Successfully loaded strategy: {self.strategy.strategy_name}",
             )
         except Exception as e:
             self.logger.critical(f"Failed to load trading strategy: {e}", exc_info=True)
@@ -95,7 +96,9 @@ class BybitTradingBot:
             # In a real scenario, you would get the current price from a live feed.
             current_price = float(current_kline_data.iloc[-1]["close"])
             signal = self.strategy.generate_signal(
-                current_kline_data, current_price, {}
+                current_kline_data,
+                current_price,
+                {},
             )
             self.logger.info(f"Generated Signal: {signal.type}, Score: {signal.score}")
         else:

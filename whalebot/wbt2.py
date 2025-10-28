@@ -41,10 +41,9 @@ from colorama import Fore, Style, init
 # --- Guarded Imports ---
 # This ensures the script can run even if optional libraries aren't installed.
 try:
+    import pybit
     import pybit.exceptions
     from pybit.unified_trading import HTTP, WebSocket
-
-    import pybit
 
     PYBIT_AVAILABLE = True
 except ImportError:
@@ -60,7 +59,7 @@ except ImportError:
 
         def _dummy_method(self, **kwargs):
             logging.getLogger(__name__).warning(
-                "Pybit not available. Using dummy client."
+                "Pybit not available. Using dummy client.",
             )
 
     class WebSocket:
@@ -72,7 +71,7 @@ except ImportError:
 
         def _dummy_method(self, *args, **kwargs):
             logging.getLogger(__name__).warning(
-                "Pybit not available. Using dummy WebSocket."
+                "Pybit not available. Using dummy WebSocket.",
             )
 
     class WebSocketConnectionClosedException(Exception):
@@ -88,7 +87,7 @@ except ImportError:
         def __getattr__(name):
             def dummy_indicator(*args, **kwargs):
                 logging.getLogger(__name__).error(
-                    f"indicators.py not found. Using dummy function for '{name}'."
+                    f"indicators.py not found. Using dummy function for '{name}'.",
                 )
                 return (
                     pd.Series(np.nan)
@@ -100,7 +99,7 @@ except ImportError:
             return dummy_indicator
 
     logging.getLogger(__name__).error(
-        "indicators.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH."
+        "indicators.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH.",
     )
 
 try:
@@ -115,7 +114,7 @@ except ImportError:
             self.logger.log(logging.INFO, f"ALERT (Dummy): {message}")
 
     logging.getLogger(__name__).error(
-        "alert_system.py not found. Using dummy alert system."
+        "alert_system.py not found. Using dummy alert system.",
     )
 
 
@@ -238,7 +237,9 @@ def round_price(price: Decimal, price_precision: int) -> Decimal:
 
 
 def _safe_divide_decimal(
-    numerator: Decimal, denominator: Decimal, default: Decimal = Decimal("0")
+    numerator: Decimal,
+    denominator: Decimal,
+    default: Decimal = Decimal("0"),
 ) -> Decimal:
     try:
         if denominator.is_zero() or denominator.is_nan() or numerator.is_nan():
@@ -495,7 +496,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "roc_signal": 0.12,
                 "candlestick_confirmation": 0.15,
                 "fibonacci_pivot_points_confluence": 0.20,
-            }
+            },
         },
     }
     if not Path(filepath).exists():
@@ -503,7 +504,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(default_config, f, indent=4)
             logger.warning(
-                f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath}{RESET}"
+                f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath}{RESET}",
             )
             return default_config
         except OSError as e:
@@ -518,7 +519,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         return config
     except (OSError, FileNotFoundError, json.JSONDecodeError) as e:
         logger.error(
-            f"{NEON_RED}Error loading config file '{filepath}': {e}. Using default configuration.{RESET}"
+            f"{NEON_RED}Error loading config file '{filepath}': {e}. Using default configuration.{RESET}",
         )
         return default_config
 
@@ -559,16 +560,18 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
         log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
     return logger
@@ -595,7 +598,7 @@ async def bybit_request_async(
             if signed:
                 if not API_KEY or not API_SECRET:
                     logger.error(
-                        f"{NEON_RED}API_KEY or API_SECRET not set for signed request.{RESET}"
+                        f"{NEON_RED}API_KEY or API_SECRET not set for signed request.{RESET}",
                     )
                     return None
                 timestamp = str(int(time.time() * 1000))
@@ -604,7 +607,9 @@ async def bybit_request_async(
                     query_string = urllib.parse.urlencode(params) if params else ""
                     param_str = timestamp + API_KEY + recv_window + query_string
                     signature = hmac.new(
-                        API_SECRET.encode(), param_str.encode(), hashlib.sha256
+                        API_SECRET.encode(),
+                        param_str.encode(),
+                        hashlib.sha256,
                     ).hexdigest()
                     headers.update(
                         {
@@ -612,10 +617,13 @@ async def bybit_request_async(
                             "X-BAPI-TIMESTAMP": timestamp,
                             "X-BAPI-SIGN": signature,
                             "X-BAPI-RECV-WINDOW": recv_window,
-                        }
+                        },
                     )
                     async with session.get(
-                        url, params=params, headers=headers, timeout=REQUEST_TIMEOUT
+                        url,
+                        params=params,
+                        headers=headers,
+                        timeout=REQUEST_TIMEOUT,
                     ) as response:
                         response.raise_for_status()
                         data = await response.json()
@@ -623,7 +631,9 @@ async def bybit_request_async(
                     json_params = json.dumps(params) if params else ""
                     param_str = timestamp + API_KEY + recv_window + json_params
                     signature = hmac.new(
-                        API_SECRET.encode(), param_str.encode(), hashlib.sha256
+                        API_SECRET.encode(),
+                        param_str.encode(),
+                        hashlib.sha256,
                     ).hexdigest()
                     headers.update(
                         {
@@ -631,45 +641,51 @@ async def bybit_request_async(
                             "X-BAPI-TIMESTAMP": timestamp,
                             "X-BAPI-SIGN": signature,
                             "X-BAPI-RECV-WINDOW": recv_window,
-                        }
+                        },
                     )
                     async with session.post(
-                        url, json=params, headers=headers, timeout=REQUEST_TIMEOUT
+                        url,
+                        json=params,
+                        headers=headers,
+                        timeout=REQUEST_TIMEOUT,
                     ) as response:
                         response.raise_for_status()
                         data = await response.json()
             else:  # Public request (GET)
                 async with session.get(
-                    url, params=params, headers=headers, timeout=REQUEST_TIMEOUT
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=REQUEST_TIMEOUT,
                 ) as response:
                     response.raise_for_status()
                     data = await response.json()
 
             if data.get("retCode") != 0:
                 logger.error(
-                    f"{NEON_RED}Bybit API Error: {data.get('retMsg')} (Code: {data.get('retCode')}){RESET}"
+                    f"{NEON_RED}Bybit API Error: {data.get('retMsg')} (Code: {data.get('retCode')}){RESET}",
                 )
                 return None
             return data
 
         except aiohttp.ClientResponseError as e:
             logger.error(
-                f"{NEON_RED}HTTP Error {e.status}: {e.message}. Retrying... ({attempt + 1}/{MAX_API_RETRIES}){RESET}"
+                f"{NEON_RED}HTTP Error {e.status}: {e.message}. Retrying... ({attempt + 1}/{MAX_API_RETRIES}){RESET}",
             )
             await asyncio.sleep(RETRY_DELAY_SECONDS)
         except aiohttp.ClientConnectionError as e:
             logger.error(
-                f"{NEON_RED}Connection Error: {e}. Retrying... ({attempt + 1}/{MAX_API_RETRIES}){RESET}"
+                f"{NEON_RED}Connection Error: {e}. Retrying... ({attempt + 1}/{MAX_API_RETRIES}){RESET}",
             )
             await asyncio.sleep(RETRY_DELAY_SECONDS)
         except aiohttp.ClientError as e:
             logger.error(
-                f"{NEON_RED}Request Exception: {e}. Retrying... ({attempt + 1}/{MAX_API_RETRIES}){RESET}"
+                f"{NEON_RED}Request Exception: {e}. Retrying... ({attempt + 1}/{MAX_API_RETRIES}){RESET}",
             )
             await asyncio.sleep(RETRY_DELAY_SECONDS)
         except json.JSONDecodeError:
             logger.error(
-                f"{NEON_RED}Failed to decode JSON response. Retrying... ({attempt + 1}/{MAX_API_RETRIES}){RESET}"
+                f"{NEON_RED}Failed to decode JSON response. Retrying... ({attempt + 1}/{MAX_API_RETRIES}){RESET}",
             )
             await asyncio.sleep(RETRY_DELAY_SECONDS)
         except Exception as e:
@@ -680,7 +696,7 @@ async def bybit_request_async(
             await asyncio.sleep(RETRY_DELAY_SECONDS)
 
     logger.error(
-        f"{NEON_RED}Max API retries ({MAX_API_RETRIES}) exceeded. Trading halted.{RESET}"
+        f"{NEON_RED}Max API retries ({MAX_API_RETRIES}) exceeded. Trading halted.{RESET}",
     )
     return None
 
@@ -814,12 +830,12 @@ class AdvancedOrderbookManager:
     async def _validate_price_quantity(self, price: float, quantity: float) -> bool:
         if not (isinstance(price, (int, float)) and isinstance(quantity, (int, float))):
             self.logger.error(
-                f"Invalid type for price or quantity for {self.symbol}. Price: {type(price)}, Qty: {type(quantity)}"
+                f"Invalid type for price or quantity for {self.symbol}. Price: {type(price)}, Qty: {type(quantity)}",
             )
             return False
         if price < 0 or quantity < 0:
             self.logger.error(
-                f"Negative price or quantity detected for {self.symbol}: price={price}, quantity={quantity}"
+                f"Negative price or quantity detected for {self.symbol}: price={price}, quantity={quantity}",
             )
             return False
         return True
@@ -833,7 +849,7 @@ class AdvancedOrderbookManager:
                 or "u" not in data
             ):
                 self.logger.error(
-                    f"Invalid snapshot data format for {self.symbol}: {data}"
+                    f"Invalid snapshot data format for {self.symbol}: {data}",
                 )
                 return
             if self.use_skip_list:
@@ -857,7 +873,7 @@ class AdvancedOrderbookManager:
                             self.bids_ds.append(level)
                 except (ValueError, TypeError) as e:
                     self.logger.error(
-                        f"Failed to parse bid in snapshot for {self.symbol}: {price_str}/{qty_str}, error={e}"
+                        f"Failed to parse bid in snapshot for {self.symbol}: {price_str}/{qty_str}, error={e}",
                     )
             for price_str, qty_str in data.get("a", []):
                 try:
@@ -874,14 +890,14 @@ class AdvancedOrderbookManager:
                             self.asks_ds.append(level)
                 except (ValueError, TypeError) as e:
                     self.logger.error(
-                        f"Failed to parse ask in snapshot for {self.symbol}: {price_str}/{qty_str}, error={e}"
+                        f"Failed to parse ask in snapshot for {self.symbol}: {price_str}/{qty_str}, error={e}",
                     )
             self.last_update_id = data.get("u", 0)
             if not self.use_skip_list:
                 self.bids_ds.sort(key=lambda x: x.price, reverse=True)
                 self.asks_ds.sort(key=lambda x: x.price)
             self.logger.info(
-                f"Orderbook {self.symbol} snapshot updated. Last Update ID: {self.last_update_id}"
+                f"Orderbook {self.symbol} snapshot updated. Last Update ID: {self.last_update_id}",
             )
 
     async def update_delta(self, data: dict[str, Any]) -> None:
@@ -892,13 +908,13 @@ class AdvancedOrderbookManager:
                 or "u" not in data
             ):
                 self.logger.error(
-                    f"Invalid delta data format for {self.symbol}: {data}"
+                    f"Invalid delta data format for {self.symbol}: {data}",
                 )
                 return
             current_update_id = data.get("u", 0)
             if current_update_id <= self.last_update_id:
                 self.logger.debug(
-                    f"Outdated OB update for {self.symbol}: current={current_update_id}, last={self.last_update_id}. Skipping."
+                    f"Outdated OB update for {self.symbol}: current={current_update_id}, last={self.last_update_id}. Skipping.",
                 )
                 return
             for price_str, qty_str in data.get("b", []):
@@ -921,14 +937,16 @@ class AdvancedOrderbookManager:
                         ]
                         if quantity > 0:
                             levels.append(
-                                PriceLevel(price, quantity, int(time.time() * 1000))
+                                PriceLevel(price, quantity, int(time.time() * 1000)),
                             )
                         self.bids_ds = sorted(
-                            levels, key=lambda x: x.price, reverse=True
+                            levels,
+                            key=lambda x: x.price,
+                            reverse=True,
                         )
                 except (ValueError, TypeError) as e:
                     self.logger.error(
-                        f"Failed to parse bid delta for {self.symbol}: {price_str}/{qty_str}, error={e}"
+                        f"Failed to parse bid delta for {self.symbol}: {price_str}/{qty_str}, error={e}",
                     )
             for price_str, qty_str in data.get("a", []):
                 try:
@@ -950,16 +968,16 @@ class AdvancedOrderbookManager:
                         ]
                         if quantity > 0:
                             levels.append(
-                                PriceLevel(price, quantity, int(time.time() * 1000))
+                                PriceLevel(price, quantity, int(time.time() * 1000)),
                             )
                         self.asks_ds = sorted(levels, key=lambda x: x.price)
                 except (ValueError, TypeError) as e:
                     self.logger.error(
-                        f"Failed to parse ask delta for {self.symbol}: {price_str}/{qty_str}, error={e}"
+                        f"Failed to parse ask delta for {self.symbol}: {price_str}/{qty_str}, error={e}",
                     )
             self.last_update_id = current_update_id
             self.logger.debug(
-                f"Orderbook {self.symbol} delta applied. Last Update ID: {self.last_update_id}"
+                f"Orderbook {self.symbol} delta applied. Last Update ID: {self.last_update_id}",
             )
 
     async def get_best_bid_ask(self) -> tuple[float | None, float | None]:
@@ -999,7 +1017,11 @@ class AdvancedOrderbookManager:
 
 class KlineDataManager:
     def __init__(
-        self, symbol: str, interval: str, max_klines: int, logger: logging.Logger
+        self,
+        symbol: str,
+        interval: str,
+        max_klines: int,
+        logger: logging.Logger,
     ):
         self.symbol = symbol
         self.interval = interval
@@ -1011,18 +1033,20 @@ class KlineDataManager:
 
     async def initialize(self, pybit_client: "PybitTradingClient"):
         df = await pybit_client.fetch_klines(
-            self.symbol, self.interval, self.max_klines
+            self.symbol,
+            self.interval,
+            self.max_klines,
         )
         async with self._df_lock:
             if df is not None and not df.empty:
                 self._df = df
                 self._last_candle_open_time = self._df.index[-1]
                 self.logger.info(
-                    f"Initialized KlineDataManager for {self.symbol}@{self.interval} with {len(df)} klines."
+                    f"Initialized KlineDataManager for {self.symbol}@{self.interval} with {len(df)} klines.",
                 )
             else:
                 self.logger.warning(
-                    f"Failed to initialize KlineDataManager for {self.symbol}@{self.interval}."
+                    f"Failed to initialize KlineDataManager for {self.symbol}@{self.interval}.",
                 )
 
     async def get_df(self) -> pd.DataFrame:
@@ -1032,7 +1056,9 @@ class KlineDataManager:
     async def update_from_ws(self, ws_kline_data: dict[str, Any]):
         new_candle = {
             "start_time": pd.to_datetime(
-                ws_kline_data["timestamp"], unit="ms", utc=True
+                ws_kline_data["timestamp"],
+                unit="ms",
+                utc=True,
             ).dt.tz_convert(TIMEZONE),
             "open": float(ws_kline_data["open"]),
             "high": float(ws_kline_data["high"]),
@@ -1051,12 +1077,12 @@ class KlineDataManager:
                 self._df = self._df.iloc[-self.max_klines :]
                 self._last_candle_open_time = self._df.index[-1]
                 self.logger.debug(
-                    f"WS: Appended new candle {new_df_row.index[0]} to {self.symbol}@{self.interval} data."
+                    f"WS: Appended new candle {new_df_row.index[0]} to {self.symbol}@{self.interval} data.",
                 )
             elif new_df_row.index[0] == self._last_candle_open_time:
                 self._df.loc[new_df_row.index[0]] = new_df_row.iloc[0]
                 self.logger.debug(
-                    f"WS: Updated current candle {new_df_row.index[0]} for {self.symbol}@{self.interval} data."
+                    f"WS: Updated current candle {new_df_row.index[0]} for {self.symbol}@{self.interval} data.",
                 )
 
 
@@ -1087,14 +1113,14 @@ class PybitTradingClient:
         if not self.enabled:
             if not PYBIT_AVAILABLE:
                 self.logger.error(
-                    f"{NEON_RED}Pybit library not found. Please install it: pip install pybit.{RESET}"
+                    f"{NEON_RED}Pybit library not found. Please install it: pip install pybit.{RESET}",
                 )
             if not (API_KEY and API_SECRET):
                 self.logger.error(
-                    f"{NEON_RED}API keys (BYBIT_API_KEY, BYBIT_API_SECRET) not set in .env.{RESET}"
+                    f"{NEON_RED}API keys (BYBIT_API_KEY, BYBIT_API_SECRET) not set in .env.{RESET}",
                 )
             self.logger.info(
-                f"{NEON_YELLOW}PyBit execution disabled in config or due to missing dependencies.{RESET}"
+                f"{NEON_YELLOW}PyBit execution disabled in config or due to missing dependencies.{RESET}",
             )
             return
 
@@ -1117,24 +1143,29 @@ class PybitTradingClient:
                 proxies=proxies if proxies else None,
             )
             self.logger.info(
-                f"{NEON_GREEN}PyBit HTTP client initialized. Testnet={self.testnet}{RESET}"
+                f"{NEON_GREEN}PyBit HTTP client initialized. Testnet={self.testnet}{RESET}",
             )
             kline_key = f"{self.cfg['symbol']}_{self.cfg['interval']}"
             self.kline_data_managers[kline_key] = KlineDataManager(
-                self.cfg["symbol"], self.cfg["interval"], 1000, self.logger
+                self.cfg["symbol"],
+                self.cfg["interval"],
+                1000,
+                self.logger,
             )
             self.orderbook_data_manager = AdvancedOrderbookManager(
-                self.cfg["symbol"], self.logger, use_skip_list=True
+                self.cfg["symbol"],
+                self.logger,
+                use_skip_list=True,
             )
         except pybit.exceptions.FailedRequestError as e:
             self.enabled = False
             self.logger.critical(
-                f"{NEON_RED}Failed to initialize PyBit client due to API error: {e}. Check credentials and network.{RESET}"
+                f"{NEON_RED}Failed to initialize PyBit client due to API error: {e}. Check credentials and network.{RESET}",
             )
         except Exception as e:
             self.enabled = False
             self.logger.critical(
-                f"{NEON_RED}Failed to initialize PyBit client: {e}\n{traceback.format_exc()}{RESET}"
+                f"{NEON_RED}Failed to initialize PyBit client: {e}\n{traceback.format_exc()}{RESET}",
             )
 
     def _reset_hourly_error_counts(self):
@@ -1161,12 +1192,12 @@ class PybitTradingClient:
         ws_limit = self.cfg["risk_guardrails"]["ws_disconnect_limit_per_hour"]
         if self.api_error_count_hourly >= api_limit:
             self.logger.critical(
-                f"{NEON_RED}CIRCUIT BREAKER: API error limit ({api_limit}) exceeded! Trading halted.{RESET}"
+                f"{NEON_RED}CIRCUIT BREAKER: API error limit ({api_limit}) exceeded! Trading halted.{RESET}",
             )
             return True
         if self.ws_disconnect_count_hourly >= ws_limit:
             self.logger.critical(
-                f"{NEON_RED}CIRCUIT BREAKER: WebSocket disconnect limit ({ws_limit}) exceeded! Trading halted.{RESET}"
+                f"{NEON_RED}CIRCUIT BREAKER: WebSocket disconnect limit ({ws_limit}) exceeded! Trading halted.{RESET}",
             )
             return True
         return False
@@ -1174,7 +1205,7 @@ class PybitTradingClient:
     def _log_api(self, action: str, resp: dict | None, log_level: str = "error"):
         if not resp:
             getattr(self.logger, log_level)(
-                f"{NEON_RED}{action}: No response received.{RESET}"
+                f"{NEON_RED}{action}: No response received.{RESET}",
             )
             self._track_api_error(False)
             return
@@ -1182,7 +1213,7 @@ class PybitTradingClient:
             error_msg = resp.get("retMsg", "Unknown error")
             ret_code = resp.get("retCode", "N/A")
             getattr(self.logger, log_level)(
-                f"{NEON_RED}{action}: Failed with code {ret_code} - {error_msg}{RESET}"
+                f"{NEON_RED}{action}: Failed with code {ret_code} - {error_msg}{RESET}",
             )
             self._track_api_error(False)
         else:
@@ -1207,7 +1238,7 @@ class PybitTradingClient:
     def _handle_403_error(self, e: Exception):
         if isinstance(e, pybit.exceptions.FailedRequestError) and e.status_code == 403:
             self.logger.critical(
-                f"{NEON_RED}API Error 403 Forbidden: Check API key permissions and IP whitelist settings. Disabling client permanently.{RESET}"
+                f"{NEON_RED}API Error 403 Forbidden: Check API key permissions and IP whitelist settings. Disabling client permanently.{RESET}",
             )
             self.enabled = False
             self.stop_event.set()
@@ -1226,7 +1257,7 @@ class PybitTradingClient:
             return self._ok(resp)
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"set_leverage failed for {symbol}: {e}\n{traceback.format_exc()}"
+                f"set_leverage failed for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return False
@@ -1251,13 +1282,14 @@ class PybitTradingClient:
             return None
         try:
             resp = self.session.get_wallet_balance(
-                accountType=self.cfg["execution"]["account_type"], coin=coin
+                accountType=self.cfg["execution"]["account_type"],
+                coin=coin,
             )
             self._log_api("get_wallet_balance", resp, "debug")
             return resp
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"get_wallet_balance exception: {e}\n{traceback.format_exc()}"
+                f"get_wallet_balance exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -1288,13 +1320,16 @@ class PybitTradingClient:
             return resp
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"batch_place_orders exception: {e}\n{traceback.format_exc()}"
+                f"batch_place_orders exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
 
     async def cancel_order(
-        self, symbol: str, order_id: str | None = None, order_link_id: str | None = None
+        self,
+        symbol: str,
+        order_id: str | None = None,
+        order_link_id: str | None = None,
     ) -> dict | None:
         if not self.enabled or not self.session:
             return None
@@ -1306,7 +1341,7 @@ class PybitTradingClient:
                 params["orderLinkId"] = order_link_id
             else:
                 self.logger.warning(
-                    "No orderId or orderLinkId provided for cancel_order."
+                    "No orderId or orderLinkId provided for cancel_order.",
                 )
                 return None
             resp = self.session.cancel_order(**params)
@@ -1314,7 +1349,7 @@ class PybitTradingClient:
             return resp
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"cancel_order exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"cancel_order exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -1333,7 +1368,7 @@ class PybitTradingClient:
             return []
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"get_open_orders exception: {e}\n{traceback.format_exc()}"
+                f"get_open_orders exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return []
@@ -1347,24 +1382,30 @@ class PybitTradingClient:
             if self._ok(response) and response.get("result", {}).get("list"):
                 return Decimal(response["result"]["list"][0]["lastPrice"])
             self.logger.warning(
-                f"Could not fetch current price for {symbol}. Response: {response}"
+                f"Could not fetch current price for {symbol}. Response: {response}",
             )
             return None
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"fetch_current_price exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"fetch_current_price exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
 
     async def fetch_klines(
-        self, symbol: str, interval: str, limit: int
+        self,
+        symbol: str,
+        interval: str,
+        limit: int,
     ) -> pd.DataFrame | None:
         if not self.enabled or not self.session:
             return None
         try:
             resp = self.session.get_kline(
-                category=self.category, symbol=symbol, interval=interval, limit=limit
+                category=self.category,
+                symbol=symbol,
+                interval=interval,
+                limit=limit,
             )
             if self._ok(resp) and resp.get("result", {}).get("list"):
                 df = pd.DataFrame(
@@ -1380,7 +1421,9 @@ class PybitTradingClient:
                     ],
                 )
                 df["start_time"] = pd.to_datetime(
-                    df["start_time"].astype(int), unit="ms", utc=True
+                    df["start_time"].astype(int),
+                    unit="ms",
+                    utc=True,
                 ).dt.tz_convert(TIMEZONE)
                 for col in ["open", "high", "low", "close", "volume", "turnover"]:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -1388,17 +1431,17 @@ class PybitTradingClient:
                 df.sort_index(inplace=True)
                 if df.empty:
                     self.logger.warning(
-                        f"Fetched klines for {symbol} {interval} but DataFrame is empty after processing."
+                        f"Fetched klines for {symbol} {interval} but DataFrame is empty after processing.",
                     )
                     return None
                 return df
             self.logger.warning(
-                f"Could not fetch klines for {symbol} {interval}. Response: {resp}"
+                f"Could not fetch klines for {symbol} {interval}. Response: {resp}",
             )
             return None
         except (pybit.exceptions.FailedRequestError, KeyError, ValueError) as e:
             self.logger.error(
-                f"fetch_klines exception for {symbol} {interval}: {e}\n{traceback.format_exc()}"
+                f"fetch_klines exception for {symbol} {interval}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -1412,12 +1455,12 @@ class PybitTradingClient:
             if self._ok(response) and response.get("result"):
                 return response["result"]
             self.logger.warning(
-                f"Could not fetch orderbook for {symbol}. Response: {response}"
+                f"Could not fetch orderbook for {symbol}. Response: {response}",
             )
             return None
         except (pybit.exceptions.FailedRequestError, KeyError) as e:
             self.logger.error(
-                f"fetch_orderbook exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"fetch_orderbook exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -1431,18 +1474,21 @@ class PybitTradingClient:
             if self._ok(response) and response.get("result", {}).get("list"):
                 return response["result"]["list"][0]
             self.logger.warning(
-                f"Could not fetch instrument info for {symbol}. Response: {response}"
+                f"Could not fetch instrument info for {symbol}. Response: {response}",
             )
             return None
         except (pybit.exceptions.FailedRequestError, KeyError) as e:
             self.logger.error(
-                f"fetch_instrument_info exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"fetch_instrument_info exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
 
     async def get_executions(
-        self, symbol: str, start_time_ms: int, limit: int
+        self,
+        symbol: str,
+        start_time_ms: int,
+        limit: int,
     ) -> dict | None:
         if not self.enabled or not self.session:
             return None
@@ -1458,7 +1504,7 @@ class PybitTradingClient:
             return response
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"get_executions exception: {e}\n{traceback.format_exc()}"
+                f"get_executions exception: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
@@ -1473,14 +1519,16 @@ class PybitTradingClient:
             return resp
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(
-                f"cancel_all_orders exception for {symbol}: {e}\n{traceback.format_exc()}"
+                f"cancel_all_orders exception for {symbol}: {e}\n{traceback.format_exc()}",
             )
             self._handle_403_error(e)
             return None
 
     # --- WebSocket Management (Asyncio) ---
     async def _run_ws(
-        self, ws_type: Literal["public", "private"], pybit_ws_instance: WebSocket
+        self,
+        ws_type: Literal["public", "private"],
+        pybit_ws_instance: WebSocket,
     ):
         while not self.stop_event.is_set():
             try:
@@ -1499,18 +1547,18 @@ class PybitTradingClient:
 
                 await pybit_ws_instance.subscribe(subscriptions)
                 self.logger.info(
-                    f"{ws_type} WebSocket connection opened and subscribed."
+                    f"{ws_type} WebSocket connection opened and subscribed.",
                 )
 
                 while pybit_ws_instance.ws and pybit_ws_instance.ws.connected:
                     await asyncio.sleep(
                         self.cfg["execution"]["live_sync"]["heartbeat"]["interval_ms"]
-                        / 1000.0
+                        / 1000.0,
                     )
 
             except Exception as e:
                 self.logger.error(
-                    f"WebSocket error ({ws_type}): {e}. Retrying in {WS_RECONNECT_DELAY_SECONDS}s.\n{traceback.format_exc()}"
+                    f"WebSocket error ({ws_type}): {e}. Retrying in {WS_RECONNECT_DELAY_SECONDS}s.\n{traceback.format_exc()}",
                 )
                 self._track_ws_disconnect()
                 await asyncio.sleep(WS_RECONNECT_DELAY_SECONDS)
@@ -1544,7 +1592,10 @@ class PybitTradingClient:
 
 class WebSocketManager:
     def __init__(
-        self, api_client: PybitTradingClient, config: dict, logger: logging.Logger
+        self,
+        api_client: PybitTradingClient,
+        config: dict,
+        logger: logging.Logger,
     ):
         self.api_client, self.cfg, self.logger = api_client, config, logger
         self.stop_event = api_client.stop_event
@@ -1606,11 +1657,11 @@ class WebSocketManager:
             / 2000.0,
         )
         self.public_ws_task = asyncio.create_task(
-            self._run_ws("public", self.ws_public)
+            self._run_ws("public", self.ws_public),
         )
         if self.api_client.enabled:
             self.private_ws_task = asyncio.create_task(
-                self._run_ws("private", self.ws_private)
+                self._run_ws("private", self.ws_private),
             )
 
     async def shutdown(self):
@@ -1623,7 +1674,9 @@ class WebSocketManager:
         if self.private_ws_task:
             self.private_ws_task.cancel()
         await asyncio.gather(
-            self.public_ws_task, self.private_ws_task, return_exceptions=True
+            self.public_ws_task,
+            self.private_ws_task,
+            return_exceptions=True,
         )
 
     async def _run_ws(self, ws_type: str, ws: WebSocket):
@@ -1641,12 +1694,12 @@ class WebSocketManager:
                     subscriptions.extend(["position", "order", "execution", "wallet"])
                 await ws.subscribe(subscriptions)
                 self.logger.info(
-                    f"{ws_type} WebSocket connection opened and subscribed."
+                    f"{ws_type} WebSocket connection opened and subscribed.",
                 )
                 await ws.run_forever()
             except Exception as e:
                 self.logger.error(
-                    f"WebSocket error ({ws_type}): {e}. Retrying in {WS_RECONNECT_DELAY_SECONDS}s.\n{traceback.format_exc()}"
+                    f"WebSocket error ({ws_type}): {e}. Retrying in {WS_RECONNECT_DELAY_SECONDS}s.\n{traceback.format_exc()}",
                 )
                 self.api_client._track_ws_disconnect()
                 await asyncio.sleep(WS_RECONNECT_DELAY_SECONDS)
@@ -1664,7 +1717,7 @@ class WebSocketManager:
 
     def _on_close(self, ws_inst, close_status_code, close_msg):
         self.logger.warning(
-            f"WebSocket closed: {close_status_code} {close_msg}. Reconnecting..."
+            f"WebSocket closed: {close_status_code} {close_msg}. Reconnecting...",
         )
         self.api_client._track_ws_disconnect()
 
@@ -1716,7 +1769,7 @@ class WebSocketManager:
     async def handle_kline_update(self, kline_data: list[dict]):
         if kline_data and kline_data[0].get("confirm") is True:
             kline_manager = self.api_client.kline_data_managers.get(
-                f"{self.cfg['symbol']}_{self.cfg['interval']}"
+                f"{self.cfg['symbol']}_{self.cfg['interval']}",
             )
             if kline_manager:
                 await kline_manager.update_from_ws(kline_data[0])
@@ -1726,11 +1779,11 @@ class WebSocketManager:
         if self.api_client.orderbook_data_manager:
             if orderbook_data.get("u") is not None:
                 await self.api_client.orderbook_data_manager.update_delta(
-                    orderbook_data
+                    orderbook_data,
                 )
             else:
                 await self.api_client.orderbook_data_manager.update_snapshot(
-                    orderbook_data
+                    orderbook_data,
                 )
 
     async def handle_ticker_update(self, ticker_data: list[dict]):
@@ -1743,7 +1796,8 @@ class WebSocketManager:
         try:
             return {
                 "entry_time": datetime.fromtimestamp(
-                    int(ws_pos.get("createdTime", 0)) / 1000, tz=TIMEZONE
+                    int(ws_pos.get("createdTime", 0)) / 1000,
+                    tz=TIMEZONE,
                 ),
                 "symbol": symbol,
                 "side": "BUY" if ws_pos.get("side") == "Buy" else "SELL",
@@ -1762,7 +1816,7 @@ class WebSocketManager:
             }
         except (ValueError, KeyError) as e:
             self.logger.error(
-                f"Error converting WS position data for {symbol}: {e}\n{traceback.format_exc()}"
+                f"Error converting WS position data for {symbol}: {e}\n{traceback.format_exc()}",
             )
             return None
 
@@ -1807,20 +1861,20 @@ class PositionManager:
         self.price_precision = config["trade_management"]["price_precision"]
         self.qty_step = None
         self.slippage_percent = Decimal(
-            str(config["trade_management"].get("slippage_percent", 0.0))
+            str(config["trade_management"].get("slippage_percent", 0.0)),
         )
         self.stop_loss_atr_multiple = Decimal(
-            str(config["trade_management"]["stop_loss_atr_multiple"])
+            str(config["trade_management"]["stop_loss_atr_multiple"]),
         )
         self.take_profit_atr_multiple = Decimal(
-            str(config["trade_management"]["take_profit_atr_multiple"])
+            str(config["trade_management"]["take_profit_atr_multiple"]),
         )
         self.trailing_stop_atr_multiple = Decimal(
-            str(config["trade_management"].get("trailing_stop_atr_multiple", 0.5))
+            str(config["trade_management"].get("trailing_stop_atr_multiple", 0.5)),
         )
         self.trade_management_enabled = bool(config["trade_management"]["enabled"])
         self.current_account_balance = Decimal(
-            str(config["trade_management"]["account_balance"])
+            str(config["trade_management"]["account_balance"]),
         )
 
     async def _update_precision_from_exchange(self):
@@ -1850,7 +1904,10 @@ class PositionManager:
         return Decimal(str(self.config["trade_management"]["account_balance"]))
 
     def _calculate_order_size(
-        self, current_price: Decimal, atr_value: Decimal, conviction: float = 1.0
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
+        conviction: float = 1.0,
     ) -> Decimal:
         if not self.trade_management_enabled:
             return Decimal("0")
@@ -1860,7 +1917,7 @@ class PositionManager:
             / 100
         )
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         risk_multiplier = Decimal(str(np.clip(0.5 + conviction, 0.5, 1.5)))
         risk_amount = account_balance * risk_per_trade_percent * risk_multiplier
@@ -1873,7 +1930,10 @@ class PositionManager:
         return order_qty.quantize(Decimal("1e-6"), rounding=ROUND_DOWN)
 
     def _compute_stop_loss_price(
-        self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
+        self,
+        side: Literal["BUY", "SELL"],
+        entry_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         sl_cfg = self.config["execution"]["sl_scheme"]
         sl = Decimal("0")
@@ -1893,7 +1953,10 @@ class PositionManager:
         return round_price(sl, self.price_precision)
 
     def _calculate_take_profit_price(
-        self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
+        self,
+        side: Literal["BUY", "SELL"],
+        entry_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         tp = (
             (entry_price + atr_value * self.take_profit_atr_multiple)
@@ -1910,7 +1973,7 @@ class PositionManager:
         if local_pos:
             self.open_positions[self.symbol] = Position(**local_pos)
             self.logger.debug(
-                f"Position updated from WS: {self.open_positions[self.symbol]}"
+                f"Position updated from WS: {self.open_positions[self.symbol]}",
             )
 
     async def open_position(
@@ -1925,12 +1988,12 @@ class PositionManager:
             and self.open_positions[self.symbol].status == "OPEN"
         ):
             self.logger.info(
-                f"[{self.symbol}] Position management disabled or already open. Skipping."
+                f"[{self.symbol}] Position management disabled or already open. Skipping.",
             )
             return None
         if len(self.get_open_positions()) >= self.max_open_positions:
             self.logger.warning(
-                f"Max open positions ({self.max_open_positions}) reached."
+                f"Max open positions ({self.max_open_positions}) reached.",
             )
             return None
         order_qty = self._calculate_order_size(current_price, atr_value, conviction)
@@ -1938,7 +2001,9 @@ class PositionManager:
             return None
         stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
         take_profit = self._calculate_take_profit_price(
-            signal, current_price, atr_value
+            signal,
+            current_price,
+            atr_value,
         )
 
         position = Position(
@@ -1967,7 +2032,7 @@ class PositionManager:
             )
             if not self.pybit._ok(resp):
                 self.logger.error(
-                    f"Live entry failed. Simulating only. Response: {resp}"
+                    f"Live entry failed. Simulating only. Response: {resp}",
                 )
                 return None
             self.logger.info(f"Live entry submitted: {entry_link_id}")
@@ -1996,11 +2061,11 @@ class PositionManager:
             if order_response and self.pybit._ok(order_response):
                 position.status = "PENDING_CLOSE"
                 self.logger.info(
-                    f"[{self.symbol}] Placed order to close {position.side} {position.qty.normalize()}."
+                    f"[{self.symbol}] Placed order to close {position.side} {position.qty.normalize()}.",
                 )
                 return True
             self.logger.error(
-                f"[{self.symbol}] Failed to place market order to close position. Response: {order_response}"
+                f"[{self.symbol}] Failed to place market order to close position. Response: {order_response}",
             )
             return False
         return True
@@ -2050,7 +2115,7 @@ class PositionManager:
                 )
                 self.performance_tracker.record_trade(pos, pnl)
                 self.logger.info(
-                    f"[{self.symbol}] Closed simulated {pos.side} position by {closed_by}. PnL: {pnl:.2f}"
+                    f"[{self.symbol}] Closed simulated {pos.side} position by {closed_by}. PnL: {pnl:.2f}",
                 )
                 symbols_to_remove.append(symbol)
 
@@ -2058,7 +2123,10 @@ class PositionManager:
             del self.open_positions[symbol]
 
     async def trail_stop(
-        self, pos: Position, current_price: Decimal, atr_value: Decimal
+        self,
+        pos: Position,
+        current_price: Decimal,
+        atr_value: Decimal,
     ):
         if pos.status != "OPEN":
             return
@@ -2086,12 +2154,13 @@ class PositionManager:
 
         if abs(new_sl_price - pos.stop_loss) > Decimal("0.001"):
             self.logger.info(
-                f"Updating trailing stop for {self.symbol} from {pos.stop_loss:.5f} to {new_sl_price:.5f}"
+                f"Updating trailing stop for {self.symbol} from {pos.stop_loss:.5f} to {new_sl_price:.5f}",
             )
             pos.stop_loss = new_sl_price
             if self.live and self.pybit and self.pybit.enabled:
                 await self.pybit.set_trading_stop(
-                    symbol=self.symbol, stop_loss=self.pybit._q(new_sl_price)
+                    symbol=self.symbol,
+                    stop_loss=self.pybit._q(new_sl_price),
                 )
 
     async def try_pyramid(self, current_price: Decimal, atr_value: Decimal):
@@ -2124,7 +2193,7 @@ class PositionManager:
                     continue
 
                 self.logger.info(
-                    f"Pyramiding add #{pos.adds + 1} for {self.symbol}. Adding {add_qty.normalize()} at {current_price.normalize()}"
+                    f"Pyramiding add #{pos.adds + 1} for {self.symbol}. Adding {add_qty.normalize()} at {current_price.normalize()}",
                 )
 
                 new_total_cost = (pos.qty * pos.entry_price) + (add_qty * current_price)
@@ -2160,7 +2229,7 @@ class PerformanceTracker:
         self.peak_pnl = Decimal("0")
         self.max_drawdown = Decimal("0")
         self.trading_fee_percent = Decimal(
-            str(config["trade_management"].get("trading_fee_percent", 0.0))
+            str(config["trade_management"].get("trading_fee_percent", 0.0)),
         )
         self._daily_pnl = Decimal("0")
         self._last_day_reset = datetime.now(TIMEZONE).date()
@@ -2216,7 +2285,7 @@ class PerformanceTracker:
             self.consecutive_losses += 1
         self.logger.info(
             f"{NEON_CYAN}[{position.symbol}] Trade recorded. Gross PnL: {pnl.normalize():.4f}, Fees: {total_fees.normalize():.4f}, Net PnL: {pnl_net.normalize():.4f}. "
-            f"Total PnL: {self.total_pnl.normalize():.4f}, Daily PnL: {self._daily_pnl.normalize():.4f}{RESET}"
+            f"Total PnL: {self.total_pnl.normalize():.4f}, Daily PnL: {self._daily_pnl.normalize():.4f}{RESET}",
         )
 
     def get_summary(self) -> dict:
@@ -2249,7 +2318,11 @@ class PerformanceTracker:
 # --- Trading Analyzer ---
 class TradingAnalyzer:
     def __init__(
-        self, df: pd.DataFrame, config: dict, logger: logging.Logger, symbol: str
+        self,
+        df: pd.DataFrame,
+        config: dict,
+        logger: logging.Logger,
+        symbol: str,
     ):
         self.df = df.copy()
         self.config, self.logger, self.symbol = config, logger, symbol
@@ -2271,11 +2344,16 @@ class TradingAnalyzer:
             self.calculate_fibonacci_pivot_points()
 
     def _safe_calculate(
-        self, func: Callable, name: str, min_data_points: int = 0, *args, **kwargs
+        self,
+        func: Callable,
+        name: str,
+        min_data_points: int = 0,
+        *args,
+        **kwargs,
     ) -> Any | None:
         if len(self.df) < min_data_points:
             self.logger.debug(
-                f"[{self.symbol}] Skipping indicator '{name}': Not enough data (need {min_data_points}, have {len(self.df)})."
+                f"[{self.symbol}] Skipping indicator '{name}': Not enough data (need {min_data_points}, have {len(self.df)}).",
             )
             return None
         try:
@@ -2285,7 +2363,7 @@ class TradingAnalyzer:
             return result
         except Exception as e:
             self.logger.error(
-                f"[{self.symbol}] Error calculating indicator '{name}': {e}\n{traceback.format_exc()}"
+                f"[{self.symbol}] Error calculating indicator '{name}': {e}\n{traceback.format_exc()}",
             )
             return None
 
@@ -2298,7 +2376,10 @@ class TradingAnalyzer:
         # Your original indicator calculation logic here... (truncated for brevity)
         if cfg["indicators"].get("atr", False):
             self.df["ATR"] = ta.atr(
-                self.df.high, self.df.low, self.df.close, length=isd["atr_period"]
+                self.df.high,
+                self.df.low,
+                self.df.close,
+                length=isd["atr_period"],
             )
             if not self.df["ATR"].empty and not pd.isna(self.df["ATR"].iloc[-1]):
                 self.indicator_values["ATR"] = Decimal(str(self.df["ATR"].iloc[-1]))
@@ -2312,7 +2393,8 @@ class TradingAnalyzer:
             price_precision = self.config["trade_management"]["price_precision"]
             self.fib_levels = {
                 k: Decimal(str(v)).quantize(
-                    Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN
+                    Decimal(f"1e-{price_precision}"),
+                    rounding=ROUND_DOWN,
                 )
                 for k, v in fib_levels.items()
             }
@@ -2324,18 +2406,20 @@ class TradingAnalyzer:
             for key, value in pivot_data.items():
                 try:
                     self.indicator_values[key.upper()] = Decimal(str(value)).quantize(
-                        Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN
+                        Decimal(f"1e-{price_precision}"),
+                        rounding=ROUND_DOWN,
                     )
                 except InvalidOperation:
                     self.logger.warning(
-                        f"[{self.symbol}] Could not convert pivot point value '{value}' to Decimal. Skipping."
+                        f"[{self.symbol}] Could not convert pivot point value '{value}' to Decimal. Skipping.",
                     )
 
     def _get_indicator_value(self, key: str, default: Any = np.nan) -> Any:
         return self.indicator_values.get(key, default)
 
     async def _check_orderbook(
-        self, orderbook_manager: AdvancedOrderbookManager
+        self,
+        orderbook_manager: AdvancedOrderbookManager,
     ) -> float:
         best_bid, best_ask = await orderbook_manager.get_best_bid_ask()
         if best_bid is None or best_ask is None:
@@ -2366,7 +2450,7 @@ class TradingAnalyzer:
             return "HOLD", 0.0, {}
         current_close = Decimal(str(self.df["close"].iloc[-1]))
         prev_close = Decimal(
-            str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close
+            str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close,
         )
 
         # Market Regime & Dynamic Weights
@@ -2386,10 +2470,13 @@ class TradingAnalyzer:
                 kline_key = f"{self.symbol}_{htf_interval}"
                 if kline_key not in pybit_client.kline_data_managers:
                     pybit_client.kline_data_managers[kline_key] = KlineDataManager(
-                        self.symbol, htf_interval, 1000, self.logger
+                        self.symbol,
+                        htf_interval,
+                        1000,
+                        self.logger,
                     )
                     await pybit_client.kline_data_managers[kline_key].initialize(
-                        pybit_client
+                        pybit_client,
                     )
                 higher_tf_df = await pybit_client.kline_data_managers[
                     kline_key
@@ -2404,7 +2491,7 @@ class TradingAnalyzer:
                         f"{htf_interval}_{self.config['mtf_analysis']['trend_indicators'][0]}"
                     ] = trend
                 await asyncio.sleep(
-                    self.config["mtf_analysis"]["mtf_request_delay_seconds"]
+                    self.config["mtf_analysis"]["mtf_request_delay_seconds"],
                 )
 
         # Final Signal Determination
@@ -2415,7 +2502,7 @@ class TradingAnalyzer:
         elif signal_score <= -threshold:
             final_signal = "SELL"
         self.logger.info(
-            f"[{self.symbol}] Generated Signal: {final_signal} (Score: {signal_score:.2f}, Threshold: {threshold:.2f})"
+            f"[{self.symbol}] Generated Signal: {final_signal} (Score: {signal_score:.2f}, Threshold: {threshold:.2f})",
         )
         return final_signal, signal_score, signal_breakdown
 
@@ -2424,7 +2511,7 @@ class TradingAnalyzer:
 def check_manual_pause() -> bool:
     if Path(PAUSE_FILE).exists():
         global_logger.warning(
-            f"{NEON_YELLOW}Manual pause file '{PAUSE_FILE}' detected. Trading halted.{RESET}"
+            f"{NEON_YELLOW}Manual pause file '{PAUSE_FILE}' detected. Trading halted.{RESET}",
         )
         return True
     return False
@@ -2474,7 +2561,7 @@ async def main() -> None:
     pybit_client = PybitTradingClient(config, logger)
     if not pybit_client.enabled:
         logger.error(
-            f"{NEON_RED}Pybit client is not enabled or failed to initialize. Cannot proceed with live trading. Exiting.{RESET}"
+            f"{NEON_RED}Pybit client is not enabled or failed to initialize. Cannot proceed with live trading. Exiting.{RESET}",
         )
         return
 
@@ -2519,22 +2606,22 @@ async def main() -> None:
                 >= config["risk_guardrails"]["consecutive_losses_limit"]
             ):
                 logger.critical(
-                    f"{NEON_RED}Trading halted by risk-management or manual pause. Cooling down.{RESET}"
+                    f"{NEON_RED}Trading halted by risk-management or manual pause. Cooling down.{RESET}",
                 )
                 alert_system.send_alert("Trading halted.", "ERROR")
                 await asyncio.sleep(
-                    config["risk_guardrails"]["cooldown_after_kill_min"] * 60
+                    config["risk_guardrails"]["cooldown_after_kill_min"] * 60,
                 )
                 continue
             if not in_allowed_session(config):
                 logger.info(
-                    f"{NEON_BLUE}Outside allowed trading sessions. Holding.{RESET}"
+                    f"{NEON_BLUE}Outside allowed trading sessions. Holding.{RESET}",
                 )
                 await asyncio.sleep(config["loop_delay"])
                 continue
 
             logger.info(
-                f"{NEON_PURPLE}--- New Analysis Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S %Z')}) ---{RESET}"
+                f"{NEON_PURPLE}--- New Analysis Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S %Z')}) ---{RESET}",
             )
 
             df = await pybit_client.kline_data_managers[
@@ -2542,7 +2629,7 @@ async def main() -> None:
             ].get_df()
             if df.empty:
                 logger.warning(
-                    f"[{config['symbol']}] Kline Data Manager DataFrame is empty. Waiting for data."
+                    f"[{config['symbol']}] Kline Data Manager DataFrame is empty. Waiting for data.",
                 )
                 await asyncio.sleep(config["loop_delay"])
                 continue
@@ -2553,14 +2640,14 @@ async def main() -> None:
             analyzer.update_data(df)
             current_price = Decimal(str(df["close"].iloc[-1]))
             atr_value = Decimal(
-                str(analyzer._get_indicator_value("ATR", Decimal("0.01")))
+                str(analyzer._get_indicator_value("ATR", Decimal("0.01"))),
             )
 
             ob_data = await pybit_client.orderbook_data_manager.get_depth(
-                config["orderbook_limit"]
+                config["orderbook_limit"],
             )
             if ob_data and get_spread_bps_from_levels(
-                {"bids": ob_data[0], "asks": ob_data[1]}
+                {"bids": ob_data[0], "asks": ob_data[1]},
             ) > float(config["risk_guardrails"]["spread_filter_bps"]):
                 logger.warning("Spread too high. Holding.")
                 await asyncio.sleep(config["loop_delay"])
@@ -2605,10 +2692,13 @@ async def main() -> None:
                 )
                 if abs(signal_score) >= config["signal_score_threshold"]:
                     logger.info(
-                        f"Strong {trading_signal} signal detected! Score: {signal_score:.2f}"
+                        f"Strong {trading_signal} signal detected! Score: {signal_score:.2f}",
                     )
                     await position_manager.open_position(
-                        trading_signal, current_price, atr_value, conviction
+                        trading_signal,
+                        current_price,
+                        atr_value,
+                        conviction,
                     )
 
             if exec_sync:
@@ -2624,7 +2714,8 @@ async def main() -> None:
             break
         except Exception as e:
             alert_system.send_alert(
-                f"[{config['symbol']}] Unhandled error in main loop: {e}", "ERROR"
+                f"[{config['symbol']}] Unhandled error in main loop: {e}",
+                "ERROR",
             )
             logger.exception(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
             await asyncio.sleep(config["loop_delay"] * 2)
@@ -2638,7 +2729,7 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         global_logger.info(
-            f"{NEON_YELLOW}Bot stopped by user (KeyboardInterrupt). Shutting down...{RESET}"
+            f"{NEON_YELLOW}Bot stopped by user (KeyboardInterrupt). Shutting down...{RESET}",
         )
     except Exception as e:
         global_logger.critical(

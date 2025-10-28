@@ -43,16 +43,16 @@ class PrecisionManager:
                 "min_qty": Decimal(lot_size_filter["minOrderQty"]),
                 "max_qty": Decimal(lot_size_filter["maxOrderQty"]),
                 "min_notional": Decimal(
-                    lot_size_filter.get("minNotionalValue", "0")
+                    lot_size_filter.get("minNotionalValue", "0"),
                 ),  # Some categories might not have this
             }
             self.logger.info(
-                f"{NEON_GREEN}Instrument specs loaded for {symbol}: Price tick={self.instruments_info[symbol]['price_precision_decimal']}, Qty step={self.instruments_info[symbol]['qty_precision_decimal']}{RESET}"
+                f"{NEON_GREEN}Instrument specs loaded for {symbol}: Price tick={self.instruments_info[symbol]['price_precision_decimal']}, Qty step={self.instruments_info[symbol]['qty_precision_decimal']}{RESET}",
             )
             self.initialized = True
         else:
             self.logger.error(
-                f"{NEON_RED}Failed to load instrument specs for {symbol}. Trading might be inaccurate.{RESET}"
+                f"{NEON_RED}Failed to load instrument specs for {symbol}. Trading might be inaccurate.{RESET}",
             )
 
     def _get_specs(self, symbol: str) -> dict | None:
@@ -60,7 +60,7 @@ class PrecisionManager:
         specs = self.instruments_info.get(symbol)
         if not specs and self.initialized:  # Avoid spamming if not initialized yet
             self.logger.warning(
-                f"{NEON_YELLOW}Instrument specs not found for {symbol}. Using generic Decimal precision.{RESET}"
+                f"{NEON_YELLOW}Instrument specs not found for {symbol}. Using generic Decimal precision.{RESET}",
             )
             return None
         return specs
@@ -70,7 +70,8 @@ class PrecisionManager:
         specs = self._get_specs(symbol)
         if specs:
             return price.quantize(
-                specs["price_precision_decimal"], rounding=ROUND_HALF_EVEN
+                specs["price_precision_decimal"],
+                rounding=ROUND_HALF_EVEN,
             )
         return price.quantize(Decimal("0.00001"), rounding=ROUND_HALF_EVEN)  # Default
 

@@ -68,11 +68,11 @@ class KlineDataFetcher:
                 df = df.dropna(subset=["close"])
 
                 self.logger.debug(
-                    f"Fetched {len(df)} klines for {symbol} (Interval: {interval}, History: {history_window_minutes}min)."
+                    f"Fetched {len(df)} klines for {symbol} (Interval: {interval}, History: {history_window_minutes}min).",
                 )
                 return df
             self.logger.error(
-                f"Failed to fetch klines for {symbol}: {response['retMsg']}"
+                f"Failed to fetch klines for {symbol}: {response['retMsg']}",
             )
             return pd.DataFrame()
         except Exception as e:

@@ -32,18 +32,21 @@ class PnLManager:
         self.available_balance_usd: Decimal = Decimal("0")
 
         self.total_realized_pnl_usd: Decimal = Decimal(
-            "0"
+            "0",
         )  # Updated from TradeMetricsTracker
         self.total_unrealized_pnl_usd: Decimal = Decimal("0")
         self.total_fees_paid_usd: Decimal = Decimal(
-            "0"
+            "0",
         )  # Sum of fees from execution stream
 
         self.current_positions: dict[str, dict] = {}  # {symbol: {position_data}}
         self._lock = asyncio.Lock()  # For async updates
 
     async def initialize_balance(
-        self, category: str = "linear", retry_delay: float = 5.0, max_retries: int = 3
+        self,
+        category: str = "linear",
+        retry_delay: float = 5.0,
+        max_retries: int = 3,
     ) -> float:
         """Initializes account balance and sets initial_balance_usd."""
         async with self._lock:
@@ -53,7 +56,7 @@ class PnLManager:
             for attempt in range(max_retries):
                 try:
                     response = self.http_session.get_wallet_balance(
-                        accountType=account_type
+                        accountType=account_type,
                     )
 
                     if response["retCode"] == 0:
@@ -65,38 +68,39 @@ class PnLManager:
                                 coin["coin"] == "USDT"
                             ):  # Assuming USDT as base quote currency
                                 self.current_balance_usd = Decimal(
-                                    coin["walletBalance"]
+                                    coin["walletBalance"],
                                 )
                                 self.available_balance_usd = Decimal(
                                     coin.get(
-                                        "availableToWithdraw", coin["walletBalance"]
-                                    )
+                                        "availableToWithdraw",
+                                        coin["walletBalance"],
+                                    ),
                                 )  # Use availableToWithdraw if present
 
                                 if self.initial_balance_usd == Decimal(
-                                    "0"
+                                    "0",
                                 ):  # Set initial balance only once
                                     self.initial_balance_usd = self.current_balance_usd
                                 self.logger.info(
-                                    f"Balance initialized: Current={self.current_balance_usd:.2f} USDT, Available={self.available_balance_usd:.2f} USDT"
+                                    f"Balance initialized: Current={self.current_balance_usd:.2f} USDT, Available={self.available_balance_usd:.2f} USDT",
                                 )
                                 return float(self.current_balance_usd)
                         self.logger.warning(
-                            f"USDT balance not found in wallet balance response for {account_type}. Attempt {attempt + 1}/{max_retries}."
+                            f"USDT balance not found in wallet balance response for {account_type}. Attempt {attempt + 1}/{max_retries}.",
                         )
                         await asyncio.sleep(retry_delay)  # USDT not found, retry
                     else:
                         self.logger.error(
-                            f"Failed to get wallet balance (attempt {attempt + 1}/{max_retries}): {response['retMsg']}. Retrying..."
+                            f"Failed to get wallet balance (attempt {attempt + 1}/{max_retries}): {response['retMsg']}. Retrying...",
                         )
                         await asyncio.sleep(retry_delay)
                 except Exception as e:
                     self.logger.error(
-                        f"Exception initializing balance (attempt {attempt + 1}/{max_retries}): {e}. Retrying..."
+                        f"Exception initializing balance (attempt {attempt + 1}/{max_retries}): {e}. Retrying...",
                     )
                     await asyncio.sleep(retry_delay)
             self.logger.critical(
-                "Failed to initialize balance after multiple retries. Bot might not function correctly."
+                "Failed to initialize balance after multiple retries. Bot might not function correctly.",
             )
             return 0.0
 
@@ -124,10 +128,10 @@ class PnLManager:
                     ):
                         self.current_balance_usd = Decimal(entry["walletBalance"])
                         self.available_balance_usd = Decimal(
-                            entry.get("availableToWithdraw", entry["walletBalance"])
+                            entry.get("availableToWithdraw", entry["walletBalance"]),
                         )
                         self.logger.debug(
-                            f"WS Wallet update: {self.current_balance_usd:.2f} USDT (Available: {self.available_balance_usd:.2f})"
+                            f"WS Wallet update: {self.current_balance_usd:.2f} USDT (Available: {self.available_balance_usd:.2f})",
                         )
                         break
             elif topic == "position":
@@ -143,12 +147,12 @@ class PnLManager:
                                 "mark_price": Decimal(pos_entry["markPrice"]),
                                 "unrealized_pnl": Decimal(pos_entry["unrealisedPnl"]),
                                 "realized_pnl_cum": Decimal(
-                                    pos_entry.get("cumRealisedPnl", "0")
+                                    pos_entry.get("cumRealisedPnl", "0"),
                                 ),  # Cumulative realized
                                 "value_usd": size
                                 * Decimal(pos_entry["markPrice"])
                                 * self.precision.get_specs(
-                                    symbol
+                                    symbol,
                                 ).contract_value,  # Notional value for inverse
                                 "margin_usd": Decimal(pos_entry["positionIM"]),
                                 "leverage": Decimal(pos_entry["leverage"]),
@@ -166,7 +170,7 @@ class PnLManager:
                     if exec_fee > Decimal("0"):
                         self.total_fees_paid_usd += exec_fee
                         self.logger.debug(
-                            f"WS Execution fee: {exec_fee:.6f} for {exec_entry.get('orderId')}. Total fees: {self.total_fees_paid_usd:.6f}"
+                            f"WS Execution fee: {exec_fee:.6f} for {exec_entry.get('orderId')}. Total fees: {self.total_fees_paid_usd:.6f}",
                         )
 
     async def update_all_positions_pnl(self, current_prices: dict[str, float]):
@@ -175,10 +179,10 @@ class PnLManager:
         """
         async with self._lock:
             self.total_unrealized_pnl_usd = self.metrics.update_unrealized_pnl(
-                current_prices
+                current_prices,
             )
             self.logger.debug(
-                f"Total Unrealized PnL: {self.total_unrealized_pnl_usd:.2f} USDT"
+                f"Total Unrealized PnL: {self.total_unrealized_pnl_usd:.2f} USDT",
             )
 
     async def get_total_account_pnl_summary(self) -> dict:
@@ -207,24 +211,25 @@ class PnLManager:
                 "total_realized_pnl_usd": float(self.total_realized_pnl_usd),
                 "total_unrealized_pnl_usd": float(self.total_unrealized_pnl_usd),
                 "overall_total_pnl_usd": float(
-                    self.total_realized_pnl_usd + self.total_unrealized_pnl_usd
+                    self.total_realized_pnl_usd + self.total_unrealized_pnl_usd,
                 ),
                 "overall_return_usd": float(
-                    overall_return_usd
+                    overall_return_usd,
                 ),  # This is current_wallet_balance - initial_balance
                 "overall_return_percentage": float(return_percentage),
                 "total_fees_paid_usd": float(self.total_fees_paid_usd),
                 "num_open_positions": len(self.current_positions),
                 "total_position_value_usd": float(
-                    sum(p["value_usd"] for p in self.current_positions.values())
+                    sum(p["value_usd"] for p in self.current_positions.values()),
                 ),
                 "total_margin_in_use_usd": float(
-                    sum(p["margin_usd"] for p in self.current_positions.values())
+                    sum(p["margin_usd"] for p in self.current_positions.values()),
                 ),
             }
 
     async def get_position_summary(
-        self, symbol: str | None = None
+        self,
+        symbol: str | None = None,
     ) -> list[dict] | dict | None:
         """Gets a summary of all or a specific open position(s)."""
         async with self._lock:
@@ -240,7 +245,7 @@ class PnLManager:
                     # Calculate Distance to Liquidation (if applicable)
                     distance_to_liq_pct = Decimal("0")
                     if pos["liq_price"] > Decimal("0") and pos["mark_price"] > Decimal(
-                        "0"
+                        "0",
                     ):
                         distance_to_liq_pct = (
                             abs(pos["mark_price"] - pos["liq_price"])
@@ -294,7 +299,7 @@ class PnLManager:
                         "liq_price": float(p["liq_price"]),
                         "distance_to_liq_pct": float(distance_to_liq_pct),
                         "updated_at": p["updated_at"].isoformat(),
-                    }
+                    },
                 )
             return summaries
             return None  # No position found

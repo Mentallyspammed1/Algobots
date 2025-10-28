@@ -51,10 +51,13 @@ class BybitTradingBot:
             logger=self.logger,
         )
         self.position_manager = PositionManager(
-            self.config.get_config(), self.logger, self.bybit_client
+            self.config.get_config(),
+            self.logger,
+            self.bybit_client,
         )
         self.performance_tracker = PerformanceTracker(
-            self.logger, self.config.get_config()
+            self.logger,
+            self.config.get_config(),
         )
         self.indicator_calculator = IndicatorCalculator(self.logger)
         self.analyzer = TradingAnalyzer(
@@ -64,10 +67,13 @@ class BybitTradingBot:
             self.indicator_calculator,
         )
         self.kline_data_fetcher = KlineDataFetcher(
-            self.bybit_client, self.logger, self.config.get_config()
+            self.bybit_client,
+            self.logger,
+            self.config.get_config(),
         )
         self.kline_cache = InMemoryCache(
-            ttl_seconds=self.config.loop_delay * 0.8, max_size=5
+            ttl_seconds=self.config.loop_delay * 0.8,
+            max_size=5,
         )
 
         self.is_running = True
@@ -76,16 +82,16 @@ class BybitTradingBot:
         """Starts the trading bot."""
         self.logger.info(f"{NEON_GREEN}--- Whalebot Trading Bot Initialized ---{RESET}")
         self.logger.info(
-            f"Symbol: {self.config.symbol}, Interval: {self.config.interval}"
+            f"Symbol: {self.config.symbol}, Interval: {self.config.interval}",
         )
         self.logger.info(
-            f"Trade Management Enabled: {self.config.trade_management['enabled']}"
+            f"Trade Management Enabled: {self.config.trade_management['enabled']}",
         )
 
         # --- DEBUGGING: Print loaded higher timeframes ---
         loaded_higher_timeframes = self.config.mtf_analysis.get("higher_timeframes", [])
         self.logger.debug(
-            f"Loaded higher_timeframes from config: {loaded_higher_timeframes}"
+            f"Loaded higher_timeframes from config: {loaded_higher_timeframes}",
         )
         # --- END DEBUGGING ---
 
@@ -107,13 +113,13 @@ class BybitTradingBot:
         ]
         if self.config.interval not in valid_bybit_intervals:
             self.logger.error(
-                f"{NEON_RED}Invalid primary interval '{self.config.interval}'. Exiting.{RESET}"
+                f"{NEON_RED}Invalid primary interval '{self.config.interval}'. Exiting.{RESET}",
             )
             sys.exit(1)
         for htf_interval in self.config.mtf_analysis["higher_timeframes"]:
             if htf_interval not in valid_bybit_intervals:
                 self.logger.error(
-                    f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}'. Exiting.{RESET}"
+                    f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}'. Exiting.{RESET}",
                 )
                 sys.exit(1)
 
@@ -129,7 +135,7 @@ class BybitTradingBot:
                 await self._trading_loop()
         except KeyboardInterrupt:
             self.logger.info(
-                f"{NEON_YELLOW}Bot stopping due to KeyboardInterrupt.{RESET}"
+                f"{NEON_YELLOW}Bot stopping due to KeyboardInterrupt.{RESET}",
             )
         except Exception as e:
             self.alert_system.send_alert(
@@ -137,19 +143,19 @@ class BybitTradingBot:
                 "ERROR",
             )
             self.logger.exception(
-                f"{NEON_RED}[{self.config.symbol}] Unhandled exception in main loop:{RESET}"
+                f"{NEON_RED}[{self.config.symbol}] Unhandled exception in main loop:{RESET}",
             )
             await asyncio.sleep(self.config.loop_delay * 2)
         finally:
             await self.bybit_client.stop_ws()
             self.logger.info(
-                f"{NEON_GREEN}--- Whalebot Trading Bot Shut Down ---{RESET}"
+                f"{NEON_GREEN}--- Whalebot Trading Bot Shut Down ---{RESET}",
             )
 
     async def _trading_loop(self):
         """The main trading loop logic."""
         self.logger.info(
-            f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+            f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}",
         )
 
         current_price = await self.bybit_client.fetch_current_price()
@@ -203,7 +209,8 @@ class BybitTradingBot:
         sentiment_score: float | None = None
         if self.config.ml_enhancement.get("sentiment_analysis_enabled", False):
             sentiment_score = await fetch_latest_sentiment(
-                self.config.symbol, self.logger
+                self.config.symbol,
+                self.logger,
             )
 
         if self.config.adaptive_strategy_enabled:
@@ -235,7 +242,7 @@ class BybitTradingBot:
                     vol_min_dec = Decimal(str(vol_min))
                     vol_max_dec = Decimal(str(vol_max))
                     market_vol_dec = Decimal(
-                        str(market_conditions["volatility_index_value"])
+                        str(market_conditions["volatility_index_value"]),
                     )
                     if not (vol_min_dec <= market_vol_dec <= vol_max_dec):
                         vol_match = False
@@ -249,10 +256,10 @@ class BybitTradingBot:
 
             if suggested_strategy != self.config.current_strategy_profile:
                 self.logger.info(
-                    f"{NEON_YELLOW}[{self.config.symbol}] Market conditions suggest switching strategy from '{self.config.current_strategy_profile}' to '{suggested_strategy}'. Reloading config.{RESET}"
+                    f"{NEON_YELLOW}[{self.config.symbol}] Market conditions suggest switching strategy from '{self.config.current_strategy_profile}' to '{suggested_strategy}'. Reloading config.{RESET}",
                 )
                 self.config.set_active_strategy_profile(
-                    suggested_strategy
+                    suggested_strategy,
                 )  # Update config object
                 self.analyzer.config = (
                     self.config.get_config()
@@ -262,12 +269,12 @@ class BybitTradingBot:
                 )  # Update analyzer's weights
 
         atr_value = Decimal(
-            str(self.analyzer._get_indicator_value("ATR", Decimal("0.0001")))
+            str(self.analyzer._get_indicator_value("ATR", Decimal("0.0001"))),
         )
         if atr_value <= 0:
             atr_value = Decimal("0.0001")
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.config.symbol}] ATR value was zero or negative, defaulting to {atr_value}.{RESET}"
+                f"{NEON_YELLOW}[{self.config.symbol}] ATR value was zero or negative, defaulting to {atr_value}.{RESET}",
             )
 
         (
@@ -282,7 +289,9 @@ class BybitTradingBot:
         )
 
         await self.position_manager.manage_positions(
-            current_price, self.performance_tracker, atr_value
+            current_price,
+            self.performance_tracker,
+            atr_value,
         )
 
         await display_indicator_values_and_price(
@@ -309,12 +318,12 @@ class BybitTradingBot:
 
         if trading_signal == "BUY" and signal_score >= signal_threshold:
             self.logger.info(
-                f"{NEON_GREEN}[{self.config.symbol}] Strong BUY signal detected! Score: {signal_score:.2f}{RESET}"
+                f"{NEON_GREEN}[{self.config.symbol}] Strong BUY signal detected! Score: {signal_score:.2f}{RESET}",
             )
             if has_sell_position:
                 if self.config.trade_management["close_on_opposite_signal"]:
                     self.logger.warning(
-                        f"{NEON_YELLOW}[{self.config.symbol}] Detected strong BUY signal while a SELL position is open. Attempting to close SELL position.{RESET}"
+                        f"{NEON_YELLOW}[{self.config.symbol}] Detected strong BUY signal while a SELL position is open. Attempting to close SELL position.{RESET}",
                     )
                     sell_pos = next(
                         p
@@ -331,32 +340,36 @@ class BybitTradingBot:
                         "reverse_position_on_opposite_signal"
                     ]:
                         self.logger.info(
-                            f"{NEON_GREEN}[{self.config.symbol}] Reversing position: Opening new BUY position after closing SELL.{RESET}"
+                            f"{NEON_GREEN}[{self.config.symbol}] Reversing position: Opening new BUY position after closing SELL.{RESET}",
                         )
                         await self.position_manager.open_position(
-                            "Buy", current_price, atr_value
+                            "Buy",
+                            current_price,
+                            atr_value,
                         )
                 else:
                     self.logger.info(
-                        f"{NEON_YELLOW}[{self.config.symbol}] Close on opposite signal is disabled. Holding SELL position.{RESET}"
+                        f"{NEON_YELLOW}[{self.config.symbol}] Close on opposite signal is disabled. Holding SELL position.{RESET}",
                     )
             elif not has_buy_position:
                 await self.position_manager.open_position(
-                    "Buy", current_price, atr_value
+                    "Buy",
+                    current_price,
+                    atr_value,
                 )
             else:
                 self.logger.info(
-                    f"{NEON_YELLOW}[{self.config.symbol}] Already have a BUY position. Not opening another.{RESET}"
+                    f"{NEON_YELLOW}[{self.config.symbol}] Already have a BUY position. Not opening another.{RESET}",
                 )
 
         elif trading_signal == "SELL" and signal_score <= -signal_threshold:
             selfP.logger.info(
-                f"{NEON_RED}[{self.config.symbol}] Strong SELL signal detected! Score: {signal_score:.2f}{RESET}"
+                f"{NEON_RED}[{self.config.symbol}] Strong SELL signal detected! Score: {signal_score:.2f}{RESET}",
             )
             if has_buy_position:
                 if self.config.trade_management["close_on_opposite_signal"]:
                     self.logger.warning(
-                        f"{NEON_YELLOW}[{self.config.symbol}] Detected strong SELL signal while a BUY position is open. Attempting to close BUY position.{RESET}"
+                        f"{NEON_YELLOW}[{self.config.symbol}] Detected strong SELL signal while a BUY position is open. Attempting to close BUY position.{RESET}",
                     )
                     buy_pos = next(
                         p
@@ -373,49 +386,53 @@ class BybitTradingBot:
                         "reverse_position_on_opposite_signal"
                     ]:
                         self.logger.info(
-                            f"{NEON_RED}[{self.config.symbol}] Reversing position: Opening new SELL position after closing BUY.{RESET}"
+                            f"{NEON_RED}[{self.config.symbol}] Reversing position: Opening new SELL position after closing BUY.{RESET}",
                         )
                         await self.position_manager.open_position(
-                            "Sell", current_price, atr_value
+                            "Sell",
+                            current_price,
+                            atr_value,
                         )
                 else:
                     self.logger.info(
-                        f"{NEON_YELLOW}[{self.config.symbol}] Close on opposite signal is disabled. Holding BUY position.{RESET}"
+                        f"{NEON_YELLOW}[{self.config.symbol}] Close on opposite signal is disabled. Holding BUY position.{RESET}",
                     )
             elif not has_sell_position:
                 await self.position_manager.open_position(
-                    "Sell", current_price, atr_value
+                    "Sell",
+                    current_price,
+                    atr_value,
                 )
             else:
                 self.logger.info(
-                    f"{NEON_YELLOW}[{self.config.symbol}] Already have a SELL position. Not opening another.{RESET}"
+                    f"{NEON_YELLOW}[{self.config.symbol}] Already have a SELL position. Not opening another.{RESET}",
                 )
         else:
             self.logger.info(
-                f"{NEON_BLUE}[{self.config.symbol}] No strong trading signal. Holding. Score: {signal_score:.2f}{RESET}"
+                f"{NEON_BLUE}[{self.config.symbol}] No strong trading signal. Holding. Score: {signal_score:.2f}{RESET}",
             )
 
         open_positions = self.position_manager.get_open_positions()
         if open_positions:
             self.logger.info(
-                f"{NEON_CYAN}[{self.config.symbol}] Open Positions: {len(open_positions)}{RESET}"
+                f"{NEON_CYAN}[{self.config.symbol}] Open Positions: {len(open_positions)}{RESET}",
             )
             for pos in open_positions:
                 self.logger.info(
-                    f"  - {pos['side']} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}, TSL Active: {pos['trailing_stop_activated']}){RESET}"
+                    f"  - {pos['side']} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}, TSL Active: {pos['trailing_stop_activated']}){RESET}",
                 )
         else:
             self.logger.info(
-                f"{NEON_CYAN}[{self.config.symbol}] No open positions.{RESET}"
+                f"{NEON_CYAN}[{self.config.symbol}] No open positions.{RESET}",
             )
 
         perf_summary = self.performance_tracker.get_summary()
         self.logger.info(
-            f"{NEON_YELLOW}[{self.config.symbol}] Performance Summary: Total PnL: {perf_summary['total_pnl'].normalize():.2f}, Wins: {perf_summary['wins']}, Losses: {perf_summary['losses']}, Win Rate: {perf_summary['win_rate']}{RESET}"
+            f"{NEON_YELLOW}[{self.config.symbol}] Performance Summary: Total PnL: {perf_summary['total_pnl'].normalize():.2f}, Wins: {perf_summary['wins']}, Losses: {perf_summary['losses']}, Win Rate: {perf_summary['win_rate']}{RESET}",
         )
 
         self.logger.info(
-            f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {self.config.loop_delay}s ---{RESET}"
+            f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {self.config.loop_delay}s ---{RESET}",
         )
         await asyncio.sleep(self.config.loop_delay)
 

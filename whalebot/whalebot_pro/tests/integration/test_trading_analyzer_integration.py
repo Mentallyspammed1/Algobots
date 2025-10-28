@@ -86,7 +86,7 @@ def mock_config():
                 "roc_signal": 0.12,
                 "candlestick_confirmation": 0.15,
                 "fibonacci_pivot_points_confluence": 0.20,
-            }
+            },
         },
         "indicator_settings": {
             "atr_period": 14,
@@ -160,7 +160,10 @@ def indicator_calculator(mock_logger):
 @pytest.fixture
 def trading_analyzer(mock_config, mock_logger, indicator_calculator):
     return TradingAnalyzer(
-        mock_config.get_config(), mock_logger, mock_config.symbol, indicator_calculator
+        mock_config.get_config(),
+        mock_logger,
+        mock_config.symbol,
+        indicator_calculator,
     )
 
 
@@ -193,7 +196,9 @@ def sample_df_for_analyzer():
 
 @pytest.mark.asyncio
 async def test_generate_trading_signal_hold(
-    trading_analyzer, mock_orderbook_manager, sample_df_for_analyzer
+    trading_analyzer,
+    mock_orderbook_manager,
+    sample_df_for_analyzer,
 ):
     trading_analyzer.update_data(sample_df_for_analyzer)
 
@@ -250,7 +255,9 @@ async def test_generate_trading_signal_hold(
     }
 
     signal, score, breakdown = await trading_analyzer.generate_trading_signal(
-        Decimal("1000"), mock_orderbook_manager, {}
+        Decimal("1000"),
+        mock_orderbook_manager,
+        {},
     )
     assert signal == "HOLD"
     assert score == pytest.approx(0.0, abs=0.1)  # Score should be near zero
@@ -258,7 +265,9 @@ async def test_generate_trading_signal_hold(
 
 @pytest.mark.asyncio
 async def test_generate_trading_signal_buy(
-    trading_analyzer, mock_orderbook_manager, sample_df_for_analyzer
+    trading_analyzer,
+    mock_orderbook_manager,
+    sample_df_for_analyzer,
 ):
     trading_analyzer.update_data(sample_df_for_analyzer)
 
@@ -332,7 +341,9 @@ async def test_generate_trading_signal_buy(
     )
 
     signal, score, breakdown = await trading_analyzer.generate_trading_signal(
-        Decimal("102"), mock_orderbook_manager, {}
+        Decimal("102"),
+        mock_orderbook_manager,
+        {},
     )
     assert signal == "BUY"
     assert score > trading_analyzer.config.signal_score_threshold
@@ -340,7 +351,9 @@ async def test_generate_trading_signal_buy(
 
 @pytest.mark.asyncio
 async def test_generate_trading_signal_sell(
-    trading_analyzer, mock_orderbook_manager, sample_df_for_analyzer
+    trading_analyzer,
+    mock_orderbook_manager,
+    sample_df_for_analyzer,
 ):
     trading_analyzer.update_data(sample_df_for_analyzer)
 
@@ -414,7 +427,9 @@ async def test_generate_trading_signal_sell(
     )
 
     signal, score, breakdown = await trading_analyzer.generate_trading_signal(
-        Decimal("98"), mock_orderbook_manager, {}
+        Decimal("98"),
+        mock_orderbook_manager,
+        {},
     )
     assert signal == "SELL"
     assert score < -trading_analyzer.config.signal_score_threshold
@@ -424,7 +439,7 @@ async def test_generate_trading_signal_sell(
 async def test_calculate_entry_tp_sl(trading_analyzer, mock_config):
     # Mock precision_manager on indicator_calculator
     trading_analyzer.indicator_calculator.round_price = MagicMock(
-        side_effect=lambda price, sym: price.quantize(Decimal("0.01"))
+        side_effect=lambda price, sym: price.quantize(Decimal("0.01")),
     )
 
     current_price = Decimal("40000")
@@ -432,14 +447,20 @@ async def test_calculate_entry_tp_sl(trading_analyzer, mock_config):
 
     # Test Buy signal
     tp_buy, sl_buy = trading_analyzer.calculate_entry_tp_sl(
-        current_price, atr_value, "Buy", trading_analyzer.indicator_calculator
+        current_price,
+        atr_value,
+        "Buy",
+        trading_analyzer.indicator_calculator,
     )
     assert tp_buy == Decimal("40200.00")  # 40000 + 100 * 2.0
     assert sl_buy == Decimal("39850.00")  # 40000 - 100 * 1.5
 
     # Test Sell signal
     tp_sell, sl_sell = trading_analyzer.calculate_entry_tp_sl(
-        current_price, atr_value, "Sell", trading_analyzer.indicator_calculator
+        current_price,
+        atr_value,
+        "Sell",
+        trading_analyzer.indicator_calculator,
     )
     assert tp_sell == Decimal("39800.00")  # 40000 - 100 * 2.0
     assert sl_sell == Decimal("40150.00")  # 40000 + 100 * 1.5

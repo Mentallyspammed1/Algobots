@@ -220,7 +220,8 @@ def test_calculate_atr(indicator_calculator, sample_df):
 
 def test_calculate_super_smoother(indicator_calculator, sample_df):
     smoothed = indicator_calculator.calculate_super_smoother(
-        sample_df["close"], period=10
+        sample_df["close"],
+        period=10,
     )
     assert isinstance(smoothed, pd.Series)
     assert not smoothed.isnull().all()
@@ -229,7 +230,9 @@ def test_calculate_super_smoother(indicator_calculator, sample_df):
 
 def test_calculate_ehlers_supertrend(indicator_calculator, sample_df):
     st_result = indicator_calculator.calculate_ehlers_supertrend(
-        sample_df, period=10, multiplier=2.0
+        sample_df,
+        period=10,
+        multiplier=2.0,
     )
     assert isinstance(st_result, pd.DataFrame)
     assert "supertrend" in st_result.columns
@@ -241,7 +244,10 @@ def test_calculate_ehlers_supertrend(indicator_calculator, sample_df):
 
 def test_calculate_macd(indicator_calculator, sample_df):
     macd_line, signal_line, histogram = indicator_calculator.calculate_macd(
-        sample_df, fast_period=12, slow_period=26, signal_period=9
+        sample_df,
+        fast_period=12,
+        slow_period=26,
+        signal_period=9,
     )
     assert isinstance(macd_line, pd.Series)
     assert isinstance(signal_line, pd.Series)
@@ -260,7 +266,10 @@ def test_calculate_rsi(indicator_calculator, sample_df):
 
 def test_calculate_stoch_rsi(indicator_calculator, sample_df):
     stoch_k, stoch_d = indicator_calculator.calculate_stoch_rsi(
-        sample_df, period=14, k_period=3, d_period=3
+        sample_df,
+        period=14,
+        k_period=3,
+        d_period=3,
     )
     assert isinstance(stoch_k, pd.Series)
     assert isinstance(stoch_d, pd.Series)
@@ -283,7 +292,9 @@ def test_calculate_adx(indicator_calculator, sample_df):
 
 def test_calculate_bollinger_bands(indicator_calculator, sample_df):
     upper, middle, lower = indicator_calculator.calculate_bollinger_bands(
-        sample_df, period=20, std_dev=2.0
+        sample_df,
+        period=20,
+        std_dev=2.0,
     )
     assert isinstance(upper, pd.Series)
     assert isinstance(middle, pd.Series)
@@ -354,7 +365,9 @@ def test_calculate_cmf(indicator_calculator, sample_df):
 
 def test_calculate_psar(indicator_calculator, sample_df):
     psar_val, psar_dir = indicator_calculator.calculate_psar(
-        sample_df, acceleration=0.02, max_acceleration=0.2
+        sample_df,
+        acceleration=0.02,
+        max_acceleration=0.2,
     )
     assert isinstance(psar_val, pd.Series)
     assert isinstance(psar_dir, pd.Series)
@@ -387,7 +400,10 @@ def test_calculate_volume_delta(indicator_calculator, sample_df):
 
 def test_calculate_kaufman_ama(indicator_calculator, sample_df):
     kama = indicator_calculator.calculate_kaufman_ama(
-        sample_df, period=10, fast_period=2, slow_period=30
+        sample_df,
+        period=10,
+        fast_period=2,
+        slow_period=30,
     )
     assert isinstance(kama, pd.Series)
     assert not kama.isnull().all()
@@ -417,7 +433,9 @@ def test_calculate_keltner_channels(indicator_calculator, sample_df):
     # ATR is needed for this, so calculate it first
     sample_df["ATR"] = indicator_calculator.calculate_atr(sample_df, period=14)
     upper, middle, lower = indicator_calculator.calculate_keltner_channels(
-        sample_df, period=20, atr_multiplier=2.0
+        sample_df,
+        period=20,
+        atr_multiplier=2.0,
     )
     assert isinstance(upper, pd.Series)
     assert isinstance(middle, pd.Series)

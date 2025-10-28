@@ -23,7 +23,10 @@ class PositionManager:
     """Manages open positions, stop-loss, and take-profit levels."""
 
     def __init__(
-        self, config: dict[str, Any], logger: logging.Logger, bybit_client: BybitClient
+        self,
+        config: dict[str, Any],
+        logger: logging.Logger,
+        bybit_client: BybitClient,
     ):
         """Initializes the PositionManager."""
         self.config = config
@@ -38,26 +41,29 @@ class PositionManager:
         self.precision_manager = self.bybit_client.precision_manager
 
         self.enable_trailing_stop = config["trade_management"].get(
-            "enable_trailing_stop", False
+            "enable_trailing_stop",
+            False,
         )
         self.trailing_stop_atr_multiple = Decimal(
-            str(config["trade_management"].get("trailing_stop_atr_multiple", 0.0))
+            str(config["trade_management"].get("trailing_stop_atr_multiple", 0.0)),
         )
         self.break_even_atr_trigger = Decimal(
-            str(config["trade_management"].get("break_even_atr_trigger", 0.0))
+            str(config["trade_management"].get("break_even_atr_trigger", 0.0)),
         )
 
         self.move_to_breakeven_atr_trigger = Decimal(
-            str(config["trade_management"].get("move_to_breakeven_atr_trigger", 0.0))
+            str(config["trade_management"].get("move_to_breakeven_atr_trigger", 0.0)),
         )
         self.profit_lock_in_atr_multiple = Decimal(
-            str(config["trade_management"].get("profit_lock_in_atr_multiple", 0.0))
+            str(config["trade_management"].get("profit_lock_in_atr_multiple", 0.0)),
         )
         self.close_on_opposite_signal = config["trade_management"].get(
-            "close_on_opposite_signal", True
+            "close_on_opposite_signal",
+            True,
         )
         self.reverse_position_on_opposite_signal = config["trade_management"].get(
-            "reverse_position_on_opposite_signal", False
+            "reverse_position_on_opposite_signal",
+            False,
         )
 
         # Initial sync of open positions from exchange
@@ -68,13 +74,15 @@ class PositionManager:
         balance = await self.bybit_client.get_wallet_balance()
         if balance is None:
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch real account balance. Using configured balance for simulation.{RESET}"
+                f"{NEON_YELLOW}Could not fetch real account balance. Using configured balance for simulation.{RESET}",
             )
             return Decimal(str(self.config["trade_management"]["account_balance"]))
         return balance
 
     async def _calculate_order_size(
-        self, current_price: Decimal, atr_value: Decimal
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         """Calculate order size based on risk per trade and ATR."""
         if not self.trade_management_enabled:
@@ -86,7 +94,7 @@ class PositionManager:
             / 100
         )
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
 
         risk_amount = account_balance * risk_per_trade_percent
@@ -94,7 +102,7 @@ class PositionManager:
 
         if stop_loss_distance <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Calculated stop loss distance is zero or negative ({stop_loss_distance}). Cannot determine order size.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Calculated stop loss distance is zero or negative ({stop_loss_distance}). Cannot determine order size.{RESET}",
             )
             return Decimal("0")
 
@@ -107,12 +115,12 @@ class PositionManager:
         min_qty = self.precision_manager.get_min_qty(self.symbol)
         if order_qty < min_qty:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity {order_qty} is less than min_qty {min_qty}. Adjusting to min_qty.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity {order_qty} is less than min_qty {min_qty}. Adjusting to min_qty.{RESET}",
             )
             order_qty = min_qty
 
         self.logger.info(
-            f"[{self.symbol}] Calculated order size: {order_qty.normalize()} (Risk: {risk_amount.normalize():.2f} USD)"
+            f"[{self.symbol}] Calculated order size: {order_qty.normalize()} (Risk: {risk_amount.normalize():.2f} USD)",
         )
         return order_qty
 
@@ -157,17 +165,21 @@ class PositionManager:
                 existing_pos.update(
                     {
                         "entry_price": self.precision_manager.round_price(
-                            entry_price, self.symbol
+                            entry_price,
+                            self.symbol,
                         ),
                         "qty": self.precision_manager.round_qty(qty, self.symbol),
                         "stop_loss": self.precision_manager.round_price(
-                            stop_loss_price, self.symbol
+                            stop_loss_price,
+                            self.symbol,
                         ),
                         "take_profit": self.precision_manager.round_price(
-                            take_profit_price, self.symbol
+                            take_profit_price,
+                            self.symbol,
                         ),
                         "trailing_stop_price": self.precision_manager.round_price(
-                            trailing_stop, self.symbol
+                            trailing_stop,
+                            self.symbol,
                         )
                         if trailing_stop
                         else None,
@@ -175,45 +187,51 @@ class PositionManager:
                         if self.enable_trailing_stop
                         else False,
                         "breakeven_activated": existing_pos.get(
-                            "breakeven_activated", False
+                            "breakeven_activated",
+                            False,
                         ),
-                    }
+                    },
                 )
                 new_open_positions.append(existing_pos)
             else:
                 self.logger.warning(
-                    f"{NEON_YELLOW}[{self.symbol}] Detected new untracked position on exchange. Side: {side}, Qty: {qty}, Entry: {entry_price}. Adding to internal tracking.{RESET}"
+                    f"{NEON_YELLOW}[{self.symbol}] Detected new untracked position on exchange. Side: {side}, Qty: {qty}, Entry: {entry_price}. Adding to internal tracking.{RESET}",
                 )
                 new_open_positions.append(
                     {
                         "positionIdx": position_idx_int,
                         "side": side,
                         "entry_price": self.precision_manager.round_price(
-                            entry_price, self.symbol
+                            entry_price,
+                            self.symbol,
                         ),
                         "qty": self.precision_manager.round_qty(qty, self.symbol),
                         "stop_loss": self.precision_manager.round_price(
-                            stop_loss_price, self.symbol
+                            stop_loss_price,
+                            self.symbol,
                         ),
                         "take_profit": self.precision_manager.round_price(
-                            take_profit_price, self.symbol
+                            take_profit_price,
+                            self.symbol,
                         ),
                         "position_id": position_id,
                         "order_id": "UNKNOWN",
                         "entry_time": datetime.now(self.bybit_client.timezone),
                         "initial_stop_loss": self.precision_manager.round_price(
-                            stop_loss_price, self.symbol
+                            stop_loss_price,
+                            self.symbol,
                         ),
                         "trailing_stop_activated": trailing_stop > 0
                         if self.enable_trailing_stop
                         else False,
                         "trailing_stop_price": self.precision_manager.round_price(
-                            trailing_stop, self.symbol
+                            trailing_stop,
+                            self.symbol,
                         )
                         if trailing_stop
                         else None,
                         "breakeven_activated": False,
-                    }
+                    },
                 )
 
         for tracked_pos in self.open_positions:
@@ -225,13 +243,13 @@ class PositionManager:
             )
             if not is_still_open:
                 self.logger.info(
-                    f"{NEON_BLUE}[{self.symbol}] Position {tracked_pos['side']} (ID: {tracked_pos.get('position_id', 'N/A')}) no longer open on exchange. Marking as closed.{RESET}"
+                    f"{NEON_BLUE}[{self.symbol}] Position {tracked_pos['side']} (ID: {tracked_pos.get('position_id', 'N/A')}) no longer open on exchange. Marking as closed.{RESET}",
                 )
 
         self.open_positions = new_open_positions
         if not self.open_positions:
             self.logger.debug(
-                f"[{self.symbol}] No active positions being tracked internally."
+                f"[{self.symbol}] No active positions being tracked internally.",
             )
 
     async def open_position(
@@ -243,14 +261,14 @@ class PositionManager:
         """Open a new position if conditions allow, interacting with the Bybit API."""
         if not self.trade_management_enabled:
             self.logger.info(
-                f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Skipping opening position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Skipping opening position.{RESET}",
             )
             return None
 
         await self.sync_positions_from_exchange()
         if len(self.get_open_positions()) >= self.max_open_positions:
             self.logger.info(
-                f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}",
             )
             return None
 
@@ -258,22 +276,22 @@ class PositionManager:
             p["side"].upper() == signal_side.upper() for p in self.get_open_positions()
         ):
             self.logger.info(
-                f"{NEON_YELLOW}[{self.symbol}] Already have an open {signal_side} position. Skipping new entry.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Already have an open {signal_side} position. Skipping new entry.{RESET}",
             )
             return None
 
         order_qty = await self._calculate_order_size(current_price, atr_value)
         if order_qty <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Order quantity is zero or negative ({order_qty}). Cannot open position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Order quantity is zero or negative ({order_qty}). Cannot open position.{RESET}",
             )
             return None
 
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         take_profit_atr_multiple = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
 
         if signal_side == "Buy":
@@ -285,7 +303,8 @@ class PositionManager:
 
         # Round SL/TP using precision manager
         initial_stop_loss = self.precision_manager.round_price(
-            initial_stop_loss, self.symbol
+            initial_stop_loss,
+            self.symbol,
         )
         take_profit = self.precision_manager.round_price(take_profit, self.symbol)
 
@@ -299,7 +318,7 @@ class PositionManager:
 
         if not order_result:
             self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Failed to place market order for {signal_side} {order_qty.normalize()}.{RESET}"
+                f"{NEON_RED}[{self.symbol}] Failed to place market order for {signal_side} {order_qty.normalize()}.{RESET}",
             )
             return None
 
@@ -313,7 +332,8 @@ class PositionManager:
             "symbol": self.symbol,
             "side": signal_side,
             "entry_price": self.precision_manager.round_price(
-                filled_price, self.symbol
+                filled_price,
+                self.symbol,
             ),
             "qty": self.precision_manager.round_qty(filled_qty, self.symbol),
             "stop_loss": initial_stop_loss,
@@ -328,7 +348,7 @@ class PositionManager:
         }
         self.open_positions.append(new_position)
         self.logger.info(
-            f"{NEON_GREEN}[{self.symbol}] Successfully opened {signal_side} position and set initial TP/SL: {new_position}{RESET}"
+            f"{NEON_GREEN}[{self.symbol}] Successfully opened {signal_side} position and set initial TP/SL: {new_position}{RESET}",
         )
         return new_position
 
@@ -342,7 +362,7 @@ class PositionManager:
         """Closes an existing position by placing a market order in the opposite direction."""
         if not self.trade_management_enabled:
             self.logger.info(
-                f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Cannot close position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Cannot close position.{RESET}",
             )
             return
 
@@ -350,7 +370,7 @@ class PositionManager:
         qty_to_close = position["qty"]
 
         self.logger.info(
-            f"{NEON_BLUE}[{self.symbol}] Attempting to close {position['side']} position (ID: {position['position_id']}) with {side_to_close} order for {qty_to_close.normalize()}...{RESET}"
+            f"{NEON_BLUE}[{self.symbol}] Attempting to close {position['side']} position (ID: {position['position_id']}) with {side_to_close} order for {qty_to_close.normalize()}...{RESET}",
         )
 
         order_result = await self.bybit_client.place_order(
@@ -362,7 +382,7 @@ class PositionManager:
 
         if order_result:
             self.logger.info(
-                f"{NEON_GREEN}[{self.symbol}] Close order placed successfully: {order_result}{RESET}"
+                f"{NEON_GREEN}[{self.symbol}] Close order placed successfully: {order_result}{RESET}",
             )
             exit_price = Decimal(order_result.get("avgPrice", str(current_price)))
 
@@ -389,11 +409,11 @@ class PositionManager:
                 or p["side"] != position["side"]
             ]
             self.logger.info(
-                f"{NEON_GREEN}[{self.symbol}] Position (ID: {position['position_id']}) removed from internal tracking.{RESET}"
+                f"{NEON_GREEN}[{self.symbol}] Position (ID: {position['position_id']}) removed from internal tracking.{RESET}",
             )
         else:
             self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Failed to place close order for position (ID: {position['position_id']}). Manual intervention might be needed!{RESET}"
+                f"{NEON_RED}[{self.symbol}] Failed to place close order for position (ID: {position['position_id']}). Manual intervention might be needed!{RESET}",
             )
 
     async def manage_positions(
@@ -447,7 +467,8 @@ class PositionManager:
                     {
                         **position,
                         "exit_price": self.precision_manager.round_price(
-                            close_price, self.symbol
+                            close_price,
+                            self.symbol,
                         ),
                         "exit_time": datetime.now(self.bybit_client.timezone),
                         "closed_by": closed_by,
@@ -456,7 +477,7 @@ class PositionManager:
                 )
                 positions_closed_on_exchange_ids.add(position.get("position_id"))
                 self.logger.info(
-                    f"{NEON_BLUE}[{self.symbol}] Detected and recorded closure of {position['side']} position (ID: {position.get('position_id')}). PnL: {pnl.normalize():.2f}{RESET}"
+                    f"{NEON_BLUE}[{self.symbol}] Detected and recorded closure of {position['side']} position (ID: {position.get('position_id')}). PnL: {pnl.normalize():.2f}{RESET}",
                 )
                 continue
 
@@ -497,16 +518,18 @@ class PositionManager:
                     breakeven_sl = entry_price
                     if side == "Buy":
                         potential_sl_update = max(
-                            current_stop_loss_on_exchange, breakeven_sl
+                            current_stop_loss_on_exchange,
+                            breakeven_sl,
                         )
                     else:
                         potential_sl_update = min(
-                            current_stop_loss_on_exchange, breakeven_sl
+                            current_stop_loss_on_exchange,
+                            breakeven_sl,
                         )
 
                     if potential_sl_update != current_stop_loss_on_exchange:
                         self.logger.info(
-                            f"{NEON_BLUE}[{self.symbol}] Breakeven condition met for {side} position (ID: {position['position_id']}). Moving SL to {potential_sl_update.normalize()}.{RESET}"
+                            f"{NEON_BLUE}[{self.symbol}] Breakeven condition met for {side} position (ID: {position['position_id']}). Moving SL to {potential_sl_update.normalize()}.{RESET}",
                         )
                         position["breakeven_activated"] = True
                     else:
@@ -538,16 +561,18 @@ class PositionManager:
                         if potential_sl_update:
                             if side == "Buy":
                                 potential_sl_update = max(
-                                    potential_sl_update, profit_lock_sl_candidate
+                                    potential_sl_update,
+                                    profit_lock_sl_candidate,
                                 )
                             else:
                                 potential_sl_update = min(
-                                    potential_sl_update, profit_lock_sl_candidate
+                                    potential_sl_update,
+                                    profit_lock_sl_candidate,
                                 )
                         else:
                             potential_sl_update = profit_lock_sl_candidate
                         self.logger.info(
-                            f"{NEON_BLUE}[{self.symbol}] Profit lock-in condition met for {side} position (ID: {position['position_id']}). Moving SL to {potential_sl_update.normalize()}.{RESET}"
+                            f"{NEON_BLUE}[{self.symbol}] Profit lock-in condition met for {side} position (ID: {position['position_id']}). Moving SL to {potential_sl_update.normalize()}.{RESET}",
                         )
 
             if self.enable_trailing_stop and atr_value > 0:
@@ -609,7 +634,8 @@ class PositionManager:
             ):
                 # Round the potential SL update using precision manager
                 potential_sl_update = self.precision_manager.round_price(
-                    potential_sl_update, self.symbol
+                    potential_sl_update,
+                    self.symbol,
                 )
 
                 tpsl_update_result = await self.bybit_client.set_trading_stop(
@@ -621,11 +647,11 @@ class PositionManager:
                     position["stop_loss"] = potential_sl_update
                     position["trailing_stop_price"] = potential_sl_update
                     self.logger.info(
-                        f"{NEON_GREEN}[{self.symbol}] Stop Loss Updated for {side} position (ID: {position['position_id']}): Entry: {entry_price.normalize()}, Current Price: {current_price.normalize()}, New SL: {potential_sl_update.normalize()}{RESET}"
+                        f"{NEON_GREEN}[{self.symbol}] Stop Loss Updated for {side} position (ID: {position['position_id']}): Entry: {entry_price.normalize()}, Current Price: {current_price.normalize()}, New SL: {potential_sl_update.normalize()}{RESET}",
                     )
                 else:
                     self.logger.error(
-                        f"{NEON_RED}[{self.symbol}] Failed to update SL for {side} position (ID: {position['position_id']}).{RESET}"
+                        f"{NEON_RED}[{self.symbol}] Failed to update SL for {side} position (ID: {position['position_id']}).{RESET}",
                     )
 
         self.open_positions = [

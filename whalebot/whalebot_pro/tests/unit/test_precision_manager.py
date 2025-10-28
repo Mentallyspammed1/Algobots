@@ -39,8 +39,8 @@ async def test_load_instrument_info_success(precision_manager, mock_bybit_client
                         "maxOrderQty": "100",
                         "minNotionalValue": "10",
                     },
-                }
-            ]
+                },
+            ],
         },
     }
 
@@ -57,7 +57,7 @@ async def test_load_instrument_info_success(precision_manager, mock_bybit_client
     assert precision_manager.instruments_info["BTCUSDT"]["min_qty"] == Decimal("0.001")
     assert precision_manager.instruments_info["BTCUSDT"]["max_qty"] == Decimal("100")
     assert precision_manager.instruments_info["BTCUSDT"]["min_notional"] == Decimal(
-        "10"
+        "10",
     )
     precision_manager.logger.info.assert_called_once()
 
@@ -84,10 +84,10 @@ def test_round_price(precision_manager):
     }
 
     assert precision_manager.round_price(Decimal("123.4567"), "BTCUSDT") == Decimal(
-        "123.46"
+        "123.46",
     )
     assert precision_manager.round_price(Decimal("123.453"), "BTCUSDT") == Decimal(
-        "123.45"
+        "123.45",
     )
     assert precision_manager.round_price(Decimal("100"), "BTCUSDT") == Decimal("100.00")
 
@@ -103,10 +103,10 @@ def test_round_qty(precision_manager):
     }
 
     assert precision_manager.round_qty(Decimal("0.12345"), "BTCUSDT") == Decimal(
-        "0.123"
+        "0.123",
     )
     assert precision_manager.round_qty(Decimal("0.0009"), "BTCUSDT") == Decimal(
-        "0.000"
+        "0.000",
     )  # Should round down
     assert precision_manager.round_qty(Decimal("1.000"), "BTCUSDT") == Decimal("1.000")
 

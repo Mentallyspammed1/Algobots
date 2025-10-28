@@ -56,7 +56,7 @@ class Backtester:
         self.trading_analyzer = trading_analyzer
 
         self.initial_capital = Decimal(
-            str(config["trade_management"]["account_balance"])
+            str(config["trade_management"]["account_balance"]),
         )
         self.capital = self.initial_capital
         self.position_size = Decimal("0")
@@ -66,22 +66,26 @@ class Backtester:
         self.fees_incurred = Decimal("0")
         self.leverage = Decimal(str(config["trade_management"]["default_leverage"]))
         self.risk_per_trade_percent = Decimal(
-            str(config["trade_management"]["risk_per_trade_percent"])
+            str(config["trade_management"]["risk_per_trade_percent"]),
         ) / Decimal("100")
 
         self.mock_orderbook_manager = MockOrderbookManager()
         self.mock_mtf_trends = {}  # For simplicity, MTF trends are not simulated in this basic backtest
 
         self.logger.info(
-            f"{NEON_BLUE}Backtester initialized with capital: {self.initial_capital}{RESET}"
+            f"{NEON_BLUE}Backtester initialized with capital: {self.initial_capital}{RESET}",
         )
 
     async def run_backtest(
-        self, symbol: str, interval: str, start_date: str, end_date: str
+        self,
+        symbol: str,
+        interval: str,
+        start_date: str,
+        end_date: str,
     ) -> dict[str, Any]:
         """Runs the backtest over a specified historical period."""
         self.logger.info(
-            f"{NEON_BLUE}Fetching historical data for {symbol} ({interval}) from {start_date} to {end_date}...{RESET}"
+            f"{NEON_BLUE}Fetching historical data for {symbol} ({interval}) from {start_date} to {end_date}...{RESET}",
         )
 
         all_klines_df = pd.DataFrame()
@@ -92,12 +96,12 @@ class Backtester:
         fetched_count = 0
 
         self.logger.debug(
-            f"Initial current_end_time: {current_end_time}, Target start_timestamp_ms: {start_timestamp_ms}"
+            f"Initial current_end_time: {current_end_time}, Target start_timestamp_ms: {start_timestamp_ms}",
         )
 
         while fetched_count < max_fetches:
             self.logger.debug(
-                f"Fetching attempt {fetched_count + 1}. Requesting data ending at: {current_end_time}"
+                f"Fetching attempt {fetched_count + 1}. Requesting data ending at: {current_end_time}",
             )
             response = await self.bybit_client._bybit_request_with_retry(
                 "fetch_klines_iterative",
@@ -123,7 +127,9 @@ class Backtester:
                     ],
                 )
                 df["start_time"] = pd.to_datetime(
-                    df["start_time"].astype(int), unit="ms", utc=True
+                    df["start_time"].astype(int),
+                    unit="ms",
+                    utc=True,
                 ).dt.tz_convert(self.config["timezone"])
                 for col in ["open", "high", "low", "close", "volume", "turnover"]:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -132,7 +138,7 @@ class Backtester:
 
                 if df.empty:
                     self.logger.info(
-                        f"{NEON_YELLOW}Fetched empty DataFrame. Stopping iterative fetch.{RESET}"
+                        f"{NEON_YELLOW}Fetched empty DataFrame. Stopping iterative fetch.{RESET}",
                     )
                     break
 
@@ -146,17 +152,17 @@ class Backtester:
                 )  # Subtract 1ms to avoid fetching the same bar
 
                 self.logger.debug(
-                    f"Fetched {len(df)} klines. Total: {len(all_klines_df)}. Oldest bar fetched: {df.index.min()}"
+                    f"Fetched {len(df)} klines. Total: {len(all_klines_df)}. Oldest bar fetched: {df.index.min()}",
                 )
 
                 if current_end_time <= start_timestamp_ms:
                     self.logger.info(
-                        f"{NEON_GREEN}Reached desired start date. Stopping iterative fetch.{RESET}"
+                        f"{NEON_GREEN}Reached desired start date. Stopping iterative fetch.{RESET}",
                     )
                     break
             else:
                 self.logger.warning(
-                    f"{NEON_YELLOW}No more historical data or error fetching. Stopping iterative fetch.{RESET}"
+                    f"{NEON_YELLOW}No more historical data or error fetching. Stopping iterative fetch.{RESET}",
                 )
                 break
 
@@ -164,11 +170,11 @@ class Backtester:
             await asyncio.sleep(0.1)  # Small delay to avoid hitting rate limits
 
         self.logger.debug(
-            f"Finished fetching loop. Total klines fetched: {len(all_klines_df)}"
+            f"Finished fetching loop. Total klines fetched: {len(all_klines_df)}",
         )
         if all_klines_df.empty:
             self.logger.error(
-                f"{NEON_RED}No historical data fetched for the specified range. Exiting backtest.{RESET}"
+                f"{NEON_RED}No historical data fetched for the specified range. Exiting backtest.{RESET}",
             )
             return self._generate_report([], self.initial_capital, self.capital)
 
@@ -179,12 +185,12 @@ class Backtester:
 
         if klines_df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}No data within the specified date range after fetching. Exiting backtest.{RESET}"
+                f"{NEON_YELLOW}No data within the specified date range after fetching. Exiting backtest.{RESET}",
             )
             return self._generate_report([], self.initial_capital, self.capital)
 
         self.logger.info(
-            f"{NEON_GREEN}Starting backtest with {len(klines_df)} historical bars.{RESET}"
+            f"{NEON_GREEN}Starting backtest with {len(klines_df)} historical bars.{RESET}",
         )
 
         # Ensure klines_df is sorted by index (timestamp)
@@ -200,11 +206,13 @@ class Backtester:
 
             # Generate signal
             signal, score = await self.trading_analyzer.generate_trading_signal(
-                current_price, self.mock_orderbook_manager, self.mock_mtf_trends
+                current_price,
+                self.mock_orderbook_manager,
+                self.mock_mtf_trends,
             )
             self.logger.debug(f"Signal: {signal}, Score: {score}")
             self.logger.debug(
-                f"Bar {timestamp}: Price={current_price}, Signal={signal}, Score={score}, Capital={self.capital:.2f}, Position={self.position_size:.4f}"
+                f"Bar {timestamp}: Price={current_price}, Signal={signal}, Score={score}, Capital={self.capital:.2f}, Position={self.position_size:.4f}",
             )
 
             # Simulate trade execution
@@ -218,28 +226,36 @@ class Backtester:
                 self.side == "sell" and signal == "BUY"
             ):
                 self.logger.info(
-                    f"{NEON_YELLOW}Closing {self.side.upper()} position due to reversal signal at {current_price}{RESET}"
+                    f"{NEON_YELLOW}Closing {self.side.upper()} position due to reversal signal at {current_price}{RESET}",
                 )
                 await self._close_position(
-                    bar, current_price, self.entry_price, self.side
+                    bar,
+                    current_price,
+                    self.entry_price,
+                    self.side,
                 )
             else:
                 # Apply SL/TP logic (simplified: check against current bar's high/low)
                 await self._apply_sl_tp(bar, current_price)
 
         self.logger.info(
-            f"{NEON_BLUE}Backtest finished. Final Capital: {self.capital:.2f}{RESET}"
+            f"{NEON_BLUE}Backtest finished. Final Capital: {self.capital:.2f}{RESET}",
         )
         return self._generate_report(
-            self.trade_history, self.initial_capital, self.capital
+            self.trade_history,
+            self.initial_capital,
+            self.capital,
         )
 
     async def _execute_trade(
-        self, bar: pd.Series, signal_side: str, current_price: Decimal
+        self,
+        bar: pd.Series,
+        signal_side: str,
+        current_price: Decimal,
     ):
         """Simulates placing a trade."""
         self.logger.debug(
-            f"Attempting to execute {signal_side} trade. Capital: {self.capital:.2f}"
+            f"Attempting to execute {signal_side} trade. Capital: {self.capital:.2f}",
         )
         if self.position_size > 0:  # Already in a position
             self.logger.debug("Skipping trade: Already in a position.")
@@ -257,33 +273,35 @@ class Backtester:
         # Ensure trade_amount_usd is not zero or negative
         if trade_amount_usd <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}Calculated trade amount ({trade_amount_usd:.2f}) is zero or negative. Skipping trade.{RESET}"
+                f"{NEON_YELLOW}Calculated trade amount ({trade_amount_usd:.2f}) is zero or negative. Skipping trade.{RESET}",
             )
             return
 
         # Calculate quantity based on current price
         quantity = (trade_amount_usd / current_price).quantize(
-            Decimal("0.00000001"), rounding=ROUND_DOWN
+            Decimal("0.00000001"),
+            rounding=ROUND_DOWN,
         )
         self.logger.debug(
-            f"Calculated trade_amount_usd: {trade_amount_usd:.2f}, quantity: {quantity:.8f}"
+            f"Calculated trade_amount_usd: {trade_amount_usd:.2f}, quantity: {quantity:.8f}",
         )
 
         # Ensure quantity meets minimum requirements (mocking precision manager)
         if quantity < Decimal("0.00001"):  # Example min quantity
             self.logger.warning(
-                f"{NEON_YELLOW}Calculated quantity ({quantity:.8f}) is too small. Skipping trade.{RESET}"
+                f"{NEON_YELLOW}Calculated quantity ({quantity:.8f}) is too small. Skipping trade.{RESET}",
             )
             return
 
         fee_rate = Decimal("0.0005")  # Example: 0.05% taker fee
         trade_fee = (quantity * current_price * fee_rate).quantize(
-            Decimal("0.00000001"), rounding=ROUND_DOWN
+            Decimal("0.00000001"),
+            rounding=ROUND_DOWN,
         )
 
         if self.capital < trade_fee:
             self.logger.warning(
-                f"{NEON_YELLOW}Insufficient capital ({self.capital:.2f}) for trade fees ({trade_fee:.8f}). Skipping trade.{RESET}"
+                f"{NEON_YELLOW}Insufficient capital ({self.capital:.2f}) for trade fees ({trade_fee:.8f}). Skipping trade.{RESET}",
             )
             return
 
@@ -295,7 +313,7 @@ class Backtester:
         self.side = signal_side
 
         self.logger.info(
-            f"{NEON_GREEN}Simulated {self.side.upper()} entry at {self.entry_price} with {self.position_size:.4f} units. Capital: {self.capital:.2f}{RESET}"
+            f"{NEON_GREEN}Simulated {self.side.upper()} entry at {self.entry_price} with {self.position_size:.4f} units. Capital: {self.capital:.2f}{RESET}",
         )
 
         # Record the trade
@@ -309,11 +327,15 @@ class Backtester:
                 "fee": float(trade_fee),
                 "pnl": 0.0,
                 "cumulative_pnl": float(self.capital - self.initial_capital),
-            }
+            },
         )
 
     async def _close_position(
-        self, bar: pd.Series, exit_price: Decimal, entry_price: Decimal, side: str
+        self,
+        bar: pd.Series,
+        exit_price: Decimal,
+        entry_price: Decimal,
+        side: str,
     ):
         """Simulates closing an open position."""
         if self.position_size == 0:
@@ -327,7 +349,8 @@ class Backtester:
 
         fee_rate = Decimal("0.0005")  # Example: 0.05% taker fee
         close_fee = (self.position_size * exit_price * fee_rate).quantize(
-            Decimal("0.00000001"), rounding=ROUND_DOWN
+            Decimal("0.00000001"),
+            rounding=ROUND_DOWN,
         )
 
         self.capital += pnl - close_fee
@@ -335,7 +358,7 @@ class Backtester:
 
         trade_result = "WIN" if pnl > 0 else "LOSS" if pnl < 0 else "BREAKEVEN"
         self.logger.info(
-            f"{NEON_YELLOW}Simulated {side.upper()} exit at {exit_price}. PnL: {pnl:.2f} ({trade_result}). Capital: {self.capital:.2f}{RESET}"
+            f"{NEON_YELLOW}Simulated {side.upper()} exit at {exit_price}. PnL: {pnl:.2f} ({trade_result}). Capital: {self.capital:.2f}{RESET}",
         )
 
         self.trade_history.append(
@@ -348,7 +371,7 @@ class Backtester:
                 "fee": float(close_fee),
                 "pnl": float(pnl),
                 "cumulative_pnl": float(self.capital - self.initial_capital),
-            }
+            },
         )
 
         self.position_size = Decimal("0")
@@ -363,16 +386,16 @@ class Backtester:
         # For simplicity, SL/TP are checked against the current bar's close price.
         # A more robust backtester would check against high/low of the bar.
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         take_profit_atr_multiple = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
 
         atr_value = Decimal(str(self.trading_analyzer.indicator_values.get("ATR", "0")))
         if atr_value == 0:
             self.logger.warning(
-                f"{NEON_YELLOW}ATR is zero, cannot apply SL/TP based on ATR.{RESET}"
+                f"{NEON_YELLOW}ATR is zero, cannot apply SL/TP based on ATR.{RESET}",
             )
             return
 
@@ -385,12 +408,12 @@ class Backtester:
 
             if current_price <= sl_price:
                 self.logger.info(
-                    f"{NEON_RED}Simulated BUY position hit Stop Loss at {current_price} (SL: {sl_price:.2f}){RESET}"
+                    f"{NEON_RED}Simulated BUY position hit Stop Loss at {current_price} (SL: {sl_price:.2f}){RESET}",
                 )
                 await self._close_position(bar, sl_price, self.entry_price, self.side)
             elif current_price >= tp_price:
                 self.logger.info(
-                    f"{NEON_GREEN}Simulated BUY position hit Take Profit at {current_price} (TP: {tp_price:.2f}){RESET}"
+                    f"{NEON_GREEN}Simulated BUY position hit Take Profit at {current_price} (TP: {tp_price:.2f}){RESET}",
                 )
                 await self._close_position(bar, tp_price, self.entry_price, self.side)
         elif self.side == "sell":
@@ -399,12 +422,12 @@ class Backtester:
 
             if current_price >= sl_price:
                 self.logger.info(
-                    f"{NEON_RED}Simulated SELL position hit Stop Loss at {current_price} (SL: {sl_price:.2f}){RESET}"
+                    f"{NEON_RED}Simulated SELL position hit Stop Loss at {current_price} (SL: {sl_price:.2f}){RESET}",
                 )
                 await self._close_position(bar, sl_price, self.entry_price, self.side)
             elif current_price <= tp_price:
                 self.logger.info(
-                    f"{NEON_GREEN}Simulated SELL position hit Take Profit at {current_price} (TP: {tp_price:.2f}){RESET}"
+                    f"{NEON_GREEN}Simulated SELL position hit Take Profit at {current_price} (TP: {tp_price:.2f}){RESET}",
                 )
                 await self._close_position(bar, tp_price, self.entry_price, self.side)
 
@@ -431,7 +454,7 @@ class Backtester:
         self.logger.info(f"{NEON_CYAN}Final Capital: {final_capital:.2f}{RESET}")
         self.logger.info(f"{NEON_CYAN}Total PnL: {total_pnl:.2f}{RESET}")
         self.logger.info(
-            f"{NEON_CYAN}Total Fees Incurred: {self.fees_incurred:.2f}{RESET}"
+            f"{NEON_CYAN}Total Fees Incurred: {self.fees_incurred:.2f}{RESET}",
         )
         self.logger.info(f"{NEON_CYAN}Number of Trades: {num_trades}{RESET}")
         self.logger.info(f"{NEON_CYAN}Winning Trades: {len(winning_trades)}{RESET}")
@@ -459,7 +482,8 @@ async def main():
     # Override config for backtesting if needed
     config["testnet"] = False  # Use real data, so set to False
     if "gemini_ai_analysis" in config and isinstance(
-        config["gemini_ai_analysis"], dict
+        config["gemini_ai_analysis"],
+        dict,
     ):
         config["gemini_ai_analysis"]["enabled"] = (
             False  # Disable Gemini AI for backtesting speed
@@ -482,11 +506,18 @@ async def main():
     )
     indicator_calculator = IndicatorCalculator(logger)
     trading_analyzer = TradingAnalyzer(
-        config, logger, config["symbol"], indicator_calculator
+        config,
+        logger,
+        config["symbol"],
+        indicator_calculator,
     )
 
     backtester = Backtester(
-        config, logger, bybit_client, indicator_calculator, trading_analyzer
+        config,
+        logger,
+        bybit_client,
+        indicator_calculator,
+        trading_analyzer,
     )
 
     # Define backtest period

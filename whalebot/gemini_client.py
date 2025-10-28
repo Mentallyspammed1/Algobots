@@ -16,7 +16,10 @@ class GeminiClient:
     """A client for interacting with the Google Gemini API to get trading signals."""
 
     def __init__(
-        self, api_key: str, logger: logging.Logger, model: str = "gemini-1.5-flash"
+        self,
+        api_key: str,
+        logger: logging.Logger,
+        model: str = "gemini-1.5-flash",
     ):
         """Initializes the GeminiClient.
 
@@ -60,7 +63,8 @@ class GeminiClient:
         return prompt
 
     def get_trading_signal(
-        self, indicator_data: dict[str, Any]
+        self,
+        indicator_data: dict[str, Any],
     ) -> dict[str, Any] | None:
         prompt = self._prepare_prompt(indicator_data)
         headers = {"Content-Type": "application/json"}
@@ -68,7 +72,10 @@ class GeminiClient:
         text_content = ""
         try:
             response = requests.post(
-                self.api_url, headers=headers, json=payload, timeout=30
+                self.api_url,
+                headers=headers,
+                json=payload,
+                timeout=30,
             )
             response.raise_for_status()
 
@@ -95,7 +102,7 @@ class GeminiClient:
             ):
                 return signal_data
             self.logger.warning(
-                f"{NEON_YELLOW}Gemini API response is missing required keys.{RESET}"
+                f"{NEON_YELLOW}Gemini API response is missing required keys.{RESET}",
             )
             return None
 
@@ -103,7 +110,7 @@ class GeminiClient:
             self.logger.error(f"{NEON_RED}Error: Gemini API request timed out.{RESET}")
         except requests.exceptions.HTTPError as e:
             self.logger.error(
-                f"{NEON_RED}Error: Gemini API HTTP error: {e.response.status_code} - {e.response.text}{RESET}"
+                f"{NEON_RED}Error: Gemini API HTTP error: {e.response.status_code} - {e.response.text}{RESET}",
             )
         except requests.exceptions.RequestException as e:
             self.logger.error(
@@ -112,7 +119,7 @@ class GeminiClient:
             )
         except json.JSONDecodeError:
             self.logger.error(
-                f"{NEON_RED}Error: Failed to decode JSON response from Gemini API. Raw text was: {text_content}{RESET}"
+                f"{NEON_RED}Error: Failed to decode JSON response from Gemini API. Raw text was: {text_content}{RESET}",
             )
 
         return None

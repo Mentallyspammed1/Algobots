@@ -60,7 +60,9 @@ class PrecisionManager:
         self.is_loaded = False
 
     async def load_all_instruments(
-        self, retry_delay: float = 5.0, max_retries: int = 3
+        self,
+        retry_delay: float = 5.0,
+        max_retries: int = 3,
     ):
         """Loads all instrument specifications from Bybit asynchronously."""
         async with self._lock:
@@ -75,7 +77,8 @@ class PrecisionManager:
                 for attempt in range(max_retries):
                     try:
                         response = self.http_session.get_instruments_info(
-                            category=category, limit=1000
+                            category=category,
+                            limit=1000,
                         )  # Max limit
 
                         if response["retCode"] == 0:
@@ -84,84 +87,91 @@ class PrecisionManager:
 
                                 if category in ["linear", "inverse"]:
                                     specs = self._parse_derivatives_specs(
-                                        inst_data, category
+                                        inst_data,
+                                        category,
                                     )
                                 elif category == "spot":
                                     specs = self._parse_spot_specs(inst_data, category)
                                 elif category == "option":
                                     specs = self._parse_option_specs(
-                                        inst_data, category
+                                        inst_data,
+                                        category,
                                     )
                                 else:
                                     self.logger.warning(
-                                        f"Skipping unknown instrument category: {category}"
+                                        f"Skipping unknown instrument category: {category}",
                                     )
                                     continue
 
                                 self.instruments[symbol] = specs
                             self.logger.debug(
-                                f"Loaded {len(response['result']['list'])} instruments for category: {category}"
+                                f"Loaded {len(response['result']['list'])} instruments for category: {category}",
                             )
                             break  # Success, move to next category
                         self.logger.error(
-                            f"Failed to fetch {category} instruments (attempt {attempt + 1}/{max_retries}): {response['retMsg']}"
+                            f"Failed to fetch {category} instruments (attempt {attempt + 1}/{max_retries}): {response['retMsg']}",
                         )
                         await asyncio.sleep(retry_delay)
                     except Exception as e:
                         self.logger.error(
-                            f"Exception loading {category} instruments (attempt {attempt + 1}/{max_retries}): {e}"
+                            f"Exception loading {category} instruments (attempt {attempt + 1}/{max_retries}): {e}",
                         )
                         await asyncio.sleep(retry_delay)
                 else:  # This block runs if the loop completes without a 'break' (i.e., all retries failed)
                     self.logger.critical(
-                        f"Failed to load {category} instruments after {max_retries} attempts. Bot might not function correctly."
+                        f"Failed to load {category} instruments after {max_retries} attempts. Bot might not function correctly.",
                     )
 
             if not self.instruments:
                 self.logger.critical(
-                    "No instruments loaded. Critical error in PrecisionManager."
+                    "No instruments loaded. Critical error in PrecisionManager.",
                 )
             else:
                 self.is_loaded = True
                 self.logger.info(
-                    f"Successfully loaded {len(self.instruments)} total instrument specifications."
+                    f"Successfully loaded {len(self.instruments)} total instrument specifications.",
                 )
 
     async def fetch_and_update_fee_rates(
-        self, category: str, symbol: str, retry_delay: float = 3.0, max_retries: int = 3
+        self,
+        category: str,
+        symbol: str,
+        retry_delay: float = 3.0,
+        max_retries: int = 3,
     ):
         """Fetches and updates user-specific fee rates for a given symbol and category asynchronously."""
         specs = self.get_specs(symbol)
         if not specs:
             self.logger.warning(
-                f"Cannot update fee rates for {symbol}: specs not loaded. Please load instruments first."
+                f"Cannot update fee rates for {symbol}: specs not loaded. Please load instruments first.",
             )
             return
 
         for attempt in range(max_retries):
             try:
                 response = self.http_session.get_fee_rates(
-                    category=category, symbol=symbol
+                    category=category,
+                    symbol=symbol,
                 )
                 if response["retCode"] == 0 and response["result"]["list"]:
                     fee_info = response["result"]["list"][0]
                     specs.maker_fee = Decimal(fee_info["makerFeeRate"])
                     specs.taker_fee = Decimal(fee_info["takerFeeRate"])
                     self.logger.info(
-                        f"Updated fee rates for {symbol}: Maker={specs.maker_fee:.4f}, Taker={specs.taker_fee:.4f}"
+                        f"Updated fee rates for {symbol}: Maker={specs.maker_fee:.4f}, Taker={specs.taker_fee:.4f}",
                     )
                     return  # Success
                 self.logger.warning(
-                    f"Failed to fetch fee rates for {symbol} (attempt {attempt + 1}/{max_retries}): {response.get('retMsg', 'Unknown error')}. Using default fees."
+                    f"Failed to fetch fee rates for {symbol} (attempt {attempt + 1}/{max_retries}): {response.get('retMsg', 'Unknown error')}. Using default fees.",
                 )
                 await asyncio.sleep(retry_delay)
             except Exception as e:
                 self.logger.error(
-                    f"Exception fetching fee rates for {symbol} (attempt {attempt + 1}/{max_retries}): {e}. Using default fees."
+                    f"Exception fetching fee rates for {symbol} (attempt {attempt + 1}/{max_retries}): {e}. Using default fees.",
                 )
                 await asyncio.sleep(retry_delay)
         self.logger.warning(
-            f"Could not update fee rates for {symbol} after {max_retries} retries. Using default fee rates."
+            f"Could not update fee rates for {symbol} after {max_retries} retries. Using default fee rates.",
         )
 
     def _parse_derivatives_specs(self, inst: dict, category: str) -> InstrumentSpecs:
@@ -186,11 +196,11 @@ class PrecisionManager:
             max_leverage=Decimal(leverage_filter["maxLeverage"]),
             leverage_step=Decimal(leverage_filter["leverageStep"]),
             min_notional_value=Decimal(
-                lot_size.get("minOrderAmt", "0")
+                lot_size.get("minOrderAmt", "0"),
             ),  # Unified approach, 'minOrderAmt' for derivatives is notional
             max_notional_value=Decimal(lot_size.get("maxOrderAmt", "1000000000")),
             contract_value=Decimal(
-                inst.get("contractValue", "1")
+                inst.get("contractValue", "1"),
             ),  # e.g. 0.0001 BTC for inverse
             is_inverse=(category == "inverse"),
         )
@@ -210,17 +220,17 @@ class PrecisionManager:
             max_price=Decimal(price_filter["maxPrice"]),
             tick_size=Decimal(price_filter["tickSize"]),
             min_order_qty=Decimal(
-                lot_size["basePrecision"]
+                lot_size["basePrecision"],
             ),  # Spot uses basePrecision for min qty
             max_order_qty=Decimal(lot_size["maxOrderQty"]),
             qty_step=Decimal(
-                lot_size["basePrecision"]
+                lot_size["basePrecision"],
             ),  # Spot uses basePrecision for qty step
             min_leverage=Decimal("1"),  # Spot doesn't have leverage, use 1x
             max_leverage=Decimal("1"),
             leverage_step=Decimal("1"),
             min_notional_value=Decimal(
-                lot_size.get("minOrderAmt", "0")
+                lot_size.get("minOrderAmt", "0"),
             ),  # min order value in quote currency
             max_notional_value=Decimal(lot_size.get("maxOrderAmt", "1000000000")),
             contract_value=Decimal("1"),
@@ -245,7 +255,7 @@ class PrecisionManager:
             max_order_qty=Decimal(lot_size["maxOrderQty"]),
             qty_step=Decimal(lot_size["qtyStep"]),
             min_leverage=Decimal(
-                "1"
+                "1",
             ),  # Options don't have traditional leverage, often 1x
             max_leverage=Decimal("1"),
             leverage_step=Decimal("1"),
@@ -260,19 +270,23 @@ class PrecisionManager:
         specs = self.instruments.get(symbol)
         if not specs:
             self.logger.warning(
-                f"Instrument specifications for {symbol} not found. Ensure it's loaded."
+                f"Instrument specifications for {symbol} not found. Ensure it's loaded.",
             )
         return specs
 
     def round_price(
-        self, symbol: str, price: float | Decimal, rounding_mode=ROUND_DOWN
+        self,
+        symbol: str,
+        price: float | Decimal,
+        rounding_mode=ROUND_DOWN,
     ) -> Decimal:
         """Rounds a price to the correct tick size for a symbol."""
         specs = self.get_specs(symbol)
         if not specs:
             # Fallback to a common precision if specs not found (e.g., for logging before specs loaded)
             return Decimal(str(price)).quantize(
-                Decimal("0.000001"), rounding=rounding_mode
+                Decimal("0.000001"),
+                rounding=rounding_mode,
             )
 
         price_decimal = Decimal(str(price))
@@ -282,7 +296,8 @@ class PrecisionManager:
             return price_decimal
 
         rounded = (price_decimal / tick_size).quantize(
-            Decimal("1"), rounding=rounding_mode
+            Decimal("1"),
+            rounding=rounding_mode,
         ) * tick_size
 
         # Ensure within min/max bounds (optional, but good for validation)
@@ -291,14 +306,18 @@ class PrecisionManager:
         return rounded
 
     def round_quantity(
-        self, symbol: str, quantity: float | Decimal, rounding_mode=ROUND_DOWN
+        self,
+        symbol: str,
+        quantity: float | Decimal,
+        rounding_mode=ROUND_DOWN,
     ) -> Decimal:
         """Rounds a quantity to the correct step size for a symbol."""
         specs = self.get_specs(symbol)
         if not specs:
             # Fallback to a common precision if specs not found
             return Decimal(str(quantity)).quantize(
-                Decimal("0.0001"), rounding=rounding_mode
+                Decimal("0.0001"),
+                rounding=rounding_mode,
             )
 
         qty_decimal = Decimal(str(quantity))
@@ -309,7 +328,8 @@ class PrecisionManager:
 
         # Always round down quantities to avoid over-ordering
         rounded = (qty_decimal / qty_step).quantize(
-            Decimal("1"), rounding=rounding_mode
+            Decimal("1"),
+            rounding=rounding_mode,
         ) * qty_step
 
         # Ensure within min/max bounds (optional)

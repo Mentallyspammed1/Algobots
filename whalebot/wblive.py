@@ -257,7 +257,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "orderbook_imbalance": 0.10,
                 "mtf_trend_confluence": 0.25,
                 "volatility_index_signal": 0.10,
-            }
+            },
         },
         "execution": {
             "use_pybit": False,
@@ -376,16 +376,18 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
         log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
     return logger
@@ -433,7 +435,7 @@ class PybitTradingClient:
                 else None,
             )
             self.logger.info(
-                f"{NEON_GREEN}PyBit client initialized. Testnet={self.testnet}{RESET}"
+                f"{NEON_GREEN}PyBit client initialized. Testnet={self.testnet}{RESET}",
             )
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.enabled = False
@@ -443,7 +445,7 @@ class PybitTradingClient:
     def _handle_403_error(self, e):
         if "403" in str(e):
             self.logger.error(
-                f"{NEON_RED}Encountered a 403 Forbidden error. This may be due to an IP rate limit or a geographical restriction (e.g., from the USA). The bot will pause for 60 seconds.{RESET}"
+                f"{NEON_RED}Encountered a 403 Forbidden error. This may be due to an IP rate limit or a geographical restriction (e.g., from the USA). The bot will pause for 60 seconds.{RESET}",
             )
             time.sleep(60)
 
@@ -456,7 +458,7 @@ class PybitTradingClient:
             overrides.get(
                 "HEDGE_BUY" if side == "BUY" else "HEDGE_SELL",
                 1 if side == "BUY" else 2,
-            )
+            ),
         )
 
     def _side_to_bybit(self, side: Literal["BUY", "SELL"]) -> str:
@@ -474,7 +476,7 @@ class PybitTradingClient:
             return
         if not self._ok(resp):
             self.logger.error(
-                f"{NEON_RED}{action}: Error {resp.get('retCode')} - {resp.get('retMsg')}{RESET}"
+                f"{NEON_RED}{action}: Error {resp.get('retCode')} - {resp.get('retMsg')}{RESET}",
             )
 
     def set_leverage(self, symbol: str, buy: str, sell: str) -> bool:
@@ -494,7 +496,7 @@ class PybitTradingClient:
             pybit.exceptions.PybitHTTPException,
         ) as e:
             self.logger.error(
-                f"{NEON_RED}set_leverage failed: {e}. Please check symbol, leverage, and account status.{RESET}"
+                f"{NEON_RED}set_leverage failed: {e}. Please check symbol, leverage, and account status.{RESET}",
             )
             self._handle_403_error(e)
             return False
@@ -549,7 +551,7 @@ class PybitTradingClient:
             ):
                 return Decimal(response["result"]["list"][0]["lastPrice"])
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}"
+                f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
@@ -562,7 +564,8 @@ class PybitTradingClient:
             return None
         try:
             response = self.session.get_instruments_info(
-                category="linear", symbol=symbol
+                category="linear",
+                symbol=symbol,
             )
             if (
                 response
@@ -571,7 +574,7 @@ class PybitTradingClient:
             ):
                 return response["result"]["list"][0]
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch instrument info for {symbol}.{RESET}"
+                f"{NEON_YELLOW}Could not fetch instrument info for {symbol}.{RESET}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
@@ -580,7 +583,10 @@ class PybitTradingClient:
             return None
 
     def fetch_klines(
-        self, symbol: str, interval: str, limit: int
+        self,
+        symbol: str,
+        interval: str,
+        limit: int,
     ) -> pd.DataFrame | None:
         if not self.enabled:
             return None
@@ -606,7 +612,9 @@ class PybitTradingClient:
                     ],
                 )
                 df["start_time"] = pd.to_datetime(
-                    df["start_time"].astype(int), unit="ms", utc=True
+                    df["start_time"].astype(int),
+                    unit="ms",
+                    utc=True,
                 ).dt.tz_convert(TIMEZONE)
                 for col in ["open", "high", "low", "close", "volume", "turnover"]:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -614,7 +622,7 @@ class PybitTradingClient:
                 df.sort_index(inplace=True)
                 return df if not df.empty else None
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}.{RESET}"
+                f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}.{RESET}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
@@ -627,12 +635,14 @@ class PybitTradingClient:
             return None
         try:
             response = self.session.get_orderbook(
-                category="linear", symbol=symbol, limit=limit
+                category="linear",
+                symbol=symbol,
+                limit=limit,
             )
             if response and response.get("result"):
                 return response["result"]
             self.logger.warning(
-                f"{NEON_YELLOW}Could not fetch orderbook for {symbol}.{RESET}"
+                f"{NEON_YELLOW}Could not fetch orderbook for {symbol}.{RESET}",
             )
             return None
         except pybit.exceptions.FailedRequestError as e:
@@ -645,7 +655,8 @@ class PybitTradingClient:
             return None
         try:
             resp = self.session.batch_place_order(
-                category=self.category, request=requests
+                category=self.category,
+                request=requests,
             )
             self._log_api("batch_place_order", resp)
             return resp
@@ -658,7 +669,9 @@ class PybitTradingClient:
             return None
         try:
             resp = self.session.cancel_order(
-                category=self.category, symbol=symbol, orderLinkId=order_link_id
+                category=self.category,
+                symbol=symbol,
+                orderLinkId=order_link_id,
             )
             self._log_api("cancel_by_link_id", resp)
             return resp
@@ -667,7 +680,10 @@ class PybitTradingClient:
             return None
 
     def get_executions(
-        self, symbol: str, start_time_ms: int, limit: int
+        self,
+        symbol: str,
+        start_time_ms: int,
+        limit: int,
     ) -> dict | None:
         if not self.enabled:
             return None
@@ -723,10 +739,10 @@ def build_partial_tp_targets(
                 "order_type": t.get("order_type", "Limit"),
                 "tif": tif,
                 "post_only": bool(
-                    t.get("post_only", ex.get("post_only_default", False))
+                    t.get("post_only", ex.get("post_only_default", False)),
                 ),
                 "link_id_suffix": f"tp{i}",
-            }
+            },
         )
     return out
 
@@ -756,7 +772,7 @@ class PositionManager:
     def _update_precision_from_exchange(self):
         if not self.pybit or not self.pybit.enabled:
             self.logger.warning(
-                f"Pybit client not enabled. Using config precision for {self.symbol}."
+                f"Pybit client not enabled. Using config precision for {self.symbol}.",
             )
             return
         info = self.pybit.fetch_instrument_info(self.symbol)
@@ -766,7 +782,7 @@ class PositionManager:
                 if not self.qty_step.is_zero():
                     self.order_precision = abs(self.qty_step.as_tuple().exponent)
                 self.logger.info(
-                    f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}"
+                    f"Updated qty_step: {self.qty_step}, order_precision: {self.order_precision}",
                 )
             if "priceFilter" in info:
                 tick_size = Decimal(str(info["priceFilter"].get("tickSize")))
@@ -775,7 +791,7 @@ class PositionManager:
                 self.logger.info(f"Updated price_precision: {self.price_precision}")
         else:
             self.logger.warning(
-                f"Could not fetch precision for {self.symbol}. Using config values."
+                f"Could not fetch precision for {self.symbol}. Using config values.",
             )
 
     def _get_current_balance(self) -> Decimal:
@@ -788,7 +804,10 @@ class PositionManager:
         return Decimal(str(self.config["trade_management"]["account_balance"]))
 
     def _calculate_order_size(
-        self, current_price: Decimal, atr_value: Decimal, conviction: float = 1.0
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
+        conviction: float = 1.0,
     ) -> Decimal:
         if not self.trade_management_enabled:
             return Decimal("0")
@@ -799,13 +818,13 @@ class PositionManager:
         )
         risk_pct = base_risk_pct * Decimal(str(np.clip(0.5 + conviction, 0.5, 1.5)))
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         risk_amount = account_balance * risk_pct
         stop_loss_distance = atr_value * stop_loss_atr_multiple
         if stop_loss_distance <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}Stop loss distance is zero. Cannot calculate order size.{RESET}"
+                f"{NEON_YELLOW}Stop loss distance is zero. Cannot calculate order size.{RESET}",
             )
             return Decimal("0")
         order_qty = (risk_amount / stop_loss_distance) / current_price
@@ -813,7 +832,8 @@ class PositionManager:
             round_qty(order_qty, self.qty_step)
             if self.qty_step
             else order_qty.quantize(
-                Decimal(f"1e-{self.order_precision}"), rounding=ROUND_DOWN
+                Decimal(f"1e-{self.order_precision}"),
+                rounding=ROUND_DOWN,
             )
         )
 
@@ -830,7 +850,7 @@ class PositionManager:
                 pos_list = positions_resp.get("result", {}).get("list", [])
                 if any(p.get("size") and Decimal(p.get("size")) > 0 for p in pos_list):
                     self.logger.warning(
-                        f"{NEON_YELLOW}Exchange position exists, aborting new position.{RESET}"
+                        f"{NEON_YELLOW}Exchange position exists, aborting new position.{RESET}",
                     )
                     return None
 
@@ -839,20 +859,22 @@ class PositionManager:
             or len(self.open_positions) >= self.max_open_positions
         ):
             self.logger.info(
-                f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}"
+                f"{NEON_YELLOW}Cannot open new position (max reached or disabled).{RESET}",
             )
             return None
 
         order_qty = self._calculate_order_size(current_price, atr_value, conviction)
         if order_qty <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}Order quantity is zero. Cannot open position.{RESET}"
+                f"{NEON_YELLOW}Order quantity is zero. Cannot open position.{RESET}",
             )
             return None
 
         stop_loss = self._compute_stop_loss_price(signal, current_price, atr_value)
         take_profit = self._calculate_take_profit_price(
-            signal, current_price, atr_value
+            signal,
+            current_price,
+            atr_value,
         )
 
         position = {
@@ -880,11 +902,11 @@ class PositionManager:
             )
             if not self.pybit._ok(resp):
                 self.logger.error(
-                    f"{NEON_RED}Live entry failed. Simulating only.{RESET}"
+                    f"{NEON_RED}Live entry failed. Simulating only.{RESET}",
                 )
             else:
                 self.logger.info(
-                    f"{NEON_GREEN}Live entry submitted: {entry_link}{RESET}"
+                    f"{NEON_GREEN}Live entry submitted: {entry_link}{RESET}",
                 )
                 if self.config["execution"]["tpsl_mode"] == "Partial":
                     targets = build_partial_tp_targets(
@@ -899,7 +921,7 @@ class PositionManager:
                         payload = {
                             "symbol": self.symbol,
                             "side": self.pybit._side_to_bybit(
-                                "SELL" if signal == "BUY" else "BUY"
+                                "SELL" if signal == "BUY" else "BUY",
                             ),
                             "orderType": t["order_type"],
                             "qty": self.pybit._q(t["qty"]),
@@ -916,11 +938,11 @@ class PositionManager:
                         resp_tp = self.pybit.place_order(**payload)
                         if resp_tp and resp_tp.get("retCode") == 0:
                             self.logger.info(
-                                f"{NEON_GREEN}Placed individual TP target: {payload.get('orderLinkId')}{RESET}"
+                                f"{NEON_GREEN}Placed individual TP target: {payload.get('orderLinkId')}{RESET}",
                             )
                         else:
                             self.logger.error(
-                                f"{NEON_RED}Failed to place TP target: {payload.get('orderLinkId')}. Error: {resp_tp.get('retMsg') if resp_tp else 'No response'}{RESET}"
+                                f"{NEON_RED}Failed to place TP target: {payload.get('orderLinkId')}. Error: {resp_tp.get('retMsg') if resp_tp else 'No response'}{RESET}",
                             )
 
                 if self.config["execution"]["sl_scheme"]["use_conditional_stop"]:
@@ -929,7 +951,7 @@ class PositionManager:
                         category=self.pybit.category,
                         symbol=self.symbol,
                         side=self.pybit._side_to_bybit(
-                            "SELL" if signal == "BUY" else "BUY"
+                            "SELL" if signal == "BUY" else "BUY",
                         ),
                         orderType=self.config["execution"]["sl_scheme"][
                             "stop_order_type"
@@ -943,12 +965,12 @@ class PositionManager:
                     )
                     if self.pybit._ok(sresp):
                         self.logger.info(
-                            f"{NEON_GREEN}Conditional stop placed at {stop_loss}.{RESET}"
+                            f"{NEON_GREEN}Conditional stop placed at {stop_loss}.{RESET}",
                         )
 
         self.open_positions.append(position)
         self.logger.info(
-            f"{NEON_GREEN}Opened {signal} position (simulated): {position}{RESET}"
+            f"{NEON_GREEN}Opened {signal} position (simulated): {position}{RESET}",
         )
         return position
 
@@ -974,7 +996,7 @@ class PositionManager:
                             "exit_time": datetime.now(TIMEZONE),
                             "exit_price": current_price,
                             "closed_by": closed_by,
-                        }
+                        },
                     )
                     pnl = (
                         ((current_price - pos["entry_price"]) * pos["qty"])
@@ -983,7 +1005,7 @@ class PositionManager:
                     )
                     performance_tracker.record_trade(pos, pnl)
                     self.logger.info(
-                        f"{NEON_PURPLE}Closed {pos['side']} by {closed_by}. PnL: {pnl:.2f}{RESET}"
+                        f"{NEON_PURPLE}Closed {pos['side']} by {closed_by}. PnL: {pnl:.2f}{RESET}",
                     )
                     positions_to_close.append(i)
         self.open_positions = [
@@ -994,7 +1016,10 @@ class PositionManager:
         return [pos for pos in self.open_positions if pos["status"] == "OPEN"]
 
     def _compute_stop_loss_price(
-        self, side: Literal["BUY", "SELL"], entry_price: Decimal, atr_value: Decimal
+        self,
+        side: Literal["BUY", "SELL"],
+        entry_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         ex = self.config["execution"]
         sch = ex["sl_scheme"]
@@ -1017,10 +1042,13 @@ class PositionManager:
         return round_price(sl_with_buffer, price_prec)
 
     def _calculate_take_profit_price(
-        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+        self,
+        signal: Literal["BUY", "SELL"],
+        current_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         tp_mult = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
         tp = (
             (current_price + (atr_value * tp_mult))
@@ -1033,20 +1061,22 @@ class PositionManager:
         if pos.get("status") != "OPEN" or self.live:
             return
         atr_mult = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         side = pos["side"]
         pos["best_price"] = pos.get("best_price", pos["entry_price"])
         if side == "BUY":
             pos["best_price"] = max(pos["best_price"], current_price)
             new_sl = round_price(
-                pos["best_price"] - atr_mult * atr_value, self.price_precision
+                pos["best_price"] - atr_mult * atr_value,
+                self.price_precision,
             )
             pos["stop_loss"] = max(pos["stop_loss"], new_sl)
         else:  # SELL
             pos["best_price"] = min(pos["best_price"], current_price)
             new_sl = round_price(
-                pos["best_price"] + atr_mult * atr_value, self.price_precision
+                pos["best_price"] + atr_mult * atr_value,
+                self.price_precision,
             )
             pos["stop_loss"] = min(pos["stop_loss"], new_sl)
 
@@ -1083,7 +1113,7 @@ class PositionManager:
                     pos["entry_price"] = total_cost / pos["qty"]
                     pos["adds"] = adds + 1
                     self.logger.info(
-                        f"{NEON_GREEN}Pyramiding add #{pos['adds']} qty={add_qty}. New avg price: {pos['entry_price']:.2f}{RESET}"
+                        f"{NEON_GREEN}Pyramiding add #{pos['adds']} qty={add_qty}. New avg price: {pos['entry_price']:.2f}{RESET}",
                     )
 
 
@@ -1113,7 +1143,7 @@ class PerformanceTracker:
         drawdown = self.peak_pnl - self.total_pnl
         self.max_drawdown = max(self.max_drawdown, drawdown)
         self.logger.info(
-            f"{NEON_CYAN}Trade recorded. PnL: {pnl:.4f}. Total PnL: {self.total_pnl:.4f}{RESET}"
+            f"{NEON_CYAN}Trade recorded. PnL: {pnl:.4f}. Total PnL: {self.total_pnl:.4f}{RESET}",
         )
 
     def day_pnl(self) -> Decimal:
@@ -1178,7 +1208,10 @@ class ExchangeExecutionSync:
         return link_id.startswith("wgx_")
 
     def _compute_be_price(
-        self, side: str, entry_price: Decimal, atr_value: Decimal
+        self,
+        side: str,
+        entry_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         be_cfg = self.cfg["execution"]["breakeven_after_tp1"]
         off_type = str(be_cfg.get("offset_type", "atr")).lower()
@@ -1228,7 +1261,7 @@ class ExchangeExecutionSync:
             )
             if self.pybit._ok(sresp):
                 self.logger.info(
-                    f"{NEON_GREEN}Moved SL to breakeven at {new_sl}.{RESET}"
+                    f"{NEON_GREEN}Moved SL to breakeven at {new_sl}.{RESET}",
                 )
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(f"{NEON_RED}Breakeven move exception: {e}{RESET}")
@@ -1282,7 +1315,8 @@ class ExchangeExecutionSync:
                         self.pt.record_trade(
                             {
                                 "exit_time": datetime.fromtimestamp(
-                                    ts_ms / 1000, tz=TIMEZONE
+                                    ts_ms / 1000,
+                                    tz=TIMEZONE,
                                 ),
                                 "exit_price": exec_price,
                                 "qty": exec_qty,
@@ -1298,14 +1332,15 @@ class ExchangeExecutionSync:
                                 {
                                     "status": "CLOSED",
                                     "exit_time": datetime.fromtimestamp(
-                                        ts_ms / 1000, tz=TIMEZONE
+                                        ts_ms / 1000,
+                                        tz=TIMEZONE,
                                     ),
                                     "exit_price": exec_price,
                                     "closed_by": tag,
-                                }
+                                },
                             )
                             self.logger.info(
-                                f"{NEON_PURPLE}Position fully closed by {tag}.{RESET}"
+                                f"{NEON_PURPLE}Position fully closed by {tag}.{RESET}",
                             )
                     if tag == "TP" and link.endswith("_tp1"):
                         atr_val = Decimal(str(self.cfg.get("_last_atr", "0.1")))
@@ -1351,12 +1386,13 @@ class PositionHeartbeat:
                 for p in lst
             )
             local = next(
-                (p for p in self.pm.open_positions if p.get("status") == "OPEN"), None
+                (p for p in self.pm.open_positions if p.get("status") == "OPEN"),
+                None,
             )
             if net_qty == 0 and local:
                 local.update({"status": "CLOSED", "closed_by": "HEARTBEAT_SYNC"})
                 self.logger.info(
-                    f"{NEON_PURPLE}Heartbeat: Closed local position (exchange flat).{RESET}"
+                    f"{NEON_PURPLE}Heartbeat: Closed local position (exchange flat).{RESET}",
                 )
                 self.pm.open_positions = [
                     p for p in self.pm.open_positions if p.get("status") == "OPEN"
@@ -1377,7 +1413,7 @@ class PositionHeartbeat:
                 }
                 self.pm.open_positions.append(synt)
                 self.logger.info(
-                    f"{NEON_YELLOW}Heartbeat: Created synthetic local position.{RESET}"
+                    f"{NEON_YELLOW}Heartbeat: Created synthetic local position.{RESET}",
                 )
         except (pybit.exceptions.FailedRequestError, Exception) as e:
             self.logger.error(f"{NEON_RED}Heartbeat error: {e}{RESET}")
@@ -1401,7 +1437,7 @@ class TradingAnalyzer:
         self.indicator_settings = config["indicator_settings"]
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}TradingAnalyzer initialized with empty DataFrame.{RESET}"
+                f"{NEON_YELLOW}TradingAnalyzer initialized with empty DataFrame.{RESET}",
             )
             return
         self._calculate_all_indicators()
@@ -1428,12 +1464,12 @@ class TradingAnalyzer:
             )
             if is_empty:
                 self.logger.warning(
-                    f"{NEON_YELLOW}[{self.symbol}] Indicator '{name}' returned empty.{RESET}"
+                    f"{NEON_YELLOW}[{self.symbol}] Indicator '{name}' returned empty.{RESET}",
                 )
             return result if not is_empty else None
         except Exception as e:
             self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Error calculating '{name}': {e}{RESET}"
+                f"{NEON_RED}[{self.symbol}] Error calculating '{name}': {e}{RESET}",
             )
             return None
 
@@ -1444,22 +1480,30 @@ class TradingAnalyzer:
 
         if cfg["indicators"].get("sma_10", False):
             self.df["SMA_10"] = self._safe_calculate(
-                indicators.calculate_sma, "SMA_10", period=isd["sma_short_period"]
+                indicators.calculate_sma,
+                "SMA_10",
+                period=isd["sma_short_period"],
             )
             if self.df["SMA_10"] is not None and not self.df["SMA_10"].empty:
                 self.indicator_values["SMA_10"] = self.df["SMA_10"].iloc[-1]
         if cfg["indicators"].get("sma_trend_filter", False):
             self.df["SMA_Long"] = self._safe_calculate(
-                indicators.calculate_sma, "SMA_Long", period=isd["sma_long_period"]
+                indicators.calculate_sma,
+                "SMA_Long",
+                period=isd["sma_long_period"],
             )
             if self.df["SMA_Long"] is not None and not self.df["SMA_Long"].empty:
                 self.indicator_values["SMA_Long"] = self.df["SMA_Long"].iloc[-1]
         if cfg["indicators"].get("ema_alignment", False):
             self.df["EMA_Short"] = self._safe_calculate(
-                indicators.calculate_ema, "EMA_Short", period=isd["ema_short_period"]
+                indicators.calculate_ema,
+                "EMA_Short",
+                period=isd["ema_short_period"],
             )
             self.df["EMA_Long"] = self._safe_calculate(
-                indicators.calculate_ema, "EMA_Long", period=isd["ema_long_period"]
+                indicators.calculate_ema,
+                "EMA_Long",
+                period=isd["ema_long_period"],
             )
             if self.df["EMA_Short"] is not None and not self.df["EMA_Short"].empty:
                 self.indicator_values["EMA_Short"] = self.df["EMA_Short"].iloc[-1]
@@ -1467,13 +1511,17 @@ class TradingAnalyzer:
                 self.indicator_values["EMA_Long"] = self.df["EMA_Long"].iloc[-1]
         self.df["TR"] = self._safe_calculate(indicators.calculate_true_range, "TR")
         self.df["ATR"] = self._safe_calculate(
-            indicators.calculate_atr, "ATR", period=isd["atr_period"]
+            indicators.calculate_atr,
+            "ATR",
+            period=isd["atr_period"],
         )
         if self.df["ATR"] is not None and not self.df["ATR"].empty:
             self.indicator_values["ATR"] = self.df["ATR"].iloc[-1]
         if cfg["indicators"].get("rsi", False):
             self.df["RSI"] = self._safe_calculate(
-                indicators.calculate_rsi, "RSI", period=isd["rsi_period"]
+                indicators.calculate_rsi,
+                "RSI",
+                period=isd["rsi_period"],
             )
             if self.df["RSI"] is not None and not self.df["RSI"].empty:
                 self.indicator_values["RSI"] = self.df["RSI"].iloc[-1]
@@ -1509,25 +1557,33 @@ class TradingAnalyzer:
                 self.indicator_values["BB_Lower"] = bb_lower.iloc[-1]
         if cfg["indicators"].get("cci", False):
             self.df["CCI"] = self._safe_calculate(
-                indicators.calculate_cci, "CCI", period=isd["cci_period"]
+                indicators.calculate_cci,
+                "CCI",
+                period=isd["cci_period"],
             )
             if self.df["CCI"] is not None and not self.df["CCI"].empty:
                 self.indicator_values["CCI"] = self.df["CCI"].iloc[-1]
         if cfg["indicators"].get("wr", False):
             self.df["WR"] = self._safe_calculate(
-                indicators.calculate_williams_r, "WR", period=isd["williams_r_period"]
+                indicators.calculate_williams_r,
+                "WR",
+                period=isd["williams_r_period"],
             )
             if self.df["WR"] is not None and not self.df["WR"].empty:
                 self.indicator_values["WR"] = self.df["WR"].iloc[-1]
         if cfg["indicators"].get("mfi", False):
             self.df["MFI"] = self._safe_calculate(
-                indicators.calculate_mfi, "MFI", period=isd["mfi_period"]
+                indicators.calculate_mfi,
+                "MFI",
+                period=isd["mfi_period"],
             )
             if self.df["MFI"] is not None and not self.df["MFI"].empty:
                 self.indicator_values["MFI"] = self.df["MFI"].iloc[-1]
         if cfg["indicators"].get("obv", False):
             obv_val, obv_ema = self._safe_calculate(
-                indicators.calculate_obv, "OBV", ema_period=isd["obv_ema_period"]
+                indicators.calculate_obv,
+                "OBV",
+                ema_period=isd["obv_ema_period"],
             )
             if obv_val is not None and not obv_val.empty:
                 self.df["OBV"] = obv_val
@@ -1537,7 +1593,9 @@ class TradingAnalyzer:
                 self.indicator_values["OBV_EMA"] = obv_ema.iloc[-1]
         if cfg["indicators"].get("cmf", False):
             cmf_val = self._safe_calculate(
-                indicators.calculate_cmf, "CMF", period=isd["cmf_period"]
+                indicators.calculate_cmf,
+                "CMF",
+                period=isd["cmf_period"],
             )
             if cmf_val is not None and not cmf_val.empty:
                 self.df["CMF"] = cmf_val
@@ -1635,7 +1693,9 @@ class TradingAnalyzer:
                 self.indicator_values["MACD_Hist"] = histogram.iloc[-1]
         if cfg["indicators"].get("adx", False):
             adx_val, plus_di, minus_di = self._safe_calculate(
-                indicators.calculate_adx, "ADX", period=isd["adx_period"]
+                indicators.calculate_adx,
+                "ADX",
+                period=isd["adx_period"],
             )
             if adx_val is not None and not adx_val.empty:
                 self.df["ADX"] = adx_val
@@ -1661,7 +1721,9 @@ class TradingAnalyzer:
                 ].iloc[-1]
         if cfg["indicators"].get("vwma", False):
             self.df["VWMA"] = self._safe_calculate(
-                indicators.calculate_vwma, "VWMA", period=isd["vwma_period"]
+                indicators.calculate_vwma,
+                "VWMA",
+                period=isd["vwma_period"],
             )
             if self.df["VWMA"] is not None and not self.df["VWMA"].empty:
                 self.indicator_values["VWMA"] = self.df["VWMA"].iloc[-1]
@@ -1681,7 +1743,7 @@ class TradingAnalyzer:
         self.df.fillna(0, inplace=True)
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}DataFrame empty after indicator calculations.{RESET}"
+                f"{NEON_YELLOW}DataFrame empty after indicator calculations.{RESET}",
             )
 
     def _get_indicator_value(self, key: str, default: Any = np.nan) -> Any:
@@ -1736,8 +1798,9 @@ class TradingAnalyzer:
             return 0.0, None
         imb = self._clip(
             self._check_orderbook(
-                Decimal(str(self.df["close"].iloc[-1])), orderbook_data
-            )
+                Decimal(str(self.df["close"].iloc[-1])),
+                orderbook_data,
+            ),
         )
         if abs(imb) < 0.05:
             return 0.0, None
@@ -1807,12 +1870,12 @@ class TradingAnalyzer:
                 if close > sma_long:
                     score += w.get("sma_trend_filter", 0)
                     notes_buy.append(
-                        f"SMA Trend Bull +{w.get('sma_trend_filter', 0):.2f}"
+                        f"SMA Trend Bull +{w.get('sma_trend_filter', 0):.2f}",
                     )
                 elif close < sma_long:
                     score -= w.get("sma_trend_filter", 0)
                     notes_sell.append(
-                        f"SMA Trend Bear -{w.get('sma_trend_filter', 0):.2f}"
+                        f"SMA Trend Bear -{w.get('sma_trend_filter', 0):.2f}",
                     )
         if active.get("ehlers_supertrend"):
             st_fast_dir, st_slow_dir = (
@@ -1822,12 +1885,12 @@ class TradingAnalyzer:
             if st_fast_dir == 1 and st_slow_dir == 1:
                 score += w.get("ehlers_supertrend_alignment", 0)
                 notes_buy.append(
-                    f"EhlersST Bull +{w.get('ehlers_supertrend_alignment', 0):.2f}"
+                    f"EhlersST Bull +{w.get('ehlers_supertrend_alignment', 0):.2f}",
                 )
             elif st_fast_dir == -1 and st_slow_dir == -1:
                 score -= w.get("ehlers_supertrend_alignment", 0)
                 notes_sell.append(
-                    f"EhlersST Bear -{w.get('ehlers_supertrend_alignment', 0):.2f}"
+                    f"EhlersST Bear -{w.get('ehlers_supertrend_alignment', 0):.2f}",
                 )
         if active.get("macd"):
             macd, signal = (
@@ -1839,12 +1902,12 @@ class TradingAnalyzer:
                 if macd > signal and hist > 0 and prev_hist <= 0:
                     score += w.get("macd_alignment", 0)
                     notes_buy.append(
-                        f"MACD Bull Cross +{w.get('macd_alignment', 0):.2f}"
+                        f"MACD Bull Cross +{w.get('macd_alignment', 0):.2f}",
                     )
                 elif macd < signal and hist < 0 and prev_hist >= 0:
                     score -= w.get("macd_alignment", 0)
                     notes_sell.append(
-                        f"MACD Bear Cross -{w.get('macd_alignment', 0):.2f}"
+                        f"MACD Bear Cross -{w.get('macd_alignment', 0):.2f}",
                     )
         if active.get("adx"):
             adx, pdi, mdi = (
@@ -1856,12 +1919,12 @@ class TradingAnalyzer:
                 if pdi > mdi:
                     score += w.get("adx_strength", 0) * (adx / 50.0)
                     notes_buy.append(
-                        f"ADX Bull {adx:.1f} +{w.get('adx_strength', 0) * (adx / 50.0):.2f}"
+                        f"ADX Bull {adx:.1f} +{w.get('adx_strength', 0) * (adx / 50.0):.2f}",
                     )
                 else:
                     score -= w.get("adx_strength", 0) * (adx / 50.0)
                     notes_sell.append(
-                        f"ADX Bear {adx:.1f} -{w.get('adx_strength', 0) * (adx / 50.0):.2f}"
+                        f"ADX Bear {adx:.1f} -{w.get('adx_strength', 0) * (adx / 50.0):.2f}",
                     )
         if active.get("ichimoku_cloud"):
             tenkan, kijun, span_a, span_b, chikou = (
@@ -1886,7 +1949,7 @@ class TradingAnalyzer:
                 ):
                     score += w.get("ichimoku_confluence", 0)
                     notes_buy.append(
-                        f"Ichimoku Bull +{w.get('ichimoku_confluence', 0):.2f}"
+                        f"Ichimoku Bull +{w.get('ichimoku_confluence', 0):.2f}",
                     )
                 elif (
                     close < span_a
@@ -1896,7 +1959,7 @@ class TradingAnalyzer:
                 ):
                     score -= w.get("ichimoku_confluence", 0)
                     notes_sell.append(
-                        f"Ichimoku Bear -{w.get('ichimoku_confluence', 0):.2f}"
+                        f"Ichimoku Bear -{w.get('ichimoku_confluence', 0):.2f}",
                     )
         if active.get("psar"):
             if self._get_indicator_value("PSAR_Dir") == 1:
@@ -1938,11 +2001,11 @@ class TradingAnalyzer:
         if active.get("momentum"):
             mom_score = 0.0
             if not np.isnan(
-                self._get_indicator_value("RSI")
+                self._get_indicator_value("RSI"),
             ) and self._get_indicator_value("RSI") < isd.get("rsi_oversold", 30):
                 mom_score += 1
             elif not np.isnan(
-                self._get_indicator_value("RSI")
+                self._get_indicator_value("RSI"),
             ) and self._get_indicator_value("RSI") > isd.get("rsi_overbought", 70):
                 mom_score -= 1
             stoch_k, stoch_d = (
@@ -1953,37 +2016,39 @@ class TradingAnalyzer:
                 if stoch_k > stoch_d and stoch_k < isd.get("stoch_rsi_oversold", 20):
                     mom_score += 1
                 elif stoch_k < stoch_d and stoch_k > isd.get(
-                    "stoch_rsi_overbought", 80
+                    "stoch_rsi_overbought",
+                    80,
                 ):
                     mom_score -= 1
             if not np.isnan(
-                self._get_indicator_value("CCI")
+                self._get_indicator_value("CCI"),
             ) and self._get_indicator_value("CCI") < isd.get("cci_oversold", -100):
                 mom_score += 1
             elif not np.isnan(
-                self._get_indicator_value("CCI")
+                self._get_indicator_value("CCI"),
             ) and self._get_indicator_value("CCI") > isd.get("cci_overbought", 100):
                 mom_score -= 1
             if not np.isnan(
-                self._get_indicator_value("WR")
+                self._get_indicator_value("WR"),
             ) and self._get_indicator_value("WR") < isd.get("williams_r_oversold", -80):
                 mom_score += 1
             elif not np.isnan(
-                self._get_indicator_value("WR")
+                self._get_indicator_value("WR"),
             ) and self._get_indicator_value("WR") > isd.get(
-                "williams_r_overbought", -20
+                "williams_r_overbought",
+                -20,
             ):
                 mom_score -= 1
             if not np.isnan(
-                self._get_indicator_value("MFI")
+                self._get_indicator_value("MFI"),
             ) and self._get_indicator_value("MFI") < isd.get("mfi_oversold", 20):
                 mom_score += 1
             elif not np.isnan(
-                self._get_indicator_value("MFI")
+                self._get_indicator_value("MFI"),
             ) and self._get_indicator_value("MFI") > isd.get("mfi_overbought", 80):
                 mom_score -= 1
             final_mom_score = w.get("momentum_rsi_stoch_cci_wr_mfi", 0) * self._clip(
-                mom_score / 5.0
+                mom_score / 5.0,
             )
             score += final_mom_score
             if final_mom_score > 0:
@@ -1999,12 +2064,12 @@ class TradingAnalyzer:
                 if close < bb_l:
                     score += w.get("bollinger_bands", 0)
                     notes_buy.append(
-                        f"BB Reversal Bull +{w.get('bollinger_bands', 0):.2f}"
+                        f"BB Reversal Bull +{w.get('bollinger_bands', 0):.2f}",
                     )
                 elif close > bb_u:
                     score -= w.get("bollinger_bands", 0)
                     notes_sell.append(
-                        f"BB Reversal Bear -{w.get('bollinger_bands', 0):.2f}"
+                        f"BB Reversal Bear -{w.get('bollinger_bands', 0):.2f}",
                     )
         if active.get("volume_confirmation") and self._volume_confirm():
             score_change = w.get("volume_confirmation", 0)
@@ -2041,12 +2106,12 @@ class TradingAnalyzer:
                 if vol_delta > delta_thresh:
                     score += w.get("volume_delta_signal", 0)
                     notes_buy.append(
-                        f"VolDelta Bull +{w.get('volume_delta_signal', 0):.2f}"
+                        f"VolDelta Bull +{w.get('volume_delta_signal', 0):.2f}",
                     )
                 elif vol_delta < -delta_thresh:
                     score -= w.get("volume_delta_signal", 0)
                     notes_sell.append(
-                        f"VolDelta Bear -{w.get('volume_delta_signal', 0):.2f}"
+                        f"VolDelta Bear -{w.get('volume_delta_signal', 0):.2f}",
                     )
         if active.get("volatility_index"):
             vol_idx = self._nz(self._get_indicator_value("Volatility_Index"))
@@ -2060,7 +2125,8 @@ class TradingAnalyzer:
                 notes_sell.append("High Vol Dampen")
         if active.get("orderbook_imbalance"):
             ob_score, ob_note = self._orderbook_score(
-                orderbook_data, w.get("orderbook_imbalance", 0)
+                orderbook_data,
+                w.get("orderbook_imbalance", 0),
             )
             score += ob_score
             if ob_note:
@@ -2070,7 +2136,8 @@ class TradingAnalyzer:
                     notes_sell.append(ob_note)
         if active.get("mtf_analysis"):
             mtf_score, mtf_note = self._mtf_confluence(
-                mtf_trends, w.get("mtf_trend_confluence", 0)
+                mtf_trends,
+                w.get("mtf_trend_confluence", 0),
             )
             score += mtf_score
             if mtf_note:
@@ -2090,7 +2157,7 @@ class TradingAnalyzer:
         ):
             final_signal = "HOLD"
             self.logger.info(
-                f"{NEON_YELLOW}Signal held by hysteresis. Score {score:.2f} vs last {last_score:.2f}{RESET}"
+                f"{NEON_YELLOW}Signal held by hysteresis. Score {score:.2f} vs last {last_score:.2f}{RESET}",
             )
         elif score >= dyn_th:
             final_signal = "BUY"
@@ -2109,7 +2176,7 @@ class TradingAnalyzer:
         if notes_sell:
             self.logger.info(f"{NEON_RED}Sell Factors: {', '.join(notes_sell)}{RESET}")
         self.logger.info(
-            f"{NEON_PURPLE}Regime: {regime} | Score: {score:.2f} | DynThresh: {dyn_th:.2f} | Final: {final_signal}{RESET}"
+            f"{NEON_PURPLE}Regime: {regime} | Score: {score:.2f} | DynThresh: {dyn_th:.2f} | Final: {final_signal}{RESET}",
         )
         return final_signal, float(score)
 
@@ -2226,7 +2293,11 @@ def main() -> None:
     )
     heartbeat = (
         PositionHeartbeat(
-            config["symbol"], pybit_client, logger, config, position_manager
+            config["symbol"],
+            pybit_client,
+            logger,
+            config,
+            position_manager,
         )
         if config["execution"]["live_sync"]["heartbeat"]["enabled"]
         else None
@@ -2235,7 +2306,7 @@ def main() -> None:
     while True:
         try:
             logger.info(
-                f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+                f"{NEON_PURPLE}--- New Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}",
             )
 
             guard = config.get("risk_guardrails", {})
@@ -2255,7 +2326,7 @@ def main() -> None:
                     performance_tracker.max_drawdown >= max_dd
                 ):
                     logger.error(
-                        f"{NEON_RED}KILL SWITCH: Risk limits hit. Cooling down.{RESET}"
+                        f"{NEON_RED}KILL SWITCH: Risk limits hit. Cooling down.{RESET}",
                     )
                     time.sleep(int(guard.get("cooldown_after_kill_min", 120)) * 60)
                     continue
@@ -2277,7 +2348,8 @@ def main() -> None:
 
             orderbook_data = (
                 pybit_client.fetch_orderbook(
-                    config["symbol"], config["orderbook_limit"]
+                    config["symbol"],
+                    config["orderbook_limit"],
                 )
                 if config["indicators"].get("orderbook_imbalance")
                 else None
@@ -2287,7 +2359,7 @@ def main() -> None:
                 spread_bps = get_spread_bps(orderbook_data)
                 if spread_bps > float(guard.get("spread_filter_bps", 5.0)):
                     logger.warning(
-                        f"{NEON_YELLOW}Spread too high ({spread_bps:.1f} bps). Holding.{RESET}"
+                        f"{NEON_YELLOW}Spread too high ({spread_bps:.1f} bps). Holding.{RESET}",
                     )
                     time.sleep(config["loop_delay"])
                     continue
@@ -2308,12 +2380,18 @@ def main() -> None:
             if config["mtf_analysis"]["enabled"]:
                 for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
                     htf_df = pybit_client.fetch_klines(
-                        config["symbol"], htf_interval, 1000
+                        config["symbol"],
+                        htf_interval,
+                        1000,
                     )
                     if htf_df is not None and not htf_df.empty:
                         for trend_ind in config["mtf_analysis"]["trend_indicators"]:
                             trend = indicators._get_mtf_trend(
-                                htf_df, config, logger, config["symbol"], trend_ind
+                                htf_df,
+                                config,
+                                logger,
+                                config["symbol"],
+                                trend_ind,
                             )
                             mtf_trends[f"{htf_interval}_{trend_ind}"] = trend
                     time.sleep(config["mtf_analysis"]["mtf_request_delay_seconds"])
@@ -2324,11 +2402,13 @@ def main() -> None:
                 continue
 
             atr_value = Decimal(
-                str(analyzer._get_indicator_value("ATR", Decimal("0.1")))
+                str(analyzer._get_indicator_value("ATR", Decimal("0.1"))),
             )
             config["_last_atr"] = str(atr_value)
             trading_signal, signal_score = analyzer.generate_trading_signal(
-                current_price, orderbook_data, mtf_trends
+                current_price,
+                orderbook_data,
+                mtf_trends,
             )
 
             for pos in position_manager.get_open_positions():
@@ -2345,14 +2425,17 @@ def main() -> None:
                             abs(signal_score)
                             / max(config["signal_score_threshold"], 1.0),
                         ),
-                    )
+                    ),
                 )
                 position_manager.open_position(
-                    trading_signal, current_price, atr_value, conviction
+                    trading_signal,
+                    current_price,
+                    atr_value,
+                    conviction,
                 )
             else:
                 logger.info(
-                    f"{NEON_BLUE}No strong signal. Holding. Score: {signal_score:.2f}{RESET}"
+                    f"{NEON_BLUE}No strong signal. Holding. Score: {signal_score:.2f}{RESET}",
                 )
 
             config["_last_price"] = str(current_price)  # Store last price
@@ -2364,14 +2447,17 @@ def main() -> None:
                 heartbeat.tick()
 
             logger.info(
-                f"{NEON_YELLOW}Performance: {performance_tracker.get_summary()}{RESET}"
+                f"{NEON_YELLOW}Performance: {performance_tracker.get_summary()}{RESET}",
             )
             logger.info(
-                f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---{RESET}"
+                f"{NEON_PURPLE}--- Loop Finished. Waiting {config['loop_delay']}s ---{RESET}",
             )
 
             save_bot_state(
-                config, position_manager, performance_tracker, logger
+                config,
+                position_manager,
+                performance_tracker,
+                logger,
             )  # Save bot state
             time.sleep(config["loop_delay"])
 

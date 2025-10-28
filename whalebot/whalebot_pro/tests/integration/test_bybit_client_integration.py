@@ -54,7 +54,7 @@ async def test_bybit_client_initialize(bybit_client):
     bybit_client.precision_manager.load_instrument_info = AsyncMock(return_value=None)
     await bybit_client.initialize()
     bybit_client.precision_manager.load_instrument_info.assert_called_once_with(
-        bybit_client.symbol
+        bybit_client.symbol,
     )
 
 
@@ -166,7 +166,7 @@ async def test_ws_kline_message_processing(bybit_client):
                 "close": "11",
                 "volume": "100",
                 "turnover": "1000",
-            }
+            },
         ],
     }
     await bybit_client._on_kline_ws_message(message)

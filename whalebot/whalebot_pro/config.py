@@ -248,14 +248,14 @@ class Config:
 
         if not Path(filepath).exists():
             self.logger.warning(
-                f"{NEON_YELLOW}Configuration file not found. Creating default config at {filepath}{RESET}"
+                f"{NEON_YELLOW}Configuration file not found. Creating default config at {filepath}{RESET}",
             )
             try:
                 with Path(filepath).open("w", encoding="utf-8") as f:
                     json.dump(default_config, f, indent=4)
             except OSError as e:
                 self.logger.error(
-                    f"{NEON_RED}Error creating default config file: {e}{RESET}"
+                    f"{NEON_RED}Error creating default config file: {e}{RESET}",
                 )
             self._config_data = default_config
         else:
@@ -267,7 +267,7 @@ class Config:
                     json.dump(self._config_data, f_write, indent=4)
             except (OSError, FileNotFoundError, json.JSONDecodeError) as e:
                 self.logger.error(
-                    f"{NEON_RED}Error loading config: {e}. Using default and attempting to save.{RESET}"
+                    f"{NEON_RED}Error loading config: {e}. Using default and attempting to save.{RESET}",
                 )
                 self._config_data = default_config
                 try:
@@ -275,11 +275,13 @@ class Config:
                         json.dump(default_config, f_default, indent=4)
                 except OSError as e_save:
                     self.logger.error(
-                        f"{NEON_RED}Could not save default config: {e_save}{RESET}"
+                        f"{NEON_RED}Could not save default config: {e_save}{RESET}",
                     )
 
     def _ensure_config_keys(
-        self, config: dict[str, Any], default_config: dict[str, Any]
+        self,
+        config: dict[str, Any],
+        default_config: dict[str, Any],
     ) -> None:
         for key, default_value in default_config.items():
             if key not in config:
@@ -287,7 +289,8 @@ class Config:
             elif isinstance(default_value, dict) and isinstance(config.get(key), dict):
                 self._ensure_config_keys(config[key], default_value)
             elif isinstance(default_value, dict) and not isinstance(
-                config.get(key), dict
+                config.get(key),
+                dict,
             ):
                 config[key] = default_value
 
@@ -298,7 +301,8 @@ class Config:
 
     def _apply_strategy_profile(self) -> None:
         active_profile_name = self._config_data.get(
-            "current_strategy_profile", "default_scalping"
+            "current_strategy_profile",
+            "default_scalping",
         )
         if active_profile_name in self._config_data.get("strategy_profiles", {}):
             active_profile = self._config_data["strategy_profiles"][active_profile_name]
@@ -307,11 +311,11 @@ class Config:
             if "weights" in active_profile:
                 self._config_data["active_weights"] = active_profile["weights"]
             self.logger.info(
-                f"{NEON_BLUE}Active strategy profile '{active_profile_name}' loaded successfully.{RESET}"
+                f"{NEON_BLUE}Active strategy profile '{active_profile_name}' loaded successfully.{RESET}",
             )
         else:
             self.logger.warning(
-                f"{NEON_YELLOW}Configured strategy profile '{active_profile_name}' not found. Falling back to default.{RESET}"
+                f"{NEON_YELLOW}Configured strategy profile '{active_profile_name}' not found. Falling back to default.{RESET}",
             )
             if "indicators" not in self._config_data:
                 self._config_data["indicators"] = self._config_data[
@@ -326,7 +330,7 @@ class Config:
         if name in self._config_data:
             return self._config_data[name]
         raise AttributeError(
-            f"'{type(self).__name__}' object has no attribute '{name}'"
+            f"'{type(self).__name__}' object has no attribute '{name}'",
         )
 
     def get_config(self) -> dict[str, Any]:
@@ -337,9 +341,9 @@ class Config:
             self._config_data["current_strategy_profile"] = profile_name
             self._apply_strategy_profile()
             self.logger.info(
-                f"{NEON_BLUE}Switched active strategy profile to '{profile_name}'.{RESET}"
+                f"{NEON_BLUE}Switched active strategy profile to '{profile_name}'.{RESET}",
             )
         else:
             self.logger.warning(
-                f"{NEON_YELLOW}Strategy profile '{profile_name}' not found. Current profile remains '{self.current_strategy_profile}'.{RESET}"
+                f"{NEON_YELLOW}Strategy profile '{profile_name}' not found. Current profile remains '{self.current_strategy_profile}'.{RESET}",
             )

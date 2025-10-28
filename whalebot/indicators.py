@@ -26,7 +26,7 @@ def safe_calculate(
     """Safely calculate indicators and log errors, with min_data_points check."""
     if len(df) < min_data_points:
         logger.debug(
-            f"[{symbol}] Skipping indicator '{name}': Not enough data. Need {min_data_points}, have {len(df)}."
+            f"[{symbol}] Skipping indicator '{name}': Not enough data. Need {min_data_points}, have {len(df)}.",
         )
         return None
     try:
@@ -42,7 +42,7 @@ def safe_calculate(
             )
         ):
             logger.warning(
-                f"[{symbol}] Indicator '{name}' returned empty or None after calculation. Not enough valid data?"
+                f"[{symbol}] Indicator '{name}' returned empty or None after calculation. Not enough valid data?",
             )
             return None
         return result
@@ -62,7 +62,9 @@ def calculate_true_range(df: pd.DataFrame) -> pd.Series:
 
 
 def calculate_super_smoother(
-    df: pd.DataFrame, series: pd.Series, period: int
+    df: pd.DataFrame,
+    series: pd.Series,
+    period: int,
 ) -> pd.Series:
     """Apply Ehlers SuperSmoother filter to reduce lag and noise."""
     if period <= 0 or len(series) < MIN_DATA_POINTS_SMOOTHER:
@@ -103,7 +105,7 @@ def calculate_ehlers_supertrend(
     """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
     if len(df) < period * 3:
         logger.debug(
-            f"[{symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
+            f"[{symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars.",
         )
         return None
 
@@ -120,7 +122,7 @@ def calculate_ehlers_supertrend(
 
     if df_copy.empty:
         logger.debug(
-            f"[{symbol}] Ehlers SuperTrend: DataFrame empty after smoothing. Returning None."
+            f"[{symbol}] Ehlers SuperTrend: DataFrame empty after smoothing. Returning None.",
         )
         return None
 
@@ -181,7 +183,10 @@ def calculate_ehlers_supertrend(
 
 
 def calculate_macd(
-    df: pd.DataFrame, fast_period: int, slow_period: int, signal_period: int
+    df: pd.DataFrame,
+    fast_period: int,
+    slow_period: int,
+    signal_period: int,
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculate Moving Average Convergence Divergence (MACD)."""
     if len(df) < slow_period + signal_period:
@@ -214,7 +219,10 @@ def calculate_rsi(df: pd.DataFrame, period: int) -> pd.Series:
 
 
 def calculate_stoch_rsi(
-    df: pd.DataFrame, period: int, k_period: int, d_period: int
+    df: pd.DataFrame,
+    period: int,
+    k_period: int,
+    d_period: int,
 ) -> tuple[pd.Series, pd.Series]:
     """Calculate Stochastic RSI."""
     if len(df) <= period:
@@ -240,7 +248,8 @@ def calculate_stoch_rsi(
 
 
 def calculate_adx(
-    df: pd.DataFrame, period: int
+    df: pd.DataFrame,
+    period: int,
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculate Average Directional Index (ADX)."""
     if len(df) < period * 2:
@@ -274,7 +283,9 @@ def calculate_adx(
 
 
 def calculate_bollinger_bands(
-    df: pd.DataFrame, period: int, std_dev: float
+    df: pd.DataFrame,
+    period: int,
+    std_dev: float,
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculate Bollinger Bands."""
     if len(df) < period:
@@ -308,7 +319,8 @@ def calculate_cci(df: pd.DataFrame, period: int) -> pd.Series:
     tp = (df["high"] + df["low"] + df["close"]) / 3
     sma_tp = tp.rolling(window=period, min_periods=period).mean()
     mad = tp.rolling(window=period, min_periods=period).apply(
-        lambda x: np.abs(x - x.mean()).mean(), raw=False
+        lambda x: np.abs(x - x.mean()).mean(),
+        raw=False,
     )
     cci = (tp - sma_tp) / (0.015 * mad.replace(0, np.nan))
     return cci
@@ -423,7 +435,9 @@ def calculate_cmf(df: pd.DataFrame, period: int) -> pd.Series:
 
 
 def calculate_psar(
-    df: pd.DataFrame, acceleration: float, max_acceleration: float
+    df: pd.DataFrame,
+    acceleration: float,
+    max_acceleration: float,
 ) -> tuple[pd.Series, pd.Series]:
     """Calculate Parabolic SAR."""
     if len(df) < MIN_DATA_POINTS_PSAR:
@@ -484,12 +498,15 @@ def calculate_psar(
 
 
 def calculate_fibonacci_levels(
-    df: pd.DataFrame, logger: logging.Logger, symbol: str, window: int
+    df: pd.DataFrame,
+    logger: logging.Logger,
+    symbol: str,
+    window: int,
 ) -> dict[str, Decimal] | None:
     """Calculate Fibonacci retracement levels based on a recent high-low swing."""
     if len(df) < window:
         logger.warning(
-            f"[{symbol}] Not enough data for Fibonacci levels (need {window} bars)."
+            f"[{symbol}] Not enough data for Fibonacci levels (need {window} bars).",
         )
         return None
 
@@ -500,26 +517,31 @@ def calculate_fibonacci_levels(
 
     if diff <= 0:
         logger.warning(
-            f"[{symbol}] Invalid high-low range for Fibonacci calculation. Diff: {diff}"
+            f"[{symbol}] Invalid high-low range for Fibonacci calculation. Diff: {diff}",
         )
         return None
 
     fib_levels = {
         "0.0%": Decimal(str(recent_high)),
         "23.6%": Decimal(str(recent_high - 0.236 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
+            Decimal("0.00001"),
+            rounding=ROUND_DOWN,
         ),
         "38.2%": Decimal(str(recent_high - 0.382 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
+            Decimal("0.00001"),
+            rounding=ROUND_DOWN,
         ),
         "50.0%": Decimal(str(recent_high - 0.500 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
+            Decimal("0.00001"),
+            rounding=ROUND_DOWN,
         ),
         "61.8%": Decimal(str(recent_high - 0.618 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
+            Decimal("0.00001"),
+            rounding=ROUND_DOWN,
         ),
         "78.6%": Decimal(str(recent_high - 0.786 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
+            Decimal("0.00001"),
+            rounding=ROUND_DOWN,
         ),
         "100.0%": Decimal(str(recent_low)),
     }
@@ -528,12 +550,14 @@ def calculate_fibonacci_levels(
 
 
 def calculate_fibonacci_pivot_points(
-    df: pd.DataFrame, logger: logging.Logger, symbol: str
+    df: pd.DataFrame,
+    logger: logging.Logger,
+    symbol: str,
 ) -> dict[str, Decimal] | None:
     """Calculate Fibonacci Pivot Points (Pivot, R1, R2, S1, S2)."""
     if df.empty:
         logger.warning(
-            f"[{symbol}] DataFrame is empty for Fibonacci Pivot Points calculation."
+            f"[{symbol}] DataFrame is empty for Fibonacci Pivot Points calculation.",
         )
         return None
 
@@ -593,13 +617,17 @@ def calculate_volume_delta(df: pd.DataFrame, period: int) -> pd.Series:
 
     total_volume_sum = buy_volume_sum + sell_volume_sum
     volume_delta = (buy_volume_sum - sell_volume_sum) / total_volume_sum.replace(
-        0, np.nan
+        0,
+        np.nan,
     )
     return volume_delta.fillna(0)
 
 
 def calculate_kaufman_ama(
-    df: pd.DataFrame, period: int, fast_period: int, slow_period: int
+    df: pd.DataFrame,
+    period: int,
+    fast_period: int,
+    slow_period: int,
 ) -> pd.Series:
     """Calculate Kaufman's Adaptive Moving Average (KAMA)."""
     if len(df) < period + slow_period:

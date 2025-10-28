@@ -15,17 +15,21 @@ class MarketAnalyzer:
         self.logger = logger
         self.trend_detection_period: int = kwargs.get("trend_detection_period", 50)
         self.volatility_detection_atr_period: int = kwargs.get(
-            "volatility_detection_atr_period", 14
+            "volatility_detection_atr_period",
+            14,
         )
         self.volatility_threshold_high: float = kwargs.get(
-            "volatility_threshold_high", 1.5
+            "volatility_threshold_high",
+            1.5,
         )  # ATR > 1.5 * recent_ATR_avg => HIGH
         self.volatility_threshold_low: float = kwargs.get(
-            "volatility_threshold_low", 0.5
+            "volatility_threshold_low",
+            0.5,
         )  # ATR < 0.5 * recent_ATR_avg => LOW
         self.adx_period: int = kwargs.get("adx_period", 14)
         self.adx_trend_strong_threshold: int = kwargs.get(
-            "adx_trend_strong_threshold", 25
+            "adx_trend_strong_threshold",
+            25,
         )
         self.adx_trend_weak_threshold: int = kwargs.get("adx_trend_weak_threshold", 20)
 
@@ -68,7 +72,7 @@ class MarketAnalyzer:
         )
         if df_cleaned.empty or len(df_cleaned) < required_periods:
             self.logger.warning(
-                f"Insufficient data ({len(df_cleaned)} bars) for market condition analysis. Need at least {required_periods} bars."
+                f"Insufficient data ({len(df_cleaned)} bars) for market condition analysis. Need at least {required_periods} bars.",
             )
             return conditions
 
@@ -91,7 +95,7 @@ class MarketAnalyzer:
 
         if df_cleaned.empty:
             self.logger.warning(
-                "DataFrame became empty after indicator calculation and NaN handling in MarketAnalyzer."
+                "DataFrame became empty after indicator calculation and NaN handling in MarketAnalyzer.",
             )
             return conditions
 

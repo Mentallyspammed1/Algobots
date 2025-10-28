@@ -82,7 +82,7 @@ def analyze_trade_logs(log_file_path: str) -> list:
                         active_trades[trade_id] = trade
                     else:
                         print(
-                            f"Warning: Skipped opened trade entry due to missing data: {clean_line}"
+                            f"Warning: Skipped opened trade entry due to missing data: {clean_line}",
                         )
 
                 elif closed_position_match:
@@ -97,12 +97,12 @@ def analyze_trade_logs(log_file_path: str) -> list:
 
     except FileNotFoundError:
         print(
-            f"Error: The log file was not found at the specified path: {log_file_path}"
+            f"Error: The log file was not found at the specified path: {log_file_path}",
         )
         return []
     except Exception as e:
         print(
-            f"An unexpected error occurred while reading or parsing the log file: {e}"
+            f"An unexpected error occurred while reading or parsing the log file: {e}",
         )
         return []
 
@@ -135,13 +135,15 @@ if __name__ == "__main__":
 
     current_signals = analyze_trade_logs(log_file_path)
     suggested_trades = suggest_trades(
-        current_signals, confidence_threshold=1.5
+        current_signals,
+        confidence_threshold=1.5,
     )  # Example threshold
 
     top_confidence_signal = None
     if current_signals:
         top_confidence_signal = max(
-            current_signals, key=lambda x: x["confidence_level"]
+            current_signals,
+            key=lambda x: x["confidence_level"],
         )
 
     # Prepare the styled output
@@ -154,35 +156,35 @@ if __name__ == "__main__":
         for signal in current_signals:
             styled_output.append(f"  - **Time:** {signal['timestamp']}")
             styled_output.append(
-                f"    **Signal:** {signal['side']} (Confidence: {signal['confidence_level']:.2f})"
+                f"    **Signal:** {signal['side']} (Confidence: {signal['confidence_level']:.2f})",
             )
             styled_output.append(
-                f"    **Entry Price:** {signal['entry']:.5f} | **TP:** {signal['tp']:.5f} | **SL:** {signal['sl']:.5f}"
+                f"    **Entry Price:** {signal['entry']:.5f} | **TP:** {signal['tp']:.5f} | **SL:** {signal['sl']:.5f}",
             )
             styled_output.append(
-                f"    **Current Price:** {signal['current_price']:.5f}"
+                f"    **Current Price:** {signal['current_price']:.5f}",
             )
             styled_output.append("")
 
         if suggested_trades:
             styled_output.append(
-                "💡 **Prophecies of New Trades (Suggested based on Confidence):**"
+                "💡 **Prophecies of New Trades (Suggested based on Confidence):**",
             )
             for trade in suggested_trades:
                 styled_output.append(f"  - **Time:** {trade['timestamp']}")
                 styled_output.append(
-                    f"    **Suggestion:** Initiate a {trade['side']} trade (Confidence: {trade['confidence_level']:.2f})"
+                    f"    **Suggestion:** Initiate a {trade['side']} trade (Confidence: {trade['confidence_level']:.2f})",
                 )
                 styled_output.append(
-                    f"    **Entry Price:** {trade['entry']:.5f} | **Anticipated TP:** {trade['tp']:.5f} | **Protective SL:** {trade['sl']:.5f}"
+                    f"    **Entry Price:** {trade['entry']:.5f} | **Anticipated TP:** {trade['tp']:.5f} | **Protective SL:** {trade['sl']:.5f}",
                 )
                 styled_output.append(
-                    f"    **Current Market Price:** {trade['current_price']:.5f}"
+                    f"    **Current Market Price:** {trade['current_price']:.5f}",
                 )
                 styled_output.append("")
         else:
             styled_output.append(
-                "No new trade prophecies at this moment (no signals met the confidence threshold)."
+                "No new trade prophecies at this moment (no signals met the confidence threshold).",
             )
         styled_output.append("")
 
@@ -190,23 +192,23 @@ if __name__ == "__main__":
             styled_output.append("🌟 **Top Confidence Current Signal:**")
             styled_output.append(f"  - **Time:** {top_confidence_signal['timestamp']}")
             styled_output.append(
-                f"    **Signal:** {top_confidence_signal['side']} (Confidence: {top_confidence_signal['confidence_level']:.2f})"
+                f"    **Signal:** {top_confidence_signal['side']} (Confidence: {top_confidence_signal['confidence_level']:.2f})",
             )
             styled_output.append(
-                f"    **Entry Price:** {top_confidence_signal['entry']:.5f} | **TP:** {top_confidence_signal['tp']:.5f} | **SL:** {top_confidence_signal['sl']:.5f}"
+                f"    **Entry Price:** {top_confidence_signal['entry']:.5f} | **TP:** {top_confidence_signal['tp']:.5f} | **SL:** {top_confidence_signal['sl']:.5f}",
             )
             styled_output.append(
-                f"    **Current Price:** {top_confidence_signal['current_price']:.5f}"
+                f"    **Current Price:** {top_confidence_signal['current_price']:.5f}",
             )
             styled_output.append("")
     else:
         styled_output.append("No current open scalp trades (signals) found in the log.")
 
     styled_output.append(
-        "--- To leverage the Gemini API for more advanced strategy formulation or signal interpretation, you would integrate a Python library like `google-generativeai` here. This would allow the model to analyze the `current_signals` data and provide nuanced insights or even generate dynamic trading rules based on complex patterns."
+        "--- To leverage the Gemini API for more advanced strategy formulation or signal interpretation, you would integrate a Python library like `google-generativeai` here. This would allow the model to analyze the `current_signals` data and provide nuanced insights or even generate dynamic trading rules based on complex patterns.",
     )
     styled_output.append(
-        'For example, you could send the `current_signals` data to the Gemini API and ask: "Given these trade signals, what is the optimal strategy?"'
+        'For example, you could send the `current_signals` data to the Gemini API and ask: "Given these trade signals, what is the optimal strategy?"',
     )
 
     print("\n".join(styled_output))

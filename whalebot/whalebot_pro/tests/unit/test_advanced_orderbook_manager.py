@@ -30,7 +30,9 @@ def test_price_level_comparison():
     pl1 = PriceLevel(price=100.0, quantity=10.0, timestamp=1)
     pl2 = PriceLevel(price=101.0, quantity=5.0, timestamp=2)
     pl3 = PriceLevel(
-        price=100.0, quantity=20.0, timestamp=3
+        price=100.0,
+        quantity=20.0,
+        timestamp=3,
     )  # Same price, different qty/ts
 
     assert pl1 < pl2
@@ -117,7 +119,9 @@ def test_enhanced_heap_remove():
 @pytest.mark.asyncio
 async def test_orderbook_manager_snapshot_update(mock_logger):
     ob_manager = AdvancedOrderbookManager(
-        symbol="BTCUSDT", logger=mock_logger, use_skip_list=True
+        symbol="BTCUSDT",
+        logger=mock_logger,
+        use_skip_list=True,
     )
 
     snapshot_data = {
@@ -138,7 +142,9 @@ async def test_orderbook_manager_snapshot_update(mock_logger):
 @pytest.mark.asyncio
 async def test_orderbook_manager_delta_update(mock_logger):
     ob_manager = AdvancedOrderbookManager(
-        symbol="BTCUSDT", logger=mock_logger, use_skip_list=True
+        symbol="BTCUSDT",
+        logger=mock_logger,
+        use_skip_list=True,
     )
 
     # Initial snapshot
@@ -168,7 +174,9 @@ async def test_orderbook_manager_delta_update(mock_logger):
 @pytest.mark.asyncio
 async def test_orderbook_manager_get_depth(mock_logger):
     ob_manager = AdvancedOrderbookManager(
-        symbol="BTCUSDT", logger=mock_logger, use_skip_list=True
+        symbol="BTCUSDT",
+        logger=mock_logger,
+        use_skip_list=True,
     )
     snapshot_data = {
         "b": [["100.0", "10.0"], ["99.0", "5.0"], ["98.0", "15.0"]],

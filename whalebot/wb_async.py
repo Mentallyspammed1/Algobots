@@ -183,7 +183,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "vwma_cross": 0.15,
                 "volume_delta_signal": 0.10,
                 "kaufman_ama_cross": 0.20,
-            }
+            },
         },
     }
     if not Path(filepath).exists():
@@ -191,7 +191,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(default_config, f, indent=4)
             logger.warning(
-                f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath}{RESET}"
+                f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath}{RESET}",
             )
             return default_config
         except OSError as e:
@@ -238,16 +238,18 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
         log_file = Path(LOG_DIRECTORY) / f"{log_name}_async.log"
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
     return logger
@@ -264,14 +266,16 @@ class PositionManager:
         self.order_precision = config["trade_management"]["order_precision"]
         self.price_precision = config["trade_management"]["price_precision"]
         self.slippage_percent = Decimal(
-            str(config["trade_management"].get("slippage_percent", 0.0))
+            str(config["trade_management"].get("slippage_percent", 0.0)),
         )
 
     def _get_current_balance(self) -> Decimal:
         return Decimal(str(self.config["trade_management"]["account_balance"]))
 
     def _calculate_order_size(
-        self, current_price: Decimal, atr_value: Decimal
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         if not self.trade_management_enabled or atr_value <= 0:
             return Decimal("0")
@@ -281,7 +285,7 @@ class PositionManager:
             / 100
         )
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         risk_amount = account_balance * risk_per_trade_percent
         stop_loss_distance = atr_value * stop_loss_atr_multiple
@@ -293,7 +297,10 @@ class PositionManager:
         return order_qty.quantize(Decimal(precision_str), rounding=ROUND_DOWN)
 
     def open_position(
-        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+        self,
+        signal: Literal["BUY", "SELL"],
+        current_price: Decimal,
+        atr_value: Decimal,
     ) -> dict | None:
         if (
             not self.trade_management_enabled
@@ -304,10 +311,10 @@ class PositionManager:
         if order_qty <= 0:
             return None
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         take_profit_atr_multiple = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
         if signal == "BUY":
             adjusted_entry_price = current_price * (
@@ -327,25 +334,30 @@ class PositionManager:
             "symbol": self.symbol,
             "side": signal,
             "entry_price": adjusted_entry_price.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "qty": order_qty,
             "stop_loss": stop_loss.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "take_profit": take_profit.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "status": "OPEN",
         }
         self.open_positions.append(position)
         self.logger.info(
-            f"{NEON_GREEN}[{self.symbol}] Opened {signal} position: {position}{RESET}"
+            f"{NEON_GREEN}[{self.symbol}] Opened {signal} position: {position}{RESET}",
         )
         return position
 
     def manage_positions(
-        self, current_price: Decimal, performance_tracker: Any
+        self,
+        current_price: Decimal,
+        performance_tracker: Any,
     ) -> None:
         if not self.trade_management_enabled or not self.open_positions:
             return
@@ -378,7 +390,7 @@ class PositionManager:
                     )
                     performance_tracker.record_trade(position, pnl)
                     self.logger.info(
-                        f"{NEON_PURPLE}[{self.symbol}] Closed {position['side']} by {closed_by}. PnL: {pnl:.2f}{RESET}"
+                        f"{NEON_PURPLE}[{self.symbol}] Closed {position['side']} by {closed_by}. PnL: {pnl:.2f}{RESET}",
                     )
         self.open_positions = [
             p for i, p in enumerate(self.open_positions) if i not in positions_to_close
@@ -405,7 +417,7 @@ class PerformanceTracker:
         else:
             self.losses += 1
         self.logger.info(
-            f"{NEON_CYAN}Trade recorded. Total PnL: {self.total_pnl:.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}"
+            f"{NEON_CYAN}Trade recorded. Total PnL: {self.total_pnl:.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}",
         )
 
     def get_summary(self) -> dict:
@@ -425,7 +437,9 @@ class AlertSystem:
         self.logger = logger
 
     def send_alert(
-        self, message: str, level: Literal["INFO", "WARNING", "ERROR"]
+        self,
+        message: str,
+        level: Literal["INFO", "WARNING", "ERROR"],
     ) -> None:
         log_func = getattr(self.logger, level.lower(), self.logger.info)
         log_func(f"ALERT: {message}")
@@ -450,7 +464,12 @@ class TradingAnalyzer:
             self._calculate_all_indicators()
 
     def _safe_calculate(
-        self, func: callable, name: str, min_data_points: int = 0, *args, **kwargs
+        self,
+        func: callable,
+        name: str,
+        min_data_points: int = 0,
+        *args,
+        **kwargs,
     ) -> Any | None:
         if len(self.df) < min_data_points:
             return None
@@ -458,7 +477,7 @@ class TradingAnalyzer:
             return func(*args, **kwargs)
         except Exception as e:
             self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Error calculating '{name}': {e}{RESET}"
+                f"{NEON_RED}[{self.symbol}] Error calculating '{name}': {e}{RESET}",
             )
             return None
 
@@ -478,7 +497,9 @@ class TradingAnalyzer:
                 min_data_points=isd["sma_long_period"],
             )
         self.df["TR"] = self._safe_calculate(
-            self.calculate_true_range, "TR", min_data_points=MIN_DATA_POINTS_TR
+            self.calculate_true_range,
+            "TR",
+            min_data_points=MIN_DATA_POINTS_TR,
         )
         self.df["ATR"] = self._safe_calculate(
             lambda: self.df["TR"].ewm(span=isd["atr_period"], adjust=False).mean(),
@@ -493,11 +514,14 @@ class TradingAnalyzer:
         high_prev_close = (self.df["high"] - self.df["close"].shift()).abs()
         low_prev_close = (self.df["low"] - self.df["close"].shift()).abs()
         return pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(
-            axis=1
+            axis=1,
         )
 
     def generate_trading_signal(
-        self, current_price: Decimal, orderbook_data: dict, mtf_trends: dict
+        self,
+        current_price: Decimal,
+        orderbook_data: dict,
+        mtf_trends: dict,
     ) -> tuple[str, float]:
         signal_score = 0.0
         active_indicators = self.config["indicators"]
@@ -547,10 +571,14 @@ async def bybit_request(
                     "X-BAPI-TIMESTAMP": timestamp,
                     "X-BAPI-SIGN": generate_signature(param_str, API_SECRET),
                     "X-BAPI-RECV-WINDOW": recv_window,
-                }
+                },
             )
             req = client.build_request(
-                "GET", url, params=params, headers=headers, timeout=REQUEST_TIMEOUT
+                "GET",
+                url,
+                params=params,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
             )
         else:
             json_params = json.dumps(params) if params else ""
@@ -561,14 +589,22 @@ async def bybit_request(
                     "X-BAPI-TIMESTAMP": timestamp,
                     "X-BAPI-SIGN": generate_signature(param_str, API_SECRET),
                     "X-BAPI-RECV-WINDOW": recv_window,
-                }
+                },
             )
             req = client.build_request(
-                "POST", url, json=params, headers=headers, timeout=REQUEST_TIMEOUT
+                "POST",
+                url,
+                json=params,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
             )
     else:
         req = client.build_request(
-            "GET", url, params=params, headers=headers, timeout=REQUEST_TIMEOUT
+            "GET",
+            url,
+            params=params,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
         )
     try:
         response = await client.send(req)
@@ -612,7 +648,9 @@ async def fetch_klines(
             ],
         )
         df["start_time"] = pd.to_datetime(
-            df["start_time"].astype(int), unit="ms", utc=True
+            df["start_time"].astype(int),
+            unit="ms",
+            utc=True,
         )
         for col in ["open", "high", "low", "close", "volume", "turnover"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -625,7 +663,8 @@ async def fetch_klines(
 
 
 def update_kline_data(
-    klines_df: pd.DataFrame, kline_data: dict
+    klines_df: pd.DataFrame,
+    kline_data: dict,
 ) -> tuple[pd.DataFrame, bool]:
     new_kline_time = pd.to_datetime(int(kline_data["start"]), unit="ms", utc=True)
     is_new_candle = new_kline_time not in klines_df.index
@@ -658,7 +697,11 @@ class TradingBot:
 
     async def initialize(self, client: httpx.AsyncClient):
         self.klines_df = await fetch_klines(
-            client, self.symbol, self.config["interval"], 1000, self.logger
+            client,
+            self.symbol,
+            self.config["interval"],
+            1000,
+            self.logger,
         )
         return self.klines_df is not None and not self.klines_df.empty
 
@@ -668,15 +711,19 @@ class TradingBot:
         self.is_processing = True
         try:
             self.klines_df, is_new_candle = update_kline_data(
-                self.klines_df.copy(), kline_data
+                self.klines_df.copy(),
+                kline_data,
             )
             if not is_new_candle and not kline_data["confirm"]:
                 return
             self.logger.info(
-                f"Processing candle for {self.symbol} at {pd.to_datetime(int(kline_data['start']), unit='ms', utc=True)}"
+                f"Processing candle for {self.symbol} at {pd.to_datetime(int(kline_data['start']), unit='ms', utc=True)}",
             )
             analyzer = TradingAnalyzer(
-                self.klines_df, self.config, self.logger, self.symbol
+                self.klines_df,
+                self.config,
+                self.logger,
+                self.symbol,
             )
             signal, score = analyzer.generate_trading_signal(
                 current_price=Decimal(kline_data["close"]),
@@ -686,7 +733,8 @@ class TradingBot:
             self.logger.info(f"Signal: {signal}, Score: {score:.2f}")
             current_price = Decimal(kline_data["close"])
             self.position_manager.manage_positions(
-                current_price, self.performance_tracker
+                current_price,
+                self.performance_tracker,
             )
             if (
                 signal in ["BUY", "SELL"]
@@ -695,7 +743,9 @@ class TradingBot:
                 atr_value = analyzer._get_indicator_value("ATR", default=Decimal("0"))
                 if atr_value > 0:
                     self.position_manager.open_position(
-                        signal, current_price, atr_value
+                        signal,
+                        current_price,
+                        atr_value,
                     )
             self.logger.info(f"Performance: {self.performance_tracker.get_summary()}")
         finally:
@@ -716,8 +766,8 @@ async def websocket_handler(bot: TradingBot):
                             "op": "subscribe",
                             "req_id": f"kline_{symbol}_{interval}",
                             "args": [topic],
-                        }
-                    )
+                        },
+                    ),
                 )
                 while True:
                     data = json.loads(await websocket.recv())
@@ -730,7 +780,7 @@ async def websocket_handler(bot: TradingBot):
                         and data.get("success")
                     ):
                         logger.info(
-                            f"{NEON_GREEN}Subscribed to {data['req_id']}{RESET}"
+                            f"{NEON_GREEN}Subscribed to {data['req_id']}{RESET}",
                         )
         except Exception as e:
             logger.error(f"{NEON_RED}WebSocket error: {e}. Reconnecting...{RESET}")

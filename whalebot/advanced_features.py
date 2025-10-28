@@ -28,7 +28,9 @@ class PatternRecognitionEngine:
         )
 
     def _get_peaks_troughs(
-        self, series: pd.Series, order: int = 5
+        self,
+        series: pd.Series,
+        order: int = 5,
     ) -> tuple[list[int], list[int]]:
         """Identifies local peaks and troughs in a series using `order` for local window.
         Returns indices of peaks and troughs.
@@ -114,7 +116,7 @@ class PatternRecognitionEngine:
                 and df["high"].iloc[head_idx] > df["high"].iloc[right_shoulder_idx]
                 and abs(
                     df["high"].iloc[left_shoulder_idx]
-                    - df["high"].iloc[right_shoulder_idx]
+                    - df["high"].iloc[right_shoulder_idx],
                 )
                 / df["high"].iloc[left_shoulder_idx]
                 < 0.05
@@ -139,7 +141,7 @@ class PatternRecognitionEngine:
                 and df["low"].iloc[head_idx] < df["low"].iloc[right_shoulder_idx]
                 and abs(
                     df["low"].iloc[left_shoulder_idx]
-                    - df["low"].iloc[right_shoulder_idx]
+                    - df["low"].iloc[right_shoulder_idx],
                 )
                 / df["low"].iloc[left_shoulder_idx]
                 < 0.05
@@ -150,7 +152,8 @@ class PatternRecognitionEngine:
     def _detect_double_top(self, df: pd.DataFrame) -> bool:
         """Simplified detection of Double Top."""
         peaks, _ = self._get_peaks_troughs(
-            df["high"].tail(30), order=3
+            df["high"].tail(30),
+            order=3,
         )  # Look at recent 30 bars
         if len(peaks) < 2:
             return False
@@ -239,7 +242,7 @@ class SimpleSentimentAnalysis:
         self.logger = logger
         if not TEXTBLOB_AVAILABLE:
             self.logger.warning(
-                "TextBlob not found. Sentiment analysis will return dummy data. Install 'textblob' and run 'python -m textblob.download_corpora' for full functionality."
+                "TextBlob not found. Sentiment analysis will return dummy data. Install 'textblob' and run 'python -m textblob.download_corpora' for full functionality.",
             )
 
     def analyze_sentiment(
@@ -293,12 +296,12 @@ class SimpleAnomalyDetector:
         # Calculate Z-score relative to rolling window
         # Avoid division by zero if std is 0
         z_score = abs(
-            (series - rolling_mean) / rolling_std.replace(0, np.nan).fillna(1)
+            (series - rolling_mean) / rolling_std.replace(0, np.nan).fillna(1),
         )  # Replace 0 std with 1 to avoid NaN from /0
 
         anomalies = z_score > self.threshold_std
         anomalies = anomalies.fillna(
-            False
+            False,
         )  # Fill NaN from rolling window start with False
 
         self.logger.debug(f"Anomalies detected: {anomalies.sum()}")
@@ -315,7 +318,9 @@ class DynamicRiskManager:
         self.config = config
 
     def assess_risk_level(
-        self, market_conditions: dict[str, Any], signal_score: float
+        self,
+        market_conditions: dict[str, Any],
+        signal_score: float,
     ) -> str:
         """Assesses a general risk level for the current trading opportunity.
         Returns 'LOW', 'MEDIUM', 'HIGH', 'VERY HIGH'.
@@ -349,7 +354,9 @@ class DynamicRiskManager:
         return "LOW"
 
     def adjust_position_sizing_factor(
-        self, current_risk_level: str, signal_confidence: float
+        self,
+        current_risk_level: str,
+        signal_confidence: float,
     ) -> float:
         """Returns a factor (0-1) to adjust the base position size.
         `signal_confidence` is assumed to be 0-100.
@@ -362,7 +369,8 @@ class DynamicRiskManager:
         }.get(current_risk_level, 0.5)
 
         confidence_factor = max(
-            0.2, min(1.0, signal_confidence / 100)
+            0.2,
+            min(1.0, signal_confidence / 100),
         )  # Min 20% factor from confidence (0-1 range)
 
         return risk_multiplier * confidence_factor
@@ -377,14 +385,17 @@ class SimplePriceTargetPredictor:
         self.logger = logger
 
     def predict_targets(
-        self, df: pd.DataFrame, entry_price: float, position_side: str
+        self,
+        df: pd.DataFrame,
+        entry_price: float,
+        position_side: str,
     ) -> list[tuple[float, float]]:
         """Predicts potential price targets and stop loss for a trade.
         Returns a list of (price, probability) tuples.
         """
         if df.empty or "ATR" not in df.columns or len(df) < 1:
             self.logger.warning(
-                "Insufficient data for price target prediction (missing ATR)."
+                "Insufficient data for price target prediction (missing ATR).",
             )
             return []
 
@@ -443,7 +454,8 @@ class SimpleMicrostructureAnalyzer:
         self.logger = logger
 
     def analyze_orderbook_dynamics(
-        self, orderbook_data: dict[str, Any]
+        self,
+        orderbook_data: dict[str, Any],
     ) -> dict[str, Any]:
         """Analyzes order book microstructure.
         `orderbook_data` should contain 'bids' and 'asks' lists of [price, quantity] floats.
@@ -530,7 +542,9 @@ class SimpleLiquidityAnalyzer:
         self.logger = logger
 
     def analyze_liquidity(
-        self, df: pd.DataFrame, microstructure_data: dict[str, Any]
+        self,
+        df: pd.DataFrame,
+        microstructure_data: dict[str, Any],
     ) -> float:
         """Analyzes market liquidity and returns a score (0-1).
         Combines volume-based and spread-based liquidity.
@@ -544,7 +558,8 @@ class SimpleLiquidityAnalyzer:
 
             if avg_volume_20 > 0:
                 volume_score = min(
-                    recent_volume / (avg_volume_20 * 1.5), 1.0
+                    recent_volume / (avg_volume_20 * 1.5),
+                    1.0,
                 )  # Score up to 1.5x avg vol
                 scores.append(volume_score)
             else:
@@ -558,7 +573,8 @@ class SimpleLiquidityAnalyzer:
             # Lower spread = higher liquidity. Normalize to 0-1 range.
             # Assuming typical spread < 0.1% (0.001) for liquid assets
             spread_liquidity_score = max(
-                0.0, 1.0 - (spread_pct / 0.1)
+                0.0,
+                1.0 - (spread_pct / 0.1),
             )  # Max 0.1% spread is 0 score
             scores.append(spread_liquidity_score)
         else:
@@ -566,7 +582,8 @@ class SimpleLiquidityAnalyzer:
 
         # Depth-based liquidity
         total_depth_usd = microstructure_data.get(
-            "bid_depth_usd", 0.0
+            "bid_depth_usd",
+            0.0,
         ) + microstructure_data.get("ask_depth_usd", 0.0)
         # Normalize total depth (requires calibration for specific market/symbol)
         # Assuming $100,000 depth is "good" for a typical altcoin on a 15m candle
@@ -586,7 +603,9 @@ class SimpleWhaleDetector:
         self.config = config  # Access ANOMALY_DETECTOR_THRESHOLD_STD
 
     def detect_whale_activity(
-        self, df: pd.DataFrame, microstructure_data: dict[str, Any]
+        self,
+        df: pd.DataFrame,
+        microstructure_data: dict[str, Any],
     ) -> bool:
         """Detects potential whale activity based on volume spikes and large order book entries."""
         whale_indicators_count = 0
@@ -618,7 +637,7 @@ class SimpleWhaleDetector:
             # Only count if price change is substantial (e.g., > 1% and already some whale indicators)
             if price_change_pct > 1.0 and whale_indicators_count >= 1:
                 self.logger.info(
-                    f"Whale Detector: Large price move ({price_change_pct:.2f}%) detected with other whale indicators."
+                    f"Whale Detector: Large price move ({price_change_pct:.2f}%) detected with other whale indicators.",
                 )
                 whale_indicators_count += 1
 
@@ -680,14 +699,14 @@ class AdvancedFeatures:
         volume_anomalies = self.anomaly_detector_volume.detect_anomalies(df["volume"])
         price_change_pct = df["close"].pct_change().abs() * 100
         price_anomalies = self.anomaly_detector_price_change.detect_anomalies(
-            price_change_pct
+            price_change_pct,
         )
         analysis_results["volume_anomaly_detected"] = volume_anomalies.iloc[-1]
         analysis_results["price_anomaly_detected"] = price_anomalies.iloc[-1]
 
         # 4. Market Microstructure Analysis
         microstructure_data = self.microstructure_analyzer.analyze_orderbook_dynamics(
-            orderbook_data
+            orderbook_data,
         )
         analysis_results["microstructure"] = microstructure_data
 

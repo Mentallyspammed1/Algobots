@@ -124,7 +124,7 @@ class Config:
             "ADX": "\033[96m",
             "PlusDI": "\033[36m",
             "MinusDI": "\033[91m",
-        }
+        },
     )
 
     # --- Gemini AI Configuration ---
@@ -136,7 +136,7 @@ class Config:
     GEMINI_CACHE_TTL_SECONDS: int = 300
     GEMINI_DAILY_API_LIMIT: int = 1000
     GEMINI_SIGNAL_WEIGHTS: dict[str, float] = field(
-        default_factory=lambda: {"technical": 0.6, "ai": 0.4}
+        default_factory=lambda: {"technical": 0.6, "ai": 0.4},
     )
     GEMINI_LOW_AI_CONFIDENCE_THRESHOLD: int = 20
     GEMINI_CHART_IMAGE_ANALYSIS_ENABLED: bool = False

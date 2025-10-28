@@ -16,7 +16,10 @@ class BaseStrategy(ABC):
     """Abstract base class for trading strategies."""
 
     def __init__(
-        self, logger: logging.Logger, strategy_name: str = "BaseStrategy", **kwargs
+        self,
+        logger: logging.Logger,
+        strategy_name: str = "BaseStrategy",
+        **kwargs,
     ):
         self.logger = logger
         self.strategy_name = strategy_name
@@ -29,7 +32,10 @@ class BaseStrategy(ABC):
 
     @abstractmethod
     def generate_signal(
-        self, df: pd.DataFrame, current_price: float, orderbook_data: dict[str, Any]
+        self,
+        df: pd.DataFrame,
+        current_price: float,
+        orderbook_data: dict[str, Any],
     ) -> Signal:
         """Generates a trading signal based on indicators and market data."""
         pass

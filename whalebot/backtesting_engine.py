@@ -16,7 +16,9 @@ class BacktestingEngine:
         self.logger.info("BacktestingEngine initialized (placeholder).")
 
     async def run_backtest(
-        self, strategy: Any, historical_data: pd.DataFrame
+        self,
+        strategy: Any,
+        historical_data: pd.DataFrame,
     ) -> dict[str, Any]:
         """Runs a backtest of the given strategy on historical data."""
         self.logger.info("Running backtest (placeholder)...")

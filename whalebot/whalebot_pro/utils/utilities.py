@@ -12,7 +12,10 @@ class KlineDataFetcher:
     """Fetches kline data from Bybit using the BybitClient."""
 
     def __init__(
-        self, bybit_client: BybitClient, logger: logging.Logger, config: dict[str, Any]
+        self,
+        bybit_client: BybitClient,
+        logger: logging.Logger,
+        config: dict[str, Any],
     ):
         self.bybit_client = bybit_client
         self.logger = logger
@@ -36,13 +39,14 @@ class KlineDataFetcher:
             # A safe buffer is to fetch 2-3 times the lookback limit, or enough for the history window
             required_bars_for_history = (history_window_minutes // interval_minutes) + 1
             actual_limit = max(
-                limit, required_bars_for_history
+                limit,
+                required_bars_for_history,
             )  # Fetch at least 'limit' bars, or more if needed for history
         else:
             # For D, W, M intervals, a fixed large limit is often used or adjusted based on strategy needs
             actual_limit = limit  # Use the provided limit for non-minute intervals
             self.logger.warning(
-                f"Non-minute interval '{interval}' detected. History window calculation might be inaccurate."
+                f"Non-minute interval '{interval}' detected. History window calculation might be inaccurate.",
             )
 
         df = await self.bybit_client.fetch_klines(interval, actual_limit)

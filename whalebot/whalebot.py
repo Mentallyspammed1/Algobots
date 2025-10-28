@@ -97,7 +97,9 @@ class UnanimousLoggerConfig:
         log_file_path = Path(self.log_directory) / "bot_activity.log"
 
         file_handler = RotatingFileHandler(
-            log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file_path,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
 
         file_handler.setLevel(logging.DEBUG)
@@ -211,7 +213,9 @@ def main():
 
     # --- MODIFIED LINE: Specify the new model ---
     gemini_client = GeminiClient(
-        api_key=GEMINI_API_KEY, logger=logger, model="gemini-2.5-flash"
+        api_key=GEMINI_API_KEY,
+        logger=logger,
+        model="gemini-2.5-flash",
     )
 
     position_manager = PositionManager(config, logger, symbol, bybit_client)
@@ -223,7 +227,7 @@ def main():
             klines = bybit_client.fetch_klines(symbol, interval, 200)
             if klines is None or klines.empty:
                 logger.warning(
-                    f"{NEON_YELLOW}Could not fetch klines, skipping loop.{RESET}"
+                    f"{NEON_YELLOW}Could not fetch klines, skipping loop.{RESET}",
                 )
                 time.sleep(config["loop_delay"])
                 continue
@@ -231,7 +235,7 @@ def main():
             current_price = bybit_client.fetch_current_price(symbol)
             if current_price is None:
                 logger.warning(
-                    f"{NEON_YELLOW}Could not fetch current price, skipping loop.{RESET}"
+                    f"{NEON_YELLOW}Could not fetch current price, skipping loop.{RESET}",
                 )
                 time.sleep(config["loop_delay"])
                 continue
@@ -242,7 +246,9 @@ def main():
             analyzer = TradingAnalyzer(klines, config, logger, symbol, gemini_client)
 
             signal, confidence, reasoning = analyzer.generate_trading_signal(
-                current_price, orderbook, mtf_trends
+                current_price,
+                orderbook,
+                mtf_trends,
             )
 
             if (
@@ -253,15 +259,18 @@ def main():
                     atr_value = analyzer.indicator_values.get("ATR", Decimal("0"))
                     if atr_value > 0:
                         position_manager.open_position(
-                            signal, current_price, atr_value, "gemini_trade"
+                            signal,
+                            current_price,
+                            atr_value,
+                            "gemini_trade",
                         )
                     else:
                         logger.warning(
-                            f"{NEON_YELLOW}ATR is zero, cannot calculate order size.{RESET}"
+                            f"{NEON_YELLOW}ATR is zero, cannot calculate order size.{RESET}",
                         )
                 else:
                     logger.info(
-                        f"{NEON_YELLOW}Signal to {signal} ignored, a position is already open.{RESET}"
+                        f"{NEON_YELLOW}Signal to {signal} ignored, a position is already open.{RESET}",
                     )
 
             position_manager.manage_positions(current_price, performance_tracker)

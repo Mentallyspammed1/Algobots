@@ -41,7 +41,9 @@ class DefaultStrategy(BaseStrategy):
             append=True,
         )
         df.ta.bbands(
-            length=self.strategy_bb_period, std=self.strategy_bb_std, append=True
+            length=self.strategy_bb_period,
+            std=self.strategy_bb_std,
+            append=True,
         )
         df.ta.atr(
             length=self.strategy_atr_period,
@@ -95,10 +97,12 @@ class DefaultStrategy(BaseStrategy):
         )
         if df.empty or len(df) < min_data_points:
             self.logger.warning(
-                "Insufficient data for indicators in DefaultStrategy, returning HOLD."
+                "Insufficient data for indicators in DefaultStrategy, returning HOLD.",
             )
             return Signal(
-                type="HOLD", score=0, reasons=["Insufficient data for indicators"]
+                type="HOLD",
+                score=0,
+                reasons=["Insufficient data for indicators"],
             )
 
         latest = df.iloc[-1]
@@ -137,7 +141,7 @@ class DefaultStrategy(BaseStrategy):
         ):
             signal_score += ema_weight * 2.0
             reasons.append(
-                f"EMA Bullish Crossover ({latest['EMA_Fast']:.2f} > {latest['EMA_Slow']:.2f})"
+                f"EMA Bullish Crossover ({latest['EMA_Fast']:.2f} > {latest['EMA_Slow']:.2f})",
             )
         elif (
             latest["EMA_Fast"] < latest["EMA_Slow"]
@@ -145,17 +149,17 @@ class DefaultStrategy(BaseStrategy):
         ):
             signal_score -= ema_weight * 2.0
             reasons.append(
-                f"EMA Bearish Crossover ({latest['EMA_Fast']:.2f} < {latest['EMA_Slow']:.2f})"
+                f"EMA Bearish Crossover ({latest['EMA_Fast']:.2f} < {latest['EMA_Slow']:.2f})",
             )
         elif latest["EMA_Fast"] > latest["EMA_Slow"]:
             signal_score += ema_weight * 0.5
             reasons.append(
-                f"EMA Bullish Trend Continuation ({latest['EMA_Fast']:.2f} > {latest['EMA_Slow']:.2f})"
+                f"EMA Bullish Trend Continuation ({latest['EMA_Fast']:.2f} > {latest['EMA_Slow']:.2f})",
             )
         elif latest["EMA_Fast"] < latest["EMA_Slow"]:
             signal_score -= ema_weight * 0.5
             reasons.append(
-                f"EMA Bearish Trend Continuation ({latest['EMA_Fast']:.2f} < {latest['EMA_Slow']:.2f})"
+                f"EMA Bearish Trend Continuation ({latest['EMA_Fast']:.2f} < {latest['EMA_Slow']:.2f})",
             )
 
         if (
@@ -219,7 +223,7 @@ class DefaultStrategy(BaseStrategy):
             signal_type = "HOLD"
 
         self.logger.debug(
-            f"DefaultStrategy Score: {signal_score:.2f}, Type: {signal_type}, Reasons: {reasons}"
+            f"DefaultStrategy Score: {signal_score:.2f}, Type: {signal_type}, Reasons: {reasons}",
         )
         return Signal(type=signal_type, score=signal_score, reasons=reasons)
 

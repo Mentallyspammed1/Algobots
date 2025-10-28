@@ -30,7 +30,7 @@ except ImportError:
     logging.basicConfig(level=logging.ERROR)
     logger_mod_err = logging.getLogger(__name__)
     logger_mod_err.error(
-        "indicators.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH."
+        "indicators.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH.",
     )
     sys.exit(1)
 
@@ -40,7 +40,7 @@ except ImportError:
     logging.basicConfig(level=logging.ERROR)
     logger_mod_err = logging.getLogger(__name__)
     logger_mod_err.error(
-        "alert_system.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH."
+        "alert_system.py not found. Please ensure it's in the same directory or accessible via PYTHONPATH.",
     )
     sys.exit(1)
 
@@ -161,7 +161,9 @@ def round_price(price: Decimal, price_precision: int) -> Decimal:
 
 
 def _safe_divide_decimal(
-    numerator: Decimal, denominator: Decimal, default: Decimal = Decimal("0")
+    numerator: Decimal,
+    denominator: Decimal,
+    default: Decimal = Decimal("0"),
 ) -> Decimal:
     try:
         if denominator.is_zero() or denominator.is_nan() or numerator.is_nan():
@@ -172,7 +174,9 @@ def _safe_divide_decimal(
 
 
 def _clean_series(
-    series: pd.Series | None, df_index: pd.Index, default_val: Any = np.nan
+    series: pd.Series | None,
+    df_index: pd.Index,
+    default_val: Any = np.nan,
 ) -> pd.Series:
     if series is None:
         return pd.Series(default_val, index=df_index)
@@ -355,7 +359,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
                 "roc_signal": 0.12,
                 "candlestick_confirmation": 0.15,
                 "fibonacci_pivot_points_confluence": 0.20,
-            }
+            },
         },
         "execution": {
             "use_pybit": False,
@@ -490,16 +494,18 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
         log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
     return logger

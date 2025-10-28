@@ -16,8 +16,8 @@ def mock_logger():
 def mock_config():
     return {
         "trade_management": {
-            "trading_fee_percent": 0.0005  # 0.05%
-        }
+            "trading_fee_percent": 0.0005,  # 0.05%
+        },
     }
 
 

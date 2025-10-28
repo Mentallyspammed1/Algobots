@@ -11,9 +11,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from bybit_trading_bot import BybitTradingBot
-from logger_setup import setup_logger
-
 from config import Config
+from logger_setup import setup_logger
 
 
 async def main():
@@ -36,7 +35,9 @@ async def main():
         help="Use Bybit testnet. Default: True (from config)",
     )
     parser.add_argument(
-        "--mainnet", action="store_true", help="Use Bybit mainnet. Overrides --testnet."
+        "--mainnet",
+        action="store_true",
+        help="Use Bybit mainnet. Overrides --testnet.",
     )
     parser.add_argument(
         "--log_level",
@@ -64,7 +65,9 @@ async def main():
         help=f"Trading logic loop interval in seconds. Default: {Config.TRADING_LOGIC_LOOP_INTERVAL_SECONDS}",
     )
     parser.add_argument(
-        "--leverage", type=float, help=f"Leverage to use. Default: {Config.LEVERAGE}"
+        "--leverage",
+        type=float,
+        help=f"Leverage to use. Default: {Config.LEVERAGE}",
     )
     parser.add_argument(
         "--order_size_usd",
@@ -135,18 +138,18 @@ async def main():
     # 4. Validate API Keys
     if not config.BYBIT_API_KEY:
         logger.critical(
-            "BYBIT_API_KEY environment variable is NOT set. Please set it before running the bot."
+            "BYBIT_API_KEY environment variable is NOT set. Please set it before running the bot.",
         )
         sys.exit(1)
     if not config.BYBIT_API_SECRET:
         logger.critical(
-            "BYBIT_API_SECRET environment variable is NOT set. Please set it before running the bot."
+            "BYBIT_API_SECRET environment variable is NOT set. Please set it before running the bot.",
         )
         sys.exit(1)
 
     if config.GEMINI_AI_ENABLED and not config.GEMINI_API_KEY:
         logger.critical(
-            "GEMINI_AI_ENABLED is True, but GEMINI_API_KEY environment variable is NOT set. Please set it or disable AI in config.py."
+            "GEMINI_AI_ENABLED is True, but GEMINI_API_KEY environment variable is NOT set. Please set it or disable AI in config.py.",
         )
         sys.exit(1)
 
@@ -154,7 +157,7 @@ async def main():
         not config.ALERT_TELEGRAM_BOT_TOKEN or not config.ALERT_TELEGRAM_CHAT_ID
     ):
         logger.critical(
-            "ALERT_TELEGRAM_ENABLED is True, but ALERT_TELEGRAM_BOT_TOKEN or ALERT_TELEGRAM_CHAT_ID are NOT set. Please set them or disable Telegram alerts in config.py."
+            "ALERT_TELEGRAM_ENABLED is True, but ALERT_TELEGRAM_BOT_TOKEN or ALERT_TELEGRAM_CHAT_ID are NOT set. Please set them or disable Telegram alerts in config.py.",
         )
         sys.exit(1)
 
@@ -167,7 +170,8 @@ async def main():
         logger.info("KeyboardInterrupt detected. Stopping bot gracefully...")
     except Exception as e:
         logger.critical(
-            f"An unhandled exception occurred during bot execution: {e}", exc_info=True
+            f"An unhandled exception occurred during bot execution: {e}",
+            exc_info=True,
         )
     finally:
         # bot.shutdown() is called in bot.start() after the main loop or on exception

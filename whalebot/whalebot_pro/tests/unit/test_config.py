@@ -46,7 +46,7 @@ def test_config_loading_existing(tmp_path, mock_logger):
         MockPath.return_value = test_config_path
         MockPath.return_value.exists.return_value = True
         MockPath.return_value.open = mock_open(
-            read_data=json.dumps(dummy_config_content)
+            read_data=json.dumps(dummy_config_content),
         )
 
         config = Config(mock_logger)
@@ -126,7 +126,7 @@ def test_set_active_strategy_profile(tmp_path, mock_logger):
         MockPath.return_value = test_config_path
         MockPath.return_value.exists.return_value = True
         MockPath.return_value.open = mock_open(
-            read_data=json.dumps(dummy_config_content)
+            read_data=json.dumps(dummy_config_content),
         )
 
         config = Config(mock_logger)

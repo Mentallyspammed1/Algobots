@@ -48,13 +48,15 @@ class IndicatorCalculator:
             return pd.Series(np.nan, index=df.index)
         high_low = self._safe_series_op(df["high"] - df["low"], "TR_high_low")
         high_prev_close = self._safe_series_op(
-            (df["high"] - df["close"].shift()).abs(), "TR_high_prev_close"
+            (df["high"] - df["close"].shift()).abs(),
+            "TR_high_prev_close",
         )
         low_prev_close = self._safe_series_op(
-            (df["low"] - df["close"].shift()).abs(), "TR_low_prev_close"
+            (df["low"] - df["close"].shift()).abs(),
+            "TR_low_prev_close",
         )
         return pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(
-            axis=1
+            axis=1,
         )
 
     def calculate_atr(self, df: pd.DataFrame, period: int) -> pd.Series:
@@ -94,12 +96,15 @@ class IndicatorCalculator:
         return filt.reindex(series.index)
 
     def calculate_ehlers_supertrend(
-        self, df: pd.DataFrame, period: int, multiplier: float
+        self,
+        df: pd.DataFrame,
+        period: int,
+        multiplier: float,
     ) -> pd.DataFrame | None:
         """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
         if len(df) < period * 3:
             self.logger.debug(
-                f"Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars."
+                f"Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars.",
             )
             return None
 
@@ -117,7 +122,7 @@ class IndicatorCalculator:
         df_copy.dropna(subset=["smoothed_price", "smoothed_atr"], inplace=True)
         if df_copy.empty:
             self.logger.debug(
-                "Ehlers SuperTrend: DataFrame empty after smoothing. Returning None."
+                "Ehlers SuperTrend: DataFrame empty after smoothing. Returning None.",
             )
             return None
 
@@ -152,13 +157,15 @@ class IndicatorCalculator:
 
             if prev_direction == 1:
                 supertrend.loc[current_idx] = max(
-                    lower_band.loc[current_idx], prev_supertrend
+                    lower_band.loc[current_idx],
+                    prev_supertrend,
                 )
                 if curr_close < supertrend.loc[current_idx]:
                     direction.loc[current_idx] = -1
             else:
                 supertrend.loc[current_idx] = min(
-                    upper_band.loc[current_idx], prev_supertrend
+                    upper_band.loc[current_idx],
+                    prev_supertrend,
                 )
                 if curr_close > supertrend.loc[current_idx]:
                     direction.loc[current_idx] = 1
@@ -174,14 +181,21 @@ class IndicatorCalculator:
         return result.reindex(df.index)
 
     def calculate_macd(
-        self, df: pd.DataFrame, fast_period: int, slow_period: int, signal_period: int
+        self,
+        df: pd.DataFrame,
+        fast_period: int,
+        slow_period: int,
+        signal_period: int,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate Moving Average Convergence Divergence (MACD)."""
         if len(df) < slow_period + signal_period:
             return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
 
         macd_result = ta.macd(
-            df["close"], fast=fast_period, slow=slow_period, signal=signal_period
+            df["close"],
+            fast=fast_period,
+            slow=slow_period,
+            signal=signal_period,
         )
         if macd_result.empty:
             return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
@@ -209,26 +223,38 @@ class IndicatorCalculator:
         return self._safe_series_op(rsi, "RSI")
 
     def calculate_stoch_rsi(
-        self, df: pd.DataFrame, period: int, k_period: int, d_period: int
+        self,
+        df: pd.DataFrame,
+        period: int,
+        k_period: int,
+        d_period: int,
     ) -> tuple[pd.Series, pd.Series]:
         """Calculate Stochastic RSI."""
         if len(df) <= period:
             return pd.Series(np.nan, index=df.index), pd.Series(np.nan, index=df.index)
         stochrsi = ta.stochrsi(
-            df["close"], length=period, rsi_length=period, k=k_period, d=d_period
+            df["close"],
+            length=period,
+            rsi_length=period,
+            k=k_period,
+            d=d_period,
         )
 
         stoch_rsi_k = self._safe_series_op(
-            stochrsi[f"STOCHRSIk_{period}_{period}_{k_period}_{d_period}"], "StochRSI_K"
+            stochrsi[f"STOCHRSIk_{period}_{period}_{k_period}_{d_period}"],
+            "StochRSI_K",
         )
         stoch_rsi_d = self._safe_series_op(
-            stochrsi[f"STOCHRSId_{period}_{period}_{k_period}_{d_period}"], "StochRSI_D"
+            stochrsi[f"STOCHRSId_{period}_{period}_{k_period}_{d_period}"],
+            "StochRSI_D",
         )
 
         return stoch_rsi_k, stoch_rsi_d
 
     def calculate_adx(
-        self, df: pd.DataFrame, period: int
+        self,
+        df: pd.DataFrame,
+        period: int,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate Average Directional Index (ADX)."""
         if len(df) < period * 2:
@@ -243,7 +269,10 @@ class IndicatorCalculator:
         return adx_val, plus_di, minus_di
 
     def calculate_bollinger_bands(
-        self, df: pd.DataFrame, period: int, std_dev: float
+        self,
+        df: pd.DataFrame,
+        period: int,
+        std_dev: float,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate Bollinger Bands."""
         if len(df) < period:
@@ -256,7 +285,8 @@ class IndicatorCalculator:
 
         upper_band = self._safe_series_op(bbands[f"BBU_{period}_{std_dev}"], "BB_Upper")
         middle_band = self._safe_series_op(
-            bbands[f"BBM_{period}_{std_dev}"], "BB_Middle"
+            bbands[f"BBM_{period}_{std_dev}"],
+            "BB_Middle",
         )
         lower_band = self._safe_series_op(bbands[f"BBL_{period}_{std_dev}"], "BB_Lower")
 
@@ -347,7 +377,9 @@ class IndicatorCalculator:
         return self._safe_series_op(mfi, "MFI")
 
     def calculate_obv(
-        self, df: pd.DataFrame, ema_period: int
+        self,
+        df: pd.DataFrame,
+        ema_period: int,
     ) -> tuple[pd.Series, pd.Series]:
         """Calculate On-Balance Volume (OBV) and its EMA."""
         if len(df) < MIN_DATA_POINTS_OBV:
@@ -357,7 +389,8 @@ class IndicatorCalculator:
         obv_ema = ta.ema(obv, length=ema_period)
 
         return self._safe_series_op(obv, "OBV"), self._safe_series_op(
-            obv_ema, "OBV_EMA"
+            obv_ema,
+            "OBV_EMA",
         )
 
     def calculate_cmf(self, df: pd.DataFrame, period: int) -> pd.Series:
@@ -369,7 +402,10 @@ class IndicatorCalculator:
         return self._safe_series_op(cmf, "CMF")
 
     def calculate_psar(
-        self, df: pd.DataFrame, acceleration: float, max_acceleration: float
+        self,
+        df: pd.DataFrame,
+        acceleration: float,
+        max_acceleration: float,
     ) -> tuple[pd.Series, pd.Series]:
         """Calculate Parabolic SAR."""
         if len(df) < MIN_DATA_POINTS_PSAR:
@@ -385,7 +421,8 @@ class IndicatorCalculator:
         )
 
         psar_val = self._safe_series_op(
-            psar_result[f"PSAR_{acceleration}_{max_acceleration}"], "PSAR_Val"
+            psar_result[f"PSAR_{acceleration}_{max_acceleration}"],
+            "PSAR_Val",
         )
         psar_long = psar_result[f"PSARl_{acceleration}_{max_acceleration}"]
         psar_short = psar_result[f"PSARs_{acceleration}_{max_acceleration}"]
@@ -432,12 +469,17 @@ class IndicatorCalculator:
 
         total_volume_sum = buy_volume_sum + sell_volume_sum
         volume_delta = (buy_volume_sum - sell_volume_sum) / total_volume_sum.replace(
-            0, np.nan
+            0,
+            np.nan,
         )
         return volume_delta.fillna(0)
 
     def calculate_kaufman_ama(
-        self, df: pd.DataFrame, period: int, fast_period: int, slow_period: int
+        self,
+        df: pd.DataFrame,
+        period: int,
+        fast_period: int,
+        slow_period: int,
     ) -> pd.Series:
         """Calculate Kaufman's Adaptive Moving Average (KAMA)."""
         if len(df) < period + slow_period:
@@ -456,7 +498,9 @@ class IndicatorCalculator:
         return self._safe_series_op(relative_volume, "Relative_Volume")
 
     def calculate_market_structure(
-        self, df: pd.DataFrame, lookback_period: int
+        self,
+        df: pd.DataFrame,
+        lookback_period: int,
     ) -> pd.Series:
         """Determine market structure (uptrend, downtrend, sideways) based on higher highs/lows."""
         if len(df) < lookback_period * 2:
@@ -512,7 +556,10 @@ class IndicatorCalculator:
         return self._safe_series_op(dema, "DEMA")
 
     def calculate_keltner_channels(
-        self, df: pd.DataFrame, period: int, atr_multiplier: float
+        self,
+        df: pd.DataFrame,
+        period: int,
+        atr_multiplier: float,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate Keltner Channels."""
         if len(df) < period:
@@ -528,13 +575,16 @@ class IndicatorCalculator:
         )
 
         upper_band = self._safe_series_op(
-            keltner[f"KCU_{period}_{atr_multiplier}"], "Keltner_Upper"
+            keltner[f"KCU_{period}_{atr_multiplier}"],
+            "Keltner_Upper",
         )
         middle_band = self._safe_series_op(
-            keltner[f"KCM_{period}_{atr_multiplier}"], "Keltner_Middle"
+            keltner[f"KCM_{period}_{atr_multiplier}"],
+            "Keltner_Middle",
         )
         lower_band = self._safe_series_op(
-            keltner[f"KCL_{period}_{atr_multiplier}"], "Keltner_Lower"
+            keltner[f"KCL_{period}_{atr_multiplier}"],
+            "Keltner_Lower",
         )
 
         return upper_band, middle_band, lower_band
@@ -638,7 +688,9 @@ class IndicatorCalculator:
         }
 
     def calculate_support_resistance_from_orderbook(
-        self, bids: list, asks: list
+        self,
+        bids: list,
+        asks: list,
     ) -> tuple[Decimal | None, Decimal | None]:
         """Calculates support and resistance levels from orderbook data based on volume concentration.
         Identifies the highest volume bid as support and highest volume ask as resistance.

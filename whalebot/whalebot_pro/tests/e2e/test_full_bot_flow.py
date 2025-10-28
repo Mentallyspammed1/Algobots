@@ -51,7 +51,7 @@ def mock_config():
     cfg.current_strategy_profile = "default_scalping"
     cfg.adaptive_strategy_enabled = False
     cfg.strategy_profiles = {
-        "default_scalping": {"indicators_enabled": {}, "weights": {}}
+        "default_scalping": {"indicators_enabled": {}, "weights": {}},
     }
     cfg.indicator_settings = {
         "atr_period": 14,
@@ -179,7 +179,7 @@ def mock_bybit_client(mock_config):
     client.orderbook_manager.get_depth.return_value = ([], [])
     client.precision_manager = MagicMock()
     client.precision_manager.round_qty.side_effect = lambda qty, sym: qty.quantize(
-        Decimal("0.001")
+        Decimal("0.001"),
     )
     client.precision_manager.round_price.side_effect = (
         lambda price, sym: price.quantize(Decimal("0.01"))
@@ -213,13 +213,13 @@ def bot(
     with patch("whalebot_pro.main.BybitClient", return_value=mock_bybit_client):
         with patch("whalebot_pro.main.PositionManager") as MockPositionManager:
             with patch(
-                "whalebot_pro.main.PerformanceTracker"
+                "whalebot_pro.main.PerformanceTracker",
             ) as MockPerformanceTracker:
                 with patch(
-                    "whalebot_pro.main.IndicatorCalculator"
+                    "whalebot_pro.main.IndicatorCalculator",
                 ) as MockIndicatorCalculator:
                     with patch(
-                        "whalebot_pro.main.TradingAnalyzer"
+                        "whalebot_pro.main.TradingAnalyzer",
                     ) as MockTradingAnalyzer:
                         with patch(
                             "whalebot_pro.main.KlineDataFetcher",
@@ -238,7 +238,7 @@ def bot(
                                     pd.DataFrame()
                                 )  # Ensure analyzer.df is not empty initially
                                 MockTradingAnalyzer.return_value._get_indicator_value.return_value = Decimal(
-                                    "100"
+                                    "100",
                                 )  # Mock ATR
                                 MockTradingAnalyzer.return_value.assess_market_conditions.return_value = {
                                     "adx_value": 30,
@@ -283,7 +283,7 @@ async def test_bot_start_and_shutdown(bot, mock_bybit_client, mock_logger):
     bot._trading_loop.assert_called_once()  # Should have run once
     mock_bybit_client.stop_ws.assert_called_once()
     mock_logger.info.assert_any_call(
-        f"{bot.logger.handlers[0].formatter.NEON_GREEN}--- Whalebot Trading Bot Shut Down ---{bot.logger.handlers[0].formatter.RESET}"
+        f"{bot.logger.handlers[0].formatter.NEON_GREEN}--- Whalebot Trading Bot Shut Down ---{bot.logger.handlers[0].formatter.RESET}",
     )
 
 
@@ -296,14 +296,17 @@ async def test_trading_loop_fetch_price_failure(bot, mock_bybit_client, mock_log
         await bot._trading_loop()
 
     mock_logger.warning.assert_called_once_with(
-        f"\x1b[33mALERT: [{bot.config.symbol}] Failed to fetch current price. Skipping loop.\x1b[39m"
+        f"\x1b[33mALERT: [{bot.config.symbol}] Failed to fetch current price. Skipping loop.\x1b[39m",
     )
     mock_bybit_client.fetch_current_price.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_trading_loop_fetch_klines_failure(
-    bot, mock_bybit_client, mock_logger, mock_kline_data_fetcher
+    bot,
+    mock_bybit_client,
+    mock_logger,
+    mock_kline_data_fetcher,
 ):
     mock_bybit_client.fetch_current_price.return_value = Decimal("40000")
     mock_kline_data_fetcher.fetch_klines.return_value = pd.DataFrame()  # Empty DF
@@ -313,14 +316,18 @@ async def test_trading_loop_fetch_klines_failure(
         await bot._trading_loop()
 
     mock_logger.warning.assert_called_once_with(
-        f"\x1b[33mALERT: [{bot.config.symbol}] Failed to fetch primary klines or DataFrame is empty. Skipping loop.\x1b[39m"
+        f"\x1b[33mALERT: [{bot.config.symbol}] Failed to fetch primary klines or DataFrame is empty. Skipping loop.\x1b[39m",
     )
     mock_kline_data_fetcher.fetch_klines.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_trading_loop_buy_signal_open_position(
-    bot, mock_bybit_client, mock_logger, mock_kline_data_fetcher, mock_in_memory_cache
+    bot,
+    mock_bybit_client,
+    mock_logger,
+    mock_kline_data_fetcher,
+    mock_in_memory_cache,
 ):
     # Setup mocks for a BUY signal scenario
     mock_bybit_client.fetch_current_price.return_value = Decimal("40000")
@@ -356,16 +363,22 @@ async def test_trading_loop_buy_signal_open_position(
 
     bot.analyzer.generate_trading_signal.assert_called_once()
     bot.position_manager.open_position.assert_called_once_with(
-        "Buy", Decimal("40000"), Decimal("100")
+        "Buy",
+        Decimal("40000"),
+        Decimal("100"),
     )
     mock_logger.info.assert_any_call(
-        f"\x1b[32m[{bot.config.symbol}] Strong BUY signal detected! Score: 3.00\x1b[39m"
+        f"\x1b[32m[{bot.config.symbol}] Strong BUY signal detected! Score: 3.00\x1b[39m",
     )
 
 
 @pytest.mark.asyncio
 async def test_trading_loop_sell_signal_close_and_reverse(
-    bot, mock_bybit_client, mock_logger, mock_kline_data_fetcher, mock_in_memory_cache
+    bot,
+    mock_bybit_client,
+    mock_logger,
+    mock_kline_data_fetcher,
+    mock_in_memory_cache,
 ):
     # Setup mocks for a SELL signal scenario with existing BUY position and reversal enabled
     bot.config.trade_management["reverse_position_on_opposite_signal"] = True
@@ -408,11 +421,16 @@ async def test_trading_loop_sell_signal_close_and_reverse(
 
     bot.analyzer.generate_trading_signal.assert_called_once()
     bot.position_manager.close_position.assert_called_once_with(
-        buy_pos, Decimal("39000"), bot.performance_tracker, closed_by="OPPOSITE_SIGNAL"
+        buy_pos,
+        Decimal("39000"),
+        bot.performance_tracker,
+        closed_by="OPPOSITE_SIGNAL",
     )
     bot.position_manager.open_position.assert_called_once_with(
-        "Sell", Decimal("39000"), Decimal("100")
+        "Sell",
+        Decimal("39000"),
+        Decimal("100"),
     )
     mock_logger.info.assert_any_call(
-        f"\x1b[91m[{bot.config.symbol}] Strong SELL signal detected! Score: -3.00\x1b[39m"
+        f"\x1b[91m[{bot.config.symbol}] Strong SELL signal detected! Score: -3.00\x1b[39m",
     )
