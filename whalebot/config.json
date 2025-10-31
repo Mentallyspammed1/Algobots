@@ -188,7 +188,15 @@
         "volatility_index": true,
         "vwma": true,
         "volume_delta": true,
-        "volatility_filter": true
+        "volatility_filter": true,
+        "kaufman_ama": true,
+        "relative_volume": true,
+        "market_structure": true,
+        "dema": true,
+        "keltner_channels": true,
+        "roc": true,
+        "candlestick_patterns": true,
+        "fibonacci_pivot_points": true
     },
     "weight_sets": {
         "default_scalping": {
