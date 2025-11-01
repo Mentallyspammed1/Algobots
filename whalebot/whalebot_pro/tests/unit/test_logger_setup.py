@@ -1,9 +1,11 @@
 import logging
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
-from whalebot_pro.utils.logger_setup import LOG_DIRECTORY, setup_logging
+from whalebot_pro.utils.logger_setup import LOG_DIRECTORY
+from whalebot_pro.utils.logger_setup import setup_logging
 
 
 # Mock the Path.mkdir call

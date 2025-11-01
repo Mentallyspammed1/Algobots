@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 
 # Neon Color Scheme
 NEON_YELLOW = Fore.YELLOW

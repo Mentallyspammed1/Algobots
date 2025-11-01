@@ -20,7 +20,9 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry

@@ -227,7 +227,12 @@
             "keltner_breakout": 0.2,
             "roc_signal": 0.12,
             "candlestick_confirmation": 0.15,
-            "fibonacci_pivot_points_confluence": 0.2
+            "fibonacci_pivot_points_confluence": 0.2,
+            "rsi": 0.15,
+            "stoch_rsi": 0.15,
+            "cci": 0.1,
+            "wr": 0.1,
+            "mfi": 0.1
         },
         "aggressive_trend": {
             "ema_alignment": 0.4,

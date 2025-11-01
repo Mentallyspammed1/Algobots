@@ -4,22 +4,24 @@ import logging
 import os
 import sys
 import warnings
-from datetime import UTC, datetime
-from decimal import Decimal, getcontext
+from datetime import UTC
+from datetime import datetime
+from decimal import Decimal
+from decimal import getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import (
-    Any,
-    ClassVar,
-    Literal,
-)
+from typing import Any
+from typing import ClassVar
+from typing import Literal
 
 # Import async CCXT
 import ccxt.async_support as ccxt
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 from pytz import UTC  # Assuming pytz for UTC, common in financial applications
 

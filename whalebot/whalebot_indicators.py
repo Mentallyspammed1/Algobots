@@ -1,8 +1,7 @@
+import logging
+
 import numpy as np
 import pandas as pd
-import logging
-from typing import Optional, Tuple, Dict, Callable
-from decimal import Decimal
 
 # Set up a logger for the indicator module
 logger = logging.getLogger(__name__)
@@ -66,7 +65,7 @@ def calculate_kama(data: pd.Series, period: int, fast_period: int, slow_period: 
         kama = pd.Series(np.nan, index=data.index)
         first_valid_idx = sc.first_valid_index()
         if first_valid_idx is None: return pd.Series(np.nan, index=data.index)
-        
+
         kama.iloc[data.index.get_loc(first_valid_idx)] = data.loc[first_valid_idx]
 
         for i in range(data.index.get_loc(first_valid_idx) + 1, len(data)):
@@ -100,17 +99,17 @@ def calculate_rsi(data: pd.Series, period: int) -> pd.Series:
         logger.warning(f"Error calculating RSI({period}): {e}", exc_info=True)
         return pd.Series(np.nan, index=data.index)
 
-def calculate_stoch_rsi(data: pd.Series, period: int, k_period: int, d_period: int) -> Tuple[pd.Series, pd.Series]:
+def calculate_stoch_rsi(data: pd.Series, period: int, k_period: int, d_period: int) -> tuple[pd.Series, pd.Series]:
     """Calculates Stochastic RSI."""
     if period <= 0 or k_period <= 0 or d_period <= 0: return pd.Series(np.nan), pd.Series(np.nan)
     try:
         rsi = calculate_rsi(data, period=period)
         min_rsi = rsi.rolling(window=period).min()
         max_rsi = rsi.rolling(window=period).max()
-        denominator = (max_rsi - min_rsi).replace(0, np.nan) 
+        denominator = (max_rsi - min_rsi).replace(0, np.nan)
 
         stoch_rsi_raw = 100 * ((rsi - min_rsi) / denominator)
-        stoch_rsi_raw = stoch_rsi_raw.fillna(0).clip(0, 100) 
+        stoch_rsi_raw = stoch_rsi_raw.fillna(0).clip(0, 100)
 
         stoch_k = stoch_rsi_raw.rolling(window=k_period).mean()
         stoch_d = stoch_k.rolling(window=d_period).mean()

@@ -6,10 +6,13 @@ import time
 # Import asynccontextmanager
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any
+from typing import Generic
+from typing import TypeVar
 
 # Color Scheme (for logging)
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 
 NEON_RED = Fore.LIGHTRED_EX
 NEON_YELLOW = Fore.YELLOW

@@ -1,7 +1,8 @@
 import asyncio
 import time
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 from whalebot_pro.api.bybit_client import BybitClient

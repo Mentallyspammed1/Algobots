@@ -3,7 +3,8 @@ import os
 import sys
 from pathlib import Path
 
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 
 # Neon Color Scheme
 NEON_GREEN = Fore.LIGHTGREEN_EX

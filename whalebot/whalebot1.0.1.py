@@ -246,32 +246,36 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         },
         "weight_sets": {
             "default_scalping": {
-                "ema_alignment": 0.22,
-                "sma_trend_filter": 0.28,
-                "momentum_rsi_stoch_cci_wr_mfi": 0.18,
-                "bollinger_bands": 0.22,
-                "vwap": 0.22,
-                "psar": 0.22,
-                "sma_10": 0.07,
-                "orderbook_imbalance": 0.07,
-                "ehlers_supertrend_alignment": 0.55,
-                "macd_alignment": 0.28,
-                "adx_strength": 0.18,
-                "ichimoku_confluence": 0.38,
-                "obv_momentum": 0.18,
-                "cmf_flow": 0.12,
-                "mtf_trend_confluence": 0.32,
+                "ema_alignment": 0.18,
+                "sma_trend_filter": 0.20,
+                "rsi": 0.15,
+                "stoch_rsi": 0.15,
+                "cci": 0.10,
+                "wr": 0.10,
+                "mfi": 0.10,
+                "bollinger_bands": 0.15,
+                "vwap": 0.15,
+                "psar": 0.15,
+                "sma_10": 0.05,
+                "orderbook_imbalance": 0.15,
+                "ehlers_supertrend_alignment": 0.30,
+                "macd_alignment": 0.15,
+                "adx_strength": 0.15,
+                "ichimoku_confluence": 0.30,
+                "obv_momentum": 0.15,
+                "cmf_flow": 0.10,
+                "mtf_trend_confluence": 0.30,
                 "volatility_index_signal": 0.15,
                 "vwma_cross": 0.15,
                 "volume_delta_signal": 0.10,
-                "kaufman_ama_cross": 0.20,
+                "kaufman_ama_cross": 0.18,
                 "relative_volume_confirmation": 0.10,
                 "market_structure_confluence": 0.25,
-                "dema_crossover": 0.18,
-                "keltner_breakout": 0.20,
-                "roc_signal": 0.12,
+                "dema_crossover": 0.15,
+                "keltner_breakout": 0.18,
+                "roc_signal": 0.10,
                 "candlestick_confirmation": 0.15,
-                "fibonacci_pivot_points_confluence": 0.20,
+                "fibonacci_pivot_points_confluence": 0.18,
             },
         },
     }
@@ -279,24 +283,20 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
     def _validate_config(config: dict[str, Any], logger: logging.Logger) -> bool:
         is_valid = True
 
-        # Example: Validate symbol format (basic check)
         symbol = config.get("symbol", "")
         if not isinstance(symbol, str) or not symbol.endswith("USDT"):
             logger.warning(
                 f"{NEON_YELLOW}Symbol '{symbol}' might not be in the expected format (e.g., BTCUSDT). Ensure it's correct for Bybit.{RESET}"
             )
-            # Depending on severity, you might want to return False here
 
-        # Example: Validate loop_delay is a positive number
         loop_delay = config.get("loop_delay", LOOP_DELAY_SECONDS)
         if not isinstance(loop_delay, (int, float)) or loop_delay <= 0:
             logger.error(
                 f"{NEON_RED}Invalid 'loop_delay' in config. It must be a positive number. Using default {LOOP_DELAY_SECONDS}.{RESET}"
             )
-            config["loop_delay"] = LOOP_DELAY_SECONDS # Correct it
+            config["loop_delay"] = LOOP_DELAY_SECONDS
             is_valid = False
 
-        # Example: Validate risk_per_trade_percent is within a reasonable range
         risk_per_trade = config.get("trade_management", {}).get("risk_per_trade_percent", 1.0)
         if not isinstance(risk_per_trade, (int, float)) or not (0 < risk_per_trade <= 100):
             logger.error(
@@ -305,7 +305,6 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             config["trade_management"]["risk_per_trade_percent"] = 1.0
             is_valid = False
 
-        # Add more validation for other critical parameters (e.g., periods, thresholds)
         return is_valid
 
 
@@ -314,8 +313,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
             with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(default_config, f, indent=4)
             logger.warning(
-                f"{NEON_YELLOW}Configuration file not found. "
-                f"Created default config at {filepath} for symbol {default_config['symbol']}{RESET}"
+                f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath} for symbol {default_config['symbol']}{RESET}"
             )
             return default_config
         except OSError as e:
@@ -328,14 +326,13 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         _ensure_config_keys(config, default_config)
         if not _validate_config(config, logger):
             logger.error(f"{NEON_RED}Configuration validation failed. Please correct the issues in {filepath}. Exiting.{RESET}")
-            sys.exit(1) # Exit if validation fails critically
+            sys.exit(1)
         with Path(filepath).open("w", encoding="utf-8") as f_write:
             json.dump(config, f_write, indent=4)
         return config
     except (OSError, FileNotFoundError, json.JSONDecodeError) as e:
         logger.error(
-            f"{NEON_RED}Error loading config: {e}. "
-            f"Using default and attempting to save.{RESET}"
+            f"{NEON_RED}Error loading config: {e}. Using default and attempting to save.{RESET}"
         )
         try:
             with Path(filepath).open("w", encoding="utf-8") as f_default:
@@ -393,7 +390,7 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
             backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("% (asctime)s - %(name)s - %(levelname)s - %(message)s"),
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
 
@@ -401,10 +398,9 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
 
 
 def calculate_fees(price: Decimal, quantity: Decimal, fee_rate: Decimal) -> Decimal:
-    """Calculates trading fees for a given trade."""
     return price * quantity * fee_rate
+
 def calculate_slippage(price: Decimal, quantity: Decimal, slippage_rate: Decimal, side: Literal["BUY", "SELL"]) -> Decimal:
-    """Calculates the adjusted price after slippage."""
     if side == "BUY":
         return price * (Decimal("1") + slippage_rate)
     else: # SELL
@@ -467,9 +463,7 @@ def load_indicator_colors(config: dict[str, Any], logger: logging.Logger) -> dic
         "Support_Level": Fore.LIGHTCYAN_EX,
         "Resistance_Level": Fore.RED,
     }
-    # Load from config if available, otherwise use defaults
     custom_colors = config.get("indicator_colors", {})
-    # Merge defaults with custom colors, custom colors override
     final_colors = {**default_colors, **custom_colors}
     return final_colors
 
@@ -572,14 +566,11 @@ class BybitClient:
                     f"{NEON_RED}Bybit API Error: {ret_msg} (Code: {ret_code}){RESET}"
                 )
 
-                # Example: Handle insufficient balance specifically
-                if ret_code == 30037: # Example error code for insufficient balance
+                if ret_code == 30037:
                     self.logger.error(
                         f"{NEON_RED}Insufficient balance on Bybit. Please check your account balance.{RESET}"
                     )
-                    # Consider sending an alert or stopping trading for this symbol
-                    # alert_system.send_alert(f"[{self.symbol}] Insufficient balance on Bybit.", "ERROR")
-                    # return None # Or raise a custom exception
+                    return None
 
                 return None
             return data
@@ -697,9 +688,6 @@ class BybitClient:
 
 class PositionManager:
     def __init__(self, config: dict[str, Any], logger: logging.Logger, symbol: str):
-        """
-        Manages open positions, including calculating order sizes, opening, and closing trades.
-        """
         self.config = config
         self.logger = logger
         self.symbol = symbol
@@ -837,7 +825,7 @@ class PositionManager:
         take_profit = position["take_profit"]
 
         closed_by = None
-        close_price_at_trigger = Decimal("0") # Renamed variable
+        close_price_at_trigger = Decimal("0")
 
         if side == "BUY":
             if current_price <= stop_loss:
@@ -856,12 +844,10 @@ class PositionManager:
 
         if closed_by:
             price_precision_str = "0." + "0" * (price_precision - 1) + "1"
-            adjusted_close_price = close_price_at_trigger.quantize( # Use the correctly named variable
+            adjusted_close_price = close_price_at_trigger.quantize(
                 Decimal(price_precision_str),
                 rounding=ROUND_DOWN,
             )
-            # For PnL calculation, it might be better to use the entry price and the adjusted_close_price
-            # The original position['entry_price'] already includes entry slippage.
             return True, adjusted_close_price, closed_by
         return False, Decimal("0"), ""
 
@@ -1297,25 +1283,22 @@ class TradingAnalyzer:
                             if isinstance(result, tuple) and len(result) == len(
                                 result_keys,
                             ):
-                                for i, key in enumerate(result_keys):
-                                    if result[i] is not None:
-                                        self.df[key] = result[i].reindex(self.df.index)
-                                        if not result[i].empty:
-                                            self.indicator_values[key] = result[i].tail(1).item()
-                            else:
-                                self.logger.warning(
-                                   f"[{self.symbol}] Indicator '{ind_key}' expected {len(result_keys)} results but got {type(result)}: {result}. Skipping storage."
-                                )
-                        elif isinstance(result, pd.Series):
-                            self.df[result_keys] = result.reindex(self.df.index)
-                            if not result.empty:
-                                self.indicator_values[result_keys] = result.tail(1).item()
-                        else:
-                            self.df[result_keys] = pd.Series(
-                                result,
-                                index=self.df.index,
-                            )
-                            self.indicator_values[result_keys] = result
+                                                                                                                                                                    else:
+                                                                                                                                                                        self.logger.warning(
+                                                                                                                                                                           f"[{self.symbol}] Indicator '{ind_key}' expected {len(result_keys)} results but got {type(result)}: {result}. Skipping storage."
+                                                                                                                                                                        )
+                                                                                                                                                            elif isinstance(result, pd.Series):
+                                                                                                                                                                # Ensure the Series is of object dtype to preserve Decimals
+                                                                                                                                                                series_to_assign = result.astype(object).reindex(self.df.index)
+                                                                                                                                                                self.df[result_keys] = series_to_assign
+                                                                                                                                                                if not result.empty:
+                                                                                                                                                                    self.indicator_values[result_keys] = result.tail(1).item()
+                                                                                                                                                        else:
+                                                                                                                                                            # This case is less common for indicator results, but for safety:
+                                                                                                                                                            # Ensure the Series is of object dtype to preserve Decimals
+                                                                                                                                                            series_to_assign = pd.Series(result, index=self.df.index, dtype=object)
+                                                                                                                                                            self.df[result_keys] = series_to_assign
+                                                                                                                                                            self.indicator_values[result_keys] = result
 
         initial_len = len(self.df)
         self.df.dropna(subset=["close"], inplace=True)
@@ -1530,29 +1513,62 @@ class TradingAnalyzer:
         signal_period: int,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         if len(self.df) < slow_period + signal_period:
-            return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series, nan_series, nan_series
 
-        ema_fast = self.df["close"].ewm(span=fast_period, adjust=False).mean()
-        ema_slow = self.df["close"].ewm(span=slow_period, adjust=False).mean()
+        # Convert 'close' prices to Decimal for precise calculations
+        close_prices_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
 
+        # Calculate EMAs using Decimal
+        # Note: pandas ewm with adjust=False works with Decimal if the Series is Decimal
+        ema_fast = close_prices_decimal.ewm(span=fast_period, adjust=False).mean()
+        ema_slow = close_prices_decimal.ewm(span=slow_period, adjust=False).mean()
+
+        # Calculate MACD Line, Signal Line, and Histogram using Decimal
         macd_line = ema_fast - ema_slow
         signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
         histogram = macd_line - signal_line
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        ema_fast = ema_fast.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        ema_slow = ema_slow.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        macd_line = macd_line.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        signal_line = signal_line.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        histogram = histogram.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
 
         return macd_line, signal_line, histogram
 
     def calculate_rsi(self, period: int) -> pd.Series:
         if len(self.df) <= period:
-            return pd.Series(np.nan, index=self.df.index)
-        delta = self.df["close"].diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
+            # Return a Series of NaNs with Decimal type if not enough data
+            return pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
 
+        # Convert 'close' prices to Decimal for precise calculations
+        close_prices_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate price differences using Decimal
+        delta = close_prices_decimal.diff()
+
+        # Separate gains and losses
+        gain = delta.apply(lambda x: x if x > 0 else Decimal('0'))
+        loss = delta.apply(lambda x: -x if x < 0 else Decimal('0'))
+
+        # Calculate average gain and loss using EMA with Decimal
+        # Note: pandas ewm with adjust=False works with Decimal if the Series is Decimal
         avg_gain = gain.ewm(span=period, adjust=False, min_periods=period).mean()
         avg_loss = loss.ewm(span=period, adjust=False, min_periods=period).mean()
 
-        rs = avg_gain / avg_loss.replace(0, np.nan)
-        rsi = 100 - (100 / (1 + rs))
+        # Handle division by zero for RS calculation
+        rs = avg_gain / avg_loss.replace(Decimal('0'), Decimal('NaN'))
+
+        # Calculate RSI
+        # Handle cases where rs might be NaN or infinite
+        rsi = Decimal('100') - (Decimal('100') / (Decimal('1') + rs))
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        rsi = rsi.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
         return rsi
 
     def calculate_stoch_rsi(
@@ -1589,31 +1605,61 @@ class TradingAnalyzer:
 
     def calculate_adx(self, period: int) -> tuple[pd.Series, pd.Series, pd.Series]:
         if len(self.df) < period * 2:
-            return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series, nan_series, nan_series
 
-        tr = self.calculate_true_range()
+        # Calculate True Range using Decimal
+        tr = self._safe_calculate(
+            self.calculate_true_range,
+            "TR",
+            min_data_points=MIN_DATA_POINTS_TR,
+        )
+        if tr is None or tr.isnull().all():
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series, nan_series, nan_series
 
-        plus_dm = self.df["high"].diff()
-        minus_dm = -self.df["low"].diff()
+        # Convert 'high' and 'low' prices to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
 
-        plus_dm_final = pd.Series(0.0, index=self.df.index)
-        minus_dm_final = pd.Series(0.0, index=self.df.index)
+        # Calculate Directional Movement (+DM and -DM) using Decimal
+        plus_dm = high_decimal.diff()
+        minus_dm = -(low_decimal.diff())
 
+        # Initialize final DM Series with Decimal zeros
+        plus_dm_final = pd.Series([Decimal('0.0')] * len(self.df.index), index=self.df.index)
+        minus_dm_final = pd.Series([Decimal('0.0')] * len(self.df.index), index=self.df.index)
+
+        # Populate final DM values using Decimal comparisons
         for i in range(1, len(self.df)):
             if plus_dm.iloc[i] > minus_dm.iloc[i] and plus_dm.iloc[i] > 0:
                 plus_dm_final.iloc[i] = plus_dm.iloc[i]
             if minus_dm.iloc[i] > plus_dm.iloc[i] and minus_dm.iloc[i] > 0:
                 minus_dm_final.iloc[i] = minus_dm.iloc[i]
 
+        # Calculate ATR using Decimal
         atr = tr.ewm(span=period, adjust=False).mean()
-        plus_di = (plus_dm_final.ewm(span=period, adjust=False).mean() / atr) * 100
-        minus_di = (minus_dm_final.ewm(span=period, adjust=False).mean() / atr) * 100
 
+        # Calculate Directional Indicators (+DI and -DI) using Decimal
+        # Handle division by zero for ATR
+        plus_di = (plus_dm_final.ewm(span=period, adjust=False).mean() / atr.replace(Decimal('0'), Decimal('NaN'))) * Decimal('100')
+        minus_di = (minus_dm_final.ewm(span=period, adjust=False).mean() / atr.replace(Decimal('0'), Decimal('NaN'))) * Decimal('100')
+
+        # Calculate DI difference and sum, handling potential NaNs
         di_diff = abs(plus_di - minus_di)
         di_sum = plus_di + minus_di
-        dx = (di_diff / di_sum.replace(0, np.nan)).fillna(0) * 100
 
+        # Calculate DX, handling division by zero
+        dx = (di_diff / di_sum.replace(Decimal('0'), Decimal('NaN'))).fillna(Decimal('0')) * Decimal('100')
+
+        # Calculate ADX using EMA with Decimal
         adx = dx.ewm(span=period, adjust=False).mean()
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        plus_di = plus_di.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        minus_di = minus_di.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        adx = adx.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
 
         return adx, plus_di, minus_di
 
@@ -1623,45 +1669,113 @@ class TradingAnalyzer:
         std_dev: float,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         if len(self.df) < period:
-            return (
-                pd.Series(np.nan, index=self.df.index),
-                pd.Series(np.nan, index=self.df.index),
-                pd.Series(np.nan, index=self.df.index),
-            )
-        middle_band = self.df["close"].rolling(window=period, min_periods=period).mean()
-        std = self.df["close"].rolling(window=period, min_periods=period).std()
-        upper_band = middle_band + (std * std_dev)
-        lower_band = middle_band - (std * std_dev)
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series, nan_series, nan_series
+
+        # Convert 'close' prices to Decimal for precise calculations
+        close_prices_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate middle band (SMA) using Decimal
+        middle_band = close_prices_decimal.rolling(window=period, min_periods=period).mean()
+
+        # Calculate standard deviation using Decimal
+        std = close_prices_decimal.rolling(window=period, min_periods=period).std()
+
+        # Calculate upper and lower bands using Decimal arithmetic
+        upper_band = middle_band + (std * Decimal(str(std_dev)))
+        lower_band = middle_band - (std * Decimal(str(std_dev)))
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        middle_band = middle_band.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        upper_band = upper_band.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        lower_band = lower_band.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
         return upper_band, middle_band, lower_band
 
     def calculate_vwap(self) -> pd.Series:
         if self.df.empty:
-            return pd.Series(np.nan, index=self.df.index)
-        typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        cumulative_tp_vol = (typical_price * self.df["volume"])
-        cumulative_vol = self.df["volume"].cumsum()
-        vwap = cumulative_tp_vol / cumulative_vol
+            # Return NaNs with Decimal type if DataFrame is empty
+            return pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+
+        # Convert relevant columns to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+        volume_decimal = pd.Series([Decimal(str(p)) for p in self.df["volume"]], index=self.df.index)
+
+        # Calculate typical price using Decimal
+        typical_price = (high_decimal + low_decimal + close_decimal) / Decimal('3')
+
+        # Calculate cumulative typical price * volume and cumulative volume using Decimal
+        cumulative_tp_vol = (typical_price * volume_decimal).cumsum()
+        cumulative_vol = volume_decimal.cumsum()
+
+        # Calculate VWAP, handling division by zero
+        vwap = cumulative_tp_vol / cumulative_vol.replace(Decimal('0'), Decimal('NaN'))
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        vwap = vwap.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
         return vwap.reindex(self.df.index)
 
     def calculate_cci(self, period: int) -> pd.Series:
         if len(self.df) < period:
-            return pd.Series(np.nan, index=self.df.index)
-        tp = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series
+
+        # Convert relevant columns to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate typical price using Decimal
+        tp = (high_decimal + low_decimal + close_decimal) / Decimal('3')
+
+        # Calculate SMA of typical price using Decimal
         sma_tp = tp.rolling(window=period, min_periods=period).mean()
+
+        # Calculate Mean Absolute Deviation using Decimal
+        # The lambda function needs to be adapted for Decimal objects
         mad = tp.rolling(window=period, min_periods=period).apply(
-            lambda x: np.abs(x - x.mean()).mean(),
+            lambda x: sum(abs(val - x.mean()) for val in x) / period if not x.isnull().all() else Decimal('NaN'),
             raw=False,
         )
-        cci = (tp - sma_tp) / (0.015 * mad.replace(0, np.nan))
+
+        # Calculate CCI, handling division by zero
+        cci = (tp - sma_tp) / (Decimal('0.015') * mad.replace(Decimal('0'), Decimal('NaN')))
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        cci = cci.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
         return cci
 
     def calculate_williams_r(self, period: int) -> pd.Series:
         if len(self.df) < period:
-            return pd.Series(np.nan, index=self.df.index)
-        highest_high = self.df["high"].rolling(window=period, min_periods=period).max()
-        lowest_low = self.df["low"].rolling(window=period, min_periods=period).min()
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series
+
+        # Convert relevant columns to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate highest high and lowest low using Decimal
+        highest_high = high_decimal.rolling(window=period, min_periods=period).max()
+        lowest_low = low_decimal.rolling(window=period, min_periods=period).min()
+
+        # Calculate denominator, handling potential division by zero
         denominator = highest_high - lowest_low
-        wr = -100 * ((highest_high - self.df["close"]) / denominator.replace(0, np.nan))
+        denominator = denominator.replace(Decimal('0'), Decimal('NaN'))
+
+        # Calculate Williams %R using Decimal arithmetic
+        wr = Decimal('-100') * ((highest_high - close_decimal) / denominator)
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        wr = wr.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
         return wr
 
     def calculate_ichimoku_cloud(
@@ -1671,67 +1785,130 @@ class TradingAnalyzer:
         senkou_span_b_period: int,
         chikou_span_offset: int,
     ) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
-        if (
-            len(self.df)
-            < max(tenkan_period, kijun_period, senkou_span_b_period)
-            + chikou_span_offset
-        ):
-            return (
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-            )
+        required_bars = max(tenkan_period, kijun_period, senkou_span_b_period) + chikou_span_offset
+        if len(self.df) < required_bars:
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series, nan_series, nan_series, nan_series, nan_series
 
+        # Convert 'high' and 'low' prices to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate Tenkan-sen using Decimal
         tenkan_sen = (
-            self.df["high"].rolling(window=tenkan_period).max()
-            + self.df["low"].rolling(window=tenkan_period).min()
-        ) / 2
+            high_decimal.rolling(window=tenkan_period).max()
+            + low_decimal.rolling(window=tenkan_period).min()
+        ) / Decimal('2')
 
+        # Calculate Kijun-sen using Decimal
         kijun_sen = (
-            self.df["high"].rolling(window=kijun_period).max()
-            + self.df["low"].rolling(window=kijun_period).min()
-        ) / 2
+            high_decimal.rolling(window=kijun_period).max()
+            + low_decimal.rolling(window=kijun_period).min()
+        ) / Decimal('2')
 
-        senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(kijun_period)
+        # Calculate Senkou Span A using Decimal
+        senkou_span_a = ((tenkan_sen + kijun_sen) / Decimal('2')).shift(kijun_period)
 
+        # Calculate Senkou Span B using Decimal
         senkou_span_b = (
             (
-                self.df["high"].rolling(window=senkou_span_b_period).max()
-                + self.df["low"].rolling(window=senkou_span_b_period).min()
+                high_decimal.rolling(window=senkou_span_b_period).max()
+                + low_decimal.rolling(window=senkou_span_b_period).min()
             )
-            / 2
+            / Decimal('2')
         ).shift(kijun_period)
 
-        chikou_span = self.df["close"].shift(-chikou_span_offset)
+        # Calculate Chikou Span using Decimal
+        chikou_span = close_decimal.shift(-chikou_span_offset)
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        tenkan_sen = tenkan_sen.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        kijun_sen = kijun_sen.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        senkou_span_a = senkou_span_a.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        senkou_span_b = senkou_span_b.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        chikou_span = chikou_span.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
 
         return tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span
 
     def calculate_mfi(self, period: int) -> pd.Series:
         if len(self.df) <= period:
-            return pd.Series(np.nan, index=self.df.index)
-        typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        money_flow = typical_price * self.df["volume"]
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series
 
+        # Convert relevant columns to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+        volume_decimal = pd.Series([Decimal(str(p)) for p in self.df["volume"]], index=self.df.index)
+
+        # Calculate typical price using Decimal
+        typical_price = (high_decimal + low_decimal + close_decimal) / Decimal('3')
+
+        # Calculate money flow using Decimal
+        money_flow = typical_price * volume_decimal
+
+        # Calculate price difference using Decimal
         price_diff = typical_price.diff()
-        positive_flow = money_flow.where(price_diff > 0, 0)
-        negative_flow = money_flow.where(price_diff < 0, 0)
 
+        # Separate positive and negative flow using Decimal comparisons
+        # Use .where() for positive flow and .mask() for negative flow
+        # Ensure Decimal('0') is used for default values
+        positive_flow = money_flow.where(price_diff > 0, Decimal('0'))
+        # For negative flow, we want the absolute value of the negative difference
+        # So, if price_diff < 0, we take -price_diff, otherwise 0.
+        negative_flow = (-price_diff).where(price_diff < 0, Decimal('0'))
+
+        # Calculate sum of positive and negative money flow using Decimal rolling sum
+        # Ensure rolling sum operates on Decimal Series
         positive_mf_sum = positive_flow.rolling(window=period, min_periods=period).sum()
         negative_mf_sum = negative_flow.rolling(window=period, min_periods=period).sum()
 
-        mf_ratio = positive_mf_sum / negative_mf_sum.replace(0, np.nan)
-        mfi = 100 - (100 / (1 + mf_ratio))
-        return mfi
+        # Calculate Money Flow Ratio, handling division by zero
+        # Use Decimal('NaN') for division by zero
+        negative_mf_sum_safe = negative_mf_sum.replace(Decimal('0'), Decimal('NaN'))
+        mf_ratio = positive_mf_sum / negative_mf_sum_safe
+
+        # Calculate MFI using Decimal
+        # Handle potential division by zero in the final calculation as well
+        denominator_mfi = Decimal('1') + mf_ratio
+        denominator_mfi_safe = denominator_mfi.replace(Decimal('0'), Decimal('NaN'))
+        mfi = Decimal('100') - (Decimal('100') / denominator_mfi_safe)
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        # Use Decimal('NaN') for missing values
+        mfi = mfi.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
+        return mfi.astype(object) # Ensure return type is object dtype
 
     def calculate_obv(self, ema_period: int) -> tuple[pd.Series, pd.Series]:
         if len(self.df) < MIN_DATA_POINTS_OBV:
-            return pd.Series(np.nan), pd.Series(np.nan)
+            # Return NaNs with Decimal type if not enough data
+            return pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object), pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
 
-        obv = pd.Series(0.0, index=self.df.index)
-        obv_direction = np.sign(self.df["close"].diff().fillna(0))
-        obv = (obv_direction * self.df["volume"])
+        # Define a Decimal-compatible sign function
+        def decimal_sign(x):
+            if x > Decimal('0'):
+                return Decimal('1')
+            elif x < Decimal('0'):
+                return Decimal('-1')
+            else:
+                return Decimal('0')
+
+        # Ensure volume is treated as Decimal
+        volume_decimal = pd.Series([Decimal(str(v)) for v in self.df["volume"]], index=self.df.index, dtype=object)
+
+        # Initialize OBV Series with Decimal zeros
+        obv = pd.Series([Decimal('0.0')] * len(self.df.index), index=self.df.index, dtype=object)
+        
+        # Calculate direction using Decimal sign function
+        close_diff = self.df["close"].diff()
+        # Fill NaN in diff with Decimal('0') before applying sign
+        obv_direction = close_diff.fillna(Decimal('0')).apply(decimal_sign)
+        
+        obv = (obv_direction * volume_decimal)
 
         obv_ema = obv.ewm(span=ema_period, adjust=False).mean()
 
@@ -1761,21 +1938,29 @@ class TradingAnalyzer:
         max_acceleration: float,
     ) -> tuple[pd.Series, pd.Series]:
         if len(self.df) < MIN_DATA_POINTS_PSAR:
-            return pd.Series(np.nan, index=self.df.index), pd.Series(
-                np.nan,
-                index=self.df.index,
-            )
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series([Decimal('NaN')] * len(self.df.index), index=self.df.index, dtype=object)
+            return nan_series, nan_series
 
-        psar = self.df["close"].copy()
+        # Convert float parameters to Decimal
+        accel = Decimal(str(acceleration))
+        max_accel = Decimal(str(max_acceleration))
+
+        # Ensure close, high, low are treated as Decimal
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index, dtype=object)
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index, dtype=object)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index, dtype=object)
+
+        psar = close_decimal.copy()
         bull = pd.Series(True, index=self.df.index)
-        af = acceleration
+        af = accel
 
         ep = (
-            self.df["low"].iloc[0]
-            if self.df["close"].iloc[0] < self.df["close"].iloc[1]
-            else self.df["high"].iloc[0]
+            low_decimal.iloc[0]
+            if close_decimal.iloc[0] < close_decimal.iloc[1]
+            else high_decimal.iloc[0]
         )
-        bull.iloc[0] = self.df["close"].iloc[0] < self.df["close"].iloc[1]
+        bull.iloc[0] = close_decimal.iloc[0] < close_decimal.iloc[1]
 
         for i in range(1, len(self.df)):
             prev_bull = bull.iloc[i - 1]
@@ -1787,51 +1972,52 @@ class TradingAnalyzer:
                 psar.iloc[i] = prev_psar - af * (prev_psar - ep)
 
             reverse = False
-            if prev_bull and self.df["low"].iloc[i] < psar.iloc[i]:
+            if prev_bull and low_decimal.iloc[i] < psar.iloc[i]:
                 bull.iloc[i] = False
                 reverse = True
-            elif not prev_bull and self.df["high"].iloc[i] > psar.iloc[i]:
+            elif not prev_bull and high_decimal.iloc[i] > psar.iloc[i]:
                 bull.iloc[i] = True
                 reverse = True
             else:
                 bull.iloc[i] = prev_bull
 
             if reverse:
-                af = acceleration
-                ep = self.df["high"].iloc[i] if bull.iloc[i] else self.df["low"].iloc[i]
+                af = accel
+                ep = high_decimal.iloc[i] if bull.iloc[i] else low_decimal.iloc[i]
                 if bull.iloc[i]:
                     psar.iloc[i] = min(
-                        self.df["low"].iloc[i],
-                        self.df["low"].iloc[i - 1],
+                        low_decimal.iloc[i],
+                        low_decimal.iloc[i - 1],
                     )
                 else:
                     psar.iloc[i] = max(
-                        self.df["high"].iloc[i],
-                        self.df["high"].iloc[i - 1],
+                        high_decimal.iloc[i],
+                        high_decimal.iloc[i - 1],
                     )
 
             elif bull.iloc[i]:
-                if self.df["high"].iloc[i] > ep:
-                    ep = self.df["high"].iloc[i]
-                    af = min(af + acceleration, max_acceleration)
+                if high_decimal.iloc[i] > ep:
+                    ep = high_decimal.iloc[i]
+                    af = min(af + accel, max_accel)
                 psar.iloc[i] = min(
                     psar.iloc[i],
-                    self.df["low"].iloc[i],
-                    self.df["low"].iloc[i - 1],
+                    low_decimal.iloc[i],
+                    low_decimal.iloc[i - 1],
                 )
             else:
-                if self.df["low"].iloc[i] < ep:
-                    ep = self.df["low"].iloc[i]
-                    af = min(af + acceleration, max_acceleration)
+                if low_decimal.iloc[i] < ep:
+                    ep = low_decimal.iloc[i]
+                    af = min(af + accel, max_accel)
                 psar.iloc[i] = max(
                     psar.iloc[i],
-                    self.df["high"].iloc[i],
-                    self.df["high"].iloc[i - 1],
+                    high_decimal.iloc[i],
+                    high_decimal.iloc[i - 1],
                 )
 
-        direction = pd.Series(0, index=self.df.index, dtype=int)
-        direction[psar < self.df["close"]] = 1
-        direction[psar > self.df["close"]] = -1
+        # Initialize direction Series with Decimal('0') and use Decimal values for direction
+        direction = pd.Series([Decimal('0')] * len(self.df.index), index=self.df.index, dtype=object)
+        direction[psar < close_decimal] = Decimal('1')
+        direction[psar > close_decimal] = Decimal('-1')
 
         return psar, direction
 
@@ -2130,22 +2316,18 @@ class TradingAnalyzer:
             ]
         ):
             return "No Pattern"
-        # Example: Adding Doji detection
         body_length = abs(current_bar["close"] - current_bar["open"])
         candle_range = current_bar["high"] - current_bar["low"]
-        if candle_range > 0 and body_length / candle_range < 0.1: # Very small body relative to range
+        if candle_range > 0 and body_length / candle_range < 0.1:
             return "Doji"
 
-        # Example: Refine Hammer/Shooting Star logic
-        if body_length / candle_range < 0.3: # Body is less than 30% of total range
-            if current_bar["open"] < current_bar["close"]: # Bullish
+        if body_length / candle_range < 0.3:
+            if current_bar["open"] < current_bar["close"]:
                 if (current_bar["open"] - current_bar["low"]) > 2 * body_length and (current_bar["high"] - current_bar["close"]) < 0.5 * body_length:
                     return "Bullish Hammer"
-            else: # Bearish
+            else:
                 if (current_bar["high"] - current_bar["open"]) > 2 * body_length and (current_bar["close"] - current_bar["low"]) < 0.5 * body_length:
                     return "Bearish Shooting Star"
-
-        # ... (other patterns) ...
 
         return "No Pattern"
 
@@ -2288,10 +2470,7 @@ class TradingAnalyzer:
             return "HOLD", 0.0, {}
 
         current_close = Decimal(str(self.df["close"].iloc[-1]))
-        prev_close = (
-            Decimal(str(self.df["close"].iloc[-2]))
-            if len(self.df) > 1 else current_close,
-        )
+        prev_close = Decimal(str(self.df["close"].iloc[-2])) if len(self.df) > 1 else current_close
 
         trend_strength_multiplier = 1.0
 
@@ -2552,7 +2731,7 @@ class TradingAnalyzer:
                     signal_breakdown["Fibonacci R2 Breakout"] = fib_pivot_contrib * 1.0
                 elif current_close > pivot and prev_close <= pivot:
                     signal_score += fib_pivot_contrib * 0.2
-                    signal_breakdown["Fibonacci Pivot Breakout"]
+                    signal_breakdown["Fibonacci Pivot Breakout"] = fib_pivot_contrib * 0.2
                 
                 if current_close < s1 and prev_close >= s1:
                     signal_score -= fib_pivot_contrib * 0.5
@@ -2562,7 +2741,7 @@ class TradingAnalyzer:
                     signal_breakdown["Fibonacci S2 Breakout"] = -fib_pivot_contrib * 1.0
                 elif current_close < pivot and prev_close >= pivot:
                     signal_score -= fib_pivot_contrib * 0.2
-                    signal_breakdown["Fibonacci Pivot Breakdown"]
+                    signal_breakdown["Fibonacci Pivot Breakdown"] = -fib_pivot_contrib * 0.2
 
         if active_indicators.get("ehlers_supertrend", False):
             st_fast_dir = self._get_indicator_value("ST_Fast_Dir")

@@ -1,9 +1,11 @@
 import logging
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 from whalebot_pro.api.bybit_client import BybitClient
 from whalebot_pro.config import Config
 

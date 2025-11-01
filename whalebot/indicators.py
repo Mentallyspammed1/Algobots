@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Pyrmethus' Arcane Arts: Indicator Spells Module
 #
@@ -15,12 +14,8 @@
 
 import logging
 import sys
-import time
-from collections.abc import Callable
-from datetime import UTC, datetime
-from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
+from decimal import getcontext
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -29,7 +24,7 @@ import pandas as pd
 # Although not strictly needed for the module itself, it's good practice
 # to have it if the module might be used in a colored terminal context.
 # For module reusability, we'll keep it minimal here.
-from colorama import Back, Fore, Style, init as colorama_init
+from colorama import init as colorama_init
 
 colorama_init(autoreset=True)  # Auto-reset styles after each print
 

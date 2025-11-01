@@ -7,21 +7,24 @@ import os
 import sys
 import time
 import warnings
-from datetime import UTC, datetime
-from decimal import ROUND_DOWN, Decimal, getcontext
+from datetime import UTC
+from datetime import datetime
+from decimal import ROUND_DOWN
+from decimal import Decimal
+from decimal import getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import (
-    Any,
-    ClassVar,
-    Literal,
-)
+from typing import Any
+from typing import ClassVar
+from typing import Literal
 
 import httpx  # For asynchronous HTTP requests
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 

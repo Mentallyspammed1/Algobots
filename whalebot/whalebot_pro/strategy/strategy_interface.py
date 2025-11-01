@@ -1,5 +1,6 @@
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 from enum import Enum
 from typing import Any
 

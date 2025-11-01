@@ -8,11 +8,15 @@ import os
 import sys
 import time
 import urllib.parse
-from datetime import date, datetime
-from decimal import ROUND_DOWN, Decimal, getcontext
+from datetime import date
+from datetime import datetime
+from decimal import ROUND_DOWN
+from decimal import Decimal
+from decimal import getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
+from typing import ClassVar
 from zoneinfo import ZoneInfo
 
 import google.generativeai as genai
@@ -20,9 +24,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
-from google.generativeai.types import GenerateContentResponse, Part
+from google.generativeai.types import GenerateContentResponse
+from google.generativeai.types import Part
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 

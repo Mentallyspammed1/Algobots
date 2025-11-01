@@ -59,17 +59,25 @@ import sys
 import threading
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
-from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
+from datetime import UTC
+from datetime import datetime
+from decimal import ROUND_DOWN
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+from typing import Optional
 
 # --- External Dependencies ---
 import numpy as np
 import pandas as pd
 
 # --- Colorama Initialization ---
-from colorama import Back, Fore, Style, init as colorama_init
+from colorama import Back
+from colorama import Fore
+from colorama import Style
+from colorama import init as colorama_init
 
 colorama_init(autoreset=True)  # Auto-reset styles after each print
 
@@ -95,13 +103,10 @@ except Exception as e:
 print(f"{Fore.CYAN}----------------------------{Style.RESET_ALL}", file=sys.stderr)
 
 # --- Pybit Imports ---
+from pybit.exceptions import FailedRequestError
+from pybit.exceptions import InvalidRequestError
 from pybit.unified_trading import HTTP  # For REST API client
-from pybit.exceptions import (
-    FailedRequestError,
-    InvalidRequestError,
-)
 from pybit.unified_trading import WebSocket  # For WebSocket client
-from websocket import WebSocketException
 
 PYBIT_AVAILABLE = True
 
@@ -109,11 +114,14 @@ PYBIT_AVAILABLE = True
 # --- CCXT Import ---
 import ccxt
 
-# --- Pydantic Imports ---
-from pydantic import BaseModel, Field, ValidationError, validator
-
 # --- Dotenv Import ---
 from dotenv import load_dotenv
+
+# --- Pydantic Imports ---
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import ValidationError
+from pydantic import validator
 
 
 # --- Custom Logging Formatters (Placeholder definitions) ---

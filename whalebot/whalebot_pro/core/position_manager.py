@@ -1,9 +1,12 @@
 import logging
-from datetime import UTC, datetime
+from datetime import UTC
+from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any
+from typing import Literal
 
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 
 # Import local modules
 from whalebot_pro.api.bybit_client import BybitClient

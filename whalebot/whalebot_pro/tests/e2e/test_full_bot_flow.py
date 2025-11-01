@@ -1,14 +1,17 @@
 import asyncio
 import logging
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
 from whalebot_pro.api.bybit_client import BybitClient
 from whalebot_pro.config import Config
 from whalebot_pro.main import BybitTradingBot
-from whalebot_pro.utils.utilities import InMemoryCache, KlineDataFetcher
+from whalebot_pro.utils.utilities import InMemoryCache
+from whalebot_pro.utils.utilities import KlineDataFetcher
 
 
 @pytest.fixture

@@ -1,8 +1,11 @@
 import logging
-from decimal import ROUND_DOWN, ROUND_HALF_EVEN, Decimal
+from decimal import ROUND_DOWN
+from decimal import ROUND_HALF_EVEN
+from decimal import Decimal
 from typing import Any
 
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 
 # Color Scheme
 NEON_RED = Fore.LIGHTRED_EX

@@ -253,42 +253,74 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         },
         "weight_sets": {
             "default_scalping": {
-                "ema_alignment": 0.22,
-                "sma_trend_filter": 0.28,
-                "momentum_rsi_stoch_cci_wr_mfi": 0.18,
-                "bollinger_bands": 0.22,
-                "vwap": 0.22,
-                "psar": 0.22,
-                "sma_10": 0.07,
-                "orderbook_imbalance": 0.07,
-                "ehlers_supertrend_alignment": 0.55,
-                "macd_alignment": 0.28,
-                "adx_strength": 0.18,
-                "ichimoku_confluence": 0.38,
-                "obv_momentum": 0.18,
-                "cmf_flow": 0.12,
-                "mtf_trend_confluence": 0.32,
+                "ema_alignment": 0.18,
+                "sma_trend_filter": 0.20,
+                "rsi": 0.15,
+                "stoch_rsi": 0.15,
+                "cci": 0.10,
+                "wr": 0.10,
+                "mfi": 0.10,
+                "bollinger_bands": 0.15,
+                "vwap": 0.15,
+                "psar": 0.15,
+                "sma_10": 0.05,
+                "orderbook_imbalance": 0.15,
+                "ehlers_supertrend_alignment": 0.30,
+                "macd_alignment": 0.15,
+                "adx_strength": 0.15,
+                "ichimoku_confluence": 0.30,
+                "obv_momentum": 0.15,
+                "cmf_flow": 0.10,
+                "mtf_trend_confluence": 0.30,
                 "volatility_index_signal": 0.15,
                 "vwma_cross": 0.15,
                 "volume_delta_signal": 0.10,
-                "kaufman_ama_cross": 0.20,
+                "kaufman_ama_cross": 0.18,
                 "relative_volume_confirmation": 0.10,
                 "market_structure_confluence": 0.25,
-                "dema_crossover": 0.18,
-                "keltner_breakout": 0.20,
-                "roc_signal": 0.12,
+                "dema_crossover": 0.15,
+                "keltner_breakout": 0.18,
+                "roc_signal": 0.10,
                 "candlestick_confirmation": 0.15,
-                "fibonacci_pivot_points_confluence": 0.20,
+                "fibonacci_pivot_points_confluence": 0.18,
             },
         },
     }
+
+    def _validate_config(config: dict[str, Any], logger: logging.Logger) -> bool:
+        is_valid = True
+
+        symbol = config.get("symbol", "")
+        if not isinstance(symbol, str) or not symbol.endswith("USDT"):
+            logger.warning(
+                f"{NEON_YELLOW}Symbol '{symbol}' might not be in the expected format (e.g., BTCUSDT). Ensure it's correct for Bybit.{RESET}",
+            )
+
+        loop_delay = config.get("loop_delay", LOOP_DELAY_SECONDS)
+        if not isinstance(loop_delay, (int, float)) or loop_delay <= 0:
+            logger.error(
+                f"{NEON_RED}Invalid 'loop_delay' in config. It must be a positive number. Using default {LOOP_DELAY_SECONDS}.{RESET}",
+            )
+            config["loop_delay"] = LOOP_DELAY_SECONDS
+            is_valid = False
+
+        risk_per_trade = config.get("trade_management", {}).get("risk_per_trade_percent", 1.0)
+        if not isinstance(risk_per_trade, (int, float)) or not (0 < risk_per_trade <= 100):
+            logger.error(
+                f"{NEON_RED}Invalid 'risk_per_trade_percent' in config. It must be between 0 and 100. Using default 1.0.{RESET}",
+            )
+            config["trade_management"]["risk_per_trade_percent"] = 1.0
+            is_valid = False
+
+        return is_valid
+
+
     if not Path(filepath).exists():
         try:
             with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(default_config, f, indent=4)
             logger.warning(
-                f"{NEON_YELLOW}Configuration file not found. "
-                f"Created default config at {filepath} for symbol {default_config['symbol']}{RESET}",
+                f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath} for symbol {default_config['symbol']}{RESET}",
             )
             return default_config
         except OSError as e:
@@ -299,13 +331,15 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         with Path(filepath).open(encoding="utf-8") as f:
             config = json.load(f)
         _ensure_config_keys(config, default_config)
+        if not _validate_config(config, logger):
+            logger.error(f"{NEON_RED}Configuration validation failed. Please correct the issues in {filepath}. Exiting.{RESET}")
+            sys.exit(1)
         with Path(filepath).open("w", encoding="utf-8") as f_write:
             json.dump(config, f_write, indent=4)
         return config
     except (OSError, FileNotFoundError, json.JSONDecodeError) as e:
         logger.error(
-            f"{NEON_RED}Error loading config: {e}. "
-            f"Using default and attempting to save.{RESET}",
+            f"{NEON_RED}Error loading config: {e}. Using default and attempting to save.{RESET}",
         )
         try:
             with Path(filepath).open("w", encoding="utf-8") as f_default:
@@ -368,6 +402,77 @@ def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
         logger.addHandler(file_handler)
 
     return logger
+
+
+def calculate_fees(price: Decimal, quantity: Decimal, fee_rate: Decimal) -> Decimal:
+    return price * quantity * fee_rate
+
+def calculate_slippage(price: Decimal, quantity: Decimal, slippage_rate: Decimal, side: Literal["BUY", "SELL"]) -> Decimal:
+    if side == "BUY":
+        return price * (Decimal("1") + slippage_rate)
+    # SELL
+    return price * (Decimal("1") - slippage_rate)
+
+def load_indicator_colors(config: dict[str, Any], logger: logging.Logger) -> dict[str, str]:
+    default_colors = {
+        "SMA_10": Fore.LIGHTBLUE_EX,
+        "SMA_Long": Fore.BLUE,
+        "EMA_Short": Fore.LIGHTMAGENTA_EX,
+        "EMA_Long": Fore.MAGENTA,
+        "ATR": Fore.YELLOW,
+        "RSI": Fore.GREEN,
+        "StochRSI_K": Fore.CYAN,
+        "StochRSI_D": Fore.LIGHTCYAN_EX,
+        "BB_Upper": Fore.RED,
+        "BB_Middle": Fore.WHITE,
+        "BB_Lower": Fore.RED,
+        "CCI": Fore.LIGHTGREEN_EX,
+        "WR": Fore.LIGHTRED_EX,
+        "MFI": Fore.GREEN,
+        "OBV": Fore.BLUE,
+        "OBV_EMA": Fore.LIGHTBLUE_EX,
+        "CMF": Fore.MAGENTA,
+        "Tenkan_Sen": Fore.CYAN,
+        "Kijun_Sen": Fore.LIGHTCYAN_EX,
+        "Senkou_Span_A": Fore.GREEN,
+        "Senkou_Span_B": Fore.RED,
+        "Chikou_Span": Fore.YELLOW,
+        "PSAR_Val": Fore.MAGENTA,
+        "PSAR_Dir": Fore.LIGHTMAGENTA_EX,
+        "VWAP": Fore.WHITE,
+        "ST_Fast_Dir": Fore.BLUE,
+        "ST_Fast_Val": Fore.LIGHTBLUE_EX,
+        "ST_Slow_Dir": Fore.MAGENTA,
+        "ST_Slow_Val": Fore.LIGHTMAGENTA_EX,
+        "MACD_Line": Fore.GREEN,
+        "MACD_Signal": Fore.LIGHTGREEN_EX,
+        "MACD_Hist": Fore.YELLOW,
+        "ADX": Fore.CYAN,
+        "PlusDI": Fore.LIGHTCYAN_EX,
+        "MinusDI": Fore.RED,
+        "Volatility_Index": Fore.YELLOW,
+        "Volume_Delta": Fore.LIGHTCYAN_EX,
+        "VWMA": Fore.WHITE,
+        "Kaufman_AMA": Fore.GREEN,
+        "Relative_Volume": Fore.LIGHTMAGENTA_EX,
+        "Market_Structure_Trend": Fore.LIGHTCYAN_EX,
+        "DEMA": Fore.BLUE,
+        "Keltner_Upper": Fore.LIGHTMAGENTA_EX,
+        "Keltner_Middle": Fore.WHITE,
+        "Keltner_Lower": Fore.MAGENTA,
+        "ROC": Fore.LIGHTGREEN_EX,
+        "Pivot": Fore.WHITE,
+        "R1": Fore.CYAN,
+        "R2": Fore.LIGHTCYAN_EX,
+        "S1": Fore.MAGENTA,
+        "S2": Fore.LIGHTMAGENTA_EX,
+        "Candlestick_Pattern": Fore.LIGHTYELLOW_EX,
+        "Support_Level": Fore.LIGHTCYAN_EX,
+        "Resistance_Level": Fore.RED,
+    }
+    custom_colors = config.get("indicator_colors", {})
+    final_colors = {**default_colors, **custom_colors}
+    return final_colors
 
 
 class BybitClient:
@@ -462,10 +567,18 @@ class BybitClient:
             response.raise_for_status()
             data = response.json()
             if data.get("retCode") != 0:
+                ret_msg = data.get("retMsg", "Unknown error")
+                ret_code = data.get("retCode")
                 self.logger.error(
-                    f"{NEON_RED}Bybit API Error: {data.get('retMsg')} "
-                    f"(Code: {data.get('retCode')}){RESET}",
+                    f"{NEON_RED}Bybit API Error: {ret_msg} (Code: {ret_code}){RESET}",
                 )
+
+                if ret_code == 30037:
+                    self.logger.error(
+                        f"{NEON_RED}Insufficient balance on Bybit. Please check your account balance.{RESET}",
+                    )
+                    return None
+
                 return None
             return data
         except requests.exceptions.HTTPError as e:
@@ -610,8 +723,7 @@ class PositionManager:
 
         account_balance = self._get_current_balance()
         risk_per_trade_percent = (
-            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"]))
-            / 100
+            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"])) / 100
         )
         stop_loss_atr_multiple = Decimal(
             str(self.config["trade_management"]["stop_loss_atr_multiple"]),
@@ -670,9 +782,7 @@ class PositionManager:
         )
 
         if signal == "BUY":
-            adjusted_entry_price = current_price * (
-                Decimal("1") + self.slippage_percent
-            )
+            adjusted_entry_price = calculate_slippage(current_price, order_qty, self.slippage_percent, signal)
             stop_loss = adjusted_entry_price - (atr_value * stop_loss_atr_multiple)
             take_profit = adjusted_entry_price + (atr_value * take_profit_atr_multiple)
         else:
@@ -722,26 +832,26 @@ class PositionManager:
         take_profit = position["take_profit"]
 
         closed_by = None
-        close_price = Decimal("0")
+        close_price_at_trigger = Decimal("0")
 
         if side == "BUY":
             if current_price <= stop_loss:
                 closed_by = "STOP_LOSS"
-                close_price = current_price * (Decimal("1") - slippage_percent)
+                close_price_at_trigger = current_price * (Decimal("1") - slippage_percent)
             elif current_price >= take_profit:
                 closed_by = "TAKE_PROFIT"
-                close_price = current_price * (Decimal("1") - slippage_percent)
+                close_price_at_trigger = current_price * (Decimal("1") - slippage_percent)
         elif side == "SELL":
             if current_price >= stop_loss:
                 closed_by = "STOP_LOSS"
-                close_price = current_price * (Decimal("1") + slippage_percent)
+                close_price_at_trigger = current_price * (Decimal("1") + slippage_percent)
             elif current_price <= take_profit:
                 closed_by = "TAKE_PROFIT"
-                close_price = current_price * (Decimal("1") + slippage_percent)
+                close_price_at_trigger = current_price * (Decimal("1") + slippage_percent)
 
         if closed_by:
             price_precision_str = "0." + "0" * (price_precision - 1) + "1"
-            adjusted_close_price = close_price.quantize(
+            adjusted_close_price = close_price_at_trigger.quantize(
                 Decimal(price_precision_str),
                 rounding=ROUND_DOWN,
             )
@@ -825,8 +935,8 @@ class PerformanceTracker:
         self.trades.append(trade_record)
         self.total_pnl += pnl
 
-        entry_fee = position["entry_price"] * position["qty"] * self.trading_fee_percent
-        exit_fee = position["exit_price"] * position["qty"] * self.trading_fee_percent
+        entry_fee = calculate_fees(position["entry_price"], position["qty"], self.trading_fee_percent)
+        exit_fee = calculate_fees(position["exit_price"], position["qty"], self.trading_fee_percent)
         total_fees = entry_fee + exit_fee
         self.total_pnl -= total_fees
 
@@ -931,7 +1041,7 @@ class TradingAnalyzer:
             return result
         except Exception as e:
             self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Error calculating indicator '{name}': {e}{RESET}",
+                f"{NEON_RED}[{self.symbol}] Error calculating indicator '{name}': {e}. Parameters: {kwargs}.{RESET}",
             )
             return None
 
@@ -966,7 +1076,7 @@ class TradingAnalyzer:
                 self._calculate_atr_internal,
                 {"period": isd["atr_period"]},
                 "ATR",
-                isd["atr_period"],
+                isd["atr_period"] + MIN_DATA_POINTS_TR,
             ),
             "rsi": (
                 self.calculate_rsi,
@@ -1184,17 +1294,15 @@ class TradingAnalyzer:
                                     if result[i] is not None:
                                         self.df[key] = result[i].reindex(self.df.index)
                                         if not result[i].empty:
-                                            self.indicator_values[key] = result[i].iloc[
-                                                -1
-                                            ]
+                                            self.indicator_values[key] = result[i].tail(1).item()
                             else:
                                 self.logger.warning(
-                                    f"[{self.symbol}] Indicator '{ind_key}' expected {len(result_keys)} results but got {type(result)}: {result}. Skipping storage.",
+                                   f"[{self.symbol}] Indicator '{ind_key}' expected {len(result_keys)} results but got {type(result)}: {result}. Skipping storage.",
                                 )
                         elif isinstance(result, pd.Series):
                             self.df[result_keys] = result.reindex(self.df.index)
                             if not result.empty:
-                                self.indicator_values[result_keys] = result.iloc[-1]
+                                self.indicator_values[result_keys] = result.tail(1).item()
                         else:
                             self.df[result_keys] = pd.Series(
                                 result,
@@ -1222,11 +1330,21 @@ class TradingAnalyzer:
 
     def _calculate_emas(
         self,
-        short_period: int,
-        long_period: int,
+        short_period: int | None = None,
+        long_period: int | None = None,
     ) -> tuple[pd.Series, pd.Series]:
-        ema_short = self.df["close"].ewm(span=short_period, adjust=False).mean()
-        ema_long = self.df["close"].ewm(span=long_period, adjust=False).mean()
+        actual_short_period = (
+            short_period
+            if short_period is not None
+            else self.indicator_settings["ema_short_period"]
+        )
+        actual_long_period = (
+            long_period
+            if long_period is not None
+            else self.indicator_settings["ema_long_period"]
+        )
+        ema_short = self.df["close"].ewm(span=actual_short_period, adjust=False).mean()
+        ema_long = self.df["close"].ewm(span=actual_long_period, adjust=False).mean()
         return ema_short, ema_long
 
     def _calculate_atr_internal(self, period: int) -> pd.Series:
@@ -1513,7 +1631,7 @@ class TradingAnalyzer:
         if self.df.empty:
             return pd.Series(np.nan, index=self.df.index)
         typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        cumulative_tp_vol = (typical_price * self.df["volume"]).cumsum()
+        cumulative_tp_vol = (typical_price * self.df["volume"])
         cumulative_vol = self.df["volume"].cumsum()
         vwap = cumulative_tp_vol / cumulative_vol
         return vwap.reindex(self.df.index)
@@ -1606,7 +1724,7 @@ class TradingAnalyzer:
 
         obv = pd.Series(0.0, index=self.df.index)
         obv_direction = np.sign(self.df["close"].diff().fillna(0))
-        obv = (obv_direction * self.df["volume"]).cumsum()
+        obv = (obv_direction * self.df["volume"])
 
         obv_ema = obv.ewm(span=ema_period, adjust=False).mean()
 
@@ -2005,41 +2123,17 @@ class TradingAnalyzer:
             ]
         ):
             return "No Pattern"
+        body_length = abs(current_bar["close"] - current_bar["open"])
+        candle_range = current_bar["high"] - current_bar["low"]
+        if candle_range > 0 and body_length / candle_range < 0.1:
+            return "Doji"
 
-        if (
-            current_bar["open"] < prev_bar["close"]
-            and current_bar["close"] > prev_bar["open"]
-            and current_bar["close"] > current_bar["open"]
-            and prev_bar["close"] < prev_bar["open"]
-        ):
-            return "Bullish Engulfing"
-        if (
-            current_bar["open"] > prev_bar["close"]
-            and current_bar["close"] < prev_bar["open"]
-            and current_bar["close"] < current_bar["open"]
-            and prev_bar["close"] > prev_bar["open"]
-        ):
-            return "Bearish Engulfing"
-        if (
-            current_bar["close"] > current_bar["open"]
-            and abs(current_bar["close"] - current_bar["open"])
-            <= (current_bar["high"] - current_bar["low"]) * 0.3
-            and (current_bar["open"] - current_bar["low"])
-            >= 2 * abs(current_bar["close"] - current_bar["open"])
-            and (current_bar["high"] - current_bar["close"])
-            <= 0.5 * abs(current_bar["close"] - current_bar["open"])
-        ):
-            return "Bullish Hammer"
-        if (
-            current_bar["close"] < current_bar["open"]
-            and abs(current_bar["close"] - current_bar["open"])
-            <= (current_bar["high"] - current_bar["low"]) * 0.3
-            and (current_bar["high"] - current_bar["open"])
-            >= 2 * abs(current_bar["close"] - current_bar["open"])
-            and (current_bar["close"] - current_bar["low"])
-            <= 0.5 * abs(current_bar["close"] - current_bar["open"])
-        ):
-            return "Bearish Shooting Star"
+        if body_length / candle_range < 0.3:
+            if current_bar["open"] < current_bar["close"]:
+                if (current_bar["open"] - current_bar["low"]) > 2 * body_length and (current_bar["high"] - current_bar["close"]) < 0.5 * body_length:
+                    return "Bullish Hammer"
+            elif (current_bar["high"] - current_bar["open"]) > 2 * body_length and (current_bar["close"] - current_bar["low"]) < 0.5 * body_length:
+                return "Bearish Shooting Star"
 
         return "No Pattern"
 
@@ -2182,9 +2276,7 @@ class TradingAnalyzer:
             return "HOLD", 0.0, {}
 
         current_close = Decimal(str(self.df["close"].iloc[-1]))
-        prev_close = Decimal(
-            str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close,
-        )
+        prev_close = Decimal(str(self.df["close"].iloc[-2])) if len(self.df) > 1 else current_close
 
         trend_strength_multiplier = 1.0
 
@@ -2445,9 +2537,7 @@ class TradingAnalyzer:
                     signal_breakdown["Fibonacci R2 Breakout"] = fib_pivot_contrib * 1.0
                 elif current_close > pivot and prev_close <= pivot:
                     signal_score += fib_pivot_contrib * 0.2
-                    signal_breakdown["Fibonacci Pivot Breakout"] = (
-                        fib_pivot_contrib * 0.2
-                    )
+                    signal_breakdown["Fibonacci Pivot Breakout"] = fib_pivot_contrib * 0.2
 
                 if current_close < s1 and prev_close >= s1:
                     signal_score -= fib_pivot_contrib * 0.5
@@ -2457,9 +2547,7 @@ class TradingAnalyzer:
                     signal_breakdown["Fibonacci S2 Breakout"] = -fib_pivot_contrib * 1.0
                 elif current_close < pivot and prev_close >= pivot:
                     signal_score -= fib_pivot_contrib * 0.2
-                    signal_breakdown["Fibonacci Pivot Breakdown"] = (
-                        -fib_pivot_contrib * 0.2
-                    )
+                    signal_breakdown["Fibonacci Pivot Breakdown"] = -fib_pivot_contrib * 0.2
 
         if active_indicators.get("ehlers_supertrend", False):
             st_fast_dir = self._get_indicator_value("ST_Fast_Dir")
@@ -2693,9 +2781,6 @@ class TradingAnalyzer:
                             vol_contrib = weight * 0.2
                         elif signal_score < 0:
                             vol_contrib = -weight * 0.2
-                    elif vol_idx < prev_vol_idx < prev_prev_vol_idx:
-                        if abs(signal_score) > 0:
-                            vol_contrib = signal_score * -0.2
                 signal_score += vol_contrib
                 signal_breakdown["Volatility Index"] = vol_contrib
 
@@ -3360,7 +3445,7 @@ def main() -> None:
                 f"[{config['symbol']}] An unhandled error occurred in the main loop: {e}",
                 "ERROR",
             )
-            logger.exception(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
+            logger.error(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
             time.sleep(config["loop_delay"] * 2)
 
 

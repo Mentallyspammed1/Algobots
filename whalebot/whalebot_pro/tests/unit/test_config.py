@@ -1,9 +1,11 @@
 import json
 import logging
-from unittest.mock import mock_open, patch
+from unittest.mock import mock_open
+from unittest.mock import patch
 
 import pytest
-from whalebot_pro.config import DEFAULT_CONFIG_FILE, Config
+from whalebot_pro.config import DEFAULT_CONFIG_FILE
+from whalebot_pro.config import Config
 
 
 # Mock logger for testing Config class

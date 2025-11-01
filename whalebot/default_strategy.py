@@ -4,7 +4,8 @@ import logging
 from typing import Any
 
 import pandas as pd
-from strategy_interface import BaseStrategy, Signal
+from strategy_interface import BaseStrategy
+from strategy_interface import Signal
 
 
 class DefaultStrategy(BaseStrategy):
