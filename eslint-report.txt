@@ -1,0 +1,829 @@
+
+/home/runner/work/Algobots/Algobots/.github/scripts/analyze-with-gemini.js
+  73:4  error  Parsing error: Unexpected token $
+
+/home/runner/work/Algobots/Algobots/agent.js
+  54:26  error  Parsing error: Unexpected token json
+
+/home/runner/work/Algobots/Algobots/bybit/hug.js
+  126:19  error  'text' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/bybit/psutil-7.0.0/docs/_static/copybutton.js
+   1:1   error  '$' is not defined                 no-undef
+   5:15  error  '$' is not defined                 no-undef
+  25:23  error  'index' is defined but never used  no-unused-vars
+  26:21  error  '$' is not defined                 no-undef
+  28:26  error  '$' is not defined                 no-undef
+  41:5   error  '$' is not defined                 no-undef
+  43:26  error  '$' is not defined                 no-undef
+  50:26  error  '$' is not defined                 no-undef
+
+/home/runner/work/Algobots/Algobots/bybit/psutil-7.0.0/docs/_static/sidebar.js
+   23:1   error  '$' is not defined                                    no-undef
+   27:21  error  '$' is not defined                                    no-undef
+   28:17  error  '$' is not defined                                    no-undef
+   29:24  error  '$' is not defined                                    no-undef
+   67:33  error  '_' is not defined                                    no-undef
+   82:33  error  '_' is not defined                                    no-undef
+   98:25  error  '$' is not defined                                    no-undef
+  104:4   error  'viewport_height' is assigned a value but never used  no-unused-vars
+  104:22  error  '$' is not defined                                    no-undef
+  105:9   error  'sidebar_offset' is assigned a value but never used   no-unused-vars
+  118:33  error  '_' is not defined                                    no-undef
+  133:11  error  '$' is not defined                                    no-undef
+  136:11  error  '$' is not defined                                    no-undef
+  159:23  error  '$' is not defined                                    no-undef
+
+/home/runner/work/Algobots/Algobots/bybit_webhook_app/venv/lib/python3.12/site-packages/werkzeug/debug/shared/debugger.js
+    2:8   error  'EVALEX_TRUSTED' is not defined  no-undef
+    6:7   error  'CONSOLE_MODE' is not defined    no-undef
+    6:23  error  'EVALEX' is not defined          no-undef
+   11:7   error  'EVALEX' is not defined          no-undef
+   42:19  error  'SECRET' is not defined          no-undef
+   60:13  error  'EVALEX_TRUSTED' is not defined  no-undef
+   83:8   error  'EVALEX_TRUSTED' is not defined  no-undef
+  161:9   error  'EVALEX' is not defined          no-undef
+
+/home/runner/work/Algobots/Algobots/bybit_webhook_app/venv/lib64/python3.12/site-packages/werkzeug/debug/shared/debugger.js
+    2:8   error  'EVALEX_TRUSTED' is not defined  no-undef
+    6:7   error  'CONSOLE_MODE' is not defined    no-undef
+    6:23  error  'EVALEX' is not defined          no-undef
+   11:7   error  'EVALEX' is not defined          no-undef
+   42:19  error  'SECRET' is not defined          no-undef
+   60:13  error  'EVALEX_TRUSTED' is not defined  no-undef
+   83:8   error  'EVALEX_TRUSTED' is not defined  no-undef
+  161:9   error  'EVALEX' is not defined          no-undef
+
+/home/runner/work/Algobots/Algobots/geminibb/src/api/bybit_api.js
+  324:36  error  'SIDES' is not defined  no-undef
+  324:48  error  'SIDES' is not defined  no-undef
+  324:61  error  'SIDES' is not defined  no-undef
+
+/home/runner/work/Algobots/Algobots/geminibb/src/api/bybit_websocket.js
+   7:7   error  'sleep' is assigned a value but never used         no-unused-vars
+  32:13  error  'retryAttempt' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/geminibb/src/api/gemini_api.js
+  29:19  error  'model' is assigned a value but never used  no-unused-vars
+  85:23  error  'sleep' is not defined                      no-undef
+
+/home/runner/work/Algobots/Algobots/geminibb/src/core/trading_logic.js
+  13:7   error  'safeFormat' is assigned a value but never used  no-unused-vars
+  81:11  error  'tradeCost' is assigned a value but never used   no-unused-vars
+
+/home/runner/work/Algobots/Algobots/geminibb/src/ta/indicators/macd.js
+  22:11  error  'f' is assigned a value but never used    no-unused-vars
+  23:11  error  's' is assigned a value but never used    no-unused-vars
+  26:11  error  'sig' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/geminibb/src/trading_ai_system.js
+  5:46  error  'getDecimalState' is defined but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/geminibb/trading-bot/lib/geminiAnalyzer.js
+  429:14  error  'error' is defined but never used    no-unused-vars
+  601:31  error  'success' is defined but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/geminibb/trading-bot/lib/indicators.js
+  233:43  error  'filt' is constant                            no-const-assign
+  235:7   error  'filt' is constant                            no-const-assign
+  457:9   error  Unexpected lexical declaration in case block  no-case-declarations
+  476:9   error  Unexpected lexical declaration in case block  no-case-declarations
+  477:9   error  'r4' is not defined                           no-undef
+  484:9   error  Unexpected lexical declaration in case block  no-case-declarations
+  485:37  error  'r4' is not defined                           no-undef
+  488:9   error  Unexpected lexical declaration in case block  no-case-declarations
+
+/home/runner/work/Algobots/Algobots/geminibb/trading-bot/lib/logParser.js
+  73:38  error  Unnecessary escape character: \[  no-useless-escape
+  73:44  error  Unnecessary escape character: \s  no-useless-escape
+  73:74  error  Unnecessary escape character: \]  no-useless-escape
+  73:77  error  Unnecessary escape character: \s  no-useless-escape
+  73:82  error  Unnecessary escape character: \s  no-useless-escape
+
+/home/runner/work/Algobots/Algobots/geminibb/trading-bot/lib/signalGenerator.js
+    5:7   error  'SignalError' is defined but never used  no-unused-vars
+  883:17  error  'signal' is defined but never used       no-unused-vars
+
+/home/runner/work/Algobots/Algobots/geminibb/trading-bot/lib/utils.js
+   83:22  error  Unexpected control character(s) in regular expression: \x1b  no-control-regex
+  325:9   error  'format' is assigned a value but never used                  no-unused-vars
+  467:20  error  'error' is defined but never used                            no-unused-vars
+  468:16  error  'error' is defined but never used                            no-unused-vars
+  468:23  error  'attempt' is defined but never used                          no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/@javabot/chanexit.js
+     7:7   error  'indicatorModule' is assigned a value but never used  no-unused-vars
+    46:7   error  'ColoredLogger' is defined but never used             no-unused-vars
+   109:3   error  'rootLogger' is not defined                           no-undef
+   123:11  error  'config' is assigned a value but never used           no-unused-vars
+   133:24  error  'BybitAsync' is not defined                           no-undef
+   144:5   error  'rootLogger' is not defined                           no-undef
+   150:5   error  'rootLogger' is not defined                           no-undef
+   162:11  error  'rootLogger' is not defined                           no-undef
+   164:11  error  'rootLogger' is not defined                           no-undef
+   168:9   error  'rootLogger' is not defined                           no-undef
+   182:9   error  'rootLogger' is not defined                           no-undef
+   185:9   error  'rootLogger' is not defined                           no-undef
+   199:9   error  'rootLogger' is not defined                           no-undef
+   202:9   error  'rootLogger' is not defined                           no-undef
+   229:26  error  'DataFrame' is not defined                            no-undef
+   236:13  error  'rootLogger' is not defined                           no-undef
+   237:24  error  'DataFrame' is not defined                            no-undef
+   241:9   error  'rootLogger' is not defined                           no-undef
+   244:9   error  'rootLogger' is not defined                           no-undef
+   248:16  error  'DataFrame' is not defined                            no-undef
+   258:7   error  'rootLogger' is not defined                           no-undef
+   272:9   error  'rootLogger' is not defined                           no-undef
+   275:9   error  'rootLogger' is not defined                           no-undef
+   294:9   error  'rootLogger' is not defined                           no-undef
+   297:9   error  'rootLogger' is not defined                           no-undef
+   306:7   error  'rootLogger' is not defined                           no-undef
+   332:11  error  'rootLogger' is not defined                           no-undef
+   335:11  error  'rootLogger' is not defined                           no-undef
+   338:9   error  'rootLogger' is not defined                           no-undef
+   341:9   error  'rootLogger' is not defined                           no-undef
+   356:7   error  'rootLogger' is not defined                           no-undef
+   388:11  error  'rootLogger' is not defined                           no-undef
+   393:11  error  'rootLogger' is not defined                           no-undef
+   397:9   error  'rootLogger' is not defined                           no-undef
+   400:9   error  'rootLogger' is not defined                           no-undef
+   418:7   error  'rootLogger' is not defined                           no-undef
+   425:7   error  'rootLogger' is not defined                           no-undef
+   432:11  error  'rootLogger' is not defined                           no-undef
+   435:9   error  'rootLogger' is not defined                           no-undef
+   438:9   error  'rootLogger' is not defined                           no-undef
+   445:54  error  'positionIdx' is assigned a value but never used      no-unused-vars
+   447:7   error  'rootLogger' is not defined                           no-undef
+   461:11  error  'rootLogger' is not defined                           no-undef
+   464:11  error  'rootLogger' is not defined                           no-undef
+   467:9   error  'rootLogger' is not defined                           no-undef
+   470:9   error  'rootLogger' is not defined                           no-undef
+   486:9   error  'rootLogger' is not defined                           no-undef
+   489:9   error  'rootLogger' is not defined                           no-undef
+   498:7   error  'rootLogger' is not defined                           no-undef
+   505:11  error  'rootLogger' is not defined                           no-undef
+   512:11  error  'rootLogger' is not defined                           no-undef
+   525:9   error  'rootLogger' is not defined                           no-undef
+   542:5   error  'rootLogger' is not defined                           no-undef
+   546:16  error  'calculateEMA' is not defined                         no-undef
+   547:16  error  'calculateEMA' is not defined                         no-undef
+   555:28  error  'length' is assigned a value but never used           no-unused-vars
+   555:40  error  'multiplier' is assigned a value but never used       no-unused-vars
+   558:17  error  'row' is defined but never used                       no-unused-vars
+   562:30  error  'period' is assigned a value but never used           no-unused-vars
+   564:17  error  'row' is defined but never used                       no-unused-vars
+   568:35  error  'k_period' is assigned a value but never used         no-unused-vars
+   568:50  error  'd_period' is assigned a value but never used         no-unused-vars
+   568:64  error  'smoothing' is assigned a value but never used        no-unused-vars
+   570:18  error  'row' is defined but never used                       no-unused-vars
+   570:37  error  'row' is defined but never used                       no-unused-vars
+   574:28  error  'fast' is assigned a value but never used             no-unused-vars
+   574:39  error  'slow' is assigned a value but never used             no-unused-vars
+   574:50  error  'signal' is assigned a value but never used           no-unused-vars
+   576:18  error  'row' is defined but never used                       no-unused-vars
+   576:36  error  'row' is defined but never used                       no-unused-vars
+   576:54  error  'row' is defined but never used                       no-unused-vars
+   580:27  error  'period' is assigned a value but never used           no-unused-vars
+   582:17  error  'row' is defined but never used                       no-unused-vars
+   611:21  error  'calculateATR' is not defined                         no-undef
+   664:20  error  'calculateEMA' is not defined                         no-undef
+   665:16  error  'calculateEMA' is not defined                         no-undef
+   666:16  error  'calculateEMA' is not defined                         no-undef
+   667:15  error  'calculateRSI' is not defined                         no-undef
+   676:20  error  'calculateSMA' is not defined                         no-undef
+   677:45  error  'volMa' is not defined                                no-undef
+   882:5   error  'rootLogger' is not defined                           no-undef
+   887:5   error  'rootLogger' is not defined                           no-undef
+   894:7   error  'rootLogger' is not defined                           no-undef
+   907:5   error  'rootLogger' is not defined                           no-undef
+   915:3   error  'rootLogger' is not defined                           no-undef
+   916:3   error  'rootLogger' is not defined                           no-undef
+   923:7   error  'rootLogger' is not defined                           no-undef
+   926:9   error  'rootLogger' is not defined                           no-undef
+   935:9   error  'rootLogger' is not defined                           no-undef
+   940:7   error  'rootLogger' is not defined                           no-undef
+   947:7   error  'rootLogger' is not defined                           no-undef
+   951:9   error  'rootLogger' is not defined                           no-undef
+   974:11  error  'rootLogger' is not defined                           no-undef
+   979:11  error  'rootLogger' is not defined                           no-undef
+   985:11  error  'rootLogger' is not defined                           no-undef
+   994:7   error  'rootLogger' is not defined                           no-undef
+  1013:7   error  'rootLogger' is not defined                           no-undef
+  1024:7   error  'rootLogger' is not defined                           no-undef
+  1039:5   error  'rootLogger' is not defined                           no-undef
+  1049:5   error  'rootLogger' is not defined                           no-undef
+  1091:23  error  '_' is assigned a value but never used                no-unused-vars
+  1098:7   error  'rootLogger' is not defined                           no-undef
+  1128:5   error  'rootLogger' is not defined                           no-undef
+  1136:5   error  'rootLogger' is not defined                           no-undef
+  1143:5   error  'rootLogger' is not defined                           no-undef
+  1173:5   error  'rootLogger' is not defined                           no-undef
+  1177:5   error  'rootLogger' is not defined                           no-undef
+  1181:3   error  'rootLogger' is not defined                           no-undef
+  1182:3   error  'rootLogger' is not defined                           no-undef
+  1191:5   error  'rootLogger' is not defined                           no-undef
+  1201:5   error  'rootLogger' is not defined                           no-undef
+  1217:7   error  'rootLogger' is not defined                           no-undef
+  1220:7   error  'rootLogger' is not defined                           no-undef
+  1223:7   error  'rootLogger' is not defined                           no-undef
+  1243:5   error  'rootLogger' is not defined                           no-undef
+  1251:5   error  'rootLogger' is not defined                           no-undef
+  1262:5   error  'rootLogger' is not defined                           no-undef
+  1289:9   error  'rootLogger' is not defined                           no-undef
+  1291:9   error  'rootLogger' is not defined                           no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/@javabot/ehlst.js
+   31:27  error  'DateTime' is not defined                           no-undef
+   67:30  error  'fs' is not defined                                 no-undef
+   68:18  error  'yaml' is not defined                               no-undef
+  119:27  error  'DateTime' is not defined                           no-undef
+  120:25  error  'DateTime' is not defined                           no-undef
+  123:22  error  'DateTime' is not defined                           no-undef
+  123:38  error  'DateTime' is not defined                           no-undef
+  128:17  error  'DateTime' is not defined                           no-undef
+  128:33  error  'DateTime' is not defined                           no-undef
+  154:10  error  'calculatePnl' is defined but never used            no-unused-vars
+  168:9   error  'cumulativePnl' is assigned a value but never used  no-unused-vars
+  215:70  error  'generateEhlSupertrendSignals' is not defined       no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/@javabot/est.js
+  78:33  error  'sl_price' is assigned a value but never used  no-unused-vars
+  78:43  error  'tp_price' is assigned a value but never used  no-unused-vars
+  78:67  error  'generateSignals' is not defined               no-undef
+  94:15  error  'sleep' is not defined                         no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/@javabot/indicators.js
+  1:51   error  'StochasticRSI' is assigned a value but never used  no-unused-vars
+  1:66   error  'ADX' is assigned a value but never used            no-unused-vars
+  1:71   error  'CCI' is assigned a value but never used            no-unused-vars
+  1:76   error  'VWAP' is assigned a value but never used           no-unused-vars
+  1:82   error  'OBV' is assigned a value but never used            no-unused-vars
+  1:87   error  'MFI' is assigned a value but never used            no-unused-vars
+  1:92   error  'WilliamsR' is assigned a value but never used      no-unused-vars
+  1:103  error  'IchimokuCloud' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/@javabot/whalebot.js
+   26:25  error  'stdout' is defined but never used       no-unused-vars
+   26:33  error  'stderr' is defined but never used       no-unused-vars
+  134:16  error  'cancelOrder' is defined but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/bot/chanexit.js
+     1:8   error  'warnings' is defined but never used              no-unused-vars
+     2:8   error  'net' is defined but never used                   no-unused-vars
+     3:10  error  'URL' is defined but never used                   no-unused-vars
+     4:10  error  'performance' is defined but never used           no-unused-vars
+     5:8   error  'os' is defined but never used                    no-unused-vars
+     6:8   error  'fs' is defined but never used                    no-unused-vars
+     7:8   error  'path' is defined but never used                  no-unused-vars
+   132:11  error  'config' is assigned a value but never used       no-unused-vars
+   459:54  error  'positionIdx' is assigned a value but never used  no-unused-vars
+   793:3   error  'percentD' is constant                            no-const-assign
+   866:9   error  'adx' is assigned a value but never used          no-unused-vars
+  1437:23  error  '_' is assigned a value but never used            no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/bot/ehlst.js
+    2:7   error  'path' is assigned a value but never used      no-unused-vars
+    7:19  error  'Settings' is assigned a value but never used  no-unused-vars
+  690:77  error  'qtyPrecision' is defined but never used       no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/backups/chanexit.js
+     3:8   error  'warnings' is defined but never used                           no-unused-vars
+     4:8   error  'net' is defined but never used                                no-unused-vars
+     5:10  error  'URL' is defined but never used                                no-unused-vars
+     6:10  error  'performance' is defined but never used                        no-unused-vars
+     7:8   error  'os' is defined but never used                                 no-unused-vars
+     8:8   error  'fs' is defined but never used                                 no-unused-vars
+     9:8   error  'path' is defined but never used                               no-unused-vars
+   131:11  error  'config' is assigned a value but never used                    no-unused-vars
+   457:54  error  'positionIdx' is assigned a value but never used               no-unused-vars
+   642:7   error  'mockSupertrend' is assigned a value but never used            no-unused-vars
+   642:29  error  'length' is defined but never used                             no-unused-vars
+   642:37  error  'multiplier' is defined but never used                         no-unused-vars
+   643:7   error  'mockFisherTransform' is assigned a value but never used       no-unused-vars
+   643:34  error  'period' is defined but never used                             no-unused-vars
+   644:7   error  'mockStochasticOscillator' is assigned a value but never used  no-unused-vars
+   644:39  error  'k' is defined but never used                                  no-unused-vars
+   644:42  error  'd' is defined but never used                                  no-unused-vars
+   644:45  error  'smoothing' is defined but never used                          no-unused-vars
+   645:7   error  'mockMacdIndicator' is assigned a value but never used         no-unused-vars
+   645:32  error  'fast' is defined but never used                               no-unused-vars
+   645:38  error  'slow' is defined but never used                               no-unused-vars
+   645:44  error  'signal' is defined but never used                             no-unused-vars
+   646:7   error  'mockAdxIndicator' is assigned a value but never used          no-unused-vars
+   646:31  error  'period' is defined but never used                             no-unused-vars
+   668:28  error  'length' is assigned a value but never used                    no-unused-vars
+   668:40  error  'multiplier' is assigned a value but never used                no-unused-vars
+   671:17  error  'row' is defined but never used                                no-unused-vars
+   675:30  error  'period' is assigned a value but never used                    no-unused-vars
+   677:17  error  'row' is defined but never used                                no-unused-vars
+   681:35  error  'k_period' is assigned a value but never used                  no-unused-vars
+   681:50  error  'd_period' is assigned a value but never used                  no-unused-vars
+   681:64  error  'smoothing' is assigned a value but never used                 no-unused-vars
+   683:18  error  'row' is defined but never used                                no-unused-vars
+   683:37  error  'row' is defined but never used                                no-unused-vars
+   687:28  error  'fast' is assigned a value but never used                      no-unused-vars
+   687:39  error  'slow' is assigned a value but never used                      no-unused-vars
+   687:50  error  'signal' is assigned a value but never used                    no-unused-vars
+   689:18  error  'row' is defined but never used                                no-unused-vars
+   689:36  error  'row' is defined but never used                                no-unused-vars
+   689:54  error  'row' is defined but never used                                no-unused-vars
+   693:27  error  'period' is assigned a value but never used                    no-unused-vars
+   695:17  error  'row' is defined but never used                                no-unused-vars
+  1204:23  error  '_' is assigned a value but never used                         no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/backups/ehlst.js
+    2:7   error  'path' is assigned a value but never used      no-unused-vars
+    8:19  error  'Settings' is assigned a value but never used  no-unused-vars
+  481:11  error  Duplicate name 'syncTime'                      no-dupe-class-members
+  593:77  error  'qtyPrecision' is defined but never used       no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/backups/market-maker.js
+   48:7   error  'SPREAD_MULTIPLIER' is assigned a value but never used  no-unused-vars
+  296:48  error  'mid' is not defined                                    no-undef
+  297:48  error  'mid' is not defined                                    no-undef
+  667:12  error  '_' is defined but never used                           no-unused-vars
+  667:15  error  Empty block statement                                   no-empty
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/backups/stindicators.js
+  3:7  error  'Decimal' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/ehlst.bak.js
+    2:7   error  'path' is assigned a value but never used      no-unused-vars
+    8:19  error  'Settings' is assigned a value but never used  no-unused-vars
+  566:77  error  'qtyPrecision' is defined but never used       no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/gemsignal.cjs
+  261:34  error  Unexpected control character(s) in regular expression: \x1b  no-control-regex
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/gemsignal.js
+  206:38  error  Unexpected control character(s) in regular expression: \x1b  no-control-regex
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/market-maker.bak.js
+  205:16  error  'getTicker' is defined but never used          no-unused-vars
+  385:16  error  'fetchActiveOrders' is defined but never used  no-unused-vars
+  587:14  error  'err' is defined but never used                no-unused-vars
+  614:13  error  'bids' is assigned a value but never used      no-unused-vars
+  614:19  error  'asks' is assigned a value but never used      no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/market-maker.bak1.js
+   48:7   error  'SPREAD_MULTIPLIER' is assigned a value but never used  no-unused-vars
+  291:48  error  'mid' is not defined                                    no-undef
+  292:48  error  'mid' is not defined                                    no-undef
+  661:12  error  '_' is defined but never used                           no-unused-vars
+  661:15  error  Empty block statement                                   no-empty
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/scalper.js
+   195:121  error  Unnecessary escape character: \$                       no-useless-escape
+   196:127  error  Unnecessary escape character: \$                       no-useless-escape
+   216:18   error  'e' is defined but never used                          no-unused-vars
+   225:10   error  'getTimestampMs' is defined but never used             no-unused-vars
+   232:10   error  'runTermuxCommand' is defined but never used           no-unused-vars
+   316:115  error  Unnecessary escape character: \$                       no-useless-escape
+   317:121  error  Unnecessary escape character: \$                       no-useless-escape
+   807:30   error  'condition' is assigned a value but never used         no-unused-vars
+   842:25   error  'bbMiddle' is assigned a value but never used          no-unused-vars
+  1001:88   error  'e' is defined but never used                          no-unused-vars
+  1001:91   error  Empty block statement                                  no-empty
+  1081:86   error  'e' is defined but never used                          no-unused-vars
+  1081:89   error  Empty block statement                                  no-empty
+  1124:100  error  'e' is defined but never used                          no-unused-vars
+  1124:103  error  Empty block statement                                  no-empty
+  1165:19   error  'latestIndicators' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/strategies/chanexit_strategy.js
+  135:16  error  'calculateEMA' is not defined           no-undef
+  136:16  error  'calculateEMA' is not defined           no-undef
+  557:23  error  '_' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/strategies/ehlst_strategy.js
+   12:7   error  'SYMBOL' is assigned a value but never used                   no-unused-vars
+   13:7   error  'TRADING_SYMBOLS' is assigned a value but never used          no-unused-vars
+   14:7   error  'TIMEFRAME' is assigned a value but never used                no-unused-vars
+   15:7   error  'MIN_KLINES_FOR_STRATEGY' is assigned a value but never used  no-unused-vars
+   16:7   error  'MAX_POSITIONS' is assigned a value but never used            no-unused-vars
+   17:7   error  'RISK_PER_TRADE_PCT' is assigned a value but never used       no-unused-vars
+   18:7   error  'ORDER_QTY_USDT' is assigned a value but never used           no-unused-vars
+   19:7   error  'LEVERAGE' is assigned a value but never used                 no-unused-vars
+   20:7   error  'MARGIN_MODE' is assigned a value but never used              no-unused-vars
+   21:7   error  'REWARD_RISK_RATIO' is assigned a value but never used        no-unused-vars
+   22:7   error  'USE_ATR_FOR_TP_SL' is assigned a value but never used        no-unused-vars
+   23:7   error  'TP_ATR_MULTIPLIER' is assigned a value but never used        no-unused-vars
+   24:7   error  'SL_ATR_MULTIPLIER' is assigned a value but never used        no-unused-vars
+  233:11  error  'SYMBOL' is assigned a value but never used                   no-unused-vars
+  242:11  error  'REWARD_RISK_RATIO' is assigned a value but never used        no-unused-vars
+  243:11  error  'USE_ATR_FOR_TP_SL' is assigned a value but never used        no-unused-vars
+  244:11  error  'TP_ATR_MULTIPLIER' is assigned a value but never used        no-unused-vars
+  245:11  error  'SL_ATR_MULTIPLIER' is assigned a value but never used        no-unused-vars
+  299:23  error  'prevRow' is assigned a value but never used                  no-unused-vars
+  323:45  error  'ADX_THRESHOLD' is not defined                                no-undef
+  326:25  error  'RSI_CONFIRM_LONG_THRESHOLD' is not defined                   no-undef
+  326:83  error  'RSI_OVERBOUGHT' is not defined                               no-undef
+  332:45  error  'ADX_THRESHOLD' is not defined                                no-undef
+  335:25  error  'RSI_OVERSOLD' is not defined                                 no-undef
+  335:69  error  'RSI_CONFIRM_SHORT_THRESHOLD' is not defined                  no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/strategies/market_maker_strategy.js
+    2:8   error  'path' is defined but never used  no-unused-vars
+  440:12  error  '_' is defined but never used     no-unused-vars
+  440:15  error  Empty block statement             no-empty
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/strategies/unified_whale_strategy.js
+   73:28  error  'current_price' is defined but never used              no-unused-vars
+   73:43  error  'performanceTracker' is defined but never used         no-unused-vars
+   96:59  error  'conviction' is defined but never used                 no-unused-vars
+  110:13  error  'order_type' is assigned a value but never used        no-unused-vars
+  112:13  error  'price_step' is assigned a value but never used        no-unused-vars
+  215:15  error  'last_pivot_kline' is assigned a value but never used  no-unused-vars
+  276:29  error  'latest_orderbook' is defined but never used           no-unused-vars
+  282:15  error  'prev_kline' is assigned a value but never used        no-unused-vars
+  285:15  error  'atr' is assigned a value but never used               no-unused-vars
+  385:50  error  'signal_breakdown' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/strategies/whale_strategy.js
+   46:36  error  'minOrderQty' is assigned a value but never used                     no-unused-vars
+  357:26  error  'key' is defined but never used                                      no-unused-vars
+  921:16  error  'run_bot' is defined but never used                                  no-unused-vars
+  928:11  error  'ORDERBOOK_LIMIT' is assigned a value but never used                 no-unused-vars
+  929:11  error  'SIGNAL_SCORE_THRESHOLD' is assigned a value but never used          no-unused-vars
+  930:11  error  'COOLDOWN_SEC' is assigned a value but never used                    no-unused-vars
+  931:11  error  'HYSTERESIS_RATIO' is assigned a value but never used                no-unused-vars
+  932:11  error  'VOLUME_CONFIRMATION_MULTIPLIER' is assigned a value but never used  no-unused-vars
+  968:54  error  'breakdown' is assigned a value but never used                       no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/tests/config.test.js
+   3:1  error  'describe' is not defined   no-undef
+   6:3  error  'beforeAll' is not defined  no-undef
+  14:3  error  'afterAll' is not defined   no-undef
+  17:3  error  'test' is not defined       no-undef
+  18:5  error  'expect' is not defined     no-undef
+  21:3  error  'test' is not defined       no-undef
+  22:5  error  'expect' is not defined     no-undef
+  23:5  error  'expect' is not defined     no-undef
+  26:3  error  'test' is not defined       no-undef
+  37:5  error  'expect' is not defined     no-undef
+  38:5  error  'expect' is not defined     no-undef
+  43:3  error  'test' is not defined       no-undef
+  44:5  error  'expect' is not defined     no-undef
+  45:5  error  'expect' is not defined     no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/tests/unit/bybit_api_client.test.js
+   63:1  error  'describe' is not defined    no-undef
+   64:3  error  'beforeEach' is not defined  no-undef
+   73:3  error  'describe' is not defined    no-undef
+   74:5  error  'it' is not defined          no-undef
+   75:7  error  'expect' is not defined      no-undef
+   81:7  error  'expect' is not defined      no-undef
+   85:3  error  'describe' is not defined    no-undef
+   86:5  error  'it' is not defined          no-undef
+   93:7  error  'expect' is not defined      no-undef
+   94:7  error  'expect' is not defined      no-undef
+   95:7  error  'expect' is not defined      no-undef
+   99:3  error  'describe' is not defined    no-undef
+  100:5  error  'beforeEach' is not defined  no-undef
+  104:5  error  'it' is not defined          no-undef
+  112:7  error  'expect' is not defined      no-undef
+  113:7  error  'expect' is not defined      no-undef
+  117:3  error  'describe' is not defined    no-undef
+  118:5  error  'beforeEach' is not defined  no-undef
+  122:5  error  'it' is not defined          no-undef
+  124:7  error  'expect' is not defined      no-undef
+  125:7  error  'expect' is not defined      no-undef
+  128:5  error  'it' is not defined          no-undef
+  130:7  error  'expect' is not defined      no-undef
+  131:7  error  'expect' is not defined      no-undef
+  132:7  error  'expect' is not defined      no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/tests/unit/config.test.js
+   15:1   error  'describe' is not defined    no-undef
+   18:3   error  'beforeEach' is not defined  no-undef
+   28:3   error  'afterAll' is not defined    no-undef
+   33:3   error  'it' is not defined          no-undef
+   37:5   error  'expect' is not defined      no-undef
+   38:5   error  'expect' is not defined      no-undef
+   39:5   error  'expect' is not defined      no-undef
+   42:3   error  'it' is not defined          no-undef
+   56:5   error  'expect' is not defined      no-undef
+   57:5   error  'expect' is not defined      no-undef
+   58:5   error  'expect' is not defined      no-undef
+   59:5   error  'expect' is not defined      no-undef
+   60:5   error  'expect' is not defined      no-undef
+   63:3   error  'it' is not defined          no-undef
+   77:5   error  'expect' is not defined      no-undef
+   78:5   error  'expect' is not defined      no-undef
+   79:5   error  'expect' is not defined      no-undef
+   82:3   error  'it' is not defined          no-undef
+   88:5   error  'expect' is not defined      no-undef
+   89:5   error  'expect' is not defined      no-undef
+   92:3   error  'it' is not defined          no-undef
+  100:11  error  'expect' is not defined      no-undef
+  105:3   error  'it' is not defined          no-undef
+  113:11  error  'expect' is not defined      no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/tests/unit/indicators.test.js
+    6:3  error  'calculateRSI' is defined but never used                      no-unused-vars
+    7:3  error  'calculateStochasticOscillator' is defined but never used     no-unused-vars
+    8:3  error  'calculateMACD' is defined but never used                     no-unused-vars
+    9:3  error  'calculateADX' is defined but never used                      no-unused-vars
+   10:3  error  'calculateBollingerBands' is defined but never used           no-unused-vars
+   11:3  error  'calculateCCI' is defined but never used                      no-unused-vars
+   12:3  error  'calculateWilliamsR' is defined but never used                no-unused-vars
+   13:3  error  'calculateMFI' is defined but never used                      no-unused-vars
+   14:3  error  'calculateOBV' is defined but never used                      no-unused-vars
+   15:3  error  'calculateCMF' is defined but never used                      no-unused-vars
+   16:3  error  'calculateIchimokuCloud' is defined but never used            no-unused-vars
+   17:3  error  'calculatePSAR' is defined but never used                     no-unused-vars
+   18:3  error  'calculateVWAP' is defined but never used                     no-unused-vars
+   19:3  error  'calculateVolatilityIndex' is defined but never used          no-unused-vars
+   20:3  error  'calculateVWMA' is defined but never used                     no-unused-vars
+   21:3  error  'calculateVolumeDelta' is defined but never used              no-unused-vars
+   22:3  error  'calculateKaufmanAMA' is defined but never used               no-unused-vars
+   23:3  error  'calculateRelativeVolume' is defined but never used           no-unused-vars
+   24:3  error  'calculateMarketStructure' is defined but never used          no-unused-vars
+   25:3  error  'calculateKeltnerChannels' is defined but never used          no-unused-vars
+   26:3  error  'calculateROC' is defined but never used                      no-unused-vars
+   27:3  error  'detectCandlestickPatterns' is defined but never used         no-unused-vars
+   28:3  error  'calculateFibonacciLevels' is defined but never used          no-unused-vars
+   29:3  error  'calculateFibonacciPivotPoints' is defined but never used     no-unused-vars
+   30:3  error  'calculateEhlSupertrendIndicators' is defined but never used  no-unused-vars
+   31:3  error  'calculateFisherTransform' is defined but never used          no-unused-vars
+   32:3  error  'calculateSupertrend' is defined but never used               no-unused-vars
+   33:3  error  'buildAllIndicators' is defined but never used                no-unused-vars
+   39:1  error  'describe' is not defined                                     no-undef
+   45:3  error  'describe' is not defined                                     no-undef
+   46:5  error  'it' is not defined                                           no-undef
+   51:7  error  'expect' is not defined                                       no-undef
+   54:5  error  'it' is not defined                                           no-undef
+   58:7  error  'expect' is not defined                                       no-undef
+   61:5  error  'it' is not defined                                           no-undef
+   65:7  error  'expect' is not defined                                       no-undef
+   69:3  error  'describe' is not defined                                     no-undef
+   70:5  error  'it' is not defined                                           no-undef
+   76:7  error  'expect' is not defined                                       no-undef
+   79:5  error  'it' is not defined                                           no-undef
+   83:7  error  'expect' is not defined                                       no-undef
+   87:3  error  'describe' is not defined                                     no-undef
+   88:5  error  'it' is not defined                                           no-undef
+  109:7  error  'expect' is not defined                                       no-undef
+  112:5  error  'it' is not defined                                           no-undef
+  118:7  error  'expect' is not defined                                       no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/tests/unit/math_utils.test.js
+   4:1  error  'describe' is not defined  no-undef
+   5:3  error  'describe' is not defined  no-undef
+   6:5  error  'it' is not defined        no-undef
+  10:7  error  'expect' is not defined    no-undef
+  13:5  error  'it' is not defined        no-undef
+  17:7  error  'expect' is not defined    no-undef
+  20:5  error  'it' is not defined        no-undef
+  24:7  error  'expect' is not defined    no-undef
+  27:5  error  'it' is not defined        no-undef
+  29:7  error  'expect' is not defined    no-undef
+  30:7  error  'expect' is not defined    no-undef
+  34:3  error  'describe' is not defined  no-undef
+  35:5  error  'it' is not defined        no-undef
+  38:7  error  'expect' is not defined    no-undef
+  41:5  error  'it' is not defined        no-undef
+  44:7  error  'expect' is not defined    no-undef
+  47:5  error  'it' is not defined        no-undef
+  50:7  error  'expect' is not defined    no-undef
+  53:5  error  'it' is not defined        no-undef
+  56:9  error  'expect' is not defined    no-undef
+  60:3  error  'describe' is not defined  no-undef
+  61:5  error  'it' is not defined        no-undef
+  62:7  error  'expect' is not defined    no-undef
+  65:5  error  'it' is not defined        no-undef
+  66:7  error  'expect' is not defined    no-undef
+  69:5  error  'it' is not defined        no-undef
+  70:7  error  'expect' is not defined    no-undef
+  73:5  error  'it' is not defined        no-undef
+  74:7  error  'expect' is not defined    no-undef
+  75:7  error  'expect' is not defined    no-undef
+  78:5  error  'it' is not defined        no-undef
+  79:9  error  'expect' is not defined    no-undef
+  80:9  error  'expect' is not defined    no-undef
+  81:9  error  'expect' is not defined    no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/tests/unit/performance_tracker.test.js
+   11:1  error  'describe' is not defined    no-undef
+   14:3  error  'beforeEach' is not defined  no-undef
+   18:3  error  'it' is not defined          no-undef
+   20:5  error  'expect' is not defined      no-undef
+   21:5  error  'expect' is not defined      no-undef
+   22:5  error  'expect' is not defined      no-undef
+   23:5  error  'expect' is not defined      no-undef
+   24:5  error  'expect' is not defined      no-undef
+   25:5  error  'expect' is not defined      no-undef
+   26:5  error  'expect' is not defined      no-undef
+   29:3  error  'it' is not defined          no-undef
+   45:5  error  'expect' is not defined      no-undef
+   46:5  error  'expect' is not defined      no-undef
+   47:5  error  'expect' is not defined      no-undef
+   48:5  error  'expect' is not defined      no-undef
+   49:5  error  'expect' is not defined      no-undef
+   50:5  error  'expect' is not defined      no-undef
+   53:3  error  'it' is not defined          no-undef
+   69:5  error  'expect' is not defined      no-undef
+   70:5  error  'expect' is not defined      no-undef
+   71:5  error  'expect' is not defined      no-undef
+   72:5  error  'expect' is not defined      no-undef
+   73:5  error  'expect' is not defined      no-undef
+   74:5  error  'expect' is not defined      no-undef
+   77:3  error  'it' is not defined          no-undef
+   86:5  error  'expect' is not defined      no-undef
+   87:5  error  'expect' is not defined      no-undef
+   88:5  error  'expect' is not defined      no-undef
+   89:5  error  'expect' is not defined      no-undef
+   91:5  error  'expect' is not defined      no-undef
+   94:3  error  'it' is not defined          no-undef
+   97:5  error  'expect' is not defined      no-undef
+  100:3  error  'it' is not defined          no-undef
+  103:5  error  'expect' is not defined      no-undef
+  104:5  error  'expect' is not defined      no-undef
+  105:5  error  'expect' is not defined      no-undef
+  109:5  error  'expect' is not defined      no-undef
+  110:5  error  'expect' is not defined      no-undef
+  111:5  error  'expect' is not defined      no-undef
+  115:5  error  'expect' is not defined      no-undef
+  116:5  error  'expect' is not defined      no-undef
+  117:5  error  'expect' is not defined      no-undef
+  121:5  error  'expect' is not defined      no-undef
+  122:5  error  'expect' is not defined      no-undef
+  123:5  error  'expect' is not defined      no-undef
+  126:3  error  'it' is not defined          no-undef
+  138:5  error  'expect' is not defined      no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/utils/gemini.js
+  55:67  error  Unexpected control character(s) in regular expression: \x1b  no-control-regex
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/utils/webhook.js
+  12:44  error  Unexpected control character(s) in regular expression: \x1b  no-control-regex
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/wb.cjs
+     3:7   error  'path' is assigned a value but never used                           no-unused-vars
+    31:7   error  'TIMEZONE' is assigned a value but never used                       no-unused-vars
+    41:7   error  'MIN_DATA_POINTS_TR' is assigned a value but never used             no-unused-vars
+    42:7   error  'MIN_DATA_POINTS_SMOOTHER_INIT' is assigned a value but never used  no-unused-vars
+    43:7   error  'MIN_DATA_POINTS_OBV' is assigned a value but never used            no-unused-vars
+    83:17  error  'current_time_in_minutes' is constant                               no-const-assign
+   253:62  error  'object' is defined but never used                                  no-unused-vars
+   253:70  error  'source' is defined but never used                                  no-unused-vars
+   905:27  error  'performance_tracker' is not defined                                no-undef
+   905:49  error  'performance_tracker' is not defined                                no-undef
+  1244:19  error  'qty' is assigned a value but never used                            no-unused-vars
+  1564:18  error  'e' is defined but never used                                       no-unused-vars
+  1681:73  error  Unexpected negating the left operand of 'instanceof' operator       no-unsafe-negation
+  3214:9   error  'kline_data_ready' is assigned a value but never used               no-unused-vars
+  3223:28  error  'kline' is defined but never used                                   no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/wb1.1.js
+    13:7   error  '_' is assigned a value but never used                                     no-unused-vars
+    14:7   error  'moment' is assigned a value but never used                                no-unused-vars
+    34:7   error  'INDICATOR_COLORS' is assigned a value but never used                      no-unused-vars
+    72:7   error  'MAX_API_RETRIES' is assigned a value but never used                       no-unused-vars
+    73:7   error  'RETRY_DELAY_MS' is assigned a value but never used                        no-unused-vars
+    77:7   error  'PRICE_PRECISION' is assigned a value but never used                       no-unused-vars
+    82:7   error  'TAKE_PROFIT_RATIO' is assigned a value but never used                     no-unused-vars
+   205:21  error  Do not access Object.prototype method 'hasOwnProperty' from target object  no-prototype-builtins
+   591:31  error  'p' is not defined                                                         no-undef
+   840:31  error  'stochRsiD' is assigned a value but never used                             no-unused-vars
+   955:15  error  'close' is assigned a value but never used                                 no-unused-vars
+  1101:15  error  'close' is assigned a value but never used                                 no-unused-vars
+  1359:15  error  'previous' is assigned a value but never used                              no-unused-vars
+  1828:19  error  'entryPrice' is assigned a value but never used                            no-unused-vars
+  1855:35  error  'atrValue' is defined but never used                                       no-unused-vars
+  2188:13  error  'klineData' is not defined                                                 no-undef
+  2189:13  error  'klineData' is not defined                                                 no-undef
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/wb1.2.js
+    17:7    error  'readline' is assigned a value but never used          no-unused-vars
+   202:18   error  'e' is defined but never used                          no-unused-vars
+   211:10   error  'getTimestampMs' is defined but never used             no-unused-vars
+   218:10   error  'runTermuxCommand' is defined but never used           no-unused-vars
+   245:38   error  'recvWindow' is assigned a value but never used        no-unused-vars
+   441:27   error  'deque' is not defined                                 no-undef
+   441:85   error  'deque' is not defined                                 no-undef
+   790:30   error  'condition' is assigned a value but never used         no-unused-vars
+   825:25   error  'bbMiddle' is assigned a value but never used          no-unused-vars
+   883:58   error  'deque' is not defined                                 no-undef
+   984:88   error  'e' is defined but never used                          no-unused-vars
+   984:91   error  Empty block statement                                  no-empty
+  1064:86   error  'e' is defined but never used                          no-unused-vars
+  1064:89   error  Empty block statement                                  no-empty
+  1107:100  error  'e' is defined but never used                          no-unused-vars
+  1107:103  error  Empty block statement                                  no-empty
+  1148:19   error  'latestIndicators' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/wb2.0.js
+  204:32  error  Parsing error: Unterminated regular expression
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/wb3.0.js
+  876:15  error  Parsing error: Identifier 'senB' has already been declared
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/wb3.1.js
+  1:16  error  'timeout' is defined but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/wb4.0.js
+   14:9   error  'execSync' is assigned a value but never used          no-unused-vars
+  106:7   error  'indicators' is assigned a value but never used        no-unused-vars
+  529:28  error  'current_price' is defined but never used              no-unused-vars
+  529:43  error  'performanceTracker' is defined but never used         no-unused-vars
+  541:59  error  'conviction' is defined but never used                 no-unused-vars
+  564:13  error  'price_step' is assigned a value but never used        no-unused-vars
+  634:7   error  'AlertSystem' is defined but never used                no-unused-vars
+  658:15  error  'last_pivot_kline' is assigned a value but never used  no-unused-vars
+  680:15  error  'stoch_k_period' is assigned a value but never used    no-unused-vars
+  681:15  error  'stoch_d_period' is assigned a value but never used    no-unused-vars
+  772:29  error  'latest_orderbook' is defined but never used           no-unused-vars
+  778:15  error  'prev_kline' is assigned a value but never used        no-unused-vars
+  779:15  error  'prev_prev_kline' is assigned a value but never used   no-unused-vars
+  782:15  error  'atr' is assigned a value but never used               no-unused-vars
+  874:50  error  'signal_breakdown' is assigned a value but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/wbglm.js
+    13:8   error  'WebSocket' is defined but never used                               no-unused-vars
+    28:7   error  'TIMEZONE' is assigned a value but never used                       no-unused-vars
+    39:7   error  'MIN_DATA_POINTS_TR' is assigned a value but never used             no-unused-vars
+    40:7   error  'MIN_DATA_POINTS_SMOOTHER_INIT' is assigned a value but never used  no-unused-vars
+    41:7   error  'MIN_DATA_POINTS_OBV' is assigned a value but never used            no-unused-vars
+   495:13  error  'upperBand' is assigned a value but never used                      no-unused-vars
+   921:15  error  'prev' is assigned a value but never used                           no-unused-vars
+  1624:91  error  'logger' is defined but never used                                  no-unused-vars
+  1903:18  error  'e' is defined but never used                                       no-unused-vars
+  2421:15  error  'isd' is assigned a value but never used                            no-unused-vars
+  2665:15  error  'current_close' is assigned a value but never used                  no-unused-vars
+  3771:7   error  'Path' is assigned a value but never used                           no-unused-vars
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/whale.js
+  234:54  error  Parsing error: Unterminated regular expression
+
+/home/runner/work/Algobots/Algobots/pybit/javabot/whalebot.cjs
+    14:7   error  'WebSocket' is assigned a value but never used                      no-unused-vars
+    33:7   error  'TIMEZONE' is assigned a value but never used                       no-unused-vars
+    44:7   error  'MIN_DATA_POINTS_TR' is assigned a value but never used             no-unused-vars
+    45:7   error  'MIN_DATA_POINTS_SMOOTHER_INIT' is assigned a value but never used  no-unused-vars
+    46:7   error  'MIN_DATA_POINTS_OBV' is assigned a value but never used            no-unused-vars
+   362:62  error  'object' is defined but never used                                  no-unused-vars
+   362:70  error  'source' is defined but never used                                  no-unused-vars
+   944:13  error  'live_positions' is assigned a value but never used                 no-unused-vars
+  1212:18  error  'e' is defined but never used                                       no-unused-vars
+  3065:7   error  'Path' is assigned a value but never used                           no-unused-vars
+
+/home/runner/work/Algobots/Algobots/whalebot/bot_logs/trading-bot/lib/geminiAnalyzer.js
+  429:14  error  'error' is defined but never used    no-unused-vars
+  601:31  error  'success' is defined but never used  no-unused-vars
+
+/home/runner/work/Algobots/Algobots/whalebot/bot_logs/trading-bot/lib/indicators.js
+  233:43  error  'filt' is constant                            no-const-assign
+  235:7   error  'filt' is constant                            no-const-assign
+  457:9   error  Unexpected lexical declaration in case block  no-case-declarations
+  476:9   error  Unexpected lexical declaration in case block  no-case-declarations
+  477:9   error  'r4' is not defined                           no-undef
+  484:9   error  Unexpected lexical declaration in case block  no-case-declarations
+  485:37  error  'r4' is not defined                           no-undef
+  488:9   error  Unexpected lexical declaration in case block  no-case-declarations
+
+/home/runner/work/Algobots/Algobots/whalebot/bot_logs/trading-bot/lib/logParser.js
+  65:41  error  Unnecessary escape character: \[  no-useless-escape
+  65:48  error  Unnecessary escape character: \s  no-useless-escape
+  65:79  error  Unnecessary escape character: \]  no-useless-escape
+  65:83  error  Unnecessary escape character: \s  no-useless-escape
+  65:88  error  Unnecessary escape character: \s  no-useless-escape
+
+/home/runner/work/Algobots/Algobots/whalebot/bot_logs/trading-bot/lib/signalGenerator.js
+    5:7   error  'SignalError' is defined but never used  no-unused-vars
+  883:17  error  'signal' is defined but never used       no-unused-vars
+
+/home/runner/work/Algobots/Algobots/whalebot/bot_logs/trading-bot/lib/utils.js
+   83:22  error  Unexpected control character(s) in regular expression: \x1b  no-control-regex
+  325:9   error  'format' is assigned a value but never used                  no-unused-vars
+  467:20  error  'error' is defined but never used                            no-unused-vars
+  468:16  error  'error' is defined but never used                            no-unused-vars
+  468:23  error  'attempt' is defined but never used                          no-unused-vars
+
+/home/runner/work/Algobots/Algobots/whalebot/gemini_signal_bot.js
+  1608:60  error  Parsing error: Unexpected token {
+
+/home/runner/work/Algobots/Algobots/whalebot/gsb.js
+     7:9   error  'Buffer' is assigned a value but never used                                no-unused-vars
+    46:7   error  'Style' is assigned a value but never used                                 no-unused-vars
+   231:22  error  'retryCount' is defined but never used                                     no-unused-vars
+   557:21  error  Do not access Object.prototype method 'hasOwnProperty' from target object  no-prototype-builtins
+   770:15  error  'lastClose' is assigned a value but never used                             no-unused-vars
+  1081:66  error  Do not access Object.prototype method 'hasOwnProperty' from target object  no-prototype-builtins
+  2358:19  error  'currentClose' is assigned a value but never used                          no-unused-vars
+
+/home/runner/work/Algobots/Algobots/whalebot/wb.js
+     2:7   error  'path' is assigned a value but never used                                  no-unused-vars
+     5:9   error  'setInterval' is assigned a value but never used                           no-unused-vars
+    80:7   error  'TIMEZONE_OFFSET' is assigned a value but never used                       no-unused-vars
+    94:7   error  'MIN_DATA_POINTS_VWMA' is assigned a value but never used                  no-unused-vars
+   267:21  error  Do not access Object.prototype method 'hasOwnProperty' from target object  no-prototype-builtins
+   510:13  error  'windowSum' is assigned a value but never used                             no-unused-vars
+   632:15  error  'precisionStr' is assigned a value but never used                          no-unused-vars
+   668:15  error  'pricePrecisionStr' is assigned a value but never used                     no-unused-vars
+  1362:15  error  'close' is assigned a value but never used                                 no-unused-vars
+  1426:15  error  'close' is assigned a value but never used                                 no-unused-vars
+  1591:15  error  'low' is assigned a value but never used                                   no-unused-vars
+  2478:15  error  'pricePrecisionStr' is assigned a value but never used                     no-unused-vars
+
+✖ 695 problems (695 errors, 0 warnings)
