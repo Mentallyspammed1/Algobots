@@ -1,6 +1,8 @@
 import pandas as pd
 import pytest
-from indicators_api import calculate_ema, calculate_rsi, calculate_supertrend
+from indicators_api import calculate_ema
+from indicators_api import calculate_rsi
+from indicators_api import calculate_supertrend
 
 
 # Fixture for a basic DataFrame

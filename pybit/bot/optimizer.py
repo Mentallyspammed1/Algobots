@@ -9,7 +9,8 @@ import smtplib
 import sqlite3
 import uuid
 import warnings
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
+from dataclasses import dataclass
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
@@ -43,16 +44,13 @@ except ImportError:
 
 # Import BOT_CONFIG from the new config file
 # Import necessary components from ehlerssupertrend.py
-from ehlerssupertrend import (
-    Bybit,
-    ColoredFormatter,
-    calculate_ehl_supertrend_indicators,
-    calculate_pnl,
-    generate_ehl_supertrend_signals,
-    send_termux_toast,
-)
-
 from config import BOT_CONFIG
+from ehlerssupertrend import Bybit
+from ehlerssupertrend import ColoredFormatter
+from ehlerssupertrend import calculate_ehl_supertrend_indicators
+from ehlerssupertrend import calculate_pnl
+from ehlerssupertrend import generate_ehl_supertrend_signals
+from ehlerssupertrend import send_termux_toast
 
 
 # --- Enhanced Logging Setup ---

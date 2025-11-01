@@ -7,7 +7,8 @@ import time
 from asyncio import Queue
 from collections import deque
 from collections.abc import Callable
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 from functools import lru_cache
 from typing import Any
 
@@ -101,19 +102,19 @@ def is_fresh(df: pd.DataFrame) -> bool:
 
 
 # --- Import Configuration and Indicator Logic ---
-from bot_logger import log_exception, log_metrics, setup_logging
+import config as cfg  # Import config as cfg
+from bot_logger import log_exception
+from bot_logger import log_metrics
+from bot_logger import setup_logging
 from bot_ui import display_market_info
-from bybit_api import BybitAPIError, BybitContractAPI
-from indicators import (
-    calculate_atr,
-    calculate_fibonacci_pivot_points,
-    find_pivots,
-    handle_websocket_kline_data,
-)
+from bybit_api import BybitAPIError
+from bybit_api import BybitContractAPI
+from indicators import calculate_atr
+from indicators import calculate_fibonacci_pivot_points
+from indicators import find_pivots
+from indicators import handle_websocket_kline_data
 from order_manager import OrderManager
 from trade_metrics import TradeMetrics
-
-import config as cfg  # Import config as cfg
 from utils import OrderBook
 
 # --- Strategy Management ---
@@ -269,7 +270,7 @@ class PyrmethusBot:
         """Returns the side of the current open position ('Buy', 'Sell', or None)."""
         if self.inventory > Decimal("0"):
             return "Buy"
-        elif self.inventory < Decimal("0"):
+        if self.inventory < Decimal("0"):
             return "Sell"
         return None
 

@@ -10,11 +10,17 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
+from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
-from decimal import Decimal, InvalidOperation, getcontext
-from enum import Enum, auto
-from functools import lru_cache, wraps
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
+from enum import Enum
+from enum import auto
+from functools import lru_cache
+from functools import wraps
 from typing import Any
 
 import aiofiles
@@ -23,7 +29,8 @@ import prometheus_client  # Improvement #3: Prometheus metrics
 import redis  # Improvement #2: Redis for distributed caching
 import uvloop  # Improvement #1: High-performance event loop
 from cryptography.fernet import Fernet  # Improvement #4: Encryption for sensitive data
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 # Improvement #5: Use uvloop for better async performance
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -197,7 +204,9 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
 
 
 # Setup logging
-from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
+from logging.handlers import QueueHandler
+from logging.handlers import QueueListener
+from logging.handlers import RotatingFileHandler
 
 log_queue = queue.Queue()
 queue_handler = QueueHandler(log_queue)

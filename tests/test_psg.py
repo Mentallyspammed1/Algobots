@@ -3,16 +3,17 @@ import sys
 import time
 import unittest
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pandas as pd
 
 sys.path.insert(0, "/data/data/com.termux/files/home/Algobots")
 
 # Import the module and classes to be tested
-from PSG import PyrmethusBot
-
 import config
+from PSG import PyrmethusBot
 
 
 # --- Helper function to create sample DataFrame ---

@@ -3,7 +3,9 @@ import itertools
 from decimal import Decimal
 
 # Import the necessary components from our backtester script
-from backtester import Backtester, load_config, load_historical_data
+from backtester import Backtester
+from backtester import load_config
+from backtester import load_historical_data
 
 
 def run_optimizer():

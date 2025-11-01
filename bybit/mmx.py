@@ -15,12 +15,21 @@ import os
 import sys
 import time
 import uuid
-from collections import defaultdict, deque
+from collections import defaultdict
+from collections import deque
 from collections.abc import Callable
 from contextlib import asynccontextmanager
-from dataclasses import asdict, dataclass, field, fields
-from datetime import UTC, datetime
-from decimal import ROUND_DOWN, ROUND_UP, Decimal, DecimalException, getcontext
+from dataclasses import asdict
+from dataclasses import dataclass
+from dataclasses import field
+from dataclasses import fields
+from datetime import UTC
+from datetime import datetime
+from decimal import ROUND_DOWN
+from decimal import ROUND_UP
+from decimal import Decimal
+from decimal import DecimalException
+from decimal import getcontext
 from typing import Any
 
 import psutil
@@ -47,9 +56,12 @@ except ImportError:
     notification = None  # Ensure notification is None if plyer isn't found
 
 
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 # Initialize colorama for cross-platform color support
 init(autoreset=True)

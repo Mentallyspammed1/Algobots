@@ -4,15 +4,16 @@ from typing import Any
 
 import pandas as pd
 from algobots_types import OrderBlock
-from color_codex import COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_RESET, COLOR_YELLOW
+from color_codex import COLOR_CYAN
+from color_codex import COLOR_GREEN
+from color_codex import COLOR_RED
+from color_codex import COLOR_RESET
+from color_codex import COLOR_YELLOW
+from config import EHLERS_FISHER_SIGNAL_PERIOD
+from config import OB_TOLERANCE_PCT
+from config import PIVOT_TOLERANCE_PCT
+from config import SMA_PERIOD
 from strategies.strategy_template import StrategyTemplate
-
-from config import (
-    EHLERS_FISHER_SIGNAL_PERIOD,
-    OB_TOLERANCE_PCT,
-    PIVOT_TOLERANCE_PCT,
-    SMA_PERIOD,
-)
 
 strategy_logger = logging.getLogger("stochrsi_fib_ob_strategy")
 strategy_logger.setLevel(logging.DEBUG)

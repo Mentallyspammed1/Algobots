@@ -3,11 +3,14 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN
+from decimal import Decimal
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask
+from flask import jsonify
+from flask import request
 from flask_cors import CORS
 from pybit.unified_trading import HTTP
 

@@ -17,12 +17,18 @@ import signal
 import sys
 import time
 import uuid
-from decimal import ROUND_DOWN, Decimal, DecimalException, getcontext
+from decimal import ROUND_DOWN
+from decimal import Decimal
+from decimal import DecimalException
+from decimal import getcontext
 from typing import Any
 
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 # Initialize colorama for cross-platform color support
 init(autoreset=True)

@@ -1,10 +1,12 @@
 # strategies/chandelier_ehlers_strategy.py
 from typing import Any
 
-from data.data_manager import BybitDataProvider, DataManager  # Import DataManager
+from data.data_manager import BybitDataProvider  # Import DataManager
+from data.data_manager import DataManager  # Import DataManager
 from indicators.chandelier_exit import ChandelierExit
 from indicators.ehlers_supertrend import EhlersSuperTrend
-from signals.signal_generator import ChandelierEhlersSignalGenerator, Signal
+from signals.signal_generator import ChandelierEhlersSignalGenerator
+from signals.signal_generator import Signal
 
 
 class ChandelierEhlersSuperTrendStrategy:
@@ -66,7 +68,7 @@ class ChandelierEhlersSuperTrendStrategy:
                 # Attempt to find USDT equity
                 if "USDT" in account_info["result"]:
                     return float(account_info["result"]["USDT"].get("equity", 0.0))
-                elif "list" in account_info["result"] and isinstance(
+                if "list" in account_info["result"] and isinstance(
                     account_info["result"]["list"], list
                 ):
                     for balance_entry in account_info["result"]["list"]:
@@ -79,12 +81,11 @@ class ChandelierEhlersSuperTrendStrategy:
                 )
                 return 0.0
 
-            else:
-                print(
-                    f"Error fetching account balance: "
-                    f"{account_info.get('retMsg', 'Unknown error')}"
-                )
-                return 0.0
+            print(
+                f"Error fetching account balance: "
+                f"{account_info.get('retMsg', 'Unknown error')}"
+            )
+            return 0.0
 
         except AttributeError:
             print(

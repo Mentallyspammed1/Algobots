@@ -5,23 +5,23 @@ import logging as Bl  # Renamed to avoid conflict with standard logging if this 
 import os
 import sys  # B0 was sys
 import threading  # CK was threading
-from datetime import datetime, timedelta, timezone
-from decimal import (
-    Decimal,
-    InvalidOperation,
-    getcontext,
-)
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
 from functools import wraps
-from typing import (
-    Any,
-    Final,
-)
+from typing import Any
+from typing import Final
 
 import ccxt as X  # X is ccxt
 import numpy as M  # M is numpy
 import pandas as L  # L is pandas
 import requests  # BL was requests
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 
 # Initialize Colorama for vibrant terminal output
 init(autoreset=True)
@@ -1188,10 +1188,14 @@ class RuneWeaver:
     def print_indicators(self) -> None:
         from p.scalper import (  # Local import for pscalper UI functions
             print_neon_header,
-            print_neon_separator,
-            print_table_header,
-            print_table_row,
         )
+        from p.scalper import (  # Local import for pscalper UI functions
+            print_neon_separator,
+        )
+        from p.scalper import (  # Local import for pscalper UI functions
+            print_table_header,
+        )
+        from p.scalper import print_table_row  # Local import for pscalper UI functions
 
         if not self.indicators:
             self.logger.warning(f"{NY}No indicators computed{RST}")

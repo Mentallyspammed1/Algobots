@@ -5,20 +5,19 @@ import os
 import sys
 import unittest
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from supertrend_bot import (
-    BybitTradingBot,
-    Config,
-    Position,
-    StrategySignal,
-    SupertrendStrategy,
-)
+from supertrend_bot import BybitTradingBot
+from supertrend_bot import Config
+from supertrend_bot import Position
+from supertrend_bot import StrategySignal
+from supertrend_bot import SupertrendStrategy
 
 # --- Test Data Fixtures ---
 

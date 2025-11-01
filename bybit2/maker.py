@@ -44,9 +44,13 @@ import threading  # Added for locks in performance monitor
 import time
 import urllib.parse
 import uuid  # Added for client_order_id generation
-from collections import defaultdict, deque
-from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from collections import defaultdict
+from collections import deque
+from dataclasses import asdict
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import UTC
+from datetime import datetime
 from typing import Any
 
 # --- Third-Party Library Imports ---
@@ -81,7 +85,9 @@ except ImportError:
     PYBIT_AVAILABLE = False
 
 try:
-    from colorama import Fore, Style, init
+    from colorama import Fore
+    from colorama import Style
+    from colorama import init
 
     init(autoreset=True)
 except ImportError:
@@ -94,7 +100,11 @@ except ImportError:
     Style = DummyColor()
 
 # --- Decimal Configuration ---
-from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal, InvalidOperation, getcontext
+from decimal import ROUND_DOWN
+from decimal import ROUND_HALF_UP
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
 
 getcontext().prec = 30
 getcontext().rounding = ROUND_HALF_UP

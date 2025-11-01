@@ -9,12 +9,14 @@ import sys
 import time
 import traceback
 from collections.abc import Callable
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 from email.mime.text import MIMEText
 from typing import Any
 
 import yaml
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 # Set decimal precision for financial calculations
 getcontext().prec = 28

@@ -8,20 +8,22 @@ import sys
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
-from decimal import (
-    ROUND_DOWN,
-    ROUND_HALF_EVEN,
-    ROUND_UP,
-    Decimal,
-    InvalidOperation,
-    getcontext,
-)
+from dataclasses import asdict
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from decimal import ROUND_DOWN
+from decimal import ROUND_HALF_EVEN
+from decimal import ROUND_UP
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
+from typing import Final
 
 import ccxt
 import numpy as np
@@ -29,7 +31,9 @@ import pandas as pd
 import pandas_ta as ta
 import requests
 import websocket  # pip install websocket-client
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 
 # Ensure python-dotenv is installed for load_dotenv
 try:
@@ -1545,10 +1549,9 @@ def fcp(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> Decimal
 
     if price is not None and price > 0:
         return price
-    else:
-        raise ccxt.ExchangeError(
-            f"Failed to get a valid price from ticker data. Ticker: {ticker}. The scrying mirror is clouded."
-        )
+    raise ccxt.ExchangeError(
+        f"Failed to get a valid price from ticker data. Ticker: {ticker}. The scrying mirror is clouded."
+    )
 
 
 @retry_api_call()
@@ -2405,7 +2408,7 @@ class TA:
                         f"Using price precision (decimal places) from market_info.precision.price: {price_precision_value} for {symbol_name}. A clear decree from the market.{RST}"
                     )
                     return price_precision_value
-                elif isinstance(price_precision_value, (float, str)):
+                if isinstance(price_precision_value, (float, str)):
                     try:
                         tick_size = Decimal(str(price_precision_value))
                         if tick_size > 0:
@@ -2435,10 +2438,9 @@ class TA:
                             f"Inferred price precision from limits.price.min ({min_price_tick}): {precision_decimal_places} for {symbol_name}. A subtle hint from the market's boundaries.{RST}"
                         )
                         return precision_decimal_places
-                    else:
-                        logger.debug(
-                            f"limits.price.min ({min_price_tick}) for {symbol_name} seems too large for tick size, likely minimum order price. Ignoring for precision. This is not the tick we seek.{RST}"
-                        )
+                    logger.debug(
+                        f"limits.price.min ({min_price_tick}) for {symbol_name} seems too large for tick size, likely minimum order price. Ignoring for precision. This is not the tick we seek.{RST}"
+                    )
                 except (InvalidOperation, ValueError, TypeError) as e:
                     logger.warning(
                         f"{NY}Could not parse limits.price.min '{min_price_value}' for precision inference for {symbol_name}: {e}. The limit rune is ambiguous.{RST}"
@@ -2573,10 +2575,9 @@ class TA:
 
         if close_price > ema_short > ema_long:
             return Decimal("1.0")
-        elif close_price < ema_short < ema_long:
+        if close_price < ema_short < ema_long:
             return Decimal("-1.0")
-        else:
-            return Decimal("0.0")
+        return Decimal("0.0")
 
     def _cm(self) -> Decimal:
         """Check Momentum Score: Calculates a score based on the Momentum indicator,
@@ -2613,15 +2614,14 @@ class TA:
                     / (threshold_strong_positive - threshold_positive),
                 )
                 return score if score > 0 else Decimal("0.0")
-            elif momentum_percentage < -threshold_positive:
+            if momentum_percentage < -threshold_positive:
                 score = max(
                     Decimal("-1.0"),
                     (momentum_percentage + threshold_positive)
                     / (threshold_strong_positive - threshold_positive),
                 )
                 return score if score < 0 else Decimal("0.0")
-            else:
-                return Decimal("0.0")
+            return Decimal("0.0")
         except (InvalidOperation, ValueError, TypeError) as e:
             self.lg.warning(
                 f"{NY}Error during momentum check calculation for {self.s}: {e}. A numerical ripple!{RST}"
@@ -2657,10 +2657,9 @@ class TA:
                     + ((volume_ratio - multiplier) / (multiplier * Decimal("2"))),
                 )
                 return score
-            elif volume_ratio < (Decimal(1) / multiplier):
+            if volume_ratio < (Decimal(1) / multiplier):
                 return Decimal("-0.4")
-            else:
-                return Decimal("0.0")
+            return Decimal("0.0")
         except (InvalidOperation, ValueError, TypeError) as e:
             self.lg.warning(
                 f"{NY}Error during volume confirmation check for {self.s}: {e}. A volumetric distortion!{RST}"
@@ -2834,18 +2833,17 @@ class TA:
 
         if is_long_active and not is_short_active:
             return Decimal("1.0")
-        elif is_short_active and not is_long_active:
+        if is_short_active and not is_long_active:
             return Decimal("-1.0")
-        elif not is_long_active and not is_short_active:
+        if not is_long_active and not is_short_active:
             self.lg.debug(
                 f"PSAR check skipped for {self.s}: No active PSAR signal (both NaN). The parabolic path is undefined.{RST}"
             )
             return Decimal(np.nan)
-        else:
-            self.lg.warning(
-                f"{NY}PSAR check encountered unexpected state for {self.s}: Long={psar_long_active}, Short={psar_short_active}. Returning neutral. The paths diverge!{RST}"
-            )
-            return Decimal("0.0")
+        self.lg.warning(
+            f"{NY}PSAR check encountered unexpected state for {self.s}: Long={psar_long_active}, Short={psar_short_active}. Returning neutral. The paths diverge!{RST}"
+        )
+        return Decimal("0.0")
 
     def _csma(self) -> Decimal:
         """Check SMA10 Score: Compares current closing price to a 10-period Simple Moving Average."""
@@ -2862,10 +2860,9 @@ class TA:
 
         if last_close_decimal > sma10_value:
             return sma10_score
-        elif last_close_decimal < sma10_value:
+        if last_close_decimal < sma10_value:
             return -sma10_score
-        else:
-            return Decimal("0.0")
+        return Decimal("0.0")
 
     def _cv(self) -> Decimal:
         """Check VWAP Score: Compares current closing price to the Volume Weighted Average Price."""
@@ -2882,10 +2879,9 @@ class TA:
 
         if last_close_decimal > vwap_value:
             return vwap_score
-        elif last_close_decimal < vwap_value:
+        if last_close_decimal < vwap_value:
             return -vwap_score
-        else:
-            return Decimal("0.0")
+        return Decimal("0.0")
 
     def _cmfi(self) -> Decimal:
         """Check MFI Score: Evaluates Money Flow Index for overbought/oversold conditions."""
@@ -2978,16 +2974,15 @@ class TA:
 
         if fisher_value <= extreme_buy_threshold:
             return Decimal("1.0")  # Strong buy
-        elif fisher_value <= buy_threshold:
+        if fisher_value <= buy_threshold:
             return Decimal("0.5")  # Buy
-        elif fisher_value >= extreme_sell_threshold:
+        if fisher_value >= extreme_sell_threshold:
             return Decimal("-1.0")  # Strong sell
-        elif fisher_value >= sell_threshold:
+        if fisher_value >= sell_threshold:
             return Decimal("-0.5")  # Sell
-        else:
-            # Optional: Could scale score between thresholds, e.g., if between buy_threshold and 0
-            # For now, neutral if between buy and sell thresholds.
-            return Decimal("0.0")
+        # Optional: Could scale score between thresholds, e.g., if between buy_threshold and 0
+        # For now, neutral if between buy and sell thresholds.
+        return Decimal("0.0")
 
     def _cob(self, orderbook_data: dict | None, current_price: Decimal) -> Decimal:
         """Check Orderbook Score: Analyzes the imbalance between bids and asks in the order book."""
@@ -3077,16 +3072,15 @@ class TA:
 
         if fisher_value <= extreme_buy_threshold:
             return Decimal("1.0")  # Strong buy
-        elif fisher_value <= buy_threshold:
+        if fisher_value <= buy_threshold:
             return Decimal("0.5")  # Buy
-        elif fisher_value >= extreme_sell_threshold:
+        if fisher_value >= extreme_sell_threshold:
             return Decimal("-1.0")  # Strong sell
-        elif fisher_value >= sell_threshold:
+        if fisher_value >= sell_threshold:
             return Decimal("-0.5")  # Sell
-        else:
-            # Optional: Could scale score between thresholds, e.g., if between buy_threshold and 0
-            # For now, neutral if between buy and sell thresholds.
-            return Decimal("0.0")
+        # Optional: Could scale score between thresholds, e.g., if between buy_threshold and 0
+        # For now, neutral if between buy and sell thresholds.
+        return Decimal("0.0")
 
     def gts(self, current_price: Decimal, orderbook_data: dict | None) -> str:
         """Generate Trade Signal: Aggregates scores from various indicators to produce a BUY, SELL, or HOLD signal."""
@@ -3565,7 +3559,7 @@ def fb(
             ):  # If found via Bybit V5 parsing, break from account type loop
                 break
             # Standard CCXT format
-            elif (
+            if (
                 currency in balance_info
                 and balance_info[currency].get("free") is not None
             ):
@@ -3632,10 +3626,9 @@ def fb(
                     f"{NC}Available {currency} balance: {final_balance:.4f}. The essence of your holdings is revealed!{RST}"
                 )
                 return final_balance
-            else:
-                logger.error(
-                    f"{NR}Parsed balance for {currency} is negative ({final_balance}). A dark omen in the ledger!{RST}"
-                )
+            logger.error(
+                f"{NR}Parsed balance for {currency} is negative ({final_balance}). A dark omen in the ledger!{RST}"
+            )
         except (InvalidOperation, ValueError, TypeError) as e:
             logger.error(
                 f"{NR}Failed to convert balance string '{available_balance_str}' to Decimal for {currency}: {e}. The numerical rune is corrupted!{RST}"
@@ -3710,15 +3703,14 @@ def send_termux_sms(recipient: str, message: str, logger: logging.Logger) -> boo
                 f'{NG}SMS sending command executed for recipient {recipient}. Message: "{message[:30]}..." (Check Termux for actual send status).{RST}'
             )
             return True
-        else:
-            logger.error(
-                f"{NR}SMS sending command failed for recipient {recipient}. Return code: {result.returncode}{RST}"
-            )
-            if result.stdout:
-                logger.error(f"{NR}SMS stdout: {result.stdout.strip()}{RST}")
-            if result.stderr:
-                logger.error(f"{NR}SMS stderr: {result.stderr.strip()}{RST}")
-            return False
+        logger.error(
+            f"{NR}SMS sending command failed for recipient {recipient}. Return code: {result.returncode}{RST}"
+        )
+        if result.stdout:
+            logger.error(f"{NR}SMS stdout: {result.stdout.strip()}{RST}")
+        if result.stderr:
+            logger.error(f"{NR}SMS stderr: {result.stderr.strip()}{RST}")
+        return False
     except FileNotFoundError:
         logger.error(
             f"{NR}SMS sending failed: 'termux-sms-send' command not found. Ensure Termux:API is installed and configured correctly on your device.{RST}"
@@ -3798,10 +3790,9 @@ def gmi(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> dict | 
 
         market_data["is_contract"] = is_contract
         return market_data
-    else:
-        raise ccxt.ExchangeError(
-            f"Market dictionary unexpectedly not found for validated symbol {symbol}. A void in the market's records!"
-        )
+    raise ccxt.ExchangeError(
+        f"Market dictionary unexpectedly not found for validated symbol {symbol}. A void in the market's records!"
+    )
 
 
 @retry_api_call()
@@ -4079,7 +4070,7 @@ def _pmap(
                 f"Manual amount precision (decimal places): {amount_decimal} -> {final_amount}. Truncating to the exact digit.{RST}"
             )
             return final_amount
-        elif isinstance(amount_precision_value, (float, str)):
+        if isinstance(amount_precision_value, (float, str)):
             amount_step_size = Decimal(str(amount_precision_value))
             if amount_step_size > 0:
                 # Determine the number of decimal places for the step size
@@ -4100,16 +4091,14 @@ def _pmap(
                     f"Manual amount precision (step size): {amount_decimal} -> {final_amount}. Aligning to the market's smallest step.{RST}"
                 )
                 return final_amount
-            else:
-                logger.warning(
-                    f"{NY}Manual amount precision: Amount step size is zero or invalid ({amount_step_size}) for {symbol}. Returning original amount. The step is immeasurable!{RST}"
-                )
-                return amount_decimal
-        else:
             logger.warning(
-                f"{NY}Manual amount precision: Unknown type for amountPrecision '{amount_precision_value}' for {symbol}. Returning original amount. The precision rune is of an unknown script!{RST}"
+                f"{NY}Manual amount precision: Amount step size is zero or invalid ({amount_step_size}) for {symbol}. Returning original amount. The step is immeasurable!{RST}"
             )
             return amount_decimal
+        logger.warning(
+            f"{NY}Manual amount precision: Unknown type for amountPrecision '{amount_precision_value}' for {symbol}. Returning original amount. The precision rune is of an unknown script!{RST}"
+        )
+        return amount_decimal
     except (InvalidOperation, ValueError, TypeError) as e:
         logger.error(
             f"{NR}Error during manual amount precision for {symbol}: {e}. Returning original amount. A numerical distortion in the shaping!{RST}",
@@ -4290,11 +4279,10 @@ def gop(
                         # Use price precision for size display clarity
                         amount_precision_for_log = TA.gpp(market_info, logger)
                         return f"{abs(decimal_value):.{amount_precision_for_log}f}"
-                    elif is_price:
+                    if is_price:
                         price_prec = TA.gpp(market_info, logger)
                         return f"{decimal_value:.{price_prec}f}"
-                    else:
-                        return f"{decimal_value:.4f}"
+                    return f"{decimal_value:.4f}"
                 except:
                     return str(value_raw)
 
@@ -4377,10 +4365,9 @@ def slc(
                 f"{NR}Exchange {exchange.id} does not support setLeverage or setMarginMode via CCXT. Cannot set leverage. The exchange offers no amplification!{RST}"
             )
             return False
-        else:
-            logger.warning(
-                f"{NY}Exchange {exchange.id} might use setMarginMode for leverage. Proceeding with setLeverage which may internally map. A subtle difference in the amplification spell.{RST}"
-            )
+        logger.warning(
+            f"{NY}Exchange {exchange.id} might use setMarginMode for leverage. Proceeding with setLeverage which may internally map. A subtle difference in the amplification spell.{RST}"
+        )
 
     logger.info(
         f"{NB}Attempting to set leverage for {symbol} to {leverage}x... Amplifying market power!{RST}"
@@ -4439,12 +4426,11 @@ def slc(
                 f"{NY}Leverage for {symbol} is already set to {leverage}x (Exchange confirmed: {original_ret_msg}). No modification needed. The amplification is already active.{RST}"
             )
             return True  # Treat as success
-        else:
-            # For any other BadRequest, re-raise it for the retry_api_call decorator to handle
-            logger.warning(
-                f"{NY}Unhandled BadRequest in slc for {symbol}: {e}. Re-raising.{RST}"
-            )
-            raise
+        # For any other BadRequest, re-raise it for the retry_api_call decorator to handle
+        logger.warning(
+            f"{NY}Unhandled BadRequest in slc for {symbol}: {e}. Re-raising.{RST}"
+        )
+        raise
     except (
         ccxt.ExchangeError
     ) as e:  # Catch other exchange errors that are not BadRequest
@@ -4574,10 +4560,9 @@ def pt(
             f"Raw order response ({symbol} {side_lower} {action_description}): {order_response}. The echo of the completed ritual.{RST}"
         )
         return order_response
-    else:
-        raise ccxt.ExchangeError(
-            f"Order placement call returned None without raising an exception for {symbol}. The spell yielded no result!"
-        )
+    raise ccxt.ExchangeError(
+        f"Order placement call returned None without raising an exception for {symbol}. The spell yielded no result!"
+    )
 
 
 @retry_api_call()
@@ -4937,13 +4922,12 @@ def stsl(
             f"TSL Active: {trade_record.trailing_stop_active}, TSL Dist: {trade_record.trailing_stop_distance}, TSL Act: {trade_record.tsl_activation_price}.{RST}"
         )
         return True
-    else:
-        ret_code = response_data.get("retCode") if response_data else "N/A"
-        ret_msg = response_data.get("retMsg") if response_data else "N/A"
-        logger.error(
-            f"{NR}stsl: Failed to set protections for {symbol} via HTTP POST. retCode: {ret_code}, retMsg: {ret_msg}. Full Response: {json.dumps(response_data, default=str) if response_data else 'No response data'}{RST}"
-        )
-        return False
+    ret_code = response_data.get("retCode") if response_data else "N/A"
+    ret_msg = response_data.get("retMsg") if response_data else "N/A"
+    logger.error(
+        f"{NR}stsl: Failed to set protections for {symbol} via HTTP POST. retCode: {ret_code}, retMsg: {ret_msg}. Full Response: {json.dumps(response_data, default=str) if response_data else 'No response data'}{RST}"
+    )
+    return False
 
 
 @dataclass
@@ -5739,10 +5723,9 @@ class TMT:
             seconds = int(avg_seconds % 60)
             if hours > 0:
                 return f"{hours}h {minutes}m {seconds}s"
-            elif minutes > 0:
+            if minutes > 0:
                 return f"{minutes}m {seconds}s"
-            else:
-                return f"{seconds}s"
+            return f"{seconds}s"
 
         avg_duration_str = format_duration(total_duration_seconds, trades_with_duration)
         avg_win_duration_str = format_duration(
@@ -6177,8 +6160,7 @@ class PB:
             val = self.ta_analyzer.iv.get(key)
             if val is not None and not val.is_nan():
                 break  # Found a valid value
-            else:
-                val = None  # Reset val if it was NaN or None to continue checking alternatives
+            val = None  # Reset val if it was NaN or None to continue checking alternatives
 
         if val is None:  # All keys resulted in None or NaN
             # self.lg.debug(f"_get_indicator_value: No valid value found for keys {keys_to_check} in ta_analyzer.iv for {self.s}.")
@@ -6269,17 +6251,16 @@ class PB:
                 f"{NB}Initial last closed candle timestamp set for {self.s}: {self.lct}. Ready to detect new formations.{RST}"
             )
             return True
-        elif current_last_closed_candle_ts > self.lct:
+        if current_last_closed_candle_ts > self.lct:
             self.lg.info(
                 f"{NB}New closed candle detected for {self.s}: {current_last_closed_candle_ts}. A new temporal segment has arrived!{RST}"
             )
             self.lct = current_last_closed_candle_ts
             return True
-        else:
-            self.lg.debug(
-                f"No new closed candle for {self.s}. Last candle: {self.lct}, Current last closed: {current_last_closed_candle_ts}. Still awaiting the next temporal shift.{RST}"
-            )
-            return False
+        self.lg.debug(
+            f"No new closed candle for {self.s}. Last candle: {self.lct}, Current last closed: {current_last_closed_candle_ts}. Still awaiting the next temporal shift.{RST}"
+        )
+        return False
 
     def _cet(self, exit_reason: str, current_price: Decimal) -> bool:
         """Close Existing Trade: Executes the closing of an open position."""
@@ -6539,16 +6520,14 @@ class PB:
                                     f"{NY}Failed to send trade closure SMS alert for {self.s} (after cleanup).{RST}"
                                 )
                     return True
-                else:
-                    self.lg.error(
-                        f"{NR}Position for {self.s} remains open after all attempts to close. Manual intervention may be required!{RST}"
-                    )
-                    return False
-            else:
                 self.lg.error(
-                    f"{NR}Failed to place close order for {self.s}. The closing spell failed to cast!{RST}"
+                    f"{NR}Position for {self.s} remains open after all attempts to close. Manual intervention may be required!{RST}"
                 )
                 return False
+            self.lg.error(
+                f"{NR}Failed to place close order for {self.s}. The closing spell failed to cast!{RST}"
+            )
+            return False
         except Exception as e:
             self.lg.error(
                 f"{NR}An unexpected error occurred while trying to close trade for {self.s}: {e}. A cosmic interference in sealing the trade!{RST}",
@@ -7524,12 +7503,11 @@ class PB:
                 f"{NG}Trade opened successfully for {self.s}! The new quest is underway!{RST}"
             )
             return True
-        else:
-            self.lg.error(
-                f"{NR}Failed to open trade for {self.s}. The opening spell failed!{RST}"
-            )
-            self._coo()  # Attempt to cancel any lingering orders if trade failed
-            return False
+        self.lg.error(
+            f"{NR}Failed to open trade for {self.s}. The opening spell failed!{RST}"
+        )
+        self._coo()  # Attempt to cancel any lingering orders if trade failed
+        return False
 
     def run_symbol_logic(self):
         """Main logic loop for a single symbol. Fetches data, calculates indicators,

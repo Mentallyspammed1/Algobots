@@ -8,7 +8,8 @@ import urllib.parse
 import pandas as pd
 import pandas_ta as ta
 import requests
-from colorama import Fore, init
+from colorama import Fore
+from colorama import init
 from dotenv import load_dotenv
 
 # Initialize colorama

@@ -1,7 +1,8 @@
 import csv
 import json
 import os
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 
 # Set decimal precision
 getcontext().prec = 10

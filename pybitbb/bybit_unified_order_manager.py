@@ -2,7 +2,8 @@
 import logging
 import threading
 import time
-from typing import Any, Literal
+from typing import Any
+from typing import Literal
 
 # Import the specific helpers we've already created
 from bybit_trade_helper import BybitTradeHelper

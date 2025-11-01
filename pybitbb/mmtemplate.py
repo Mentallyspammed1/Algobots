@@ -8,14 +8,12 @@ from typing import Any
 # Import your helper modules
 from bybit_account_helper import BybitAccountHelper
 from bybit_market_data_helper import BybitMarketDataHelper
-from bybit_orderbook_helper import (  # PriceLevel for type hinting
-    BybitOrderbookHelper,
-)
+from bybit_orderbook_helper import BybitOrderbookHelper  # PriceLevel for type hinting
 from bybit_sizing_helper import BybitSizingHelper
 from bybit_unified_order_manager import (  # Using unified manager for orders
     BybitUnifiedOrderManager,
-    TradingMode,
 )
+from bybit_unified_order_manager import TradingMode  # Using unified manager for orders
 
 # Configure logging for the main script
 logging.basicConfig(

@@ -12,9 +12,12 @@ import logging
 import os
 import random
 import time
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from decimal import Decimal, getcontext
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import UTC
+from datetime import datetime
+from decimal import Decimal
+from decimal import getcontext
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -22,7 +25,8 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 from colorama import init as colorama_init
 from dotenv import load_dotenv
 

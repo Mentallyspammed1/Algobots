@@ -25,14 +25,18 @@ import os
 import smtplib
 import subprocess
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC
+from datetime import datetime
+from datetime import timedelta
 from decimal import Decimal
 from email.mime.text import MIMEText
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import pandas_ta as ta
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from pybit.unified_trading import HTTP
 
 # Initialize Colorama for neon terminal radiance
@@ -478,8 +482,7 @@ def _close_position(session, symbol, category, current_position, delay):
             if not positions or Decimal(positions[0]["size"]) == Decimal("0"):
                 print(NEON_SUCCESS + "Closure confirmed." + NEON_RESET)
                 return response
-            else:
-                print(NEON_WARNING + "Closure incomplete—retrying..." + NEON_RESET)
+            print(NEON_WARNING + "Closure incomplete—retrying..." + NEON_RESET)
                 # If closure is incomplete, we might need to retry the close operation
                 # or handle it differently. For now, we'll just log and continue.
                 # A more robust solution might involve a loop here to re-attempt closing.

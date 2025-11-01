@@ -1,10 +1,13 @@
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
 import pandas as pd
 from algobots_types import OrderBlock  # Assuming this is available
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 
 from .strategy_template import StrategyTemplate
 

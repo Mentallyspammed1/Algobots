@@ -14,17 +14,17 @@ import time
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 from pathlib import Path
-from typing import (
-    Any,
-)
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 from colorama import init as colorama_init
 from dotenv import load_dotenv
 

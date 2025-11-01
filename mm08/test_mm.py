@@ -1,13 +1,14 @@
-import unittest
-import numpy as np
-from unittest.mock import MagicMock, patch
-
 # Mock the config module before importing mm
 import sys
+import unittest
+from unittest.mock import MagicMock
+
+import numpy as np
+
 sys.modules['config'] = MagicMock()
 import config
-
 from mm import MarketMaker
+
 
 class TestMarketMakerCalculations(unittest.TestCase):
 

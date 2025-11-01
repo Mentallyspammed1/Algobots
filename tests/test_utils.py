@@ -2,27 +2,25 @@ import logging
 import os  # Import os module
 import sys
 import unittest
-from decimal import Decimal, getcontext
-from unittest.mock import MagicMock, patch
+from decimal import Decimal
+from decimal import getcontext
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 # Ensure the root directory is in the Python path for imports
 sys.path.insert(0, "/data/data/com.termux/files/home/Algobots")
 
 # Mock setup_logging to prevent actual log file creation during tests
 with patch("bot_logger.setup_logging"):
-    from utils import (
-        FallbackZoneInfo,  # Import TIMEZONE
-        OrderBook,
-        calculate_order_quantity,
-        get_min_tick_size,
-        get_price_precision,
-        get_timezone,
-        round_decimal,
-        set_timezone,
-    )  # Import color constants
-    from utils import (
-        _module_logger as utils_logger,  # Access the module-level logger
-    )
+    from utils import FallbackZoneInfo  # Import TIMEZONE  # Import color constants
+    from utils import OrderBook  # Import color constants
+    from utils import _module_logger as utils_logger  # Access the module-level logger
+    from utils import calculate_order_quantity  # Import color constants
+    from utils import get_min_tick_size  # Import color constants
+    from utils import get_price_precision  # Import color constants
+    from utils import get_timezone  # Import color constants
+    from utils import round_decimal  # Import color constants
+    from utils import set_timezone  # Import color constants
 
 # Set Decimal precision for tests
 getcontext().prec = 38

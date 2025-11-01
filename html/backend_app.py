@@ -5,8 +5,11 @@ import time
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
-from indicators_api import calculate_ema, calculate_rsi, calculate_supertrend
+from fastapi import FastAPI
+from fastapi import HTTPException
+from indicators_api import calculate_ema
+from indicators_api import calculate_rsi
+from indicators_api import calculate_supertrend
 from pydantic import BaseModel
 
 app = FastAPI(

@@ -5,7 +5,6 @@ This script initializes the BybitTrader and starts the bot.
 
 from bot_logger import logger
 from bybit_trader import BybitTrader
-
 from config import STRATEGY_FILE
 
 

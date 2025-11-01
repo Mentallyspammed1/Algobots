@@ -46,10 +46,15 @@ import logging.handlers
 import os
 import pickle
 import sys
-from collections import defaultdict, deque
-from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
-from decimal import Decimal, getcontext
+from collections import defaultdict
+from collections import deque
+from dataclasses import asdict
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import UTC
+from datetime import datetime
+from decimal import Decimal
+from decimal import getcontext
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -62,7 +67,9 @@ try:
     import pandas as pd
     import pandas_ta as ta
     from aioconsole import start_interactive_server
-    from colorama import Back, Fore, Style
+    from colorama import Back
+    from colorama import Fore
+    from colorama import Style
     from colorama import init as colorama_init
     from dotenv import load_dotenv
     from scipy import stats

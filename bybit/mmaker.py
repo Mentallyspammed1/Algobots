@@ -6,12 +6,18 @@ import signal
 import sys
 import time
 from datetime import datetime
-from decimal import ROUND_DOWN, ROUND_UP, Decimal, getcontext
+from decimal import ROUND_DOWN
+from decimal import ROUND_UP
+from decimal import Decimal
+from decimal import getcontext
 from typing import Any
 
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 # Initialize Colorama for beautiful terminal output
 init(autoreset=True)

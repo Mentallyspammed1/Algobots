@@ -48,13 +48,12 @@ def safe_get_bool(key: str, default: bool) -> bool:
     value = os.getenv(key, str(default)).lower()
     if value in ["true", "1", "yes"]:
         return True
-    elif value in ["false", "0", "no"]:
+    if value in ["false", "0", "no"]:
         return False
-    else:
-        logger.warning(
-            f"Invalid boolean value for '{key}': '{value}'. Using default: {default}"
-        )
-        return default
+    logger.warning(
+        f"Invalid boolean value for '{key}': '{value}'. Using default: {default}"
+    )
+    return default
 
 
 # --- API Configuration ---

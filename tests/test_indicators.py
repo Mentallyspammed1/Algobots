@@ -1,6 +1,7 @@
 import sys
 import unittest
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 from unittest.mock import patch
 
 import pandas as pd
@@ -10,20 +11,18 @@ sys.path.insert(0, "/data/data/com.termux/files/home/Algobots")
 
 # Mock setup_logging to prevent actual log file creation during tests
 with patch("bot_logger.setup_logging"):
-    from indicators import (
-        calculate_atr,
-        calculate_ehlers_fisher_strategy,
-        calculate_ehlers_fisher_transform,
-        calculate_ehlers_super_smoother,
-        calculate_fibonacci_pivot_points,
-        calculate_order_book_imbalance,
-        calculate_sma,
-        calculate_stochrsi,
-        calculate_supertrend,
-        calculate_vwap,
-        find_pivots,
-        handle_websocket_kline_data,
-    )
+    from indicators import calculate_atr
+    from indicators import calculate_ehlers_fisher_strategy
+    from indicators import calculate_ehlers_fisher_transform
+    from indicators import calculate_ehlers_super_smoother
+    from indicators import calculate_fibonacci_pivot_points
+    from indicators import calculate_order_book_imbalance
+    from indicators import calculate_sma
+    from indicators import calculate_stochrsi
+    from indicators import calculate_supertrend
+    from indicators import calculate_vwap
+    from indicators import find_pivots
+    from indicators import handle_websocket_kline_data
 
 # Set Decimal precision for tests
 getcontext().prec = 38

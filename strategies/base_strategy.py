@@ -3,7 +3,8 @@
 This abstract class defines the interface that all strategy classes must implement.
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 
 import pandas as pd
 

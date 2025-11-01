@@ -9,8 +9,9 @@ import sys
 from datetime import datetime
 
 from market_maker import MarketMaker
-
-from utils import load_config, load_env_variables, setup_logger
+from utils import load_config
+from utils import load_env_variables
+from utils import setup_logger
 
 
 def signal_handler(signum, frame):

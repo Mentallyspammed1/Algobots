@@ -2,10 +2,14 @@
 import datetime as dt  # Use dt alias for datetime module
 import logging
 import os
-from decimal import Decimal, InvalidOperation, getcontext
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
 from typing import Any
 
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 
 
 class OrderBook:

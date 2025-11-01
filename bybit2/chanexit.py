@@ -37,14 +37,20 @@ import random  # For random jitter in delays
 import smtplib
 import subprocess
 import time
-from datetime import UTC, datetime, timedelta
-from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
+from datetime import UTC
+from datetime import datetime
+from datetime import timedelta
+from decimal import ROUND_DOWN
+from decimal import ROUND_HALF_UP
+from decimal import Decimal
 from email.mime.text import MIMEText
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import pandas_ta as ta
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from pybit.unified_trading import HTTP
 
 # Initialize Colorama for neon terminal radiance
@@ -568,10 +574,10 @@ def _fetch_kline_data(
                             + NEON_RESET
                         )
                         return pd.DataFrame()  # Return empty if no data at all
-                    else:  # Handle other missing data scenarios
-                        raise ValueError(
-                            f"Kline data missing or invalid format. Response: {response.get('retMsg', 'Unknown error')}"
-                        )
+                    # Handle other missing data scenarios
+                    raise ValueError(
+                        f"Kline data missing or invalid format. Response: {response.get('retMsg', 'Unknown error')}"
+                    )
 
                 if (
                     not data
@@ -1104,7 +1110,7 @@ def _check_rsi_filter(rsi_val, config, side):
     if side == "Buy":
         # Allow Buy signal if RSI is below the overbought threshold
         return rsi_val < config["rsi_overbought"]
-    elif side == "Sell":
+    if side == "Sell":
         # Allow Sell signal if RSI is above the oversold threshold
         return rsi_val > config["rsi_oversold"]
     return False  # Should not happen if side is always "Buy" or "Sell"
@@ -1242,15 +1248,14 @@ def _execute_trade(
                 config["close_delay"]
             )  # Add delay after successful order confirmation
             return True  # Trade executed successfully
-        else:
-            # Order placement failed or response format unexpected
-            print(
-                NEON_ERROR
-                + f"Order placement failed, no Order ID received. Response: {response}"
-                + NEON_RESET
-            )
-            logging.error(f"Order placement failed, no Order ID. Response: {response}")
-            return False
+        # Order placement failed or response format unexpected
+        print(
+            NEON_ERROR
+            + f"Order placement failed, no Order ID received. Response: {response}"
+            + NEON_RESET
+        )
+        logging.error(f"Order placement failed, no Order ID. Response: {response}")
+        return False
 
     except Exception as e:
         # Catch API exceptions (e.g., network errors, invalid parameters, specific Bybit errors)

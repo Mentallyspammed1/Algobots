@@ -1,7 +1,5 @@
 import decimal  # Import the decimal module itself for exception handling
-from decimal import (  # Import Decimal and InvalidOperation for safety
-    Decimal,
-)
+from decimal import Decimal  # Import Decimal and InvalidOperation for safety
 from typing import Any
 
 import pandas as pd
@@ -10,22 +8,20 @@ import pandas as pd
 # Assuming color_codex.py provides these constants.
 # If not, define them here or ensure the file is accessible.
 try:
-    from color_codex import (
-        COLOR_BLUE,
-        COLOR_BOLD,
-        COLOR_CYAN,
-        COLOR_DIM,
-        COLOR_GREEN,
-        COLOR_MAGENTA,
-        COLOR_RED,
-        COLOR_RESET,
-        COLOR_YELLOW,
-        PYRMETHUS_BLUE,
-        PYRMETHUS_GREEN,
-        PYRMETHUS_GREY,
-        PYRMETHUS_ORANGE,
-        PYRMETHUS_PURPLE,
-    )
+    from color_codex import COLOR_BLUE
+    from color_codex import COLOR_BOLD
+    from color_codex import COLOR_CYAN
+    from color_codex import COLOR_DIM
+    from color_codex import COLOR_GREEN
+    from color_codex import COLOR_MAGENTA
+    from color_codex import COLOR_RED
+    from color_codex import COLOR_RESET
+    from color_codex import COLOR_YELLOW
+    from color_codex import PYRMETHUS_BLUE
+    from color_codex import PYRMETHUS_GREEN
+    from color_codex import PYRMETHUS_GREY
+    from color_codex import PYRMETHUS_ORANGE
+    from color_codex import PYRMETHUS_PURPLE
 except ImportError:
     # Define fallback colors if color_codex is not available
     COLOR_RESET = "\033[0m"

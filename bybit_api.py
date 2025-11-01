@@ -6,13 +6,13 @@ import logging
 import os
 import time
 import urllib.parse
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 
+import config
 import httpx
 import websockets
 from dotenv import load_dotenv
-
-import config
 
 # Load environment variables
 load_dotenv(override=True)

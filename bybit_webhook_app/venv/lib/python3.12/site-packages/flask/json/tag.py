@@ -231,7 +231,7 @@ class TaggedJSONSerializer:
     * :class:`~datetime.datetime`
     """
 
-    __slots__ = ("tags", "order")
+    __slots__ = ("order", "tags")
 
     #: Tag classes to bind when creating the serializer. Other tags can be
     #: added later using :meth:`~register`.

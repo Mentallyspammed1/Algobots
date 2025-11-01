@@ -4,18 +4,15 @@ from datetime import datetime
 from order_manager import OrderManager
 from pybit.unified_trading import HTTP
 from risk_manager import RiskManager
+from utils import PerformanceTracker
+from utils import calculate_order_sizes
+from utils import calculate_order_step
+from utils import calculate_spread
+from utils import calculate_volatility
+from utils import format_price
+from utils import format_quantity
+from utils import setup_logger
 from websocket_manager import WebSocketManager
-
-from utils import (
-    PerformanceTracker,
-    calculate_order_sizes,
-    calculate_order_step,
-    calculate_spread,
-    calculate_volatility,
-    format_price,
-    format_quantity,
-    setup_logger,
-)
 
 
 class MarketMaker:
@@ -127,44 +124,43 @@ class MarketMaker:
                 "mid": self.mid_price,
                 "spread": self.spread,
             }
-        else:
-            try:
-                # Get orderbook
-                orderbook = self.client.get_orderbook(
-                    category=self.config["trading"]["market_type"],
-                    symbol=self.symbol,
-                    limit=1,
-                )
+        try:
+            # Get orderbook
+            orderbook = self.client.get_orderbook(
+                category=self.config["trading"]["market_type"],
+                symbol=self.symbol,
+                limit=1,
+            )
 
-                if orderbook["retCode"] == 0:
-                    bids = orderbook["result"]["b"]
-                    asks = orderbook["result"]["a"]
+            if orderbook["retCode"] == 0:
+                bids = orderbook["result"]["b"]
+                asks = orderbook["result"]["a"]
 
-                    if bids and asks:
-                        self.bid_price = float(bids[0][0])
-                        self.ask_price = float(asks[0][0])
-                        self.mid_price = (self.bid_price + self.ask_price) / 2
-                        self.spread = (self.ask_price - self.bid_price) / self.mid_price
+                if bids and asks:
+                    self.bid_price = float(bids[0][0])
+                    self.ask_price = float(asks[0][0])
+                    self.mid_price = (self.bid_price + self.ask_price) / 2
+                    self.spread = (self.ask_price - self.bid_price) / self.mid_price
 
-                        # Update price history
-                        self.price_history.append(self.mid_price)
-                        if (
-                            len(self.price_history)
-                            > self.config["advanced"]["price_history_length"]
-                        ):
-                            self.price_history = self.price_history[
-                                -self.config["advanced"]["price_history_length"] :
-                            ]
+                    # Update price history
+                    self.price_history.append(self.mid_price)
+                    if (
+                        len(self.price_history)
+                        > self.config["advanced"]["price_history_length"]
+                    ):
+                        self.price_history = self.price_history[
+                            -self.config["advanced"]["price_history_length"] :
+                        ]
 
-                        return {
-                            "bid": self.bid_price,
-                            "ask": self.ask_price,
-                            "mid": self.mid_price,
-                            "spread": self.spread,
-                        }
+                    return {
+                        "bid": self.bid_price,
+                        "ask": self.ask_price,
+                        "mid": self.mid_price,
+                        "spread": self.spread,
+                    }
 
-            except Exception as e:
-                self.logger.error(f"Error fetching market data: {e!s}")
+        except Exception as e:
+            self.logger.error(f"Error fetching market data: {e!s}")
 
         return {}
 
@@ -186,38 +182,37 @@ class MarketMaker:
             and self.ws_manager.is_connected
         ):
             return self.position
-        else:
-            try:
-                response = self.client.get_positions(
-                    category=self.config["trading"]["market_type"], symbol=self.symbol
-                )
+        try:
+            response = self.client.get_positions(
+                category=self.config["trading"]["market_type"], symbol=self.symbol
+            )
 
-                if response["retCode"] == 0 and response["result"]["list"]:
-                    position_data = response["result"]["list"][0]
-                    self.position = {
-                        "size": float(position_data["size"]),
-                        "side": position_data["side"],
-                        "avg_price": float(position_data["avgPrice"])
-                        if position_data["avgPrice"]
-                        else 0,
-                        "mark_price": float(position_data["markPrice"])
-                        if position_data["markPrice"]
-                        else 0,
-                        "unrealized_pnl": float(position_data["unrealisedPnl"])
-                        if position_data["unrealisedPnl"]
-                        else 0,
-                    }
+            if response["retCode"] == 0 and response["result"]["list"]:
+                position_data = response["result"]["list"][0]
+                self.position = {
+                    "size": float(position_data["size"]),
+                    "side": position_data["side"],
+                    "avg_price": float(position_data["avgPrice"])
+                    if position_data["avgPrice"]
+                    else 0,
+                    "mark_price": float(position_data["markPrice"])
+                    if position_data["markPrice"]
+                    else 0,
+                    "unrealized_pnl": float(position_data["unrealisedPnl"])
+                    if position_data["unrealisedPnl"]
+                    else 0,
+                }
 
-                    self._calculate_inventory_ratio()
-                    return self.position
-
-                self.position = {"size": 0, "side": None, "avg_price": 0}
-                self.inventory_ratio = 0.5
+                self._calculate_inventory_ratio()
                 return self.position
 
-            except Exception as e:
-                self.logger.error(f"Error fetching position: {e!s}")
-                return self.position
+            self.position = {"size": 0, "side": None, "avg_price": 0}
+            self.inventory_ratio = 0.5
+            return self.position
+
+        except Exception as e:
+            self.logger.error(f"Error fetching position: {e!s}")
+            return self.position
 
     def get_account_balance(self) -> float:
         """Get account balance"""

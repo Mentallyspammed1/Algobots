@@ -5,14 +5,17 @@ import logging
 import os
 import time
 from datetime import datetime
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 
 

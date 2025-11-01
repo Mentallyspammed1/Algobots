@@ -1,7 +1,9 @@
 import os
 import time
 
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 

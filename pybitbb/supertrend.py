@@ -2,16 +2,17 @@
 import logging
 import threading
 import time
-from typing import Any, Literal
+from typing import Any
+from typing import Literal
+
+# Import the configuration
+import config
 
 # Import your helper modules
 from bybit_account_helper import BybitAccountHelper
 from bybit_sizing_helper import BybitSizingHelper
 from bybit_unified_order_manager import BybitUnifiedOrderManager
 from indicators import BybitIndicators
-
-# Import the configuration
-import config
 
 # Configure logging for the bot
 logging.basicConfig(

@@ -8,7 +8,9 @@ from datetime import datetime
 
 import pandas as pd
 import requests
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 
 # Initialize Colorama

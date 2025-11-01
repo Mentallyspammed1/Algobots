@@ -2371,7 +2371,7 @@ class SupertrendBot:
                     self.logger.warning(
                         "Could not calculate a valid position size for the STRONG SELL signal. Skipping order placement."
                     )
-            
+
             # 2. Handle Position Continuation or Closing based on signals
             elif self.position_active:  # If we are currently in a position
                 # Handle Closing the Position on Reversal Signals
@@ -2392,12 +2392,12 @@ class SupertrendBot:
                         f"Signal reversal to {signal.name} detected while in SELL position. Closing position."
                     )
                     self.close_position()  # Attempt to close the current position
-                
+
                 # Handle maintaining position on continuation signals
                 elif self.current_position_side == "Buy" and signal == Signal.BUY:
                     self.logger.debug("Continuation BUY signal while in BUY position. Maintaining position.")
                     # Optionally adjust SL/TP or trailing stop here if needed, but trailing stop handles it below.
-                
+
                 elif self.current_position_side == "Sell" and signal == Signal.SELL:
                     self.logger.debug("Continuation SELL signal while in SELL position. Maintaining position.")
                     # Optionally adjust SL/TP or trailing stop here.
@@ -2414,7 +2414,7 @@ class SupertrendBot:
                     )  # Get current position data
                     if pos_data and pos_data.get("markPrice"):
                         current_price_for_ts = Decimal(pos_data["markPrice"])
-                    
+
                     # If current_price_for_ts is still 0 (e.g., no position data and ticker failed), use current_price
                     if current_price_for_ts == 0:
                         current_price_for_ts = current_price
@@ -2508,7 +2508,7 @@ class SupertrendBot:
                     dir_fast_log = 0
                     st_slow_log = Decimal("0.0")
                     dir_slow_log = 0
-                    
+
                     if not self.market_data.empty and len(self.market_data) >= 1:
                         latest = self.market_data.iloc[-1]
                         current_price_log = latest.get(

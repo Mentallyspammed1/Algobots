@@ -5,7 +5,9 @@ import time
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask
+from flask import jsonify
+from flask import request
 from flask_cors import CORS
 
 # --- Configuration ---
@@ -53,9 +55,8 @@ def get_from_bybit_cache(key):
         if time.time() < BYBIT_CACHE[key]["expiry"]:
             logging.debug(f"Cache hit for {key}")
             return BYBIT_CACHE[key]["data"]
-        else:
-            logging.debug(f"Cache expired for {key}")
-            del BYBIT_CACHE[key]
+        logging.debug(f"Cache expired for {key}")
+        del BYBIT_CACHE[key]
     logging.debug(f"Cache miss for {key}")
     return None
 

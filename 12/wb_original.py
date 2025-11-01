@@ -5,7 +5,8 @@ import logging
 import os
 import time
 from datetime import datetime
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 from typing import Any
 
 # --- END CORRECTED IMPORT ---
@@ -16,7 +17,9 @@ import pandas as pd
 import requests
 
 # --- CORRECTED IMPORT ---
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 from logger_config import setup_custom_logger
 

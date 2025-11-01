@@ -3,11 +3,9 @@ from typing import Any
 
 import pandas as pd
 from algobots_types import OrderBlock
-from indicators import (
-    calculate_ehlers_fisher_strategy,
-    calculate_sma,
-    calculate_supertrend,
-)
+from indicators import calculate_ehlers_fisher_strategy
+from indicators import calculate_sma
+from indicators import calculate_supertrend
 
 
 class EhlersSupertrendStrategy:

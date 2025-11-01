@@ -2,10 +2,12 @@ import asyncio
 import logging
 import os
 from collections.abc import Callable
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 from typing import Any
 
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 # Set decimal precision for financial calculations
 getcontext().prec = 10

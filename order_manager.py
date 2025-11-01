@@ -2,10 +2,10 @@ import asyncio
 from decimal import Decimal
 from typing import Any
 
-from bot_logger import log_exception
-from bybit_api import BybitAPIError, BybitContractAPI
-
 import config
+from bot_logger import log_exception
+from bybit_api import BybitAPIError
+from bybit_api import BybitContractAPI
 from utils import calculate_order_quantity
 
 # --- Pyrmethus's Color Codex ---
@@ -230,11 +230,10 @@ class OrderManager:
                         self.chase_limit_order(order_id, config.SYMBOL, side)
                     )
                 return True
-            else:
-                self.logger.error(
-                    f"{COLOR_RED}Order placement failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}"
-                )
-                return False
+            self.logger.error(
+                f"{COLOR_RED}Order placement failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}"
+            )
+            return False
         except BybitAPIError as e:
             await self.bot._handle_api_error(e, "order placement")
             return False
@@ -288,11 +287,10 @@ class OrderManager:
                 )
                 # The main bot loop will handle the position state reset via WebSocket updates.
                 return True
-            else:
-                self.logger.error(
-                    f"{COLOR_RED}Exit order failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}"
-                )
-                return False
+            self.logger.error(
+                f"{COLOR_RED}Exit order failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}"
+            )
+            return False
         except BybitAPIError as e:
             await self.bot._handle_api_error(e, "exit order placement")
             return False

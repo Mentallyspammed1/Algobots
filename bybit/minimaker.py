@@ -9,11 +9,15 @@ import os
 import threading
 import time
 from collections.abc import Callable
-from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
+from decimal import ROUND_DOWN
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
 from typing import Any
 
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 # Load environment variables from .env file
 load_dotenv()

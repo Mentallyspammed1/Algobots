@@ -1,7 +1,8 @@
 import logging
 import os
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC
+from datetime import datetime
 from typing import Any
 
 import pandas as pd
@@ -9,8 +10,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from pybit.unified_trading import HTTP, WebSocket
-
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 from utils import round_decimal
 
 # --- Initialize Logging for Bybit API ---

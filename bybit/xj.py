@@ -15,11 +15,17 @@ import sqlite3  # (Pyrmethus's Insight #31) For persistent state storage
 import threading
 import time
 import warnings
-from collections import defaultdict, deque
+from collections import defaultdict
+from collections import deque
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
-from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
+from dataclasses import asdict
+from dataclasses import dataclass
+from dataclasses import field
+from decimal import ROUND_DOWN
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
 from enum import Enum
 from typing import Any
 
@@ -28,12 +34,15 @@ from cryptography.fernet import (
     Fernet,  # (Pyrmethus's Insight #34) For API key encryption
 )
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 warnings.filterwarnings("ignore")
 
 # Channeling the ether for vibrant terminal displays
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 
 init(autoreset=True)
 

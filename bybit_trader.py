@@ -12,18 +12,16 @@ import time
 
 import pandas as pd
 from bot_logger import logger
-from pybit.unified_trading import HTTP, WebSocket
+from config import API_KEY
+from config import API_SECRET
+from config import CATEGORY
+from config import SYMBOL
+from config import TESTNET
+from config import TRADE_QTY_USD
+from config import WS_HEARTBEAT
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 from strategies.base_strategy import BaseStrategy
-
-from config import (
-    API_KEY,
-    API_SECRET,
-    CATEGORY,
-    SYMBOL,
-    TESTNET,
-    TRADE_QTY_USD,
-    WS_HEARTBEAT,
-)
 
 
 class BybitTrader:

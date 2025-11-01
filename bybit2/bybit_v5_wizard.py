@@ -7,7 +7,9 @@ import time
 
 import requests
 import websocket
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 
 # Initialize Colorama for vibrant terminal output
 init()

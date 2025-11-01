@@ -1,6 +1,7 @@
 # tests/test_chandelier_ehlers_strategy.py
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 
 import pandas as pd
 from indicators.chandelier_exit import ChandelierExit

@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 
 # We need to import the class we want to test
-from whalebot import TradingAnalyzer, load_config
+from whalebot import TradingAnalyzer
+from whalebot import load_config
 
 
 # Mock the logger to prevent actual log file creation during tests

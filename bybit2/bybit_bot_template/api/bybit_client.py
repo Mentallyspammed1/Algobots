@@ -3,7 +3,9 @@ import json
 import os
 from typing import Any
 
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 from loguru import logger
 from pybit.unified_trading import HTTP
@@ -316,13 +318,12 @@ class BybitClient:
             # Basic check for successful response structure from pybit
             if response and response.get("retCode") == 0:
                 return response
-            else:
-                self.logger.error(
-                    Fore.RED
-                    + f"  # HTTP Request '{method_name}' failed. Response: {response}"
-                    + Style.RESET_ALL
-                )
-                return response  # Return response even on failure for inspection
+            self.logger.error(
+                Fore.RED
+                + f"  # HTTP Request '{method_name}' failed. Response: {response}"
+                + Style.RESET_ALL
+            )
+            return response  # Return response even on failure for inspection
         except Exception as e:
             self.logger.error(
                 Fore.RED

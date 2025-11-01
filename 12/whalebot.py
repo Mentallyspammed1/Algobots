@@ -11,7 +11,8 @@ import time
 import warnings
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal, getcontext
+from decimal import Decimal
+from decimal import getcontext
 from email.mime.text import MIMEText
 from enum import Enum
 from typing import Any
@@ -20,7 +21,9 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 from logger_config import setup_custom_logger
 

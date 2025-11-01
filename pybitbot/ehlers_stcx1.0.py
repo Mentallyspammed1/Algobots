@@ -55,10 +55,16 @@ import logging
 import os
 import pickle
 import sys
-from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
+from abc import ABC
+from abc import abstractmethod
+from dataclasses import asdict
+from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
-from decimal import ROUND_DOWN, Context, Decimal, getcontext
+from decimal import ROUND_DOWN
+from decimal import Context
+from decimal import Decimal
+from decimal import getcontext
 from enum import Enum
 from logging.handlers import RotatingFileHandler
 from typing import Any
@@ -66,7 +72,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP, WebSocket
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 
 # --- INITIAL SETUP ---
 

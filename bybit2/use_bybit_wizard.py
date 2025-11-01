@@ -2,7 +2,9 @@ import json
 import os
 
 from bybit_v5_wizard import BybitV5Wizard
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 
 init(autoreset=True)
 

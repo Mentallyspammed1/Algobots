@@ -7,7 +7,8 @@ import sqlite3
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from threading import Thread
@@ -17,7 +18,10 @@ import joblib
 import numpy as np
 import requests
 import websockets
-from colorama import Back, Fore, Style, init
+from colorama import Back
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 from sklearn.ensemble import RandomForestClassifier
 

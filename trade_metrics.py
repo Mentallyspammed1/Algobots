@@ -1,6 +1,7 @@
 # trade_metrics.py
 import logging
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP
+from decimal import Decimal
 from typing import Any
 
 # Initialize logging for trade_metrics

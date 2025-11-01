@@ -2,14 +2,18 @@ import logging
 import os
 import sys  # For sys.exit
 import time
-from decimal import ROUND_DOWN, ROUND_UP, Decimal, getcontext  # Import ROUND_UP
+from decimal import ROUND_DOWN  # Import ROUND_UP
+from decimal import ROUND_UP  # Import ROUND_UP
+from decimal import Decimal  # Import ROUND_UP
+from decimal import getcontext  # Import ROUND_UP
 
 # Ensure Decimal precision for financial calculations
 getcontext().prec = 10  # Set precision for Decimal operations
 
 # Import pybit components
 try:
-    from pybit.unified_trading import HTTP, WebSocket
+    from pybit.unified_trading import HTTP
+    from pybit.unified_trading import WebSocket
 except ImportError:
     logging.error("Please install pybit: pip install pybit")
     sys.exit(1)

@@ -6,12 +6,10 @@ from unittest.mock import patch
 # Add the parent directory to the sys.path to allow importing modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backtester import (
-    DEFAULT_CONFIG,
-    fetch_historical_klines,
-    optimize_strategy,
-    run_backtest,
-)
+from backtester import DEFAULT_CONFIG
+from backtester import fetch_historical_klines
+from backtester import optimize_strategy
+from backtester import run_backtest
 
 
 class TestBacktester(unittest.TestCase):

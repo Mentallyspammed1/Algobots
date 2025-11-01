@@ -7,8 +7,10 @@ import logging
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timedelta
 from enum import Enum
 from typing import Any
 
@@ -195,9 +197,8 @@ class BybitAdapter:
                 df = df.astype(float)
                 df.sort_index(inplace=True)
                 return df
-            else:
-                logger.error(f"Failed to fetch klines for {symbol}: {response}")
-                return pd.DataFrame()
+            logger.error(f"Failed to fetch klines for {symbol}: {response}")
+            return pd.DataFrame()
         except Exception as e:
             logger.error(f"Error fetching klines for {symbol}: {e}")
             return pd.DataFrame()
@@ -248,9 +249,8 @@ class BybitAdapter:
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                     "source": "Bybit",
                 }
-            else:
-                logger.error(f"Failed to fetch ticker data for {symbol}: {ticker_info}")
-                return {}
+            logger.error(f"Failed to fetch ticker data for {symbol}: {ticker_info}")
+            return {}
         except Exception as e:
             logger.error(f"Error fetching Bybit market data for {symbol}: {e}")
             return {}
@@ -386,17 +386,16 @@ class BybitAdapter:
                     f"Order placed: {new_order.client_order_id}, Bybit ID: {new_order.bybit_order_id}"
                 )
                 return {"status": "success", "order": new_order}
-            else:
-                error_msg = (
-                    response.get("retMsg", "Unknown error")
-                    if response
-                    else "No response"
-                )
-                logger.error(f"Failed to place Bybit order for {symbol}: {error_msg}")
-                if client_order_id in self.orders:
-                    self.orders[client_order_id].status = OrderStatus.REJECTED
-                    self.orders[client_order_id].updated_at = datetime.utcnow()
-                return {"status": "failed", "message": error_msg}
+            error_msg = (
+                response.get("retMsg", "Unknown error")
+                if response
+                else "No response"
+            )
+            logger.error(f"Failed to place Bybit order for {symbol}: {error_msg}")
+            if client_order_id in self.orders:
+                self.orders[client_order_id].status = OrderStatus.REJECTED
+                self.orders[client_order_id].updated_at = datetime.utcnow()
+            return {"status": "failed", "message": error_msg}
         except Exception as e:
             logger.error(f"Exception during Bybit order placement for {symbol}: {e}")
             if client_order_id in self.orders:
@@ -458,44 +457,42 @@ class BybitAdapter:
                         f"Updated order {internal_order.client_order_id} status to {internal_order.status}"
                     )
                     return internal_order
-                else:
-                    temp_order = Order(
-                        client_order_id=order_data.get("orderLinkId"),
-                        symbol=order_data.get("symbol"),
-                        side=order_data.get("side"),
-                        order_type=order_data.get("orderType"),
-                        qty=float(order_data.get("qty", 0)),
-                        price=float(order_data.get("price", 0))
-                        if order_data.get("price")
-                        else None,
-                        stop_loss=float(order_data.get("stopLoss", 0))
-                        if order_data.get("stopLoss")
-                        else None,
-                        take_profit=float(order_data.get("takeProfit", 0))
-                        if order_data.get("takeProfit")
-                        else None,
-                        status=self._map_bybit_order_status(
-                            order_data.get("orderStatus")
-                        ),
-                        bybit_order_id=order_data.get("orderId"),
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow(),
-                    )
-                    self.orders[temp_order.client_order_id] = temp_order
-                    logger.info(
-                        f"Fetched and cached new order {temp_order.client_order_id} with status {temp_order.status}"
-                    )
-                    return temp_order
-            else:
-                error_msg = (
-                    response.get("retMsg", "Unknown error")
-                    if response
-                    else "No response"
+                temp_order = Order(
+                    client_order_id=order_data.get("orderLinkId"),
+                    symbol=order_data.get("symbol"),
+                    side=order_data.get("side"),
+                    order_type=order_data.get("orderType"),
+                    qty=float(order_data.get("qty", 0)),
+                    price=float(order_data.get("price", 0))
+                    if order_data.get("price")
+                    else None,
+                    stop_loss=float(order_data.get("stopLoss", 0))
+                    if order_data.get("stopLoss")
+                    else None,
+                    take_profit=float(order_data.get("takeProfit", 0))
+                    if order_data.get("takeProfit")
+                    else None,
+                    status=self._map_bybit_order_status(
+                        order_data.get("orderStatus")
+                    ),
+                    bybit_order_id=order_data.get("orderId"),
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
                 )
-                logger.error(
-                    f"Failed to fetch Bybit order {order_id}/{client_order_id}: {error_msg}"
+                self.orders[temp_order.client_order_id] = temp_order
+                logger.info(
+                    f"Fetched and cached new order {temp_order.client_order_id} with status {temp_order.status}"
                 )
-                return None
+                return temp_order
+            error_msg = (
+                response.get("retMsg", "Unknown error")
+                if response
+                else "No response"
+            )
+            logger.error(
+                f"Failed to fetch Bybit order {order_id}/{client_order_id}: {error_msg}"
+            )
+            return None
         except Exception as e:
             logger.error(
                 f"Exception fetching Bybit order {order_id}/{client_order_id}: {e}"
@@ -622,19 +619,18 @@ class BybitAdapter:
                     f"Order cancellation request sent for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}"
                 )
                 return {"status": "success", "message": "Cancellation request sent."}
-            else:
-                error_msg = (
-                    response.get("retMsg", "Unknown error")
-                    if response
-                    else "No response"
-                )
-                logger.error(
-                    f"Failed cancellation for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}: {error_msg}"
-                )
-                if internal_order:
-                    internal_order.status = OrderStatus.REJECTED
-                    internal_order.updated_at = datetime.utcnow()
-                return {"status": "failed", "message": error_msg}
+            error_msg = (
+                response.get("retMsg", "Unknown error")
+                if response
+                else "No response"
+            )
+            logger.error(
+                f"Failed cancellation for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}: {error_msg}"
+            )
+            if internal_order:
+                internal_order.status = OrderStatus.REJECTED
+                internal_order.updated_at = datetime.utcnow()
+            return {"status": "failed", "message": error_msg}
         except Exception as e:
             logger.error(f"Exception cancelling Bybit order {symbol}: {e}")
             if internal_order:
@@ -986,7 +982,8 @@ async def main():
         dummy_chart_path = "dummy_chart.png"
         if not os.path.exists(dummy_chart_path):
             try:
-                from PIL import Image, ImageDraw
+                from PIL import Image
+                from PIL import ImageDraw
 
                 img = Image.new("RGB", (60, 30), color=(255, 255, 255))
                 d = ImageDraw.Draw(img)

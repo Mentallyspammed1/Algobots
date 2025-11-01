@@ -6,7 +6,9 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import yaml
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 
 # Initialize colorama

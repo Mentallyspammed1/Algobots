@@ -2,7 +2,9 @@ import argparse
 import json
 import os
 
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from pybit.unified_trading import HTTP
 
 # Initialize Colorama

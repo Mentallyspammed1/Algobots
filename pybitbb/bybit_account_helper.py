@@ -3,10 +3,8 @@ import logging
 import time  # For potential timestamp in error logging
 from typing import Any
 
-from pybit.exceptions import (  # Import specific Pybit exceptions
-    BybitAPIError,
-    BybitRequestError,
-)
+from pybit.exceptions import BybitAPIError  # Import specific Pybit exceptions
+from pybit.exceptions import BybitRequestError  # Import specific Pybit exceptions
 from pybit.unified_trading import HTTP
 
 # Configure logging for the module

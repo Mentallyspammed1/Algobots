@@ -3,7 +3,8 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 # Add the parent directory to the sys.path to allow importing modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -17,7 +18,9 @@ with patch.dict(
         "GEMINI_API_KEY": "test_gemini_key",
     },
 ):
-    from backbone import BOT_STATE, app, log_message
+    from backbone import BOT_STATE
+    from backbone import app
+    from backbone import log_message
 
 
 class TestBackbone(unittest.TestCase):

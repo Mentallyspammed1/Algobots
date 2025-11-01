@@ -1,13 +1,11 @@
 import numpy as np
 import pandas as pd
 import pytest
-from indicators_api import (
-    calculate_ehlers_fisher_transform,
-    calculate_ema,
-    calculate_macd,
-    calculate_rsi,
-    calculate_supertrend,
-)
+from indicators_api import calculate_ehlers_fisher_transform
+from indicators_api import calculate_ema
+from indicators_api import calculate_macd
+from indicators_api import calculate_rsi
+from indicators_api import calculate_supertrend
 
 
 # Fixture for a basic DataFrame

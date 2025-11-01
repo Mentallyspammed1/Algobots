@@ -3,7 +3,9 @@
 import logging  # Import logging module
 
 import requests
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask
+from flask import jsonify
+from flask import send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)

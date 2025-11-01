@@ -11,14 +11,17 @@ import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 import requests
 import websocket
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 
 # Initialize Colorama for vibrant terminal output
 init()
