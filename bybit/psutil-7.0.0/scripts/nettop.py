@@ -37,7 +37,7 @@ import time
 try:
     import curses
 except ImportError:
-    sys.exit('platform not supported')
+    sys.exit("platform not supported")
 
 import psutil
 from psutil._common import bytes2human
@@ -147,7 +147,7 @@ def main():
     try:
         interval = 0
         while True:
-            if win.getch() == ord('q'):
+            if win.getch() == ord("q"):
                 break
             args = poll(interval)
             refresh_window(*args)
@@ -158,5 +158,5 @@ def main():
         tear_down()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

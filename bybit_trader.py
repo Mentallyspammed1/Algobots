@@ -6,39 +6,46 @@ This module contains the main BybitTrader class that handles:
 - Order and position management
 - Real-time data handling
 """
+
 import importlib.util
 import time
 
 import pandas as pd
 from bot_logger import logger
-from config import (
-    API_KEY,
-    API_SECRET,
-    CATEGORY,
-    SYMBOL,
-    TESTNET,
-    TRADE_QTY_USD,
-    WS_HEARTBEAT,
-)
-from pybit.unified_trading import HTTP, WebSocket
+from config import API_KEY
+from config import API_SECRET
+from config import CATEGORY
+from config import SYMBOL
+from config import TESTNET
+from config import TRADE_QTY_USD
+from config import WS_HEARTBEAT
+from pybit.unified_trading import HTTP
+from pybit.unified_trading import WebSocket
 from strategies.base_strategy import BaseStrategy
 
 
 class BybitTrader:
-    """The main class for the trading bot.
-    """
+    """The main class for the trading bot."""
+
     def __init__(self, strategy_path: str):
         self.strategy: BaseStrategy = self._load_strategy_from_file(strategy_path)
         logger.info(f"Successfully loaded strategy: {self.strategy.name}")
 
         self.session = HTTP(testnet=TESTNET, api_key=API_KEY, api_secret=API_SECRET)
-        self.ws = WebSocket(testnet=TESTNET, channel_type="private", api_key=API_KEY, api_secret=API_SECRET)
+        self.ws = WebSocket(
+            testnet=TESTNET,
+            channel_type="private",
+            api_key=API_KEY,
+            api_secret=API_SECRET,
+        )
 
-        self.kline_data = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume', 'turnover'])
+        self.kline_data = pd.DataFrame(
+            columns=["open", "high", "low", "close", "volume", "turnover"]
+        )
         self.is_long = False
         self.is_short = False
         self.last_order_time = 0
-        self.cooldown_period = 60 # seconds
+        self.cooldown_period = 60  # seconds
 
     def _load_strategy_from_file(self, file_path: str) -> BaseStrategy:
         """Dynamically loads a strategy class from a Python file."""
@@ -50,7 +57,11 @@ class BybitTrader:
             for item in dir(strategy_module):
                 if not item.startswith("_"):
                     cls = getattr(strategy_module, item)
-                    if isinstance(cls, type) and issubclass(cls, BaseStrategy) and cls is not BaseStrategy:
+                    if (
+                        isinstance(cls, type)
+                        and issubclass(cls, BaseStrategy)
+                        and cls is not BaseStrategy
+                    ):
                         return cls()
             raise ImportError(f"No strategy class found in {file_path}")
         except Exception as e:
@@ -59,16 +70,16 @@ class BybitTrader:
 
     def _handle_kline_message(self, message: dict):
         """Callback function to process incoming kline data from WebSocket."""
-        kline_list = message.get('data', [])
+        kline_list = message.get("data", [])
         for kline in kline_list:
-            timestamp = pd.to_datetime(int(kline['start']), unit='ms')
+            timestamp = pd.to_datetime(int(kline["start"]), unit="ms")
             new_row = {
-                'open': float(kline['open']),
-                'high': float(kline['high']),
-                'low': float(kline['low']),
-                'close': float(kline['close']),
-                'volume': float(kline['volume']),
-                'turnover': float(kline['turnover']),
+                "open": float(kline["open"]),
+                "high": float(kline["high"]),
+                "low": float(kline["low"]),
+                "close": float(kline["close"]),
+                "volume": float(kline["volume"]),
+                "turnover": float(kline["turnover"]),
             }
             self.kline_data.loc[timestamp] = new_row
 
@@ -83,21 +94,25 @@ class BybitTrader:
     def get_historical_klines(self, symbol: str, interval: str = "1"):
         """Fetches historical kline data to bootstrap the bot."""
         try:
-            response = self.session.get_kline(category=CATEGORY, symbol=symbol, interval=interval, limit=200)
-            if response['retCode'] == 0:
-                klines = response['result']['list']
+            response = self.session.get_kline(
+                category=CATEGORY, symbol=symbol, interval=interval, limit=200
+            )
+            if response["retCode"] == 0:
+                klines = response["result"]["list"]
                 for kline in klines:
-                    timestamp = pd.to_datetime(int(kline[0]), unit='ms')
+                    timestamp = pd.to_datetime(int(kline[0]), unit="ms")
                     self.kline_data.loc[timestamp] = {
-                        'open': float(kline[1]),
-                        'high': float(kline[2]),
-                        'low': float(kline[3]),
-                        'close': float(kline[4]),
-                        'volume': float(kline[5]),
-                        'turnover': float(kline[6]),
+                        "open": float(kline[1]),
+                        "high": float(kline[2]),
+                        "low": float(kline[3]),
+                        "close": float(kline[4]),
+                        "volume": float(kline[5]),
+                        "turnover": float(kline[6]),
                     }
                 self.kline_data.sort_index(inplace=True)
-                logger.info(f"Successfully fetched {len(self.kline_data)} historical klines for {symbol}.")
+                logger.info(
+                    f"Successfully fetched {len(self.kline_data)} historical klines for {symbol}."
+                )
             else:
                 logger.error(f"Error fetching klines: {response['retMsg']}")
         except Exception as e:
@@ -105,20 +120,20 @@ class BybitTrader:
 
     def run_strategy(self):
         """Runs the loaded strategy and executes trades based on signals."""
-        if len(self.kline_data) < 20: # Not enough data for indicators
+        if len(self.kline_data) < 20:  # Not enough data for indicators
             return
 
         # Generate signals
         signals_df = self.strategy.generate_signals(self.kline_data)
-        signal = signals_df['signal'].iloc[-1]
+        signal = signals_df["signal"].iloc[-1]
 
         logger.info(f"Signal: {signal}")
 
         # Execute trades
-        if signal == 'buy' and not self.is_long:
-            self.place_order('Buy')
-        elif signal == 'sell' and not self.is_short:
-            self.place_order('Sell')
+        if signal == "buy" and not self.is_long:
+            self.place_order("Buy")
+        elif signal == "sell" and not self.is_short:
+            self.place_order("Sell")
 
     def place_order(self, side: str):
         """Places an order on Bybit."""
@@ -130,9 +145,15 @@ class BybitTrader:
         try:
             # Close any existing position first
             if self.is_long or self.is_short:
-                close_side = 'Sell' if self.is_long else 'Buy'
+                close_side = "Sell" if self.is_long else "Buy"
                 logger.info(f"Closing existing position: {close_side}")
-                self.session.place_order(category=CATEGORY, symbol=SYMBOL, side=close_side, orderType="Market", qty=str(TRADE_QTY_USD / float(self.kline_data['close'].iloc[-1])))
+                self.session.place_order(
+                    category=CATEGORY,
+                    symbol=SYMBOL,
+                    side=close_side,
+                    orderType="Market",
+                    qty=str(TRADE_QTY_USD / float(self.kline_data["close"].iloc[-1])),
+                )
 
             # Place new order
             response = self.session.place_order(
@@ -140,12 +161,12 @@ class BybitTrader:
                 symbol=SYMBOL,
                 side=side,
                 orderType="Market",
-                qty=str(TRADE_QTY_USD / float(self.kline_data['close'].iloc[-1])),
+                qty=str(TRADE_QTY_USD / float(self.kline_data["close"].iloc[-1])),
             )
-            if response['retCode'] == 0:
+            if response["retCode"] == 0:
                 logger.info(f"{side} order placed successfully: {response['result']}")
                 self.last_order_time = current_time
-                if side == 'Buy':
+                if side == "Buy":
                     self.is_long = True
                     self.is_short = False
                 else:
@@ -165,9 +186,7 @@ class BybitTrader:
 
         # Subscribe to kline stream
         self.ws.kline_stream(
-            symbol=SYMBOL,
-            interval=1,
-            callback=self._handle_kline_message
+            symbol=SYMBOL, interval=1, callback=self._handle_kline_message
         )
 
         while True:

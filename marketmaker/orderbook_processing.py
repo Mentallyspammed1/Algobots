@@ -1,4 +1,3 @@
-
 from decimal import Decimal
 from typing import Any
 
@@ -7,13 +6,17 @@ from typing import Any
 # For now, we'll assume they are available.
 # from sorting_algorithms import merge_sort, quick_sort, insertion_sort, heap_sort, bucket_sort
 
+
 # Placeholder for sorting functions if sorting_algorithms.py is not yet created
 # In a real scenario, these would be imported from the generated sorting_algorithms.py
 def merge_sort(collection: list) -> list:
     if len(collection) <= 1:
         return collection
     mid_index = len(collection) // 2
-    return merge_sort(collection[:mid_index]) + merge_sort(collection[mid_index:]) # Simplified for placeholder
+    return merge_sort(collection[:mid_index]) + merge_sort(
+        collection[mid_index:]
+    )  # Simplified for placeholder
+
 
 def quick_sort(collection: list) -> list:
     if len(collection) < 2:
@@ -23,6 +26,7 @@ def quick_sort(collection: list) -> list:
     equal = [item for item in collection if item == pivot]
     greater = [item for item in collection if item > pivot]
     return quick_sort(lesser) + equal + quick_sort(greater)
+
 
 def insertion_sort(collection: list) -> list:
     for i in range(1, len(collection)):
@@ -34,9 +38,11 @@ def insertion_sort(collection: list) -> list:
         collection[j + 1] = key
     return collection
 
+
 def heap_sort(unsorted: list) -> list:
     # Simplified placeholder for heap_sort
     return sorted(unsorted)
+
 
 def bucket_sort(my_list: list, bucket_count: int = 10) -> list:
     # Simplified placeholder for bucket_sort
@@ -60,18 +66,27 @@ def sort_orderbook_levels(orderbook_data: dict[str, Any]) -> dict[str, Any]:
     # Sort bids (highest price first for bids)
     # For merge_sort, we need a comparison function or sort by the first element (price)
     # Python's sorted() is stable and efficient. If using custom merge_sort, ensure it handles tuples.
-    sorted_bids = sorted(bid_tuples, key=lambda x: x[0], reverse=True) # Sort by price, descending
+    sorted_bids = sorted(
+        bid_tuples, key=lambda x: x[0], reverse=True
+    )  # Sort by price, descending
 
     # Sort asks (lowest price first for asks)
-    sorted_asks = sorted(ask_tuples, key=lambda x: x[0]) # Sort by price, ascending
+    sorted_asks = sorted(ask_tuples, key=lambda x: x[0])  # Sort by price, ascending
 
     # Extract back to original format
-    orderbook_data["result"]["b"] = [[str(item[0]), str(item[1])] for item in sorted_bids]
-    orderbook_data["result"]["a"] = [[str(item[0]), str(item[1])] for item in sorted_asks]
+    orderbook_data["result"]["b"] = [
+        [str(item[0]), str(item[1])] for item in sorted_bids
+    ]
+    orderbook_data["result"]["a"] = [
+        [str(item[0]), str(item[1])] for item in sorted_asks
+    ]
 
     return orderbook_data
 
-def process_delta_update(current_orderbook: dict[str, Any], delta_data: dict[str, Any]) -> dict[str, Any]:
+
+def process_delta_update(
+    current_orderbook: dict[str, Any], delta_data: dict[str, Any]
+) -> dict[str, Any]:
     """
     Apply delta updates while maintaining sorted order
     """
@@ -90,7 +105,7 @@ def process_delta_update(current_orderbook: dict[str, Any], delta_data: dict[str
                 idx_to_update = i
                 break
 
-        if qty == Decimal('0.0'):
+        if qty == Decimal("0.0"):
             # Remove price level
             if idx_to_update != -1:
                 bids.pop(idx_to_update)
@@ -115,7 +130,7 @@ def process_delta_update(current_orderbook: dict[str, Any], delta_data: dict[str
                 idx_to_update = i
                 break
 
-        if qty == Decimal('0.0'):
+        if qty == Decimal("0.0"):
             if idx_to_update != -1:
                 asks.pop(idx_to_update)
         else:
@@ -123,9 +138,10 @@ def process_delta_update(current_orderbook: dict[str, Any], delta_data: dict[str
                 asks[idx_to_update] = [str(price), str(qty)]
             else:
                 asks.append([str(price), str(qty)])
-                asks = sorted(asks, key=lambda x: Decimal(x[0])) # Ascending sort
+                asks = sorted(asks, key=lambda x: Decimal(x[0]))  # Ascending sort
 
     return {"b": bids, "a": asks}
+
 
 def fast_orderbook_sort(price_levels: list[list[str]]) -> list[list[str]]:
     """
@@ -140,12 +156,15 @@ def fast_orderbook_sort(price_levels: list[list[str]]) -> list[list[str]]:
 
     # Use Python's sorted() as a placeholder for heap_sort for now
     # For actual heap_sort, you'd need a heapify function and extract_min/max
-    sorted_data = sorted(sortable_data, key=lambda x: x[0]) # Default ascending sort
+    sorted_data = sorted(sortable_data, key=lambda x: x[0])  # Default ascending sort
 
     # Convert back to original format
     return [[item[1], item[2]] for item in sorted_data]
 
-def aggregate_price_levels(orderbook_data: dict[str, Any], price_increment: float = 0.01) -> dict[str, Any]:
+
+def aggregate_price_levels(
+    orderbook_data: dict[str, Any], price_increment: float = 0.01
+) -> dict[str, Any]:
     """
     Aggregate orderbook levels into price buckets
     """
@@ -161,7 +180,9 @@ def aggregate_price_levels(orderbook_data: dict[str, Any], price_increment: floa
     min_price, max_price = min(prices), max(prices)
 
     # Ensure bucket_count is at least 1
-    bucket_count = max(1, int((max_price - min_price) / Decimal(str(price_increment))) + 1)
+    bucket_count = max(
+        1, int((max_price - min_price) / Decimal(str(price_increment))) + 1
+    )
 
     # Create price buckets
     # Simplified bucket sort logic for demonstration
@@ -169,7 +190,7 @@ def aggregate_price_levels(orderbook_data: dict[str, Any], price_increment: floa
 
     if bucket_count > 0:
         bucket_size = (max_price - min_price) / bucket_count
-        if bucket_size == Decimal('0'): # Handle case where all prices are the same
+        if bucket_size == Decimal("0"):  # Handle case where all prices are the same
             for val in prices:
                 buckets[0].append(val)
         else:

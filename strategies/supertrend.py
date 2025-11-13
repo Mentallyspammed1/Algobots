@@ -1,27 +1,30 @@
 import logging
-from typing import Any, Dict, List, Optional
-import pandas as pd
 from decimal import Decimal
+from typing import Any
+
+import pandas as pd
+
 
 class Supertrend:
-    """
-    A placeholder Supertrend strategy.
-    """
+    """A placeholder Supertrend strategy."""
+
     def __init__(self, logger: logging.Logger, **kwargs):
         self.logger = logger
         self.logger.info("Supertrend strategy initialized.")
         # Add any strategy-specific parameters from kwargs here
 
-    def generate_signals(self, klines_df: pd.DataFrame,
-                         pivot_resistance_levels: Dict[str, Decimal],
-                         pivot_support_levels: Dict[str, Decimal],
-                         active_bull_obs: List[Any],
-                         active_bear_obs: List[Any],
-                         current_position_side: str,
-                         current_position_size: Decimal,
-                         order_book_imbalance: Decimal) -> List[Dict[str, Any]]:
-        """
-        Generates entry signals based on the Supertrend strategy.
+    def generate_signals(
+        self,
+        klines_df: pd.DataFrame,
+        pivot_resistance_levels: dict[str, Decimal],
+        pivot_support_levels: dict[str, Decimal],
+        active_bull_obs: list[Any],
+        active_bear_obs: list[Any],
+        current_position_side: str,
+        current_position_size: Decimal,
+        order_book_imbalance: Decimal,
+    ) -> list[dict[str, Any]]:
+        """Generates entry signals based on the Supertrend strategy.
         This is a placeholder and needs actual Supertrend logic.
         """
         signals = []
@@ -36,16 +39,18 @@ class Supertrend:
         #     })
         return signals
 
-    def generate_exit_signals(self, klines_df: pd.DataFrame,
-                              current_position_side: str,
-                              active_bull_obs: List[Any],
-                              active_bear_obs: List[Any],
-                              entry_price: Decimal,
-                              pnl: Decimal,
-                              current_position_size: Decimal,
-                              order_book_imbalance: Decimal) -> List[Dict[str, Any]]:
-        """
-        Generates exit signals based on the Supertrend strategy.
+    def generate_exit_signals(
+        self,
+        klines_df: pd.DataFrame,
+        current_position_side: str,
+        active_bull_obs: list[Any],
+        active_bear_obs: list[Any],
+        entry_price: Decimal,
+        pnl: Decimal,
+        current_position_size: Decimal,
+        order_book_imbalance: Decimal,
+    ) -> list[dict[str, Any]]:
+        """Generates exit signals based on the Supertrend strategy.
         This is a placeholder and needs actual Supertrend logic.
         """
         exit_signals = []

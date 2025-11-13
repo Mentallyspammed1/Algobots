@@ -1,12 +1,13 @@
-
 import logging
 from typing import Literal
+
 from colorama import Fore
 
 NEON_BLUE = Fore.CYAN
 NEON_YELLOW = Fore.YELLOW
 NEON_RED = Fore.LIGHTRED_EX
 RESET = Fore.RESET
+
 
 class AlertSystem:
     """Handles sending alerts for critical events."""
@@ -15,7 +16,11 @@ class AlertSystem:
         """Initializes the AlertSystem."""
         self.logger = logger
 
-    def send_alert(self, message: str, level: Literal["INFO", "WARNING", "ERROR"]) -> None:
+    def send_alert(
+        self,
+        message: str,
+        level: Literal["INFO", "WARNING", "ERROR"],
+    ) -> None:
         """Send an alert (currently logs it)."""
         if level == "INFO":
             self.logger.info(f"{NEON_BLUE}ALERT: {message}{RESET}")

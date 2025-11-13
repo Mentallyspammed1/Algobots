@@ -2,7 +2,8 @@
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -18,8 +19,14 @@ class KlineDataFetcher:
         self.logger = logger
         self.config = config
 
-    async def fetch_klines(self, symbol: str, category: str, interval: str,
-                           limit: int, history_window_minutes: int) -> pd.DataFrame:
+    async def fetch_klines(
+        self,
+        symbol: str,
+        category: str,
+        interval: str,
+        limit: int,
+        history_window_minutes: int,
+    ) -> pd.DataFrame:
         """Fetches historical kline data, ensuring enough data for indicator lookbacks."""
         try:
             end_time = datetime.now(ZoneInfo(self.config.BYBIT_TIMEZONE))
@@ -31,26 +38,43 @@ class KlineDataFetcher:
                 interval=interval,
                 start=int(start_time.timestamp() * 1000),
                 end=int(end_time.timestamp() * 1000),
-                limit=limit
+                limit=limit,
             )
 
-            if response['retCode'] == 0:
-                klines_data = response['result']['list']
+            if response["retCode"] == 0:
+                klines_data = response["result"]["list"]
 
-                df = pd.DataFrame(klines_data, columns=[
-                    'timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'
-                ])
+                df = pd.DataFrame(
+                    klines_data,
+                    columns=[
+                        "timestamp",
+                        "open",
+                        "high",
+                        "low",
+                        "close",
+                        "volume",
+                        "turnover",
+                    ],
+                )
 
-                df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='ms').dt.tz_localize('UTC').dt.tz_convert(ZoneInfo(self.config.BYBIT_TIMEZONE))
-                for col in ['open', 'high', 'low', 'close', 'volume', 'turnover']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                df["timestamp"] = (
+                    pd.to_datetime(df["timestamp"].astype(float), unit="ms")
+                    .dt.tz_localize("UTC")
+                    .dt.tz_convert(ZoneInfo(self.config.BYBIT_TIMEZONE))
+                )
+                for col in ["open", "high", "low", "close", "volume", "turnover"]:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
 
-                df = df.sort_values('timestamp').set_index('timestamp')
-                df = df.dropna(subset=['close'])
+                df = df.sort_values("timestamp").set_index("timestamp")
+                df = df.dropna(subset=["close"])
 
-                self.logger.debug(f"Fetched {len(df)} klines for {symbol} (Interval: {interval}, History: {history_window_minutes}min).")
+                self.logger.debug(
+                    f"Fetched {len(df)} klines for {symbol} (Interval: {interval}, History: {history_window_minutes}min).",
+                )
                 return df
-            self.logger.error(f"Failed to fetch klines for {symbol}: {response['retMsg']}")
+            self.logger.error(
+                f"Failed to fetch klines for {symbol}: {response['retMsg']}",
+            )
             return pd.DataFrame()
         except Exception as e:
             self.logger.error(f"Exception fetching klines for {symbol}: {e}")
@@ -92,6 +116,13 @@ class InMemoryCache:
         self.cache.clear()
         self.logger.info("Cache cleared.")
 
-    def generate_kline_cache_key(self, symbol: str, category: str, interval: str, limit: int, history_window_minutes: int) -> str:
+    def generate_kline_cache_key(
+        self,
+        symbol: str,
+        category: str,
+        interval: str,
+        limit: int,
+        history_window_minutes: int,
+    ) -> str:
         """Generates a unique cache key for kline data requests."""
         return f"kline_data_{symbol}_{category}_{interval}_{limit}_{history_window_minutes}"

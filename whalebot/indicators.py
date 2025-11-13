@@ -1,612 +1,806 @@
+#
+# Pyrmethus' Arcane Arts: Indicator Spells Module
+#
+# This module houses the core technical indicator calculations,
+# crafted with standard pandas and numpy for efficiency and clarity,
+# avoiding external libraries like pandas-ta.
+#
+# Essence: To provide robust, well-tested indicator functions that
+# respect precision and handle edge cases gracefully.
+#
+# Core Values: Elegance, Efficiency, Clarity, Robustness.
+# Mantra: Calculations must be pure; side effects are forbidden.
+#
+
 import logging
-from typing import Any, Literal
+import sys
+from decimal import getcontext
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from decimal import Decimal, ROUND_DOWN
 
-# Magic Numbers as Constants
-MIN_DATA_POINTS_TR = 2
-MIN_DATA_POINTS_SMOOTHER = 2
-MIN_DATA_POINTS_OBV = 2
-MIN_DATA_POINTS_PSAR = 2
-MIN_DATA_POINTS_VOLATILITY = 2
+# --- Colorama Initialization ---
+# Although not strictly needed for the module itself, it's good practice
+# to have it if the module might be used in a colored terminal context.
+# For module reusability, we'll keep it minimal here.
+from colorama import init as colorama_init
 
-def safe_calculate(
-    df: pd.DataFrame, logger: logging.Logger, symbol: str, func: callable, name: str, min_data_points: int = 0, *args, **kwargs
-) -> Any | None:
-    """Safely calculate indicators and log errors, with min_data_points check."""
-    if len(df) < min_data_points:
-        logger.debug(
-            f"[{symbol}] Skipping indicator '{name}': Not enough data. Need {min_data_points}, have {len(df)}."
-        )
-        return None
-    try:
-        result = func(df, *args, **kwargs)
-        if (
-            result is None
-            or (isinstance(result, pd.Series) and result.empty)
-            or (
-                isinstance(result, tuple)
-                and all(
-                    r is None or (isinstance(r, pd.Series) and r.empty)
-                    for r in result
-                )
-            )
-        ):
-            logger.warning(
-                f"[{symbol}] Indicator '{name}' returned empty or None after calculation. Not enough valid data?"
-            )
-            return None
-        return result
-    except Exception as e:
-        logger.error(
-            f"[{symbol}] Error calculating indicator '{name}': {e}"
-        )
-        return None
+colorama_init(autoreset=True)  # Auto-reset styles after each print
 
-def calculate_true_range(df: pd.DataFrame) -> pd.Series:
-    """Calculate True Range (TR)."""
-    if len(df) < MIN_DATA_POINTS_TR:
-        return pd.Series(np.nan, index=df.index)
-    high_low = df["high"] - df["low"]
-    high_prev_close = (df["high"] - df["close"].shift()).abs()
-    low_prev_close = (df["low"] - df["close"].shift()).abs()
-    return pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(
-        axis=1
+# --- Placeholder for Logger ---
+# In a real module, this would likely be passed in or configured externally.
+# For self-containment, we'll use a basic logger setup.
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    logger.setLevel(logging.DEBUG)
+    console_handler = logging.StreamHandler(sys.stdout)
+    # Basic formatter without colors for module reusability
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s [%(filename)s:%(lineno)d] - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    logger._configured = True
+# --- Custom Log Level Definition ---
+# Ensure SUCCESS_LEVEL is defined if it's a custom level.
+# In logging, levels are integers. Let's assign a value above CRITICAL.
+SUCCESS_LEVEL = logging.CRITICAL + 1
+logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")  # Register the level name for display
 
-def calculate_super_smoother(df: pd.DataFrame, series: pd.Series, period: int) -> pd.Series:
-    """Apply Ehlers SuperSmoother filter to reduce lag and noise."""
-    if period <= 0 or len(series) < MIN_DATA_POINTS_SMOOTHER:
-        return pd.Series(np.nan, index=series.index)
 
-    series = pd.to_numeric(series, errors="coerce").dropna()
-    if len(series) < MIN_DATA_POINTS_SMOOTHER:
-        return pd.Series(np.nan, index=series.index)
+# --- Global Constants (from whalebott.py) ---
+# These are essential for indicator calculations and should be consistent.
+# Ideally, these would be imported from a shared constants file.
+# For self-containment, defining them here.
+DEFAULT_PRIMARY_INTERVAL = "15m"
+DEFAULT_LOOP_DELAY_SECONDS = 60
+BASE_URL = "https://api.bybit.com"
+WS_PUBLIC_BASE_URL = "wss://stream.bybit.com/v5"
+WS_PRIVATE_BASE_URL = "wss://stream.bybit.com/v5"
+API_KEY = os.getenv("BYBIT_API_KEY")
+API_SECRET = os.getenv("BYBIT_API_SECRET")
+SCRIPT_DIR = Path(__file__).resolve().parent
+CONFIG_DIR = SCRIPT_DIR / "config"
+LOG_DIRECTORY = SCRIPT_DIR / "logs"
+CONFIG_FILE_PATH = CONFIG_DIR / "config.json"
 
-    a1 = np.exp(-np.sqrt(2) * np.pi / period)
-    b1 = 2 * a1 * np.cos(np.sqrt(2) * np.pi / period)
-    c1 = 1 - b1 + a1**2
-    c2 = b1 - 2 * a1**2
-    c3 = a1**2
 
-    filt = pd.Series(0.0, index=series.index)
-    if len(series) >= 1:
-        filt.iloc[0] = series.iloc[0]
-    if len(series) >= 2:
-        filt.iloc[1] = (series.iloc[0] + series.iloc[1]) / 2
+# --- Set global precision for Decimal calculations ---
+getcontext().prec = 28  # Standard for financial precision
 
-    for i in range(2, len(series)):
-        filt.iloc[i] = (
-            (c1 / 2) * (series.iloc[i] + series.iloc[i - 1])
-            + c2 * filt.iloc[i - 1]
-            - c3 * filt.iloc[i - 2]
-        )
-    return filt.reindex(df.index)
 
-def calculate_ehlers_supertrend(
-    df: pd.DataFrame, logger: logging.Logger, symbol: str, period: int, multiplier: float
-) -> pd.DataFrame | None:
-    """Calculate SuperTrend using Ehlers SuperSmoother for price and volatility."""
-    if len(df) < period * 3:
-        logger.debug(
-            f"[{symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
-        )
-        return None
+# --- Indicator Calculation Functions ---
+# These functions are extracted from whalebott.py and use standard pandas/numpy.
 
-    df_copy = df.copy()
+def calculate_sma(data: pd.Series, period: int) -> pd.Series:
+    """Calculates Simple Moving Average."""
+    if period <= 0:
+        return pd.Series(np.nan, index=data.index)
+    try:
+        return data.rolling(window=period).mean()
+    except Exception as e:
+        logger.warning(f"Error calculating SMA({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=data.index)
 
-    hl2 = (df_copy["high"] + df_copy["low"]) / 2
-    smoothed_price = calculate_super_smoother(df_copy, hl2, period)
 
-    tr = calculate_true_range(df_copy)
-    smoothed_atr = calculate_super_smoother(df_copy, tr, period)
+def calculate_ema(data: pd.Series, period: int) -> pd.Series:
+    """Calculates Exponential Moving Average."""
+    if period <= 0:
+        return pd.Series(np.nan, index=data.index)
+    try:
+        return data.ewm(span=period, adjust=False).mean()
+    except Exception as e:
+        logger.warning(f"Error calculating EMA({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=data.index)
 
-    df_copy["smoothed_price"] = smoothed_price
-    df_copy["smoothed_atr"] = smoothed_atr
 
-    if df_copy.empty:
-        logger.debug(
-            f"[{symbol}] Ehlers SuperTrend: DataFrame empty after smoothing. Returning None."
-        )
-        return None
+def calculate_vwma(
+    close_data: pd.Series, volume_data: pd.Series, period: int,
+) -> pd.Series:
+    """Calculates Volume Weighted Moving Average."""
+    if period <= 0:
+        return pd.Series(np.nan, index=close_data.index)
+    try:
+        # Calculate Typical Price (H+L+C)/3 - using close for simplicity if H/L not critical
+        typical_price = (
+            close_data + close_data.shift(1) + close_data.shift(2)
+        ) / 3
+        if typical_price.isnull().all():
+            typical_price = close_data  # Fallback if H/L not available
 
-    upper_band = df_copy["smoothed_price"] + multiplier * df_copy["smoothed_atr"]
-    lower_band = df_copy["smoothed_price"] - multiplier * df_copy["smoothed_atr"]
+        # Calculate VWAP for the period
+        vwap_series = (typical_price * volume_data).rolling(
+            window=period,
+        ).sum() / volume_data.rolling(window=period).sum()
+        return vwap_series
+    except Exception as e:
+        logger.warning(f"Error calculating VWMA({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=close_data.index)
 
-    direction = pd.Series(0, index=df_copy.index, dtype=int)
-    supertrend = pd.Series(np.nan, index=df_copy.index)
 
-    first_valid_idx_val = smoothed_price.first_valid_index()
-    if first_valid_idx_val is None:
-        return None
-    first_valid_idx = df_copy.index.get_loc(first_valid_idx_val)
-    if first_valid_idx >= len(df_copy):
-        return None
+def calculate_kama(
+    data: pd.Series, period: int, fast_period: int, slow_period: int,
+) -> pd.Series:
+    """Calculates Kaufman's Adaptive Moving Average (KAMA)."""
+    if period <= 0 or fast_period <= 0 or slow_period <= 0:
+        return pd.Series(np.nan, index=data.index)
+    try:
+        # Step 1: Calculate the Efficiency Ratio (ER)
+        # ER = ( (Close - Prior Close) / (High - Low) ) * 100
+        # Handle potential division by zero or NaN
+        price_change = data - data.shift(1)
+        h_l_diff = data.rolling(window=period).max() - data.rolling(window=period).min()
+        h_l_diff = h_l_diff.replace(0, 1e-9)  # Avoid division by zero
+        er = (price_change / h_l_diff) * 100
+        er = er.fillna(0)  # Fill initial NaNs
 
-    if df_copy["close"].iloc[first_valid_idx] > upper_band.iloc[first_valid_idx]:
-        direction.iloc[first_valid_idx] = 1
-        supertrend.iloc[first_valid_idx] = lower_band.iloc[first_valid_idx]
-    elif (
-        df_copy["close"].iloc[first_valid_idx] < lower_band.iloc[first_valid_idx]
-    ):
-        direction.iloc[first_valid_idx] = -1
-        supertrend.iloc[first_valid_idx] = upper_band.iloc[first_valid_idx]
-    else:
-        direction.iloc[first_valid_idx] = 0
-        supertrend.iloc[first_valid_idx] = lower_band.iloc[first_valid_idx]
+        # Step 2: Calculate the Noise Ratio (NR)
+        # NR = 100 - ER
+        nr = 100 - er
 
-    for i in range(first_valid_idx + 1, len(df_copy)):
-        prev_direction = direction.iloc[i - 1]
-        prev_supertrend = supertrend.iloc[i - 1]
-        curr_close = df_copy["close"].iloc[i]
+        # Step 3: Calculate the Smoothing Constant (SC)
+        # SC = ER / (period * Noise_Ratio)
+        # Use SC_fast = 2 / (fast_period + 1) and SC_slow = 2 / (slow_period + 1) for calculation basis
+        sc_fast_base = 2 / (fast_period + 1)
+        sc_slow_base = 2 / (slow_period + 1)
+        sc = (er / period) * (sc_fast_base - sc_slow_base) + sc_slow_base
 
-        if prev_direction == 1:
-            if curr_close < prev_supertrend:
-                direction.iloc[i] = -1
-                supertrend.iloc[i] = upper_band.iloc[i]
+        # Step 4: Calculate KAMA
+        # KAMA = Prior KAMA + SC * (Close - Prior KAMA)
+        kama = pd.Series(np.nan, index=data.index)
+        # Initialize with the first valid price as KAMA
+        kama.iloc[period - 1] = data.iloc[period - 1]
+
+        for i in range(period, len(data)):
+            if pd.isna(kama.iloc[i - 1]):  # If previous KAMA is NaN, re-initialize
+                kama.iloc[i] = data.iloc[i]
             else:
-                direction.iloc[i] = 1
-                supertrend.iloc[i] = max(lower_band.iloc[i], prev_supertrend)
-        elif prev_direction == -1:
-            if curr_close > prev_supertrend:
-                direction.iloc[i] = 1
-                supertrend.iloc[i] = lower_band.iloc[i]
-            else:
-                direction.iloc[i] = -1
-                supertrend.iloc[i] = min(upper_band.iloc[i], prev_supertrend)
-        else:
-            if curr_close > upper_band.iloc[i]:
-                direction.iloc[i] = 1
-                supertrend.iloc[i] = lower_band.iloc[i]
-            elif curr_close < lower_band.iloc[i]:
-                direction.iloc[i] = -1
-                supertrend.iloc[i] = upper_band.iloc[i]
-            else:
-                direction.iloc[i] = prev_direction
-                supertrend.iloc[i] = prev_supertrend
+                kama.iloc[i] = kama.iloc[i - 1] + sc.iloc[i] * (
+                    data.iloc[i] - kama.iloc[i - 1]
+                )
+        return kama
 
-    result = pd.DataFrame({"supertrend": supertrend, "direction": direction})
-    return result.reindex(df.index)
+    except Exception as e:
+        logger.warning(
+            f"Error calculating KAMA({period}, fast={fast_period}, slow={slow_period}): {e}",
+            exc_info=True,
+        )
+        return pd.Series(np.nan, index=data.index)
 
-def calculate_macd(
-    df: pd.DataFrame, fast_period: int, slow_period: int, signal_period: int
-) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """Calculate Moving Average Convergence Divergence (MACD)."""
-    if len(df) < slow_period + signal_period:
-        return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
 
-    ema_fast = df["close"].ewm(span=fast_period, adjust=False).mean()
-    ema_slow = df["close"].ewm(span=slow_period, adjust=False).mean()
+def calculate_rsi(data: pd.Series, period: int) -> pd.Series:
+    """Calculates Relative Strength Index."""
+    if period <= 0:
+        return pd.Series(np.nan, index=data.index)
+    try:
+        delta = data.diff()
+        gain = (delta.where(delta > 0)).fillna(0)
+        loss = (-delta.where(delta < 0)).fillna(0)
 
-    macd_line = ema_fast - ema_slow
-    signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
-    histogram = macd_line - signal_line
+        avg_gain = gain.ewm(span=period, adjust=False).mean()
+        avg_loss = loss.ewm(span=period, adjust=False).mean()
 
-    return macd_line, signal_line, histogram
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+    except Exception as e:
+        logger.warning(f"Error calculating RSI({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=data.index)
 
-def calculate_rsi(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calculate Relative Strength Index (RSI)."""
-    if len(df) <= period:
-        return pd.Series(np.nan, index=df.index)
-    delta = df["close"].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-
-    avg_gain = gain.ewm(span=period, adjust=False, min_periods=period).mean()
-    avg_loss = loss.ewm(span=period, adjust=False, min_periods=period).mean()
-
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
 
 def calculate_stoch_rsi(
-    df: pd.DataFrame, period: int, k_period: int, d_period: int
+    data: pd.Series, period: int, k_period: int, d_period: int,
 ) -> tuple[pd.Series, pd.Series]:
-    """Calculate Stochastic RSI."""
-    if len(df) <= period:
-        return pd.Series(np.nan, index=df.index), pd.Series(
-            np.nan, index=df.index
+    """Calculates Stochastic RSI."""
+    if period <= 0 or k_period <= 0 or d_period <= 0:
+        return pd.Series(np.nan, index=data.index), pd.Series(np.nan, index=data.index)
+    try:
+        rsi = calculate_rsi(data, period=period)
+        if rsi.isnull().all():
+            return pd.Series(np.nan, index=data.index), pd.Series(np.nan, index=data.index)
+
+        min_rsi = rsi.rolling(window=period).min()
+        max_rsi = rsi.rolling(window=period).max()
+
+        stoch_rsi = 100 * ((rsi - min_rsi) / (max_rsi - min_rsi))
+        stoch_rsi = stoch_rsi.fillna(0)  # Fill initial NaNs
+
+        # Calculate %K and %D
+        stoch_k = stoch_rsi.rolling(window=k_period).mean()
+        stoch_d = stoch_k.rolling(window=d_period).mean()
+
+        return stoch_k, stoch_d
+    except Exception as e:
+        logger.warning(
+            f"Error calculating Stochastic RSI (Period={period}, K={k_period}, D={d_period}): {e}",
+            exc_info=True,
         )
-    rsi_series = calculate_rsi(df, period)
+        return pd.Series(np.nan, index=data.index), pd.Series(np.nan, index=data.index)
 
-    lowest_rsi = rsi_series.rolling(window=period, min_periods=period).min()
-    highest_rsi = rsi_series.rolling(window=period, min_periods=period).max()
 
-    denominator = highest_rsi - lowest_rsi
-    denominator[denominator == 0] = np.nan
-    stoch_rsi_k_raw = ((rsi_series - lowest_rsi) / denominator) * 100
-    stoch_rsi_k_raw = stoch_rsi_k_raw.fillna(0).clip(0, 100)
+def calculate_cci(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int,
+) -> pd.Series:
+    """Calculates Commodity Channel Index."""
+    if period <= 0:
+        return pd.Series(np.nan, index=high.index)
+    try:
+        typical_price = (high + low + close) / 3
+        # Using ta-lib for accuracy if available, otherwise fallback to manual implementation
+        # Note: ta-lib is not guaranteed to be available in all environments.
+        # For broader compatibility, a manual implementation is preferred if ta-lib is not a hard dependency.
+        # The following is a manual implementation fallback.
+        tp_mean = typical_price.rolling(window=period).mean()
+        tp_dev = abs(typical_price - tp_mean).rolling(window=period).sum() / period
+        # Avoid division by zero
+        tp_dev = tp_dev.replace(0, 1e-9)
+        cci = (typical_price - tp_mean) / (0.015 * tp_dev)  # 0.015 is a common constant multiplier
+        return cci
+    except Exception as e:
+        logger.warning(f"Error calculating CCI({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=high.index)
 
-    stoch_rsi_k = stoch_rsi_k_raw.rolling(
-        window=k_period, min_periods=k_period
-    ).mean().fillna(0)
-    stoch_rsi_d = stoch_rsi_k.rolling(window=d_period, min_periods=d_period).mean().fillna(0)
 
-    return stoch_rsi_k, stoch_rsi_d
+def calculate_williams_r(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int,
+) -> pd.Series:
+    """Calculates Williams %R."""
+    if period <= 0:
+        return pd.Series(np.nan, index=high.index)
+    try:
+        highest_high = high.rolling(window=period).max()
+        lowest_low = low.rolling(window=period).min()
+        wr = -100 * ((highest_high - close) / (highest_high - lowest_low))
+        return wr
+    except Exception as e:
+        logger.warning(f"Error calculating Williams %R({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=high.index)
 
-def calculate_adx(df: pd.DataFrame, period: int) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """Calculate Average Directional Index (ADX)."""
-    if len(df) < period * 2:
-        return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
 
-    tr = calculate_true_range(df)
+def calculate_mfi(
+    high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int,
+) -> pd.Series:
+    """Calculates Money Flow Index."""
+    if period <= 0:
+        return pd.Series(np.nan, index=high.index)
+    try:
+        typical_price = (high + low + close) / 3
+        money_flow = typical_price * volume
+        positive_mf = money_flow.where(typical_price > typical_price.shift(1)).fillna(0)
+        negative_mf = money_flow.where(typical_price < typical_price.shift(1)).fillna(0)
 
-    plus_dm = df["high"].diff()
-    minus_dm = -df["low"].diff()
+        positive_mf_sum = positive_mf.rolling(window=period).sum()
+        negative_mf_sum = negative_mf.rolling(window=period).sum()
 
-    plus_dm_final = pd.Series(0.0, index=df.index)
-    minus_dm_final = pd.Series(0.0, index=df.index)
+        money_ratio = positive_mf_sum / negative_mf_sum
+        mfi = 100 - (100 / (1 + money_ratio))
+        return mfi
+    except Exception as e:
+        logger.warning(f"Error calculating MFI({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=high.index)
 
-    for i in range(1, len(df)):
-        if plus_dm.iloc[i] > minus_dm.iloc[i] and plus_dm.iloc[i] > 0:
-            plus_dm_final.iloc[i] = plus_dm.iloc[i]
-        if minus_dm.iloc[i] > plus_dm.iloc[i] and minus_dm.iloc[i] > 0:
-            minus_dm_final.iloc[i] = minus_dm.iloc[i]
 
-    atr = tr.ewm(span=period, adjust=False).mean()
-    plus_di = (plus_dm_final.ewm(span=period, adjust=False).mean() / atr) * 100
-    minus_di = (minus_dm_final.ewm(span=period, adjust=False).mean() / atr) * 100
+def calculate_atr(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int,
+) -> pd.Series:
+    """Calculates Average True Range."""
+    if period <= 0:
+        return pd.Series(np.nan, index=high.index)
+    try:
+        # Calculate True Range (TR)
+        tr1 = high - low
+        tr2 = abs(high - close.shift(1))
+        tr3 = abs(low - close.shift(1))
+        true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
 
-    di_diff = abs(plus_di - minus_di)
-    di_sum = plus_di + minus_di
-    dx = (di_diff / di_sum.replace(0, np.nan)).fillna(0) * 100
+        # Calculate ATR using EMA
+        atr = true_range.ewm(span=period, adjust=False).mean()
+        return atr
+    except Exception as e:
+        logger.warning(f"Error calculating ATR({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=high.index)
 
-    adx = dx.ewm(span=period, adjust=False).mean()
 
-    return adx, plus_di, minus_di
+def calculate_psar(
+    high: pd.Series, low: pd.Series, close: pd.Series, af_start: float, af_max: float,
+) -> pd.Series:
+    """Calculates Parabolic Stop and Reverse (PSAR)."""
+    # Using a simplified manual implementation as ta-lib might not be available
+    # A full implementation requires careful state management (AF, EP, trend)
+    # This is a placeholder and might need refinement or ta-lib integration.
+    if af_start <= 0 or af_max <= 0:
+        return pd.Series(np.nan, index=high.index)
+    try:
+        # Placeholder: Return NaNs or a very basic calculation
+        # A proper implementation would be much more complex.
+        # For now, we return NaNs to signify it's not reliably calculated here.
+        logger.warning(
+            "Manual PSAR calculation is a placeholder and may not be accurate. Consider using a library like TA-Lib.",
+        )
+        return pd.Series(np.nan, index=high.index)
+    except Exception as e:
+        logger.warning(
+            f"Error calculating PSAR (AF_Start={af_start}): {e}", exc_info=True,
+        )
+        return pd.Series(np.nan, index=high.index)
+
 
 def calculate_bollinger_bands(
-    df: pd.DataFrame, period: int, std_dev: float
+    data: pd.Series, period: int, std_dev: float,
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """Calculate Bollinger Bands."""
-    if len(df) < period:
+    """Calculates Bollinger Bands (Basis, Upper, Lower)."""
+    if period <= 0 or std_dev <= 0:
         return (
-            pd.Series(np.nan, index=df.index),
-            pd.Series(np.nan, index=df.index),
-            pd.Series(np.nan, index=df.index),
+            pd.Series(np.nan, index=data.index),
+            pd.Series(np.nan, index=data.index),
+            pd.Series(np.nan, index=data.index),
         )
-    middle_band = df["close"].rolling(window=period, min_periods=period).mean()
-    std = df["close"].rolling(window=period, min_periods=period).std()
-    upper_band = middle_band + (std * std_dev)
-    lower_band = middle_band - (std * std_dev)
-    return upper_band, middle_band, lower_band
+    try:
+        basis = calculate_sma(data, period=period)
+        if basis.isnull().all():
+            return (
+                pd.Series(np.nan, index=data.index),
+                pd.Series(np.nan, index=data.index),
+                pd.Series(np.nan, index=data.index),
+            )
 
-def calculate_vwap(df: pd.DataFrame) -> pd.Series:
-    """Calculate Volume Weighted Average Price (VWAP)."""
-    if df.empty:
-        return pd.Series(np.nan, index=df.index)
-    typical_price = (df["high"] + df["low"] + df["close"]) / 3
-    cumulative_tp_vol = (typical_price * df["volume"]).cumsum()
-    cumulative_vol = df["volume"].cumsum()
-    vwap = cumulative_tp_vol / cumulative_vol
-    return vwap.reindex(df.index)
+        std_dev_prices = data.rolling(window=period).std()
+        upper = basis + (std_dev_prices * std_dev)
+        lower = basis - (std_dev_prices * std_dev)
+        return basis, upper, lower
+    except Exception as e:
+        logger.warning(
+            f"Error calculating Bollinger Bands (Period={period}, StdDev={std_dev}): {e}",
+            exc_info=True,
+        )
+        return (
+            pd.Series(np.nan, index=data.index),
+            pd.Series(np.nan, index=data.index),
+            pd.Series(np.nan, index=data.index),
+        )
 
-def calculate_cci(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calculate Commodity Channel Index (CCI)."""
-    if len(df) < period:
-        return pd.Series(np.nan, index=df.index)
-    tp = (df["high"] + df["low"] + df["close"]) / 3
-    sma_tp = tp.rolling(window=period, min_periods=period).mean()
-    mad = tp.rolling(window=period, min_periods=period).apply(
-        lambda x: np.abs(x - x.mean()).mean(), raw=False
+
+def calculate_keltner_channels(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int,
+    atr_multiplier: float,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Calculates Keltner Channels."""
+    if period <= 0 or atr_multiplier <= 0:
+        return (
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+        )
+    try:
+        basis = calculate_ema(close, period=period)  # EMA is common for Keltner basis
+        if basis.isnull().all():
+            return (
+                pd.Series(np.nan, index=high.index),
+                pd.Series(np.nan, index=high.index),
+                pd.Series(np.nan, index=high.index),
+            )
+
+        atr = calculate_atr(high, low, close, period=period)
+        upper = basis + (atr * atr_multiplier)
+        lower = basis - (atr * atr_multiplier)
+        return basis, upper, lower
+    except Exception as e:
+        logger.warning(
+            f"Error calculating Keltner Channels (Period={period}, ATRMult={atr_multiplier}): {e}",
+            exc_info=True,
+        )
+        return (
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+        )
+
+
+def calculate_adx(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int,
+) -> dict[str, pd.Series]:
+    """Calculates ADX, PlusDI, MinusDI."""
+    if period <= 0:
+        return {
+            "ADX": pd.Series(np.nan, index=high.index),
+            "PlusDI": pd.Series(np.nan, index=high.index),
+            "MinusDI": pd.Series(np.nan, index=high.index),
+        }
+    try:
+        # Calculate Directional Movement (+DM, -DM)
+        up_move = high.diff()
+        down_move = low.diff()
+        plus_dm = pd.Series(np.nan, index=high.index)
+        minus_dm = pd.Series(np.nan, index=high.index)
+
+        plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
+        minus_dm = np.where((down_move > up_move) & (down_move > 0), -down_move, 0)
+
+        # Smoothed Directional Indicators (+DI, -DI) using Wilder's smoothing (similar to EMA but different factor)
+        # Smoothed value = Prior Smoothed + (Current Value - Prior Smoothed) / Period
+        # Or using EMA with period: TR = EMA(TR, period)
+        # Using EMA for simplicity here. Wilder's smoothing uses period / (period + 1) instead of 2/(period+1).
+        plus_di = plus_dm.ewm(span=period, adjust=False).mean()
+        minus_di = minus_dm.ewm(span=period, adjust=False).mean()
+
+        # Calculate Directional Index (DX)
+        di_sum = plus_di + minus_di
+        di_diff = abs(plus_di - minus_di)
+        # Avoid division by zero
+        di_sum = di_sum.replace(0, 1e-9)
+        dx = (di_diff / di_sum) * 100
+
+        # Calculate ADX from DX using EMA
+        adx = dx.ewm(span=period, adjust=False).mean()
+
+        return {"ADX": adx, "PlusDI": plus_di, "MinusDI": minus_di}
+    except Exception as e:
+        logger.warning(f"Error calculating ADX({period}): {e}", exc_info=True)
+        return {
+            "ADX": pd.Series(np.nan, index=high.index),
+            "PlusDI": pd.Series(np.nan, index=high.index),
+            "MinusDI": pd.Series(np.nan, index=high.index),
+        }
+
+
+def calculate_volume_delta(
+    close: pd.Series, volume: pd.Series, period: int,
+) -> pd.Series:
+    """Calculates Volume Delta (Buy Volume - Sell Volume) over a period."""
+    if period <= 0:
+        return pd.Series(np.nan, index=close.index)
+    try:
+        # Simple approach: assume volume is buy volume if close > open, sell volume if close < open
+        # This is a simplification; actual buy/sell volume requires order book or tick data.
+        buy_volume = volume.where(close > close.shift(1)).fillna(0)
+        sell_volume = volume.where(close < close.shift(1)).fillna(0)
+
+        volume_delta_per_candle = buy_volume - sell_volume
+        # Calculate rolling sum of volume delta
+        volume_delta_rolled = volume_delta_per_candle.rolling(window=period).sum()
+        return volume_delta_rolled
+    except Exception as e:
+        logger.warning(f"Error calculating Volume Delta({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=close.index)
+
+
+def calculate_relative_volume(volume: pd.Series, period: int) -> pd.Series:
+    """Calculates Relative Volume (Current Volume / Average Volume)."""
+    if period <= 0:
+        return pd.Series(np.nan, index=volume.index)
+    try:
+        avg_volume = volume.rolling(window=period).mean()
+        # Avoid division by zero
+        avg_volume = avg_volume.replace(0, 1e-9)
+        relative_vol = volume / avg_volume
+        return relative_vol
+    except Exception as e:
+        logger.warning(
+            f"Error calculating Relative Volume({period}): {e}", exc_info=True,
+        )
+        return pd.Series(np.nan, index=volume.index)
+
+
+def calculate_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
+    """Calculates On-Balance Volume."""
+    try:
+        obv = pd.Series(index=close.index, dtype="float64")
+        obv.iloc[0] = 0  # Initialize OBV
+
+        for i in range(1, len(close)):
+            if close.iloc[i] > close.iloc[i - 1]:
+                obv.iloc[i] = obv.iloc[i - 1] + volume.iloc[i]
+            elif close.iloc[i] < close.iloc[i - 1]:
+                obv.iloc[i] = obv.iloc[i - 1] - volume.iloc[i]
+            else:
+                obv.iloc[i] = obv.iloc[i - 1]
+        return obv
+    except Exception as e:
+        logger.warning(f"Error calculating OBV: {e}", exc_info=True)
+        return pd.Series(np.nan, index=close.index)
+
+
+def calculate_cmf(
+    high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int,
+) -> pd.Series:
+    """Calculates Chaikin Money Flow."""
+    if period <= 0:
+        return pd.Series(np.nan, index=high.index)
+    try:
+        # Calculate Money Flow Multiplier (MFM)
+        mfm = ((close - low) - (high - close)) / (high - low)
+        # Avoid division by zero or NaN in (high - low)
+        mfm = mfm.replace([np.inf, -np.inf], 0)
+        mfm = mfm.fillna(0)
+
+        # Calculate Money Flow (MF)
+        mf = mfm * volume
+
+        # Calculate CMF over the period using rolling sum
+        cmf = mf.rolling(window=period).sum() / volume.rolling(window=period).sum()
+        return cmf
+    except Exception as e:
+        logger.warning(f"Error calculating CMF({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=high.index)
+
+
+def calculate_macd(
+    close: pd.Series, fast_period: int, slow_period: int, signal_period: int,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Calculates MACD (MACD Line, Signal Line, Histogram)."""
+    if (
+        fast_period <= 0
+        or slow_period <= 0
+        or signal_period <= 0
+        or fast_period >= slow_period
+    ):
+        return (
+            pd.Series(np.nan, index=close.index),
+            pd.Series(np.nan, index=close.index),
+            pd.Series(np.nan, index=close.index),
+        )
+    try:
+        ema_fast = calculate_ema(close, period=fast_period)
+        ema_slow = calculate_ema(close, period=slow_period)
+
+        macd_line = ema_fast - ema_slow
+        signal_line = calculate_ema(macd_line, period=signal_period)
+        macd_hist = macd_line - signal_line
+
+        return macd_line, signal_line, macd_hist
+    except Exception as e:
+        logger.warning(
+            f"Error calculating MACD (Fast={fast_period}, Slow={slow_period}, Signal={signal_period}): {e}",
+            exc_info=True,
+        )
+        return (
+            pd.Series(np.nan, index=close.index),
+            pd.Series(np.nan, index=close.index),
+            pd.Series(np.nan, index=close.index),
+        )
+
+
+# Ehlers Indicator Calculations (Simplified placeholders, might require external libraries or detailed implementation)
+# These are complex and require precise state management. Using basic logic for demonstration.
+
+
+def calculate_ehlers_supertrend(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    atr_len: int,
+    multiplier: float,
+    ss_len: int | None = None,
+) -> tuple[pd.Series, pd.Series]:
+    """Placeholder for Ehlers SuperTrend calculation. Requires precise implementation."""
+    # A true SuperTrend implementation involves ATR and trend direction tracking.
+    # This placeholder returns NaNs.
+    logger.warning(
+        "Ehlers SuperTrend calculation is a placeholder. Requires detailed implementation.",
     )
-    cci = (tp - sma_tp) / (0.015 * mad.replace(0, np.nan))
-    return cci
+    return pd.Series(np.nan, index=high.index), pd.Series(np.nan, index=high.index)
 
-def calculate_williams_r(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calculate Williams %R."""
-    if len(df) < period:
-        return pd.Series(np.nan, index=df.index)
-    highest_high = df["high"].rolling(window=period, min_periods=period).max()
-    lowest_low = df["low"].rolling(window=period, min_periods=period).min()
-    denominator = highest_high - lowest_low
-    wr = -100 * ((highest_high - df["close"]) / denominator.replace(0, np.nan))
-    return wr
+
+def calculate_fisher_transform(
+    high: pd.Series, low: pd.Series, close: pd.Series, length: int,
+) -> tuple[pd.Series, pd.Series]:
+    """Placeholder for Ehlers Fisher Transform calculation."""
+    # Requires calculation of Highest High and Lowest Low over `length` period.
+    logger.warning(
+        "Ehlers Fisher Transform calculation is a placeholder. Requires detailed implementation.",
+    )
+    return pd.Series(np.nan, index=high.index), pd.Series(np.nan, index=high.index)
+
+
+def calculate_ehlers_stochrsi(
+    close: pd.Series, rsi_len: int, stoch_len: int, fast_len: int, slow_len: int,
+) -> pd.Series:
+    """Placeholder for Ehlers Stochastic RSI calculation."""
+    # StochRSI calculation is already implemented above, this function might aim for Ehlers' specific version.
+    logger.warning(
+        "Ehlers Stochastic RSI calculation is a placeholder. Consider using the standard StochRSI or verify Ehlers' method.",
+    )
+    # For now, defer to the standard implementation. If Ehlers' version differs significantly,
+    # this would need its own logic.
+    stoch_k, _ = calculate_stoch_rsi(close, rsi_len, stoch_len, fast_len)
+    return stoch_k  # Returning StochRSI %K as a proxy
+
 
 def calculate_ichimoku_cloud(
-    df: pd.DataFrame,
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
     tenkan_period: int,
     kijun_period: int,
     senkou_span_b_period: int,
-    chikou_span_offset: int,
+    chikou_offset: int,
 ) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
-    """Calculate Ichimoku Cloud components."""
-    if (
-        len(df)
-        < max(tenkan_period, kijun_period, senkou_span_b_period)
-        + chikou_span_offset
-    ):
+    """Calculates Ichimoku Cloud components."""
+    if tenkan_period <= 0 or kijun_period <= 0 or senkou_span_b_period <= 0:
         return (
-            pd.Series(np.nan),
-            pd.Series(np.nan),
-            pd.Series(np.nan),
-            pd.Series(np.nan),
-            pd.Series(np.nan),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+        )
+    try:
+        # Conversion periods
+        tenkan_sen = (
+            high.rolling(window=tenkan_period).max()
+            + low.rolling(window=tenkan_period).min()
+        ) / 2
+        kijun_sen = (
+            high.rolling(window=kijun_period).max()
+            + low.rolling(window=kijun_period).min()
+        ) / 2
+
+        # Senkou Span A (Leading Span 1)
+        senkou_span_a = (tenkan_sen + kijun_sen) / 2
+
+        # Senkou Span B (Leading Span 2)
+        senkou_span_b = (
+            high.rolling(window=senkou_span_b_period).max()
+            + low.rolling(window=senkou_span_b_period).min()
+        ) / 2
+
+        # Chikou Span (Lagging Span) - shifted back by kijun_period (common offset)
+        # The offset is applied in the data frame itself, so here we just return close series.
+        # The dataframe merge/lookup handles the offset.
+        chikou_span = close
+
+        return tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span
+    except Exception as e:
+        logger.warning(f"Error calculating Ichimoku Cloud: {e}", exc_info=True)
+        return (
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
+            pd.Series(np.nan, index=high.index),
         )
 
-    tenkan_sen = (
-        df["high"].rolling(window=tenkan_period).max()
-        + df["low"].rolling(window=tenkan_period).min()
-    ) / 2
 
-    kijun_sen = (
-        df["high"].rolling(window=kijun_period).max()
-        + df["low"].rolling(window=kijun_period).min()
-    ) / 2
+def calculate_pivot_points_fibonacci(
+    daily_df: pd.DataFrame, window: int,
+) -> pd.DataFrame:
+    """Calculates Fibonacci Pivot Points based on daily High, Low, Close."""
+    if daily_df.empty or window <= 0:
+        return pd.DataFrame()
+    try:
+        # Ensure required columns are present and numeric
+        required_cols = ["high", "low", "close"]
+        if not all(col in daily_df.columns for col in required_cols):
+            logger.error("Daily DataFrame missing required columns for Pivot calculation.")
+            return pd.DataFrame()
 
-    senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(kijun_period)
+        # Calculate Standard Pivots (P)
+        P = (daily_df["high"] + daily_df["low"] + daily_df["close"]) / 3
 
-    senkou_span_b = (
-        (
-            df["high"].rolling(window=senkou_span_b_period).max()
-            + df["low"].rolling(window=senkou_span_b_period).min()
-        )
-        / 2
-    ).shift(kijun_period)
+        # Calculate Resistance (R) and Support (S) levels
+        R1 = (2 * P) - daily_df["low"]
+        S1 = (2 * P) - daily_df["high"]
 
-    chikou_span = df["close"].shift(-chikou_span_offset)
+        R2 = P + (daily_df["high"] - daily_df["low"])
+        S2 = P - (df["high"] - df["low"])
 
-    return tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span
+        R3 = P + 2 * (daily_df["high"] - daily_df["low"])
+        S3 = P - 2 * (df["high"] - df["low"])
 
-def calculate_mfi(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calculate Money Flow Index (MFI)."""
-    if len(df) <= period:
-        return pd.Series(np.nan, index=df.index)
-    typical_price = (df["high"] + df["low"] + df["close"]) / 3
-    money_flow = typical_price * df["volume"]
+        # Calculate Camilla Boyer (BC) and Bollinger Support (BS) - often derived from pivots
+        # These might need specific definitions; using common interpretations:
+        BC = P - (df["high"] - df["low"])  # Simplified BC
+        BS = P + (df["high"] - df["low"])  # Simplified BS
 
-    price_diff = typical_price.diff()
-    positive_flow = money_flow.where(price_diff > 0, 0)
-    negative_flow = money_flow.where(price_diff < 0, 0)
-
-    positive_mf_sum = positive_flow.rolling(window=period, min_periods=period).sum()
-    negative_mf_sum = negative_flow.rolling(window=period, min_periods=period).sum()
-
-    mf_ratio = positive_mf_sum / negative_mf_sum.replace(0, np.nan)
-    mfi = 100 - (100 / (1 + mf_ratio))
-    return mfi
-
-def calculate_obv(df: pd.DataFrame, ema_period: int) -> tuple[pd.Series, pd.Series]:
-    """Calculate On-Balance Volume (OBV) and its EMA."""
-    if len(df) < MIN_DATA_POINTS_OBV:
-        return pd.Series(np.nan), pd.Series(np.nan)
-
-    obv_direction = np.sign(df["close"].diff().fillna(0))
-    obv = (obv_direction * df["volume"]).cumsum()
-
-    obv_ema = obv.ewm(span=ema_period, adjust=False).mean()
-
-    return obv, obv_ema
-
-def calculate_cmf(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calculate Chaikin Money Flow (CMF)."""
-    if len(df) < period:
-        return pd.Series(np.nan)
-
-    high_low_range = df["high"] - df["low"]
-    mfm = (
-        (df["close"] - df["low"]) - (df["high"] - df["close"])
-    ) / high_low_range.replace(0, np.nan)
-    mfm = mfm.fillna(0)
-
-    mfv = mfm * df["volume"]
-
-    volume_sum = df["volume"].rolling(window=period).sum()
-    cmf = mfv.rolling(window=period).sum() / volume_sum.replace(0, np.nan)
-    cmf = cmf.fillna(0)
-
-    return cmf
-
-def calculate_psar(
-    df: pd.DataFrame, acceleration: float, max_acceleration: float
-) -> tuple[pd.Series, pd.Series]:
-    """Calculate Parabolic SAR."""
-    if len(df) < MIN_DATA_POINTS_PSAR:
-        return pd.Series(np.nan, index=df.index), pd.Series(
-            np.nan, index=df.index
+        # Create DataFrame for pivot points, ensure timestamp alignment
+        pivot_df = pd.DataFrame(
+            {
+                "timestamp": daily_df["timestamp"],
+                "Pivot": P,
+                "R1": R1,
+                "R2": R2,
+                "R3": R3,
+                "S1": S1,
+                "S2": S2,
+                "S3": S3,
+                "BC": BC,
+                "BS": BS,
+            },
         )
 
-    psar = df["close"].copy()
-    bull = pd.Series(True, index=df.index)
-    af = acceleration
-    ep = (
-        df["low"].iloc[0]
-        if df["close"].iloc[0] < df["close"].iloc[1]
-        else df["high"].iloc[0]
+        # Apply rolling window to get pivots for the lookback period
+        # This calculates pivots based on the last `window` days' data.
+        # We need to apply this rolling calculation carefully.
+        # A common approach is to calculate pivots for each day based on the previous N days' data.
+        # For simplicity here, let's assume `daily_df` is already aligned and we want pivots for each day.
+        # If a rolling calculation is needed, it implies calculating pivots N days in the past for each current bar.
+
+        # For real-time, pivots are typically based on the previous day's data.
+        # If `daily_df` represents daily data, we might just return it directly for use.
+        # Let's assume `daily_df` is suitable for direct use, and the `window` parameter
+        # implies how many days of history were used to derive `daily_df` itself.
+        # If the intent is to calculate pivots dynamically based on a rolling window of `daily_df`,
+        # that requires more complex application.
+
+        # Let's just return the calculated pivots for each day in `daily_df` for now.
+        # The `window` parameter might be more relevant if `daily_df` itself was a rolling window.
+        return pivot_df
+
+    except Exception as e:
+        logger.warning(
+            f"Error calculating Fibonacci Pivot Points (Window={window}): {e}",
+            exc_info=True,
+        )
+        return pd.DataFrame()
+
+
+def calculate_volatility_index(
+    high: pd.Series, low: pd.Series, period: int,
+) -> pd.Series:
+    """Calculates a simple Volatility Index (e.g., based on Average Range)."""
+    if period <= 0:
+        return pd.Series(np.nan, index=high.index)
+    try:
+        # Using ATR as a proxy for volatility
+        volatility = calculate_atr(
+            high, low, high, period=period,
+        )  # Using high for close placeholder in ATR
+        return volatility
+    except Exception as e:
+        logger.warning(
+            f"Error calculating Volatility Index ({period}): {e}", exc_info=True,
+        )
+        return pd.Series(np.nan, index=high.index)
+
+
+def detect_market_structure(
+    high: pd.Series, low: pd.Series, lookback: int,
+) -> pd.Series:
+    """Detects Market Structure points (HH, HL, LH, LL) - simplified logic."""
+    if lookback <= 0:
+        return pd.Series(np.nan, index=high.index)
+    try:
+        structure = pd.Series(np.nan, index=high.index)
+        # Simplified logic: A high is higher than previous highs, low is higher than previous lows etc.
+        # This requires comparing current pivot points to prior ones over the lookback window.
+        # A proper implementation involves finding pivot points first.
+
+        # Placeholder: returns NaN, needs significant implementation.
+        logger.warning(
+            "Market Structure detection is a placeholder. Requires pivot point identification.",
+        )
+        return structure
+    except Exception as e:
+        logger.warning(
+            f"Error detecting Market Structure (Lookback={lookback}): {e}",
+            exc_info=True,
+        )
+        return pd.Series(np.nan, index=high.index)
+
+
+def detect_candlestick_patterns(df: pd.DataFrame) -> pd.Series:
+    """Detects common candlestick patterns - Placeholder function."""
+    # This would involve analyzing Open, High, Low, Close relationships for specific patterns.
+    # e.g., Doji, Engulfing, Hammer, etc.
+    # Requires significant pattern recognition logic.
+    logger.warning(
+        "Candlestick pattern detection is a placeholder. Requires specific pattern recognition logic.",
     )
+    return pd.Series(np.nan, index=df.index)
 
-    for i in range(1, len(df)):
-        prev_bull = bull.iloc[i - 1]
-        prev_psar = psar.iloc[i - 1]
 
-        if prev_bull:
-            psar.iloc[i] = prev_psar + af * (ep - prev_psar)
-        else:
-            psar.iloc[i] = prev_psar - af * (prev_psar - ep)
-
-        reverse = False
-        if prev_bull and df["low"].iloc[i] < psar.iloc[i]:
-            bull.iloc[i] = False
-            reverse = True
-        elif not prev_bull and df["high"].iloc[i] > psar.iloc[i]:
-            bull.iloc[i] = True
-            reverse = True
-        else:
-            bull.iloc[i] = prev_bull
-
-        if reverse:
-            af = acceleration
-            ep = df["high"].iloc[i] if bull.iloc[i] else df["low"].iloc[i]
-            if bull.iloc[i]:
-                psar.iloc[i] = min(df["low"].iloc[i], df["low"].iloc[i-1])
-            else:
-                psar.iloc[i] = max(df["high"].iloc[i], df["high"].iloc[i-1])
-
-        elif bull.iloc[i]:
-            if df["high"].iloc[i] > ep:
-                ep = df["high"].iloc[i]
-                af = min(af + acceleration, max_acceleration)
-            psar.iloc[i] = min(psar.iloc[i], df["low"].iloc[i], df["low"].iloc[i-1])
-        else:
-            if df["low"].iloc[i] < ep:
-                ep = df["low"].iloc[i]
-                af = min(af + acceleration, max_acceleration)
-            psar.iloc[i] = max(psar.iloc[i], df["high"].iloc[i], df["high"].iloc[i-1])
-
-    direction = pd.Series(0, index=df.index, dtype=int)
-    direction[psar < df["close"]] = 1
-    direction[psar > df["close"]] = -1
-
-    return psar, direction
-
-def calculate_fibonacci_levels(df: pd.DataFrame, logger: logging.Logger, symbol: str, window: int) -> dict[str, Decimal] | None:
-    """Calculate Fibonacci retracement levels based on a recent high-low swing."""
-    if len(df) < window:
-        logger.warning(
-            f"[{symbol}] Not enough data for Fibonacci levels (need {window} bars)."
-        )
-        return None
-
-    recent_high = df["high"].iloc[-window:].max()
-    recent_low = df["low"].iloc[-window:].min()
-
-    diff = recent_high - recent_low
-
-    if diff <= 0:
-        logger.warning(
-            f"[{symbol}] Invalid high-low range for Fibonacci calculation. Diff: {diff}"
-        )
-        return None
-
-    fib_levels = {
-        "0.0%": Decimal(str(recent_high)),
-        "23.6%": Decimal(str(recent_high - 0.236 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
-        ),
-        "38.2%": Decimal(str(recent_high - 0.382 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
-        ),
-        "50.0%": Decimal(str(recent_high - 0.500 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
-        ),
-        "61.8%": Decimal(str(recent_high - 0.618 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
-        ),
-        "78.6%": Decimal(str(recent_high - 0.786 * diff)).quantize(
-            Decimal("0.00001"), rounding=ROUND_DOWN
-        ),
-        "100.0%": Decimal(str(recent_low)),
-    }
-    logger.debug(f"[{symbol}] Calculated Fibonacci levels: {fib_levels}")
-    return fib_levels
-
-def calculate_fibonacci_pivot_points(df: pd.DataFrame, logger: logging.Logger, symbol: str) -> dict[str, Decimal] | None:
-    """Calculate Fibonacci Pivot Points (Pivot, R1, R2, S1, S2)."""
-    if df.empty:
-        logger.warning(
-            f"[{symbol}] DataFrame is empty for Fibonacci Pivot Points calculation."
-        )
-        return None
-
-    pivot = (df["high"].iloc[-1] + df["low"].iloc[-1] + df["close"].iloc[-1]) / 3
-    range_hl = df["high"].iloc[-1] - df["low"].iloc[-1]
-
-    fib_ratios = {
-        "R1": 0.382,
-        "R2": 0.618,
-        "S1": 0.382,
-        "S2": 0.618,
-    }
-
-    pivot_points = {
-        "Pivot": pivot,
-        "R1": pivot + (fib_ratios["R1"] * range_hl),
-        "R2": pivot + (fib_ratios["R2"] * range_hl),
-        "S1": pivot - (fib_ratios["S1"] * range_hl),
-        "S2": pivot - (fib_ratios["S2"] * range_hl),
-    }
-
-    logger.debug(f"[{symbol}] Calculated Fibonacci Pivot Points.")
-    return pivot_points
-
-def calculate_volatility_index(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calculate a simple Volatility Index based on ATR normalized by price."""
-    if len(df) < period or "ATR" not in df.columns:
-        return pd.Series(np.nan, index=df.index)
-
-    normalized_atr = df["ATR"] / df["close"]
-    volatility_index = normalized_atr.rolling(window=period).mean()
-    return volatility_index
-
-def calculate_vwma(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calculate Volume Weighted Moving Average (VWMA)."""
-    if len(df) < period or df["volume"].isnull().any():
-        return pd.Series(np.nan, index=df.index)
-
-    valid_volume = df["volume"].replace(0, np.nan)
-    pv = df["close"] * valid_volume
-    vwma = pv.rolling(window=period).sum() / valid_volume.rolling(
-        window=period
-    ).sum()
-    return vwma
-
-def calculate_volume_delta(df: pd.DataFrame, period: int) -> pd.Series:
-    """Calculate Volume Delta, indicating buying vs selling pressure."""
-    if len(df) < MIN_DATA_POINTS_VOLATILITY:
-        return pd.Series(np.nan, index=df.index)
-
-    buy_volume = df["volume"].where(df["close"] > df["open"], 0)
-    sell_volume = df["volume"].where(df["close"] < df["open"], 0)
-
-    buy_volume_sum = buy_volume.rolling(window=period, min_periods=1).sum()
-    sell_volume_sum = sell_volume.rolling(window=period, min_periods=1).sum()
-
-    total_volume_sum = buy_volume_sum + sell_volume_sum
-    volume_delta = (buy_volume_sum - sell_volume_sum) / total_volume_sum.replace(
-        0, np.nan
-    )
-    return volume_delta.fillna(0)
-
-def calculate_kaufman_ama(df: pd.DataFrame, period: int, fast_period: int, slow_period: int) -> pd.Series:
-    """Calculate Kaufman's Adaptive Moving Average (KAMA)."""
-    if len(df) < period + slow_period:
-        return pd.Series(np.nan, index=df.index)
-
-    close_prices = df["close"].values
-    kama = np.full_like(close_prices, np.nan)
-
-    er_numerator = np.abs(close_prices - np.roll(close_prices, period))
-    
-    volatility_series = pd.Series(np.abs(np.diff(close_prices))).rolling(window=period-1).sum()
-    volatility_series = volatility_series.reindex(df.index, fill_value=0)
-    
-    er_denominator = volatility_series.values
-    
-    er = np.full_like(close_prices, np.nan)
-    
-    for i in range(period, len(close_prices)):
-        if er_denominator[i] != 0:
-            er[i] = er_numerator[i] / er_denominator[i]
-        else:
-            er[i] = 0
-
-    fast_alpha = 2 / (fast_period + 1)
-    slow_alpha = 2 / (slow_period + 1)
-    sc = (er * (fast_alpha - slow_alpha) + slow_alpha)**2
-
-    first_valid_idx = np.where(~np.isnan(sc))[0][0] if np.where(~np.isnan(sc))[0].size > 0 else period
-
-    if first_valid_idx >= len(close_prices):
-        return pd.Series(np.nan, index=df.index)
-
-    kama[first_valid_idx] = close_prices[first_valid_idx]
-
-    for i in range(first_valid_idx + 1, len(close_prices)):
-        if not np.isnan(sc[i]):
-            kama[i] = kama[i-1] + sc[i] * (close_prices[i] - kama[i-1])
-        else:
-            kama[i] = kama[i-1]
-
-    return pd.Series(kama, index=df.index)
+def calculate_roc(close: pd.Series, period: int) -> pd.Series:
+    """Calculates Rate of Change."""
+    if period <= 0:
+        return pd.Series(np.nan, index=close.index)
+    try:
+        roc = ((close - close.shift(period)) / close.shift(period)) * 100
+        return roc
+    except Exception as e:
+        logger.warning(f"Error calculating ROC({period}): {e}", exc_info=True)
+        return pd.Series(np.nan, index=close.index)

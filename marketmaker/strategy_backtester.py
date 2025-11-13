@@ -18,16 +18,15 @@ from config_definitions import (
 # Use the same logger as the main bot for consistency
 logger = logging.getLogger("MarketMakerBot")
 
+
 class MarketMakingStrategy:
     def __init__(self, config: Config, market_info: MarketInfo):
         self.config = config
         self.market_info = market_info
 
-
-
     def _calculate_dynamic_spread(self, state: TradingState) -> Decimal:
         ds_config = self.config.strategy.dynamic_spread
-        current_time = time.time() # In backtest, this will be simulated time
+        current_time = time.time()  # In backtest, this will be simulated time
 
         # In backtest, we need to ensure price_candlestick_history is populated
         # This will be handled by the Backtester class
@@ -140,7 +139,9 @@ class MarketMakingStrategy:
             logger.debug(f"Adjusted to Bid: {bid_p}, Ask: {ask_p}")
         return bid_p, ask_p
 
-    def _calculate_order_size(self, side: str, price: Decimal, state: TradingState) -> Decimal:
+    def _calculate_order_size(
+        self, side: str, price: Decimal, state: TradingState
+    ) -> Decimal:
         capital = (
             state.available_balance
             if self.config.category == "spot"
@@ -174,7 +175,7 @@ class MarketMakingStrategy:
             self.config.strategy.inventory.enabled
             and self.config.max_net_exposure_usd > Decimal("0")
         ):
-            current_mid_price = state.mid_price # Use state's mid_price
+            current_mid_price = state.mid_price  # Use state's mid_price
             if current_mid_price == Decimal("0"):
                 logger.warning(
                     "Mid-price is zero, cannot calculate max net exposure. Skipping exposure check."
@@ -237,12 +238,12 @@ class MarketMakingStrategy:
         )
         return qty
 
-    def get_target_orders(self, state: TradingState, orderbook_data: dict = None) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    def get_target_orders(
+        self, state: TradingState, orderbook_data: dict = None
+    ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
         # This combines logic from _manage_orders to determine target prices and quantities
         mid_price_for_strategy = state.smoothed_mid_price
         pos_qty = state.metrics.current_asset_holdings
-
-
 
         spread_pct = self._calculate_dynamic_spread(state)
 
@@ -258,15 +259,20 @@ class MarketMakingStrategy:
         target_bid_price = self.market_info.format_price(target_bid_price)
         target_ask_price = self.market_info.format_price(target_ask_price)
 
-
-
         buy_qty = self._calculate_order_size("Buy", target_bid_price, state)
         sell_qty = self._calculate_order_size("Sell", target_ask_price, state)
 
         return target_bid_price, buy_qty, target_ask_price, sell_qty
 
+
 class Backtester:
-    def __init__(self, config: Config, klines_df: pd.DataFrame, kline_interval: str, initial_capital: Decimal = Decimal("10000")):
+    def __init__(
+        self,
+        config: Config,
+        klines_df: pd.DataFrame,
+        kline_interval: str,
+        initial_capital: Decimal = Decimal("10000"),
+    ):
         self.config = config
         self.klines_df = klines_df
         self.initial_capital = initial_capital
@@ -274,9 +280,9 @@ class Backtester:
         # Initialize MarketInfo for backtesting
         self.market_info = MarketInfo(
             symbol=self.config.symbol,
-            price_precision=Decimal("0.00001"), # Default for XLMUSDT
-            quantity_precision=Decimal("1"),    # Default for XLMUSDT
-            min_order_qty=Decimal("1"),         # Default for XLMUSDT
+            price_precision=Decimal("0.00001"),  # Default for XLMUSDT
+            quantity_precision=Decimal("1"),  # Default for XLMUSDT
+            min_order_qty=Decimal("1"),  # Default for XLMUSDT
             min_notional_value=self.config.min_order_value_usd,
             maker_fee_rate=Decimal("0.0002"),
             taker_fee_rate=Decimal("0.0005"),
@@ -289,62 +295,107 @@ class Backtester:
             current_balance=initial_capital,
             available_balance=initial_capital,
             daily_initial_capital=initial_capital,
-            daily_pnl_reset_date=datetime.fromtimestamp(klines_df['start'].iloc[0] / 1000, tz=timezone.utc),
-            price_candlestick_history=deque(maxlen=self.config.strategy.dynamic_spread.volatility_window_sec + 1),
-            circuit_breaker_price_points=deque(maxlen=self.config.strategy.circuit_breaker.check_window_sec * 2),
+            daily_pnl_reset_date=datetime.fromtimestamp(
+                klines_df["start"].iloc[0] / 1000, tz=timezone.utc
+            ),
+            price_candlestick_history=deque(
+                maxlen=self.config.strategy.dynamic_spread.volatility_window_sec + 1
+            ),
+            circuit_breaker_price_points=deque(
+                maxlen=self.config.strategy.circuit_breaker.check_window_sec * 2
+            ),
         )
-        self.logger = setup_logger(self.config.files) # Re-initialize logger for backtester
+        self.logger = setup_logger(
+            self.config.files
+        )  # Re-initialize logger for backtester
 
         # Create a minimal BacktestParams for FillEngine
         fill_engine_params = BacktestParams(
             symbol=self.config.symbol,
             category=self.config.category,
-            interval=kline_interval, # Use the passed kline_interval
-            start=datetime.fromtimestamp(klines_df['start'].iloc[0] / 1000, tz=timezone.utc),
-            end=datetime.fromtimestamp(klines_df['start'].iloc[-1] / 1000, tz=timezone.utc),
-            maker_fee=float(self.market_info.maker_fee_rate), # Convert Decimal to float
+            interval=kline_interval,  # Use the passed kline_interval
+            start=datetime.fromtimestamp(
+                klines_df["start"].iloc[0] / 1000, tz=timezone.utc
+            ),
+            end=datetime.fromtimestamp(
+                klines_df["start"].iloc[-1] / 1000, tz=timezone.utc
+            ),
+            maker_fee=float(
+                self.market_info.maker_fee_rate
+            ),  # Convert Decimal to float
             # fill_on_touch, volume_cap_ratio, rng_seed, sl_tp_emulation are defaults in BacktestParams
         )
         self.fill_engine = FillEngine(fill_engine_params)
 
-        self.equity_curve: list[tuple[int, Decimal]] = [] # (timestamp ms, equity)
-        self.trades: list[dict] = [] # Simulated trades
+        self.equity_curve: list[tuple[int, Decimal]] = []  # (timestamp ms, equity)
+        self.trades: list[dict] = []  # Simulated trades
 
     def run(self) -> dict:
-        logger.info(f"Starting backtest for {self.config.symbol} from {datetime.fromtimestamp(self.klines_df['start'].iloc[0]/1000)} to {datetime.fromtimestamp(self.klines_df['start'].iloc[-1]/1000)}")
+        logger.info(
+            f"Starting backtest for {self.config.symbol} from {datetime.fromtimestamp(self.klines_df['start'].iloc[0] / 1000)} to {datetime.fromtimestamp(self.klines_df['start'].iloc[-1] / 1000)}"
+        )
 
         for index, row in self.klines_df.iterrows():
-            current_timestamp_ms = int(row['start'])
-            current_timestamp_dt = datetime.fromtimestamp(current_timestamp_ms / 1000, tz=timezone.utc)
-            current_price = Decimal(str(row['close'])) # Use close price as current mid for simplicity
+            current_timestamp_ms = int(row["start"])
+            current_timestamp_dt = datetime.fromtimestamp(
+                current_timestamp_ms / 1000, tz=timezone.utc
+            )
+            current_price = Decimal(
+                str(row["close"])
+            )  # Use close price as current mid for simplicity
 
             # Update state with current market data
             self.state.mid_price = current_price
-            self.state.smoothed_mid_price = current_price # For simplicity in backtest, can be refined
-            self.state.price_candlestick_history.append((current_timestamp_ms / 1000, Decimal(str(row['high'])), Decimal(str(row['low'])), current_price))
-            self.state.circuit_breaker_price_points.append((current_timestamp_ms / 1000, current_price))
+            self.state.smoothed_mid_price = (
+                current_price  # For simplicity in backtest, can be refined
+            )
+            self.state.price_candlestick_history.append(
+                (
+                    current_timestamp_ms / 1000,
+                    Decimal(str(row["high"])),
+                    Decimal(str(row["low"])),
+                    current_price,
+                )
+            )
+            self.state.circuit_breaker_price_points.append(
+                (current_timestamp_ms / 1000, current_price)
+            )
 
             # Simulate order management
-            target_bid_price, buy_qty, target_ask_price, sell_qty = self.strategy.get_target_orders(self.state)
+            target_bid_price, buy_qty, target_ask_price, sell_qty = (
+                self.strategy.get_target_orders(self.state)
+            )
 
-            logger.debug(f"Timestamp: {current_timestamp_dt}, Mid: {self.state.mid_price}, Smoothed Mid: {self.state.smoothed_mid_price}")
+            logger.debug(
+                f"Timestamp: {current_timestamp_dt}, Mid: {self.state.mid_price}, Smoothed Mid: {self.state.smoothed_mid_price}"
+            )
             logger.debug(f"Target Bid: {target_bid_price}, Buy Qty: {buy_qty}")
             logger.debug(f"Target Ask: {target_ask_price}, Sell Qty: {sell_qty}")
 
             # Simulate fills using intra-bar path and volume capacity
-            o, h, l, c = float(row['open']), float(row['high']), float(row['low']), float(row['close'])
-            ts_ms = int(row['start'])
+            o, h, l, c = (
+                float(row["open"]),
+                float(row["high"]),
+                float(row["low"]),
+                float(row["close"]),
+            )
+            ts_ms = int(row["start"])
             path = self._intrabar_path(o, h, l, c, ts_ms)
             logger.debug(f"Candle Path: {path}, Candle Volume: {row['volume']})")
 
-            capacity_remaining = self._volume_capacity(float(row['volume']))
+            capacity_remaining = self._volume_capacity(float(row["volume"]))
 
             # Simulate fills for buy orders
             if buy_qty > 0 and capacity_remaining > 0:
                 # Check if target_bid_price is touched by the intra-bar path
                 if min(path) <= float(target_bid_price):
                     fill_size = min(float(buy_qty), capacity_remaining)
-                    self._simulate_fill("Buy", Decimal(str(fill_size)), target_bid_price, current_timestamp_dt)
+                    self._simulate_fill(
+                        "Buy",
+                        Decimal(str(fill_size)),
+                        target_bid_price,
+                        current_timestamp_dt,
+                    )
                     capacity_remaining -= fill_size
 
             # Simulate fills for sell orders
@@ -352,11 +403,19 @@ class Backtester:
                 # Check if target_ask_price is touched by the intra-bar path
                 if max(path) >= float(target_ask_price):
                     fill_size = min(float(sell_qty), capacity_remaining)
-                    self._simulate_fill("Sell", Decimal(str(fill_size)), target_ask_price, current_timestamp_dt)
+                    self._simulate_fill(
+                        "Sell",
+                        Decimal(str(fill_size)),
+                        target_ask_price,
+                        current_timestamp_dt,
+                    )
                     capacity_remaining -= fill_size
 
             # Update equity curve
-            equity = self.state.metrics.net_realized_pnl + self.state.metrics.calculate_unrealized_pnl(current_price)
+            equity = (
+                self.state.metrics.net_realized_pnl
+                + self.state.metrics.calculate_unrealized_pnl(current_price)
+            )
             self.equity_curve.append((current_timestamp_ms, equity))
 
         # Calculate final metrics
@@ -375,9 +434,13 @@ class Backtester:
         logger.info(f"Backtest complete. Results: {results}")
         return results
 
-    def _simulate_fill(self, side: str, qty: Decimal, price: Decimal, timestamp: datetime):
+    def _simulate_fill(
+        self, side: str, qty: Decimal, price: Decimal, timestamp: datetime
+    ):
         logger.debug(f"Simulating {side} fill: Qty={qty}, Price={price}")
-        exec_fee = qty * price * self.market_info.taker_fee_rate # Assume taker fill for simplicity
+        exec_fee = (
+            qty * price * self.market_info.taker_fee_rate
+        )  # Assume taker fill for simplicity
 
         metrics = self.state.metrics
         realized_pnl_impact = Decimal("0")
@@ -398,23 +461,29 @@ class Backtester:
             self.state.current_balance -= (qty * price) + exec_fee
         elif side == "Sell":
             self.state.current_balance += (qty * price) - exec_fee
-        self.state.available_balance = self.state.current_balance # Assuming all balance is available
+        self.state.available_balance = (
+            self.state.current_balance
+        )  # Assuming all balance is available
 
-        metrics.total_fees += exec_fee # Add fee to total fees
+        metrics.total_fees += exec_fee  # Add fee to total fees
 
-        self.trades.append({
-            "timestamp": timestamp.isoformat(),
-            "side": side,
-            "qty": float(qty),
-            "price": float(price),
-            "fee": float(exec_fee),
-            "realized_pnl_impact": float(realized_pnl_impact),
-            "net_realized_pnl": float(metrics.net_realized_pnl),
-            "current_asset_holdings": float(metrics.current_asset_holdings),
-            "average_entry_price": float(metrics.average_entry_price),
-        })
+        self.trades.append(
+            {
+                "timestamp": timestamp.isoformat(),
+                "side": side,
+                "qty": float(qty),
+                "price": float(price),
+                "fee": float(exec_fee),
+                "realized_pnl_impact": float(realized_pnl_impact),
+                "net_realized_pnl": float(metrics.net_realized_pnl),
+                "current_asset_holdings": float(metrics.current_asset_holdings),
+                "average_entry_price": float(metrics.average_entry_price),
+            }
+        )
 
-    def _intrabar_path(self, o: float, h: float, low_price: float, c: float, ts_ms: int) -> list[float]:
+    def _intrabar_path(
+        self, o: float, h: float, low_price: float, c: float, ts_ms: int
+    ) -> list[float]:
         """
         Generate a simple deterministic intra-candle path: open -> mid-extreme ->
         other extreme -> close. The ordering (O-H-L-C) vs (O-L-H-C) is seeded by
@@ -422,12 +491,28 @@ class Backtester:
         """
         # Use self.params.rng_seed if BacktestParams is available, otherwise use a fixed seed
         # For now, let's use a fixed seed.
-        rnd = (ts_ms // 60000) ^ 42 # Using a fixed seed for now
+        rnd = (ts_ms // 60000) ^ 42  # Using a fixed seed for now
         go_high_first = rnd % 2 == 0
         if go_high_first:
-            return [o, (o + h) / 2, h, (h + low_price) / 2, low_price, (low_price + c) / 2, c]
+            return [
+                o,
+                (o + h) / 2,
+                h,
+                (h + low_price) / 2,
+                low_price,
+                (low_price + c) / 2,
+                c,
+            ]
         else:
-            return [o, (o + low_price) / 2, low_price, (low_price + h) / 2, h, (h + c) / 2, c]
+            return [
+                o,
+                (o + low_price) / 2,
+                low_price,
+                (low_price + h) / 2,
+                h,
+                (h + c) / 2,
+                c,
+            ]
 
     def _volume_capacity(self, candle_volume: float) -> float:
         """
@@ -437,7 +522,7 @@ class Backtester:
         """
         # The original FillEngine takes params.volume_cap_ratio.
         # For now, I'll use a fixed ratio.
-        return max(0.0, candle_volume) * 0.25 # Using a fixed ratio for now
+        return max(0.0, candle_volume) * 0.25  # Using a fixed ratio for now
 
     @staticmethod
     def _calc_sharpe(step_pnl: np.ndarray) -> float:

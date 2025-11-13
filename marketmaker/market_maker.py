@@ -12,21 +12,24 @@ from pybit.unified_trading import HTTP, WebSocket
 # Load environment variables from .env file
 load_dotenv()
 
+
 # --- Logging Setup ---
 def setup_logging():
     """Configure logging with file and console handlers."""
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s | %(levelname)s | %(module)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
+        format="%(asctime)s | %(levelname)s | %(module)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler('marketmaker.log', mode='a')
-        ]
+            logging.FileHandler("marketmaker.log", mode="a"),
+        ],
     )
     return logging.getLogger(__name__)
 
+
 logger = setup_logging()
+
 
 # --- Configuration ---
 class Config:
@@ -45,10 +48,16 @@ class Config:
         self.LEVERAGE = Decimal(os.getenv("LEVERAGE", "1"))
         self.ACCOUNT_BALANCE = Decimal(os.getenv("ACCOUNT_BALANCE", "10000"))
         self.POST_ONLY = os.getenv("POST_ONLY", "True").lower() in ("true", "1", "t")
-        self.REPLACE_THRESHOLD_TICKS = Decimal(os.getenv("REPLACE_THRESHOLD_TICKS", "5"))
-        self.PROTECT_MODE = os.getenv("PROTECT_MODE", "off")  # "off", "trailing", "breakeven"
+        self.REPLACE_THRESHOLD_TICKS = Decimal(
+            os.getenv("REPLACE_THRESHOLD_TICKS", "5")
+        )
+        self.PROTECT_MODE = os.getenv(
+            "PROTECT_MODE", "off"
+        )  # "off", "trailing", "breakeven"
         self.TRAILING_DISTANCE = Decimal(os.getenv("TRAILING_DISTANCE", "10"))
-        self.TRAILING_ACTIVATE_PROFIT_BPS = Decimal(os.getenv("TRAILING_ACTIVATE_PROFIT_BPS", "100"))  # 1%
+        self.TRAILING_ACTIVATE_PROFIT_BPS = Decimal(
+            os.getenv("TRAILING_ACTIVATE_PROFIT_BPS", "100")
+        )  # 1%
         self.BE_TRIGGER_BPS = Decimal(os.getenv("BE_TRIGGER_BPS", "200"))  # 2%
         self.BE_OFFSET_TICKS = Decimal(os.getenv("BE_OFFSET_TICKS", "2"))
 
@@ -71,20 +80,20 @@ class Config:
                 logger.critical(f"Missing required environment variable: {var}")
                 sys.exit(1)
 
+
 # --- Helpers ---
 def q_round(v: Decimal, step: Decimal) -> Decimal:
     """Round a Decimal value to the nearest step."""
     n = (v / step).to_integral_value(rounding=ROUND_DOWN)
     return (n * step).normalize()
 
+
 # --- REST API Wrapper ---
 class BybitRest:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.client = HTTP(
-            testnet=cfg.TESTNET,
-            api_key=cfg.API_KEY,
-            api_secret=cfg.API_SECRET
+            testnet=cfg.TESTNET, api_key=cfg.API_KEY, api_secret=cfg.API_SECRET
         )
         self.load_instrument()
 
@@ -92,8 +101,7 @@ class BybitRest:
         """Load instrument details from the exchange."""
         try:
             response = self.client.get_instruments_info(
-                category=self.cfg.CATEGORY,
-                symbol=self.cfg.SYMBOL
+                category=self.cfg.CATEGORY, symbol=self.cfg.SYMBOL
             )
             if response["retCode"] != 0:
                 logger.error(f"API Error: {response.get('retMsg', 'Unknown error')}")
@@ -115,11 +123,12 @@ class BybitRest:
         """Place batch orders."""
         try:
             response = self.client.place_batch_order(
-                category=self.cfg.CATEGORY,
-                request=orders
+                category=self.cfg.CATEGORY, request=orders
             )
             if response["retCode"] != 0:
-                logger.error(f"Failed to place batch order: {response.get('retMsg', 'Unknown error')}")
+                logger.error(
+                    f"Failed to place batch order: {response.get('retMsg', 'Unknown error')}"
+                )
             return response
         except Exception as e:
             logger.error(f"Failed to place batch order: {e}")
@@ -129,11 +138,12 @@ class BybitRest:
         """Amend batch orders."""
         try:
             response = self.client.amend_batch_order(
-                category=self.cfg.CATEGORY,
-                request=orders
+                category=self.cfg.CATEGORY, request=orders
             )
             if response["retCode"] != 0:
-                logger.error(f"Failed to amend batch order: {response.get('retMsg', 'Unknown error')}")
+                logger.error(
+                    f"Failed to amend batch order: {response.get('retMsg', 'Unknown error')}"
+                )
             return response
         except Exception as e:
             logger.error(f"Failed to amend batch order: {e}")
@@ -143,11 +153,12 @@ class BybitRest:
         """Cancel batch orders."""
         try:
             response = self.client.cancel_batch_order(
-                category=self.cfg.CATEGORY,
-                request=orders
+                category=self.cfg.CATEGORY, request=orders
             )
             if response["retCode"] != 0:
-                logger.error(f"Failed to cancel batch order: {response.get('retMsg', 'Unknown error')}")
+                logger.error(
+                    f"Failed to cancel batch order: {response.get('retMsg', 'Unknown error')}"
+                )
             return response
         except Exception as e:
             logger.error(f"Failed to cancel batch order: {e}")
@@ -158,11 +169,14 @@ class BybitRest:
         try:
             response = self.client.set_trading_stop(params)
             if response["retCode"] != 0:
-                logger.error(f"Failed to set trading stop: {response.get('retMsg', 'Unknown error')}")
+                logger.error(
+                    f"Failed to set trading stop: {response.get('retMsg', 'Unknown error')}"
+                )
             return response
         except Exception as e:
             logger.error(f"Failed to set trading stop: {e}")
             raise
+
 
 # --- Position Sizer ---
 class PositionSizer:
@@ -173,7 +187,9 @@ class PositionSizer:
     def calculate_quote_size(self, entry_price: Decimal) -> Decimal:
         """Calculate position size based on risk management."""
         try:
-            risk_per_trade = self.cfg.ACCOUNT_BALANCE * (self.cfg.RISK_PER_TRADE_PCT / 100)
+            risk_per_trade = self.cfg.ACCOUNT_BALANCE * (
+                self.cfg.RISK_PER_TRADE_PCT / 100
+            )
             stop_loss_distance = entry_price * (self.cfg.RISK_PER_TRADE_PCT / 100)
             position_size = risk_per_trade / stop_loss_distance
 
@@ -198,20 +214,15 @@ class PositionSizer:
             logger.error(f"Error calculating quote size: {e}")
             return self.rest.min_qty
 
+
 # --- WebSocket Handlers ---
 class PublicWS:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.ws = WebSocket(
-            testnet=cfg.TESTNET,
-            channel_type=cfg.CATEGORY
-        )
+        self.ws = WebSocket(testnet=cfg.TESTNET, channel_type=cfg.CATEGORY)
         self.best_bid = Decimal("0")
         self.best_ask = Decimal("0")
-        self.ws.orderbook_stream(
-            symbol=cfg.SYMBOL,
-            callback=self.on_orderbook
-        )
+        self.ws.orderbook_stream(symbol=cfg.SYMBOL, callback=self.on_orderbook)
         logger.info("Public WebSocket initialized")
 
     def on_orderbook(self, message: dict):
@@ -225,13 +236,16 @@ class PublicWS:
                     self.best_bid = Decimal(bids[0][0])
                 if asks:
                     self.best_ask = Decimal(asks[0][0])
-                logger.debug(f"Order book updated: Bid={self.best_bid}, Ask={self.best_ask}")
+                logger.debug(
+                    f"Order book updated: Bid={self.best_bid}, Ask={self.best_ask}"
+                )
         except Exception as e:
             logger.error(f"Error processing order book: {e}")
 
     def mid_price(self) -> Decimal:
         """Calculate mid price."""
         return (self.best_bid + self.best_ask) / 2
+
 
 class PrivateWS:
     def __init__(self, cfg: Config):
@@ -240,7 +254,7 @@ class PrivateWS:
             testnet=cfg.TESTNET,
             channel_type="private",
             api_key=cfg.API_KEY,
-            api_secret=cfg.API_SECRET
+            api_secret=cfg.API_SECRET,
         )
         self.position = Decimal("0")
         self.entry_price = Decimal("0")
@@ -258,7 +272,9 @@ class PrivateWS:
                 if position["symbol"] == self.cfg.SYMBOL:
                     self.position = Decimal(position["size"])
                     self.entry_price = Decimal(position["entryPrice"])
-                    logger.debug(f"Position updated: Size={self.position}, Entry={self.entry_price}")
+                    logger.debug(
+                        f"Position updated: Size={self.position}, Entry={self.entry_price}"
+                    )
         except Exception as e:
             logger.error(f"Error processing position update: {e}")
 
@@ -270,9 +286,12 @@ class PrivateWS:
                 order = data[0]
                 order_id = order["orderId"]
                 self.orders[order_id] = order
-                logger.debug(f"Order updated: ID={order_id}, Status={order.get('orderStatus')}")
+                logger.debug(
+                    f"Order updated: ID={order_id}, Status={order.get('orderStatus')}"
+                )
         except Exception as e:
             logger.error(f"Error processing order update: {e}")
+
 
 # --- Market Maker ---
 class MarketMaker:
@@ -282,7 +301,7 @@ class MarketMaker:
         rest: BybitRest,
         public_ws: PublicWS,
         private_ws: PrivateWS,
-        position_sizer: PositionSizer
+        position_sizer: PositionSizer,
     ):
         self.cfg = cfg
         self.rest = rest
@@ -305,7 +324,7 @@ class MarketMaker:
 
             half_spread = max(
                 (self.cfg.BASE_SPREAD_BPS / 10000) * mid,
-                self.cfg.MIN_SPREAD_TICKS * self.rest.tick_size
+                self.cfg.MIN_SPREAD_TICKS * self.rest.tick_size,
             )
             bid = q_round(mid - half_spread, self.rest.tick_size)
             ask = q_round(mid + half_spread, self.rest.tick_size)
@@ -344,29 +363,41 @@ class MarketMaker:
 
             orders = []
             # Check and update bid order
-            if self.working_bid is None or abs(self.working_bid - bid) >= self.cfg.REPLACE_THRESHOLD_TICKS * self.rest.tick_size:
-                orders.append({
-                    "symbol": self.cfg.SYMBOL,
-                    "side": "Buy",
-                    "orderType": "Limit",
-                    "qty": str(qty),
-                    "price": str(bid),
-                    "timeInForce": "PostOnly" if self.cfg.POST_ONLY else "GTC",
-                    "orderLinkId": self.bid_id
-                })
+            if (
+                self.working_bid is None
+                or abs(self.working_bid - bid)
+                >= self.cfg.REPLACE_THRESHOLD_TICKS * self.rest.tick_size
+            ):
+                orders.append(
+                    {
+                        "symbol": self.cfg.SYMBOL,
+                        "side": "Buy",
+                        "orderType": "Limit",
+                        "qty": str(qty),
+                        "price": str(bid),
+                        "timeInForce": "PostOnly" if self.cfg.POST_ONLY else "GTC",
+                        "orderLinkId": self.bid_id,
+                    }
+                )
                 self.working_bid = bid
 
             # Check and update ask order
-            if self.working_ask is None or abs(self.working_ask - ask) >= self.cfg.REPLACE_THRESHOLD_TICKS * self.rest.tick_size:
-                orders.append({
-                    "symbol": self.cfg.SYMBOL,
-                    "side": "Sell",
-                    "orderType": "Limit",
-                    "qty": str(qty),
-                    "price": str(ask),
-                    "timeInForce": "PostOnly" if self.cfg.POST_ONLY else "GTC",
-                    "orderLinkId": self.ask_id
-                })
+            if (
+                self.working_ask is None
+                or abs(self.working_ask - ask)
+                >= self.cfg.REPLACE_THRESHOLD_TICKS * self.rest.tick_size
+            ):
+                orders.append(
+                    {
+                        "symbol": self.cfg.SYMBOL,
+                        "side": "Sell",
+                        "orderType": "Limit",
+                        "qty": str(qty),
+                        "price": str(ask),
+                        "timeInForce": "PostOnly" if self.cfg.POST_ONLY else "GTC",
+                        "orderLinkId": self.ask_id,
+                    }
+                )
                 self.working_ask = ask
 
             if orders:
@@ -384,7 +415,7 @@ class MarketMaker:
         try:
             orders = [
                 {"symbol": self.cfg.SYMBOL, "orderLinkId": self.bid_id},
-                {"symbol": self.cfg.SYMBOL, "orderLinkId": self.ask_id}
+                {"symbol": self.cfg.SYMBOL, "orderLinkId": self.ask_id},
             ]
             logger.info("Cancelling all active orders")
             self.rest.cancel_batch_order(orders)
@@ -393,9 +424,12 @@ class MarketMaker:
         except Exception as e:
             logger.error(f"Error cancelling orders: {e}")
 
+
 # --- Protection Manager ---
 class ProtectionManager:
-    def __init__(self, cfg: Config, rest: BybitRest, private_ws: PrivateWS, public_ws: PublicWS):
+    def __init__(
+        self, cfg: Config, rest: BybitRest, private_ws: PrivateWS, public_ws: PublicWS
+    ):
         self.cfg = cfg
         self.rest = rest
         self.private_ws = private_ws
@@ -423,57 +457,78 @@ class ProtectionManager:
         except Exception as e:
             logger.error(f"Error applying protection: {e}")
 
-    def apply_trailing_stop(self, position: Decimal, entry_price: Decimal, mark_price: Decimal):
+    def apply_trailing_stop(
+        self, position: Decimal, entry_price: Decimal, mark_price: Decimal
+    ):
         """Apply trailing stop loss."""
         try:
             long = position > 0
             distance = self.cfg.TRAILING_DISTANCE * self.rest.tick_size
-            activate_profit = (self.cfg.TRAILING_ACTIVATE_PROFIT_BPS / 10000) * entry_price
+            activate_profit = (
+                self.cfg.TRAILING_ACTIVATE_PROFIT_BPS / 10000
+            ) * entry_price
 
             if long:
                 if mark_price >= entry_price + activate_profit:
-                    self.rest.set_trading_stop({
-                        "category": self.cfg.CATEGORY,
-                        "symbol": self.cfg.SYMBOL,
-                        "trailingStop": str(distance),
-                        "activePrice": str(entry_price + activate_profit),
-                        "positionIdx": 0
-                    })
-                    logger.info(f"Trailing stop set for long position at distance {distance}")
+                    self.rest.set_trading_stop(
+                        {
+                            "category": self.cfg.CATEGORY,
+                            "symbol": self.cfg.SYMBOL,
+                            "trailingStop": str(distance),
+                            "activePrice": str(entry_price + activate_profit),
+                            "positionIdx": 0,
+                        }
+                    )
+                    logger.info(
+                        f"Trailing stop set for long position at distance {distance}"
+                    )
                     self._trail_applied = True
             else:
                 if mark_price <= entry_price - activate_profit:
-                    self.rest.set_trading_stop({
-                        "category": self.cfg.CATEGORY,
-                        "symbol": self.cfg.SYMBOL,
-                        "trailingStop": str(distance),
-                        "activePrice": str(entry_price - activate_profit),
-                        "positionIdx": 0
-                    })
-                    logger.info(f"Trailing stop set for short position at distance {distance}")
+                    self.rest.set_trading_stop(
+                        {
+                            "category": self.cfg.CATEGORY,
+                            "symbol": self.cfg.SYMBOL,
+                            "trailingStop": str(distance),
+                            "activePrice": str(entry_price - activate_profit),
+                            "positionIdx": 0,
+                        }
+                    )
+                    logger.info(
+                        f"Trailing stop set for short position at distance {distance}"
+                    )
                     self._trail_applied = True
         except Exception as e:
             logger.error(f"Error applying trailing stop: {e}")
 
-    def apply_breakeven(self, position: Decimal, entry_price: Decimal, mark_price: Decimal):
+    def apply_breakeven(
+        self, position: Decimal, entry_price: Decimal, mark_price: Decimal
+    ):
         """Apply breakeven stop loss."""
         try:
             long = position > 0
-            profit_bps = (mark_price / entry_price - 1) * 100 if long else (1 - mark_price / entry_price) * 100
+            profit_bps = (
+                (mark_price / entry_price - 1) * 100
+                if long
+                else (1 - mark_price / entry_price) * 100
+            )
 
             if profit_bps >= self.cfg.BE_TRIGGER_BPS:
                 offset = self.cfg.BE_OFFSET_TICKS * self.rest.tick_size
                 stop_price = entry_price + offset if long else entry_price - offset
-                self.rest.set_trading_stop({
-                    "category": self.cfg.CATEGORY,
-                    "symbol": self.cfg.SYMBOL,
-                    "stopLoss": str(stop_price),
-                    "positionIdx": 0
-                })
+                self.rest.set_trading_stop(
+                    {
+                        "category": self.cfg.CATEGORY,
+                        "symbol": self.cfg.SYMBOL,
+                        "stopLoss": str(stop_price),
+                        "positionIdx": 0,
+                    }
+                )
                 logger.info(f"Breakeven stop set at {stop_price}")
                 self._be_applied = True
         except Exception as e:
             logger.error(f"Error applying breakeven stop: {e}")
+
 
 # --- Main Execution ---
 def main():
@@ -508,6 +563,7 @@ def main():
     except Exception as e:
         logger.critical(f"Fatal error in main execution: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

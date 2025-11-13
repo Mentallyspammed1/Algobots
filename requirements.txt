@@ -5,7 +5,7 @@
 pybit
 
 # For data manipulation
-pandas
+
 
 # For technical indicators
 pandas_ta
@@ -15,3 +15,9 @@ python-dotenv
 
 # For Google AI
 google-generativeai
+requests==2.31.0
+numpy==1.26.4
+pandas==2.2.2
+colorama==0.4.6
+
+bybit-api==2.2.0

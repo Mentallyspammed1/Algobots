@@ -5,14 +5,13 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 # Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from config import Config
 from market_maker import BybitRest, MarketMaker, PrivateWS, Protection, PublicWS, Quoter
 
 
 class TestNewMarketMakerComponents(unittest.TestCase):
-
     def setUp(self):
         self.config = Config()
         # Mock pybit.unified_trading.HTTP and WebSocket
@@ -20,19 +19,40 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.mock_websocket = MagicMock()
 
         # Configure mock_http methods to return successful responses
-        self.mock_http.place_batch_order.return_value = {"retCode": 0, "retMsg": "SUCCESS"}
-        self.mock_http.amend_batch_order.return_value = {"retCode": 0, "retMsg": "SUCCESS"}
-        self.mock_http.cancel_batch_order.return_value = {"retCode": 0, "retMsg": "SUCCESS"}
-        self.mock_http.set_trading_stop.return_value = {"retCode": 0, "retMsg": "SUCCESS"}
+        self.mock_http.place_batch_order.return_value = {
+            "retCode": 0,
+            "retMsg": "SUCCESS",
+        }
+        self.mock_http.amend_batch_order.return_value = {
+            "retCode": 0,
+            "retMsg": "SUCCESS",
+        }
+        self.mock_http.cancel_batch_order.return_value = {
+            "retCode": 0,
+            "retMsg": "SUCCESS",
+        }
+        self.mock_http.set_trading_stop.return_value = {
+            "retCode": 0,
+            "retMsg": "SUCCESS",
+        }
 
         # Mock get_instruments_info directly on the mock_http instance
         self.mock_http.get_instruments_info.return_value = {
-            "result": {"list": [{"priceFilter": {"tickSize": "0.5"}, "lotSizeFilter": {"qtyStep": "0.001", "minNotionalValue": "10"}}]}
+            "result": {
+                "list": [
+                    {
+                        "priceFilter": {"tickSize": "0.5"},
+                        "lotSizeFilter": {"qtyStep": "0.001", "minNotionalValue": "10"},
+                    }
+                ]
+            }
         }
 
         # Patch the HTTP and WebSocket classes in pybit.unified_trading
-        patcher_http = patch('pybit.unified_trading.HTTP', return_value=self.mock_http)
-        patcher_websocket = patch('pybit.unified_trading.WebSocket', return_value=self.mock_websocket)
+        patcher_http = patch("pybit.unified_trading.HTTP", return_value=self.mock_http)
+        patcher_websocket = patch(
+            "pybit.unified_trading.WebSocket", return_value=self.mock_websocket
+        )
 
         self.mock_http_class = patcher_http.start()
         self.mock_websocket_class = patcher_websocket.start()
@@ -69,28 +89,47 @@ class TestNewMarketMakerComponents(unittest.TestCase):
     def test_bybit_rest_place_batch(self):
         reqs = [{"symbol": "BTCUSDT", "side": "Buy"}]
         self.rest.place_batch(reqs)
-        self.mock_http.place_batch_order.assert_called_once_with(category=self.config.CATEGORY, request=reqs)
+        self.mock_http.place_batch_order.assert_called_once_with(
+            category=self.config.CATEGORY, request=reqs
+        )
 
     def test_bybit_rest_amend_batch(self):
         reqs = [{"symbol": "BTCUSDT", "orderLinkId": "test", "price": "100"}]
         self.rest.amend_batch(reqs)
-        self.mock_http.amend_batch_order.assert_called_once_with(category=self.config.CATEGORY, request=reqs)
+        self.mock_http.amend_batch_order.assert_called_once_with(
+            category=self.config.CATEGORY, request=reqs
+        )
 
     def test_bybit_rest_cancel_batch(self):
         reqs = [{"symbol": "BTCUSDT", "orderLinkId": "test"}]
         self.rest.cancel_batch(reqs)
-        self.mock_http.cancel_batch_order.assert_called_once_with(category=self.config.CATEGORY, request=reqs)
+        self.mock_http.cancel_batch_order.assert_called_once_with(
+            category=self.config.CATEGORY, request=reqs
+        )
 
     def test_bybit_rest_set_trailing(self):
         self.rest.set_trailing(Decimal("50"), Decimal("40000"))
         self.mock_http.set_trading_stop.assert_called_once_with(
-            {'category': self.config.CATEGORY, 'symbol': self.config.SYMBOL, 'tpslMode': 'Full', 'trailingStop': '50', 'positionIdx': 0, 'activePrice': '40000'}
+            {
+                "category": self.config.CATEGORY,
+                "symbol": self.config.SYMBOL,
+                "tpslMode": "Full",
+                "trailingStop": "50",
+                "positionIdx": 0,
+                "activePrice": "40000",
+            }
         )
 
     def test_bybit_rest_set_stop_loss(self):
         self.rest.set_stop_loss(Decimal("39000"))
         self.mock_http.set_trading_stop.assert_called_once_with(
-            {'category': self.config.CATEGORY, 'symbol': self.config.SYMBOL, 'tpslMode': 'Full', 'stopLoss': '39000', 'positionIdx': 0}
+            {
+                "category": self.config.CATEGORY,
+                "symbol": self.config.SYMBOL,
+                "tpslMode": "Full",
+                "stopLoss": "39000",
+                "positionIdx": 0,
+            }
         )
 
     # --- Test PublicWS ---
@@ -113,11 +152,26 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.pub.bid_sz = Decimal("1")
         self.pub.ask_sz = Decimal("2")
         # (40001 * 1 + 40000 * 2) / (1 + 2) = (40001 + 80000) / 3 = 120001 / 3 = 40000.333...
-        self.assertAlmostEqual(self.pub.microprice(), Decimal("40000.333333333333333333333333333"))
+        self.assertAlmostEqual(
+            self.pub.microprice(), Decimal("40000.333333333333333333333333333")
+        )
 
     # --- Test PrivateWS ---
     def test_private_ws_on_position(self):
-        msg = {"data": [{"symbol": self.config.SYMBOL, "category": self.config.CATEGORY, "side": "Buy", "size": "0.01", "entryPrice": "39900", "markPrice": "40000", "stopLoss": "39500", "trailingStop": "50"}]}
+        msg = {
+            "data": [
+                {
+                    "symbol": self.config.SYMBOL,
+                    "category": self.config.CATEGORY,
+                    "side": "Buy",
+                    "size": "0.01",
+                    "entryPrice": "39900",
+                    "markPrice": "40000",
+                    "stopLoss": "39500",
+                    "trailingStop": "50",
+                }
+            ]
+        }
         self.prv.on_position(msg)
         self.assertEqual(self.prv.position_qty, Decimal("0.01"))
         self.assertEqual(self.prv.entry_price, Decimal("39900"))
@@ -126,7 +180,15 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.assertEqual(self.prv.trailing_stop, Decimal("50"))
 
     def test_private_ws_on_order(self):
-        msg = {"data": [{"orderLinkId": "test_link", "orderId": "test_id", "symbol": self.config.SYMBOL}]}
+        msg = {
+            "data": [
+                {
+                    "orderLinkId": "test_link",
+                    "orderId": "test_id",
+                    "symbol": self.config.SYMBOL,
+                }
+            ]
+        }
         self.prv.on_order(msg)
         self.assertIn("test_link", self.prv.orders)
         self.assertEqual(self.prv.orders["test_link"]["orderId"], "test_id")
@@ -138,7 +200,7 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.pub.best_bid = Decimal("39999")
         self.pub.best_ask = Decimal("40001")
         self.rest.tick = Decimal("0.5")
-        self.config.BASE_SPREAD_BPS = 20 # 0.2%
+        self.config.BASE_SPREAD_BPS = 20  # 0.2%
         self.config.MIN_SPREAD_TICKS = 1
 
         bid, ask = self.quoter.compute_quotes()
@@ -151,22 +213,28 @@ class TestNewMarketMakerComponents(unittest.TestCase):
     def test_quoter_ok_qty(self):
         self.rest.qty_step = Decimal("0.001")
         self.rest.min_notional = Decimal("10")
-        self.config.MAX_NOTIONAL = Decimal("3000") # Corrected attribute name
+        self.config.MAX_NOTIONAL = Decimal("3000")  # Corrected attribute name
         self.pub.mid = MagicMock(return_value=Decimal("40000"))
 
         # Valid quantity
         self.assertEqual(self.quoter._ok_qty(Decimal("0.001")), Decimal("0.001"))
         # Too small notional
-        self.assertIsNone(self.quoter._ok_qty(Decimal("0.0001"))) # 40000 * 0.0001 = 4 < 10
+        self.assertIsNone(
+            self.quoter._ok_qty(Decimal("0.0001"))
+        )  # 40000 * 0.0001 = 4 < 10
         # Too large notional
-        self.assertIsNone(self.quoter._ok_qty(Decimal("0.1"))) # 40000 * 0.1 = 4000 > 3000
+        self.assertIsNone(
+            self.quoter._ok_qty(Decimal("0.1"))
+        )  # 40000 * 0.1 = 4000 > 3000
 
     def test_quoter_upsert_both_place_new(self):
         self.quoter.working_bid = None
         self.quoter.working_ask = None
         self.rest.place_batch = MagicMock()
         self.rest.amend_batch = MagicMock()
-        self.quoter.compute_quotes = MagicMock(return_value=(Decimal("39999"), Decimal("40001")))
+        self.quoter.compute_quotes = MagicMock(
+            return_value=(Decimal("39999"), Decimal("40001"))
+        )
         self.quoter._ok_qty = MagicMock(return_value=Decimal("0.001"))
         self.config.QUOTE_SIZE = Decimal("0.001")
 
@@ -181,7 +249,9 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.quoter.working_ask = Decimal("40010")
         self.rest.place_batch = MagicMock()
         self.rest.amend_batch = MagicMock()
-        self.quoter.compute_quotes = MagicMock(return_value=(Decimal("39999"), Decimal("40001")))
+        self.quoter.compute_quotes = MagicMock(
+            return_value=(Decimal("39999"), Decimal("40001"))
+        )
         self.quoter._ok_qty = MagicMock(return_value=Decimal("0.001"))
         self.config.QUOTE_SIZE = Decimal("0.001")
         self.config.REPLACE_THRESHOLD_TICKS = 1
@@ -198,7 +268,9 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.quoter.working_ask = Decimal("40001")
         self.rest.place_batch = MagicMock()
         self.rest.amend_batch = MagicMock()
-        self.quoter.compute_quotes = MagicMock(return_value=(Decimal("39999"), Decimal("40001")))
+        self.quoter.compute_quotes = MagicMock(
+            return_value=(Decimal("39999"), Decimal("40001"))
+        )
         self.quoter._ok_qty = MagicMock(return_value=Decimal("0.001"))
         self.config.QUOTE_SIZE = Decimal("0.001")
         self.config.REPLACE_THRESHOLD_TICKS = 1
@@ -223,10 +295,10 @@ class TestNewMarketMakerComponents(unittest.TestCase):
     def test_protection_step_trailing_mode_long_position(self):
         self.config.PROTECT_MODE = "trailing"
         self.config.TRAILING_ACTIVATE_PROFIT_BPS = Decimal("30")
-        self.config.TRAILING_DISTANCE = Decimal("50") # Corrected attribute name
+        self.config.TRAILING_DISTANCE = Decimal("50")  # Corrected attribute name
         self.prv.position_qty = Decimal("0.01")
         self.prv.entry_price = Decimal("40000")
-        self.prv.mark_price = Decimal("40150") # PnL > 30 bps
+        self.prv.mark_price = Decimal("40150")  # PnL > 30 bps
         self.rest.tick = Decimal("0.5")
         # self.rest.set_trailing = MagicMock() # Removed this line
 
@@ -241,7 +313,9 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.config.BE_OFFSET_TICKS = 1
         self.prv.position_qty = Decimal("0.01")
         self.prv.entry_price = Decimal("40000")
-        self.prv.mark_price = Decimal("40070") # PnL > 15 bps (40070/40000 - 1)*1e4 = 17.5 bps
+        self.prv.mark_price = Decimal(
+            "40070"
+        )  # PnL > 15 bps (40070/40000 - 1)*1e4 = 17.5 bps
         self.rest.tick = Decimal("0.5")
         # self.rest.set_stop_loss = MagicMock() # Removed this line
 
@@ -250,5 +324,6 @@ class TestNewMarketMakerComponents(unittest.TestCase):
         self.rest.set_stop_loss.assert_called_once_with(Decimal("40000.5"))
         self.assertTrue(self.protection._be_applied)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

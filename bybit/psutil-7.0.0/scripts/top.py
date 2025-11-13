@@ -40,7 +40,7 @@ import time
 try:
     import curses
 except ImportError:
-    sys.exit('platform not supported')
+    sys.exit("platform not supported")
 
 import psutil
 from psutil._common import bytes2human
@@ -82,20 +82,22 @@ def poll(interval):
     procs_status = {}
     for p in psutil.process_iter():
         try:
-            p.dict = p.as_dict([
-                'username',
-                'nice',
-                'memory_info',
-                'memory_percent',
-                'cpu_percent',
-                'cpu_times',
-                'name',
-                'status',
-            ])
+            p.dict = p.as_dict(
+                [
+                    "username",
+                    "nice",
+                    "memory_info",
+                    "memory_percent",
+                    "cpu_percent",
+                    "cpu_times",
+                    "name",
+                    "status",
+                ]
+            )
             try:
-                procs_status[p.dict['status']] += 1
+                procs_status[p.dict["status"]] += 1
             except KeyError:
-                procs_status[p.dict['status']] = 1
+                procs_status[p.dict["status"]] = 1
         except psutil.NoSuchProcess:
             pass
         else:
@@ -103,7 +105,7 @@ def poll(interval):
 
     # return processes sorted by CPU percent usage
     processes = sorted(
-        procs, key=lambda p: p.dict['cpu_percent'], reverse=True
+        procs, key=lambda p: p.dict["cpu_percent"], reverse=True
     )
     return (processes, procs_status)
 
@@ -163,7 +165,7 @@ def print_header(procs_status, num_procs):
     for x, y in procs_status.items():
         if y:
             st.append(f"{x}={y}")
-    st.sort(key=lambda x: x[:3] in {'run', 'sle'}, reverse=1)
+    st.sort(key=lambda x: x[:3] in {"run", "sle"}, reverse=1)
     printl(f" Processes: {num_procs} ({', '.join(st)})")
     # load average, uptime
     uptime = datetime.datetime.now() - datetime.datetime.fromtimestamp(
@@ -174,7 +176,7 @@ def print_header(procs_status, num_procs):
         av1,
         av2,
         av3,
-        str(uptime).split('.')[0],
+        str(uptime).split(".")[0],
     )
     printl(line)
 
@@ -201,32 +203,32 @@ def refresh_window(procs, procs_status):
     for p in procs:
         # TIME+ column shows process CPU cumulative time and it
         # is expressed as: "mm:ss.ms"
-        if p.dict['cpu_times'] is not None:
-            ctime = datetime.timedelta(seconds=sum(p.dict['cpu_times']))
+        if p.dict["cpu_times"] is not None:
+            ctime = datetime.timedelta(seconds=sum(p.dict["cpu_times"]))
             ctime = "{}:{}.{}".format(
                 ctime.seconds // 60 % 60,
                 str(ctime.seconds % 60).zfill(2),
                 str(ctime.microseconds)[:2],
             )
         else:
-            ctime = ''
-        if p.dict['memory_percent'] is not None:
-            p.dict['memory_percent'] = round(p.dict['memory_percent'], 1)
+            ctime = ""
+        if p.dict["memory_percent"] is not None:
+            p.dict["memory_percent"] = round(p.dict["memory_percent"], 1)
         else:
-            p.dict['memory_percent'] = ''
-        if p.dict['cpu_percent'] is None:
-            p.dict['cpu_percent'] = ''
-        username = p.dict['username'][:8] if p.dict['username'] else ''
+            p.dict["memory_percent"] = ""
+        if p.dict["cpu_percent"] is None:
+            p.dict["cpu_percent"] = ""
+        username = p.dict["username"][:8] if p.dict["username"] else ""
         line = templ.format(
             p.pid,
             username,
-            p.dict['nice'],
-            bytes2human(getattr(p.dict['memory_info'], 'vms', 0)),
-            bytes2human(getattr(p.dict['memory_info'], 'rss', 0)),
-            p.dict['cpu_percent'],
-            p.dict['memory_percent'],
+            p.dict["nice"],
+            bytes2human(getattr(p.dict["memory_info"], "vms", 0)),
+            bytes2human(getattr(p.dict["memory_info"], "rss", 0)),
+            p.dict["cpu_percent"],
+            p.dict["memory_percent"],
             ctime,
-            p.dict['name'] or '',
+            p.dict["name"] or "",
         )
         try:
             printl(line)
@@ -256,7 +258,7 @@ def main():
     try:
         interval = 0
         while True:
-            if win.getch() == ord('q'):
+            if win.getch() == ord("q"):
                 break
             args = poll(interval)
             refresh_window(*args)
@@ -267,5 +269,5 @@ def main():
         tear_down()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

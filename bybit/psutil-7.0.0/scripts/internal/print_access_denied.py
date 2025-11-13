@@ -44,7 +44,6 @@ open_files           238     71.3%   ACCESS DENIED
 Totals: access-denied=1744, calls=10020, processes=334
 """
 
-
 import time
 from collections import defaultdict
 
@@ -83,10 +82,11 @@ def main():
     tot_perc = round((tot_ads / tot_calls) * 100, 1)
     print("-" * 50)
     print(
-        "Totals: access-denied={} ({}%%), calls={}, processes={}, elapsed={}s"
-        .format(tot_ads, tot_perc, tot_calls, tot_procs, round(elapsed, 2))
+        "Totals: access-denied={} ({}%%), calls={}, processes={}, elapsed={}s".format(
+            tot_ads, tot_perc, tot_calls, tot_procs, round(elapsed, 2)
+        )
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

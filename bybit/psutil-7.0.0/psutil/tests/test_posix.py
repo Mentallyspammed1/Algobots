@@ -47,22 +47,22 @@ def ps(fmt, pid=None):
     support for a narrow range of features.
     """
 
-    cmd = ['ps']
+    cmd = ["ps"]
 
     if LINUX:
-        cmd.append('--no-headers')
+        cmd.append("--no-headers")
 
     if pid is not None:
-        cmd.extend(['-p', str(pid)])
+        cmd.extend(["-p", str(pid)])
     elif SUNOS or AIX:
-        cmd.append('-A')
+        cmd.append("-A")
     else:
-        cmd.append('ax')
+        cmd.append("ax")
 
     if SUNOS:
         fmt = fmt.replace("start", "stime")
 
-    cmd.extend(['-o', fmt])
+    cmd.extend(["-o", fmt])
 
     output = sh(cmd)
 
@@ -136,12 +136,12 @@ def df(device):
         if "device busy" in str(err).lower():
             raise pytest.skip("df returned EBUSY")
         raise
-    line = out.split('\n')[1]
+    line = out.split("\n")[1]
     fields = line.split()
     sys_total = int(fields[1]) * 1024
     sys_used = int(fields[2]) * 1024
     sys_free = int(fields[3]) * 1024
-    sys_percent = float(fields[4].replace('%', ''))
+    sys_percent = float(fields[4].replace("%", ""))
     return (sys_total, sys_used, sys_free, sys_percent)
 
 
@@ -160,22 +160,22 @@ class TestProcess(PsutilTestCase):
         terminate(cls.pid)
 
     def test_ppid(self):
-        ppid_ps = ps('ppid', self.pid)
+        ppid_ps = ps("ppid", self.pid)
         ppid_psutil = psutil.Process(self.pid).ppid()
         assert ppid_ps == ppid_psutil
 
     def test_uid(self):
-        uid_ps = ps('uid', self.pid)
+        uid_ps = ps("uid", self.pid)
         uid_psutil = psutil.Process(self.pid).uids().real
         assert uid_ps == uid_psutil
 
     def test_gid(self):
-        gid_ps = ps('rgid', self.pid)
+        gid_ps = ps("rgid", self.pid)
         gid_psutil = psutil.Process(self.pid).gids().real
         assert gid_ps == gid_psutil
 
     def test_username(self):
-        username_ps = ps('user', self.pid)
+        username_ps = ps("user", self.pid)
         username_psutil = psutil.Process(self.pid).username()
         assert username_ps == username_psutil
 
@@ -263,7 +263,7 @@ class TestProcess(PsutilTestCase):
 
     @pytest.mark.skipif(MACOS or BSD, reason="ps -o start not available")
     def test_create_time(self):
-        time_ps = ps('start', self.pid)
+        time_ps = ps("start", self.pid)
         time_psutil = psutil.Process(self.pid).create_time()
         time_psutil_tstamp = datetime.datetime.fromtimestamp(
             time_psutil
@@ -313,7 +313,7 @@ class TestProcess(PsutilTestCase):
     @pytest.mark.skipif(SUNOS, reason="not reliable on SUNOS")
     @pytest.mark.skipif(AIX, reason="not reliable on AIX")
     def test_nice(self):
-        ps_nice = ps('nice', self.pid)
+        ps_nice = ps("nice", self.pid)
         psutil_nice = psutil.Process().nice()
         assert ps_nice == psutil_nice
 
@@ -364,7 +364,7 @@ class TestSystemAPIs(PsutilTestCase):
         out = sh("who -u")
         if not out.strip():
             raise pytest.skip("no users on this system")
-        lines = out.split('\n')
+        lines = out.split("\n")
         users = [x.split()[0] for x in lines]
         terminals = [x.split()[1] for x in lines]
         assert len(users) == len(psutil.users())

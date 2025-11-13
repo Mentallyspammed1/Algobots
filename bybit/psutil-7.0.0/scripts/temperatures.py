@@ -21,7 +21,6 @@ coretemp
     Core 3               54.0 °C (high = 100.0 °C, critical = 100.0 °C)
 """
 
-
 import sys
 
 import psutil
@@ -46,5 +45,5 @@ def main():
         print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

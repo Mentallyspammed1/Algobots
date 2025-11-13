@@ -27,7 +27,6 @@ Battery:
     plugged in: yes
 """
 
-
 import psutil
 
 
@@ -93,5 +92,5 @@ def main():
             print("    plugged in: no")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

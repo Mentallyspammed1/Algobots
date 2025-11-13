@@ -2,6 +2,7 @@
 connection to the Bybit exchange. It handles subscribing to topics,
 receiving messages, and processing real-time data.
 """
+
 import json
 import logging
 import threading
@@ -10,12 +11,15 @@ from decimal import Decimal
 from typing import Any
 
 import websocket
-from scalper_core.constants import NB, NG, NR, NY, RST
+from scalper_core.constants import NB
+from scalper_core.constants import NG
+from scalper_core.constants import NR
+from scalper_core.constants import NY
+from scalper_core.constants import RST
 
 
 class BybitWebSocket:
-    """Manages the WebSocket connection to the Bybit exchange.
-    """
+    """Manages the WebSocket connection to the Bybit exchange."""
 
     def __init__(
         self,
@@ -98,4 +102,3 @@ class BybitWebSocket:
         """Closes the WebSocket connection."""
         if self.ws:
             self.ws.close()
-

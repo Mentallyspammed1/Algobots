@@ -23,7 +23,7 @@ def main():
         proc_name = psutil.Process(user.pid).name() if user.pid else ""
         line = "{:<12} {:<10} {:<10} {:<14} {}".format(
             user.name,
-            user.terminal or '-',
+            user.terminal or "-",
             datetime.fromtimestamp(user.started).strftime("%Y-%m-%d %H:%M"),
             f"({user.host or ''})",
             proc_name,
@@ -31,5 +31,5 @@ def main():
         print(line)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

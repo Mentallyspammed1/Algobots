@@ -3,7 +3,9 @@ import itertools
 from decimal import Decimal
 
 # Import the necessary components from our backtester script
-from backtester import Backtester, load_config, load_historical_data
+from backtester import Backtester
+from backtester import load_config
+from backtester import load_historical_data
 
 
 def run_optimizer():
@@ -15,7 +17,7 @@ def run_optimizer():
     param_grid = {
         "SPREAD_PERCENTAGE": [Decimal("0.001"), Decimal("0.002"), Decimal("0.003")],
         "PROFIT_PERCENTAGE": [Decimal("0.002"), Decimal("0.004"), Decimal("0.006")],
-        "STOP_LOSS_PERCENTAGE": [Decimal("0.005"), Decimal("0.01"), Decimal("0.015")]
+        "STOP_LOSS_PERCENTAGE": [Decimal("0.005"), Decimal("0.01"), Decimal("0.015")],
     }
 
     # Load base configuration and data once
@@ -30,7 +32,9 @@ def run_optimizer():
 
     # Create all possible combinations of parameters
     keys, values = zip(*param_grid.items(), strict=False)
-    parameter_combinations = [dict(zip(keys, v, strict=False)) for v in itertools.product(*values)]
+    parameter_combinations = [
+        dict(zip(keys, v, strict=False)) for v in itertools.product(*values)
+    ]
 
     total_combinations = len(parameter_combinations)
     print(f"Will test {total_combinations} parameter combinations...")
@@ -45,7 +49,7 @@ def run_optimizer():
         # Create a temporary config for this run
         temp_config = copy.deepcopy(base_config)
         for key, value in params.items():
-            temp_config[key] = str(value) # Config values are strings
+            temp_config[key] = str(value)  # Config values are strings
 
         # Run the backtest with these parameters
         backtester = Backtester(temp_config)
@@ -73,7 +77,10 @@ def run_optimizer():
         print("\nTo use these settings, update your config.json file.")
     else:
         print("\n--- Optimization Complete ---")
-        print("Could not determine a best parameter set. All runs may have resulted in a loss.")
+        print(
+            "Could not determine a best parameter set. All runs may have resulted in a loss."
+        )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     run_optimizer()

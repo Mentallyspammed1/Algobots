@@ -19,8 +19,12 @@ class TradeMetrics:
     losses: int = 0
     win_rate: float = 0.0
     realized_pnl: Decimal = Decimal("0")
-    current_asset_holdings: Decimal = Decimal("0") # Net position (positive for long, negative for short)
-    average_entry_price: Decimal = Decimal("0") # Average entry price for the net position
+    current_asset_holdings: Decimal = Decimal(
+        "0"
+    )  # Net position (positive for long, negative for short)
+    average_entry_price: Decimal = Decimal(
+        "0"
+    )  # Average entry price for the net position
     last_pnl_update_timestamp: datetime | None = None
 
     @property
@@ -39,12 +43,14 @@ class TradeMetrics:
 
         # Calculate PnL for closing part of a position
         realized_pnl_on_fill = Decimal("0")
-        if self.current_asset_holdings != Decimal("0") and np.sign(self.current_asset_holdings) != np.sign(quantity if side == "Buy" else -quantity):
+        if self.current_asset_holdings != Decimal("0") and np.sign(
+            self.current_asset_holdings
+        ) != np.sign(quantity if side == "Buy" else -quantity):
             # Closing or flipping a position
             qty_closed = min(abs(self.current_asset_holdings), quantity)
-            if self.current_asset_holdings > 0 and side == "Sell": # Closing long
+            if self.current_asset_holdings > 0 and side == "Sell":  # Closing long
                 realized_pnl_on_fill = (price - self.average_entry_price) * qty_closed
-            elif self.current_asset_holdings < 0 and side == "Buy": # Closing short
+            elif self.current_asset_holdings < 0 and side == "Buy":  # Closing short
                 realized_pnl_on_fill = (self.average_entry_price - price) * qty_closed
             self.realized_pnl += realized_pnl_on_fill
 
@@ -59,35 +65,49 @@ class TradeMetrics:
         if side == "Buy":
             new_holdings = self.current_asset_holdings + quantity
             if new_holdings != Decimal("0"):
-                if np.sign(new_holdings) == np.sign(self.current_asset_holdings) or self.current_asset_holdings == Decimal("0"):
+                if np.sign(new_holdings) == np.sign(
+                    self.current_asset_holdings
+                ) or self.current_asset_holdings == Decimal("0"):
                     # Adding to same-direction position or opening new long
-                    self.average_entry_price = ((self.average_entry_price * abs(self.current_asset_holdings)) + (price * quantity)) / abs(new_holdings)
-                else: # Flipping from short to long, or reducing short
+                    self.average_entry_price = (
+                        (self.average_entry_price * abs(self.current_asset_holdings))
+                        + (price * quantity)
+                    ) / abs(new_holdings)
+                else:  # Flipping from short to long, or reducing short
                     # Average entry price remains the same for the remaining position
                     pass
-            else: # Position becomes zero
+            else:  # Position becomes zero
                 self.average_entry_price = Decimal("0")
             self.current_asset_holdings = new_holdings
         elif side == "Sell":
             new_holdings = self.current_asset_holdings - quantity
             if new_holdings != Decimal("0"):
-                if np.sign(new_holdings) == np.sign(self.current_asset_holdings) or self.current_asset_holdings == Decimal("0"):
+                if np.sign(new_holdings) == np.sign(
+                    self.current_asset_holdings
+                ) or self.current_asset_holdings == Decimal("0"):
                     # Adding to same-direction position or opening new short
-                    self.average_entry_price = ((self.average_entry_price * abs(self.current_asset_holdings)) + (price * quantity)) / abs(new_holdings)
-                else: # Flipping from long to short, or reducing long
+                    self.average_entry_price = (
+                        (self.average_entry_price * abs(self.current_asset_holdings))
+                        + (price * quantity)
+                    ) / abs(new_holdings)
+                else:  # Flipping from long to short, or reducing long
                     # Average entry price remains the same for the remaining position
                     pass
-            else: # Position becomes zero
+            else:  # Position becomes zero
                 self.average_entry_price = Decimal("0")
             self.current_asset_holdings = new_holdings
 
         self.last_pnl_update_timestamp = datetime.now(timezone.utc)
-        self.total_trades += 1 # Count each fill as a trade for win rate purposes
+        self.total_trades += 1  # Count each fill as a trade for win rate purposes
         self.update_win_rate()
 
     def calculate_unrealized_pnl(self, current_price: Decimal) -> Decimal:
-        if self.current_asset_holdings != Decimal("0") and self.average_entry_price != Decimal("0"):
-            return (current_price - self.average_entry_price) * self.current_asset_holdings
+        if self.current_asset_holdings != Decimal(
+            "0"
+        ) and self.average_entry_price != Decimal("0"):
+            return (
+                current_price - self.average_entry_price
+            ) * self.current_asset_holdings
         return Decimal("0")
 
 

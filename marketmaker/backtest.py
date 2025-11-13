@@ -24,8 +24,10 @@ class BybitAPIError(Exception):
         self.ret_code = ret_code
         self.ret_msg = ret_msg
 
+
 class BybitRateLimitError(BybitAPIError):
     pass
+
 
 from config import Config
 
@@ -82,8 +84,10 @@ class BybitHistoricalData:
         self.params = params
         # For public endpoints, keys are optional
         self.http = HTTP(testnet=params.testnet)
-        self.logger = logging.getLogger("Backtester") # Use the existing logger
-        self._api_retry = self._get_api_retry_decorator() # Initialize the decorator here
+        self.logger = logging.getLogger("Backtester")  # Use the existing logger
+        self._api_retry = (
+            self._get_api_retry_decorator()
+        )  # Initialize the decorator here
 
     def _is_retryable_bybit_error(self, exception: Exception) -> bool:
         if not isinstance(exception, BybitAPIError):
@@ -137,22 +141,36 @@ class BybitHistoricalData:
                     end=end_ms,
                     limit=limit,
                 )
-            except Exception as e: # Catch any exception from pybit's get_kline
+            except Exception as e:  # Catch any exception from pybit's get_kline
                 # Check if it's a rate limit error or other API error
-                if hasattr(e, 'status_code') and e.status_code == 429: # Common rate limit status code
+                if (
+                    hasattr(e, "status_code") and e.status_code == 429
+                ):  # Common rate limit status code
                     raise BybitRateLimitError(f"API rate limit hit: {e}")
-                elif hasattr(e, 'message'): # pybit errors often have a 'message' attribute
-                    raise BybitAPIError(f"Bybit API error: {e.message}", ret_msg=e.message)
+                elif hasattr(
+                    e, "message"
+                ):  # pybit errors often have a 'message' attribute
+                    raise BybitAPIError(
+                        f"Bybit API error: {e.message}", ret_msg=e.message
+                    )
                 else:
                     raise BybitAPIError(f"Unknown API error: {e}")
 
             ret_code = resp.get("retCode")
             ret_msg = resp.get("retMsg", "Unknown error")
 
-            if ret_code == 10006: # Specific Bybit rate limit error code
-                raise BybitRateLimitError(f"Bybit get_kline rate limit: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+            if ret_code == 10006:  # Specific Bybit rate limit error code
+                raise BybitRateLimitError(
+                    f"Bybit get_kline rate limit: {ret_msg}",
+                    ret_code=ret_code,
+                    ret_msg=ret_msg,
+                )
             elif ret_code != 0:
-                raise BybitAPIError(f"Bybit get_kline error: {ret_msg}", ret_code=ret_code, ret_msg=ret_msg)
+                raise BybitAPIError(
+                    f"Bybit get_kline error: {ret_msg}",
+                    ret_code=ret_code,
+                    ret_msg=ret_msg,
+                )
 
             rows = resp["result"]["list"]
             if not rows:
@@ -211,9 +229,25 @@ class FillEngine:
         rnd = (ts_ms // 60000) ^ self.params.rng_seed
         go_high_first = rnd % 2 == 0
         if go_high_first:
-            return [o, (o + h) / 2, h, (h + low_price) / 2, low_price, (low_price + c) / 2, c]
+            return [
+                o,
+                (o + h) / 2,
+                h,
+                (h + low_price) / 2,
+                low_price,
+                (low_price + c) / 2,
+                c,
+            ]
         else:
-            return [o, (o + low_price) / 2, low_price, (low_price + h) / 2, h, (h + c) / 2, c]
+            return [
+                o,
+                (o + low_price) / 2,
+                low_price,
+                (low_price + h) / 2,
+                h,
+                (h + c) / 2,
+                c,
+            ]
 
     def _volume_capacity(self, candle_volume: float) -> float:
         """

@@ -54,9 +54,13 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     # 1. Define all parameters using tr.suggest_...
     min_spread_pct = tr.suggest_float("min_spread_pct", 0.0001, 0.001, log=True)
     base_spread_pct = tr.suggest_float("base_spread_pct", 0.0005, 0.005, log=True)
-    max_spread_pct = tr.suggest_float("max_spread_pct", base_spread_pct * 1.5, 0.02, log=True)
+    max_spread_pct = tr.suggest_float(
+        "max_spread_pct", base_spread_pct * 1.5, 0.02, log=True
+    )
 
-    base_order_size_pct_of_balance = tr.suggest_float("base_order_size_pct_of_balance", 0.001, 0.01, log=True)
+    base_order_size_pct_of_balance = tr.suggest_float(
+        "base_order_size_pct_of_balance", 0.001, 0.01, log=True
+    )
     min_order_value_usd = tr.suggest_float("min_order_value_usd", 5.0, 50.0, log=True)
     max_order_size_pct = tr.suggest_float("max_order_size_pct", 0.05, 0.5, log=True)
 
@@ -66,32 +70,40 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     volatility_window_sec = tr.suggest_int("volatility_window_sec", 30, 180)
     volatility_multiplier = tr.suggest_float("volatility_multiplier", 1.0, 5.0)
 
-    min_profit_spread_after_fees_pct = tr.suggest_float("min_profit_spread_after_fees_pct", 0.0001, 0.001, log=True)
+    min_profit_spread_after_fees_pct = tr.suggest_float(
+        "min_profit_spread_after_fees_pct", 0.0001, 0.001, log=True
+    )
     max_daily_loss_pct = tr.suggest_float("max_daily_loss_pct", 0.01, 0.1)
 
-    order_stale_threshold_pct = tr.suggest_float("order_stale_threshold_pct", 0.0001, 0.001, log=True)
+    order_stale_threshold_pct = tr.suggest_float(
+        "order_stale_threshold_pct", 0.0001, 0.001, log=True
+    )
     max_outstanding_orders = tr.suggest_int("max_outstanding_orders", 1, 5)
 
     # 2. Use the defined parameters in replace() calls
     # Update DynamicSpreadConfig fields
-    new_dynamic_spread = replace(cfg.strategy.dynamic_spread,
+    new_dynamic_spread = replace(
+        cfg.strategy.dynamic_spread,
         min_spread_pct=Decimal(str(min_spread_pct)),
         max_spread_pct=Decimal(str(max_spread_pct)),
         volatility_window_sec=volatility_window_sec,
         volatility_multiplier=Decimal(str(volatility_multiplier)),
     )
     # Update InventoryStrategyConfig fields
-    new_inventory = replace(cfg.strategy.inventory,
+    new_inventory = replace(
+        cfg.strategy.inventory,
         max_inventory_ratio=Decimal(str(max_inventory_ratio)),
         skew_intensity=Decimal(str(skew_intensity)),
     )
     # Update CircuitBreakerConfig fields
-    new_circuit_breaker = replace(cfg.strategy.circuit_breaker,
+    new_circuit_breaker = replace(
+        cfg.strategy.circuit_breaker,
         max_daily_loss_pct=Decimal(str(max_daily_loss_pct)),
     )
 
     # Now create a new StrategyConfig instance
-    new_strategy = replace(cfg.strategy,
+    new_strategy = replace(
+        cfg.strategy,
         base_spread_pct=Decimal(str(base_spread_pct)),
         base_order_size_pct_of_balance=Decimal(str(base_order_size_pct_of_balance)),
         order_stale_threshold_pct=Decimal(str(order_stale_threshold_pct)),
@@ -103,7 +115,8 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     )
 
     # Finally, create a new Config instance
-    cfg = replace(cfg,
+    cfg = replace(
+        cfg,
         min_order_value_usd=Decimal(str(min_order_value_usd)),
         max_order_size_pct=Decimal(str(max_order_size_pct)),
         strategy=new_strategy,

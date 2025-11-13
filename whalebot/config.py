@@ -1,20 +1,22 @@
 # config.py
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
+
 
 @dataclass
 class Config:
     """Bot configuration parameters."""
 
     # --- API Credentials ---
-    BYBIT_API_KEY: str = os.getenv('BYBIT_API_KEY', '')
-    BYBIT_API_SECRET: str = os.getenv('BYBIT_API_SECRET', '')
-    TESTNET: bool = os.getenv('BYBIT_TESTNET', 'True').lower() == 'true'
+    BYBIT_API_KEY: str = os.getenv("BYBIT_API_KEY", "")
+    BYBIT_API_SECRET: str = os.getenv("BYBIT_API_SECRET", "")
+    TESTNET: bool = os.getenv("BYBIT_TESTNET", "True").lower() == "true"
 
     # --- Trading Parameters ---
-    SYMBOL: str = 'BTCUSDT'
-    CATEGORY: str = 'linear'
+    SYMBOL: str = "BTCUSDT"
+    CATEGORY: str = "linear"
     LEVERAGE: float = 10.0
     ORDER_SIZE_USD_VALUE: float = 100.0
     SPREAD_PERCENTAGE: float = 0.0005
@@ -45,7 +47,7 @@ class Config:
 
     # --- Market Data Fetching (Historical) ---
     KLINES_LOOKBACK_LIMIT: int = 500
-    KLINES_INTERVAL: str = '15'
+    KLINES_INTERVAL: str = "15"
     KLINES_HISTORY_WINDOW_MINUTES: int = 60 * 24 * 7
 
     # --- Strategy Selection ---
@@ -79,46 +81,75 @@ class Config:
     DAILY_METRICS_CSV: str = "bot_logs/daily_metrics.csv"
 
     # --- UI/Colorama Settings ---
-    NEON_GREEN: str = '\033[92m'
-    NEON_BLUE: str = '\033[96m'
-    NEON_PURPLE: str = '\033[95m'
-    NEON_YELLOW: str = '\033[93m'
-    NEON_RED: str = '\033[91m'
-    NEON_CYAN: str = '\033[96m'
-    RESET: str = '\033[0m'
-    INDICATOR_COLORS: dict[str, str] = field(default_factory=lambda: {
-        "SMA_10": '\033[94m', "SMA_Long": '\033[34m', "EMA_Short": '\033[95m',
-        "EMA_Long": '\033[35m', "ATR": '\033[93m', "RSI": '\033[92m',
-        "StochRSI_K": '\033[96m', "StochRSI_D": '\033[36m', "BB_Upper": '\033[91m',
-        "BB_Middle": '\033[97m', "BB_Lower": '\033[91m', "CCI": '\033[92m',
-        "WR": '\033[91m', "MFI": '\033[92m', "OBV": '\033[94m',
-        "OBV_EMA": '\033[96m', "CMF": '\033[95m', "Tenkan_Sen": '\033[96m',
-        "Kijun_Sen": '\033[36m', "Senkou_Span_A": '\033[92m', "Senkou_Span_B": '\033[91m',
-        "Chikou_Span": '\033[93m', "PSAR_Val": '\033[95m', "PSAR_Dir": '\033[35m',
-        "VWAP": '\033[97m', "ST_Fast_Dir": '\033[94m', "ST_Fast_Val": '\033[96m',
-        "ST_Slow_Dir": '\033[95m', "ST_Slow_Val": '\033[35m', "MACD_Line": '\033[92m',
-        "MACD_Signal": '\033[92m', "MACD_Hist": '\033[93m', "ADX": '\033[96m',
-        "PlusDI": '\033[36m', "MinusDI": '\033[91m',
-    })
+    NEON_GREEN: str = "\033[92m"
+    NEON_BLUE: str = "\033[96m"
+    NEON_PURPLE: str = "\033[95m"
+    NEON_YELLOW: str = "\033[93m"
+    NEON_RED: str = "\033[91m"
+    NEON_CYAN: str = "\033[96m"
+    RESET: str = "\033[0m"
+    INDICATOR_COLORS: dict[str, str] = field(
+        default_factory=lambda: {
+            "SMA_10": "\033[94m",
+            "SMA_Long": "\033[34m",
+            "EMA_Short": "\033[95m",
+            "EMA_Long": "\033[35m",
+            "ATR": "\033[93m",
+            "RSI": "\033[92m",
+            "StochRSI_K": "\033[96m",
+            "StochRSI_D": "\033[36m",
+            "BB_Upper": "\033[91m",
+            "BB_Middle": "\033[97m",
+            "BB_Lower": "\033[91m",
+            "CCI": "\033[92m",
+            "WR": "\033[91m",
+            "MFI": "\033[92m",
+            "OBV": "\033[94m",
+            "OBV_EMA": "\033[96m",
+            "CMF": "\033[95m",
+            "Tenkan_Sen": "\033[96m",
+            "Kijun_Sen": "\033[36m",
+            "Senkou_Span_A": "\033[92m",
+            "Senkou_Span_B": "\033[91m",
+            "Chikou_Span": "\033[93m",
+            "PSAR_Val": "\033[95m",
+            "PSAR_Dir": "\033[35m",
+            "VWAP": "\033[97m",
+            "ST_Fast_Dir": "\033[94m",
+            "ST_Fast_Val": "\033[96m",
+            "ST_Slow_Dir": "\033[95m",
+            "ST_Slow_Val": "\033[35m",
+            "MACD_Line": "\033[92m",
+            "MACD_Signal": "\033[92m",
+            "MACD_Hist": "\033[93m",
+            "ADX": "\033[96m",
+            "PlusDI": "\033[36m",
+            "MinusDI": "\033[91m",
+        },
+    )
 
     # --- Gemini AI Configuration ---
-    GEMINI_AI_ENABLED: bool = os.getenv('GEMINI_AI_ENABLED', 'False').lower() == 'true'
-    GEMINI_API_KEY: str = os.getenv('GEMINI_API_KEY', '')
+    GEMINI_AI_ENABLED: bool = os.getenv("GEMINI_AI_ENABLED", "False").lower() == "true"
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = "gemini-1.5-flash-latest"
     GEMINI_MIN_CONFIDENCE_FOR_OVERRIDE: int = 60
     GEMINI_RATE_LIMIT_DELAY_SECONDS: float = 1.0
     GEMINI_CACHE_TTL_SECONDS: int = 300
     GEMINI_DAILY_API_LIMIT: int = 1000
-    GEMINI_SIGNAL_WEIGHTS: dict[str, float] = field(default_factory=lambda: {"technical": 0.6, "ai": 0.4})
+    GEMINI_SIGNAL_WEIGHTS: dict[str, float] = field(
+        default_factory=lambda: {"technical": 0.6, "ai": 0.4},
+    )
     GEMINI_LOW_AI_CONFIDENCE_THRESHOLD: int = 20
     GEMINI_CHART_IMAGE_ANALYSIS_ENABLED: bool = False
     GEMINI_CHART_IMAGE_FREQUENCY_LOOPS: int = 100
     GEMINI_CHART_IMAGE_DATA_POINTS: int = 100
 
     # --- Alert System Settings ---
-    ALERT_TELEGRAM_ENABLED: bool = os.getenv('ALERT_TELEGRAM_ENABLED', 'False').lower() == 'true'
-    ALERT_TELEGRAM_BOT_TOKEN: str = os.getenv('ALERT_TELEGRAM_BOT_TOKEN', '')
-    ALERT_TELEGRAM_CHAT_ID: str = os.getenv('ALERT_TELEGRAM_CHAT_ID', '')
+    ALERT_TELEGRAM_ENABLED: bool = (
+        os.getenv("ALERT_TELEGRAM_ENABLED", "False").lower() == "true"
+    )
+    ALERT_TELEGRAM_BOT_TOKEN: str = os.getenv("ALERT_TELEGRAM_BOT_TOKEN", "")
+    ALERT_TELEGRAM_CHAT_ID: str = os.getenv("ALERT_TELEGRAM_CHAT_ID", "")
     ALERT_CRITICAL_LEVEL: str = "WARNING"
     ALERT_COOLDOWN_SECONDS: int = 300
 

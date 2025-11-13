@@ -11,7 +11,6 @@ Useful sites:
 * https://hugovk.github.io/top-pypi-packages/.
 """
 
-
 import json
 import os
 import shlex
@@ -24,7 +23,7 @@ from psutil._common import memoize
 
 
 AUTH_FILE = os.path.expanduser("~/.pypinfo.json")
-PKGNAME = 'psutil'
+PKGNAME = "psutil"
 DAYS = 30
 LIMIT = 100
 GITHUB_SCRIPT_URL = (
@@ -42,7 +41,7 @@ bytes_billed = 0
 def sh(cmd):
     assert os.path.exists(AUTH_FILE)
     env = os.environ.copy()
-    env['GOOGLE_APPLICATION_CREDENTIALS'] = AUTH_FILE
+    env["GOOGLE_APPLICATION_CREDENTIALS"] = AUTH_FILE
     p = subprocess.Popen(
         shlex.split(cmd),
         stdout=subprocess.PIPE,
@@ -61,7 +60,7 @@ def sh(cmd):
 def query(cmd):
     global bytes_billed
     ret = json.loads(sh(cmd))
-    bytes_billed += ret['query']['bytes_billed']
+    bytes_billed += ret["query"]["bytes_billed"]
     return ret
 
 
@@ -70,8 +69,8 @@ def top_packages():
     ret = query(
         f"pypinfo --all --json --days {DAYS} --limit {LIMIT} '' project"
     )
-    LAST_UPDATE = ret['last_update']
-    return [(x['project'], x['download_count']) for x in ret['rows']]
+    LAST_UPDATE = ret["last_update"]
+    return [(x["project"], x["download_count"]) for x in ret["rows"]]
 
 
 def ranking():
@@ -127,13 +126,13 @@ def print_header(left, right="Downloads"):
 
 
 def print_markdown_table(title, left, rows):
-    pleft = left.replace('_', ' ').capitalize()
+    pleft = left.replace("_", " ").capitalize()
     print("### " + title)
     print()
     print_header(pleft)
     for row in rows:
         lval = row[left]
-        print_row(lval, row['download_count'])
+        print_row(lval, row["download_count"])
     print()
 
 
@@ -148,26 +147,26 @@ def main():
     print(s)
 
     data = [
-        {'what': 'Per month', 'download_count': downs},
-        {'what': 'Per day', 'download_count': int(downs / 30)},
-        {'what': 'PYPI ranking', 'download_count': ranking()},
+        {"what": "Per month", "download_count": downs},
+        {"what": "Per day", "download_count": int(downs / 30)},
+        {"what": "PYPI ranking", "download_count": ranking()},
     ]
-    print_markdown_table('Overview', 'what', data)
+    print_markdown_table("Overview", "what", data)
     print_markdown_table(
-        'Operating systems', 'system_name', downloads_by_system()['rows']
+        "Operating systems", "system_name", downloads_by_system()["rows"]
     )
     print_markdown_table(
-        'Distros', 'distro_name', downloads_by_distro()['rows']
+        "Distros", "distro_name", downloads_by_distro()["rows"]
     )
     print_markdown_table(
-        'Python versions', 'python_version', downloads_pyver()['rows']
+        "Python versions", "python_version", downloads_pyver()["rows"]
     )
     print_markdown_table(
-        'Countries', 'country', downloads_by_country()['rows']
+        "Countries", "country", downloads_by_country()["rows"]
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     finally:

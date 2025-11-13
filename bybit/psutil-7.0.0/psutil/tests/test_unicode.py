@@ -108,8 +108,8 @@ def try_unicode(suffix):
         safe_rmpath(testfn)
         create_py_exe(testfn)
         sproc = spawn_testproc(cmd=[testfn])
-        shutil.copyfile(testfn, testfn + '-2')
-        safe_rmpath(testfn + '-2')
+        shutil.copyfile(testfn, testfn + "-2")
+        safe_rmpath(testfn + "-2")
     except (UnicodeEncodeError, OSError):
         return False
     else:
@@ -214,7 +214,7 @@ class TestFSAPIs(BaseUnicodeTest):
     def test_proc_open_files(self):
         p = psutil.Process()
         start = set(p.open_files())
-        with open(self.funky_name, 'rb'):
+        with open(self.funky_name, "rb"):
             new = set(p.open_files())
         path = (new - start).pop().path
         assert isinstance(path, str)
@@ -229,7 +229,7 @@ class TestFSAPIs(BaseUnicodeTest):
         name = self.get_testfn(suffix=self.funky_suffix)
         sock = bind_unix_socket(name)
         with closing(sock):
-            conn = psutil.Process().net_connections('unix')[0]
+            conn = psutil.Process().net_connections("unix")[0]
             assert isinstance(conn.laddr, str)
             assert conn.laddr == name
 
@@ -248,7 +248,7 @@ class TestFSAPIs(BaseUnicodeTest):
         name = self.get_testfn(suffix=self.funky_suffix)
         sock = bind_unix_socket(name)
         with closing(sock):
-            cons = psutil.net_connections(kind='unix')
+            cons = psutil.net_connections(kind="unix")
             conn = find_sock(cons)
             assert isinstance(conn.laddr, str)
             assert conn.laddr == name
@@ -303,11 +303,11 @@ class TestNonFSAPIS(BaseUnicodeTest):
         # Note: differently from others, this test does not deal
         # with fs paths.
         env = os.environ.copy()
-        env['FUNNY_ARG'] = self.funky_suffix
+        env["FUNNY_ARG"] = self.funky_suffix
         sproc = self.spawn_testproc(env=env)
         p = psutil.Process(sproc.pid)
         env = p.environ()
         for k, v in env.items():
             assert isinstance(k, str)
             assert isinstance(v, str)
-        assert env['FUNNY_ARG'] == self.funky_suffix
+        assert env["FUNNY_ARG"] == self.funky_suffix

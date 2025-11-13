@@ -23,32 +23,59 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
+
 def parse_dt(s: str) -> datetime:
     """Parse an ISO-formatted datetime string to a UTC datetime object."""
     return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
 
-def fetch_klines_once(symbol: str, category: str, interval: str, start: datetime, end: datetime, testnet: bool) -> pd.DataFrame:
+
+def fetch_klines_once(
+    symbol: str,
+    category: str,
+    interval: str,
+    start: datetime,
+    end: datetime,
+    testnet: bool,
+) -> pd.DataFrame:
     logger.info("Fetching klines once for the entire optimization window...")
     # BybitHistoricalData expects a BacktestParams object, so create a minimal one
-    params = BacktestParams(symbol=symbol, category=category, interval=interval, start=start, end=end, testnet=testnet)
+    params = BacktestParams(
+        symbol=symbol,
+        category=category,
+        interval=interval,
+        start=start,
+        end=end,
+        testnet=testnet,
+    )
     df = BybitHistoricalData(params).get_klines()
     logger.info(
-        f"Fetched {len(df)} candles from {datetime.fromtimestamp(df.start.iloc[0]/1000)} "
-        f"to {datetime.fromtimestamp(df.start.iloc[-1]/1000)}"
+        f"Fetched {len(df)} candles from {datetime.fromtimestamp(df.start.iloc[0] / 1000)} "
+        f"to {datetime.fromtimestamp(df.start.iloc[-1] / 1000)}"
     )
     return df
+
 
 def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     cfg = deepcopy(base_cfg)
 
     # 1. Define all parameters using tr.suggest_...
-    min_spread_pct = tr.suggest_float("min_spread_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
-    base_spread_pct = tr.suggest_float("base_spread_pct", 0.0005, 0.005, log=True) # 0.05% to 0.5%
-    max_spread_pct = tr.suggest_float("max_spread_pct", base_spread_pct * 1.5, 0.02, log=True) # up to 2%
+    min_spread_pct = tr.suggest_float(
+        "min_spread_pct", 0.0001, 0.001, log=True
+    )  # 0.01% to 0.1%
+    base_spread_pct = tr.suggest_float(
+        "base_spread_pct", 0.0005, 0.005, log=True
+    )  # 0.05% to 0.5%
+    max_spread_pct = tr.suggest_float(
+        "max_spread_pct", base_spread_pct * 1.5, 0.02, log=True
+    )  # up to 2%
 
-    base_order_size_pct_of_balance = tr.suggest_float("base_order_size_pct_of_balance", 0.001, 0.01, log=True) # 0.1% to 1%
+    base_order_size_pct_of_balance = tr.suggest_float(
+        "base_order_size_pct_of_balance", 0.001, 0.01, log=True
+    )  # 0.1% to 1%
     min_order_value_usd = tr.suggest_float("min_order_value_usd", 5.0, 50.0, log=True)
-    max_order_size_pct = tr.suggest_float("max_order_size_pct", 0.05, 0.5, log=True) # 5% to 50%
+    max_order_size_pct = tr.suggest_float(
+        "max_order_size_pct", 0.05, 0.5, log=True
+    )  # 5% to 50%
 
     max_inventory_ratio = tr.suggest_float("max_inventory_ratio", 0.1, 0.9)
     skew_intensity = tr.suggest_float("skew_intensity", 0.1, 1.0)
@@ -56,32 +83,40 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     volatility_window_sec = tr.suggest_int("volatility_window_sec", 30, 180)
     volatility_multiplier = tr.suggest_float("volatility_multiplier", 1.0, 5.0)
 
-    min_profit_spread_after_fees_pct = tr.suggest_float("min_profit_spread_after_fees_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
-    max_daily_loss_pct = tr.suggest_float("max_daily_loss_pct", 0.01, 0.1) # 1% to 10%
+    min_profit_spread_after_fees_pct = tr.suggest_float(
+        "min_profit_spread_after_fees_pct", 0.0001, 0.001, log=True
+    )  # 0.01% to 0.1%
+    max_daily_loss_pct = tr.suggest_float("max_daily_loss_pct", 0.01, 0.1)  # 1% to 10%
 
-    order_stale_threshold_pct = tr.suggest_float("order_stale_threshold_pct", 0.0001, 0.001, log=True) # 0.01% to 0.1%
+    order_stale_threshold_pct = tr.suggest_float(
+        "order_stale_threshold_pct", 0.0001, 0.001, log=True
+    )  # 0.01% to 0.1%
     max_outstanding_orders = tr.suggest_int("max_outstanding_orders", 1, 5)
 
     # 2. Use the defined parameters in replace() calls
     # Update DynamicSpreadConfig fields
-    new_dynamic_spread = replace(cfg.strategy.dynamic_spread,
+    new_dynamic_spread = replace(
+        cfg.strategy.dynamic_spread,
         min_spread_pct=Decimal(str(min_spread_pct)),
         max_spread_pct=Decimal(str(max_spread_pct)),
         volatility_window_sec=volatility_window_sec,
         volatility_multiplier=Decimal(str(volatility_multiplier)),
     )
     # Update InventoryStrategyConfig fields
-    new_inventory = replace(cfg.strategy.inventory,
+    new_inventory = replace(
+        cfg.strategy.inventory,
         max_inventory_ratio=Decimal(str(max_inventory_ratio)),
         skew_intensity=Decimal(str(skew_intensity)),
     )
     # Update CircuitBreakerConfig fields
-    new_circuit_breaker = replace(cfg.strategy.circuit_breaker,
+    new_circuit_breaker = replace(
+        cfg.strategy.circuit_breaker,
         max_daily_loss_pct=Decimal(str(max_daily_loss_pct)),
     )
 
     # Now create a new StrategyConfig instance
-    new_strategy = replace(cfg.strategy,
+    new_strategy = replace(
+        cfg.strategy,
         base_spread_pct=Decimal(str(base_spread_pct)),
         base_order_size_pct_of_balance=Decimal(str(base_order_size_pct_of_balance)),
         order_stale_threshold_pct=Decimal(str(order_stale_threshold_pct)),
@@ -93,13 +128,15 @@ def apply_trial_to_config(base_cfg: Config, tr: optuna.Trial) -> Config:
     )
 
     # Finally, create a new Config instance
-    cfg = replace(cfg,
+    cfg = replace(
+        cfg,
         min_order_value_usd=Decimal(str(min_order_value_usd)),
         max_order_size_pct=Decimal(str(max_order_size_pct)),
         strategy=new_strategy,
     )
 
     return cfg
+
 
 def make_objective(
     klines_df: pd.DataFrame,
@@ -108,7 +145,7 @@ def make_objective(
     risk_penalty: float,
     max_dd_cap: float,
     trials_verbose: bool,
-    kline_interval: str, # Add kline_interval here
+    kline_interval: str,  # Add kline_interval here
 ):
     """
     Returns an Optuna objective callable.
@@ -121,7 +158,9 @@ def make_objective(
         cfg = apply_trial_to_config(base_cfg, trial)
 
         # Run backtest using the new Backtester
-        bt = Backtester(config=cfg, klines_df=klines_df, kline_interval=kline_interval) # Use kline_interval
+        bt = Backtester(
+            config=cfg, klines_df=klines_df, kline_interval=kline_interval
+        )  # Use kline_interval
         results = bt.run()
 
         net = float(results["net_pnl"])
@@ -147,6 +186,7 @@ def make_objective(
         return float(score)
 
     return objective
+
 
 def main():
     ap = argparse.ArgumentParser(
@@ -216,7 +256,7 @@ def main():
         interval=args.interval,
         start=parse_dt(args.start),
         end=parse_dt(args.end),
-        testnet=args.testnet
+        testnet=args.testnet,
     )
 
     # Base config to be tuned
@@ -260,7 +300,7 @@ def main():
         risk_penalty=args.risk_penalty,
         max_dd_cap=args.max_dd_cap,
         trials_verbose=args.trials_verbose,
-        kline_interval=args.interval, # Pass kline_interval here
+        kline_interval=args.interval,  # Pass kline_interval here
     )
 
     logger.info(
@@ -302,11 +342,15 @@ def main():
     logger.info("Re-running backtest with best parameters to export equity curve...")
     cfg_best = apply_trial_to_config(base_cfg, best)
 
-    bt = Backtester(config=cfg_best, klines_df=klines_df, kline_interval=args.interval) # Pass kline_interval here
-    results_best = bt.run() # Run backtest to get equity curve
+    bt = Backtester(
+        config=cfg_best, klines_df=klines_df, kline_interval=args.interval
+    )  # Pass kline_interval here
+    results_best = bt.run()  # Run backtest to get equity curve
 
     eq = pd.DataFrame(bt.equity_curve, columns=["timestamp_ms", "equity"])
-    eq["timestamp"] = eq["timestamp_ms"].apply(lambda x: datetime.fromtimestamp(x/1000, tz=timezone.utc).isoformat())
+    eq["timestamp"] = eq["timestamp_ms"].apply(
+        lambda x: datetime.fromtimestamp(x / 1000, tz=timezone.utc).isoformat()
+    )
     eq.to_csv("equity_curve_best.csv", index=False)
     logger.info("Saved equity_curve_best.csv")
 

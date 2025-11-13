@@ -3,14 +3,18 @@
 import logging  # Import logging module
 
 import requests
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask
+from flask import jsonify
+from flask import send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app) # Enable CORS for the frontend
+CORS(app)  # Enable CORS for the frontend
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # --- Bybit API Configuration ---
 BYBIT_API_URL = "https://api.bybit.com/v5/market/kline"
@@ -29,12 +33,13 @@ LONG_EMA_PERIOD = 26
 RSI_PERIOD = 14
 MACD_SIGNAL_PERIOD = 9
 ADX_PERIOD = 14
-ADX_THRESHOLD = 20 # Minimum ADX value to consider a trend strong enough
+ADX_THRESHOLD = 20  # Minimum ADX value to consider a trend strong enough
 VOLUME_MA_PERIOD = 20
-VOLUME_SPIKE_THRESHOLD = 1.5 # Volume must be X times the MA to confirm a signal
+VOLUME_SPIKE_THRESHOLD = 1.5  # Volume must be X times the MA to confirm a signal
 
 
 # --- Indicator Calculation Functions ---
+
 
 def calculate_ema(data, period):
     """Calculates Exponential Moving Average (EMA)."""
@@ -46,24 +51,31 @@ def calculate_ema(data, period):
 
     # Initial EMA is a simple average of the first 'period' values
     try:
-        initial_sum = sum(d['close'] for d in data[:period])
+        initial_sum = sum(d["close"] for d in data[:period])
         ema_values.append(initial_sum / period)
-    except (KeyError, TypeError): # Handle cases where 'close' might be missing or not a number
+    except (
+        KeyError,
+        TypeError,
+    ):  # Handle cases where 'close' might be missing or not a number
         logging.warning("Error calculating initial EMA sum. Data might be malformed.")
-        return [None] * len(data) # Return None for all if initial calc fails
+        return [None] * len(data)  # Return None for all if initial calc fails
 
     # Calculate subsequent EMA values
     for i in range(period, len(data)):
         prev_ema = ema_values[-1]
         try:
-            current_close = data[i]['close']
-            if prev_ema is None or current_close is None: # Skip if previous EMA or current close is None
+            current_close = data[i]["close"]
+            if (
+                prev_ema is None or current_close is None
+            ):  # Skip if previous EMA or current close is None
                 ema_values.append(None)
                 continue
             current_ema = (current_close - prev_ema) * smoothing_factor + prev_ema
             ema_values.append(current_ema)
-        except (KeyError, TypeError): # Handle missing 'close' or non-numeric values
-            logging.warning(f"Skipping EMA calculation for index {i} due to data error.")
+        except (KeyError, TypeError):  # Handle missing 'close' or non-numeric values
+            logging.warning(
+                f"Skipping EMA calculation for index {i} due to data error."
+            )
             ema_values.append(None)
 
     return ema_values
@@ -78,24 +90,26 @@ def calculate_rsi(data, period):
     losses = [0.0] * len(data)
     for i in range(1, len(data)):
         try:
-            change = data[i]['close'] - data[i-1]['close']
+            change = data[i]["close"] - data[i - 1]["close"]
             if change > 0:
                 gains[i] = change
             else:
                 losses[i] = abs(change)
-        except (KeyError, TypeError): # Handle missing 'close' or non-numeric values
-            logging.warning(f"Skipping RSI gain/loss calculation for index {i} due to data error.")
+        except (KeyError, TypeError):  # Handle missing 'close' or non-numeric values
+            logging.warning(
+                f"Skipping RSI gain/loss calculation for index {i} due to data error."
+            )
             # Keep gains/losses as 0 for this iteration if error occurs
 
     # Initial Average Gain and Loss for the first 'period'
     try:
-        avg_gain = sum(gains[1:period+1]) / period
-        avg_loss = sum(losses[1:period+1]) / period
-    except (ValueError, TypeError): # Handle potential empty slices or non-numeric sums
+        avg_gain = sum(gains[1 : period + 1]) / period
+        avg_loss = sum(losses[1 : period + 1]) / period
+    except (ValueError, TypeError):  # Handle potential empty slices or non-numeric sums
         logging.warning("Error calculating initial average gain/loss for RSI.")
         return [None] * len(data)
 
-    rsi_values = [None] * period # RSI needs 'period' bars to start calculation
+    rsi_values = [None] * period  # RSI needs 'period' bars to start calculation
 
     def calculate_single_rsi(avg_gain, avg_loss):
         if avg_loss == 0:
@@ -107,21 +121,26 @@ def calculate_rsi(data, period):
     if avg_gain is not None and avg_loss is not None:
         try:
             rsi_values.append(calculate_single_rsi(avg_gain, avg_loss))
-        except (ValueError, TypeError): # Catch division by zero if avg_loss somehow is zero again
+        except (
+            ValueError,
+            TypeError,
+        ):  # Catch division by zero if avg_loss somehow is zero again
             rsi_values.append(None)
     else:
-         rsi_values.append(None)
+        rsi_values.append(None)
 
     # Calculate subsequent RSI values using Wilder's smoothing
     for i in range(period + 1, len(data)):
         try:
-            prev_avg_gain = avg_gain # Use the last calculated avg_gain/loss for smoothing
+            prev_avg_gain = (
+                avg_gain  # Use the last calculated avg_gain/loss for smoothing
+            )
             prev_avg_loss = avg_loss
 
             avg_gain = ((prev_avg_gain * (period - 1)) + gains[i]) / period
             avg_loss = ((prev_avg_loss * (period - 1)) + losses[i]) / period
 
-            if avg_loss == 0: # Handle division by zero
+            if avg_loss == 0:  # Handle division by zero
                 rsi_values.append(100.0)
             else:
                 rs = avg_gain / avg_loss
@@ -135,6 +154,7 @@ def calculate_rsi(data, period):
 
     return rsi_values
 
+
 def calculate_atr(data, period):
     """Calculates Average True Range (ATR) using Wilder's smoothing."""
     if not data or len(data) < period + 1:
@@ -143,14 +163,16 @@ def calculate_atr(data, period):
     tr_values = []
     for i in range(1, len(data)):
         try:
-            high = data[i]['high']
-            low = data[i]['low']
-            prev_close = data[i-1]['close']
+            high = data[i]["high"]
+            low = data[i]["low"]
+            prev_close = data[i - 1]["close"]
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             tr_values.append(tr)
         except (KeyError, TypeError):
-            logging.warning(f"Skipping ATR calculation for index {i} due to data error.")
-            tr_values.append(None) # Append None if data is bad
+            logging.warning(
+                f"Skipping ATR calculation for index {i} due to data error."
+            )
+            tr_values.append(None)  # Append None if data is bad
 
     # Initial ATR calculation
     initial_tr_slice = [v for v in tr_values[:period] if v is not None]
@@ -159,7 +181,7 @@ def calculate_atr(data, period):
         return [None] * len(data)
 
     initial_atr = sum(initial_tr_slice) / period
-    atr_values = [None] * period # ATR needs 'period' bars to start calculation
+    atr_values = [None] * period  # ATR needs 'period' bars to start calculation
     atr_values.append(initial_atr)
 
     # Calculate subsequent ATR values
@@ -167,7 +189,9 @@ def calculate_atr(data, period):
         prev_atr = atr_values[-1]
         current_tr = tr_values[i]
 
-        if prev_atr is None or current_tr is None: # Skip if previous ATR or current TR is None
+        if (
+            prev_atr is None or current_tr is None
+        ):  # Skip if previous ATR or current TR is None
             atr_values.append(None)
             continue
 
@@ -175,6 +199,7 @@ def calculate_atr(data, period):
         atr_values.append(atr)
 
     return atr_values
+
 
 def calculate_macd(data, short_period, long_period, signal_period):
     """Calculates MACD, Signal Line, and Histogram."""
@@ -189,7 +214,7 @@ def calculate_macd(data, short_period, long_period, signal_period):
             macd_line.append(None)
 
     # Prepare data for signal line calculation (EMA of MACD line)
-    macd_data_for_ema = [{'close': val} for val in macd_line if val is not None]
+    macd_data_for_ema = [{"close": val} for val in macd_line if val is not None]
 
     # Calculate signal line EMA on the MACD line values
     temp_signal_line = calculate_ema(macd_data_for_ema, signal_period)
@@ -208,6 +233,7 @@ def calculate_macd(data, short_period, long_period, signal_period):
 
     return macd_line, signal_line, hist
 
+
 def calculate_adx(highs, lows, closes, period):
     """Calculates ADX, +DI, and -DI."""
     if not closes or len(closes) < period:
@@ -218,8 +244,8 @@ def calculate_adx(highs, lows, closes, period):
 
     for i in range(1, len(closes)):
         try:
-            up_move = highs[i] - highs[i-1]
-            down_move = lows[i-1] - lows[i]
+            up_move = highs[i] - highs[i - 1]
+            down_move = lows[i - 1] - lows[i]
 
             # Ensure moves are non-negative and check conditions
             if up_move > 0 and up_move > down_move:
@@ -228,18 +254,24 @@ def calculate_adx(highs, lows, closes, period):
             if down_move > 0 and down_move > up_move:
                 minus_dm[i] = down_move
         except (KeyError, TypeError):
-            logging.warning(f"Skipping ADX DM calculation for index {i} due to data error.")
-            plus_dm[i] = 0.0 # Default to 0 if error
+            logging.warning(
+                f"Skipping ADX DM calculation for index {i} due to data error."
+            )
+            plus_dm[i] = 0.0  # Default to 0 if error
             minus_dm[i] = 0.0
 
     # Calculate ATR (required for DI) - needs data in specific format
     atr_data_for_calc = []
     for i in range(len(closes)):
         try:
-            atr_data_for_calc.append({'high': highs[i], 'low': lows[i], 'close': closes[i]})
+            atr_data_for_calc.append(
+                {"high": highs[i], "low": lows[i], "close": closes[i]}
+            )
         except (KeyError, TypeError):
             logging.warning(f"Skipping ATR data prep for index {i} in ADX calc.")
-            atr_data_for_calc.append({'high': None, 'low': None, 'close': None}) # Placeholder
+            atr_data_for_calc.append(
+                {"high": None, "low": None, "close": None}
+            )  # Placeholder
 
     atr_values = calculate_atr(atr_data_for_calc, period)
 
@@ -274,11 +306,11 @@ def calculate_adx(highs, lows, closes, period):
                 dx = 100.0 * abs(pdi - mdi) / sum_di
                 dx_values[i] = dx
             else:
-                dx_values[i] = 0.0 # If sum_di is 0, DX is 0
+                dx_values[i] = 0.0  # If sum_di is 0, DX is 0
 
     # Calculate ADX using EMA on DX values
     # Need to wrap dx_values in the format expected by calculate_ema
-    dx_data_for_ema = [{'close': val} for val in dx_values if val is not None]
+    dx_data_for_ema = [{"close": val} for val in dx_values if val is not None]
     temp_adx_values = calculate_ema(dx_data_for_ema, period)
 
     # Reconstruct adx_values to match the length of closes, padding with None at the beginning
@@ -299,11 +331,13 @@ def calculate_vwap(data):
 
     for d in data:
         try:
-            volume = d['volume']
-            close_price = d['close']
+            volume = d["volume"]
+            close_price = d["close"]
 
             if volume is None or close_price is None:
-                vwap_values.append(None) # Cannot calculate if volume or price is missing
+                vwap_values.append(
+                    None
+                )  # Cannot calculate if volume or price is missing
                 continue
 
             cumulative_volume += volume
@@ -312,7 +346,7 @@ def calculate_vwap(data):
             if cumulative_volume > 0:
                 vwap_values.append(cumulative_volume_price / cumulative_volume)
             else:
-                vwap_values.append(None) # Avoid division by zero
+                vwap_values.append(None)  # Avoid division by zero
         except (KeyError, TypeError):
             logging.warning("Skipping VWAP calculation for a data point due to error.")
             vwap_values.append(None)
@@ -320,26 +354,30 @@ def calculate_vwap(data):
     return vwap_values
 
 
-@app.route('/api/data')
+@app.route("/api/data")
 def get_bybit_data():
     """Fetches and processes Bybit data for the frontend."""
     try:
         params = {
-            "category": "linear", # Assuming linear perpetual contracts
+            "category": "linear",  # Assuming linear perpetual contracts
             "symbol": SYMBOL,
             "interval": INTERVAL,
-            "limit": LIMIT
+            "limit": LIMIT,
         }
         logging.info(f"Fetching K-line data from Bybit API: {params}")
         response = requests.get(BYBIT_API_URL, params=params)
-        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
 
         api_result = response.json()
         raw_data = api_result.get("result", {}).get("list", [])
 
         if not raw_data:
             logging.warning("No data received from Bybit API.")
-            return jsonify({"error": "No data received from Bybit API for the specified symbol and interval."}), 404
+            return jsonify(
+                {
+                    "error": "No data received from Bybit API for the specified symbol and interval."
+                }
+            ), 404
 
         # Format and reverse the data to have the oldest first
         formatted_data = []
@@ -347,38 +385,44 @@ def get_bybit_data():
             try:
                 # Bybit timestamps are often in milliseconds, convert to seconds for JS
                 timestamp = int(bar[0]) / 1000
-                formatted_data.append({
-                    "time": timestamp,
-                    "open": float(bar[1]),
-                    "high": float(bar[2]),
-                    "low": float(bar[3]),
-                    "close": float(bar[4]),
-                    "volume": float(bar[5])
-                })
+                formatted_data.append(
+                    {
+                        "time": timestamp,
+                        "open": float(bar[1]),
+                        "high": float(bar[2]),
+                        "low": float(bar[3]),
+                        "close": float(bar[4]),
+                        "volume": float(bar[5]),
+                    }
+                )
             except (IndexError, ValueError, TypeError) as e:
                 logging.warning(f"Skipping malformed bar data: {bar} - Error: {e}")
-                continue # Skip this bar if data format is unexpected
+                continue  # Skip this bar if data format is unexpected
 
         if not formatted_data:
             logging.error("All bars processed resulted in malformed data.")
-            return jsonify({"error": "Failed to parse any valid bar data from API response."}), 500
+            return jsonify(
+                {"error": "Failed to parse any valid bar data from API response."}
+            ), 500
 
         # Extract OHLCV data for calculations
-        closes = [d['close'] for d in formatted_data]
-        highs = [d['high'] for d in formatted_data]
-        lows = [d['low'] for d in formatted_data]
-        volumes = [d['volume'] for d in formatted_data]
+        closes = [d["close"] for d in formatted_data]
+        highs = [d["high"] for d in formatted_data]
+        lows = [d["low"] for d in formatted_data]
+        volumes = [d["volume"] for d in formatted_data]
 
         # --- Calculate all Indicators ---
         trend_ema = calculate_ema(formatted_data, TREND_EMA_PERIOD)
         short_ema = calculate_ema(formatted_data, SHORT_EMA_PERIOD)
         long_ema = calculate_ema(formatted_data, LONG_EMA_PERIOD)
         rsi = calculate_rsi(formatted_data, RSI_PERIOD)
-        macd_line, signal_line, macd_hist = calculate_macd(formatted_data, SHORT_EMA_PERIOD, LONG_EMA_PERIOD, MACD_SIGNAL_PERIOD)
+        macd_line, signal_line, macd_hist = calculate_macd(
+            formatted_data, SHORT_EMA_PERIOD, LONG_EMA_PERIOD, MACD_SIGNAL_PERIOD
+        )
         adx, plus_di, minus_di = calculate_adx(highs, lows, closes, ADX_PERIOD)
         atr = calculate_atr(formatted_data, ATR_PERIOD)
-        volume_ma = calculate_ema([{'close': vol} for vol in volumes], VOLUME_MA_PERIOD)
-        vwap = calculate_vwap(formatted_data) # Added VWAP calculation
+        volume_ma = calculate_ema([{"close": vol} for vol in volumes], VOLUME_MA_PERIOD)
+        vwap = calculate_vwap(formatted_data)  # Added VWAP calculation
 
         # --- Chandelier Exit Calculation ---
         # This calculation needs access to highs, lows, and ATR over a period.
@@ -389,28 +433,40 @@ def get_bybit_data():
         for i in range(ATR_PERIOD - 1, len(formatted_data)):
             if atr[i] is not None:
                 # Get the relevant slice of data for high/low range calculation
-                relevant_highs = highs[max(0, i - ATR_PERIOD + 1):i+1]
-                relevant_lows = lows[max(0, i - ATR_PERIOD + 1):i+1]
+                relevant_highs = highs[max(0, i - ATR_PERIOD + 1) : i + 1]
+                relevant_lows = lows[max(0, i - ATR_PERIOD + 1) : i + 1]
 
                 if relevant_highs and relevant_lows:
                     highest_high = max(relevant_highs)
                     lowest_low = min(relevant_lows)
 
-                    chandelier_long_vals[i] = highest_high - (atr[i] * CHANDELIER_MULTIPLIER)
-                    chandelier_short_vals[i] = lowest_low + (atr[i] * CHANDELIER_MULTIPLIER)
+                    chandelier_long_vals[i] = highest_high - (
+                        atr[i] * CHANDELIER_MULTIPLIER
+                    )
+                    chandelier_short_vals[i] = lowest_low + (
+                        atr[i] * CHANDELIER_MULTIPLIER
+                    )
 
         # --- Generate Trading Signal ---
-        current_signal = 'neutral'
+        current_signal = "neutral"
 
         # Get the latest valid data point for signal calculation
         last_valid_index = -1
         for i in range(len(formatted_data) - 1, -1, -1):
-            if (closes[i] is not None and volumes[i] is not None and
-                short_ema[i] is not None and long_ema[i] is not None and
-                trend_ema[i] is not None and rsi[i] is not None and
-                macd_line[i] is not None and signal_line[i] is not None and
-                adx[i] is not None and chandelier_long_vals[i] is not None and
-                chandelier_short_vals[i] is not None and volume_ma[i] is not None):
+            if (
+                closes[i] is not None
+                and volumes[i] is not None
+                and short_ema[i] is not None
+                and long_ema[i] is not None
+                and trend_ema[i] is not None
+                and rsi[i] is not None
+                and macd_line[i] is not None
+                and signal_line[i] is not None
+                and adx[i] is not None
+                and chandelier_long_vals[i] is not None
+                and chandelier_short_vals[i] is not None
+                and volume_ma[i] is not None
+            ):
                 last_valid_index = i
                 break
 
@@ -431,30 +487,32 @@ def get_bybit_data():
 
             # --- Buy Entry Condition ---
             buy_entry_condition = (
-                last_short_ema > last_long_ema and
-                last_close > last_trend_ema and
-                last_close > last_chandelier_long and # Price above upper Chandelier
-                last_rsi < 70 and # RSI not overbought
-                last_volume > (last_volume_ma * VOLUME_SPIKE_THRESHOLD) and # Volume spike confirmation
-                last_macd > last_macd_signal and # MACD crossover confirmation
-                last_adx > ADX_THRESHOLD # Trend strength confirmation
+                last_short_ema > last_long_ema
+                and last_close > last_trend_ema
+                and last_close > last_chandelier_long  # Price above upper Chandelier
+                and last_rsi < 70  # RSI not overbought
+                and last_volume
+                > (last_volume_ma * VOLUME_SPIKE_THRESHOLD)  # Volume spike confirmation
+                and last_macd > last_macd_signal  # MACD crossover confirmation
+                and last_adx > ADX_THRESHOLD  # Trend strength confirmation
             )
 
             # --- Sell Entry Condition ---
             sell_entry_condition = (
-                last_short_ema < last_long_ema and
-                last_close < last_trend_ema and
-                last_close < last_chandelier_short and # Price below lower Chandelier
-                last_rsi > 30 and # RSI not oversold
-                last_volume > (last_volume_ma * VOLUME_SPIKE_THRESHOLD) and # Volume spike confirmation
-                last_macd < last_macd_signal and # MACD crossover confirmation
-                last_adx > ADX_THRESHOLD # Trend strength confirmation
+                last_short_ema < last_long_ema
+                and last_close < last_trend_ema
+                and last_close < last_chandelier_short  # Price below lower Chandelier
+                and last_rsi > 30  # RSI not oversold
+                and last_volume
+                > (last_volume_ma * VOLUME_SPIKE_THRESHOLD)  # Volume spike confirmation
+                and last_macd < last_macd_signal  # MACD crossover confirmation
+                and last_adx > ADX_THRESHOLD  # Trend strength confirmation
             )
 
             if buy_entry_condition:
-                current_signal = 'buy'
+                current_signal = "buy"
             elif sell_entry_condition:
-                current_signal = 'sell'
+                current_signal = "sell"
         else:
             logging.warning("Could not find a valid data point for signal generation.")
             # If no valid data, signal remains 'neutral' and all indicators will show '--'
@@ -465,7 +523,7 @@ def get_bybit_data():
         def pad_list(lst, target_length, default_value=None):
             if len(lst) < target_length:
                 return [default_value] * (target_length - len(lst)) + lst
-            return lst # No padding needed if list is already long enough
+            return lst  # No padding needed if list is already long enough
 
         response_data = {
             "candles": formatted_data,
@@ -481,46 +539,69 @@ def get_bybit_data():
             "minus_di": pad_list(minus_di, len(formatted_data)),
             "chandelier_long": pad_list(chandelier_long_vals, len(formatted_data)),
             "chandelier_short": pad_list(chandelier_short_vals, len(formatted_data)),
-            "volume": pad_list(volumes, len(formatted_data)), # Added volume
-            "volume_ma": pad_list(volume_ma, len(formatted_data)), # Added volume MA
-            "vwap": pad_list(vwap, len(formatted_data)), # Added VWAP
+            "volume": pad_list(volumes, len(formatted_data)),  # Added volume
+            "volume_ma": pad_list(volume_ma, len(formatted_data)),  # Added volume MA
+            "vwap": pad_list(vwap, len(formatted_data)),  # Added VWAP
             "current_signal": current_signal,
-            "last_close": formatted_data[-1]['close'] if formatted_data else None # Get last close from the latest valid candle
+            "last_close": formatted_data[-1]["close"]
+            if formatted_data
+            else None,  # Get last close from the latest valid candle
         }
 
-        logging.info(f"Successfully processed data. {len(formatted_data)} candles, signal: {current_signal}")
+        logging.info(
+            f"Successfully processed data. {len(formatted_data)} candles, signal: {current_signal}"
+        )
         return jsonify(response_data)
 
     except requests.exceptions.HTTPError as e:
-        logging.error(f"HTTP error fetching data from Bybit: {e.response.status_code} - {e.response.text}")
-        return jsonify({"error": f"HTTP error from Bybit API: {e.response.status_code}. Please check SYMBOL, INTERVAL, and API limits."}), 500
+        logging.error(
+            f"HTTP error fetching data from Bybit: {e.response.status_code} - {e.response.text}"
+        )
+        return jsonify(
+            {
+                "error": f"HTTP error from Bybit API: {e.response.status_code}. Please check SYMBOL, INTERVAL, and API limits."
+            }
+        ), 500
     except requests.exceptions.ConnectionError as e:
         logging.error(f"Connection error fetching data from Bybit: {e}")
-        return jsonify({"error": "Could not connect to Bybit API. Check your internet connection or Bybit server status."}), 500
+        return jsonify(
+            {
+                "error": "Could not connect to Bybit API. Check your internet connection or Bybit server status."
+            }
+        ), 500
     except requests.exceptions.Timeout as e:
         logging.error(f"Timeout error fetching data from Bybit: {e}")
-        return jsonify({"error": "Request to Bybit API timed out. Try again later."}), 500
+        return jsonify(
+            {"error": "Request to Bybit API timed out. Try again later."}
+        ), 500
     except requests.exceptions.RequestException as e:
         logging.error(f"An unexpected error occurred during Bybit API request: {e}")
-        return jsonify({"error": "An unexpected error occurred while fetching data from Bybit."}), 500
+        return jsonify(
+            {"error": "An unexpected error occurred while fetching data from Bybit."}
+        ), 500
     except Exception:
         # Catch-all for unexpected errors during data processing
         logging.exception("An unexpected error occurred during data processing.")
-        return jsonify({"error": "An internal error occurred while processing data."}), 500
+        return jsonify(
+            {"error": "An internal error occurred while processing data."}
+        ), 500
 
-@app.route('/')
+
+@app.route("/")
 def serve_index():
     """Serves the frontend index.html file."""
     try:
-        return send_from_directory('.', 'index.html')
+        return send_from_directory(".", "index.html")
     except FileNotFoundError:
         logging.error("index.html not found in the current directory.")
         return "Error: index.html not found.", 404
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Use debug=True for development, but set to False for production
     # app.run(host='0.0.0.0', port=5000, debug=True)
     logging.info("Starting Flask server on http://0.0.0.0:5000")
-    print("Starting server. To access the app, open your web browser and go to http://127.0.0.1:5000")
-    app.run(host='0.0.0.0', port=5000)
-
+    print(
+        "Starting server. To access the app, open your web browser and go to http://127.0.0.1:5000"
+    )
+    app.run(host="0.0.0.0", port=5000)

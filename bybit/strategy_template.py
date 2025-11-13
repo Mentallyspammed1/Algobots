@@ -5,9 +5,12 @@ from pybit.unified_trading import HTTP
 
 logger = logging.getLogger(__name__)
 
-async def my_custom_strategy(market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any):
+
+async def my_custom_strategy(
+    market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any
+):
     """This is a template for a custom trading strategy.
-    
+
     Args:
         market_data: Dictionary containing current market data for subscribed symbols.
                      Example: market_data = {
@@ -30,6 +33,7 @@ async def my_custom_strategy(market_data: dict, account_info: dict, http_client:
                      - await bot_instance.get_historical_klines(...) (to fetch klines)
         bot_instance: The BybitTradingBot instance itself. Useful for accessing
                       other bot methods or WebSocket manager's state (e.g., bot_instance.ws_manager.positions).
+
     """
     logger.info("Executing my_custom_strategy...")
 
@@ -41,15 +45,15 @@ async def my_custom_strategy(market_data: dict, account_info: dict, http_client:
         logger.info(f"Current BTCUSDT Price: {current_btc_price}")
     else:
         logger.warning("BTCUSDT ticker data not available.")
-        return # Exit if critical data is missing
+        return  # Exit if critical data is missing
 
     # --- Accessing Account Info ---
     usdt_balance = 0.0
     if account_info:
         for wallet in account_info:
-            for coin_info in wallet.get('coin', []):
-                if coin_info.get('coin') == 'USDT':
-                    usdt_balance = float(coin_info.get('availableToWithdraw', 0))
+            for coin_info in wallet.get("coin", []):
+                if coin_info.get("coin") == "USDT":
+                    usdt_balance = float(coin_info.get("availableToWithdraw", 0))
                     break
             if usdt_balance > 0:
                 break
@@ -69,11 +73,13 @@ async def my_custom_strategy(market_data: dict, account_info: dict, http_client:
     # Example: Get 1-hour klines for BTCUSDT
     klines_response = await bot_instance.get_historical_klines(
         symbol="BTCUSDT",
-        interval="60", # 60 minutes = 1 hour
-        limit=100 # Get last 100 candles
+        interval="60",  # 60 minutes = 1 hour
+        limit=100,  # Get last 100 candles
     )
-    if klines_response and klines_response['retCode'] == 0:
-        logger.info(f"Fetched {len(klines_response['result']['list'])} klines for BTCUSDT.")
+    if klines_response and klines_response["retCode"] == 0:
+        logger.info(
+            f"Fetched {len(klines_response['result']['list'])} klines for BTCUSDT."
+        )
         # Process klines here (e.g., calculate indicators)
     else:
         logger.warning("Failed to fetch historical klines.")
@@ -88,14 +94,16 @@ async def my_custom_strategy(market_data: dict, account_info: dict, http_client:
     # or pass state through the bot_instance if you modify the bot.
 
     # Example: Place a dummy buy order if conditions are met
-    if current_btc_price < 50000 and usdt_balance > 100: # Dummy condition
-        logger.info(f"Condition met: Attempting to place a BUY order for BTCUSDT at {current_btc_price}")
+    if current_btc_price < 50000 and usdt_balance > 100:  # Dummy condition
+        logger.info(
+            f"Condition met: Attempting to place a BUY order for BTCUSDT at {current_btc_price}"
+        )
         order_result = await http_client.place_order(
             category="linear",
             symbol="BTCUSDT",
             side="Buy",
             order_type="Market",
-            qty=0.001 # Example quantity
+            qty=0.001,  # Example quantity
         )
         if order_result:
             logger.info(f"Dummy Buy Order placed: {order_result}")

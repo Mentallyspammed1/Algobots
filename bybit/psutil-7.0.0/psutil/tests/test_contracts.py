@@ -227,7 +227,7 @@ class TestSystemAPITypes(PsutilTestCase):
 
     # TODO: remove this once 1892 is fixed
     @pytest.mark.skipif(
-        MACOS and platform.machine() == 'arm64', reason="skipped due to #1892"
+        MACOS and platform.machine() == "arm64", reason="skipped due to #1892"
     )
     @pytest.mark.skipif(not HAS_CPU_FREQ, reason="not supported")
     def test_cpu_freq(self):
@@ -252,7 +252,7 @@ class TestSystemAPITypes(PsutilTestCase):
     @pytest.mark.skipif(SKIP_SYSCONS, reason="requires root")
     def test_net_connections(self):
         with create_sockets():
-            ret = psutil.net_connections('all')
+            ret = psutil.net_connections("all")
             assert len(ret) == len(set(ret))
             for conn in ret:
                 assert is_namedtuple(conn)

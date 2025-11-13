@@ -4,7 +4,6 @@
 
 """Test utilities."""
 
-
 import atexit
 import contextlib
 import ctypes
@@ -108,11 +107,11 @@ __all__ = [
 
 # --- platforms
 
-PYPY = '__pypy__' in sys.builtin_module_names
+PYPY = "__pypy__" in sys.builtin_module_names
 # whether we're running this test suite on a Continuous Integration service
-GITHUB_ACTIONS = 'GITHUB_ACTIONS' in os.environ or 'CIBUILDWHEEL' in os.environ
+GITHUB_ACTIONS = "GITHUB_ACTIONS" in os.environ or "CIBUILDWHEEL" in os.environ
 CI_TESTING = GITHUB_ACTIONS
-COVERAGE = 'COVERAGE_RUN' in os.environ
+COVERAGE = "COVERAGE_RUN" in os.environ
 PYTEST_PARALLEL = "PYTEST_XDIST_WORKER" in os.environ  # `make test-parallel`
 # are we a 64 bit process?
 IS_64BIT = sys.maxsize > 2**32
@@ -167,23 +166,23 @@ if CI_TESTING:
 # --- file names
 
 # Disambiguate TESTFN for parallel testing.
-if os.name == 'java':
+if os.name == "java":
     # Jython disallows @ in module names
     TESTFN_PREFIX = f"$psutil-{os.getpid()}-"
 else:
     TESTFN_PREFIX = f"@psutil-{os.getpid()}-"
 UNICODE_SUFFIX = "-ƒőő"
 # An invalid unicode string.
-INVALID_UNICODE_SUFFIX = b"f\xc0\x80".decode('utf8', 'surrogateescape')
+INVALID_UNICODE_SUFFIX = b"f\xc0\x80".decode("utf8", "surrogateescape")
 ASCII_FS = sys.getfilesystemencoding().lower() in {"ascii", "us-ascii"}
 
 # --- paths
 
 ROOT_DIR = os.path.realpath(
-    os.path.join(os.path.dirname(__file__), '..', '..')
+    os.path.join(os.path.dirname(__file__), "..", "..")
 )
 SCRIPTS_DIR = os.environ.get(
-    "PSUTIL_SCRIPTS_DIR", os.path.join(ROOT_DIR, 'scripts')
+    "PSUTIL_SCRIPTS_DIR", os.path.join(ROOT_DIR, "scripts")
 )
 HERE = os.path.realpath(os.path.dirname(__file__))
 
@@ -258,11 +257,11 @@ def _get_py_exe():
 
 
 PYTHON_EXE, PYTHON_EXE_ENV = _get_py_exe()
-DEVNULL = open(os.devnull, 'r+')  # noqa: SIM115
+DEVNULL = open(os.devnull, "r+")  # noqa: SIM115
 atexit.register(DEVNULL.close)
 
 VALID_PROC_STATUSES = [
-    getattr(psutil, x) for x in dir(psutil) if x.startswith('STATUS_')
+    getattr(psutil, x) for x in dir(psutil) if x.startswith("STATUS_")
 ]
 AF_UNIX = getattr(socket, "AF_UNIX", object())
 
@@ -497,7 +496,7 @@ def sh(cmd, **kwds):
         raise RuntimeError(stdout + stderr)
     if stderr:
         warn(stderr)
-    if stdout.endswith('\n'):
+    if stdout.endswith("\n"):
         stdout = stdout[:-1]
     return stdout
 
@@ -630,7 +629,7 @@ def kernel_version():
     s = ""
     uname = os.uname()[2]
     for c in uname:
-        if c.isdigit() or c == '.':
+        if c.isdigit() or c == ".":
             s += c
         else:
             break
@@ -638,7 +637,7 @@ def kernel_version():
         raise ValueError(f"can't parse {uname!r}")
     minor = 0
     micro = 0
-    nums = s.split('.')
+    nums = s.split(".")
     major = int(nums[0])
     if len(nums) >= 2:
         minor = int(nums[1])
@@ -848,7 +847,7 @@ def create_c_exe(path, c_code=None):
         assert isinstance(c_code, str), c_code
 
     atexit.register(safe_rmpath, path)
-    with open(get_testfn(suffix='.c'), "w") as f:
+    with open(get_testfn(suffix=".c"), "w") as f:
         f.write(c_code)
     try:
         subprocess.check_call(["gcc", f.name, "-o", path])
@@ -937,7 +936,6 @@ class fake_pytest:
         raise unittest.SkipTest(reason)
 
     class mark:
-
         @staticmethod
         def skipif(condition, reason=""):
             """Mimics `@pytest.mark.skipif` decorator."""
@@ -1140,7 +1138,7 @@ class TestMemoryLeak(PsutilTestCase):
     retries = 10 if CI_TESTING else 5
     verbose = True
     _thisproc = psutil.Process()
-    _psutil_debug_orig = bool(os.getenv('PSUTIL_DEBUG'))
+    _psutil_debug_orig = bool(os.getenv("PSUTIL_DEBUG"))
 
     @classmethod
     def setUpClass(cls):
@@ -1287,78 +1285,80 @@ def print_sysinfo():
 
     # OS
     if psutil.LINUX and shutil.which("lsb_release"):
-        info['OS'] = sh('lsb_release -d -s')
+        info["OS"] = sh("lsb_release -d -s")
     elif psutil.OSX:
-        info['OS'] = f"Darwin {platform.mac_ver()[0]}"
+        info["OS"] = f"Darwin {platform.mac_ver()[0]}"
     elif psutil.WINDOWS:
-        info['OS'] = "Windows " + ' '.join(map(str, platform.win32_ver()))
-        if hasattr(platform, 'win32_edition'):
-            info['OS'] += ", " + platform.win32_edition()
+        info["OS"] = "Windows " + " ".join(map(str, platform.win32_ver()))
+        if hasattr(platform, "win32_edition"):
+            info["OS"] += ", " + platform.win32_edition()
     else:
-        info['OS'] = f"{platform.system()} {platform.version()}"
-    info['arch'] = ', '.join(
+        info["OS"] = f"{platform.system()} {platform.version()}"
+    info["arch"] = ", ".join(
         list(platform.architecture()) + [platform.machine()]
     )
     if psutil.POSIX:
-        info['kernel'] = platform.uname()[2]
+        info["kernel"] = platform.uname()[2]
 
     # python
-    info['python'] = ', '.join([
-        platform.python_implementation(),
-        platform.python_version(),
-        platform.python_compiler(),
-    ])
-    info['pip'] = getattr(pip, '__version__', 'not installed')
+    info["python"] = ", ".join(
+        [
+            platform.python_implementation(),
+            platform.python_version(),
+            platform.python_compiler(),
+        ]
+    )
+    info["pip"] = getattr(pip, "__version__", "not installed")
     if wheel is not None:
-        info['pip'] += f" (wheel={wheel.__version__})"
+        info["pip"] += f" (wheel={wheel.__version__})"
 
     # UNIX
     if psutil.POSIX:
         if shutil.which("gcc"):
-            out = sh(['gcc', '--version'])
-            info['gcc'] = str(out).split('\n')[0]
+            out = sh(["gcc", "--version"])
+            info["gcc"] = str(out).split("\n")[0]
         else:
-            info['gcc'] = 'not installed'
+            info["gcc"] = "not installed"
         s = platform.libc_ver()[1]
         if s:
-            info['glibc'] = s
+            info["glibc"] = s
 
     # system
-    info['fs-encoding'] = sys.getfilesystemencoding()
+    info["fs-encoding"] = sys.getfilesystemencoding()
     lang = locale.getlocale()
-    info['lang'] = f"{lang[0]}, {lang[1]}"
-    info['boot-time'] = datetime.datetime.fromtimestamp(
+    info["lang"] = f"{lang[0]}, {lang[1]}"
+    info["boot-time"] = datetime.datetime.fromtimestamp(
         psutil.boot_time()
     ).strftime("%Y-%m-%d %H:%M:%S")
-    info['time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    info['user'] = getpass.getuser()
-    info['home'] = os.path.expanduser("~")
-    info['cwd'] = os.getcwd()
-    info['pyexe'] = PYTHON_EXE
-    info['hostname'] = platform.node()
-    info['PID'] = os.getpid()
+    info["time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    info["user"] = getpass.getuser()
+    info["home"] = os.path.expanduser("~")
+    info["cwd"] = os.getcwd()
+    info["pyexe"] = PYTHON_EXE
+    info["hostname"] = platform.node()
+    info["PID"] = os.getpid()
 
     # metrics
-    info['cpus'] = psutil.cpu_count()
-    info['loadavg'] = "{:.1f}%, {:.1f}%, {:.1f}%".format(
+    info["cpus"] = psutil.cpu_count()
+    info["loadavg"] = "{:.1f}%, {:.1f}%, {:.1f}%".format(
         *tuple(x / psutil.cpu_count() * 100 for x in psutil.getloadavg())
     )
     mem = psutil.virtual_memory()
-    info['memory'] = "{}%%, used={}, total={}".format(
+    info["memory"] = "{}%%, used={}, total={}".format(
         int(mem.percent),
         bytes2human(mem.used),
         bytes2human(mem.total),
     )
     swap = psutil.swap_memory()
-    info['swap'] = "{}%%, used={}, total={}".format(
+    info["swap"] = "{}%%, used={}, total={}".format(
         int(swap.percent),
         bytes2human(swap.used),
         bytes2human(swap.total),
     )
-    info['pids'] = len(psutil.pids())
+    info["pids"] = len(psutil.pids())
     pinfo = psutil.Process().as_dict()
-    pinfo.pop('memory_maps', None)
-    info['proc'] = pprint.pformat(pinfo)
+    pinfo.pop("memory_maps", None)
+    info["proc"] = pprint.pformat(pinfo)
 
     print("=" * 70, file=sys.stderr)  # noqa: T201
     for k, v in info.items():
@@ -1412,86 +1412,86 @@ class process_namespace:
     ...    fun()
     """
 
-    utils = [('cpu_percent', (), {}), ('memory_percent', (), {})]
+    utils = [("cpu_percent", (), {}), ("memory_percent", (), {})]
 
     ignored = [
-        ('as_dict', (), {}),
-        ('children', (), {'recursive': True}),
-        ('connections', (), {}),  # deprecated
-        ('is_running', (), {}),
-        ('oneshot', (), {}),
-        ('parent', (), {}),
-        ('parents', (), {}),
-        ('pid', (), {}),
-        ('wait', (0,), {}),
+        ("as_dict", (), {}),
+        ("children", (), {"recursive": True}),
+        ("connections", (), {}),  # deprecated
+        ("is_running", (), {}),
+        ("oneshot", (), {}),
+        ("parent", (), {}),
+        ("parents", (), {}),
+        ("pid", (), {}),
+        ("wait", (0,), {}),
     ]
 
     getters = [
-        ('cmdline', (), {}),
-        ('cpu_times', (), {}),
-        ('create_time', (), {}),
-        ('cwd', (), {}),
-        ('exe', (), {}),
-        ('memory_full_info', (), {}),
-        ('memory_info', (), {}),
-        ('name', (), {}),
-        ('net_connections', (), {'kind': 'all'}),
-        ('nice', (), {}),
-        ('num_ctx_switches', (), {}),
-        ('num_threads', (), {}),
-        ('open_files', (), {}),
-        ('ppid', (), {}),
-        ('status', (), {}),
-        ('threads', (), {}),
-        ('username', (), {}),
+        ("cmdline", (), {}),
+        ("cpu_times", (), {}),
+        ("create_time", (), {}),
+        ("cwd", (), {}),
+        ("exe", (), {}),
+        ("memory_full_info", (), {}),
+        ("memory_info", (), {}),
+        ("name", (), {}),
+        ("net_connections", (), {"kind": "all"}),
+        ("nice", (), {}),
+        ("num_ctx_switches", (), {}),
+        ("num_threads", (), {}),
+        ("open_files", (), {}),
+        ("ppid", (), {}),
+        ("status", (), {}),
+        ("threads", (), {}),
+        ("username", (), {}),
     ]
     if POSIX:
-        getters += [('uids', (), {})]
-        getters += [('gids', (), {})]
-        getters += [('terminal', (), {})]
-        getters += [('num_fds', (), {})]
+        getters += [("uids", (), {})]
+        getters += [("gids", (), {})]
+        getters += [("terminal", (), {})]
+        getters += [("num_fds", (), {})]
     if HAS_PROC_IO_COUNTERS:
-        getters += [('io_counters', (), {})]
+        getters += [("io_counters", (), {})]
     if HAS_IONICE:
-        getters += [('ionice', (), {})]
+        getters += [("ionice", (), {})]
     if HAS_RLIMIT:
-        getters += [('rlimit', (psutil.RLIMIT_NOFILE,), {})]
+        getters += [("rlimit", (psutil.RLIMIT_NOFILE,), {})]
     if HAS_CPU_AFFINITY:
-        getters += [('cpu_affinity', (), {})]
+        getters += [("cpu_affinity", (), {})]
     if HAS_PROC_CPU_NUM:
-        getters += [('cpu_num', (), {})]
+        getters += [("cpu_num", (), {})]
     if HAS_ENVIRON:
-        getters += [('environ', (), {})]
+        getters += [("environ", (), {})]
     if WINDOWS:
-        getters += [('num_handles', (), {})]
+        getters += [("num_handles", (), {})]
     if HAS_MEMORY_MAPS:
-        getters += [('memory_maps', (), {'grouped': False})]
+        getters += [("memory_maps", (), {"grouped": False})]
 
     setters = []
     if POSIX:
-        setters += [('nice', (0,), {})]
+        setters += [("nice", (0,), {})]
     else:
-        setters += [('nice', (psutil.NORMAL_PRIORITY_CLASS,), {})]
+        setters += [("nice", (psutil.NORMAL_PRIORITY_CLASS,), {})]
     if HAS_RLIMIT:
-        setters += [('rlimit', (psutil.RLIMIT_NOFILE, (1024, 4096)), {})]
+        setters += [("rlimit", (psutil.RLIMIT_NOFILE, (1024, 4096)), {})]
     if HAS_IONICE:
         if LINUX:
-            setters += [('ionice', (psutil.IOPRIO_CLASS_NONE, 0), {})]
+            setters += [("ionice", (psutil.IOPRIO_CLASS_NONE, 0), {})]
         else:
-            setters += [('ionice', (psutil.IOPRIO_NORMAL,), {})]
+            setters += [("ionice", (psutil.IOPRIO_NORMAL,), {})]
     if HAS_CPU_AFFINITY:
-        setters += [('cpu_affinity', ([_get_eligible_cpu()],), {})]
+        setters += [("cpu_affinity", ([_get_eligible_cpu()],), {})]
 
     killers = [
-        ('send_signal', (signal.SIGTERM,), {}),
-        ('suspend', (), {}),
-        ('resume', (), {}),
-        ('terminate', (), {}),
-        ('kill', (), {}),
+        ("send_signal", (signal.SIGTERM,), {}),
+        ("suspend", (), {}),
+        ("resume", (), {}),
+        ("terminate", (), {}),
+        ("kill", (), {}),
     ]
     if WINDOWS:
-        killers += [('send_signal', (signal.CTRL_C_EVENT,), {})]
-        killers += [('send_signal', (signal.CTRL_BREAK_EVENT,), {})]
+        killers += [("send_signal", (signal.CTRL_C_EVENT,), {})]
+        killers += [("send_signal", (signal.CTRL_BREAK_EVENT,), {})]
 
     all = utils + getters + setters + killers
 
@@ -1521,7 +1521,7 @@ class process_namespace:
         the class defines the required test method names.
         """
         for fun_name, _, _ in ls:
-            meth_name = 'test_' + fun_name
+            meth_name = "test_" + fun_name
             if not hasattr(test_class, meth_name):
                 msg = (
                     f"{test_class.__class__.__name__!r} class should define a"
@@ -1533,7 +1533,7 @@ class process_namespace:
     def test(cls):
         this = {x[0] for x in cls.all}
         ignored = {x[0] for x in cls.ignored}
-        klass = {x for x in dir(psutil.Process) if x[0] != '_'}
+        klass = {x for x in dir(psutil.Process) if x[0] != "_"}
         leftout = (this | ignored) ^ klass
         if leftout:
             raise ValueError(f"uncovered Process class names: {leftout!r}")
@@ -1549,47 +1549,47 @@ class system_namespace:
     """
 
     getters = [
-        ('boot_time', (), {}),
-        ('cpu_count', (), {'logical': False}),
-        ('cpu_count', (), {'logical': True}),
-        ('cpu_stats', (), {}),
-        ('cpu_times', (), {'percpu': False}),
-        ('cpu_times', (), {'percpu': True}),
-        ('disk_io_counters', (), {'perdisk': True}),
-        ('disk_partitions', (), {'all': True}),
-        ('disk_usage', (os.getcwd(),), {}),
-        ('net_connections', (), {'kind': 'all'}),
-        ('net_if_addrs', (), {}),
-        ('net_if_stats', (), {}),
-        ('net_io_counters', (), {'pernic': True}),
-        ('pid_exists', (os.getpid(),), {}),
-        ('pids', (), {}),
-        ('swap_memory', (), {}),
-        ('users', (), {}),
-        ('virtual_memory', (), {}),
+        ("boot_time", (), {}),
+        ("cpu_count", (), {"logical": False}),
+        ("cpu_count", (), {"logical": True}),
+        ("cpu_stats", (), {}),
+        ("cpu_times", (), {"percpu": False}),
+        ("cpu_times", (), {"percpu": True}),
+        ("disk_io_counters", (), {"perdisk": True}),
+        ("disk_partitions", (), {"all": True}),
+        ("disk_usage", (os.getcwd(),), {}),
+        ("net_connections", (), {"kind": "all"}),
+        ("net_if_addrs", (), {}),
+        ("net_if_stats", (), {}),
+        ("net_io_counters", (), {"pernic": True}),
+        ("pid_exists", (os.getpid(),), {}),
+        ("pids", (), {}),
+        ("swap_memory", (), {}),
+        ("users", (), {}),
+        ("virtual_memory", (), {}),
     ]
     if HAS_CPU_FREQ:
-        if MACOS and platform.machine() == 'arm64':  # skipped due to #1892
+        if MACOS and platform.machine() == "arm64":  # skipped due to #1892
             pass
         else:
-            getters += [('cpu_freq', (), {'percpu': True})]
+            getters += [("cpu_freq", (), {"percpu": True})]
     if HAS_GETLOADAVG:
-        getters += [('getloadavg', (), {})]
+        getters += [("getloadavg", (), {})]
     if HAS_SENSORS_TEMPERATURES:
-        getters += [('sensors_temperatures', (), {})]
+        getters += [("sensors_temperatures", (), {})]
     if HAS_SENSORS_FANS:
-        getters += [('sensors_fans', (), {})]
+        getters += [("sensors_fans", (), {})]
     if HAS_SENSORS_BATTERY:
-        getters += [('sensors_battery', (), {})]
+        getters += [("sensors_battery", (), {})]
     if WINDOWS:
-        getters += [('win_service_iter', (), {})]
-        getters += [('win_service_get', ('alg',), {})]
+        getters += [("win_service_iter", (), {})]
+        getters += [("win_service_get", ("alg",), {})]
 
     ignored = [
-        ('process_iter', (), {}),
-        ('wait_procs', ([psutil.Process()],), {}),
-        ('cpu_percent', (), {}),
-        ('cpu_times_percent', (), {}),
+        ("process_iter", (), {}),
+        ("wait_procs", ([psutil.Process()],), {}),
+        ("cpu_percent", (), {}),
+        ("cpu_times_percent", (), {}),
     ]
 
     all = getters
@@ -1670,7 +1670,7 @@ def skip_on_not_implemented(only_if=None):
 
 
 # XXX: no longer used
-def get_free_port(host='127.0.0.1'):
+def get_free_port(host="127.0.0.1"):
     """Return an unused TCP port. Subject to race conditions."""
     with socket.socket() as sock:
         sock.bind((host, 0))
@@ -1683,7 +1683,7 @@ def bind_socket(family=AF_INET, type=SOCK_STREAM, addr=None):
         addr = ("", 0)
     sock = socket.socket(family, type)
     try:
-        if os.name not in {'nt', 'cygwin'}:
+        if os.name not in {"nt", "cygwin"}:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(addr)
         if type == socket.SOCK_STREAM:
@@ -1761,15 +1761,19 @@ def create_sockets():
     socks = []
     fname1 = fname2 = None
     try:
-        socks.extend((
-            bind_socket(socket.AF_INET, socket.SOCK_STREAM),
-            bind_socket(socket.AF_INET, socket.SOCK_DGRAM),
-        ))
+        socks.extend(
+            (
+                bind_socket(socket.AF_INET, socket.SOCK_STREAM),
+                bind_socket(socket.AF_INET, socket.SOCK_DGRAM),
+            )
+        )
         if supports_ipv6():
-            socks.extend((
-                bind_socket(socket.AF_INET6, socket.SOCK_STREAM),
-                bind_socket(socket.AF_INET6, socket.SOCK_DGRAM),
-            ))
+            socks.extend(
+                (
+                    bind_socket(socket.AF_INET6, socket.SOCK_STREAM),
+                    bind_socket(socket.AF_INET6, socket.SOCK_DGRAM),
+                )
+            )
         if POSIX and HAS_NET_CONNECTIONS_UNIX:
             fname1 = get_testfn()
             fname2 = get_testfn()
@@ -1792,7 +1796,7 @@ def check_net_address(addr, family):
     """
     assert isinstance(family, enum.IntEnum), family
     if family == socket.AF_INET:
-        octs = [int(x) for x in addr.split('.')]
+        octs = [int(x) for x in addr.split(".")]
         assert len(octs) == 4, addr
         for num in octs:
             assert 0 <= num <= 255, addr
@@ -1801,7 +1805,7 @@ def check_net_address(addr, family):
         assert isinstance(addr, str), addr
         ipaddress.IPv6Address(addr)
     elif family == psutil.AF_LINK:
-        assert re.match(r'([a-fA-F0-9]{2}[:|\-]?){6}', addr) is not None, addr
+        assert re.match(r"([a-fA-F0-9]{2}[:|\-]?){6}", addr) is not None, addr
     else:
         raise ValueError(f"unknown family {family!r}")
 
@@ -1866,7 +1870,7 @@ def check_connection_ntuple(conn):
     def check_status(conn):
         assert isinstance(conn.status, str), conn.status
         valids = [
-            getattr(psutil, x) for x in dir(psutil) if x.startswith('CONN_')
+            getattr(psutil, x) for x in dir(psutil) if x.startswith("CONN_")
         ]
         assert conn.status in valids, conn.status
         if conn.family in {AF_INET, AF_INET6} and conn.type == SOCK_STREAM:
@@ -1928,7 +1932,7 @@ def is_namedtuple(x):
     b = t.__bases__
     if len(b) != 1 or b[0] is not tuple:
         return False
-    f = getattr(t, '_fields', None)
+    f = getattr(t, "_fields", None)
     if not isinstance(f, tuple):
         return False
     return all(isinstance(n, str) for n in f)
@@ -1942,7 +1946,7 @@ if POSIX:
         by this process, copies it in another location and loads it
         in memory via ctypes. Return the new absolutized path.
         """
-        exe = 'pypy' if PYPY else 'python'
+        exe = "pypy" if PYPY else "python"
         ext = ".so"
         dst = get_testfn(suffix=suffix + ext)
         libs = [
@@ -1976,14 +1980,14 @@ else:
             x.path
             for x in psutil.Process().memory_maps()
             if x.path.lower().endswith(ext)
-            and 'python' in os.path.basename(x.path).lower()
-            and 'wow64' not in x.path.lower()
+            and "python" in os.path.basename(x.path).lower()
+            and "wow64" not in x.path.lower()
         ]
         if PYPY and not libs:
             libs = [
                 x.path
                 for x in psutil.Process().memory_maps()
-                if 'pypy' in os.path.basename(x.path).lower()
+                if "pypy" in os.path.basename(x.path).lower()
             ]
         src = random.choice(libs)
         shutil.copyfile(src, dst)

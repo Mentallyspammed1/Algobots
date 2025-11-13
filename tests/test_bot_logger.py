@@ -4,23 +4,28 @@ import sys
 
 import pytest
 
-sys.path.insert(0, '/data/data/com.termux/files/home/Algobots')
-from bot_logger import log_exception, log_metrics, log_trade, setup_logging
+sys.path.insert(0, "/data/data/com.termux/files/home/Algobots")
+from bot_logger import log_exception
+from bot_logger import log_metrics
+from bot_logger import log_trade
+from bot_logger import setup_logging
 
 
 @pytest.fixture
 def caplog_for_test(caplog):
     """Fixture to capture logs for testing."""
-    caplog.set_level(logging.DEBUG) # Capture all levels
+    caplog.set_level(logging.DEBUG)  # Capture all levels
     return caplog
+
 
 def test_setup_logging(caplog_for_test):
     logger = setup_logging()
     assert isinstance(logger, logging.Logger)
-    assert logger.name == 'PyrmethusBot'
-    assert len(logger.handlers) == 4 # File and Console
+    assert logger.name == "PyrmethusBot"
+    assert len(logger.handlers) == 4  # File and Console
     logger.info("Test log message")
     assert "Test log message" in caplog_for_test.text
+
 
 def test_log_trade(caplog_for_test):
     logger = setup_logging()
@@ -29,12 +34,14 @@ def test_log_trade(caplog_for_test):
     assert '"symbol": "BTCUSDT"' in caplog_for_test.text
     assert "TRADE" in caplog_for_test.text
 
+
 def test_log_metrics(caplog_for_test):
     logger = setup_logging()
     metrics_data = {"total_pnl": 100.5, "win_rate": 0.6}
     log_metrics(logger, "Daily metrics", metrics_data)
     assert '"total_pnl": 100.5' in caplog_for_test.text
     assert "METRICS" in caplog_for_test.text
+
 
 def test_log_exception(caplog_for_test):
     logger = setup_logging()

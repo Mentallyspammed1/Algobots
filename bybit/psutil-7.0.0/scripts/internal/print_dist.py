@@ -35,41 +35,41 @@ class Wheel:
         return self._name
 
     def platform(self):
-        plat = self.name.split('-')[-1]
-        pyimpl = self.name.split('-')[3]
-        ispypy = 'pypy' in pyimpl
-        if 'linux' in plat:
+        plat = self.name.split("-")[-1]
+        pyimpl = self.name.split("-")[3]
+        ispypy = "pypy" in pyimpl
+        if "linux" in plat:
             if ispypy:
-                return 'pypy_on_linux'
+                return "pypy_on_linux"
             else:
-                return 'linux'
-        elif 'win' in plat:
+                return "linux"
+        elif "win" in plat:
             if ispypy:
-                return 'pypy_on_windows'
+                return "pypy_on_windows"
             else:
-                return 'windows'
-        elif 'macosx' in plat:
+                return "windows"
+        elif "macosx" in plat:
             if ispypy:
-                return 'pypy_on_macos'
+                return "pypy_on_macos"
             else:
-                return 'macos'
+                return "macos"
         else:
             raise ValueError(f"unknown platform {self.name!r}")
 
     def arch(self):
-        if self.name.endswith(('x86_64.whl', 'amd64.whl')):
-            return '64-bit'
+        if self.name.endswith(("x86_64.whl", "amd64.whl")):
+            return "64-bit"
         if self.name.endswith(("i686.whl", "win32.whl")):
-            return '32-bit'
+            return "32-bit"
         if self.name.endswith("arm64.whl"):
-            return 'arm64'
+            return "arm64"
         if self.name.endswith("aarch64.whl"):
-            return 'aarch64'
-        return '?'
+            return "aarch64"
+        return "?"
 
     def pyver(self):
-        pyver = 'pypy' if self.name.split('-')[3].startswith('pypy') else 'py'
-        pyver += self.name.split('-')[2][2:]
+        pyver = "pypy" if self.name.split("-")[3].startswith("pypy") else "py"
+        pyver += self.name.split("-")[2][2:]
         return pyver
 
     def size(self):
@@ -90,10 +90,10 @@ class Tarball(Wheel):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        'dir',
+        "dir",
         nargs="?",
         default="dist",
-        help='directory containing tar.gz or wheel files',
+        help="directory containing tar.gz or wheel files",
     )
     args = parser.parse_args()
 
@@ -115,7 +115,7 @@ def main():
     for platf, pkgs in groups.items():
         ppn = f"{platf} ({len(pkgs)})"
         s = templ.format(ppn, "size", "arch", "pyver")
-        print_color('\n' + s, color=None, bold=True)
+        print_color("\n" + s, color=None, bold=True)
         for pkg in sorted(pkgs, key=lambda x: x.name):
             tot_files += 1
             tot_size += pkg.size()
@@ -125,10 +125,10 @@ def main():
                 pkg.arch(),
                 pkg.pyver(),
             )
-            if 'pypy' in pkg.pyver():
-                print_color(s, color='violet')
+            if "pypy" in pkg.pyver():
+                print_color(s, color="violet")
             else:
-                print_color(s, color='brown')
+                print_color(s, color="brown")
 
     print_color(
         f"\n\ntotals: files={tot_files}, size={bytes2human(tot_size)}",
@@ -136,5 +136,5 @@ def main():
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

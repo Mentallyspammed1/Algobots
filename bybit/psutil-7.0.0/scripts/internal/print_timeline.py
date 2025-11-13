@@ -25,16 +25,16 @@ def sh(cmd):
 
 def get_tag_date(tag):
     out = sh(f"git log -1 --format=%ai {tag}")
-    return out.split(' ')[0]
+    return out.split(" ")[0]
 
 
 def main():
     releases = []
     out = sh("git tag")
-    for line in out.split('\n'):
-        tag = line.split(' ')[0]
-        ver = tag.replace('release-', '')
-        nodotver = ver.replace('.', '')
+    for line in out.split("\n"):
+        tag = line.split(" ")[0]
+        ver = tag.replace("release-", "")
+        nodotver = ver.replace(".", "")
         date = get_tag_date(tag)
         releases.append((tag, ver, nodotver, date))
     releases.sort(reverse=True)
@@ -49,5 +49,5 @@ def main():
         print(entry.format(**locals()))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -11,7 +11,6 @@ This was originally written as a bat file but they suck so much
 that they should be deemed illegal!
 """
 
-
 import argparse
 import atexit
 import ctypes
@@ -24,7 +23,7 @@ import subprocess
 import sys
 
 
-PYTHON = os.getenv('PYTHON', sys.executable)
+PYTHON = os.getenv("PYTHON", sys.executable)
 PYTEST_ARGS = ["-v", "-s", "--tb=short"]
 HERE = os.path.abspath(os.path.dirname(__file__))
 ROOT_DIR = os.path.realpath(os.path.join(HERE, "..", ".."))
@@ -63,11 +62,11 @@ def safe_print(text, file=sys.stdout):
     try:
         file.write(text)
     except UnicodeEncodeError:
-        bytes_string = text.encode(file.encoding, 'backslashreplace')
-        if hasattr(file, 'buffer'):
+        bytes_string = text.encode(file.encoding, "backslashreplace")
+        if hasattr(file, "buffer"):
             file.buffer.write(bytes_string)
         else:
-            text = bytes_string.decode(file.encoding, 'strict')
+            text = bytes_string.decode(file.encoding, "strict")
             file.write(text)
     file.write("\n")
 
@@ -113,9 +112,9 @@ def rm(pattern, directory=False):
             safe_remove(pattern)
         return
 
-    for root, dirs, files in os.walk('.'):
+    for root, dirs, files in os.walk("."):
         root = os.path.normpath(root)
-        if root.startswith('.git/'):
+        if root.startswith(".git/"):
             continue
         found = fnmatch.filter(dirs if directory else files, pattern)
         for name in found:
@@ -147,9 +146,9 @@ def safe_rmtree(path):
 
 def recursive_rm(*patterns):
     """Recursively remove a file or matching a list of patterns."""
-    for root, dirs, files in os.walk('.'):
+    for root, dirs, files in os.walk("."):
         root = os.path.normpath(root)
-        if root.startswith('.git/'):
+        if root.startswith(".git/"):
             continue
         for file in files:
             for pattern in patterns:
@@ -177,15 +176,15 @@ def build():
     # from within psutil root directory.
     cmd = [PYTHON, "setup.py", "build_ext", "-i"]
     if os.cpu_count() or 1 > 1:  # noqa: PLR0133
-        cmd += ['--parallel', str(os.cpu_count())]
+        cmd += ["--parallel", str(os.cpu_count())]
     # Print coloured warnings in real time.
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
-        for line in iter(p.stdout.readline, b''):
+        for line in iter(p.stdout.readline, b""):
             line = line.decode().strip()
-            if 'warning' in line:
+            if "warning" in line:
                 win_colorprint(line, YELLOW)
-            elif 'error' in line:
+            elif "error" in line:
                 win_colorprint(line, RED)
             else:
                 print(line)
@@ -237,7 +236,7 @@ def uninstall():
     install_pip()
     here = os.getcwd()
     try:
-        os.chdir('C:\\')
+        os.chdir("C:\\")
         while True:
             try:
                 import psutil  # noqa: F401
@@ -250,9 +249,9 @@ def uninstall():
 
     for dir in site.getsitepackages():
         for name in os.listdir(dir):
-            if name.startswith('psutil'):
+            if name.startswith("psutil"):
                 rm(os.path.join(dir, name))
-            elif name == 'easy-install.pth':
+            elif name == "easy-install.pth":
                 # easy_install can add a line (installation path) into
                 # easy-install.pth; that line alters sys.path.
                 path = os.path.join(dir, name)
@@ -260,13 +259,13 @@ def uninstall():
                     lines = f.readlines()
                     hasit = False
                     for line in lines:
-                        if 'psutil' in line:
+                        if "psutil" in line:
                             hasit = True
                             break
                 if hasit:
                     with open(path, "w") as f:
                         for line in lines:
-                            if 'psutil' not in line:
+                            if "psutil" not in line:
                                 f.write(line)
                             else:
                                 print(f"removed line {line!r} from {path!r}")
@@ -411,7 +410,7 @@ def test_memleaks():
 
 def install_git_hooks():
     """Install GIT pre-commit hook."""
-    if os.path.isdir('.git'):
+    if os.path.isdir(".git"):
         src = os.path.join(
             ROOT_DIR, "scripts", "internal", "git_pre_commit.py"
         )
@@ -467,11 +466,11 @@ def get_python(path):
     if os.path.isabs(path):
         return path
     # try to look for a python installation given a shortcut name
-    path = path.replace('.', '')
+    path = path.replace(".", "")
     vers = (
-        '310-64',
-        '311-64',
-        '312-64',
+        "310-64",
+        "311-64",
+        "312-64",
     )
     for v in vers:
         pypath = rf"C:\\python{v}\python.exe"
@@ -482,50 +481,50 @@ def get_python(path):
 def parse_args():
     parser = argparse.ArgumentParser()
     # option shared by all commands
-    parser.add_argument('-p', '--python', help="use python executable path")
-    sp = parser.add_subparsers(dest='command', title='targets')
-    sp.add_parser('bench-oneshot', help="benchmarks for oneshot()")
-    sp.add_parser('bench-oneshot_2', help="benchmarks for oneshot() (perf)")
-    sp.add_parser('build', help="build")
-    sp.add_parser('clean', help="deletes dev files")
-    sp.add_parser('coverage', help="run coverage tests.")
-    sp.add_parser('generate-manifest', help="generate MANIFEST.in file")
-    sp.add_parser('help', help="print this help")
-    sp.add_parser('install', help="build + install in develop/edit mode")
-    sp.add_parser('install-git-hooks', help="install GIT pre-commit hook")
-    sp.add_parser('install-pip', help="install pip")
-    sp.add_parser('install-pydeps-dev', help="install dev python deps")
-    sp.add_parser('install-pydeps-test', help="install python test deps")
-    sp.add_parser('print-access-denied', help="print AD exceptions")
-    sp.add_parser('print-api-speed', help="benchmark all API calls")
-    sp.add_parser('print-sysinfo', help="print system info")
-    sp.add_parser('test-parallel', help="run tests in parallel")
-    test = sp.add_parser('test', help="[ARG] run tests")
-    test_by_name = sp.add_parser('test-by-name', help="<ARG> run test by name")
-    sp.add_parser('test-connections', help="run connections tests")
-    sp.add_parser('test-contracts', help="run contracts tests")
+    parser.add_argument("-p", "--python", help="use python executable path")
+    sp = parser.add_subparsers(dest="command", title="targets")
+    sp.add_parser("bench-oneshot", help="benchmarks for oneshot()")
+    sp.add_parser("bench-oneshot_2", help="benchmarks for oneshot() (perf)")
+    sp.add_parser("build", help="build")
+    sp.add_parser("clean", help="deletes dev files")
+    sp.add_parser("coverage", help="run coverage tests.")
+    sp.add_parser("generate-manifest", help="generate MANIFEST.in file")
+    sp.add_parser("help", help="print this help")
+    sp.add_parser("install", help="build + install in develop/edit mode")
+    sp.add_parser("install-git-hooks", help="install GIT pre-commit hook")
+    sp.add_parser("install-pip", help="install pip")
+    sp.add_parser("install-pydeps-dev", help="install dev python deps")
+    sp.add_parser("install-pydeps-test", help="install python test deps")
+    sp.add_parser("print-access-denied", help="print AD exceptions")
+    sp.add_parser("print-api-speed", help="benchmark all API calls")
+    sp.add_parser("print-sysinfo", help="print system info")
+    sp.add_parser("test-parallel", help="run tests in parallel")
+    test = sp.add_parser("test", help="[ARG] run tests")
+    test_by_name = sp.add_parser("test-by-name", help="<ARG> run test by name")
+    sp.add_parser("test-connections", help="run connections tests")
+    sp.add_parser("test-contracts", help="run contracts tests")
     sp.add_parser(
-        'test-last-failed', help="re-run tests which failed on last run"
+        "test-last-failed", help="re-run tests which failed on last run"
     )
-    sp.add_parser('test-memleaks', help="run memory leaks tests")
-    sp.add_parser('test-misc', help="run misc tests")
-    sp.add_parser('test-scripts', help="run scripts tests")
-    sp.add_parser('test-platform', help="run windows only tests")
-    sp.add_parser('test-process', help="run process tests")
-    sp.add_parser('test-process-all', help="run process all tests")
-    sp.add_parser('test-system', help="run system tests")
-    sp.add_parser('test-unicode', help="run unicode tests")
-    sp.add_parser('test-testutils', help="run test utils tests")
-    sp.add_parser('uninstall', help="uninstall psutil")
-    sp.add_parser('upload-wheels', help="upload wheel files on PyPI")
-    sp.add_parser('wheel', help="create wheel file")
+    sp.add_parser("test-memleaks", help="run memory leaks tests")
+    sp.add_parser("test-misc", help="run misc tests")
+    sp.add_parser("test-scripts", help="run scripts tests")
+    sp.add_parser("test-platform", help="run windows only tests")
+    sp.add_parser("test-process", help="run process tests")
+    sp.add_parser("test-process-all", help="run process all tests")
+    sp.add_parser("test-system", help="run system tests")
+    sp.add_parser("test-unicode", help="run unicode tests")
+    sp.add_parser("test-testutils", help="run test utils tests")
+    sp.add_parser("uninstall", help="uninstall psutil")
+    sp.add_parser("upload-wheels", help="upload wheel files on PyPI")
+    sp.add_parser("wheel", help="create wheel file")
 
     for p in (test, test_by_name):
-        p.add_argument('arg', type=str, nargs='?', default="", help="arg")
+        p.add_argument("arg", type=str, nargs="?", default="", help="arg")
 
     args = parser.parse_args()
 
-    if not args.command or args.command == 'help':
+    if not args.command or args.command == "help":
         parser.print_help(sys.stderr)
         sys.exit(1)
 
@@ -541,16 +540,16 @@ def main():
         return sys.exit(
             f"can't find any python installation matching {args.python!r}"
         )
-    os.putenv('PYTHON', PYTHON)
+    os.putenv("PYTHON", PYTHON)
     win_colorprint("using " + PYTHON)
 
-    fname = args.command.replace('-', '_')
+    fname = args.command.replace("-", "_")
     fun = getattr(sys.modules[__name__], fname)  # err if fun not defined
-    if args.command == 'test' and args.arg:
+    if args.command == "test" and args.arg:
         sh([PYTHON, args.arg])  # test a script
     else:
         fun()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

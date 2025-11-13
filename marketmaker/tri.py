@@ -115,7 +115,9 @@ class DBManager:
             self.conn = await aiosqlite.connect(db_uri, uri=True)
             await self.conn.execute("PRAGMA journal_mode=WAL;")
             self.conn.row_factory = aiosqlite.Row
-            self.logger.info(f"Connected to database: {self.db_file} with URI mode and WAL journal mode.")
+            self.logger.info(
+                f"Connected to database: {self.db_file} with URI mode and WAL journal mode."
+            )
         except Exception as e:
             self.logger.critical(f"Failed to connect to database: {e}", exc_info=True)
             sys.exit(1)
@@ -156,7 +158,9 @@ class DBManager:
         await _add_column_if_not_exists(
             "trade_fills", "liquidity_role", "TEXT", "'UNKNOWN'"
         )
-        await _add_column_if_not_exists("trade_fills", "realized_pnl_impact", "TEXT", "'0'")
+        await _add_column_if_not_exists(
+            "trade_fills", "realized_pnl_impact", "TEXT", "'0'"
+        )
         await _add_column_if_not_exists("bot_metrics", "realized_pnl", "TEXT", "'0'")
         await _add_column_if_not_exists(
             "bot_metrics", "net_realized_pnl", "TEXT", "'0'"
@@ -323,7 +327,10 @@ class TradingClient:
                 BybitRateLimitError,
                 BybitInsufficientBalanceError,
             ),
-        ) or isinstance(exception, (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError)):
+        ) or isinstance(
+            exception,
+            (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError),
+        ):
             return False
         return True
 
@@ -1023,7 +1030,9 @@ class BybitMarketMaker:
                         filled = True
 
                     if filled:
-                        fill_qty = order_data["qty"] - order_data.get("cumExecQty", Decimal("0"))
+                        fill_qty = order_data["qty"] - order_data.get(
+                            "cumExecQty", Decimal("0")
+                        )
                         if fill_qty <= Decimal("0"):
                             continue
 
@@ -1216,9 +1225,7 @@ class BybitMarketMaker:
                 if self.state.smoothed_mid_price == Decimal("0"):
                     self.state.smoothed_mid_price = new_mid_price
                 else:
-                    alpha = (
-                        self.config.strategy.dynamic_spread.price_change_smoothing_factor
-                    )
+                    alpha = self.config.strategy.dynamic_spread.price_change_smoothing_factor
                     self.state.smoothed_mid_price = (alpha * new_mid_price) + (
                         (Decimal("1") - alpha) * self.state.smoothed_mid_price
                     )
@@ -1369,18 +1376,29 @@ class BybitMarketMaker:
         latest_orderbook = None
         while not self.orderbook_queue.empty():
             latest_orderbook = await self.orderbook_queue.get()
-        target_bid_price, buy_qty, target_ask_price, sell_qty = self.strategy.get_target_orders(self.state, latest_orderbook)
+        target_bid_price, buy_qty, target_ask_price, sell_qty = (
+            self.strategy.get_target_orders(self.state, latest_orderbook)
+        )
 
-        unrealized_pnl = self.state.metrics.calculate_unrealized_pnl(self.state.mid_price)
-        if abs(unrealized_pnl) > self.state.current_balance * self.config.strategy.profit_take_threshold:
-            self.logger.info(f"Profit-taking triggered: Unrealized PnL={unrealized_pnl}")
+        unrealized_pnl = self.state.metrics.calculate_unrealized_pnl(
+            self.state.mid_price
+        )
+        if (
+            abs(unrealized_pnl)
+            > self.state.current_balance * self.config.strategy.profit_take_threshold
+        ):
+            self.logger.info(
+                f"Profit-taking triggered: Unrealized PnL={unrealized_pnl}"
+            )
             position_qty = self.state.metrics.current_asset_holdings
             if position_qty > 0:
                 await self._place_market_order("Sell", position_qty)
             elif position_qty < 0:
                 await self._place_market_order("Buy", -position_qty)
         else:
-            await self._reconcile_and_place_orders(target_bid_price, buy_qty, target_ask_price, sell_qty)
+            await self._reconcile_and_place_orders(
+                target_bid_price, buy_qty, target_ask_price, sell_qty
+            )
 
     async def _check_circuit_breaker(self) -> bool:
         cb_config = self.config.strategy.circuit_breaker
@@ -1420,14 +1438,12 @@ class BybitMarketMaker:
             return True
         return False
 
-
-
-
-
-
-
     async def _reconcile_and_place_orders(
-        self, target_bid: Decimal, buy_qty: Decimal, target_ask: Decimal, sell_qty: Decimal
+        self,
+        target_bid: Decimal,
+        buy_qty: Decimal,
+        target_ask: Decimal,
+        sell_qty: Decimal,
     ):
         if not self.market_info:
             return
@@ -1455,9 +1471,7 @@ class BybitMarketMaker:
                     "Deactivated",
                     "Expired",
                 ]:
-                    if order_data["qty"] == order_data.get(
-                        "cumExecQty", Decimal("0")
-                    ):
+                    if order_data["qty"] == order_data.get("cumExecQty", Decimal("0")):
                         self.logger.debug(
                             f"Removing fully processed order {order_id} from active orders."
                         )
@@ -1538,7 +1552,6 @@ class BybitMarketMaker:
             not bid_order_to_keep
             and current_outstanding_orders < self.config.strategy.max_outstanding_orders
         ):
-
             if buy_qty > 0:
                 new_orders_to_place.append(("Buy", target_bid, buy_qty))
                 current_outstanding_orders += 1
@@ -1567,7 +1580,11 @@ class BybitMarketMaker:
             await self._place_limit_order(side, price, qty)
 
     async def _log_status_summary(self):
-        async with self.balance_position_lock, self.active_orders_lock, self.market_data_lock:
+        async with (
+            self.balance_position_lock,
+            self.active_orders_lock,
+            self.market_data_lock,
+        ):
             metrics = self.state.metrics
             current_market_price = (
                 self.state.mid_price
@@ -1897,16 +1914,15 @@ class BybitMarketMaker:
         async with self.active_orders_lock:
             self.state.active_orders.clear()
 
-
-
     async def _place_limit_order(self, side: str, price: Decimal, quantity: Decimal):
         if not self.market_info:
             self.logger.error("Cannot place order, market info not available.")
             raise OrderPlacementError("Market information is not available.")
 
-        qty_f, price_f = self.market_info.format_quantity(
-            quantity
-        ), self.market_info.format_price(price)
+        qty_f, price_f = (
+            self.market_info.format_quantity(quantity),
+            self.market_info.format_price(price),
+        )
         if qty_f <= Decimal("0") or price_f <= Decimal("0"):
             self.logger.warning(
                 f"Attempted to place order with zero or negative quantity/price: Qty={qty_f}, Price={price_f}. Skipping."
@@ -1996,7 +2012,9 @@ class BybitMarketMaker:
                     f"Post-only order rejected for {side} at {price_f}. Retrying with adjusted price."
                 )
                 # Adjust price slightly and retry
-                adjusted_price = price_f * (Decimal("0.999") if side == "Buy" else Decimal("1.001"))
+                adjusted_price = price_f * (
+                    Decimal("0.999") if side == "Buy" else Decimal("1.001")
+                )
                 await self._place_limit_order(side, adjusted_price, qty_f)
         except BybitAPIError as e:
             self.logger.error(f"Failed to place post-only order: {e}")
@@ -2022,16 +2040,20 @@ class BybitMarketMaker:
             self.logger.info(
                 f"{self.config.trading_mode}: Would place market {side} order: Qty={qty_f}"
             )
-            await self._process_fill({
-                "orderId": oid,
-                "symbol": self.config.symbol,
-                "side": side,
-                "execQty": str(qty_f),
-                "execPrice": str(self.state.mid_price),
-                "execFee": str(qty_f * self.state.mid_price * self.market_info.taker_fee_rate),
-                "feeCurrency": self.config.quote_currency,
-                "execType": "Taker",
-            })
+            await self._process_fill(
+                {
+                    "orderId": oid,
+                    "symbol": self.config.symbol,
+                    "side": side,
+                    "execQty": str(qty_f),
+                    "execPrice": str(self.state.mid_price),
+                    "execFee": str(
+                        qty_f * self.state.mid_price * self.market_info.taker_fee_rate
+                    ),
+                    "feeCurrency": self.config.quote_currency,
+                    "execType": "Taker",
+                }
+            )
             return
 
         result = await self.trading_client.place_order(params)

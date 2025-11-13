@@ -30,8 +30,8 @@ def main():
         )
     )
     for part in psutil.disk_partitions(all=False):
-        if os.name == 'nt':
-            if 'cdrom' in part.opts or not part.fstype:
+        if os.name == "nt":
+            if "cdrom" in part.opts or not part.fstype:
                 # skip cd-rom drives with no disk in it; they may raise
                 # ENOENT, pop-up a Windows GUI error for a non-ready
                 # partition or just hang.
@@ -49,5 +49,5 @@ def main():
         print(line)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

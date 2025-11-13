@@ -8,20 +8,22 @@ import sys
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
-from decimal import (
-    ROUND_DOWN,
-    ROUND_HALF_EVEN,
-    ROUND_UP,
-    Decimal,
-    InvalidOperation,
-    getcontext,
-)
+from dataclasses import asdict
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from decimal import ROUND_DOWN
+from decimal import ROUND_HALF_EVEN
+from decimal import ROUND_UP
+from decimal import Decimal
+from decimal import InvalidOperation
+from decimal import getcontext
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
+from typing import Final
 
 import ccxt
 import numpy as np
@@ -29,12 +31,15 @@ import pandas as pd
 import pandas_ta as ta
 import requests
 import websocket  # pip install websocket-client
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from pybit.unified_trading import HTTP
 
 
 class PybitAPIException(Exception):
     """Custom exception for Pybit API errors."""
+
 
 # Ensure python-dotenv is installed for load_dotenv
 try:
@@ -369,7 +374,9 @@ class BybitUnifiedTrading:
     Handles order management, position adjustments, and account queries.
     """
 
-    def __init__(self, api_key: str, api_secret: str, testnet: bool, logger: logging.Logger):
+    def __init__(
+        self, api_key: str, api_secret: str, testnet: bool, logger: logging.Logger
+    ):
         self.logger = logger
         self.session = HTTP(
             testnet=testnet,
@@ -377,32 +384,48 @@ class BybitUnifiedTrading:
             api_secret=api_secret,
             # Set a default timeout for all requests
             # This can be overridden per request if needed
-            timeout=30
+            timeout=30,
         )
-        self.logger.info(f"{NB}BybitUnifiedTrading session initialized. Testnet: {testnet}. The trading conduit is open!{RST}")
+        self.logger.info(
+            f"{NB}BybitUnifiedTrading session initialized. Testnet: {testnet}. The trading conduit is open!{RST}"
+        )
 
-    @retry_api_call(catch_exceptions=(requests.exceptions.RequestException, PybitAPIException))
+    @retry_api_call(
+        catch_exceptions=(requests.exceptions.RequestException, PybitAPIException)
+    )
     def query_api(self, method_name: str, **kwargs) -> dict[str, Any]:
-        """Generic method to call any pybit session method and handle its response.
-        """
-        self.logger.debug(f"Calling Bybit API method '{method_name}' with params: {kwargs}")
+        """Generic method to call any pybit session method and handle its response."""
+        self.logger.debug(
+            f"Calling Bybit API method '{method_name}' with params: {kwargs}"
+        )
         try:
             method = getattr(self.session, method_name)
             response = method(**kwargs)
-            if response and response.get('retCode') == 0:
-                self.logger.debug(f"API call '{method_name}' successful. Response: {response}")
+            if response and response.get("retCode") == 0:
+                self.logger.debug(
+                    f"API call '{method_name}' successful. Response: {response}"
+                )
                 return response
-            error_msg = response.get('retMsg', 'Unknown error') if response else 'No response'
-            ret_code = response.get('retCode', 'N/A') if response else 'N/A'
-            self.logger.error(f"{NR}Bybit API call '{method_name}' failed. Code: {ret_code}, Message: {error_msg}. Full response: {response}{RST}")
+            error_msg = (
+                response.get("retMsg", "Unknown error") if response else "No response"
+            )
+            ret_code = response.get("retCode", "N/A") if response else "N/A"
+            self.logger.error(
+                f"{NR}Bybit API call '{method_name}' failed. Code: {ret_code}, Message: {error_msg}. Full response: {response}{RST}"
+            )
             raise PybitAPIException(f"Bybit API error: {error_msg} (Code: {ret_code})")
         except PybitAPIException:
-            raise # Re-raise custom exception
+            raise  # Re-raise custom exception
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"{NR}Network or request error during Bybit API call '{method_name}': {e}{RST}")
-            raise # Re-raise network errors
+            self.logger.error(
+                f"{NR}Network or request error during Bybit API call '{method_name}': {e}{RST}"
+            )
+            raise  # Re-raise network errors
         except Exception as e:
-            self.logger.error(f"{NR}An unexpected error occurred during Bybit API call '{method_name}': {e}{RST}", exc_info=True)
+            self.logger.error(
+                f"{NR}An unexpected error occurred during Bybit API call '{method_name}': {e}{RST}",
+                exc_info=True,
+            )
             raise
 
     def place_order(self, **kwargs) -> dict[str, Any]:
@@ -447,7 +470,7 @@ def clear_screen() -> None:
 
 
 def display_open_positions(
-    open_trades: dict[str, 'Tr'],
+    open_trades: dict[str, "Tr"],
     market_infos: dict[str, dict],
     current_prices: dict[
         str, Decimal | None
@@ -642,7 +665,7 @@ def display_open_positions(
 
 
 def display_recent_closed_trades(
-    closed_trades: list['Tr'],
+    closed_trades: list["Tr"],
     market_infos: dict[str, dict],
     quote_currency: str,
     logger: logging.Logger,  # For TA.gpp
@@ -753,16 +776,20 @@ def display_recent_closed_trades(
 
 
 # --- SMS Alert Function ---
-def send_sms_alert(message: str, recipient_number: str, logger: logging.Logger, config: dict[str, Any]) -> bool:
+def send_sms_alert(
+    message: str, recipient_number: str, logger: logging.Logger, config: dict[str, Any]
+) -> bool:
     """Sends an SMS alert using Termux API if enabled in config.
     Returns True if SMS was sent or alerts are disabled, False if sending failed.
     """
     if not config.get("enable_sms_alerts", False):
         logger.debug("SMS alerts are disabled in config. Skipping.")
-        return True # Considered success as no action was needed
+        return True  # Considered success as no action was needed
 
     if not recipient_number or not isinstance(recipient_number, str):
-        logger.error(f"{NR}SMS recipient number is not configured or invalid. Cannot send SMS.{RST}")
+        logger.error(
+            f"{NR}SMS recipient number is not configured or invalid. Cannot send SMS.{RST}"
+        )
         return False
 
     if not message or not isinstance(message, str):
@@ -771,11 +798,13 @@ def send_sms_alert(message: str, recipient_number: str, logger: logging.Logger, 
 
     # Sanitize message for shell command
     # Basic sanitization: remove backticks and limit length. More robust sanitization might be needed.
-    sanitized_message = message.replace('`', "'").replace('"', "'")
-    max_sms_length = 1500 # Generous limit, actual limits vary by carrier/device
+    sanitized_message = message.replace("`", "'").replace('"', "'")
+    max_sms_length = 1500  # Generous limit, actual limits vary by carrier/device
     if len(sanitized_message) > max_sms_length:
-        sanitized_message = sanitized_message[:max_sms_length-3] + "..."
-        logger.warning(f"{NY}SMS message truncated to {max_sms_length} characters.{RST}")
+        sanitized_message = sanitized_message[: max_sms_length - 3] + "..."
+        logger.warning(
+            f"{NY}SMS message truncated to {max_sms_length} characters.{RST}"
+        )
 
     try:
         # Ensure recipient_number is also sanitized if it comes directly from config without validation elsewhere
@@ -784,23 +813,35 @@ def send_sms_alert(message: str, recipient_number: str, logger: logging.Logger, 
         command = ["termux-sms-send", "-n", recipient_number, sanitized_message]
         logger.debug(f"Executing Termux SMS command: {' '.join(command)}")
 
-        result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30) # 30s timeout
+        result = subprocess.run(
+            command, capture_output=True, text=True, check=False, timeout=30
+        )  # 30s timeout
 
         if result.returncode == 0:
-            logger.info(f"{NG}SMS alert sent successfully to {recipient_number}. Message: '{sanitized_message}'{RST}")
+            logger.info(
+                f"{NG}SMS alert sent successfully to {recipient_number}. Message: '{sanitized_message}'{RST}"
+            )
             return True
         error_output = result.stderr or result.stdout or "No output"
-        logger.error(f"{NR}Failed to send SMS alert via Termux. Return code: {result.returncode}. Error: {error_output.strip()}{RST}")
+        logger.error(
+            f"{NR}Failed to send SMS alert via Termux. Return code: {result.returncode}. Error: {error_output.strip()}{RST}"
+        )
         return False
     except FileNotFoundError:
-        logger.error(f"{NR}Termux API command 'termux-sms-send' not found. Is Termux API installed and configured?{RST}")
+        logger.error(
+            f"{NR}Termux API command 'termux-sms-send' not found. Is Termux API installed and configured?{RST}"
+        )
         return False
     except subprocess.TimeoutExpired:
         logger.error(f"{NR}Termux SMS command timed out after 30 seconds.{RST}")
         return False
     except Exception as e:
-        logger.error(f"{NR}An unexpected error occurred while sending SMS: {e}{RST}", exc_info=True)
+        logger.error(
+            f"{NR}An unexpected error occurred while sending SMS: {e}{RST}",
+            exc_info=True,
+        )
         return False
+
 
 class SF(logging.Formatter):
     """Sensitive Formatter: A custom logging formatter that redacts API keys
@@ -1150,7 +1191,11 @@ def lc(file_path: Path) -> dict[str, Any]:
             "atr_sl_multiplier": {"min": Decimal("0.1")},
             "atr_tp_period": {"min": 1, "is_int": True},
             "atr_tp_multiplier": {"min": Decimal("0.1")},
-            "sms_report_interval_minutes": {"min": 1, "is_int": True, "allow_none": False}, # allow_none: False, must have a value
+            "sms_report_interval_minutes": {
+                "min": 1,
+                "is_int": True,
+                "allow_none": False,
+            },  # allow_none: False, must have a value
         }
 
         for param_key, validation_rules in numeric_params_to_validate.items():
@@ -1186,7 +1231,9 @@ def lc(file_path: Path) -> dict[str, Any]:
         # This is a basic check; actual phone number validation is complex.
         # We'll just log a warning if it's not empty and contains characters other than digits, +, -, (, ), space.
         # This is a very lenient check.
-        if sms_recipient and not all(c.isdigit() or c in ['+', '-', '(', ')', ' '] for c in sms_recipient):
+        if sms_recipient and not all(
+            c.isdigit() or c in ["+", "-", "(", ")", " "] for c in sms_recipient
+        ):
             logger.warning(
                 f"{NY}Config value 'sms_recipient_number' ('{sms_recipient}') contains characters that might not be valid for a phone number. Ensure it is correct. The recipient's address seems unusual!{RST}"
             )
@@ -1251,16 +1298,15 @@ def lc(file_path: Path) -> dict[str, Any]:
                         logger=logger,
                     ):
                         save_needed = True
-            else:
-                if _vncv(
-                    user_config,
-                    param_key,
-                    default_val,
-                    min_value=1,
-                    is_integer=isinstance(default_val, int),
-                    logger=logger,
-                ):
-                    save_needed = True
+            elif _vncv(
+                user_config,
+                param_key,
+                default_val,
+                min_value=1,
+                is_integer=isinstance(default_val, int),
+                logger=logger,
+            ):
+                save_needed = True
 
         # Validate weights within active_weight_set
         current_active_weights = user_config.get("weight_sets", {}).get(
@@ -1277,7 +1323,7 @@ def lc(file_path: Path) -> dict[str, Any]:
                 save_needed = True
                 user_config["weight_sets"][user_config["active_weight_set"]][
                     indicator_key
-                ] = current_active_weights[indicator_key]
+                ] = weight_value
 
         # Validate indicator_thresholds
         indicator_thresholds = user_config.get("indicator_thresholds", {})
@@ -1391,8 +1437,7 @@ def retry_api_call(
         PybitAPIException,
     ),
 ):  # Removed ccxt.ExchangeError from default
-    """Decorator for retrying API calls.
-    """
+    """Decorator for retrying API calls."""
 
     def decorator(func):
         @wraps(func)
@@ -1437,7 +1482,9 @@ def retry_api_call(
 
 
 @retry_api_call()
-def ie(config: dict[str, Any], logger: logging.Logger) -> tuple[ccxt.Exchange | None, BybitUnifiedTrading | None]:
+def ie(
+    config: dict[str, Any], logger: logging.Logger
+) -> tuple[ccxt.Exchange | None, BybitUnifiedTrading | None]:
     """Initialize Exchange: Connects to the cryptocurrency exchange.
     Handles sandbox mode, market loading, and initial balance fetch to confirm connection.
     Returns a CCXT exchange instance or a BybitUnifiedTrading instance.
@@ -1480,7 +1527,10 @@ def ie(config: dict[str, Any], logger: logging.Logger) -> tuple[ccxt.Exchange | 
                 f"{NY}{ccxt_exchange.id} does not support set_sandbox_mode via ccxt. Ensure API keys are configured for Testnet manually.{RST}"
             )
             # For Bybit, manually set the testnet URL if set_sandbox_mode is not available or doesn't work as expected
-            if ccxt_exchange.id == "bybit" and "testnet" not in ccxt_exchange.urls["api"]:
+            if (
+                ccxt_exchange.id == "bybit"
+                and "testnet" not in ccxt_exchange.urls["api"]
+            ):
                 ccxt_exchange.urls["api"] = "https://api-testnet.bybit.com"
                 logger.warning(
                     f"{NY}Manually set Bybit Testnet API URL: {ccxt_exchange.urls['api']}. A hidden path revealed!{RST}"
@@ -1493,19 +1543,27 @@ def ie(config: dict[str, Any], logger: logging.Logger) -> tuple[ccxt.Exchange | 
 
     bybit_api_instance: BybitUnifiedTrading | None = None
     if exchange_id == "bybit":
-        logger.info(f"{NB}Initializing Bybit Unified Trading API... Forging the Bybit connection!{RST}")
+        logger.info(
+            f"{NB}Initializing Bybit Unified Trading API... Forging the Bybit connection!{RST}"
+        )
         try:
             bybit_api_instance = BybitUnifiedTrading(AK, AS, use_sandbox, logger)
             # Test connection by fetching account info
             account_info = bybit_api_instance.get_account_info()
-            if account_info and account_info.get('retCode') == 0:
-                logger.info(f"{NG}Successfully connected to Bybit Unified Trading API. Account type: {account_info.get('result', {}).get('accountType')}. The Bybit conduit is strong!{RST}")
+            if account_info and account_info.get("retCode") == 0:
+                logger.info(
+                    f"{NG}Successfully connected to Bybit Unified Trading API. Account type: {account_info.get('result', {}).get('accountType')}. The Bybit conduit is strong!{RST}"
+                )
             else:
-                logger.error(f"{NR}Failed to connect to Bybit Unified Trading API. Response: {account_info}{RST}")
-                bybit_api_instance = None # Ensure it's None if connection fails
+                logger.error(
+                    f"{NR}Failed to connect to Bybit Unified Trading API. Response: {account_info}{RST}"
+                )
+                bybit_api_instance = None  # Ensure it's None if connection fails
         except Exception as e:
-            logger.error(f"{NR}Error initializing BybitUnifiedTrading: {e}{RST}", exc_info=True)
-            bybit_api_instance = None # Ensure it's None if connection fails
+            logger.error(
+                f"{NR}Error initializing BybitUnifiedTrading: {e}{RST}", exc_info=True
+            )
+            bybit_api_instance = None  # Ensure it's None if connection fails
 
     account_type = "CONTRACT"
     logger.info(
@@ -1531,9 +1589,7 @@ def ie(config: dict[str, Any], logger: logging.Logger) -> tuple[ccxt.Exchange | 
 
 
 @retry_api_call()
-def fcp(
-    exchange: ccxt.Exchange, symbol: str, logger: logging.Logger
-) -> Decimal | None:
+def fcp(exchange: ccxt.Exchange, symbol: str, logger: logging.Logger) -> Decimal | None:
     """Fetch Current Price: Retrieves the current price for a given symbol,
     with retries and robust fallback logic for different price types (last, bid/ask midpoint).
     """
@@ -1978,34 +2034,61 @@ class TA:
 
                 try:
                     # Explicitly cast required columns to float64 before MFI calculation
-                    for col_to_cast in ['high', 'low', 'close', 'volume']:
+                    for col_to_cast in ["high", "low", "close", "volume"]:
                         if col_to_cast in data_copy.columns:
                             # Attempt to convert object/string types to numeric first
-                            if pd.api.types.is_object_dtype(data_copy[col_to_cast]) or pd.api.types.is_string_dtype(data_copy[col_to_cast]):
-                                data_copy[col_to_cast] = pd.to_numeric(data_copy[col_to_cast], errors='coerce')
+                            if pd.api.types.is_object_dtype(
+                                data_copy[col_to_cast]
+                            ) or pd.api.types.is_string_dtype(data_copy[col_to_cast]):
+                                data_copy[col_to_cast] = pd.to_numeric(
+                                    data_copy[col_to_cast], errors="coerce"
+                                )
                             # Then cast to float64
-                            data_copy[col_to_cast] = data_copy[col_to_cast].astype('float64')
+                            data_copy[col_to_cast] = data_copy[col_to_cast].astype(
+                                "float64"
+                            )
                         else:
-                            self.lg.warning(f"MFI pre-casting: Column '{col_to_cast}' not found in data_copy for {self.s}. Skipping cast for this column.")
+                            self.lg.warning(
+                                f"MFI pre-casting: Column '{col_to_cast}' not found in data_copy for {self.s}. Skipping cast for this column."
+                            )
 
                     # Check for NaNs after conversion, which might indicate original non-numeric data
-                    if data_copy[['high', 'low', 'close', 'volume']].isnull().any().any():
-                        self.lg.warning(f"MFI calculation for {self.s}: Found NaN values in OHLCV data after attempting conversion. This might lead to MFI calculation issues.")
+                    if (
+                        data_copy[["high", "low", "close", "volume"]]
+                        .isnull()
+                        .any()
+                        .any()
+                    ):
+                        self.lg.warning(
+                            f"MFI calculation for {self.s}: Found NaN values in OHLCV data after attempting conversion. This might lead to MFI calculation issues."
+                        )
 
-                    mfi_series = data_copy.ta.mfi(length=mfi_period, append=False) # Calculate MFI
+                    mfi_series = data_copy.ta.mfi(
+                        length=mfi_period, append=False
+                    )  # Calculate MFI
 
                     if mfi_series is not None and not mfi_series.empty:
-                        mfi_series = mfi_series.astype('float64', errors='ignore') # Ensure MFI series itself is float64
+                        mfi_series = mfi_series.astype(
+                            "float64", errors="ignore"
+                        )  # Ensure MFI series itself is float64
                         data_copy[mfi_col_name] = mfi_series
                         self.tcn["MFI"] = mfi_col_name
                     else:
-                        self.lg.warning(f"MFI calculation for {self.s} returned None or empty series. Skipping MFI assignment.")
+                        self.lg.warning(
+                            f"MFI calculation for {self.s} returned None or empty series. Skipping MFI assignment."
+                        )
                         self.tcn["MFI"] = None
                 except (ValueError, TypeError) as e:
-                    self.lg.error(f"MFI calculation failed for {self.s} due to {type(e).__name__}: {e}. Proceeding without MFI for this cycle. The money flow is obscured!", exc_info=True)
+                    self.lg.error(
+                        f"MFI calculation failed for {self.s} due to {type(e).__name__}: {e}. Proceeding without MFI for this cycle. The money flow is obscured!",
+                        exc_info=True,
+                    )
                     self.tcn["MFI"] = None
-                except Exception as e: # Catch any other unexpected error during MFI
-                    self.lg.error(f"Unexpected error during MFI calculation for {self.s}: {e}. Proceeding without MFI. The money flow is unexpectedly obscured!", exc_info=True)
+                except Exception as e:  # Catch any other unexpected error during MFI
+                    self.lg.error(
+                        f"Unexpected error during MFI calculation for {self.s}: {e}. Proceeding without MFI. The money flow is unexpectedly obscured!",
+                        exc_info=True,
+                    )
                     self.tcn["MFI"] = None
 
             if indicators_config.get("vwap", False):
@@ -2199,9 +2282,7 @@ class TA:
                             self.iv[fisher_key] = Decimal(np.nan)
                     else:
                         self.iv[fisher_key] = Decimal(np.nan)
-                elif (
-                    col_name
-                ):  # col_name was in tcn but not in latest_row.index (should be rare after _cai)
+                elif col_name:  # col_name was in tcn but not in latest_row.index (should be rare after _cai)
                     self.lg.debug(
                         f"Indicator column '{col_name}' for key '{fisher_key}' not found in latest data row for {self.s} during _uliv specific check. Storing NaN."
                     )
@@ -2410,8 +2491,7 @@ class TA:
 
     @staticmethod
     def gmts(market_info: dict[str, Any], logger: logging.Logger) -> Decimal:
-        """Get Minimum Tick Size: Determines the smallest price increment allowed by the exchange.
-        """
+        """Get Minimum Tick Size: Determines the smallest price increment allowed by the exchange."""
         symbol_name = market_info.get("symbol", "UNKNOWN")
         try:
             precision_info = market_info.get("precision", {})
@@ -2473,8 +2553,7 @@ class TA:
     def gnfl(
         self, current_price: Decimal, num_levels: int = 5
     ) -> list[tuple[str, Decimal]]:
-        """Get Nearest Fibonacci Levels: Finds the closest Fibonacci levels to the current price.
-        """
+        """Get Nearest Fibonacci Levels: Finds the closest Fibonacci levels to the current price."""
         if not self.fld:
             self.lg.debug(
                 f"Fibonacci levels not calculated yet for {self.s}. Cannot find nearest. The golden spirals are not yet formed.{RST}"
@@ -2667,8 +2746,7 @@ class TA:
         return score
 
     def _cr(self) -> Decimal:
-        """Check RSI Score: Assesses RSI for overbought/oversold conditions and trend strength.
-        """
+        """Check RSI Score: Assesses RSI for overbought/oversold conditions and trend strength."""
         rsi_value = self.iv.get("RSI")
         if pd.isna(rsi_value):
             self.lg.debug(
@@ -2708,8 +2786,7 @@ class TA:
         return Decimal("0.0")
 
     def _cc(self) -> Decimal:
-        """Check CCI Score: Evaluates CCI for overbought/oversold conditions and trend direction.
-        """
+        """Check CCI Score: Evaluates CCI for overbought/oversold conditions and trend direction."""
         cci_value = self.iv.get("CCI")
         if pd.isna(cci_value):
             self.lg.debug(
@@ -2747,8 +2824,7 @@ class TA:
         return Decimal("0.0")
 
     def _cwr(self) -> Decimal:
-        """Check Williams %R Score: Assesses Williams %R for overbought/oversold conditions.
-        """
+        """Check Williams %R Score: Assesses Williams %R for overbought/oversold conditions."""
         wr_value = self.iv.get("Williams_R")
         if pd.isna(wr_value):
             self.lg.debug(
@@ -2779,8 +2855,7 @@ class TA:
         return Decimal("0.0")
 
     def _cpsar(self) -> Decimal:
-        """Check PSAR Score: Determines trend direction based on Parabolic SAR.
-        """
+        """Check PSAR Score: Determines trend direction based on Parabolic SAR."""
         psar_long_active = self.iv.get("PSAR_long")
         psar_short_active = self.iv.get("PSAR_short")
 
@@ -2802,8 +2877,7 @@ class TA:
         return Decimal("0.0")
 
     def _csma(self) -> Decimal:
-        """Check SMA10 Score: Compares current closing price to a 10-period Simple Moving Average.
-        """
+        """Check SMA10 Score: Compares current closing price to a 10-period Simple Moving Average."""
         sma10_value = self.iv.get("SMA10")
         last_close_decimal = self.iv.get("Close")
 
@@ -2822,8 +2896,7 @@ class TA:
         return Decimal("0.0")
 
     def _cv(self) -> Decimal:
-        """Check VWAP Score: Compares current closing price to the Volume Weighted Average Price.
-        """
+        """Check VWAP Score: Compares current closing price to the Volume Weighted Average Price."""
         vwap_value = self.iv.get("VWAP")
         last_close_decimal = self.iv.get("Close")
 
@@ -2842,8 +2915,7 @@ class TA:
         return Decimal("0.0")
 
     def _cmfi(self) -> Decimal:
-        """Check MFI Score: Evaluates Money Flow Index for overbought/oversold conditions.
-        """
+        """Check MFI Score: Evaluates Money Flow Index for overbought/oversold conditions."""
         mfi_value = self.iv.get("MFI")
         if pd.isna(mfi_value):
             self.lg.debug(
@@ -2870,8 +2942,7 @@ class TA:
         return Decimal("0.0")
 
     def _cbb(self) -> Decimal:
-        """Check Bollinger Bands Score: Assesses price position relative to Bollinger Bands.
-        """
+        """Check Bollinger Bands Score: Assesses price position relative to Bollinger Bands."""
         bb_lower = self.iv.get("BB_Lower")
         bb_middle = self.iv.get("BB_Middle")
         bb_upper = self.iv.get("BB_Upper")
@@ -2910,8 +2981,7 @@ class TA:
         return Decimal("0.0")
 
     def _cob(self, orderbook_data: dict | None, current_price: Decimal) -> Decimal:
-        """Check Orderbook Score: Analyzes the imbalance between bids and asks in the order book.
-        """
+        """Check Orderbook Score: Analyzes the imbalance between bids and asks in the order book."""
         if not orderbook_data:
             self.lg.debug(
                 f"Orderbook check skipped for {self.s}: No data provided. The whispers are silent.{RST}"
@@ -3038,8 +3108,7 @@ class TA:
         return score
 
     def gts(self, current_price: Decimal, orderbook_data: dict | None) -> str:
-        """Generate Trade Signal: Aggregates scores from various indicators to produce a BUY, SELL, or HOLD signal.
-        """
+        """Generate Trade Signal: Aggregates scores from various indicators to produce a BUY, SELL, or HOLD signal."""
         signal_threshold = self.cfg.get("signal_score_threshold", Decimal("1.5"))
         self.sig = {"BUY": 0, "SELL": 0, "HOLD": 1}
         final_signal_score = Decimal("0.0")
@@ -3129,11 +3198,10 @@ class TA:
                             indicator_score_decimal = indicator_check_method(
                                 orderbook_data, current_price
                             )
-                        else:
-                            if weight != Decimal("0.0"):
-                                self.lg.debug(
-                                    f"Orderbook check skipped for {self.s}: No orderbook data provided, but indicator is enabled/weighted. The market's immediate desires are not visible.{RST}"
-                                )
+                        elif weight != Decimal("0.0"):
+                            self.lg.debug(
+                                f"Orderbook check skipped for {self.s}: No orderbook data provided, but indicator is enabled/weighted. The market's immediate desires are not visible.{RST}"
+                            )
                     else:
                         indicator_score_decimal = indicator_check_method()
                 except Exception as e:
@@ -3168,11 +3236,10 @@ class TA:
                         nan_indicator_count += 1
                 else:
                     nan_indicator_count += 1
-            else:
-                if weight != Decimal("0.0"):
-                    self.lg.warning(
-                        f"{NY}Indicator check method '{method_name}' (for '{indicator_key}') not found or not callable for enabled/weighted indicator: {indicator_key} ({self.s}). A missing incantation!{RST}"
-                    )
+            elif weight != Decimal("0.0"):
+                self.lg.warning(
+                    f"{NY}Indicator check method '{method_name}' (for '{indicator_key}') not found or not callable for enabled/weighted indicator: {indicator_key} ({self.s}). A missing incantation!{RST}"
+                )
 
         final_signal = "HOLD"
         if total_weighted_active == Decimal("0.0"):
@@ -3456,24 +3523,37 @@ def fb(
         try:
             # For Bybit, get_wallet_balance is the primary way to get balance
             # It returns a list of coins in the 'list' key under 'result'
-            wallet_balance_response = bybit_api.get_wallet_balance(accountType="UNIFIED", coin=currency)
-            if wallet_balance_response and wallet_balance_response.get('retCode') == 0:
-                result_list = wallet_balance_response.get('result', {}).get('list', [])
+            wallet_balance_response = bybit_api.get_wallet_balance(
+                accountType="UNIFIED", coin=currency
+            )
+            if wallet_balance_response and wallet_balance_response.get("retCode") == 0:
+                result_list = wallet_balance_response.get("result", {}).get("list", [])
                 if result_list:
                     # Assuming the first item in the list contains the relevant coin data
-                    coin_data = result_list[0].get('coin', [])
+                    coin_data = result_list[0].get("coin", [])
                     for coin_info in coin_data:
-                        if coin_info.get('coin') == currency:
-                            available_balance_str = coin_info.get('availableToWithdraw') or coin_info.get('availableBalance')
+                        if coin_info.get("coin") == currency:
+                            available_balance_str = coin_info.get(
+                                "availableToWithdraw"
+                            ) or coin_info.get("availableBalance")
                             if available_balance_str is not None:
                                 final_balance = Decimal(str(available_balance_str))
-                                logger.info(f"{NG}Available {currency} balance via BybitUnifiedTrading: {final_balance:.4f}.{RST}")
+                                logger.info(
+                                    f"{NG}Available {currency} balance via BybitUnifiedTrading: {final_balance:.4f}.{RST}"
+                                )
                                 return final_balance
-            logger.warning(f"{NY}Could not fetch balance for {currency} via BybitUnifiedTrading. Falling back to CCXT. The Bybit ledger is elusive!{RST}")
+            logger.warning(
+                f"{NY}Could not fetch balance for {currency} via BybitUnifiedTrading. Falling back to CCXT. The Bybit ledger is elusive!{RST}"
+            )
         except PybitAPIException as e:
-            logger.warning(f"{NY}BybitUnifiedTrading balance fetch failed: {e}. Falling back to CCXT. The Bybit conduit is troubled!{RST}")
+            logger.warning(
+                f"{NY}BybitUnifiedTrading balance fetch failed: {e}. Falling back to CCXT. The Bybit conduit is troubled!{RST}"
+            )
         except Exception as e:
-            logger.error(f"{NR}Unexpected error during BybitUnifiedTrading balance fetch: {e}. Falling back to CCXT. A cosmic interference!{RST}", exc_info=True)
+            logger.error(
+                f"{NR}Unexpected error during BybitUnifiedTrading balance fetch: {e}. Falling back to CCXT. A cosmic interference!{RST}",
+                exc_info=True,
+            )
 
     # Fallback to CCXT for other exchanges or if BybitUnifiedTrading fails
     logger.debug(f"Fetching balance using CCXT for {currency}.")
@@ -3616,8 +3696,7 @@ def fb(
 def _gop_decimal_converter(
     value: Any, logger: logging.Logger, symbol: str, field_name: str
 ) -> Decimal | None:
-    """Converts a value to Decimal for gop function, treating '0', empty strings, or None as None.
-    """
+    """Converts a value to Decimal for gop function, treating '0', empty strings, or None as None."""
     if value is None or str(value).strip() == "":
         return None
     try:
@@ -3834,13 +3913,12 @@ def cps(
     estimated_cost: Decimal | None = None
     if market_info.get("linear", True) or not is_contract:
         estimated_cost = adjusted_size * entry_price * contract_size
+    elif entry_price > 0:
+        estimated_cost = adjusted_size * contract_size / entry_price
     else:
-        if entry_price > 0:
-            estimated_cost = adjusted_size * contract_size / entry_price
-        else:
-            raise ValueError(
-                f"Cannot estimate cost for inverse contract {symbol}: Entry price is zero. The cost is immeasurable!"
-            )
+        raise ValueError(
+            f"Cannot estimate cost for inverse contract {symbol}: Entry price is zero. The cost is immeasurable!"
+        )
 
     logger.debug(
         f"  Cost Check: Adjusted Size={adjusted_size:.8f}, Estimated Cost={estimated_cost:.4f} {quote_currency}. Verifying the cost of the enchantment.{RST}"
@@ -3855,13 +3933,12 @@ def cps(
             denominator = entry_price * contract_size
             if denominator > 0:
                 required_size_for_min_cost = min_cost / denominator
+        elif contract_size > 0:
+            required_size_for_min_cost = min_cost * entry_price / contract_size
         else:
-            if contract_size > 0:
-                required_size_for_min_cost = min_cost * entry_price / contract_size
-            else:
-                raise ValueError(
-                    "Cannot calculate required size for min cost: Contract size is zero."
-                )
+            raise ValueError(
+                "Cannot calculate required size for min cost: Contract size is zero."
+            )
 
         if required_size_for_min_cost is None:
             raise ValueError(
@@ -3895,13 +3972,12 @@ def cps(
                 raise ValueError(
                     "Cannot calculate max size for max cost: Denominator zero/negative."
                 )
+        elif contract_size > 0:
+            allowed_size_for_max_cost = max_cost * entry_price / contract_size
         else:
-            if contract_size > 0:
-                allowed_size_for_max_cost = max_cost * entry_price / contract_size
-            else:
-                raise ValueError(
-                    "Cannot calculate max size for max cost: Contract size is zero."
-                )
+            raise ValueError(
+                "Cannot calculate max size for max cost: Contract size is zero."
+            )
 
         if allowed_size_for_max_cost is None:
             raise ValueError(
@@ -3942,11 +4018,10 @@ def cps(
     final_cost: Decimal | None = None
     if market_info.get("linear", True) or not is_contract:
         final_cost = final_size * entry_price * contract_size
+    elif entry_price > 0:
+        final_cost = final_size * contract_size / entry_price
     else:
-        if entry_price > 0:
-            final_cost = final_size * contract_size / entry_price
-        else:
-            final_cost = None
+        final_cost = None
 
     if final_cost is not None and min_cost > 0 and final_cost < min_cost:
         raise ValueError(
@@ -4459,8 +4534,12 @@ def pt(
     if order_response:
         order_id = order_response.get("id", "N/A")
         order_status = order_response.get("status", "N/A")
-        filled_amount_str = str(order_response.get("filled", "0")) # Ensure it's a string for Decimal
-        average_price_str = str(order_response.get("average", "N/A")) # Ensure it's a string
+        filled_amount_str = str(
+            order_response.get("filled", "0")
+        )  # Ensure it's a string for Decimal
+        average_price_str = str(
+            order_response.get("average", "N/A")
+        )  # Ensure it's a string
 
         logger.info(
             f"{NG}{action_description} Trade Placed Successfully! The spell was cast!{RST}"
@@ -4470,10 +4549,14 @@ def pt(
         if filled_amount_str != "0" and filled_amount_str is not None:
             try:
                 filled_decimal_for_log = Decimal(filled_amount_str)
-                if filled_decimal_for_log > 0: # Only log if filled amount is greater than 0
+                if (
+                    filled_decimal_for_log > 0
+                ):  # Only log if filled amount is greater than 0
                     logger.info(f"{NG}  Filled Amount: {filled_decimal_for_log}{RST}")
             except InvalidOperation:
-                 logger.info(f"{NG}  Filled Amount: {filled_amount_str} (raw){RST}") # Log raw if not decimal
+                logger.info(
+                    f"{NG}  Filled Amount: {filled_amount_str} (raw){RST}"
+                )  # Log raw if not decimal
 
         if average_price_str != "N/A":
             logger.info(f"{NG}  Average Fill Price: {average_price_str}{RST}")
@@ -4484,16 +4567,24 @@ def pt(
             if recipient_number:
                 # Determine price for SMS message
                 sms_price = "N/A"
-                if order_type == 'limit' and formatted_price_float is not None:
-                    sms_price = f"{formatted_price_float:.{TA.gpp(market_info, logger)}f}"
+                if order_type == "limit" and formatted_price_float is not None:
+                    sms_price = (
+                        f"{formatted_price_float:.{TA.gpp(market_info, logger)}f}"
+                    )
                 elif average_price_str != "N/A":
                     try:
                         avg_price_dec = Decimal(average_price_str)
                         sms_price = f"{avg_price_dec:.{TA.gpp(market_info, logger)}f}"
                     except InvalidOperation:
-                        sms_price = average_price_str # Use raw string if conversion fails
+                        sms_price = (
+                            average_price_str  # Use raw string if conversion fails
+                        )
 
-                size_unit_sms = "Contracts" if market_info.get("is_contract", False) else market_info.get("base", "")
+                size_unit_sms = (
+                    "Contracts"
+                    if market_info.get("is_contract", False)
+                    else market_info.get("base", "")
+                )
 
                 sms_message = (
                     f"XR Scalper Alert:\n"
@@ -4508,7 +4599,9 @@ def pt(
                 )
                 send_sms_alert(sms_message, recipient_number, logger, _icfs)
             else:
-                logger.warning(f"{NY}SMS alerts enabled but no recipient number configured. Cannot send order placement SMS.{RST}")
+                logger.warning(
+                    f"{NY}SMS alerts enabled but no recipient number configured. Cannot send order placement SMS.{RST}"
+                )
         # <<< END NEW SMS ALERT CODE >>>
 
         logger.debug(
@@ -4654,7 +4747,7 @@ def stsl(
     if current_position_size_raw is not None:
         try:
             current_position_size = Decimal(str(current_position_size_raw))
-            if current_position_size.is_zero(): # Position exists but size is zero
+            if current_position_size.is_zero():  # Position exists but size is zero
                 logger.warning(
                     f"{NY}stsl: Position size for {symbol} is zero ({current_position_size_raw}). Cannot set protections if position is effectively closed.{RST}"
                 )
@@ -4669,19 +4762,23 @@ def stsl(
                 f"{NR}stsl: Invalid position size '{current_position_size_raw}' in position_info for {symbol}. Cannot set protections.{RST}"
             )
             return False
-    else: # Fallback to trade_record.size if live data isn't available or not in expected format
+    else:  # Fallback to trade_record.size if live data isn't available or not in expected format
         current_position_size = trade_record.size
         logger.warning(
             f"{NY}stsl: 'contractsDecimal' not found in position_info for {symbol}. Using trade_record.size ({current_position_size}) as fallback. Protections might be based on stale size.{RST}"
         )
 
-    if current_position_size is None or current_position_size.is_zero(): # Final check after potential fallback
+    if (
+        current_position_size is None or current_position_size.is_zero()
+    ):  # Final check after potential fallback
         logger.error(
             f"{NR}stsl: Valid non-zero position size could not be determined for {symbol}. Cannot set protections.{RST}"
         )
         return False
 
-    current_position_size_str = str(abs(current_position_size)) # API expects positive size
+    current_position_size_str = str(
+        abs(current_position_size)
+    )  # API expects positive size
 
     # Determine base_url based on sandbox mode
     use_sandbox = config.get("use_sandbox", True)
@@ -4721,14 +4818,14 @@ def stsl(
     if take_profit_price_target and take_profit_price_target > 0:
         quantized_tp_price = take_profit_price_target.quantize(
             min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"),
-            rounding=ROUND_HALF_EVEN
+            rounding=ROUND_HALF_EVEN,
         )
 
     quantized_fixed_sl_price: Decimal | None = None
     if fixed_stop_loss_price and fixed_stop_loss_price > 0:
         quantized_fixed_sl_price = fixed_stop_loss_price.quantize(
             min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"),
-            rounding=ROUND_HALF_EVEN
+            rounding=ROUND_HALF_EVEN,
         )
 
     # --- TSL Parameter Calculation ---
@@ -4746,7 +4843,7 @@ def stsl(
         logger.info(
             f"{NB}stsl: Setting Take Profit for {symbol} to {quantized_tp} with size {current_position_size_str}.{RST}"
         )
-    else: # Clearing TP or no TP requested
+    else:  # Clearing TP or no TP requested
         params_to_set["takeProfit"] = "0"
         # Ensure tpSize is always set, even when clearing takeProfit
         params_to_set["tpSize"] = current_position_size_str
@@ -4757,58 +4854,101 @@ def stsl(
     # --- Stop Loss / Trailing Stop Loss Handling ---
     if attempt_tsl and config.get("enable_trailing_stop", False):
         try:
-            tsl_distance_rate_from_config = config.get("trailing_stop_callback_rate", DIP["psar_af"])
-            activation_percentage_from_config = config.get("trailing_stop_activation_percentage", DIP["psar_af"])
+            tsl_distance_rate_from_config = config.get(
+                "trailing_stop_callback_rate", DIP["psar_af"]
+            )
+            activation_percentage_from_config = config.get(
+                "trailing_stop_activation_percentage", DIP["psar_af"]
+            )
 
-            if not (isinstance(tsl_distance_rate_from_config, Decimal) and
-                    isinstance(activation_percentage_from_config, Decimal) and
-                    tsl_distance_rate_from_config > 0 and
-                    activation_percentage_from_config >= 0):
-                logger.error(f"{NR}stsl: Invalid TSL config types/values. Rate: {tsl_distance_rate_from_config}, Activation Pct: {activation_percentage_from_config}.{RST}")
+            if not (
+                isinstance(tsl_distance_rate_from_config, Decimal)
+                and isinstance(activation_percentage_from_config, Decimal)
+                and tsl_distance_rate_from_config > 0
+                and activation_percentage_from_config >= 0
+            ):
+                logger.error(
+                    f"{NR}stsl: Invalid TSL config types/values. Rate: {tsl_distance_rate_from_config}, Activation Pct: {activation_percentage_from_config}.{RST}"
+                )
             else:
-                entry_price = position_info.get("entryPriceDecimal", trade_record.entry_price)
+                entry_price = position_info.get(
+                    "entryPriceDecimal", trade_record.entry_price
+                )
                 pos_side_for_tsl_calc = position_info.get("side", trade_record.side)
 
                 if not entry_price or entry_price <= 0 or not pos_side_for_tsl_calc:
-                    logger.error(f"{NR}stsl: Missing entry price/side for TSL calc. Entry: {entry_price}, Side: {pos_side_for_tsl_calc}.{RST}")
+                    logger.error(
+                        f"{NR}stsl: Missing entry price/side for TSL calc. Entry: {entry_price}, Side: {pos_side_for_tsl_calc}.{RST}"
+                    )
                 else:
-                    raw_activation_price = entry_price * (Decimal('1') + (activation_percentage_from_config if pos_side_for_tsl_calc == "long" else -activation_percentage_from_config))
+                    raw_activation_price = entry_price * (
+                        Decimal("1")
+                        + (
+                            activation_percentage_from_config
+                            if pos_side_for_tsl_calc == "long"
+                            else -activation_percentage_from_config
+                        )
+                    )
                     quantized_activation_price = raw_activation_price.quantize(
-                        min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"),
-                        rounding=ROUND_HALF_EVEN
+                        min_tick_size
+                        if min_tick_size > 0
+                        else Decimal(f"1e-{price_precision}"),
+                        rounding=ROUND_HALF_EVEN,
                     )
 
                     actual_distance_value = entry_price * tsl_distance_rate_from_config
                     quantized_distance = actual_distance_value.quantize(
-                        min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"),
-                        rounding=ROUND_HALF_EVEN
+                        min_tick_size
+                        if min_tick_size > 0
+                        else Decimal(f"1e-{price_precision}"),
+                        rounding=ROUND_HALF_EVEN,
                     )
 
-                    if quantized_distance <= (min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}")): # Ensure meaningful distance
-                        calculated_tsl_distance = (min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"))
-                        logger.warning(f"{NY}stsl: TSL distance from rate ({tsl_distance_rate_from_config}) resulted in {actual_distance_value}, quantized to {quantized_distance}, which is too small. Adjusted to {calculated_tsl_distance}.{RST}")
+                    if quantized_distance <= (
+                        min_tick_size
+                        if min_tick_size > 0
+                        else Decimal(f"1e-{price_precision}")
+                    ):  # Ensure meaningful distance
+                        calculated_tsl_distance = (
+                            min_tick_size
+                            if min_tick_size > 0
+                            else Decimal(f"1e-{price_precision}")
+                        )
+                        logger.warning(
+                            f"{NY}stsl: TSL distance from rate ({tsl_distance_rate_from_config}) resulted in {actual_distance_value}, quantized to {quantized_distance}, which is too small. Adjusted to {calculated_tsl_distance}.{RST}"
+                        )
                     else:
                         calculated_tsl_distance = quantized_distance
 
                     calculated_tsl_activation_price = quantized_activation_price
 
-                    if calculated_tsl_distance > 0 and calculated_tsl_activation_price > 0:
+                    if (
+                        calculated_tsl_distance > 0
+                        and calculated_tsl_activation_price > 0
+                    ):
                         initial_tsl_params_valid_for_processing = True
                     else:
-                        logger.error(f"{NR}stsl: Final TSL distance ({calculated_tsl_distance}) or activation price ({calculated_tsl_activation_price}) is invalid.{RST}")
+                        logger.error(
+                            f"{NR}stsl: Final TSL distance ({calculated_tsl_distance}) or activation price ({calculated_tsl_activation_price}) is invalid.{RST}"
+                        )
         except Exception as e:
-            logger.error(f"{NR}stsl: Error during TSL param calculation for {symbol}: {e}.{RST}", exc_info=True)
+            logger.error(
+                f"{NR}stsl: Error during TSL param calculation for {symbol}: {e}.{RST}",
+                exc_info=True,
+            )
             initial_tsl_params_valid_for_processing = False
 
     # --- Define Actual Intent Flags (AFTER all calculations) ---
     intent_to_set_tp = bool(quantized_tp_price and quantized_tp_price > 0)
     # intent_to_set_tsl is now effectively initial_tsl_params_valid_for_processing
-    intent_to_set_fixed_sl = bool(quantized_fixed_sl_price and quantized_fixed_sl_price > 0)
+    intent_to_set_fixed_sl = bool(
+        quantized_fixed_sl_price and quantized_fixed_sl_price > 0
+    )
 
     if should_set_tsl and calculated_tsl_distance and calculated_tsl_activation_price:
         params_to_set["trailingStop"] = str(calculated_tsl_distance)
         params_to_set["activePrice"] = str(calculated_tsl_activation_price)
-        params_to_set["stopLoss"] = "0" # Clear fixed SL when TSL is active
+        params_to_set["stopLoss"] = "0"  # Clear fixed SL when TSL is active
         # Ensure slSize is always set when stopLoss is present (even if "0" due to TSL)
         params_to_set["slSize"] = current_position_size_str
         logger.info(
@@ -4819,7 +4959,7 @@ def stsl(
             min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}")
         )
         params_to_set["stopLoss"] = str(quantized_fixed_sl)
-        params_to_set["trailingStop"] = "0" # Clear TSL
+        params_to_set["trailingStop"] = "0"  # Clear TSL
         params_to_set["activePrice"] = "0"  # Clear TSL activation price
         # Ensure slSize is always set when stopLoss is present
         params_to_set["slSize"] = current_position_size_str
@@ -4838,20 +4978,44 @@ def stsl(
 
     tsl_actually_applied_with_initial_sl = False
 
-    if initial_tsl_params_valid_for_processing: # If config and inputs for TSL were okay initially
+    if (
+        initial_tsl_params_valid_for_processing
+    ):  # If config and inputs for TSL were okay initially
         pos_side = position_info.get("side", trade_record.side)
         quantized_initial_trigger_sl: Decimal | None = None
 
         if pos_side == "long":
             raw_initial_sl = calculated_tsl_activation_price - calculated_tsl_distance
-            quantized_initial_trigger_sl = raw_initial_sl.quantize(min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"), rounding=ROUND_DOWN)
-            if quantized_initial_trigger_sl >= calculated_tsl_activation_price: # Adjust if SL is bad
-                quantized_initial_trigger_sl = calculated_tsl_activation_price - (min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"))
+            quantized_initial_trigger_sl = raw_initial_sl.quantize(
+                min_tick_size
+                if min_tick_size > 0
+                else Decimal(f"1e-{price_precision}"),
+                rounding=ROUND_DOWN,
+            )
+            if (
+                quantized_initial_trigger_sl >= calculated_tsl_activation_price
+            ):  # Adjust if SL is bad
+                quantized_initial_trigger_sl = calculated_tsl_activation_price - (
+                    min_tick_size
+                    if min_tick_size > 0
+                    else Decimal(f"1e-{price_precision}")
+                )
         elif pos_side == "short":
             raw_initial_sl = calculated_tsl_activation_price + calculated_tsl_distance
-            quantized_initial_trigger_sl = raw_initial_sl.quantize(min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"), rounding=ROUND_UP)
-            if quantized_initial_trigger_sl <= calculated_tsl_activation_price: # Adjust if SL is bad
-                quantized_initial_trigger_sl = calculated_tsl_activation_price + (min_tick_size if min_tick_size > 0 else Decimal(f"1e-{price_precision}"))
+            quantized_initial_trigger_sl = raw_initial_sl.quantize(
+                min_tick_size
+                if min_tick_size > 0
+                else Decimal(f"1e-{price_precision}"),
+                rounding=ROUND_UP,
+            )
+            if (
+                quantized_initial_trigger_sl <= calculated_tsl_activation_price
+            ):  # Adjust if SL is bad
+                quantized_initial_trigger_sl = calculated_tsl_activation_price + (
+                    min_tick_size
+                    if min_tick_size > 0
+                    else Decimal(f"1e-{price_precision}")
+                )
 
         if quantized_initial_trigger_sl and quantized_initial_trigger_sl > 0:
             params_to_set["stopLoss"] = str(quantized_initial_trigger_sl)
@@ -4859,9 +5023,13 @@ def stsl(
             params_to_set["trailingStop"] = str(calculated_tsl_distance)
             params_to_set["activePrice"] = str(calculated_tsl_activation_price)
             tsl_actually_applied_with_initial_sl = True
-            logger.info(f"{NB}stsl: Planning to set TSL (Partial mode) for {symbol}. Initial SL: {quantized_initial_trigger_sl}, Dist: {calculated_tsl_distance}, Act: {calculated_tsl_activation_price}.{RST}")
+            logger.info(
+                f"{NB}stsl: Planning to set TSL (Partial mode) for {symbol}. Initial SL: {quantized_initial_trigger_sl}, Dist: {calculated_tsl_distance}, Act: {calculated_tsl_activation_price}.{RST}"
+            )
         else:
-            logger.error(f"{NR}stsl: Calculated initial trigger SL for TSL is invalid ({quantized_initial_trigger_sl}). TSL will not be set with this logic.{RST}")
+            logger.error(
+                f"{NR}stsl: Calculated initial trigger SL for TSL is invalid ({quantized_initial_trigger_sl}). TSL will not be set with this logic.{RST}"
+            )
             # Fall through to fixed SL or clearing logic
 
     if not tsl_actually_applied_with_initial_sl:
@@ -4869,23 +5037,33 @@ def stsl(
             params_to_set["stopLoss"] = str(quantized_fixed_sl_price)
             params_to_set["slSize"] = current_position_size_str
             params_to_set["trailingStop"] = "0"
-            if "activePrice" in params_to_set: del params_to_set["activePrice"]
-            logger.info(f"{NB}stsl: Planning to set Fixed SL (Partial mode) for {symbol} to {quantized_fixed_sl_price}. TSL not applied.{RST}")
-        else: # Clear SL protections
+            if "activePrice" in params_to_set:
+                del params_to_set["activePrice"]
+            logger.info(
+                f"{NB}stsl: Planning to set Fixed SL (Partial mode) for {symbol} to {quantized_fixed_sl_price}. TSL not applied.{RST}"
+            )
+        else:  # Clear SL protections
             params_to_set["stopLoss"] = "0"
             params_to_set["slSize"] = current_position_size_str
             params_to_set["trailingStop"] = "0"
-            if "activePrice" in params_to_set: del params_to_set["activePrice"]
-            logger.info(f"{NB}stsl: Planning to clear SL protections (Partial mode) for {symbol}.{RST}")
+            if "activePrice" in params_to_set:
+                del params_to_set["activePrice"]
+            logger.info(
+                f"{NB}stsl: Planning to clear SL protections (Partial mode) for {symbol}.{RST}"
+            )
 
     if intent_to_set_tp:
         params_to_set["takeProfit"] = str(quantized_tp_price)
         params_to_set["tpSize"] = current_position_size_str
-        logger.info(f"{NB}stsl: Planning to set Take Profit (Partial mode) for {symbol} to {quantized_tp_price}.{RST}")
+        logger.info(
+            f"{NB}stsl: Planning to set Take Profit (Partial mode) for {symbol} to {quantized_tp_price}.{RST}"
+        )
     else:
         params_to_set["takeProfit"] = "0"
         params_to_set["tpSize"] = current_position_size_str
-        logger.info(f"{NB}stsl: Planning to clear Take Profit (Partial mode) for {symbol}.{RST}")
+        logger.info(
+            f"{NB}stsl: Planning to clear Take Profit (Partial mode) for {symbol}.{RST}"
+        )
 
     # --- Skip Logic ---
     # Retrieve current protections from position_info for skip logic
@@ -4917,18 +5095,22 @@ def stsl(
         return True
 
     # Final Parameter Check (Debug Log)
-    logger.debug(f"stsl: Preparing to call Bybit API. URL: {base_url}{api_path}, Payload: {json.dumps(params_to_set, default=str)}")
+    logger.debug(
+        f"stsl: Preparing to call Bybit API. URL: {base_url}{api_path}, Payload: {json.dumps(params_to_set, default=str)}"
+    )
     # The existing info log is good and can remain as is, or be merged if preferred.
     # For now, keeping both as the debug has full URL, info has a summary.
     logger.info(
         f"{NB}stsl: Attempting to set protections for {symbol} via direct API call. Params Summary: TP={params_to_set.get('takeProfit')}, SL={params_to_set.get('stopLoss')}, TSL={params_to_set.get('trailingStop')}{RST}"
     )
-    logger.info(f"{NB}stsl: Sending payload to Bybit API /v5/position/trading-stop: {json.dumps(params_to_set, default=str)}{RST}")
+    logger.info(
+        f"{NB}stsl: Sending payload to Bybit API /v5/position/trading-stop: {json.dumps(params_to_set, default=str)}{RST}"
+    )
     # Call the _bybit_v5_request helper function
     response = _bybit_v5_request(
         method="POST",
         path=api_path,
-        params=params_to_set, # Already prepared and logged
+        params=params_to_set,  # Already prepared and logged
         api_key=AK,
         api_secret=AS,
         base_url=base_url,
@@ -4948,14 +5130,20 @@ def stsl(
         logger.info(
             f"{NG}stsl: Successfully set protections for {symbol} via direct API. Msg: {response.get('retMsg')}{RST}"
         )
-        logger.debug(f"stsl: Successful protection set for {symbol}. Original params sent: {json.dumps(params_to_set, default=str)}")
+        logger.debug(
+            f"stsl: Successful protection set for {symbol}. Original params sent: {json.dumps(params_to_set, default=str)}"
+        )
         # Update TradeRecord based on what was successfully sent
-        if tsl_actually_applied_with_initial_sl and calculated_tsl_distance and calculated_tsl_activation_price:
+        if (
+            tsl_actually_applied_with_initial_sl
+            and calculated_tsl_distance
+            and calculated_tsl_activation_price
+        ):
             trade_record.trailing_stop_active = True
             trade_record.trailing_stop_distance = calculated_tsl_distance
             trade_record.tsl_activation_price = calculated_tsl_activation_price
-            trade_record.stop_loss_price = None # TSL overrides fixed SL
-        else: # Fixed SL was set or cleared
+            trade_record.stop_loss_price = None  # TSL overrides fixed SL
+        else:  # Fixed SL was set or cleared
             trade_record.trailing_stop_active = False
             trade_record.trailing_stop_distance = None
             trade_record.tsl_activation_price = None
@@ -4977,9 +5165,11 @@ def stsl(
         return True
     ret_msg = response.get("retMsg", "Unknown error")
     ret_code = response.get("retCode", "N/A")
-    logger.debug(f"stsl: Failed protection set for {symbol}. Original params sent: {json.dumps(params_to_set, default=str)}") # Added debug log for params
+    logger.debug(
+        f"stsl: Failed protection set for {symbol}. Original params sent: {json.dumps(params_to_set, default=str)}"
+    )  # Added debug log for params
 
-    if ret_code == 110061: # Specific handling for SL/TP limit exceeded
+    if ret_code == 110061:  # Specific handling for SL/TP limit exceeded
         logger.error(
             f"{NR}stsl: Failed to set protections for {symbol} due to SL/TP order limit exceeded (Error 110061). Msg: {ret_msg}. Attempting to cancel existing StopOrders for the symbol as a corrective measure.{RST}"
         )
@@ -4987,10 +5177,12 @@ def stsl(
             cancel_all_sl_tp_params = {
                 "category": params_to_set["category"],
                 "symbol": params_to_set["symbol"],
-                "orderFilter": "StopOrder"
+                "orderFilter": "StopOrder",
             }
             cancel_api_path = "/v5/order/cancel-all"
-            logger.info(f"{NB}stsl: Attempting to cancel all StopOrders for {symbol} with params: {json.dumps(cancel_all_sl_tp_params, default=str)} via {cancel_api_path}{RST}")
+            logger.info(
+                f"{NB}stsl: Attempting to cancel all StopOrders for {symbol} with params: {json.dumps(cancel_all_sl_tp_params, default=str)} via {cancel_api_path}{RST}"
+            )
 
             cancel_response = _bybit_v5_request(
                 method="POST",
@@ -4998,7 +5190,7 @@ def stsl(
                 params=cancel_all_sl_tp_params,
                 api_key=AK,
                 api_secret=AS,
-                base_url=base_url, # base_url is defined earlier in stsl
+                base_url=base_url,  # base_url is defined earlier in stsl
                 logger=logger,
             )
             if cancel_response and cancel_response.get("retCode") == 0:
@@ -5009,14 +5201,21 @@ def stsl(
                     f"{NG}stsl: Successfully sent request to cancel all StopOrders for {symbol}. Orders cancelled/affected: {cancelled_count}. This is a corrective action for the next cycle. Msg: {cancel_response.get('retMsg')}{RST}"
                 )
             else:
-                cancel_err_msg = cancel_response.get('retMsg', 'Unknown cancel error') if cancel_response else "No response from cancel call"
-                cancel_err_code = cancel_response.get('retCode', 'N/A') if cancel_response else "N/A"
+                cancel_err_msg = (
+                    cancel_response.get("retMsg", "Unknown cancel error")
+                    if cancel_response
+                    else "No response from cancel call"
+                )
+                cancel_err_code = (
+                    cancel_response.get("retCode", "N/A") if cancel_response else "N/A"
+                )
                 logger.error(
                     f"{NR}stsl: Failed to cancel all StopOrders for {symbol}. Code: {cancel_err_code}, Msg: {cancel_err_msg}. Full Cancel Response: {json.dumps(cancel_response, default=str)}{RST}"
                 )
         except Exception as e_cancel:
             logger.error(
-                f"{NR}stsl: Exception occurred while attempting to cancel all StopOrders for {symbol}: {e_cancel}{RST}", exc_info=True
+                f"{NR}stsl: Exception occurred while attempting to cancel all StopOrders for {symbol}: {e_cancel}{RST}",
+                exc_info=True,
             )
         # Even after attempting cancellation, the original SL/TP set operation failed.
         return False
@@ -5026,10 +5225,10 @@ def stsl(
     )
     return False
 
+
 @dataclass
 class Tr:
-    """Trade Record: A dataclass to store details of an individual trade for tracking.
-    """
+    """Trade Record: A dataclass to store details of an individual trade for tracking."""
 
     symbol: str
     side: str
@@ -5120,8 +5319,7 @@ class Tr:
         return cls(**data)
 
     def upnl(self, current_price: Decimal, market_info: dict, logger: logging.Logger):
-        """Update Unrealized PnL: Calculates and updates the unrealized PnL for an open trade.
-        """
+        """Update Unrealized PnL: Calculates and updates the unrealized PnL for an open trade."""
         if self.status != "OPEN":
             return
 
@@ -5143,11 +5341,13 @@ class Tr:
                     (self.entry_price - current_price) * self.size * contract_size
                 )
             else:
-                logger.error(f"PnL Error for {self.symbol}: Unhandled trade side '{self.side}'. Cannot calculate PnL.")
+                logger.error(
+                    f"PnL Error for {self.symbol}: Unhandled trade side '{self.side}'. Cannot calculate PnL."
+                )
                 # Ensure pnl_quote and pnl_percentage remain None or are reset
                 self.pnl_quote = None
                 self.pnl_percentage = None
-                return # Exit if side is unhandled
+                return  # Exit if side is unhandled
 
             pnl_percentage = (
                 (unrealized_pnl / self.initial_capital) * Decimal("100")
@@ -5301,7 +5501,9 @@ class TMT:
             f"{NY}All trade records have been reset. A new chapter begins.{RST}"
         )
 
-    def set_exchange_reference(self, exchange_instance: ccxt.Exchange | BybitUnifiedTrading):
+    def set_exchange_reference(
+        self, exchange_instance: ccxt.Exchange | BybitUnifiedTrading
+    ):
         """Sets the exchange instance reference for the TMT."""
         self.ex_ref = exchange_instance
         self.lg.info(
@@ -5313,8 +5515,7 @@ class TMT:
         # where ex_ref was missing, that logic could be added here or called separately.
 
     def sib(self, balance: Decimal):
-        """Set Initial Balance: Sets the initial account balance if not already set.
-        """
+        """Set Initial Balance: Sets the initial account balance if not already set."""
         if self.initial_balance == Decimal("0") and balance > 0:
             self.initial_balance = balance
             self.current_balance = balance
@@ -5324,15 +5525,13 @@ class TMT:
             self._save_trades()
 
     def ub(self, new_balance: Decimal):
-        """Update Balance: Updates the current account balance.
-        """
+        """Update Balance: Updates the current account balance."""
         if new_balance > 0:
             self.current_balance = new_balance
             self._save_trades()
 
     def aot(self, trade_record: Tr):
-        """Add Open Trade: Adds a new trade record to the open trades dictionary.
-        """
+        """Add Open Trade: Adds a new trade record to the open trades dictionary."""
         self.open_trades[trade_record.symbol] = trade_record
         self.lg.info(
             f"{NG}TRADE TRACKER: Added new OPEN trade for {trade_record.symbol} ({trade_record.side}) at {trade_record.entry_price} with size {trade_record.size}. A new quest begins!{RST}"
@@ -5400,8 +5599,7 @@ class TMT:
             )
 
     def dm(self):
-        """Display Metrics: Prints a summary of all closed trades and overall performance.
-        """
+        """Display Metrics: Prints a summary of all closed trades and overall performance."""
         total_closed_trades = len(self.closed_trades)
         winning_trades = sum(
             1
@@ -5780,12 +5978,12 @@ class BybitWebSocketClient:
             "order": [],
             "position": [],
         }
-        self.last_prices: dict[str, Decimal] = (
-            {}
-        )  # Stores latest ticker price for each symbol (Bybit ID)
-        self.position_updates: dict[str, dict] = (
-            {}
-        )  # Stores latest position info for each symbol (Bybit ID)
+        self.last_prices: dict[
+            str, Decimal
+        ] = {}  # Stores latest ticker price for each symbol (Bybit ID)
+        self.position_updates: dict[
+            str, dict
+        ] = {}  # Stores latest position info for each symbol (Bybit ID)
 
         self.public_subscriptions: list[str] = []
         self.private_subscriptions: list[str] = []
@@ -6192,8 +6390,7 @@ class PB:
         return False
 
     def _cet(self, exit_reason: str, current_price: Decimal) -> bool:
-        """Close Existing Trade: Executes the closing of an open position.
-        """
+        """Close Existing Trade: Executes the closing of an open position."""
         current_open_trade = tt.open_trades.get(self.s)
         if not current_open_trade:
             self.lg.info(
@@ -6219,9 +6416,7 @@ class PB:
             # Check if position is already effectively closed (size near zero)
             if not refreshed_position or abs(
                 Decimal(str(refreshed_position.get("size", "0")))
-            ) <= Decimal(
-                "1e-9"
-            ):  # Use 'size' from WS data
+            ) <= Decimal("1e-9"):  # Use 'size' from WS data
                 self.lg.info(
                     f"{NG}Position for {self.s} already closed or zero size after refresh. The trade was already sealed!{RST}"
                 )
@@ -6340,8 +6535,7 @@ class PB:
             return False
 
     def _coo(self) -> bool:
-        """Cancel Open Orders: Cancels all active orders for the current symbol.
-        """
+        """Cancel Open Orders: Cancels all active orders for the current symbol."""
         try:
             open_orders = self.ex.fetch_open_orders(self.s)
             if not open_orders:
@@ -6388,8 +6582,7 @@ class PB:
         return False
 
     def _cbe(self, current_price: Decimal, position_info: dict) -> bool:
-        """Check Break-Even: Adjusts stop loss to break-even if price moves favorably.
-        """
+        """Check Break-Even: Adjusts stop loss to break-even if price moves favorably."""
         if not self.cfg.get("enable_break_even", False):
             self.lg.debug(
                 f"Break-Even feature is disabled for {self.s}. Skipping check.{RST}"
@@ -6596,8 +6789,7 @@ class PB:
         return False
 
     def _tbe(self, position_info: dict) -> bool:
-        """Time-Based Exit: Closes a trade if it has been open for longer than the configured duration.
-        """
+        """Time-Based Exit: Closes a trade if it has been open for longer than the configured duration."""
         time_based_exit_minutes = self.cfg.get("time_based_exit_minutes")
         if time_based_exit_minutes is None or time_based_exit_minutes <= 0:
             self.lg.debug(
@@ -6941,8 +7133,7 @@ class PB:
     def _ot(
         self, signal: str, current_price: Decimal, orderbook_data: dict | None
     ) -> bool:
-        """Open Trade: Executes a new trade based on the generated signal.
-        """
+        """Open Trade: Executes a new trade based on the generated signal."""
         if not self.cfg.get("enable_trading", False):
             self.lg.info(
                 f"{NB}Trading is disabled in config for {self.s}. Skipping trade execution. The market's gates are closed!{RST}"
@@ -7418,35 +7609,74 @@ class MainBot:
                 recipient_number = self.cfg.get("sms_recipient_number")
                 sms_interval_minutes = self.cfg.get("sms_report_interval_minutes")
 
-                if enable_sms and recipient_number and sms_interval_minutes and sms_interval_minutes > 0:
+                if (
+                    enable_sms
+                    and recipient_number
+                    and sms_interval_minutes
+                    and sms_interval_minutes > 0
+                ):
                     current_loop_time = time.time()
-                    if (current_loop_time - self.last_sms_report_time) >= (sms_interval_minutes * 60):
-                        self.lg.info(f"{NB}SMS report interval reached. Generating summary...{RST}")
+                    if (current_loop_time - self.last_sms_report_time) >= (
+                        sms_interval_minutes * 60
+                    ):
+                        self.lg.info(
+                            f"{NB}SMS report interval reached. Generating summary...{RST}"
+                        )
                         try:
                             # 1. Fetch Balance
-                            balance_val = fb(self.ex, QC, self.lg) # QC is globally defined quote currency
-                            balance_str = f"{balance_val:.2f} {QC}" if balance_val is not None else "N/A"
+                            balance_val = fb(
+                                self.ex, QC, self.lg
+                            )  # QC is globally defined quote currency
+                            balance_str = (
+                                f"{balance_val:.2f} {QC}"
+                                if balance_val is not None
+                                else "N/A"
+                            )
 
                             # 2. Open Positions Summary
                             open_pos_summary_parts = []
                             if tt.open_trades:
                                 for symbol, trade in tt.open_trades.items():
-                                    pnl_str = f"{trade.pnl_quote:.2f}" if trade.pnl_quote is not None else "N/A"
-                                    open_pos_summary_parts.append(f"{symbol.split('/')[0]}:{trade.side[:1].upper()}({pnl_str})")
-                            open_pos_str = ", ".join(open_pos_summary_parts) if open_pos_summary_parts else "None"
-                            if len(open_pos_str) > 100: # Truncate if too long for SMS
+                                    pnl_str = (
+                                        f"{trade.pnl_quote:.2f}"
+                                        if trade.pnl_quote is not None
+                                        else "N/A"
+                                    )
+                                    open_pos_summary_parts.append(
+                                        f"{symbol.split('/')[0]}:{trade.side[:1].upper()}({pnl_str})"
+                                    )
+                            open_pos_str = (
+                                ", ".join(open_pos_summary_parts)
+                                if open_pos_summary_parts
+                                else "None"
+                            )
+                            if len(open_pos_str) > 100:  # Truncate if too long for SMS
                                 open_pos_str = open_pos_str[:97] + "..."
 
                             # 3. Recent Closed Trades Summary (Last 1)
                             closed_trades_summary_parts = []
                             if tt.closed_trades:
                                 last_closed = tt.closed_trades[-1]
-                                closed_pnl_str = f"{last_closed.realized_pnl_quote:.2f}" if last_closed.realized_pnl_quote is not None else "N/A"
-                                closed_trades_summary_parts.append(f"Last Closed: {last_closed.symbol.split('/')[0]} PnL:{closed_pnl_str}")
-                            closed_trades_str = ", ".join(closed_trades_summary_parts) if closed_trades_summary_parts else "None"
+                                closed_pnl_str = (
+                                    f"{last_closed.realized_pnl_quote:.2f}"
+                                    if last_closed.realized_pnl_quote is not None
+                                    else "N/A"
+                                )
+                                closed_trades_summary_parts.append(
+                                    f"Last Closed: {last_closed.symbol.split('/')[0]} PnL:{closed_pnl_str}"
+                                )
+                            closed_trades_str = (
+                                ", ".join(closed_trades_summary_parts)
+                                if closed_trades_summary_parts
+                                else "None"
+                            )
 
                             # 4. Overall PnL
-                            overall_pnl_str = f"{tt.total_pnl:.2f} {QC}" if tt.total_pnl is not None else "N/A"
+                            overall_pnl_str = (
+                                f"{tt.total_pnl:.2f} {QC}"
+                                if tt.total_pnl is not None
+                                else "N/A"
+                            )
 
                             # 5. Construct SMS
                             sms_message = (
@@ -7457,10 +7687,15 @@ class MainBot:
                                 f"{closed_trades_str}"
                             )
 
-                            send_sms_alert(sms_message, recipient_number, self.lg, self.cfg)
+                            send_sms_alert(
+                                sms_message, recipient_number, self.lg, self.cfg
+                            )
                             self.last_sms_report_time = current_loop_time
                         except Exception as e_sms_report:
-                            self.lg.error(f"{NR}Error generating periodic SMS summary: {e_sms_report}{RST}", exc_info=True)
+                            self.lg.error(
+                                f"{NR}Error generating periodic SMS summary: {e_sms_report}{RST}",
+                                exc_info=True,
+                            )
                 # --- End Periodic SMS Summary Logic ---
 
                 current_time = time.time()

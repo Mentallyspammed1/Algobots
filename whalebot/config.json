@@ -114,6 +114,10 @@
         "volatility_index": true,
         "vwma": true,
         "volume_delta": true,
+<<<<<<< HEAD
+=======
+        "volatility_filter": true,
+>>>>>>> refs/remotes/origin/main
         "kaufman_ama": true,
         "relative_volume": true,
         "market_structure": true,
@@ -150,7 +154,58 @@
             "keltner_breakout": 0.20,
             "roc_signal": 0.12,
             "candlestick_confirmation": 0.15,
+<<<<<<< HEAD
             "fibonacci_pivot_points_confluence": 0.20
+=======
+            "fibonacci_pivot_points_confluence": 0.2,
+            "rsi": 0.15,
+            "stoch_rsi": 0.15,
+            "cci": 0.1,
+            "wr": 0.1,
+            "mfi": 0.1
+        },
+        "aggressive_trend": {
+            "ema_alignment": 0.4,
+            "sma_trend_filter": 0.3,
+            "ehlers_supertrend_alignment": 0.5,
+            "macd_alignment": 0.4,
+            "adx_strength": 0.35,
+            "ichimoku_confluence": 0.45,
+            "psar": 0.2,
+            "vwap": 0.2,
+            "vwma_cross": 0.15,
+            "sma_10": 0.1,
+            "bollinger_bands": 0.15,
+            "momentum_rsi_stoch_cci_wr_mfi": 0.25,
+            "volume_confirmation": 0.15,
+            "obv_momentum": 0.2,
+            "cmf_flow": 0.15,
+            "volume_delta_signal": 0.15,
+            "orderbook_imbalance": 0.15,
+            "mtf_trend_confluence": 0.35,
+            "volatility_index_signal": 0.05
+        },
+        "conservative_range": {
+            "ema_alignment": 0.2,
+            "sma_trend_filter": 0.15,
+            "ehlers_supertrend_alignment": 0.25,
+            "macd_alignment": 0.2,
+            "adx_strength": 0.15,
+            "ichimoku_confluence": 0.25,
+            "psar": 0.1,
+            "vwap": 0.1,
+            "vwma_cross": 0.05,
+            "sma_10": 0.05,
+            "bollinger_bands": 0.4,
+            "momentum_rsi_stoch_cci_wr_mfi": 0.45,
+            "volume_confirmation": 0.2,
+            "obv_momentum": 0.25,
+            "cmf_flow": 0.2,
+            "volume_delta_signal": 0.2,
+            "orderbook_imbalance": 0.2,
+            "mtf_trend_confluence": 0.15,
+            "volatility_index_signal": 0.2
+>>>>>>> refs/remotes/origin/main
         }
     }
 }

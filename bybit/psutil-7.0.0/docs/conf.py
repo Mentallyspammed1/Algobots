@@ -36,13 +36,13 @@ HERE = os.path.abspath(os.path.dirname(__file__))
 
 
 def get_version():
-    INIT = os.path.abspath(os.path.join(HERE, '../psutil/__init__.py'))
+    INIT = os.path.abspath(os.path.join(HERE, "../psutil/__init__.py"))
     with open(INIT) as f:
         for line in f:
-            if line.startswith('__version__'):
-                ret = ast.literal_eval(line.strip().split(' = ')[1])
-                assert ret.count('.') == 2, ret
-                for num in ret.split('.'):
+            if line.startswith("__version__"):
+                ret = ast.literal_eval(line.strip().split(" = ")[1])
+                assert ret.count(".") == 2, ret
+                for num in ret.split("."):
                     assert num.isdigit(), ret
                 return ret
         msg = "couldn't find version string"
@@ -59,28 +59,28 @@ VERSION = get_version()
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.coverage',
-    'sphinx.ext.imgmath',
-    'sphinx.ext.viewcode',
-    'sphinx.ext.intersphinx',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.coverage",
+    "sphinx.ext.imgmath",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.intersphinx",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+source_suffix = ".rst"
 
 # The encoding of source files.
 #
 # source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = 'index'
+master_doc = "index"
 
 # General information about the project.
 project = PROJECT_NAME
@@ -115,7 +115,7 @@ language = "eng"
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'DEVGUIDE.rst']
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "DEVGUIDE.rst"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -137,7 +137,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'DEVGUIDE.rst']
 # show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = "sphinx"
 
 # A list of ignored prefixes for module index sorting.
 # modindex_common_prefix = []
@@ -154,7 +154,7 @@ todo_include_todos = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = "sphinx_rtd_theme"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -187,7 +187,7 @@ html_theme = 'sphinx_rtd_theme'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
@@ -290,7 +290,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'psutil.tex', 'psutil Documentation', AUTHOR, 'manual')
+    (master_doc, "psutil.tex", "psutil Documentation", AUTHOR, "manual")
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -330,7 +330,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, 'psutil', 'psutil Documentation', [author], 1)]
+man_pages = [(master_doc, "psutil", "psutil Documentation", [author], 1)]
 
 # If true, show URL addresses after external links.
 #
@@ -342,15 +342,17 @@ man_pages = [(master_doc, 'psutil', 'psutil Documentation', [author], 1)]
 # Grouping the document tree into Texinfo files. List of tuples
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
-texinfo_documents = [(
-    master_doc,
-    'psutil',
-    'psutil Documentation',
-    author,
-    'psutil',
-    'One line description of project.',
-    'Miscellaneous',
-)]
+texinfo_documents = [
+    (
+        master_doc,
+        "psutil",
+        "psutil Documentation",
+        author,
+        "psutil",
+        "One line description of project.",
+        "Miscellaneous",
+    )
+]
 
 # Documents to append as an appendix to all manuals.
 #
@@ -370,9 +372,9 @@ texinfo_documents = [(
 
 
 html_context = {
-    'css_files': [
-        'https://media.readthedocs.org/css/sphinx_rtd_theme.css',
-        'https://media.readthedocs.org/css/readthedocs-doc-embed.css',
-        '_static/css/custom.css',
+    "css_files": [
+        "https://media.readthedocs.org/css/sphinx_rtd_theme.css",
+        "https://media.readthedocs.org/css/readthedocs-doc-embed.css",
+        "_static/css/custom.css",
     ]
 }

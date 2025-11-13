@@ -11,7 +11,6 @@ asus
     cpu_fan              3200 RPM
 """
 
-
 import sys
 
 import psutil
@@ -33,5 +32,5 @@ def main():
         print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

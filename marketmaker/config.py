@@ -19,30 +19,32 @@ class Config:
     CATEGORY = "linear"  # 'linear' for USDT perpetual, 'inverse' for inverse contracts
 
     # Market Making Parameters (aligned with mm_bybit_batch_trailing.py)
-    BASE_SPREAD_BPS = 20 # 0.2% base spread (20 bps each side => 40 bps wide) - converted from 0.002
+    BASE_SPREAD_BPS = (
+        20  # 0.2% base spread (20 bps each side => 40 bps wide) - converted from 0.002
+    )
     MIN_SPREAD_TICKS = 1
-    SPREAD_PCT = 0.1 # Initial spread percentage (e.g., 0.1% on each side)
-    ORDER_QTY_BASE = Decimal("0.001") # Quantity per order (e.g., BTC amount)
-    NUM_LEVELS = 5 # Number of bid/ask levels per batch (e.g., 5 bids + 5 asks = 2 batches if >20)
+    SPREAD_PCT = 0.1  # Initial spread percentage (e.g., 0.1% on each side)
+    ORDER_QTY_BASE = Decimal("0.001")  # Quantity per order (e.g., BTC amount)
+    NUM_LEVELS = 5  # Number of bid/ask levels per batch (e.g., 5 bids + 5 asks = 2 batches if >20)
     REPLACE_THRESHOLD_TICKS = 1
-    REFRESH_MS = 400 # Minimum ms between quote checks (formerly UPDATE_INTERVAL)
+    REFRESH_MS = 400  # Minimum ms between quote checks (formerly UPDATE_INTERVAL)
     POST_ONLY = True
 
     # Inventory/Risk (aligned with mm_bybit_batch_trailing.py)
-    MAX_POSITION = Decimal("0.01") # Max net position to hold
-    MAX_NOTIONAL = Decimal("3000") # Max notional value for a single order
-    VOLATILITY_THRESHOLD = 1.0 # % change to widen spreads
+    MAX_POSITION = Decimal("0.01")  # Max net position to hold
+    MAX_NOTIONAL = Decimal("3000")  # Max notional value for a single order
+    VOLATILITY_THRESHOLD = 1.0  # % change to widen spreads
 
     # Protection mode: "trailing", "breakeven", or "off"
     PROTECT_MODE = "trailing"
     # Trailing stop config (price distance; same currency as symbol)
-    TRAILING_DISTANCE = Decimal("50") # e.g., $50 for BTCUSDT (absolute price distance)
+    TRAILING_DISTANCE = Decimal("50")  # e.g., $50 for BTCUSDT (absolute price distance)
     # Activate the trailing stop only when in profit by this many bps from entry (0 = always on)
-    TRAILING_ACTIVATE_PROFIT_BPS = Decimal("30") # 30 bps = 0.30%
-    BREAK_EVEN_PROFIT_PCT = 0.5 # Move to break-even once unrealized PnL > this %
+    TRAILING_ACTIVATE_PROFIT_BPS = Decimal("30")  # 30 bps = 0.30%
+    BREAK_EVEN_PROFIT_PCT = 0.5  # Move to break-even once unrealized PnL > this %
     # Break-even config
-    BE_TRIGGER_BPS = Decimal("15") # Move SL to BE when in profit >= 15 bps
-    BE_OFFSET_TICKS = 1 # Add 1 tick beyond BE to cover fees
+    BE_TRIGGER_BPS = Decimal("15")  # Move SL to BE when in profit >= 15 bps
+    BE_OFFSET_TICKS = 1  # Add 1 tick beyond BE to cover fees
 
     # Logging
     LOG_EVERY_SECS = 10

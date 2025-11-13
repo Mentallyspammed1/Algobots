@@ -1,4 +1,3 @@
-
 import time
 
 from simulated_exchange import SimulatedExchange
@@ -39,7 +38,7 @@ class MarketMakingBot:
                 # 4. Print status
                 self.print_status()
 
-                time.sleep(5) # Wait for 5 seconds before the next iteration
+                time.sleep(5)  # Wait for 5 seconds before the next iteration
 
             except Exception as e:
                 print(f"An error occurred: {e}")
@@ -51,7 +50,7 @@ class MarketMakingBot:
         self.exchange.cancel_all_orders(self.symbol)
         for order in new_orders:
             self.exchange.place_order(
-                self.symbol, order['side'], order['price'], order['quantity']
+                self.symbol, order["side"], order["price"], order["quantity"]
             )
 
     def print_status(self):
@@ -69,8 +68,8 @@ if __name__ == "__main__":
     # In a real bot, you would get these from a config file
     SYMBOL = "BTC/USD"
     INITIAL_QUOTE_BALANCE = 10000
-    SPREAD = 0.01 # 1% spread
-    ORDER_AMOUNT = 0.1 # Amount of BTC to trade
+    SPREAD = 0.01  # 1% spread
+    ORDER_AMOUNT = 0.1  # Amount of BTC to trade
 
     # Initialize the exchange and strategy
     exchange = SimulatedExchange()
@@ -81,11 +80,10 @@ if __name__ == "__main__":
         exchange=exchange,
         strategy=strategy,
         symbol=SYMBOL,
-        initial_balance={'USD': INITIAL_QUOTE_BALANCE, 'BTC': 0}
+        initial_balance={"USD": INITIAL_QUOTE_BALANCE, "BTC": 0},
     )
 
     try:
         bot.start()
     except KeyboardInterrupt:
         bot.stop()
-

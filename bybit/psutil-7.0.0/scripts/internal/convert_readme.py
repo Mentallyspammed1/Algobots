@@ -41,7 +41,7 @@ Example usages"""
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('file', type=str)
+    parser.add_argument("file", type=str)
     args = parser.parse_args()
     with open(args.file) as f:
         data = f.read()
@@ -50,5 +50,5 @@ def main():
     print(data)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

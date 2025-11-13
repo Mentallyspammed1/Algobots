@@ -58,8 +58,8 @@ def sysctl(cmdline):
 
 def muse(field):
     """Thin wrapper around 'muse' cmdline utility."""
-    out = sh('muse')
-    for line in out.split('\n'):
+    out = sh("muse")
+    for line in out.split("\n"):
         if line.startswith(field):
             break
     else:
@@ -87,7 +87,7 @@ class BSDTestCase(PsutilTestCase):
     @pytest.mark.skipif(NETBSD, reason="-o lstart doesn't work on NETBSD")
     def test_process_create_time(self):
         output = sh(f"ps -o lstart -p {self.pid}")
-        start_ps = output.replace('STARTED', '').strip()
+        start_ps = output.replace("STARTED", "").strip()
         start_psutil = psutil.Process(self.pid).create_time()
         start_psutil = time.strftime(
             "%a %b %e %H:%M:%S %Y", time.localtime(start_psutil)
@@ -99,12 +99,12 @@ class BSDTestCase(PsutilTestCase):
         # against "df -a"
         def df(path):
             out = sh(f'df -k "{path}"').strip()
-            lines = out.split('\n')
+            lines = out.split("\n")
             lines.pop(0)
             line = lines.pop(0)
             dev, total, used, free = line.split()[:4]
-            if dev == 'none':
-                dev = ''
+            if dev == "none":
+                dev = ""
             total = int(total) * 1024
             used = int(used) * 1024
             free = int(free) * 1024
@@ -132,10 +132,11 @@ class BSDTestCase(PsutilTestCase):
         not shutil.which("sysctl"), reason="sysctl cmd not available"
     )
     @pytest.mark.skipif(
-        NETBSD, reason="skipped on NETBSD"  # we check /proc/meminfo
+        NETBSD,
+        reason="skipped on NETBSD",  # we check /proc/meminfo
     )
     def test_virtual_memory_total(self):
-        num = sysctl('hw.physmem')
+        num = sysctl("hw.physmem")
         assert num == psutil.virtual_memory().total
 
     @pytest.mark.skipif(
@@ -148,9 +149,9 @@ class BSDTestCase(PsutilTestCase):
             except RuntimeError:
                 pass
             else:
-                assert stats.isup == ('RUNNING' in out)
+                assert stats.isup == ("RUNNING" in out)
                 if "mtu" in out:
-                    assert stats.mtu == int(re.findall(r'mtu (\d+)', out)[0])
+                    assert stats.mtu == int(re.findall(r"mtu (\d+)", out)[0])
 
 
 # =====================================================================
@@ -172,7 +173,7 @@ class FreeBSDPsutilTestCase(PsutilTestCase):
     def test_memory_maps(self):
         out = sh(f"procstat -v {self.pid}")
         maps = psutil.Process(self.pid).memory_maps(grouped=False)
-        lines = out.split('\n')[1:]
+        lines = out.split("\n")[1:]
         while lines:
             line = lines.pop()
             fields = line.split()
@@ -180,22 +181,22 @@ class FreeBSDPsutilTestCase(PsutilTestCase):
             map = maps.pop()
             assert f"{start}-{stop}" == map.addr
             assert int(res) == map.rss
-            if not map.path.startswith('['):
+            if not map.path.startswith("["):
                 assert fields[10] == map.path
 
     def test_exe(self):
         out = sh(f"procstat -b {self.pid}")
-        assert psutil.Process(self.pid).exe() == out.split('\n')[1].split()[-1]
+        assert psutil.Process(self.pid).exe() == out.split("\n")[1].split()[-1]
 
     def test_cmdline(self):
         out = sh(f"procstat -c {self.pid}")
-        assert ' '.join(psutil.Process(self.pid).cmdline()) == ' '.join(
-            out.split('\n')[1].split()[2:]
+        assert " ".join(psutil.Process(self.pid).cmdline()) == " ".join(
+            out.split("\n")[1].split()[2:]
         )
 
     def test_uids_gids(self):
         out = sh(f"procstat -s {self.pid}")
-        euid, ruid, suid, egid, rgid, sgid = out.split('\n')[1].split()[2:8]
+        euid, ruid, suid, egid, rgid, sgid = out.split("\n")[1].split()[2:8]
         p = psutil.Process(self.pid)
         uids = p.uids()
         gids = p.gids()
@@ -211,14 +212,14 @@ class FreeBSDPsutilTestCase(PsutilTestCase):
         tested = []
         out = sh(f"procstat -r {self.pid}")
         p = psutil.Process(self.pid)
-        for line in out.split('\n'):
+        for line in out.split("\n"):
             line = line.lower().strip()
-            if ' voluntary context' in line:
+            if " voluntary context" in line:
                 pstat_value = int(line.split()[-1])
                 psutil_value = p.num_ctx_switches().voluntary
                 assert pstat_value == psutil_value
                 tested.append(None)
-            elif ' involuntary context' in line:
+            elif " involuntary context" in line:
                 pstat_value = int(line.split()[-1])
                 psutil_value = p.num_ctx_switches().involuntary
                 assert pstat_value == psutil_value
@@ -231,15 +232,15 @@ class FreeBSDPsutilTestCase(PsutilTestCase):
         tested = []
         out = sh(f"procstat -r {self.pid}")
         p = psutil.Process(self.pid)
-        for line in out.split('\n'):
+        for line in out.split("\n"):
             line = line.lower().strip()
-            if 'user time' in line:
-                pstat_value = float('0.' + line.split()[-1].split('.')[-1])
+            if "user time" in line:
+                pstat_value = float("0." + line.split()[-1].split(".")[-1])
                 psutil_value = p.cpu_times().user
                 assert pstat_value == psutil_value
                 tested.append(None)
-            elif 'system time' in line:
-                pstat_value = float('0.' + line.split()[-1].split('.')[-1])
+            elif "system time" in line:
+                pstat_value = float("0." + line.split()[-1].split(".")[-1])
                 psutil_value = p.cpu_times().system
                 assert pstat_value == psutil_value
                 tested.append(None)
@@ -253,7 +254,7 @@ class FreeBSDSystemTestCase(PsutilTestCase):
     def parse_swapinfo():
         # the last line is always the total
         output = sh("swapinfo -k").splitlines()[-1]
-        parts = re.split(r'\s+', output)
+        parts = re.split(r"\s+", output)
 
         if not parts:
             raise ValueError(f"Can't parse swapinfo: {output}")
@@ -318,57 +319,57 @@ class FreeBSDSystemTestCase(PsutilTestCase):
 
     @pytest.mark.skipif(not MUSE_AVAILABLE, reason="muse not installed")
     def test_muse_vmem_total(self):
-        num = muse('Total')
+        num = muse("Total")
         assert psutil.virtual_memory().total == num
 
     @pytest.mark.skipif(not MUSE_AVAILABLE, reason="muse not installed")
     @retry_on_failure()
     def test_muse_vmem_active(self):
-        num = muse('Active')
+        num = muse("Active")
         assert abs(psutil.virtual_memory().active - num) < TOLERANCE_SYS_MEM
 
     @pytest.mark.skipif(not MUSE_AVAILABLE, reason="muse not installed")
     @retry_on_failure()
     def test_muse_vmem_inactive(self):
-        num = muse('Inactive')
+        num = muse("Inactive")
         assert abs(psutil.virtual_memory().inactive - num) < TOLERANCE_SYS_MEM
 
     @pytest.mark.skipif(not MUSE_AVAILABLE, reason="muse not installed")
     @retry_on_failure()
     def test_muse_vmem_wired(self):
-        num = muse('Wired')
+        num = muse("Wired")
         assert abs(psutil.virtual_memory().wired - num) < TOLERANCE_SYS_MEM
 
     @pytest.mark.skipif(not MUSE_AVAILABLE, reason="muse not installed")
     @retry_on_failure()
     def test_muse_vmem_cached(self):
-        num = muse('Cache')
+        num = muse("Cache")
         assert abs(psutil.virtual_memory().cached - num) < TOLERANCE_SYS_MEM
 
     @pytest.mark.skipif(not MUSE_AVAILABLE, reason="muse not installed")
     @retry_on_failure()
     def test_muse_vmem_free(self):
-        num = muse('Free')
+        num = muse("Free")
         assert abs(psutil.virtual_memory().free - num) < TOLERANCE_SYS_MEM
 
     @pytest.mark.skipif(not MUSE_AVAILABLE, reason="muse not installed")
     @retry_on_failure()
     def test_muse_vmem_buffers(self):
-        num = muse('Buffer')
+        num = muse("Buffer")
         assert abs(psutil.virtual_memory().buffers - num) < TOLERANCE_SYS_MEM
 
     def test_cpu_stats_ctx_switches(self):
         assert (
             abs(
                 psutil.cpu_stats().ctx_switches
-                - sysctl('vm.stats.sys.v_swtch')
+                - sysctl("vm.stats.sys.v_swtch")
             )
             < 1000
         )
 
     def test_cpu_stats_interrupts(self):
         assert (
-            abs(psutil.cpu_stats().interrupts - sysctl('vm.stats.sys.v_intr'))
+            abs(psutil.cpu_stats().interrupts - sysctl("vm.stats.sys.v_intr"))
             < 1000
         )
 
@@ -376,7 +377,7 @@ class FreeBSDSystemTestCase(PsutilTestCase):
         assert (
             abs(
                 psutil.cpu_stats().soft_interrupts
-                - sysctl('vm.stats.sys.v_soft')
+                - sysctl("vm.stats.sys.v_soft")
             )
             < 1000
         )
@@ -385,7 +386,7 @@ class FreeBSDSystemTestCase(PsutilTestCase):
     def test_cpu_stats_syscalls(self):
         # pretty high tolerance but it looks like it's OK.
         assert (
-            abs(psutil.cpu_stats().syscalls - sysctl('vm.stats.sys.v_syscall'))
+            abs(psutil.cpu_stats().syscalls - sysctl("vm.stats.sys.v_syscall"))
             < 200000
         )
 
@@ -410,9 +411,9 @@ class FreeBSDSystemTestCase(PsutilTestCase):
     # --- others
 
     def test_boot_time(self):
-        s = sysctl('sysctl kern.boottime')
+        s = sysctl("sysctl kern.boottime")
         s = s[s.find(" sec = ") + 7 :]
-        s = s[: s.find(',')]
+        s = s[: s.find(",")]
         btime = int(s)
         assert btime == psutil.boot_time()
 
@@ -426,12 +427,12 @@ class FreeBSDSystemTestCase(PsutilTestCase):
             return f"{int(h)}:{int(m):02}"
 
         out = sh("acpiconf -i 0")
-        fields = {x.split('\t')[0]: x.split('\t')[-1] for x in out.split("\n")}
+        fields = {x.split("\t")[0]: x.split("\t")[-1] for x in out.split("\n")}
         metrics = psutil.sensors_battery()
-        percent = int(fields['Remaining capacity:'].replace('%', ''))
-        remaining_time = fields['Remaining time:']
+        percent = int(fields["Remaining capacity:"].replace("%", ""))
+        remaining_time = fields["Remaining time:"]
         assert metrics.percent == percent
-        if remaining_time == 'unknown':
+        if remaining_time == "unknown":
             assert metrics.secsleft == psutil.POWER_TIME_UNLIMITED
         else:
             assert secs2hours(metrics.secsleft) == remaining_time
@@ -496,7 +497,7 @@ class FreeBSDSystemTestCase(PsutilTestCase):
 @pytest.mark.skipif(not OPENBSD, reason="OPENBSD only")
 class OpenBSDTestCase(PsutilTestCase):
     def test_boot_time(self):
-        s = sysctl('kern.boottime')
+        s = sysctl("kern.boottime")
         sys_bt = datetime.datetime.strptime(s, "%a %b %d %H:%M:%S %Y")
         psutil_bt = datetime.datetime.fromtimestamp(psutil.boot_time())
         assert sys_bt == psutil_bt
@@ -511,7 +512,7 @@ class OpenBSDTestCase(PsutilTestCase):
 class NetBSDTestCase(PsutilTestCase):
     @staticmethod
     def parse_meminfo(look_for):
-        with open('/proc/meminfo') as f:
+        with open("/proc/meminfo") as f:
             for line in f:
                 if line.startswith(look_for):
                     return int(line.split()[1]) * 1024
@@ -573,9 +574,9 @@ class NetBSDTestCase(PsutilTestCase):
     # --- others
 
     def test_cpu_stats_interrupts(self):
-        with open('/proc/stat', 'rb') as f:
+        with open("/proc/stat", "rb") as f:
             for line in f:
-                if line.startswith(b'intr'):
+                if line.startswith(b"intr"):
                     interrupts = int(line.split()[1])
                     break
             else:
@@ -583,9 +584,9 @@ class NetBSDTestCase(PsutilTestCase):
         assert abs(psutil.cpu_stats().interrupts - interrupts) < 1000
 
     def test_cpu_stats_ctx_switches(self):
-        with open('/proc/stat', 'rb') as f:
+        with open("/proc/stat", "rb") as f:
             for line in f:
-                if line.startswith(b'ctxt'):
+                if line.startswith(b"ctxt"):
                     ctx_switches = int(line.split()[1])
                     break
             else:

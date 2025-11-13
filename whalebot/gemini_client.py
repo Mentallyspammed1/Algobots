@@ -1,4 +1,3 @@
-
 import json
 import logging  # Import logging
 import re
@@ -6,23 +5,30 @@ from decimal import Decimal
 from typing import Any
 
 import requests
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 
 NEON_RED = Fore.LIGHTRED_EX
 NEON_YELLOW = Fore.YELLOW
 RESET = Style.RESET_ALL
 
-class GeminiClient:
-    """A client for interacting with the Google Gemini API to get trading signals.
-    """
 
-    def __init__(self, api_key: str, logger: logging.Logger, model: str = "gemini-1.5-flash"):
+class GeminiClient:
+    """A client for interacting with the Google Gemini API to get trading signals."""
+
+    def __init__(
+        self,
+        api_key: str,
+        logger: logging.Logger,
+        model: str = "gemini-1.5-flash",
+    ):
         """Initializes the GeminiClient.
 
         Args:
             api_key: The Google Gemini API key.
             logger: The logger instance for logging messages.
             model: The specific Gemini model to use.
+
         """
         if not api_key:
             raise ValueError("Gemini API key is required.")
@@ -57,23 +63,32 @@ class GeminiClient:
         """
         return prompt
 
-    def get_trading_signal(self, indicator_data: dict[str, Any]) -> dict[str, Any] | None:
+    def get_trading_signal(
+        self,
+        indicator_data: dict[str, Any],
+    ) -> dict[str, Any] | None:
         prompt = self._prepare_prompt(indicator_data)
         headers = {"Content-Type": "application/json"}
-        payload = {
-            "contents": [{
-                "parts": [{"text": prompt}]
-            }]
-        }
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
         text_content = ""
         try:
-            response = requests.post(self.api_url, headers=headers, json=payload, timeout=30)
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+                timeout=30,
+            )
             response.raise_for_status()
 
             response_json = response.json()
-            text_content = response_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            text_content = (
+                response_json.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text", "")
+            )
 
-            json_match = re.search(r'```json\s*({.*?})\s*```', text_content, re.DOTALL)
+            json_match = re.search(r"```json\s*({.*?})\s*```", text_content, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
             else:
@@ -81,18 +96,31 @@ class GeminiClient:
 
             signal_data = json.loads(json_str)
 
-            if "signal" in signal_data and "confidence" in signal_data and "reasoning" in signal_data:
+            if (
+                "signal" in signal_data
+                and "confidence" in signal_data
+                and "reasoning" in signal_data
+            ):
                 return signal_data
-            self.logger.warning(f"{NEON_YELLOW}Gemini API response is missing required keys.{RESET}")
+            self.logger.warning(
+                f"{NEON_YELLOW}Gemini API response is missing required keys.{RESET}",
+            )
             return None
 
         except requests.exceptions.Timeout:
             self.logger.error(f"{NEON_RED}Error: Gemini API request timed out.{RESET}")
         except requests.exceptions.HTTPError as e:
-            self.logger.error(f"{NEON_RED}Error: Gemini API HTTP error: {e.response.status_code} - {e.response.text}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error: Gemini API HTTP error: {e.response.status_code} - {e.response.text}{RESET}",
+            )
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"{NEON_RED}Error: An unexpected error occurred during Gemini API request: {e}{RESET}", exc_info=True)
+            self.logger.error(
+                f"{NEON_RED}Error: An unexpected error occurred during Gemini API request: {e}{RESET}",
+                exc_info=True,
+            )
         except json.JSONDecodeError:
-            self.logger.error(f"{NEON_RED}Error: Failed to decode JSON response from Gemini API. Raw text was: {text_content}{RESET}")
+            self.logger.error(
+                f"{NEON_RED}Error: Failed to decode JSON response from Gemini API. Raw text was: {text_content}{RESET}",
+            )
 
         return None

@@ -68,7 +68,6 @@ memory_full_info                 300      0.07066
 memory_maps                      300      0.74281
 """
 
-
 import argparse
 import inspect
 import os
@@ -136,7 +135,7 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument('-t', '--times', type=int, default=TIMES)
+    parser.add_argument("-t", "--times", type=int, default=TIMES)
     args = parser.parse_args()
     TIMES = args.times
     assert TIMES > 1, TIMES
@@ -152,13 +151,13 @@ def main():
 
     public_apis = []
     ignore = [
-        'wait_procs',
-        'process_iter',
-        'win_service_get',
-        'win_service_iter',
+        "wait_procs",
+        "process_iter",
+        "win_service_get",
+        "win_service_iter",
     ]
     if psutil.MACOS:
-        ignore.append('net_connections')  # raises AD
+        ignore.append("net_connections")  # raises AD
     for name in psutil.__all__:
         obj = getattr(psutil, name, None)
         if inspect.isfunction(obj):
@@ -169,38 +168,38 @@ def main():
     for name in public_apis:
         fun = getattr(psutil, name)
         args = ()
-        if name == 'pid_exists':
+        if name == "pid_exists":
             args = (os.getpid(),)
-        elif name == 'disk_usage':
+        elif name == "disk_usage":
             args = (os.getcwd(),)
         timecall(name, fun, *args)
-    timecall('cpu_count (cores)', psutil.cpu_count, logical=False)
-    timecall('process_iter (all)', lambda: list(psutil.process_iter()))
+    timecall("cpu_count (cores)", psutil.cpu_count, logical=False)
+    timecall("process_iter (all)", lambda: list(psutil.process_iter()))
     print_timings()
 
     # --- process
     print()
     print_header("PROCESS APIS")
     ignore = [
-        'send_signal',
-        'suspend',
-        'resume',
-        'terminate',
-        'kill',
-        'wait',
-        'as_dict',
-        'parent',
-        'parents',
-        'oneshot',
-        'pid',
-        'rlimit',
-        'children',
+        "send_signal",
+        "suspend",
+        "resume",
+        "terminate",
+        "kill",
+        "wait",
+        "as_dict",
+        "parent",
+        "parents",
+        "oneshot",
+        "pid",
+        "rlimit",
+        "children",
     ]
     if psutil.MACOS:
-        ignore.append('memory_maps')  # XXX
+        ignore.append("memory_maps")  # XXX
     p = psutil.Process()
     for name in sorted(dir(p)):
-        if not name.startswith('_') and name not in ignore:
+        if not name.startswith("_") and name not in ignore:
             fun = getattr(p, name)
             timecall(name, fun)
     print_timings()
@@ -211,5 +210,5 @@ def main():
         print_color(msg, "red")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

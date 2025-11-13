@@ -18,16 +18,19 @@ class DynamicSpreadConfig(BaseModel):
     price_change_smoothing_factor: PositiveFloat = 0.2
     atr_update_interval_sec: PositiveInt = 300
 
+
 class InventorySkewConfig(BaseModel):
     enabled: bool = True
     skew_intensity: PositiveFloat = 0.5
     max_inventory_ratio: PositiveFloat = 0.5
     inventory_sizing_factor: PositiveFloat = 0.5
 
+
 class OrderLayer(BaseModel):
     spread_offset_pct: PositiveFloat = 0.0
     quantity_multiplier: PositiveFloat = 1.0
     cancel_threshold_pct: PositiveFloat = 0.01
+
 
 class CircuitBreakerConfig(BaseModel):
     enabled: bool = True
@@ -36,6 +39,7 @@ class CircuitBreakerConfig(BaseModel):
     pause_duration_sec: PositiveInt = 60
     cool_down_after_trip_sec: PositiveInt = 300
     max_daily_loss_pct: PositiveFloat = None
+
 
 class StrategyConfig(BaseModel):
     base_spread_pct: PositiveFloat = 0.001
@@ -53,6 +57,7 @@ class StrategyConfig(BaseModel):
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
     order_layers: list[OrderLayer] = Field(default_factory=lambda: [OrderLayer()])
 
+
 class SystemConfig(BaseModel):
     loop_interval_sec: PositiveFloat = 0.5
     order_refresh_interval_sec: PositiveFloat = 5.0
@@ -68,6 +73,7 @@ class SystemConfig(BaseModel):
     health_check_interval_sec: PositiveInt = 10
     config_refresh_interval_sec: PositiveInt = 60
 
+
 class FilesConfig(BaseModel):
     log_level: str = "INFO"
     log_file: str = "pyrmethus.log"
@@ -76,6 +82,7 @@ class FilesConfig(BaseModel):
     symbol_config_file: str = "symbols.json"
     log_format: str = "plain"
     pybit_log_level: str = "WARNING"
+
 
 class GlobalConfig(BaseModel):
     api_key: str = ""
@@ -86,7 +93,7 @@ class GlobalConfig(BaseModel):
     main_quote_currency: str = "USDT"
     system: SystemConfig = SystemConfig()
     files: FilesConfig = FilesConfig()
-    initial_dry_run_capital: Decimal = Decimal('10000')
+    initial_dry_run_capital: Decimal = Decimal("10000")
     dry_run_price_drift_mu: float = 0.0
     dry_run_price_volatility_sigma: float = 0.0001
     dry_run_time_step_dt: float = 1.0
@@ -96,8 +103,9 @@ class GlobalConfig(BaseModel):
         return cls(
             api_key=os.getenv("BYBIT_API_KEY", ""),
             api_secret=os.getenv("BYBIT_API_SECRET", ""),
-            testnet=os.getenv("BYBIT_TESTNET", "true").lower() == "true"
+            testnet=os.getenv("BYBIT_TESTNET", "true").lower() == "true",
         )
+
 
 # --- Market Data Structures ---
 class PriceLevel:
@@ -105,12 +113,14 @@ class PriceLevel:
         self.price = price
         self.qty = qty
 
+
 # --- Skip List for Orderbook ---
 class SkipListNode:
     def __init__(self, key, value, level):
         self.key = key
         self.value = value
-        self.forward = [None]*(level+1)
+        self.forward = [None] * (level + 1)
+
 
 class SkipList:
     def __init__(self, max_level=16, p=0.5):
@@ -126,9 +136,9 @@ class SkipList:
         return lvl
 
     def insert(self, key, value):
-        update = [None]*(self.max_level+1)
+        update = [None] * (self.max_level + 1)
         current = self.header
-        for i in reversed(range(self.level+1)):
+        for i in reversed(range(self.level + 1)):
             while current.forward[i] and current.forward[i].key < key:
                 current = current.forward[i]
             update[i] = current
@@ -138,24 +148,24 @@ class SkipList:
         else:
             lvl = self.random_level()
             if lvl > self.level:
-                for i in range(self.level+1, lvl+1):
+                for i in range(self.level + 1, lvl + 1):
                     update[i] = self.header
                 self.level = lvl
             new_node = SkipListNode(key, value, lvl)
-            for i in range(lvl+1):
+            for i in range(lvl + 1):
                 new_node.forward[i] = update[i].forward[i]
                 update[i].forward[i] = new_node
 
     def delete(self, key):
-        update = [None]*(self.max_level+1)
+        update = [None] * (self.max_level + 1)
         current = self.header
-        for i in reversed(range(self.level+1)):
+        for i in reversed(range(self.level + 1)):
             while current.forward[i] and current.forward[i].key < key:
                 current = current.forward[i]
             update[i] = current
         current = current.forward[0]
         if current and current.key == key:
-            for i in range(self.level+1):
+            for i in range(self.level + 1):
                 if update[i].forward[i] != current:
                     break
                 update[i].forward[i] = current.forward[i]
@@ -164,7 +174,7 @@ class SkipList:
 
     def search(self, key):
         current = self.header
-        for i in reversed(range(self.level+1)):
+        for i in reversed(range(self.level + 1)):
             while current.forward[i] and current.forward[i].key < key:
                 current = current.forward[i]
         current = current.forward[0]
@@ -181,6 +191,7 @@ class SkipList:
             node = node.forward[0]
         return sorted(items, key=lambda x: x[0], reverse=reverse)
 
+
 # --- Orderbook Management ---
 class Orderbook:
     def __init__(self, symbol: str, max_depth=50):
@@ -194,19 +205,19 @@ class Orderbook:
         async with self.lock:
             self.bids = SkipList()
             self.asks = SkipList()
-            for lvl in snapshot.get('b', []):
+            for lvl in snapshot.get("b", []):
                 price, qty = float(lvl[0]), float(lvl[1])
                 self.bids.insert(price, qty)
-            for lvl in snapshot.get('a', []):
+            for lvl in snapshot.get("a", []):
                 price, qty = float(lvl[0]), float(lvl[1])
                 self.asks.insert(price, qty)
 
     async def process_delta(self, delta):
         async with self.lock:
-            for side in ['b', 'a']:
+            for side in ["b", "a"]:
                 for lvl in delta.get(side, []):
                     price, qty = float(lvl[0]), float(lvl[1])
-                    if side == 'b':
+                    if side == "b":
                         self.bids.insert(price, qty)
                     else:
                         self.asks.insert(price, qty)
@@ -222,6 +233,7 @@ class Orderbook:
         if node:
             return node.key, node.value
         return None, None
+
 
 # --- API Client ---
 class APIClient:
@@ -250,6 +262,7 @@ class APIClient:
     async def get_insurance(self):
         # Fetch insurance fund info
         pass
+
 
 # --- Main Strategy Class ---
 class MarketMaker:
@@ -283,8 +296,14 @@ class MarketMaker:
     def compute_dynamic_spread(self):
         base_spread = self.config.base_spread_pct
         if self.atr:
-            spread = base_spread + (self.atr / 100000) * self.config.dynamic_spread.volatility_multiplier
-            spread = max(self.config.dynamic_spread.min_spread_pct, min(spread, self.config.dynamic_spread.max_spread_pct))
+            spread = (
+                base_spread
+                + (self.atr / 100000) * self.config.dynamic_spread.volatility_multiplier
+            )
+            spread = max(
+                self.config.dynamic_spread.min_spread_pct,
+                min(spread, self.config.dynamic_spread.max_spread_pct),
+            )
             return spread
         return base_spread
 
@@ -293,9 +312,11 @@ class MarketMaker:
 
     def compute_order_sizes(self):
         size = self.bot.account_balance * self.config.base_order_size_pct_of_balance
-        max_size = self.config.inventory_skew.max_inventory_ratio * self.bot.account_balance
+        max_size = (
+            self.config.inventory_skew.max_inventory_ratio * self.bot.account_balance
+        )
         size = min(size, max_size)
-        return max(Decimal('0.0001'), size)
+        return max(Decimal("0.0001"), size)
 
     def compute_order_prices(self):
         spread = self.compute_dynamic_spread()
@@ -305,8 +326,8 @@ class MarketMaker:
         inventory_ratio = self.get_inventory_ratio()
         skew_factor = self.config.inventory_skew.skew_intensity
         skew_adjustment = inventory_ratio * skew_factor
-        bid_price *= (1 - skew_adjustment)
-        ask_price *= (1 + skew_adjustment)
+        bid_price *= 1 - skew_adjustment
+        ask_price *= 1 + skew_adjustment
         return float(bid_price), float(ask_price)
 
     async def place_layered_orders(self):
@@ -321,8 +342,8 @@ class MarketMaker:
             ask_layer_price = ask_price * (1 + offset)
             bid_qty = size * layer.quantity_multiplier
             ask_qty = size * layer.quantity_multiplier
-            await self.place_order('Buy', bid_layer_price, bid_qty, layer)
-            await self.place_order('Sell', ask_layer_price, ask_qty, layer)
+            await self.place_order("Buy", bid_layer_price, bid_qty, layer)
+            await self.place_order("Sell", ask_layer_price, ask_qty, layer)
 
     async def place_order(self, side, price, qty, layer):
         try:
@@ -331,7 +352,7 @@ class MarketMaker:
                 side=side,
                 price=str(price),
                 qty=str(qty),
-                order_type='Limit'
+                order_type="Limit",
             )
             # Log
         except Exception:
@@ -342,10 +363,12 @@ class MarketMaker:
         orders = await self.bot.api_client.get_active_orders(self.symbol)
         now = time.time()
         for order in orders:
-            age = now - order['created_time']
+            age = now - order["created_time"]
             if age > self.config.stale_order_max_age_seconds:
                 try:
-                    await self.bot.api_client.cancel_order(self.symbol, order['order_id'])
+                    await self.bot.api_client.cancel_order(
+                        self.symbol, order["order_id"]
+                    )
                 except Exception:
                     pass
 
@@ -356,6 +379,7 @@ class MarketMaker:
         while True:
             await self.place_layered_orders()
             await asyncio.sleep(self.bot.config.system.loop_interval_sec)
+
 
 # --- Main Bot ---
 class Pyrmethus:
@@ -381,8 +405,8 @@ class Pyrmethus:
         while not self._stop_event.is_set():
             # Check insurance fund
             insurance = await self.api_client.get_insurance()
-            fund = Decimal(str(insurance.get('fund', '0')))
-            if fund < Decimal('100'):
+            fund = Decimal(str(insurance.get("fund", "0")))
+            if fund < Decimal("100"):
                 # Notify
                 pass
             # Run strategy
@@ -400,10 +424,12 @@ class Pyrmethus:
         await asyncio.sleep(1)
         os._exit(0)
 
+
 # --- Main Entry ---
 async def main():
     bot = Pyrmethus()
     await bot.run()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

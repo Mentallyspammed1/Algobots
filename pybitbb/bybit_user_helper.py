@@ -2,15 +2,17 @@
 import logging
 from typing import Any
 
-from pybit.exceptions import BybitAPIError, BybitRequestError
+from pybit.exceptions import BybitAPIError
+from pybit.exceptions import BybitRequestError
 from pybit.unified_trading import HTTP
 
 # Configure logging for the module
 logging.basicConfig(
-    level=logging.INFO, # Changed to INFO for less verbose default output, DEBUG for full details
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+    level=logging.INFO,  # Changed to INFO for less verbose default output, DEBUG for full details
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
 
 class BybitUserHelper:
     """A helper class for managing Bybit user-related functionalities,
@@ -32,10 +34,16 @@ class BybitUserHelper:
         self.api_key = api_key
         self.api_secret = api_secret
         self.testnet = testnet
-        self.session = HTTP(testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret)
-        logger.info(f"BybitUserHelper initialized for {'testnet' if self.testnet else 'mainnet'}.")
+        self.session = HTTP(
+            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret
+        )
+        logger.info(
+            f"BybitUserHelper initialized for {'testnet' if self.testnet else 'mainnet'}."
+        )
 
-    def _make_request(self, method: str, endpoint_name: str, **kwargs) -> dict[str, Any] | None:
+    def _make_request(
+        self, method: str, endpoint_name: str, **kwargs
+    ) -> dict[str, Any] | None:
         """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
 
@@ -49,11 +57,13 @@ class BybitUserHelper:
             func = getattr(self.session, method)
             response = func(**kwargs)
 
-            if response and response.get('retCode') == 0:
-                logger.debug(f"[{endpoint_name}] Successfully called. Response: {response.get('result')}")
-                return response.get('result')
-            ret_code = response.get('retCode', 'N/A')
-            error_msg = response.get('retMsg', 'Unknown error')
+            if response and response.get("retCode") == 0:
+                logger.debug(
+                    f"[{endpoint_name}] Successfully called. Response: {response.get('result')}"
+                )
+                return response.get("result")
+            ret_code = response.get("retCode", "N/A")
+            error_msg = response.get("retMsg", "Unknown error")
             logger.error(
                 f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
                 f"Args: {kwargs}. Full Response: {response}"
@@ -78,9 +88,14 @@ class BybitUserHelper:
 
         :return: A dictionary containing API key details or None on failure.
         """
-        return self._make_request('get_api_key_info', 'API Key Info')
+        return self._make_request("get_api_key_info", "API Key Info")
 
-    def modify_master_api_key(self, read_only: int, ips: list[str] | None = None, permissions: dict[str, list[str]] | None = None) -> dict[str, Any] | None:
+    def modify_master_api_key(
+        self,
+        read_only: int,
+        ips: list[str] | None = None,
+        permissions: dict[str, list[str]] | None = None,
+    ) -> dict[str, Any] | None:
         """Modifies permissions or IP restrictions for the master API key.
         Use with extreme caution, as this modifies the key currently in use.
 
@@ -92,21 +107,27 @@ class BybitUserHelper:
         if not isinstance(read_only, int) or read_only not in [0, 1]:
             logger.error("Invalid 'read_only' parameter. Must be 0 or 1.")
             return None
-        if ips is not None and (not isinstance(ips, list) or not all(isinstance(ip, str) for ip in ips)):
+        if ips is not None and (
+            not isinstance(ips, list) or not all(isinstance(ip, str) for ip in ips)
+        ):
             logger.error("Invalid 'ips' parameter. Must be a list of strings.")
             return None
         if permissions is not None and not isinstance(permissions, dict):
             logger.error("Invalid 'permissions' parameter. Must be a dictionary.")
             return None
 
-        params = {'readOnly': read_only}
+        params = {"readOnly": read_only}
         if ips:
-            params['ips'] = ips
+            params["ips"] = ips
         if permissions:
-            params['permissions'] = permissions
+            params["permissions"] = permissions
 
-        logger.warning("Attempting to modify the master API key. This is a sensitive operation.")
-        return self._make_request('modify_master_api_key', 'Modify Master API Key', **params)
+        logger.warning(
+            "Attempting to modify the master API key. This is a sensitive operation."
+        )
+        return self._make_request(
+            "modify_master_api_key", "Modify Master API Key", **params
+        )
 
     def delete_master_api_key(self) -> dict[str, Any] | None:
         """Deletes the master API key currently in use.
@@ -114,11 +135,15 @@ class BybitUserHelper:
 
         :return: A dictionary containing the deletion response or None on failure.
         """
-        logger.critical("Attempting to DELETE the master API key. This will invalidate the current API credentials.")
-        return self._make_request('delete_master_api_key', 'Delete Master API Key')
+        logger.critical(
+            "Attempting to DELETE the master API key. This will invalidate the current API credentials."
+        )
+        return self._make_request("delete_master_api_key", "Delete Master API Key")
 
     # --- Sub-Account Management ---
-    def create_sub_uid(self, username: str, member_type: int = 1) -> dict[str, Any] | None:
+    def create_sub_uid(
+        self, username: str, member_type: int = 1
+    ) -> dict[str, Any] | None:
         """Creates a new sub-UID (sub-account).
 
         :param username: The username for the new sub-account.
@@ -129,18 +154,20 @@ class BybitUserHelper:
             logger.error("Invalid 'username' provided for create_sub_uid.")
             return None
         if not isinstance(member_type, int) or member_type not in [1, 6]:
-            logger.error("Invalid 'member_type' provided for create_sub_uid. Must be 1 or 6.")
+            logger.error(
+                "Invalid 'member_type' provided for create_sub_uid. Must be 1 or 6."
+            )
             return None
 
-        params = {'username': username, 'memberType': member_type}
-        return self._make_request('create_sub_uid', 'Create Sub-UID', **params)
+        params = {"username": username, "memberType": member_type}
+        return self._make_request("create_sub_uid", "Create Sub-UID", **params)
 
     def get_sub_uid_list(self) -> dict[str, Any] | None:
         """Retrieves a list of all sub-UIDs (sub-accounts) under the master account.
 
         :return: A dictionary containing a list of sub-UIDs or None on failure.
         """
-        return self._make_request('get_sub_uid_list', 'Get Sub-UID List')
+        return self._make_request("get_sub_uid_list", "Get Sub-UID List")
 
     def freeze_sub_uid(self, sub_uid: int, frozen: int) -> dict[str, Any] | None:
         """Freezes or unfreezes a sub-UID.
@@ -150,21 +177,27 @@ class BybitUserHelper:
         :return: A dictionary containing the operation response or None on failure.
         """
         if not isinstance(sub_uid, int) or sub_uid <= 0:
-            logger.error("Invalid 'sub_uid' provided for freeze_sub_uid. Must be a positive integer.")
+            logger.error(
+                "Invalid 'sub_uid' provided for freeze_sub_uid. Must be a positive integer."
+            )
             return None
         if not isinstance(frozen, int) or frozen not in [0, 1]:
-            logger.error("Invalid 'frozen' parameter. Must be 0 (unfreeze) or 1 (freeze).")
+            logger.error(
+                "Invalid 'frozen' parameter. Must be 0 (unfreeze) or 1 (freeze)."
+            )
             return None
 
-        params = {'subuid': sub_uid, 'frozen': frozen}
-        return self._make_request('freeze_sub_uid', 'Freeze Sub-UID', **params)
+        params = {"subuid": sub_uid, "frozen": frozen}
+        return self._make_request("freeze_sub_uid", "Freeze Sub-UID", **params)
 
-    def create_sub_api_key(self,
-                           sub_uid: int,
-                           read_only: int,
-                           ips: list[str] | None = None,
-                           permissions: dict[str, list[str]] | None = None,
-                           note: str | None = None) -> dict[str, Any] | None:
+    def create_sub_api_key(
+        self,
+        sub_uid: int,
+        read_only: int,
+        ips: list[str] | None = None,
+        permissions: dict[str, list[str]] | None = None,
+        note: str | None = None,
+    ) -> dict[str, Any] | None:
         """Creates an API key for a specific sub-UID.
 
         :param sub_uid: The UID of the sub-account.
@@ -180,7 +213,9 @@ class BybitUserHelper:
         if not isinstance(read_only, int) or read_only not in [0, 1]:
             logger.error("Invalid 'read_only' parameter. Must be 0 or 1.")
             return None
-        if ips is not None and (not isinstance(ips, list) or not all(isinstance(ip, str) for ip in ips)):
+        if ips is not None and (
+            not isinstance(ips, list) or not all(isinstance(ip, str) for ip in ips)
+        ):
             logger.error("Invalid 'ips' parameter. Must be a list of strings.")
             return None
         if permissions is not None and not isinstance(permissions, dict):
@@ -190,16 +225,20 @@ class BybitUserHelper:
             logger.error("Invalid 'note' parameter. Must be a string.")
             return None
 
-        params = {'subuid': sub_uid, 'readOnly': read_only}
+        params = {"subuid": sub_uid, "readOnly": read_only}
         if ips:
-            params['ips'] = ips
+            params["ips"] = ips
         if permissions:
-            params['permissions'] = permissions
+            params["permissions"] = permissions
         if note:
-            params['note'] = note
-        return self._make_request('create_sub_api_key', 'Create Sub-Account API Key', **params)
+            params["note"] = note
+        return self._make_request(
+            "create_sub_api_key", "Create Sub-Account API Key", **params
+        )
 
-    def get_all_sub_api_keys(self, sub_member_id: int | None = None) -> dict[str, Any] | None:
+    def get_all_sub_api_keys(
+        self, sub_member_id: int | None = None
+    ) -> dict[str, Any] | None:
         """Retrieves all API keys for a specific sub-UID or all sub-UIDs if `sub_member_id` is None.
 
         :param sub_member_id: Optional. The UID of the sub-account.
@@ -208,10 +247,14 @@ class BybitUserHelper:
         params = {}
         if sub_member_id is not None:
             if not isinstance(sub_member_id, int) or sub_member_id <= 0:
-                logger.error("Invalid 'sub_member_id' provided for get_all_sub_api_keys.")
+                logger.error(
+                    "Invalid 'sub_member_id' provided for get_all_sub_api_keys."
+                )
                 return None
-            params['subMemberId'] = sub_member_id
-        return self._make_request('get_all_sub_api_keys', 'Get All Sub-Account API Keys', **params)
+            params["subMemberId"] = sub_member_id
+        return self._make_request(
+            "get_all_sub_api_keys", "Get All Sub-Account API Keys", **params
+        )
 
     def delete_sub_api_key(self, api_key_to_delete: str) -> dict[str, Any] | None:
         """Deletes a specific sub-account API key.
@@ -223,9 +266,13 @@ class BybitUserHelper:
             logger.error("Invalid 'api_key_to_delete' provided for delete_sub_api_key.")
             return None
 
-        params = {'apikey': api_key_to_delete}
-        logger.warning(f"Attempting to DELETE sub-account API key: {api_key_to_delete}. This is irreversible.")
-        return self._make_request('delete_sub_api_key', 'Delete Sub-Account API Key', **params)
+        params = {"apikey": api_key_to_delete}
+        logger.warning(
+            f"Attempting to DELETE sub-account API key: {api_key_to_delete}. This is irreversible."
+        )
+        return self._make_request(
+            "delete_sub_api_key", "Delete Sub-Account API Key", **params
+        )
 
     # --- Affiliate Information ---
     def get_affiliate_user_info(self, uid: int | None = None) -> dict[str, Any] | None:
@@ -239,8 +286,10 @@ class BybitUserHelper:
             if not isinstance(uid, int) or uid <= 0:
                 logger.error("Invalid 'uid' provided for get_affiliate_user_info.")
                 return None
-            params['uid'] = uid
-        return self._make_request('get_affiliate_user_info', 'Get Affiliate User Info', **params)
+            params["uid"] = uid
+        return self._make_request(
+            "get_affiliate_user_info", "Get Affiliate User Info", **params
+        )
 
 
 # Example Usage
@@ -253,7 +302,9 @@ if __name__ == "__main__":
     USE_TESTNET = True
 
     if API_KEY == "YOUR_MASTER_API_KEY" or API_SECRET == "YOUR_MASTER_API_SECRET":
-        logger.error("Please replace YOUR_MASTER_API_KEY and YOUR_MASTER_API_SECRET with your actual credentials in bybit_user_helper.py example.")
+        logger.error(
+            "Please replace YOUR_MASTER_API_KEY and YOUR_MASTER_API_SECRET with your actual credentials in bybit_user_helper.py example."
+        )
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
 
@@ -262,9 +313,11 @@ if __name__ == "__main__":
     # --- API Key Management ---
     print("\n--- Getting Master API Key Info ---")
     api_key_info = user_helper.get_api_key_info()
-    if api_key_info and api_key_info.get('list'):
-        key_details = api_key_info['list'][0]
-        print(f"  API Key: {key_details.get('apiKey')}, Read-Only: {key_details.get('readOnly')}, Permissions: {key_details.get('permissions')}, IPs: {key_details.get('ips')}")
+    if api_key_info and api_key_info.get("list"):
+        key_details = api_key_info["list"][0]
+        print(
+            f"  API Key: {key_details.get('apiKey')}, Read-Only: {key_details.get('readOnly')}, Permissions: {key_details.get('permissions')}, IPs: {key_details.get('ips')}"
+        )
     else:
         print("  Failed to retrieve API key info.")
 
@@ -275,14 +328,18 @@ if __name__ == "__main__":
     print("\n--- Getting Sub-UID List ---")
     sub_uid_list = user_helper.get_sub_uid_list()
     target_sub_uid = None
-    if sub_uid_list and sub_uid_list.get('list'):
+    if sub_uid_list and sub_uid_list.get("list"):
         print("  Existing Sub-UIDs:")
-        for sub_account in sub_uid_list['list']:
-            print(f"    Username: {sub_account.get('username')}, UID: {sub_account.get('uid')}, Status: {'Frozen' if sub_account.get('frozen') == 1 else 'Active'}")
-            if not target_sub_uid: # Pick the first one for demonstration
-                target_sub_uid = sub_account.get('uid')
+        for sub_account in sub_uid_list["list"]:
+            print(
+                f"    Username: {sub_account.get('username')}, UID: {sub_account.get('uid')}, Status: {'Frozen' if sub_account.get('frozen') == 1 else 'Active'}"
+            )
+            if not target_sub_uid:  # Pick the first one for demonstration
+                target_sub_uid = sub_account.get("uid")
     else:
-        print("  No sub-UIDs found or failed to retrieve list. (You might need to create one first.)")
+        print(
+            "  No sub-UIDs found or failed to retrieve list. (You might need to create one first.)"
+        )
         # Example of creating a sub-UID if none exist (uncomment with caution)
         # new_sub_username = f"testsub_{int(time.time())}"
         # print(f"\n--- Creating new sub-UID: {new_sub_username} ---")
@@ -292,7 +349,6 @@ if __name__ == "__main__":
         #     print(f"  New sub-UID created: {new_sub_response}")
         # else:
         #     print("  Failed to create sub-UID.")
-
 
     if target_sub_uid:
         print(f"\n--- Freezing Sub-UID: {target_sub_uid} ---")
@@ -311,12 +367,16 @@ if __name__ == "__main__":
 
         print(f"\n--- Getting API Keys for Sub-UID: {target_sub_uid} ---")
         sub_api_keys = user_helper.get_all_sub_api_keys(sub_member_id=target_sub_uid)
-        if sub_api_keys and sub_api_keys.get('list'):
+        if sub_api_keys and sub_api_keys.get("list"):
             print(f"  API Keys for Sub-UID {target_sub_uid}:")
-            for key in sub_api_keys['list']:
-                print(f"    API Key: {key.get('apiKey')}, Read-Only: {key.get('readOnly')}, Permissions: {key.get('permissions')}")
+            for key in sub_api_keys["list"]:
+                print(
+                    f"    API Key: {key.get('apiKey')}, Read-Only: {key.get('readOnly')}, Permissions: {key.get('permissions')}"
+                )
         else:
-            print(f"  No API keys found for Sub-UID {target_sub_uid} or failed to retrieve.")
+            print(
+                f"  No API keys found for Sub-UID {target_sub_uid} or failed to retrieve."
+            )
             # Example of creating a sub-account API key (uncomment with caution)
             # new_sub_api_key_response = user_helper.create_sub_api_key(
             #     sub_uid=target_sub_uid,

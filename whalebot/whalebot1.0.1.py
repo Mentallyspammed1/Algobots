@@ -6,7 +6,7 @@ import os
 import sys
 import time
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -25,6 +25,37 @@ SKLEARN_AVAILABLE = False
 getcontext().prec = 28
 init(autoreset=True)
 load_dotenv()
+
+
+def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
+    logger = logging.getLogger(log_name)
+    logger.setLevel(level)
+    logger.propagate = False
+
+    if not logger.handlers:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(
+            SensitiveFormatter(
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
+            ),
+        )
+        logger.addHandler(console_handler)
+
+        log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+        )
+        file_handler.setFormatter(
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
+        )
+        logger.addHandler(file_handler)
+
+    return logger
+
+
+logger = setup_logger("whalebot")
 
 NEON_GREEN = Fore.LIGHTGREEN_EX
 NEON_BLUE = Fore.CYAN
@@ -98,7 +129,8 @@ CONFIG_FILE = "config.json"
 LOG_DIRECTORY = "bot_logs/trading-bot/logs"
 Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
-TIMEZONE = timezone.utc
+
+TIMEZONE = UTC
 MAX_API_RETRIES = 5
 RETRY_DELAY_SECONDS = 7
 REQUEST_TIMEOUT = 20
@@ -114,7 +146,7 @@ STOCH_RSI_MID_POINT = 50
 MIN_CANDLESTICK_PATTERNS_BARS = 2
 
 
-def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
+def load_config(filepath: str) -> dict[str, Any]:
     default_config = {
         "symbol": "BTCUSDT",
         "interval": "15",
@@ -246,42 +278,78 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         },
         "weight_sets": {
             "default_scalping": {
-                "ema_alignment": 0.22,
-                "sma_trend_filter": 0.28,
-                "momentum_rsi_stoch_cci_wr_mfi": 0.18,
-                "bollinger_bands": 0.22,
-                "vwap": 0.22,
-                "psar": 0.22,
-                "sma_10": 0.07,
-                "orderbook_imbalance": 0.07,
-                "ehlers_supertrend_alignment": 0.55,
-                "macd_alignment": 0.28,
-                "adx_strength": 0.18,
-                "ichimoku_confluence": 0.38,
-                "obv_momentum": 0.18,
-                "cmf_flow": 0.12,
-                "mtf_trend_confluence": 0.32,
+                "ema_alignment": 0.18,
+                "sma_trend_filter": 0.20,
+                "rsi": 0.15,
+                "stoch_rsi": 0.15,
+                "cci": 0.10,
+                "wr": 0.10,
+                "mfi": 0.10,
+                "bollinger_bands": 0.15,
+                "vwap": 0.15,
+                "psar": 0.15,
+                "sma_10": 0.05,
+                "orderbook_imbalance": 0.15,
+                "ehlers_supertrend_alignment": 0.30,
+                "macd_alignment": 0.15,
+                "adx_strength": 0.15,
+                "ichimoku_confluence": 0.30,
+                "obv_momentum": 0.15,
+                "cmf_flow": 0.10,
+                "mtf_trend_confluence": 0.30,
                 "volatility_index_signal": 0.15,
                 "vwma_cross": 0.15,
                 "volume_delta_signal": 0.10,
-                "kaufman_ama_cross": 0.20,
+                "kaufman_ama_cross": 0.18,
                 "relative_volume_confirmation": 0.10,
                 "market_structure_confluence": 0.25,
-                "dema_crossover": 0.18,
-                "keltner_breakout": 0.20,
-                "roc_signal": 0.12,
+                "dema_crossover": 0.15,
+                "keltner_breakout": 0.18,
+                "roc_signal": 0.10,
                 "candlestick_confirmation": 0.15,
-                "fibonacci_pivot_points_confluence": 0.20,
-            }
+                "fibonacci_pivot_points_confluence": 0.18,
+            },
         },
     }
+
+    def _validate_config(config: dict[str, Any]) -> bool:
+        is_valid = True
+
+        symbol = config.get("symbol", "")
+        if not isinstance(symbol, str) or not symbol.endswith("USDT"):
+            logger.warning(
+                f"{NEON_YELLOW}Symbol '{symbol}' might not be in the expected format (e.g., BTCUSDT). Ensure it's correct for Bybit.{RESET}"
+            )
+
+        loop_delay = config.get("loop_delay", LOOP_DELAY_SECONDS)
+        if not isinstance(loop_delay, (int, float)) or loop_delay <= 0:
+            logger.error(
+                f"{NEON_RED}Invalid 'loop_delay' in config. It must be a positive number. Using default {LOOP_DELAY_SECONDS}.{RESET}"
+            )
+            config["loop_delay"] = LOOP_DELAY_SECONDS
+            is_valid = False
+
+        risk_per_trade = config.get("trade_management", {}).get(
+            "risk_per_trade_percent", 1.0
+        )
+        if not isinstance(risk_per_trade, (int, float)) or not (
+            0 < risk_per_trade <= 100
+        ):
+            logger.error(
+                f"{NEON_RED}Invalid 'risk_per_trade_percent' in config. It must be between 0 and 100. Using default 1.0.{RESET}"
+            )
+            config["trade_management"]["risk_per_trade_percent"] = 1.0
+            is_valid = False
+
+        return is_valid
+
+
     if not Path(filepath).exists():
         try:
             with Path(filepath).open("w", encoding="utf-8") as f:
                 json.dump(default_config, f, indent=4)
             logger.warning(
-                f"{NEON_YELLOW}Configuration file not found. "
-                f"Created default config at {filepath} for symbol {default_config['symbol']}{RESET}"
+                f"{NEON_YELLOW}Configuration file not found. Created default config at {filepath} for symbol {default_config['symbol']}{RESET}",
             )
             return default_config
         except OSError as e:
@@ -292,13 +360,17 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
         with Path(filepath).open(encoding="utf-8") as f:
             config = json.load(f)
         _ensure_config_keys(config, default_config)
+        if not _validate_config(config):
+            logger.error(
+                f"{NEON_RED}Configuration validation failed. Please correct the issues in {filepath}. Exiting.{RESET}"
+            )
+            sys.exit(1)
         with Path(filepath).open("w", encoding="utf-8") as f_write:
             json.dump(config, f_write, indent=4)
         return config
     except (OSError, FileNotFoundError, json.JSONDecodeError) as e:
         logger.error(
-            f"{NEON_RED}Error loading config: {e}. "
-            f"Using default and attempting to save.{RESET}"
+            f"{NEON_RED}Error loading config: {e}. Using default and attempting to save.{RESET}",
         )
         try:
             with Path(filepath).open("w", encoding="utf-8") as f_default:
@@ -312,7 +384,9 @@ def _ensure_config_keys(config: dict[str, Any], default_config: dict[str, Any]) 
     for key, default_value in default_config.items():
         if key not in config:
             config[key] = default_value
-        elif isinstance(default_value, dict) and isinstance(config.get(key), dict):
+        elif isinstance(default_value, dict) and isinstance(
+            config.get(key), dict
+        ):
             _ensure_config_keys(config[key], default_value)
 
 
@@ -331,38 +405,96 @@ class SensitiveFormatter(logging.Formatter):
         redacted_message = original_message
         for word in self.SENSITIVE_WORDS:
             if word in redacted_message:
-                redacted_message = redacted_message.replace(word, "*" * len(word))
+                redacted_message = redacted_message.replace(
+                    word, "*" * len(word)
+                )
         return redacted_message
 
 
-def setup_logger(log_name: str, level=logging.INFO) -> logging.Logger:
-    logger = logging.getLogger(log_name)
-    logger.setLevel(level)
-    logger.propagate = False
+def calculate_fees(price: Decimal, quantity: Decimal, fee_rate: Decimal) -> Decimal:
+    return price * quantity * fee_rate
 
-    if not logger.handlers:
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(
-            SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
-        )
-        logger.addHandler(console_handler)
+def calculate_slippage(
+    price: Decimal,
+    quantity: Decimal,
+    slippage_rate: Decimal,
+    side: Literal["BUY", "SELL"],
+) -> Decimal:
+    if side == "BUY":
+        return price * (Decimal("1") + slippage_rate)
+    else:  # SELL
+        return price * (Decimal("1") - slippage_rate)
 
-        log_file = Path(LOG_DIRECTORY) / f"{log_name}.log"
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
-        )
-        file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        )
-        logger.addHandler(file_handler)
-
-    return logger
+def load_indicator_colors(config: dict[str, Any]) -> dict[str, str]:
+    default_colors = {
+        "SMA_10": Fore.LIGHTBLUE_EX,
+        "SMA_Long": Fore.BLUE,
+        "EMA_Short": Fore.LIGHTMAGENTA_EX,
+        "EMA_Long": Fore.MAGENTA,
+        "ATR": Fore.YELLOW,
+        "RSI": Fore.GREEN,
+        "StochRSI_K": Fore.CYAN,
+        "StochRSI_D": Fore.LIGHTCYAN_EX,
+        "BB_Upper": Fore.RED,
+        "BB_Middle": Fore.WHITE,
+        "BB_Lower": Fore.RED,
+        "CCI": Fore.LIGHTGREEN_EX,
+        "WR": Fore.LIGHTRED_EX,
+        "MFI": Fore.GREEN,
+        "OBV": Fore.BLUE,
+        "OBV_EMA": Fore.LIGHTBLUE_EX,
+        "CMF": Fore.MAGENTA,
+        "Tenkan_Sen": Fore.CYAN,
+        "Kijun_Sen": Fore.LIGHTCYAN_EX,
+        "Senkou_Span_A": Fore.GREEN,
+        "Senkou_Span_B": Fore.RED,
+        "Chikou_Span": Fore.YELLOW,
+        "PSAR_Val": Fore.MAGENTA,
+        "PSAR_Dir": Fore.LIGHTMAGENTA_EX,
+        "VWAP": Fore.WHITE,
+        "ST_Fast_Dir": Fore.BLUE,
+        "ST_Fast_Val": Fore.LIGHTBLUE_EX,
+        "ST_Slow_Dir": Fore.MAGENTA,
+        "ST_Slow_Val": Fore.LIGHTMAGENTA_EX,
+        "MACD_Line": Fore.GREEN,
+        "MACD_Signal": Fore.LIGHTGREEN_EX,
+        "MACD_Hist": Fore.YELLOW,
+        "ADX": Fore.CYAN,
+        "PlusDI": Fore.LIGHTCYAN_EX,
+        "MinusDI": Fore.RED,
+        "Volatility_Index": Fore.YELLOW,
+        "Volume_Delta": Fore.LIGHTCYAN_EX,
+        "VWMA": Fore.WHITE,
+        "Kaufman_AMA": Fore.GREEN,
+        "Relative_Volume": Fore.LIGHTMAGENTA_EX,
+        "Market_Structure_Trend": Fore.LIGHTCYAN_EX,
+        "DEMA": Fore.BLUE,
+        "Keltner_Upper": Fore.LIGHTMAGENTA_EX,
+        "Keltner_Middle": Fore.WHITE,
+        "Keltner_Lower": Fore.MAGENTA,
+        "ROC": Fore.LIGHTGREEN_EX,
+        "Pivot": Fore.WHITE,
+        "R1": Fore.CYAN,
+        "R2": Fore.LIGHTCYAN_EX,
+        "S1": Fore.MAGENTA,
+        "S2": Fore.LIGHTMAGENTA_EX,
+        "Candlestick_Pattern": Fore.LIGHTYELLOW_EX,
+        "Support_Level": Fore.LIGHTCYAN_EX,
+        "Resistance_Level": Fore.RED,
+    }
+    custom_colors = config.get("indicator_colors", {})
+    final_colors = {**default_colors, **custom_colors}
+    return final_colors
 
 
 class BybitClient:
-    def __init__(self, api_key: str, api_secret: str, base_url: str, logger: logging.Logger):
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        base_url: str,
+        logger: logging.Logger,
+    ):
         self.api_key = api_key
         self.api_secret = api_secret
         self.base_url = base_url
@@ -381,7 +513,11 @@ class BybitClient:
         return session
 
     def _generate_signature(self, payload: str) -> str:
-        return hmac.new(self.api_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        return hmac.new(
+            self.api_secret.encode(),
+            payload.encode(),
+            hashlib.sha256,
+        ).hexdigest()
 
     def _send_signed_request(
         self,
@@ -391,7 +527,7 @@ class BybitClient:
     ) -> requests.Response | None:
         if not self.api_key or not self.api_secret:
             self.logger.error(
-                f"{NEON_RED}API_KEY or API_SECRET not set for signed request.{RESET}"
+                f"{NEON_RED}API_KEY or API_SECRET not set for signed request.{RESET}",
             )
             return None
 
@@ -410,10 +546,15 @@ class BybitClient:
                     "X-BAPI-TIMESTAMP": timestamp,
                     "X-BAPI-SIGN": signature,
                     "X-BAPI-RECV-WINDOW": recv_window,
-                }
+                },
             )
             self.logger.debug(f"GET Request: {url}?{query_string}")
-            return self.session.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+            return self.session.get(
+                url,
+                params=params,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
+            )
         json_params = json.dumps(params) if params else ""
         param_str = timestamp + self.api_key + recv_window + json_params
         signature = self._generate_signature(param_str)
@@ -423,25 +564,38 @@ class BybitClient:
                 "X-BAPI-TIMESTAMP": timestamp,
                 "X-BAPI-SIGN": signature,
                 "X-BAPI-RECV-WINDOW": recv_window,
-            }
+            },
         )
         self.logger.debug(f"POST Request: {url} with payload {json_params}")
-        return self.session.post(url, json=params, headers=headers, timeout=REQUEST_TIMEOUT)
+        return self.session.post(
+            url,
+            json=params,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
+        )
 
     def _handle_api_response(self, response: requests.Response) -> dict | None:
         try:
             response.raise_for_status()
             data = response.json()
             if data.get("retCode") != 0:
+                ret_msg = data.get("retMsg", "Unknown error")
+                ret_code = data.get("retCode")
                 self.logger.error(
-                    f"{NEON_RED}Bybit API Error: {data.get('retMsg')} "
-                    f"(Code: {data.get('retCode')}){RESET}"
+                    f"{NEON_RED}Bybit API Error: {ret_msg} (Code: {ret_code}){RESET}",
                 )
+
+                if ret_code == 30037:
+                    self.logger.error(
+                        f"{NEON_RED}Insufficient balance on Bybit. Please check your account balance.{RESET}"
+                    )
+                    return None
+
                 return None
             return data
         except requests.exceptions.HTTPError as e:
             self.logger.error(
-                f"{NEON_RED}HTTP Error: {e.response.status_code} - {e.response.text}{RESET}"
+                f"{NEON_RED}HTTP Error: {e.response.status_code} - {e.response.text}{RESET}",
             )
         except requests.exceptions.ConnectionError as e:
             self.logger.error(f"{NEON_RED}Connection Error: {e}{RESET}")
@@ -483,11 +637,16 @@ class BybitClient:
             price = Decimal(response["result"]["list"][0]["lastPrice"])
             self.logger.debug(f"Fetched current price for {symbol}: {price}")
             return price
-        self.logger.warning(f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}")
+        self.logger.warning(
+            f"{NEON_YELLOW}Could not fetch current price for {symbol}.{RESET}"
+        )
         return None
 
     def fetch_klines(
-        self, symbol: str, interval: str, limit: int
+        self,
+        symbol: str,
+        interval: str,
+        limit: int,
     ) -> pd.DataFrame | None:
         endpoint = "/v5/market/kline"
         params = {
@@ -511,7 +670,9 @@ class BybitClient:
                 ],
             )
             df["start_time"] = pd.to_datetime(
-                df["start_time"].astype(int), unit="ms", utc=True
+                df["start_time"].astype(int),
+                unit="ms",
+                utc=True,
             ).dt.tz_convert(TIMEZONE)
             for col in ["open", "high", "low", "close", "volume", "turnover"]:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -520,14 +681,14 @@ class BybitClient:
 
             if df.empty:
                 self.logger.warning(
-                    f"{NEON_YELLOW}Fetched klines for {symbol} {interval} but DataFrame is empty after processing. Raw response: {response}{RESET}"
+                    f"{NEON_YELLOW}Fetched klines for {symbol} {interval} but DataFrame is empty after processing. Raw response: {response}{RESET}",
                 )
                 return None
 
             self.logger.debug(f"Fetched {len(df)} {interval} klines for {symbol}.")
             return df
         self.logger.warning(
-            f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}. API response might be empty or invalid. Raw response: {response}{RESET}"
+            f"{NEON_YELLOW}Could not fetch klines for {symbol} {interval}. API response might be empty or invalid. Raw response: {response}{RESET}",
         )
         return None
 
@@ -538,7 +699,9 @@ class BybitClient:
         if response and response["result"]:
             self.logger.debug(f"Fetched orderbook for {symbol} with limit {limit}.")
             return response["result"]
-        self.logger.warning(f"{NEON_YELLOW}Could not fetch orderbook for {symbol}.{RESET}")
+        self.logger.warning(
+            f"{NEON_YELLOW}Could not fetch orderbook for {symbol}.{RESET}"
+        )
         return None
 
 
@@ -549,30 +712,35 @@ class PositionManager:
         self.symbol = symbol
         self.open_positions: list[dict] = []
         self.trade_management_enabled = config["trade_management"]["enabled"]
-        self.max_open_positions = config["trade_management"]["max_open_positions"]
+        self.max_open_positions = config["trade_management"][
+            "max_open_positions"
+        ]
         self.order_precision = config["trade_management"]["order_precision"]
         self.price_precision = config["trade_management"]["price_precision"]
         self.slippage_percent = Decimal(
-            str(config["trade_management"].get("slippage_percent", 0.0))
+            str(config["trade_management"].get("slippage_percent", 0.0)),
         )
-        self.account_balance = Decimal(str(config["trade_management"]["account_balance"]))
+        self.account_balance = Decimal(
+            str(config["trade_management"]["account_balance"]),
+        )
 
     def _get_current_balance(self) -> Decimal:
         return self.account_balance
 
     def _calculate_order_size(
-        self, current_price: Decimal, atr_value: Decimal
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
     ) -> Decimal:
         if not self.trade_management_enabled:
             return Decimal("0")
 
         account_balance = self._get_current_balance()
         risk_per_trade_percent = (
-            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"]))
-            / 100
+            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"])) / 100
         )
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
 
         risk_amount = account_balance * risk_per_trade_percent
@@ -580,7 +748,7 @@ class PositionManager:
 
         if stop_loss_distance <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}Calculated stop loss distance is zero or negative. Cannot determine order size.{RESET}"
+                f"{NEON_YELLOW}Calculated stop loss distance is zero or negative. Cannot determine order size.{RESET}",
             )
             return Decimal("0")
 
@@ -596,40 +764,45 @@ class PositionManager:
         return order_qty
 
     def open_position(
-        self, signal: Literal["BUY", "SELL"], current_price: Decimal, atr_value: Decimal
+        self,
+        signal: Literal["BUY", "SELL"],
+        current_price: Decimal,
+        atr_value: Decimal,
     ) -> dict | None:
         if not self.trade_management_enabled:
             self.logger.info(
-                f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Skipping opening position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Trade management is disabled. Skipping opening position.{RESET}",
             )
             return None
 
         if len(self.open_positions) >= self.max_open_positions:
             self.logger.info(
-                f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Max open positions ({self.max_open_positions}) reached. Cannot open new position.{RESET}",
             )
             return None
 
         order_qty = self._calculate_order_size(current_price, atr_value)
         if order_qty <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Order quantity is zero or negative. Cannot open position.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Order quantity is zero or negative. Cannot open position.{RESET}",
             )
             return None
 
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         take_profit_atr_multiple = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
 
         if signal == "BUY":
-            adjusted_entry_price = current_price * (
-                Decimal("1") + self.slippage_percent
+            adjusted_entry_price = calculate_slippage(
+                current_price, order_qty, self.slippage_percent, signal
             )
             stop_loss = adjusted_entry_price - (atr_value * stop_loss_atr_multiple)
-            take_profit = adjusted_entry_price + (atr_value * take_profit_atr_multiple)
+            take_profit = adjusted_entry_price + (
+                atr_value * take_profit_atr_multiple
+            )
         else:
             adjusted_entry_price = current_price * (
                 Decimal("1") - self.slippage_percent
@@ -644,14 +817,17 @@ class PositionManager:
             "symbol": self.symbol,
             "side": signal,
             "entry_price": adjusted_entry_price.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "qty": order_qty,
             "stop_loss": stop_loss.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "take_profit": take_profit.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "status": "OPEN",
         }
@@ -667,40 +843,50 @@ class PositionManager:
         current_price: Decimal,
         slippage_percent: Decimal,
         price_precision: int,
-        logger: logging.Logger,
     ) -> tuple[bool, Decimal, str]:
         side = position["side"]
         stop_loss = position["stop_loss"]
         take_profit = position["take_profit"]
 
         closed_by = None
-        close_price = Decimal("0")
+        close_price_at_trigger = Decimal("0")
 
         if side == "BUY":
             if current_price <= stop_loss:
                 closed_by = "STOP_LOSS"
-                close_price = current_price * (Decimal("1") - slippage_percent)
+                close_price_at_trigger = current_price * (
+                    Decimal("1") - slippage_percent
+                )
             elif current_price >= take_profit:
                 closed_by = "TAKE_PROFIT"
-                close_price = current_price * (Decimal("1") - slippage_percent)
+                close_price_at_trigger = current_price * (
+                    Decimal("1") - slippage_percent
+                )
         elif side == "SELL":
             if current_price >= stop_loss:
                 closed_by = "STOP_LOSS"
-                close_price = current_price * (Decimal("1") + slippage_percent)
+                close_price_at_trigger = current_price * (
+                    Decimal("1") + slippage_percent
+                )
             elif current_price <= take_profit:
                 closed_by = "TAKE_PROFIT"
-                close_price = current_price * (Decimal("1") + slippage_percent)
+                close_price_at_trigger = current_price * (
+                    Decimal("1") + slippage_percent
+                )
 
         if closed_by:
             price_precision_str = "0." + "0" * (price_precision - 1) + "1"
-            adjusted_close_price = close_price.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+            adjusted_close_price = close_price_at_trigger.quantize(
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             )
             return True, adjusted_close_price, closed_by
         return False, Decimal("0"), ""
 
     def manage_positions(
-        self, current_price: Decimal, performance_tracker: Any
+        self,
+        current_price: Decimal,
+        performance_tracker: Any,
     ) -> None:
         if not self.trade_management_enabled or not self.open_positions:
             return
@@ -714,7 +900,6 @@ class PositionManager:
                         current_price,
                         self.slippage_percent,
                         self.price_precision,
-                        self.logger,
                     )
                 )
 
@@ -734,7 +919,7 @@ class PositionManager:
                     )
                     performance_tracker.record_trade(position, pnl)
                     self.logger.info(
-                        f"{NEON_PURPLE}[{self.symbol}] Closed {position['side']} position by {closed_by}: {position}. PnL: {pnl.normalize():.2f}{RESET}"
+                        f"{NEON_PURPLE}[{self.symbol}] Closed {position['side']} position by {closed_by}: {position}. PnL: {pnl.normalize():.2f}{RESET}",
                     )
 
         self.open_positions = [
@@ -756,7 +941,7 @@ class PerformanceTracker:
         self.wins = 0
         self.losses = 0
         self.trading_fee_percent = Decimal(
-            str(config["trade_management"].get("trading_fee_percent", 0.0))
+            str(config["trade_management"].get("trading_fee_percent", 0.0)),
         )
 
     def record_trade(self, position: dict, pnl: Decimal) -> None:
@@ -774,8 +959,12 @@ class PerformanceTracker:
         self.trades.append(trade_record)
         self.total_pnl += pnl
 
-        entry_fee = position["entry_price"] * position["qty"] * self.trading_fee_percent
-        exit_fee = position["exit_price"] * position["qty"] * self.trading_fee_percent
+        entry_fee = calculate_fees(
+            position["entry_price"], position["qty"], self.trading_fee_percent
+        )
+        exit_fee = calculate_fees(
+            position["exit_price"], position["qty"], self.trading_fee_percent
+        )
         total_fees = entry_fee + exit_fee
         self.total_pnl -= total_fees
 
@@ -784,7 +973,7 @@ class PerformanceTracker:
         else:
             self.losses += 1
         self.logger.info(
-            f"{NEON_CYAN}[{position['symbol']}] Trade recorded. PnL (before fees): {pnl.normalize():.2f}, Total Fees: {total_fees.normalize():.2f}, Current Total PnL (after fees): {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}"
+            f"{NEON_CYAN}[{position['symbol']}] Trade recorded. PnL (before fees): {pnl.normalize():.2f}, Total Fees: {total_fees.normalize():.2f}, Current Total PnL (after fees): {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}",
         )
 
     def get_summary(self) -> dict:
@@ -805,7 +994,9 @@ class AlertSystem:
         self.logger = logger
 
     def send_alert(
-        self, message: str, level: Literal["INFO", "WARNING", "ERROR"]
+        self,
+        message: str,
+        level: Literal["INFO", "WARNING", "ERROR"],
     ) -> None:
         if level == "INFO":
             self.logger.info(f"{NEON_BLUE}ALERT: {message}{RESET}")
@@ -834,7 +1025,7 @@ class TradingAnalyzer:
 
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}TradingAnalyzer initialized with an empty DataFrame. Indicators will not be calculated.{RESET}"
+                f"{NEON_YELLOW}TradingAnalyzer initialized with an empty DataFrame. Indicators will not be calculated.{RESET}",
             )
             return
 
@@ -846,7 +1037,12 @@ class TradingAnalyzer:
             self.calculate_fibonacci_pivot_points()
 
     def _safe_calculate(
-        self, func: callable, name: str, min_data_points: int = 0, *args, **kwargs
+        self,
+        func: callable,
+        name: str,
+        min_data_points: int = 0,
+        *args,
+        **kwargs,
     ) -> Any | None:
         if len(self.df) < min_data_points:
             self.logger.debug(
@@ -867,13 +1063,13 @@ class TradingAnalyzer:
                 )
             ):
                 self.logger.warning(
-                    f"{NEON_YELLOW}[{self.symbol}] Indicator '{name}' returned empty or None after calculation. Not enough valid data?{RESET}"
+                    f"{NEON_YELLOW}[{self.symbol}] Indicator '{name}' returned empty or None after calculation. Not enough valid data?{RESET}",
                 )
                 return None
             return result
         except Exception as e:
             self.logger.error(
-                f"{NEON_RED}[{self.symbol}] Error calculating indicator '{name}': {e}{RESET}"
+                f"{NEON_RED}[{self.symbol}] Error calculating indicator '{name}': {e}. Parameters: {kwargs}.{RESET}",
             )
             return None
 
@@ -908,7 +1104,7 @@ class TradingAnalyzer:
                 self._calculate_atr_internal,
                 {"period": isd["atr_period"]},
                 "ATR",
-                isd["atr_period"],
+                isd["atr_period"] + MIN_DATA_POINTS_TR,
             ),
             "rsi": (
                 self.calculate_rsi,
@@ -924,7 +1120,9 @@ class TradingAnalyzer:
                     "d_period": isd["stoch_d_period"],
                 },
                 ["StochRSI_K", "StochRSI_D"],
-                isd["stoch_rsi_period"] + isd["stoch_k_period"] + isd["stoch_d_period"],
+                isd["stoch_rsi_period"]
+                + isd["stoch_k_period"]
+                + isd["stoch_d_period"],
             ),
             "bollinger_bands": (
                 self.calculate_bollinger_bands,
@@ -970,24 +1168,42 @@ class TradingAnalyzer:
                 {
                     "tenkan_period": isd["ichimoku_tenkan_period"],
                     "kijun_period": isd["ichimoku_kijun_period"],
-                    "senkou_span_b_period": isd["ichimoku_senkou_span_b_period"],
+                    "senkou_span_b_period": isd[
+                        "ichimoku_senkou_span_b_period"
+                    ],
                     "chikou_span_offset": isd["ichimoku_chikou_span_offset"],
                 },
-                ["Tenkan_Sen", "Kijun_Sen", "Senkou_Span_A", "Senkou_Span_B", "Chikou_Span"],
-                max(isd["ichimoku_tenkan_period"], isd["ichimoku_kijun_period"], isd["ichimoku_senkou_span_b_period"])
+                [
+                    "Tenkan_Sen",
+                    "Kijun_Sen",
+                    "Senkou_Span_A",
+                    "Senkou_Span_B",
+                    "Chikou_Span",
+                ],
+                max(
+                    isd["ichimoku_tenkan_period"],
+                    isd["ichimoku_kijun_period"],
+                    isd["ichimoku_senkou_span_b_period"],
+                )
                 + isd["ichimoku_chikou_span_offset"],
             ),
             "psar": (
                 self.calculate_psar,
-                {"acceleration": isd["psar_acceleration"], "max_acceleration": isd["psar_max_acceleration"]},
+                {
+                    "acceleration": isd["psar_acceleration"],
+                    "max_acceleration": isd["psar_max_acceleration"],
+                },
                 ["PSAR_Val", "PSAR_Dir"],
                 MIN_DATA_POINTS_PSAR,
             ),
             "vwap": (self.calculate_vwap, {}, "VWAP", 1),
             "ehlers_supertrend": (
-                self._calculate_ehlers_supertrend_internal, {},
+                self._calculate_ehlers_supertrend_internal,
+                {},
                 ["ST_Fast_Dir", "ST_Fast_Val", "ST_Slow_Dir", "ST_Slow_Val"],
-                max(isd["ehlers_fast_period"] * 3, isd["ehlers_slow_period"] * 3)
+                max(
+                    isd["ehlers_fast_period"] * 3, isd["ehlers_slow_period"] * 3
+                ),
             ),
             "macd": (
                 self.calculate_macd,
@@ -1041,7 +1257,11 @@ class TradingAnalyzer:
             ),
             "market_structure": (
                 self.calculate_market_structure,
-                {"lookback_period": isd["market_structure_lookback_period"]},
+                {
+                    "lookback_period": isd[
+                        "market_structure_lookback_period"
+                    ]
+                },
                 "Market_Structure_Trend",
                 isd["market_structure_lookback_period"] * 2,
             ),
@@ -1053,24 +1273,43 @@ class TradingAnalyzer:
             ),
             "keltner_channels": (
                 self.calculate_keltner_channels,
-                {"period": isd["keltner_period"], "atr_multiplier": isd["keltner_atr_multiplier"]},
+                {
+                    "period": isd["keltner_period"],
+                    "atr_multiplier": isd["keltner_atr_multiplier"],
+                },
                 ["Keltner_Upper", "Keltner_Middle", "Keltner_Lower"],
                 isd["keltner_period"] + isd["atr_period"],
             ),
-            "roc": (self.calculate_roc, {"period": isd["roc_period"]}, "ROC", isd["roc_period"] + 1),
+            "roc": (
+                self.calculate_roc,
+                {"period": isd["roc_period"]},
+                "ROC",
+                isd["roc_period"] + 1,
+            ),
             "candlestick_patterns": (
-                self.detect_candlestick_patterns, {}, "Candlestick_Pattern", MIN_CANDLESTICK_PATTERNS_BARS
+                self.detect_candlestick_patterns,
+                {},
+                "Candlestick_Pattern",
+                MIN_CANDLESTICK_PATTERNS_BARS,
             ),
         }
 
-        for ind_key, (calc_func, func_kwargs, result_keys, min_dp) in indicator_map.items():
+        for ind_key, (
+            calc_func,
+            func_kwargs,
+            result_keys,
+            min_dp,
+        ) in indicator_map.items():
             if cfg["indicators"].get(ind_key, False):
                 if ind_key == "ehlers_supertrend":
                     self._calculate_ehlers_supertrend_internal()
                 elif ind_key == "dema":
                     result = self._safe_calculate(
-                        calc_func, ind_key, min_data_points=min_dp,
-                        series=self.df["close"], period=func_kwargs["period"]
+                        calc_func,
+                        ind_key,
+                        min_data_points=min_dp,
+                        series=self.df["close"],
+                        period=func_kwargs["period"],
                     )
                     if result is not None:
                         self.df[result_keys] = result.reindex(self.df.index)
@@ -1078,29 +1317,33 @@ class TradingAnalyzer:
                             self.indicator_values[result_keys] = result.iloc[-1]
                 else:
                     result = self._safe_calculate(
-                        calc_func, ind_key, min_data_points=min_dp, **func_kwargs
+                        calc_func,
+                        ind_key,
+                        min_data_points=min_dp,
+                        **func_kwargs,
                     )
 
                     if result is not None:
                         if isinstance(result_keys, list):
-                            if isinstance(result, tuple) and len(result) == len(result_keys):
-                                for i, key in enumerate(result_keys):
-                                    if result[i] is not None:
-                                        self.df[key] = result[i].reindex(self.df.index)
-                                        if not result[i].empty:
-                                            self.indicator_values[key] = result[i].iloc[-1]
-                            else:
-                                self.logger.warning(
-                                    f"[{self.symbol}] Indicator '{ind_key}' expected {len(result_keys)} results but got {type(result)}: {result}. Skipping storage."
-                                )
-                        else:
-                            if isinstance(result, pd.Series):
-                                self.df[result_keys] = result.reindex(self.df.index)
-                                if not result.empty:
-                                    self.indicator_values[result_keys] = result.iloc[-1]
-                            else:
-                                self.df[result_keys] = pd.Series(result, index=self.df.index)
-                                self.indicator_values[result_keys] = result
+                            if isinstance(result, tuple) and len(result) == len(
+                                result_keys,
+                            ):
+                                                                                                                                                                    else:
+                                                                                                                                                                        self.logger.warning(
+                                                                                                                                                                           f"[{self.symbol}] Indicator '{ind_key}' expected {len(result_keys)} results but got {type(result)}: {result}. Skipping storage.",
+                                                                                                                                                                        )
+                                                                                                                                                            elif isinstance(result, pd.Series):
+                                                                                                                                                                # Ensure the Series is of object dtype to preserve Decimals
+                                                                                                                                                                series_to_assign = result.astype(object).reindex(self.df.index)
+                                                                                                                                                                self.df[result_keys] = series_to_assign
+                                                                                                                                                                if not result.empty:
+                                                                                                                                                                    self.indicator_values[result_keys] = result.tail(1).item()
+                                                                                                                                                        else:
+                                                                                                                                                            # This case is less common for indicator results, but for safety:
+                                                                                                                                                            # Ensure the Series is of object dtype to preserve Decimals
+                                                                                                                                                            series_to_assign = pd.Series(result, index=self.df.index, dtype=object)
+                                                                                                                                                            self.df[result_keys] = series_to_assign
+                                                                                                                                                            self.indicator_values[result_keys] = result
 
         initial_len = len(self.df)
         self.df.dropna(subset=["close"], inplace=True)
@@ -1113,20 +1356,38 @@ class TradingAnalyzer:
 
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty after calculating all indicators and dropping NaNs.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty after calculating all indicators and dropping NaNs.{RESET}",
             )
         else:
             self.logger.debug(
                 f"[{self.symbol}] Indicators calculated. Final DataFrame size: {len(self.df)}"
             )
 
-    def _calculate_emas(self, short_period: int, long_period: int) -> tuple[pd.Series, pd.Series]:
-        ema_short = self.df["close"].ewm(span=short_period, adjust=False).mean()
-        ema_long = self.df["close"].ewm(span=long_period, adjust=False).mean()
+    def _calculate_emas(
+        self,
+        short_period: int | None = None,
+        long_period: int | None = None,
+    ) -> tuple[pd.Series, pd.Series]:
+        actual_short_period = (
+            short_period
+            if short_period is not None
+            else self.indicator_settings["ema_short_period"]
+        )
+        actual_long_period = (
+            long_period
+            if long_period is not None
+            else self.indicator_settings["ema_long_period"]
+        )
+        ema_short = self.df["close"].ewm(span=actual_short_period, adjust=False).mean()
+        ema_long = self.df["close"].ewm(span=actual_long_period, adjust=False).mean()
         return ema_short, ema_long
 
     def _calculate_atr_internal(self, period: int) -> pd.Series:
-        tr = self._safe_calculate(self.calculate_true_range, "TR", min_data_points=MIN_DATA_POINTS_TR)
+        tr = self._safe_calculate(
+            self.calculate_true_range,
+            "TR",
+            min_data_points=MIN_DATA_POINTS_TR,
+        )
         if tr is None:
             return pd.Series(np.nan, index=self.df.index)
         atr = tr.ewm(span=period, adjust=False).mean()
@@ -1168,7 +1429,7 @@ class TradingAnalyzer:
         high_prev_close = (self.df["high"] - self.df["close"].shift()).abs()
         low_prev_close = (self.df["low"] - self.df["close"].shift()).abs()
         return pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(
-            axis=1
+            axis=1,
         )
 
     def calculate_super_smoother(self, series: pd.Series, period: int) -> pd.Series:
@@ -1200,11 +1461,13 @@ class TradingAnalyzer:
         return filt.reindex(self.df.index)
 
     def calculate_ehlers_supertrend(
-        self, period: int, multiplier: float
+        self,
+        period: int,
+        multiplier: float,
     ) -> pd.DataFrame | None:
         if len(self.df) < period * 3:
             self.logger.debug(
-                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period*3} bars."
+                f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars.",
             )
             return None
 
@@ -1233,15 +1496,23 @@ class TradingAnalyzer:
         supertrend = pd.Series(np.nan, index=df_copy.index)
 
         first_valid_idx_loc = 0
-        while first_valid_idx_loc < len(df_copy) and pd.isna(df_copy["close"].iloc[first_valid_idx_loc]):
+        while first_valid_idx_loc < len(df_copy) and pd.isna(
+            df_copy["close"].iloc[first_valid_idx_loc],
+        ):
             first_valid_idx_loc += 1
         if first_valid_idx_loc >= len(df_copy):
             return None
 
-        if df_copy["close"].iloc[first_valid_idx_loc] > upper_band.iloc[first_valid_idx_loc]:
+        if (
+            df_copy["close"].iloc[first_valid_idx_loc]
+            > upper_band.iloc[first_valid_idx_loc]
+        ):
             direction.iloc[first_valid_idx_loc] = 1
             supertrend.iloc[first_valid_idx_loc] = lower_band.iloc[first_valid_idx_loc]
-        elif df_copy["close"].iloc[first_valid_idx_loc] < lower_band.iloc[first_valid_idx_loc]:
+        elif (
+            df_copy["close"].iloc[first_valid_idx_loc]
+            < lower_band.iloc[first_valid_idx_loc]
+        ):
             direction.iloc[first_valid_idx_loc] = -1
             supertrend.iloc[first_valid_idx_loc] = upper_band.iloc[first_valid_idx_loc]
         else:
@@ -1281,40 +1552,90 @@ class TradingAnalyzer:
         return result.reindex(self.df.index)
 
     def calculate_macd(
-        self, fast_period: int, slow_period: int, signal_period: int
+        self,
+        fast_period: int,
+        slow_period: int,
+        signal_period: int,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         if len(self.df) < slow_period + signal_period:
-            return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
+            return nan_series, nan_series, nan_series
 
-        ema_fast = self.df["close"].ewm(span=fast_period, adjust=False).mean()
-        ema_slow = self.df["close"].ewm(span=slow_period, adjust=False).mean()
+        # Convert 'close' prices to Decimal for precise calculations
+        close_prices_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
 
+        # Calculate EMAs using Decimal
+        # Note: pandas ewm with adjust=False works with Decimal if the Series is Decimal
+        ema_fast = close_prices_decimal.ewm(span=fast_period, adjust=False).mean()
+        ema_slow = close_prices_decimal.ewm(span=slow_period, adjust=False).mean()
+
+        # Calculate MACD Line, Signal Line, and Histogram using Decimal
         macd_line = ema_fast - ema_slow
         signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
         histogram = macd_line - signal_line
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        ema_fast = ema_fast.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        ema_slow = ema_slow.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        macd_line = macd_line.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        signal_line = signal_line.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        histogram = histogram.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
 
         return macd_line, signal_line, histogram
 
     def calculate_rsi(self, period: int) -> pd.Series:
         if len(self.df) <= period:
-            return pd.Series(np.nan, index=self.df.index)
-        delta = self.df["close"].diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
+            # Return a Series of NaNs with Decimal type if not enough data
+            return pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
 
+        # Convert 'close' prices to Decimal for precise calculations
+        close_prices_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["close"]], index=self.df.index
+        )
+
+        # Calculate price differences using Decimal
+        delta = close_prices_decimal.diff()
+
+        # Separate gains and losses
+        gain = delta.apply(lambda x: x if x > 0 else Decimal('0'))
+        loss = delta.apply(lambda x: -x if x < 0 else Decimal('0'))
+
+        # Calculate average gain and loss using EMA with Decimal
+        # Note: pandas ewm with adjust=False works with Decimal if the Series is Decimal
         avg_gain = gain.ewm(span=period, adjust=False, min_periods=period).mean()
         avg_loss = loss.ewm(span=period, adjust=False, min_periods=period).mean()
 
-        rs = avg_gain / avg_loss.replace(0, np.nan)
-        rsi = 100 - (100 / (1 + rs))
+        # Handle division by zero for RS calculation
+        rs = avg_gain / avg_loss.replace(Decimal('0'), Decimal('NaN'))
+
+        # Calculate RSI
+        # Handle cases where rs might be NaN or infinite
+        rsi = Decimal('100') - (Decimal('100') / (Decimal('1') + rs))
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        rsi = rsi.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
         return rsi
 
     def calculate_stoch_rsi(
-        self, period: int, k_period: int, d_period: int
+        self,
+        period: int,
+        k_period: int,
+        d_period: int,
     ) -> tuple[pd.Series, pd.Series]:
         if len(self.df) <= period:
             return pd.Series(np.nan, index=self.df.index), pd.Series(
-                np.nan, index=self.df.index
+                np.nan,
+                index=self.df.index,
             )
         rsi = self.calculate_rsi(period)
 
@@ -1339,76 +1660,223 @@ class TradingAnalyzer:
 
     def calculate_adx(self, period: int) -> tuple[pd.Series, pd.Series, pd.Series]:
         if len(self.df) < period * 2:
-            return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
+            return nan_series, nan_series, nan_series
 
-        tr = self.calculate_true_range()
+        # Calculate True Range using Decimal
+        tr = self._safe_calculate(
+            self.calculate_true_range,
+            "TR",
+            min_data_points=MIN_DATA_POINTS_TR,
+        )
+        if tr is None or tr.isnull().all():
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
+            return nan_series, nan_series, nan_series
 
-        plus_dm = self.df["high"].diff()
-        minus_dm = -self.df["low"].diff()
+        # Convert 'high' and 'low' prices to Decimal for precise calculations
+        high_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["high"]], index=self.df.index
+        )
+        low_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["low"]], index=self.df.index
+        )
 
-        plus_dm_final = pd.Series(0.0, index=self.df.index)
-        minus_dm_final = pd.Series(0.0, index=self.df.index)
+        # Calculate Directional Movement (+DM and -DM) using Decimal
+        plus_dm = high_decimal.diff()
+        minus_dm = -(low_decimal.diff())
 
+        # Initialize final DM Series with Decimal zeros
+        plus_dm_final = pd.Series([Decimal('0.0')] * len(self.df.index), index=self.df.index)
+        minus_dm_final = pd.Series([Decimal('0.0')] * len(self.df.index), index=self.df.index)
+
+        # Populate final DM values using Decimal comparisons
         for i in range(1, len(self.df)):
             if plus_dm.iloc[i] > minus_dm.iloc[i] and plus_dm.iloc[i] > 0:
                 plus_dm_final.iloc[i] = plus_dm.iloc[i]
             if minus_dm.iloc[i] > plus_dm.iloc[i] and minus_dm.iloc[i] > 0:
                 minus_dm_final.iloc[i] = minus_dm.iloc[i]
 
+        # Calculate ATR using Decimal
         atr = tr.ewm(span=period, adjust=False).mean()
-        plus_di = (plus_dm_final.ewm(span=period, adjust=False).mean() / atr) * 100
-        minus_di = (minus_dm_final.ewm(span=period, adjust=False).mean() / atr) * 100
 
+        # Calculate Directional Indicators (+DI and -DI) using Decimal
+        # Handle division by zero for ATR
+        plus_di = (
+            plus_dm_final.ewm(span=period, adjust=False).mean()
+            / atr.replace(Decimal("0"), Decimal("NaN"))
+        ) * Decimal("100")
+        minus_di = (
+            minus_dm_final.ewm(span=period, adjust=False).mean()
+            / atr.replace(Decimal("0"), Decimal("NaN"))
+        ) * Decimal("100")
+
+        # Calculate DI difference and sum, handling potential NaNs
         di_diff = abs(plus_di - minus_di)
         di_sum = plus_di + minus_di
-        dx = (di_diff / di_sum.replace(0, np.nan)).fillna(0) * 100
 
+        # Calculate DX, handling division by zero
+        dx = (di_diff / di_sum.replace(Decimal('0'), Decimal('NaN'))).fillna(Decimal('0')) * Decimal('100')
+
+        # Calculate ADX using EMA with Decimal
         adx = dx.ewm(span=period, adjust=False).mean()
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        plus_di = plus_di.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        minus_di = minus_di.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        adx = adx.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
 
         return adx, plus_di, minus_di
 
     def calculate_bollinger_bands(
-        self, period: int, std_dev: float
+        self,
+        period: int,
+        std_dev: float,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         if len(self.df) < period:
-            return (
-                pd.Series(np.nan, index=self.df.index),
-                pd.Series(np.nan, index=self.df.index),
-                pd.Series(np.nan, index=self.df.index),
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
             )
-        middle_band = self.df["close"].rolling(window=period, min_periods=period).mean()
-        std = self.df["close"].rolling(window=period, min_periods=period).std()
-        upper_band = middle_band + (std * std_dev)
-        lower_band = middle_band - (std * std_dev)
+            return nan_series, nan_series, nan_series
+
+        # Convert 'close' prices to Decimal for precise calculations
+        close_prices_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate middle band (SMA) using Decimal
+        middle_band = close_prices_decimal.rolling(window=period, min_periods=period).mean()
+
+        # Calculate standard deviation using Decimal
+        std = close_prices_decimal.rolling(window=period, min_periods=period).std()
+
+        # Calculate upper and lower bands using Decimal arithmetic
+        upper_band = middle_band + (std * Decimal(str(std_dev)))
+        lower_band = middle_band - (std * Decimal(str(std_dev)))
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        middle_band = middle_band.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        upper_band = upper_band.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        lower_band = lower_band.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
         return upper_band, middle_band, lower_band
 
     def calculate_vwap(self) -> pd.Series:
         if self.df.empty:
-            return pd.Series(np.nan, index=self.df.index)
-        typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        cumulative_tp_vol = (typical_price * self.df["volume"]).cumsum()
-        cumulative_vol = self.df["volume"].cumsum()
-        vwap = cumulative_tp_vol / cumulative_vol
+            # Return NaNs with Decimal type if DataFrame is empty
+            return pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
+
+        # Convert relevant columns to Decimal for precise calculations
+        high_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["high"]], index=self.df.index
+        )
+        low_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["low"]], index=self.df.index
+        )
+        close_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["close"]], index=self.df.index
+        )
+        volume_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["volume"]], index=self.df.index
+        )
+
+        # Calculate typical price using Decimal
+        typical_price = (high_decimal + low_decimal + close_decimal) / Decimal("3")
+
+        # Calculate cumulative typical price * volume and cumulative volume using Decimal
+        cumulative_tp_vol = (typical_price * volume_decimal).cumsum()
+        cumulative_vol = volume_decimal.cumsum()
+
+        # Calculate VWAP, handling division by zero
+        vwap = cumulative_tp_vol / cumulative_vol.replace(Decimal('0'), Decimal('NaN'))
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        vwap = vwap.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+
         return vwap.reindex(self.df.index)
 
     def calculate_cci(self, period: int) -> pd.Series:
         if len(self.df) < period:
-            return pd.Series(np.nan, index=self.df.index)
-        tp = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
+            return nan_series
+
+        # Convert relevant columns to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate typical price using Decimal
+        tp = (high_decimal + low_decimal + close_decimal) / Decimal('3')
+
+        # Calculate SMA of typical price using Decimal
         sma_tp = tp.rolling(window=period, min_periods=period).mean()
+
+        # Calculate Mean Absolute Deviation using Decimal
+        # The lambda function needs to be adapted for Decimal objects
         mad = tp.rolling(window=period, min_periods=period).apply(
-            lambda x: np.abs(x - x.mean()).mean(), raw=False
+            lambda x: sum(abs(val - x.mean()) for val in x) / period
+            if not x.isnull().all()
+            else Decimal("NaN"),
+            raw=False,
         )
-        cci = (tp - sma_tp) / (0.015 * mad.replace(0, np.nan))
+
+        # Calculate CCI, handling division by zero
+        cci = (tp - sma_tp) / (
+            Decimal("0.015") * mad.replace(Decimal("0"), Decimal("NaN"))
+        )
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        cci = cci.apply(lambda x: x if pd.notna(x) else Decimal("NaN"))
+
         return cci
 
     def calculate_williams_r(self, period: int) -> pd.Series:
         if len(self.df) < period:
-            return pd.Series(np.nan, index=self.df.index)
-        highest_high = self.df["high"].rolling(window=period, min_periods=period).max()
-        lowest_low = self.df["low"].rolling(window=period, min_periods=period).min()
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
+            return nan_series
+
+        # Convert relevant columns to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate highest high and lowest low using Decimal
+        highest_high = high_decimal.rolling(window=period, min_periods=period).max()
+        lowest_low = low_decimal.rolling(window=period, min_periods=period).min()
+
+        # Calculate denominator, handling potential division by zero
         denominator = highest_high - lowest_low
-        wr = -100 * ((highest_high - self.df["close"]) / denominator.replace(0, np.nan))
+        denominator = denominator.replace(Decimal('0'), Decimal('NaN'))
+
+        # Calculate Williams %R using Decimal arithmetic
+        wr = Decimal("-100") * ((highest_high - close_decimal) / denominator)
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        wr = wr.apply(lambda x: x if pd.notna(x) else Decimal("NaN"))
+
         return wr
 
     def calculate_ichimoku_cloud(
@@ -1418,67 +1886,155 @@ class TradingAnalyzer:
         senkou_span_b_period: int,
         chikou_span_offset: int,
     ) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
-        if (
-            len(self.df)
-            < max(tenkan_period, kijun_period, senkou_span_b_period)
+        required_bars = (
+            max(tenkan_period, kijun_period, senkou_span_b_period)
             + chikou_span_offset
-        ):
-            return (
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
-                pd.Series(np.nan),
+        )
+        if len(self.df) < required_bars:
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
             )
+            return nan_series, nan_series, nan_series, nan_series, nan_series
 
+        # Convert 'high' and 'low' prices to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+
+        # Calculate Tenkan-sen using Decimal
         tenkan_sen = (
-            self.df["high"].rolling(window=tenkan_period).max()
-            + self.df["low"].rolling(window=tenkan_period).min()
-        ) / 2
+            high_decimal.rolling(window=tenkan_period).max()
+            + low_decimal.rolling(window=tenkan_period).min()
+        ) / Decimal('2')
 
+        # Calculate Kijun-sen using Decimal
         kijun_sen = (
-            self.df["high"].rolling(window=kijun_period).max()
-            + self.df["low"].rolling(window=kijun_period).min()
-        ) / 2
+            high_decimal.rolling(window=kijun_period).max()
+            + low_decimal.rolling(window=kijun_period).min()
+        ) / Decimal('2')
 
-        senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(kijun_period)
+        # Calculate Senkou Span A using Decimal
+        senkou_span_a = ((tenkan_sen + kijun_sen) / Decimal('2')).shift(kijun_period)
 
+        # Calculate Senkou Span B using Decimal
         senkou_span_b = (
             (
-                self.df["high"].rolling(window=senkou_span_b_period).max()
-                + self.df["low"].rolling(window=senkou_span_b_period).min()
+                high_decimal.rolling(window=senkou_span_b_period).max()
+                + low_decimal.rolling(window=senkou_span_b_period).min()
             )
-            / 2
+            / Decimal('2')
         ).shift(kijun_period)
 
-        chikou_span = self.df["close"].shift(-chikou_span_offset)
+        # Calculate Chikou Span using Decimal
+        chikou_span = close_decimal.shift(-chikou_span_offset)
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        tenkan_sen = tenkan_sen.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        kijun_sen = kijun_sen.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        senkou_span_a = senkou_span_a.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        senkou_span_b = senkou_span_b.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
+        chikou_span = chikou_span.apply(lambda x: x if pd.notna(x) else Decimal('NaN'))
 
         return tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span
 
     def calculate_mfi(self, period: int) -> pd.Series:
         if len(self.df) <= period:
-            return pd.Series(np.nan, index=self.df.index)
-        typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
-        money_flow = typical_price * self.df["volume"]
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
+            return nan_series
 
+        # Convert relevant columns to Decimal for precise calculations
+        high_decimal = pd.Series([Decimal(str(p)) for p in self.df["high"]], index=self.df.index)
+        low_decimal = pd.Series([Decimal(str(p)) for p in self.df["low"]], index=self.df.index)
+        close_decimal = pd.Series([Decimal(str(p)) for p in self.df["close"]], index=self.df.index)
+        volume_decimal = pd.Series([Decimal(str(p)) for p in self.df["volume"]], index=self.df.index)
+
+        # Calculate typical price using Decimal
+        typical_price = (high_decimal + low_decimal + close_decimal) / Decimal("3")
+
+        # Calculate money flow using Decimal
+        money_flow = typical_price * volume_decimal
+
+        # Calculate price difference using Decimal
         price_diff = typical_price.diff()
-        positive_flow = money_flow.where(price_diff > 0, 0)
-        negative_flow = money_flow.where(price_diff < 0, 0)
 
+        # Separate positive and negative flow using Decimal comparisons
+        # Use .where() for positive flow and .mask() for negative flow
+        # Ensure Decimal('0') is used for default values
+        positive_flow = money_flow.where(price_diff > 0, Decimal('0'))
+        # For negative flow, we want the absolute value of the negative difference
+        # So, if price_diff < 0, we take -price_diff, otherwise 0.
+        negative_flow = (-price_diff).where(price_diff < 0, Decimal('0'))
+
+        # Calculate sum of positive and negative money flow using Decimal rolling sum
+        # Ensure rolling sum operates on Decimal Series
         positive_mf_sum = positive_flow.rolling(window=period, min_periods=period).sum()
         negative_mf_sum = negative_flow.rolling(window=period, min_periods=period).sum()
 
-        mf_ratio = positive_mf_sum / negative_mf_sum.replace(0, np.nan)
-        mfi = 100 - (100 / (1 + mf_ratio))
-        return mfi
+        # Calculate Money Flow Ratio, handling division by zero
+        # Use Decimal('NaN') for division by zero
+        negative_mf_sum_safe = negative_mf_sum.replace(Decimal('0'), Decimal('NaN'))
+        mf_ratio = positive_mf_sum / negative_mf_sum_safe
+
+        # Calculate MFI using Decimal
+        # Handle potential division by zero in the final calculation as well
+        denominator_mfi = Decimal('1') + mf_ratio
+        denominator_mfi_safe = denominator_mfi.replace(Decimal('0'), Decimal('NaN'))
+        mfi = Decimal('100') - (Decimal('100') / denominator_mfi_safe)
+
+        # Ensure NaNs are handled correctly for Decimal Series
+        # Use Decimal('NaN') for missing values
+        mfi = mfi.apply(lambda x: x if pd.notna(x) else Decimal("NaN"))
+
+        return mfi.astype(object)  # Ensure return type is object dtype
 
     def calculate_obv(self, ema_period: int) -> tuple[pd.Series, pd.Series]:
         if len(self.df) < MIN_DATA_POINTS_OBV:
-            return pd.Series(np.nan), pd.Series(np.nan)
+            # Return NaNs with Decimal type if not enough data
+            return pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            ), pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
+            )
 
-        obv = pd.Series(0.0, index=self.df.index)
-        obv_direction = np.sign(self.df["close"].diff().fillna(0))
-        obv = (obv_direction * self.df["volume"]).cumsum()
+        # Define a Decimal-compatible sign function
+        def decimal_sign(x):
+            if x > Decimal("0"):
+                return Decimal('1')
+            elif x < Decimal('0'):
+                return Decimal('-1')
+            else:
+                return Decimal('0')
+
+        # Ensure volume is treated as Decimal
+        volume_decimal = pd.Series(
+            [Decimal(str(v)) for v in self.df["volume"]],
+            index=self.df.index,
+            dtype=object,
+        )
+
+        # Initialize OBV Series with Decimal zeros
+        obv = pd.Series(
+            [Decimal("0.0")] * len(self.df.index), index=self.df.index, dtype=object
+        )
+
+        # Calculate direction using Decimal sign function
+        close_diff = self.df["close"].diff()
+        # Fill NaN in diff with Decimal('0') before applying sign
+        obv_direction = close_diff.fillna(Decimal('0')).apply(decimal_sign)
+        
+        obv = (obv_direction * volume_decimal)
 
         obv_ema = obv.ewm(span=ema_period, adjust=False).mean()
 
@@ -1503,23 +2059,50 @@ class TradingAnalyzer:
         return cmf
 
     def calculate_psar(
-        self, acceleration: float, max_acceleration: float
+        self,
+        acceleration: float,
+        max_acceleration: float,
     ) -> tuple[pd.Series, pd.Series]:
         if len(self.df) < MIN_DATA_POINTS_PSAR:
-            return pd.Series(np.nan, index=self.df.index), pd.Series(
-                np.nan, index=self.df.index
+            # Return NaNs with Decimal type if not enough data
+            nan_series = pd.Series(
+                [Decimal("NaN")] * len(self.df.index),
+                index=self.df.index,
+                dtype=object,
             )
+            return nan_series, nan_series
 
-        psar = self.df["close"].copy()
+        # Convert float parameters to Decimal
+        accel = Decimal(str(acceleration))
+        max_accel = Decimal(str(max_acceleration))
+
+        # Ensure close, high, low are treated as Decimal
+        close_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["close"]],
+            index=self.df.index,
+            dtype=object,
+        )
+        high_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["high"]],
+            index=self.df.index,
+            dtype=object,
+        )
+        low_decimal = pd.Series(
+            [Decimal(str(p)) for p in self.df["low"]],
+            index=self.df.index,
+            dtype=object,
+        )
+
+        psar = close_decimal.copy()
         bull = pd.Series(True, index=self.df.index)
-        af = acceleration
+        af = accel
 
         ep = (
-            self.df["low"].iloc[0]
-            if self.df["close"].iloc[0] < self.df["close"].iloc[1]
-            else self.df["high"].iloc[0]
+            low_decimal.iloc[0]
+            if close_decimal.iloc[0] < close_decimal.iloc[1]
+            else high_decimal.iloc[0]
         )
-        bull.iloc[0] = self.df["close"].iloc[0] < self.df["close"].iloc[1]
+        bull.iloc[0] = close_decimal.iloc[0] < close_decimal.iloc[1]
 
         for i in range(1, len(self.df)):
             prev_bull = bull.iloc[i - 1]
@@ -1531,47 +2114,54 @@ class TradingAnalyzer:
                 psar.iloc[i] = prev_psar - af * (prev_psar - ep)
 
             reverse = False
-            if prev_bull and self.df["low"].iloc[i] < psar.iloc[i]:
+            if prev_bull and low_decimal.iloc[i] < psar.iloc[i]:
                 bull.iloc[i] = False
                 reverse = True
-            elif not prev_bull and self.df["high"].iloc[i] > psar.iloc[i]:
+            elif not prev_bull and high_decimal.iloc[i] > psar.iloc[i]:
                 bull.iloc[i] = True
                 reverse = True
             else:
                 bull.iloc[i] = prev_bull
 
             if reverse:
-                af = acceleration
-                ep = self.df["high"].iloc[i] if bull.iloc[i] else self.df["low"].iloc[i]
-                if bull.iloc[
-                    i
-                ]:
+                af = accel
+                ep = high_decimal.iloc[i] if bull.iloc[i] else low_decimal.iloc[i]
+                if bull.iloc[i]:
                     psar.iloc[i] = min(
-                        self.df["low"].iloc[i], self.df["low"].iloc[i - 1]
+                        low_decimal.iloc[i],
+                        low_decimal.iloc[i - 1],
                     )
                 else:
                     psar.iloc[i] = max(
-                        self.df["high"].iloc[i], self.df["high"].iloc[i - 1]
+                        high_decimal.iloc[i],
+                        high_decimal.iloc[i - 1],
                     )
 
             elif bull.iloc[i]:
-                if self.df["high"].iloc[i] > ep:
-                    ep = self.df["high"].iloc[i]
-                    af = min(af + acceleration, max_acceleration)
+                if high_decimal.iloc[i] > ep:
+                    ep = high_decimal.iloc[i]
+                    af = min(af + accel, max_accel)
                 psar.iloc[i] = min(
-                    psar.iloc[i], self.df["low"].iloc[i], self.df["low"].iloc[i - 1]
+                    psar.iloc[i],
+                    low_decimal.iloc[i],
+                    low_decimal.iloc[i - 1],
                 )
             else:
-                if self.df["low"].iloc[i] < ep:
-                    ep = self.df["low"].iloc[i]
-                    af = min(af + acceleration, max_acceleration)
+                if low_decimal.iloc[i] < ep:
+                    ep = low_decimal.iloc[i]
+                    af = min(af + accel, max_accel)
                 psar.iloc[i] = max(
-                    psar.iloc[i], self.df["high"].iloc[i], self.df["high"].iloc[i - 1]
+                    psar.iloc[i],
+                    high_decimal.iloc[i],
+                    high_decimal.iloc[i - 1],
                 )
 
-        direction = pd.Series(0, index=self.df.index, dtype=int)
-        direction[psar < self.df["close"]] = 1
-        direction[psar > self.df["close"]] = -1
+        # Initialize direction Series with Decimal('0') and use Decimal values for direction
+        direction = pd.Series(
+            [Decimal("0")] * len(self.df.index), index=self.df.index, dtype=object
+        )
+        direction[psar < close_decimal] = Decimal("1")
+        direction[psar > close_decimal] = Decimal("-1")
 
         return psar, direction
 
@@ -1579,7 +2169,7 @@ class TradingAnalyzer:
         window = self.config["indicator_settings"]["fibonacci_window"]
         if len(self.df) < window:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Not enough data for Fibonacci levels (need {window} bars).{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Not enough data for Fibonacci levels (need {window} bars).{RESET}",
             )
             return
 
@@ -1590,7 +2180,7 @@ class TradingAnalyzer:
 
         if diff <= 0:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] Invalid high-low range for Fibonacci calculation. Diff: {diff}{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] Invalid high-low range for Fibonacci calculation. Diff: {diff}{RESET}",
             )
             return
 
@@ -1598,23 +2188,34 @@ class TradingAnalyzer:
             "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
         )
         self.fib_levels = {
-            "0.0%": Decimal(str(recent_high)).quantize(Decimal(price_precision_str), rounding=ROUND_DOWN),
+            "0.0%": Decimal(str(recent_high)).quantize(
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
+            ),
             "23.6%": Decimal(str(recent_high - 0.236 * diff)).quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "38.2%": Decimal(str(recent_high - 0.382 * diff)).quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "50.0%": Decimal(str(recent_high - 0.500 * diff)).quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "61.8%": Decimal(str(recent_high - 0.618 * diff)).quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
             "78.6%": Decimal(str(recent_high - 0.786 * diff)).quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             ),
-            "100.0%": Decimal(str(recent_low)).quantize(Decimal(price_precision_str), rounding=ROUND_DOWN),
+            "100.0%": Decimal(str(recent_low)).quantize(
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
+            ),
         }
         self.logger.debug(
             f"[{self.symbol}] Calculated Fibonacci levels: {self.fib_levels}"
@@ -1623,7 +2224,7 @@ class TradingAnalyzer:
     def calculate_fibonacci_pivot_points(self) -> None:
         if self.df.empty or len(self.df) < 2:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] DataFrame is too short for Fibonacci Pivot Points calculation.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] DataFrame is too short for Fibonacci Pivot Points calculation.{RESET}",
             )
             return
 
@@ -1642,19 +2243,24 @@ class TradingAnalyzer:
             "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
         )
         self.indicator_values["Pivot"] = Decimal(str(pivot)).quantize(
-            Decimal(price_precision_str), rounding=ROUND_DOWN
+            Decimal(price_precision_str),
+            rounding=ROUND_DOWN,
         )
         self.indicator_values["R1"] = Decimal(str(r1)).quantize(
-            Decimal(price_precision_str), rounding=ROUND_DOWN
+            Decimal(price_precision_str),
+            rounding=ROUND_DOWN,
         )
         self.indicator_values["R2"] = Decimal(str(r2)).quantize(
-            Decimal(price_precision_str), rounding=ROUND_DOWN
+            Decimal(price_precision_str),
+            rounding=ROUND_DOWN,
         )
         self.indicator_values["S1"] = Decimal(str(s1)).quantize(
-            Decimal(price_precision_str), rounding=ROUND_DOWN
+            Decimal(price_precision_str),
+            rounding=ROUND_DOWN,
         )
         self.indicator_values["S2"] = Decimal(str(s2)).quantize(
-            Decimal(price_precision_str), rounding=ROUND_DOWN
+            Decimal(price_precision_str),
+            rounding=ROUND_DOWN,
         )
 
         self.logger.debug(f"[{self.symbol}] Calculated Fibonacci Pivot Points.")
@@ -1690,12 +2296,16 @@ class TradingAnalyzer:
 
         total_volume_sum = buy_volume_sum + sell_volume_sum
         volume_delta = (buy_volume_sum - sell_volume_sum) / total_volume_sum.replace(
-            0, np.nan
+            0,
+            np.nan,
         )
         return volume_delta.fillna(0)
 
     def calculate_kaufman_ama(
-        self, period: int, fast_period: int, slow_period: int
+        self,
+        period: int,
+        fast_period: int,
+        slow_period: int,
     ) -> pd.Series:
         if len(self.df) < period + slow_period:
             return pd.Series(np.nan, index=self.df.index)
@@ -1722,7 +2332,9 @@ class TradingAnalyzer:
         sc = (er * (fast_alpha - slow_alpha) + slow_alpha) ** 2
 
         first_valid_idx = period
-        while first_valid_idx < len(close_prices) and (np.isnan(close_prices[first_valid_idx]) or np.isnan(sc[first_valid_idx])):
+        while first_valid_idx < len(close_prices) and (
+            np.isnan(close_prices[first_valid_idx]) or np.isnan(sc[first_valid_idx])
+        ):
             first_valid_idx += 1
 
         if first_valid_idx >= len(close_prices):
@@ -1744,14 +2356,12 @@ class TradingAnalyzer:
 
         avg_volume = self.df["volume"].rolling(window=period, min_periods=period).mean()
         relative_volume = (self.df["volume"] / avg_volume.replace(0, np.nan)).fillna(
-            1.0
+            1.0,
         )
         return relative_volume
 
     def calculate_market_structure(self, lookback_period: int) -> pd.Series:
-        if (
-            len(self.df) < lookback_period * 2
-        ):
+        if len(self.df) < lookback_period * 2:
             return pd.Series("UNKNOWN", index=self.df.index, dtype="object")
 
         recent_segment_high = self.df["high"].iloc[-lookback_period:].max()
@@ -1771,7 +2381,6 @@ class TradingAnalyzer:
             and not pd.isna(prev_segment_high)
             and not pd.isna(prev_segment_low)
         ):
-
             is_higher_high = recent_segment_high > prev_segment_high
             is_higher_low = recent_segment_low > prev_segment_low
             is_lower_high = recent_segment_high < prev_segment_high
@@ -1795,15 +2404,18 @@ class TradingAnalyzer:
         return dema
 
     def calculate_keltner_channels(
-        self, period: int, atr_multiplier: float
+        self,
+        period: int,
+        atr_multiplier: float,
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         if "ATR" not in self.df.columns or self.df["ATR"].isnull().all().item():
-            atr_series = self._calculate_atr_internal(self.indicator_settings["atr_period"])
+            atr_series = self._calculate_atr_internal(
+                self.indicator_settings["atr_period"],
+            )
             if atr_series is not None and not atr_series.empty:
                 self.df["ATR"] = atr_series
             else:
                 return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
-
 
         if len(self.df) < period or self.df["ATR"].isnull().all().item():
             return pd.Series(np.nan), pd.Series(np.nan), pd.Series(np.nan)
@@ -1827,54 +2439,43 @@ class TradingAnalyzer:
         return roc
 
     def detect_candlestick_patterns(self) -> str:
-        if (
-            len(self.df) < MIN_CANDLESTICK_PATTERNS_BARS
-        ):
+        if len(self.df) < MIN_CANDLESTICK_PATTERNS_BARS:
             return "No Pattern"
 
         i = len(self.df) - 1
         current_bar = self.df.iloc[i]
         prev_bar = self.df.iloc[i - 1]
 
-        if any(pd.isna(val) for val in [current_bar["open"], current_bar["close"], current_bar["high"], current_bar["low"],
-                                        prev_bar["open"], prev_bar["close"], prev_bar["high"], prev_bar["low"]]):
+        if any(
+            pd.isna(val)
+            for val in [
+                current_bar["open"],
+                current_bar["close"],
+                current_bar["high"],
+                current_bar["low"],
+                prev_bar["open"],
+                prev_bar["close"],
+                prev_bar["high"],
+                prev_bar["low"],
+            ]
+        ):
             return "No Pattern"
+        body_length = abs(current_bar["close"] - current_bar["open"])
+        candle_range = current_bar["high"] - current_bar["low"]
+        if candle_range > 0 and body_length / candle_range < 0.1:
+            return "Doji"
 
-
-        if (
-            current_bar["open"] < prev_bar["close"]
-            and current_bar["close"] > prev_bar["open"]
-            and current_bar["close"] > current_bar["open"]
-            and prev_bar["close"] < prev_bar["open"]
-        ):
-            return "Bullish Engulfing"
-        if (
-            current_bar["open"] > prev_bar["close"]
-            and current_bar["close"] < prev_bar["open"]
-            and current_bar["close"] < current_bar["open"]
-            and prev_bar["close"] > prev_bar["open"]
-        ):
-            return "Bearish Engulfing"
-        if (
-            current_bar["close"] > current_bar["open"]
-            and abs(current_bar["close"] - current_bar["open"])
-            <= (current_bar["high"] - current_bar["low"]) * 0.3
-            and (current_bar["open"] - current_bar["low"])
-            >= 2 * abs(current_bar["close"] - current_bar["open"])
-            and (current_bar["high"] - current_bar["close"])
-            <= 0.5 * abs(current_bar["close"] - current_bar["open"])
-        ):
-            return "Bullish Hammer"
-        if (
-            current_bar["close"] < current_bar["open"]
-            and abs(current_bar["close"] - current_bar["open"])
-            <= (current_bar["high"] - current_bar["low"]) * 0.3
-            and (current_bar["high"] - current_bar["open"])
-            >= 2 * abs(current_bar["close"] - current_bar["open"])
-            and (current_bar["close"] - current_bar["low"])
-            <= 0.5 * abs(current_bar["close"] - current_bar["open"])
-        ):
-            return "Bearish Shooting Star"
+        if body_length / candle_range < 0.3:
+            if current_bar["open"] < current_bar["close"]:
+                if (current_bar["open"] - current_bar["low"]) > 2 * body_length and (
+                    current_bar["high"] - current_bar["close"]
+                ) < 0.5 * body_length:
+                    return "Bullish Hammer"
+            else:
+                if (current_bar["high"] - current_bar["open"]) > 2 * body_length and (
+                    current_bar["close"] - current_bar["low"]
+                ) < 0.5 * body_length:
+                    return "Bearish Shooting Star"
 
         return "No Pattern"
 
@@ -1893,11 +2494,13 @@ class TradingAnalyzer:
 
         imbalance = (bid_volume - ask_volume) / (bid_volume + ask_volume)
         self.logger.debug(
-            f"[{self.symbol}] Orderbook Imbalance: {imbalance:.4f} (Bids: {bid_volume}, Asks: {ask_volume})"
+            f"[{self.symbol}] Orderbook Imbalance: {imbalance:.4f} (Bids: {bid_volume}, Asks: {ask_volume})",
         )
         return float(imbalance)
 
-    def calculate_support_resistance_from_orderbook(self, orderbook_data: dict) -> None:
+    def calculate_support_resistance_from_orderbook(
+        self, orderbook_data: dict
+    ) -> None:
         bids = orderbook_data.get("b", [])
         asks = orderbook_data.get("a", [])
 
@@ -1918,23 +2521,25 @@ class TradingAnalyzer:
                 resistance_level = Decimal(ask_price_str)
 
         price_precision_str = (
-            "0."
-            + "0" * (self.config["trade_management"]["price_precision"] - 1)
-            + "1"
+            "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
         )
         if support_level > 0:
             self.indicator_values["Support_Level"] = support_level.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             )
             self.logger.debug(
-                f"[{self.symbol}] Identified Support Level: {support_level} (Volume: {max_bid_volume})"
+                f"[{self.symbol}] Identified Support Level: {support_level} (Volume: {max_bid_volume})",
             )
         if resistance_level > 0:
-            self.indicator_values["Resistance_Level"] = resistance_level.quantize(
-                Decimal(price_precision_str), rounding=ROUND_DOWN
+            self.indicator_values[
+                "Resistance_Level"
+            ] = resistance_level.quantize(
+                Decimal(price_precision_str),
+                rounding=ROUND_DOWN,
             )
             self.logger.debug(
-                f"[{self.symbol}] Identified Resistance Level: {resistance_level} (Volume: {max_ask_volume})"
+                f"[{self.symbol}] Identified Resistance Level: {resistance_level} (Volume: {max_ask_volume})",
             )
 
     def _get_mtf_trend(self, higher_tf_df: pd.DataFrame, indicator_type: str) -> str:
@@ -1947,7 +2552,7 @@ class TradingAnalyzer:
         if indicator_type == "sma":
             if len(higher_tf_df) < period:
                 self.logger.debug(
-                    f"[{self.symbol}] MTF SMA: Not enough data for {period} period. Have {len(higher_tf_df)}."
+                    f"[{self.symbol}] MTF SMA: Not enough data for {period} period. Have {len(higher_tf_df)}.",
                 )
                 return "UNKNOWN"
             sma = (
@@ -1980,7 +2585,10 @@ class TradingAnalyzer:
             return "SIDEWAYS"
         if indicator_type == "ehlers_supertrend":
             temp_analyzer = TradingAnalyzer(
-                higher_tf_df, self.config, self.logger, self.symbol
+                higher_tf_df,
+                self.config,
+                self.logger,
+                self.symbol,
             )
             st_result = temp_analyzer.calculate_ehlers_supertrend(
                 period=self.indicator_settings["ehlers_slow_period"],
@@ -2009,14 +2617,12 @@ class TradingAnalyzer:
 
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty in generate_trading_signal. Cannot generate signal.{RESET}"
+                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty in generate_trading_signal. Cannot generate signal.{RESET}",
             )
             return "HOLD", 0.0, {}
 
         current_close = Decimal(str(self.df["close"].iloc[-1]))
-        prev_close = Decimal(
-            str(self.df["close"].iloc[-2]) if len(self.df) > 1 else current_close
-        )
+        prev_close = Decimal(str(self.df["close"].iloc[-2])) if len(self.df) > 1 else current_close
 
         trend_strength_multiplier = 1.0
 
@@ -2032,13 +2638,13 @@ class TradingAnalyzer:
                     if plus_di > minus_di:
                         adx_contrib = adx_weight
                         self.logger.debug(
-                            f"ADX: Strong BUY trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, +DI > -DI)."
+                            f"ADX: Strong BUY trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, +DI > -DI).",
                         )
                         trend_strength_multiplier = 1.2
                     elif minus_di > plus_di:
                         adx_contrib = -adx_weight
                         self.logger.debug(
-                            f"ADX: Strong SELL trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, -DI > +DI)."
+                            f"ADX: Strong SELL trend (ADX > {ADX_STRONG_TREND_THRESHOLD}, -DI > +DI).",
                         )
                         trend_strength_multiplier = 1.2
                 elif adx_val < ADX_WEAK_TREND_THRESHOLD:
@@ -2053,7 +2659,9 @@ class TradingAnalyzer:
             ema_short = self._get_indicator_value("EMA_Short")
             ema_long = self._get_indicator_value("EMA_Long")
             if not pd.isna(ema_short) and not pd.isna(ema_long):
-                ema_contrib = weights.get("ema_alignment", 0) * trend_strength_multiplier
+                ema_contrib = (
+                    weights.get("ema_alignment", 0) * trend_strength_multiplier
+                )
                 if ema_short > ema_long:
                     signal_score += ema_contrib
                     signal_breakdown["EMA Alignment"] = ema_contrib
@@ -2066,7 +2674,9 @@ class TradingAnalyzer:
         if active_indicators.get("sma_trend_filter", False):
             sma_long = self._get_indicator_value("SMA_Long")
             if not pd.isna(sma_long):
-                sma_contrib = weights.get("sma_trend_filter", 0) * trend_strength_multiplier
+                sma_contrib = (
+                    weights.get("sma_trend_filter", 0) * trend_strength_multiplier
+                )
                 if current_close > sma_long:
                     signal_score += sma_contrib
                     signal_breakdown["SMA Trend Filter"] = sma_contrib
@@ -2077,7 +2687,9 @@ class TradingAnalyzer:
                     signal_breakdown["SMA Trend Filter"] = 0.0
 
         if active_indicators.get("momentum", False):
-            momentum_weight = weights.get("momentum_rsi_stoch_cci_wr_mfi", 0)
+            momentum_weight = weights.get(
+                "momentum_rsi_stoch_cci_wr_mfi", 0
+            )
 
             if active_indicators.get("rsi", False):
                 rsi = self._get_indicator_value("RSI")
@@ -2104,7 +2716,7 @@ class TradingAnalyzer:
                     ):
                         stoch_contrib = momentum_weight * 0.6
                         self.logger.debug(
-                            f"[{self.symbol}] StochRSI: Bullish crossover from oversold."
+                            f"[{self.symbol}] StochRSI: Bullish crossover from oversold.",
                         )
                     elif (
                         stoch_k < stoch_d
@@ -2113,15 +2725,11 @@ class TradingAnalyzer:
                     ):
                         stoch_contrib = -momentum_weight * 0.6
                         self.logger.debug(
-                            f"[{self.symbol}] StochRSI: Bearish crossover from overbought."
+                            f"[{self.symbol}] StochRSI: Bearish crossover from overbought.",
                         )
-                    elif (
-                        stoch_k > stoch_d and stoch_k < STOCH_RSI_MID_POINT
-                    ):
+                    elif stoch_k > stoch_d and stoch_k < STOCH_RSI_MID_POINT:
                         stoch_contrib = momentum_weight * 0.2
-                    elif (
-                        stoch_k < stoch_d and stoch_k > STOCH_RSI_MID_POINT
-                    ):
+                    elif stoch_k < stoch_d and stoch_k > STOCH_RSI_MID_POINT:
                         stoch_contrib = -momentum_weight * 0.2
                     signal_score += stoch_contrib
                     signal_breakdown["StochRSI Crossover"] = stoch_contrib
@@ -2176,19 +2784,33 @@ class TradingAnalyzer:
             if not pd.isna(vwap):
                 vwap_contrib = 0.0
                 if current_close > vwap:
-                    vwap_contrib = weights.get("vwap", 0) * 0.2 * trend_strength_multiplier
+                    vwap_contrib = (
+                        weights.get("vwap", 0) * 0.2 * trend_strength_multiplier
+                    )
                 elif current_close < vwap:
-                    vwap_contrib = -weights.get("vwap", 0) * 0.2 * trend_strength_multiplier
+                    vwap_contrib = (
+                        -weights.get("vwap", 0)
+                        * 0.2
+                        * trend_strength_multiplier
+                    )
 
                 if len(self.df) > 1 and "VWAP" in self.df.columns:
                     prev_vwap = Decimal(str(self.df["VWAP"].iloc[-2]))
                     if current_close > vwap and prev_close <= prev_vwap:
-                        vwap_contrib += weights.get("vwap", 0) * 0.3 * trend_strength_multiplier
+                        vwap_contrib += (
+                            weights.get("vwap", 0)
+                            * 0.3
+                            * trend_strength_multiplier
+                        )
                         self.logger.debug(
                             f"[{self.symbol}] VWAP: Bullish crossover detected."
                         )
                     elif current_close < vwap and prev_close >= prev_vwap:
-                        vwap_contrib -= weights.get("vwap", 0) * 0.3 * trend_strength_multiplier
+                        vwap_contrib -= (
+                            weights.get("vwap", 0)
+                            * 0.3
+                            * trend_strength_multiplier
+                        )
                         self.logger.debug(
                             f"[{self.symbol}] VWAP: Bearish crossover detected."
                         )
@@ -2201,17 +2823,31 @@ class TradingAnalyzer:
             if not pd.isna(psar_val) and not pd.isna(psar_dir):
                 psar_contrib = 0.0
                 if psar_dir == 1:
-                    psar_contrib = weights.get("psar", 0) * 0.5 * trend_strength_multiplier
+                    psar_contrib = (
+                        weights.get("psar", 0) * 0.5 * trend_strength_multiplier
+                    )
                 elif psar_dir == -1:
-                    psar_contrib = -weights.get("psar", 0) * 0.5 * trend_strength_multiplier
+                    psar_contrib = (
+                        -weights.get("psar", 0)
+                        * 0.5
+                        * trend_strength_multiplier
+                    )
 
                 if len(self.df) > 1 and "PSAR_Val" in self.df.columns:
                     prev_psar_val = Decimal(str(self.df["PSAR_Val"].iloc[-2]))
                     if current_close > psar_val and prev_close <= prev_psar_val:
-                        psar_contrib += weights.get("psar", 0) * 0.4 * trend_strength_multiplier
+                        psar_contrib += (
+                            weights.get("psar", 0)
+                            * 0.4
+                            * trend_strength_multiplier
+                        )
                         self.logger.debug("PSAR: Bullish reversal detected.")
                     elif current_close < psar_val and prev_close >= prev_psar_val:
-                        psar_contrib -= weights.get("psar", 0) * 0.4 * trend_strength_multiplier
+                        psar_contrib -= (
+                            weights.get("psar", 0)
+                            * 0.4
+                            * trend_strength_multiplier
+                        )
                         self.logger.debug("PSAR: Bearish reversal detected.")
                 signal_score += psar_contrib
                 signal_breakdown["PSAR"] = psar_contrib
@@ -2226,9 +2862,12 @@ class TradingAnalyzer:
         if active_indicators.get("fibonacci_levels", False) and self.fib_levels:
             fib_contrib = 0.0
             for level_name, level_price in self.fib_levels.items():
-                if level_name not in ["0.0%", "100.0%"] and current_price > Decimal("0") and abs(
-                    (current_price - level_price) / current_price
-                ) < Decimal("0.001"):
+                if (
+                    level_name not in ["0.0%", "100.0%"]
+                    and current_price > Decimal("0")
+                    and abs((current_price - level_price) / current_price)
+                    < Decimal("0.001")
+                ):
                     self.logger.debug(
                         f"Price near Fibonacci level {level_name}: {level_price}"
                     )
@@ -2248,18 +2887,24 @@ class TradingAnalyzer:
             s2 = self._get_indicator_value("S2")
 
             if not any(pd.isna(val) for val in [pivot, r1, r2, s1, s2]):
-                fib_pivot_contrib = weights.get("fibonacci_pivot_points_confluence", 0)
+                fib_pivot_contrib = weights.get(
+                    "fibonacci_pivot_points_confluence", 0
+                )
 
                 if current_close > r1 and prev_close <= r1:
                     signal_score += fib_pivot_contrib * 0.5
-                    signal_breakdown["Fibonacci R1 Breakout"] = fib_pivot_contrib * 0.5
+                    signal_breakdown[
+                        "Fibonacci R1 Breakout"
+                    ] = fib_pivot_contrib * 0.5
                 elif current_close > r2 and prev_close <= r2:
                     signal_score += fib_pivot_contrib * 1.0
-                    signal_breakdown["Fibonacci R2 Breakout"] = fib_pivot_contrib * 1.0
+                    signal_breakdown[
+                        "Fibonacci R2 Breakout"
+                    ] = fib_pivot_contrib * 1.0
                 elif current_close > pivot and prev_close <= pivot:
                     signal_score += fib_pivot_contrib * 0.2
                     signal_breakdown["Fibonacci Pivot Breakout"] = fib_pivot_contrib * 0.2
-
+                
                 if current_close < s1 and prev_close >= s1:
                     signal_score -= fib_pivot_contrib * 0.5
                     signal_breakdown["Fibonacci S1 Breakout"] = -fib_pivot_contrib * 0.5
@@ -2268,9 +2913,7 @@ class TradingAnalyzer:
                     signal_breakdown["Fibonacci S2 Breakout"] = -fib_pivot_contrib * 1.0
                 elif current_close < pivot and prev_close >= pivot:
                     signal_score -= fib_pivot_contrib * 0.2
-                    signal_breakdown["Fibonacci Pivot Breakdown"] = (
-                        -fib_pivot_contrib * 0.2
-                    )
+                    signal_breakdown["Fibonacci Pivot Breakdown"] = -fib_pivot_contrib * 0.2
 
         if active_indicators.get("ehlers_supertrend", False):
             st_fast_dir = self._get_indicator_value("ST_Fast_Dir")
@@ -2280,7 +2923,10 @@ class TradingAnalyzer:
                 if "ST_Fast_Dir" in self.df.columns and len(self.df) > 1
                 else np.nan
             )
-            weight = weights.get("ehlers_supertrend_alignment", 0.0) * trend_strength_multiplier
+            weight = (
+                weights.get("ehlers_supertrend_alignment", 0.0)
+                * trend_strength_multiplier
+            )
 
             if (
                 not pd.isna(st_fast_dir)
@@ -2291,12 +2937,12 @@ class TradingAnalyzer:
                 if st_slow_dir == 1 and st_fast_dir == 1 and prev_st_fast_dir == -1:
                     st_contrib = weight
                     self.logger.debug(
-                        "Ehlers SuperTrend: Strong BUY signal (fast flip aligned with slow trend)."
+                        "Ehlers SuperTrend: Strong BUY signal (fast flip aligned with slow trend).",
                     )
                 elif st_slow_dir == -1 and st_fast_dir == -1 and prev_st_fast_dir == 1:
                     st_contrib = -weight
                     self.logger.debug(
-                        "Ehlers SuperTrend: Strong SELL signal (fast flip aligned with slow trend)."
+                        "Ehlers SuperTrend: Strong SELL signal (fast flip aligned with slow trend).",
                     )
                 elif st_slow_dir == 1 and st_fast_dir == 1:
                     st_contrib = weight * 0.3
@@ -2315,20 +2961,23 @@ class TradingAnalyzer:
                 not pd.isna(macd_line)
                 and not pd.isna(signal_line)
                 and not pd.isna(histogram)
-                and len(self.df) > 1 and "MACD_Line" in self.df.columns and "MACD_Signal" in self.df.columns
+                and len(self.df) > 1
+                and "MACD_Line" in self.df.columns
+                and "MACD_Signal" in self.df.columns
             ):
                 macd_contrib = 0.0
                 if (
                     macd_line > signal_line
-                    and self.df["MACD_Line"].iloc[-2] <= self.df["MACD_Signal"].iloc[-2]
+                    and self.df["MACD_Line"].iloc[-2]
+                    <= self.df["MACD_Signal"].iloc[-2]
                 ):
                     macd_contrib = weight
                     self.logger.debug(
                         "MACD: BUY signal (MACD line crossed above Signal line)."
                     )
-                elif (
-                    macd_line < signal_line
-                    and self.df["MACD_Line"].iloc[-2] >= self.df["MACD_Signal"].iloc[-2]
+                elif macd_line < signal_line:
+                    and self.df["MACD_Line"].iloc[-2]
+                    >= self.df["MACD_Signal"].iloc[-2]
                 ):
                     macd_contrib = -weight
                     self.logger.debug(
@@ -2340,7 +2989,6 @@ class TradingAnalyzer:
                     macd_contrib = -weight * 0.2
                 signal_score += macd_contrib
                 signal_breakdown["MACD"] = macd_contrib
-
 
         if active_indicators.get("ichimoku_cloud", False):
             tenkan_sen = self._get_indicator_value("Tenkan_Sen")
@@ -2357,14 +3005,17 @@ class TradingAnalyzer:
                 and not pd.isna(senkou_span_b)
                 and not pd.isna(chikou_span)
                 and len(self.df) > 1
-                and "Tenkan_Sen" in self.df.columns and "Kijun_Sen" in self.df.columns
-                and "Senkou_Span_A" in self.df.columns and "Senkou_Span_B" in self.df.columns
+                and "Tenkan_Sen" in self.df.columns
+                and "Kijun_Sen" in self.df.columns
+                and "Senkou_Span_A" in self.df.columns
+                and "Senkou_Span_B" in self.df.columns
                 and "Chikou_Span" in self.df.columns
             ):
                 ichimoku_contrib = 0.0
                 if (
                     tenkan_sen > kijun_sen
-                    and self.df["Tenkan_Sen"].iloc[-2] <= self.df["Kijun_Sen"].iloc[-2]
+                    and self.df["Tenkan_Sen"].iloc[-2]
+                    <= self.df["Kijun_Sen"].iloc[-2]
                 ):
                     ichimoku_contrib = weight * 0.5
                     self.logger.debug(
@@ -2372,7 +3023,8 @@ class TradingAnalyzer:
                     )
                 elif (
                     tenkan_sen < kijun_sen
-                    and self.df["Tenkan_Sen"].iloc[-2] >= self.df["Kijun_Sen"].iloc[-2]
+                    and self.df["Tenkan_Sen"].iloc[-2]
+                    >= self.df["Kijun_Sen"].iloc[-2]
                 ):
                     ichimoku_contrib = -weight * 0.5
                     self.logger.debug(
@@ -2382,7 +3034,8 @@ class TradingAnalyzer:
                 if current_close > max(senkou_span_a, senkou_span_b) and self.df[
                     "close"
                 ].iloc[-2] <= max(
-                    self.df["Senkou_Span_A"].iloc[-2], self.df["Senkou_Span_B"].iloc[-2]
+                    self.df["Senkou_Span_A"].iloc[-2],
+                    self.df["Senkou_Span_B"].iloc[-2],
                 ):
                     ichimoku_contrib += weight * 0.7
                     self.logger.debug(
@@ -2391,7 +3044,8 @@ class TradingAnalyzer:
                 elif current_close < min(senkou_span_a, senkou_span_b) and self.df[
                     "close"
                 ].iloc[-2] >= min(
-                    self.df["Senkou_Span_A"].iloc[-2], self.df["Senkou_Span_B"].iloc[-2]
+                    self.df["Senkou_Span_A"].iloc[-2],
+                    self.df["Senkou_Span_B"].iloc[-2],
                 ):
                     ichimoku_contrib -= weight * 0.7
                     self.logger.debug(
@@ -2400,7 +3054,8 @@ class TradingAnalyzer:
 
                 if (
                     chikou_span > current_close
-                    and self.df["Chikou_Span"].iloc[-2] <= self.df["close"].iloc[-2]
+                    and self.df["Chikou_Span"].iloc[-2]
+                    <= self.df["close"].iloc[-2]
                 ):
                     ichimoku_contrib += weight * 0.3
                     self.logger.debug(
@@ -2408,7 +3063,8 @@ class TradingAnalyzer:
                     )
                 elif (
                     chikou_span < current_close
-                    and self.df["Chikou_Span"].iloc[-2] >= self.df["close"].iloc[-2]
+                    and self.df["Chikou_Span"].iloc[-2]
+                    >= self.df["close"].iloc[-2]
                 ):
                     ichimoku_contrib -= weight * 0.3
                     self.logger.debug(
@@ -2422,7 +3078,13 @@ class TradingAnalyzer:
             obv_ema = self._get_indicator_value("OBV_EMA")
             weight = weights.get("obv_momentum", 0.0)
 
-            if not pd.isna(obv_val) and not pd.isna(obv_ema) and len(self.df) > 1 and "OBV" in self.df.columns and "OBV_EMA" in self.df.columns:
+            if (
+                not pd.isna(obv_val)
+                and not pd.isna(obv_ema)
+                and len(self.df) > 1
+                and "OBV" in self.df.columns
+                and "OBV_EMA" in self.df.columns
+            ):
                 obv_contrib = 0.0
                 if (
                     obv_val > obv_ema
@@ -2485,18 +3147,11 @@ class TradingAnalyzer:
                     prev_vol_idx = self.df["Volatility_Index"].iloc[-2]
                     prev_prev_vol_idx = self.df["Volatility_Index"].iloc[-3]
 
-                    if (
-                        vol_idx > prev_vol_idx > prev_prev_vol_idx
-                    ):
+                    if vol_idx > prev_vol_idx > prev_prev_vol_idx:
                         if signal_score > 0:
                             vol_contrib = weight * 0.2
                         elif signal_score < 0:
                             vol_contrib = -weight * 0.2
-                    elif (
-                        vol_idx < prev_vol_idx < prev_prev_vol_idx
-                    ):
-                        if abs(signal_score) > 0:
-                            vol_contrib = signal_score * -0.2
                 signal_score += vol_contrib
                 signal_breakdown["Volatility Index"] = vol_contrib
 
@@ -2538,7 +3193,11 @@ class TradingAnalyzer:
         if active_indicators.get("kaufman_ama", False):
             kama = self._get_indicator_value("Kaufman_AMA")
             weight = weights.get("kaufman_ama_cross", 0.0)
-            if not pd.isna(kama) and len(self.df) > 1 and "Kaufman_AMA" in self.df.columns:
+            if (
+                not pd.isna(kama)
+                and len(self.df) > 1
+                and "Kaufman_AMA" in self.df.columns
+            ):
                 kama_contrib = 0.0
                 prev_kama = self.df["Kaufman_AMA"].iloc[-2]
                 if current_close > kama and prev_close <= prev_kama:
@@ -2587,13 +3246,20 @@ class TradingAnalyzer:
             signal_breakdown["Market Structure"] = ms_contrib
 
         if active_indicators.get("dema", False) and active_indicators.get(
-            "ema_alignment", False
+            "ema_alignment",
+            False,
         ):
             dema = self._get_indicator_value("DEMA")
             ema_short = self._get_indicator_value("EMA_Short")
             weight = weights.get("dema_crossover", 0.0)
 
-            if not pd.isna(dema) and not pd.isna(ema_short) and len(self.df) > 1 and "DEMA" in self.df.columns and "EMA_Short" in self.df.columns:
+            if (
+                not pd.isna(dema)
+                and not pd.isna(ema_short)
+                and len(self.df) > 1
+                and "DEMA" in self.df.columns
+                and "EMA_Short" in self.df.columns
+            ):
                 dema_contrib = 0.0
                 prev_dema = self.df["DEMA"].iloc[-2]
                 prev_ema_short = self.df["EMA_Short"].iloc[-2]
@@ -2612,7 +3278,13 @@ class TradingAnalyzer:
             kc_lower = self._get_indicator_value("Keltner_Lower")
             weight = weights.get("keltner_breakout", 0.0)
 
-            if not pd.isna(kc_upper) and not pd.isna(kc_lower) and len(self.df) > 1 and "Keltner_Upper" in self.df.columns and "Keltner_Lower" in self.df.columns:
+            if (
+                not pd.isna(kc_upper)
+                and not pd.isna(kc_lower)
+                and len(self.df) > 1
+                and "Keltner_Upper" in self.df.columns
+                and "Keltner_Lower" in self.df.columns
+            ):
                 kc_contrib = 0.0
                 if (
                     current_close > kc_upper
@@ -2703,9 +3375,7 @@ class TradingAnalyzer:
                     normalized_mtf_score = (
                         mtf_buy_count - mtf_sell_count
                     ) / total_mtf_indicators
-                    mtf_contribution = (
-                        mtf_weight * normalized_mtf_score
-                    )
+                    mtf_contribution = mtf_weight * normalized_mtf_score
 
                 signal_score += mtf_contribution
                 signal_breakdown["MTF Confluence"] = mtf_contribution
@@ -2726,13 +3396,16 @@ class TradingAnalyzer:
         return final_signal, signal_score, signal_breakdown
 
     def calculate_entry_tp_sl(
-        self, current_price: Decimal, atr_value: Decimal, signal: Literal["BUY", "SELL"]
+        self,
+        current_price: Decimal,
+        atr_value: Decimal,
+        signal: Literal["BUY", "SELL"],
     ) -> tuple[Decimal, Decimal]:
         stop_loss_atr_multiple = Decimal(
-            str(self.config["trade_management"]["stop_loss_atr_multiple"])
+            str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
         take_profit_atr_multiple = Decimal(
-            str(self.config["trade_management"]["take_profit_atr_multiple"])
+            str(self.config["trade_management"]["take_profit_atr_multiple"]),
         )
         price_precision_str = (
             "0." + "0" * (self.config["trade_management"]["price_precision"] - 1) + "1"
@@ -2748,7 +3421,8 @@ class TradingAnalyzer:
             return Decimal("0"), Decimal("0")
 
         return take_profit.quantize(
-            Decimal(price_precision_str), rounding=ROUND_DOWN
+            Decimal(price_precision_str),
+            rounding=ROUND_DOWN,
         ), stop_loss.quantize(Decimal(price_precision_str), rounding=ROUND_DOWN)
 
 
@@ -2763,7 +3437,6 @@ def display_indicator_values_and_price(
 ) -> None:
     logger.info(f"{NEON_BLUE}--- Current Market Data & Indicators ---{RESET}")
     logger.info(f"{NEON_GREEN}Current Price: {current_price.normalize()}{RESET}")
-
 
     if analyzer.df.empty:
         logger.warning(
@@ -2833,7 +3506,9 @@ def display_indicator_values_and_price(
     if signal_breakdown:
         logger.info(f"{NEON_CYAN}--- Signal Score Breakdown ---{RESET}")
         sorted_breakdown = sorted(
-            signal_breakdown.items(), key=lambda item: abs(item[1]), reverse=True
+            signal_breakdown.items(),
+            key=lambda item: abs(item[1]),
+            reverse=True,
         )
         for indicator, contribution in sorted_breakdown:
             color = (
@@ -2956,22 +3631,37 @@ def display_indicator_values_and_price(
 
 
 def main() -> None:
-    logger = setup_logger("wgwhalex_bot")
-    config = load_config(CONFIG_FILE, logger)
+    config = load_config(CONFIG_FILE)
     alert_system = AlertSystem(logger)
     bybit_client = BybitClient(API_KEY, API_SECRET, BASE_URL, logger)
 
     valid_bybit_intervals = [
-        "1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M",
+        "1",
+        "3",
+        "5",
+        "15",
+        "30",
+        "60",
+        "120",
+        "240",
+        "360",
+        "720",
+        "D",
+        "W",
+        "M",
     ]
 
     if config["interval"] not in valid_bybit_intervals:
-        logger.error(f"{NEON_RED}Invalid primary interval '{config['interval']}' in config.json. Please use Bybit's valid string formats (e.g., '15', '60', 'D'). Exiting.{RESET}")
+        logger.error(
+            f"{NEON_RED}Invalid primary interval '{config['interval']}' in config.json. Please use Bybit's valid string formats (e.g., '15', '60', 'D'). Exiting.{RESET}"
+        )
         sys.exit(1)
 
     for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
         if htf_interval not in valid_bybit_intervals:
-            logger.error(f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}' in config.json. Please use Bybit's valid string formats (e.g., '60', '240'). Exiting.{RESET}")
+            logger.error(
+                f"{NEON_RED}Invalid higher timeframe interval '{htf_interval}' in config.json. Please use Bybit's valid string formats (e.g., '60', '240'). Exiting.{RESET}"
+            )
             sys.exit(1)
 
     logger.info(f"{NEON_GREEN}--- Whalebot Trading Bot Initialized ---{RESET}")
@@ -2983,82 +3673,149 @@ def main() -> None:
 
     while True:
         try:
-            logger.info(f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
+            logger.info(
+                f"{NEON_PURPLE}--- New Analysis Loop Started ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}"
+            )
             current_price = bybit_client.fetch_current_price(config["symbol"])
 
             trading_signal = "HOLD"
             signal_score = 0.0
             signal_breakdown = {}
             if current_price is None:
-                alert_system.send_alert(f"[{config['symbol']}] Failed to fetch current price. Skipping loop.", "WARNING")
+                alert_system.send_alert(
+                    f"[{config['symbol']}] Failed to fetch current price. Skipping loop.",
+                    "WARNING",
+                )
                 time.sleep(config["loop_delay"])
                 continue
 
             df = bybit_client.fetch_klines(config["symbol"], config["interval"], 1000)
             if df is None or df.empty:
-                alert_system.send_alert(f"[{config['symbol']}] Failed to fetch primary klines or DataFrame is empty. Skipping loop.", "WARNING")
+                alert_system.send_alert(
+                    f"[{config['symbol']}] Failed to fetch primary klines or DataFrame is empty. Skipping loop.",
+                    "WARNING",
+                )
                 time.sleep(config["loop_delay"])
                 continue
 
             orderbook_data = None
             if config["indicators"].get("orderbook_imbalance", False):
-                orderbook_data = bybit_client.fetch_orderbook(config["symbol"], config["orderbook_limit"])
+                orderbook_data = bybit_client.fetch_orderbook(
+                    config["symbol"],
+                    config["orderbook_limit"],
+                )
 
             mtf_trends: dict[str, str] = {}
             if config["mtf_analysis"]["enabled"]:
                 for htf_interval in config["mtf_analysis"]["higher_timeframes"]:
                     logger.debug(f"Fetching klines for MTF interval: {htf_interval}")
-                    htf_df = bybit_client.fetch_klines(config["symbol"], htf_interval, 1000)
+                    htf_df = bybit_client.fetch_klines(
+                        config["symbol"],
+                        htf_interval,
+                        1000,
+                    )
                     if htf_df is not None and not htf_df.empty:
                         for trend_ind in config["mtf_analysis"]["trend_indicators"]:
-                            temp_analyzer = TradingAnalyzer(htf_df, config, logger, config["symbol"])
-                            trend = temp_analyzer._get_mtf_trend(temp_analyzer.df, trend_ind)
+                            temp_analyzer = TradingAnalyzer(
+                                htf_df,
+                                config,
+                                logger,
+                                config["symbol"],
+                            )
+                            trend = temp_analyzer._get_mtf_trend(
+                                temp_analyzer.df,
+                                trend_ind,
+                            )
                             mtf_trends[f"{htf_interval}_{trend_ind}"] = trend
-                            logger.debug(f"MTF Trend ({htf_interval}, {trend_ind}): {trend}")
+                            logger.debug(
+                                f"MTF Trend ({htf_interval}, {trend_ind}): {trend}"
+                            )
                     else:
-                        logger.warning(f"{NEON_YELLOW}Could not fetch klines for higher timeframe {htf_interval} or it was empty. Skipping MTF trend for this TF.{RESET}")
+                        logger.warning(
+                            f"{NEON_YELLOW}Could not fetch klines for higher timeframe {htf_interval} or it was empty. Skipping MTF trend for this TF.{RESET}"
+                        )
                     time.sleep(config["mtf_analysis"]["mtf_request_delay_seconds"])
 
             analyzer = TradingAnalyzer(df, config, logger, config["symbol"])
 
             if analyzer.df.empty:
-                alert_system.send_alert(f"[{config['symbol']}] TradingAnalyzer DataFrame is empty after indicator calculations. Cannot generate signal.", "WARNING")
+                alert_system.send_alert(
+                    f"[{config['symbol']}] TradingAnalyzer DataFrame is empty after indicator calculations. Cannot generate signal.",
+                    "WARNING",
+                )
                 time.sleep(config["loop_delay"])
                 continue
 
-            trading_signal, signal_score, signal_breakdown = analyzer.generate_trading_signal(current_price, orderbook_data, mtf_trends)
-            atr_value = Decimal(str(analyzer._get_indicator_value("ATR", Decimal("0.01"))))
+            trading_signal, signal_score, signal_breakdown = (
+                analyzer.generate_trading_signal(
+                    current_price,
+                    orderbook_data,
+                    mtf_trends,
+                )
+            )
+            atr_value = Decimal(
+                str(analyzer._get_indicator_value("ATR", Decimal("0.01"))),
+            )
 
-            display_indicator_values_and_price(config, logger, current_price, analyzer, orderbook_data, mtf_trends, signal_breakdown)
+            display_indicator_values_and_price(
+                config,
+                logger,
+                current_price,
+                analyzer,
+                orderbook_data,
+                mtf_trends,
+                signal_breakdown,
+            )
 
             position_manager.manage_positions(current_price, performance_tracker)
 
-            if trading_signal == "BUY" and signal_score >= config["signal_score_threshold"]:
-                logger.info(f"{NEON_GREEN}Strong BUY signal detected! Score: {signal_score:.2f}{RESET}")
+            if (
+                trading_signal == "BUY"
+                and signal_score >= config["signal_score_threshold"]
+            ):
+                logger.info(
+                    f"{NEON_GREEN}Strong BUY signal detected! Score: {signal_score:.2f}{RESET}"
+                )
                 position_manager.open_position("BUY", current_price, atr_value)
-            elif trading_signal == "SELL" and signal_score <= -config["signal_score_threshold"]:
-                logger.info(f"{NEON_RED}Strong SELL signal detected! Score: {signal_score:.2f}{RESET}")
+            elif (
+                trading_signal == "SELL"
+                and signal_score <= -config["signal_score_threshold"]
+            ):
+                logger.info(
+                    f"{NEON_RED}Strong SELL signal detected! Score: {signal_score:.2f}{RESET}"
+                )
                 position_manager.open_position("SELL", current_price, atr_value)
             else:
-                logger.info(f"{NEON_BLUE}No strong trading signal. Holding. Score: {signal_score:.2f}{RESET}")
+                logger.info(
+                    f"{NEON_BLUE}No strong trading signal. Holding. Score: {signal_score:.2f}{RESET}"
+                )
 
             open_positions = position_manager.get_open_positions()
             if open_positions:
                 logger.info(f"{NEON_CYAN}Open Positions: {len(open_positions)}{RESET}")
                 for pos in open_positions:
-                    logger.info(f"  - {pos['side']} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}){RESET}")
+                    logger.info(
+                        f"  - {pos['side']} @ {pos['entry_price'].normalize()} (SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}){RESET}"
+                    )
             else:
                 logger.info(f"{NEON_CYAN}No open positions.{RESET}")
 
             perf_summary = performance_tracker.get_summary()
-            logger.info(f"{NEON_YELLOW}Performance Summary: Total PnL: {perf_summary['total_pnl'].normalize():.2f}, Wins: {perf_summary['wins']}, Losses: {perf_summary['losses']}, Win Rate: {perf_summary['win_rate']}{RESET}")
+            logger.info(
+                f"{NEON_YELLOW}Performance Summary: Total PnL: {perf_summary['total_pnl'].normalize():.2f}, Wins: {perf_summary['wins']}, Losses: {perf_summary['losses']}, Win Rate: {perf_summary['win_rate']}{RESET}"
+            )
 
-            logger.info(f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {config['loop_delay']}s ---{RESET}")
+            logger.info(
+                f"{NEON_PURPLE}--- Analysis Loop Finished. Waiting {config['loop_delay']}s ---{RESET}"
+            )
             time.sleep(config["loop_delay"])
 
         except Exception as e:
-            alert_system.send_alert(f"[{config['symbol']}] An unhandled error occurred in the main loop: {e}", "ERROR")
-            logger.exception(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
+            alert_system.send_alert(
+                f"[{config['symbol']}] An unhandled error occurred in the main loop: {e}",
+                "ERROR",
+            )
+            logger.error(f"{NEON_RED}Unhandled exception in main loop:{RESET}")
             time.sleep(config["loop_delay"] * 2)
 
 

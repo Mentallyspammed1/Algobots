@@ -1,9 +1,10 @@
-
 import logging
-import sys
 import os
+import sys
 from pathlib import Path
-from colorama import Fore, Style
+
+from colorama import Fore
+from colorama import Style
 
 # Neon Color Scheme
 NEON_GREEN = Fore.LIGHTGREEN_EX
@@ -16,6 +17,7 @@ RESET = Style.RESET_ALL
 
 LOG_DIRECTORY = "bot_logs/trading-bot/logs"
 Path(LOG_DIRECTORY).mkdir(parents=True, exist_ok=True)
+
 
 # A simple class to adapt the config dict to what setup_logger expects
 class UnanimousLoggerConfig:
@@ -53,7 +55,9 @@ def setup_logging(config):
             logger = logging.getLogger(log_name)
             logger.setLevel(getattr(logging, config_obj.LOG_LEVEL))
 
-            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            )
 
             # Stream handler
             if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
@@ -63,7 +67,11 @@ def setup_logging(config):
                 logger.addHandler(ch)
 
             # File handler
-            if not any(isinstance(h, logging.FileHandler) and h.baseFilename == config_obj.LOG_FILE_PATH for h in logger.handlers):
+            if not any(
+                isinstance(h, logging.FileHandler)
+                and h.baseFilename == config_obj.LOG_FILE_PATH
+                for h in logger.handlers
+            ):
                 fh = logging.FileHandler(config_obj.LOG_FILE_PATH)
                 fh.setLevel(getattr(logging, config_obj.LOG_LEVEL))
                 fh.setFormatter(formatter)
@@ -72,9 +80,13 @@ def setup_logging(config):
             # Optional JSON file handler
             if json_log_file:
                 json_log_path = os.path.join(LOG_DIRECTORY, json_log_file)
-                if not any(isinstance(h, logging.FileHandler) and h.baseFilename == json_log_path for h in logger.handlers):
+                if not any(
+                    isinstance(h, logging.FileHandler)
+                    and h.baseFilename == json_log_path
+                    for h in logger.handlers
+                ):
                     json_formatter = logging.Formatter(
-                        '''{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}'''
+                        """{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}""",
                     )
                     json_fh = logging.FileHandler(json_log_path)
                     json_fh.setLevel(getattr(logging, config_obj.LOG_LEVEL))
@@ -83,8 +95,13 @@ def setup_logging(config):
             return logger
 
         logger_config = BasicLoggerConfig(config)
-        logger = setup_basic_logger(logger_config, log_name="wb", json_log_file="wb.json.log")
+        logger = setup_basic_logger(
+            logger_config,
+            log_name="wb",
+            json_log_file="wb.json.log",
+        )
         return logger
+
 
 # Create a temporary basic logger for the initial config loading
 temp_logger = logging.getLogger("config_loader")

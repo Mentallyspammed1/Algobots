@@ -2,6 +2,7 @@
 
 This module provides a centralized logging configuration.
 """
+
 import logging
 import sys
 from typing import Any
@@ -21,7 +22,9 @@ def setup_logging():  # Renamed from setup_logger to match import
     file_handler = logging.FileHandler(LOG_FILE)
 
     # Create formatters and add it to handlers
-    log_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    log_format = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     stream_handler.setFormatter(log_format)
     file_handler.setFormatter(log_format)
 
@@ -32,14 +35,17 @@ def setup_logging():  # Renamed from setup_logger to match import
 
     return logger
 
+
 def log_exception(logger_instance: logging.Logger, message: str, exc: Exception):
     """Logs an exception with a custom message and traceback."""
     logger_instance.exception(f"{message}: {exc}")
+
 
 def log_metrics(logger_instance: logging.Logger, title: str, metrics: dict[str, Any]):
     """Logs a dictionary of metrics with a title."""
     metrics_str = ", ".join([f"{k}={v}" for k, v in metrics.items()])
     logger_instance.info(f"📊 {title}: {metrics_str}")
+
 
 def log_trade(logger_instance: logging.Logger, title: str, trade_info: dict[str, Any]):
     """Logs trade information."""

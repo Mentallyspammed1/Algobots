@@ -1,5 +1,6 @@
 # base_strategy.py
 
+
 class Strategy:
     """Base class for all trading strategies."""
 

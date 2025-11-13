@@ -1,4 +1,3 @@
-
 # logger_setup.py
 
 import logging
@@ -13,7 +12,12 @@ from config import Config
 class SensitiveFormatter(logging.Formatter):
     """Formatter that redacts API keys from log records."""
 
-    SENSITIVE_WORDS: ClassVar[list[str]] = ["BYBIT_API_KEY", "BYBIT_API_SECRET", "GEMINI_API_KEY", "ALERT_TELEGRAM_BOT_TOKEN"]
+    SENSITIVE_WORDS: ClassVar[list[str]] = [
+        "BYBIT_API_KEY",
+        "BYBIT_API_SECRET",
+        "GEMINI_API_KEY",
+        "ALERT_TELEGRAM_BOT_TOKEN",
+    ]
 
     def __init__(self, fmt=None, datefmt=None, style="%"):
         """Initializes the SensitiveFormatter."""
@@ -31,10 +35,14 @@ class SensitiveFormatter(logging.Formatter):
         for word in self.SENSITIVE_WORDS:
             key_value = getattr(record, word, None)
             if key_value:
-                redacted_message = redacted_message.replace(key_value, "*" * len(key_value))
+                redacted_message = redacted_message.replace(
+                    key_value,
+                    "*" * len(key_value),
+                )
             redacted_message = redacted_message.replace(word, "*" * len(word))
 
         return redacted_message
+
 
 def setup_logger(config: Config) -> logging.Logger:
     """Configure and return a logger with file and console handlers."""
@@ -49,16 +57,18 @@ def setup_logger(config: Config) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{config.NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{config.RESET}"
-            )
+                f"{config.NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{config.RESET}",
+            ),
         )
         logger.addHandler(console_handler)
 
         file_handler = RotatingFileHandler(
-            config.LOG_FILE_PATH, maxBytes=10 * 1024 * 1024, backupCount=5
+            config.LOG_FILE_PATH,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
 
