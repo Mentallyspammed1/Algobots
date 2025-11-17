@@ -7,15 +7,15 @@
     "volume_confirmation_multiplier": 1.5,
     "trade_management": {
         "enabled": true,
-        "account_balance": "1000.0",
-        "risk_per_trade_percent": "1.0",
-        "stop_loss_atr_multiple": "1.5",
-        "take_profit_atr_multiple": "2.0",
+        "account_balance": 1000.0,
+        "risk_per_trade_percent": 1.0,
+        "stop_loss_atr_multiple": 1.5,
+        "take_profit_atr_multiple": 2.0,
         "max_open_positions": 1,
         "order_precision": 5,
         "price_precision": 3,
-        "slippage_percent": "0.001",
-        "trading_fee_percent": "0.0005"
+        "slippage_percent": 0.001,
+        "trading_fee_percent": 0.0005
     },
     "mtf_analysis": {
         "enabled": true,
@@ -29,6 +29,21 @@
         ],
         "trend_period": 50,
         "mtf_request_delay_seconds": 0.5
+    },
+    "ml_enhancement": {
+        "enabled": false,
+        "model_path": "ml_model.pkl",
+        "retrain_on_startup": false,
+        "training_data_limit": 5000,
+        "prediction_lookahead": 12,
+        "profit_target_percent": 0.5,
+        "feature_lags": [
+            1,
+            2,
+            3,
+            5
+        ],
+        "cross_validation_folds": 5
     },
     "indicator_settings": {
         "atr_period": 14,
@@ -114,10 +129,6 @@
         "volatility_index": true,
         "vwma": true,
         "volume_delta": true,
-<<<<<<< HEAD
-=======
-        "volatility_filter": true,
->>>>>>> refs/remotes/origin/main
         "kaufman_ama": true,
         "relative_volume": true,
         "market_structure": true,
@@ -129,83 +140,36 @@
     },
     "weight_sets": {
         "default_scalping": {
-            "ema_alignment": 0.22,
-            "sma_trend_filter": 0.28,
-            "momentum_rsi_stoch_cci_wr_mfi": 0.18,
-            "bollinger_bands": 0.22,
-            "vwap": 0.22,
-            "psar": 0.22,
-            "sma_10": 0.07,
-            "orderbook_imbalance": 0.07,
-            "ehlers_supertrend_alignment": 0.55,
-            "macd_alignment": 0.28,
-            "adx_strength": 0.18,
-            "ichimoku_confluence": 0.38,
-            "obv_momentum": 0.18,
-            "cmf_flow": 0.12,
-            "mtf_trend_confluence": 0.32,
-            "volatility_index_signal": 0.15,
-            "vwma_cross": 0.15,
-            "volume_delta_signal": 0.10,
-            "kaufman_ama_cross": 0.20,
-            "relative_volume_confirmation": 0.10,
-            "market_structure_confluence": 0.25,
-            "dema_crossover": 0.18,
-            "keltner_breakout": 0.20,
-            "roc_signal": 0.12,
-            "candlestick_confirmation": 0.15,
-<<<<<<< HEAD
-            "fibonacci_pivot_points_confluence": 0.20
-=======
-            "fibonacci_pivot_points_confluence": 0.2,
+            "ema_alignment": 0.18,
+            "sma_trend_filter": 0.2,
             "rsi": 0.15,
             "stoch_rsi": 0.15,
             "cci": 0.1,
             "wr": 0.1,
-            "mfi": 0.1
-        },
-        "aggressive_trend": {
-            "ema_alignment": 0.4,
-            "sma_trend_filter": 0.3,
-            "ehlers_supertrend_alignment": 0.5,
-            "macd_alignment": 0.4,
-            "adx_strength": 0.35,
-            "ichimoku_confluence": 0.45,
-            "psar": 0.2,
-            "vwap": 0.2,
-            "vwma_cross": 0.15,
-            "sma_10": 0.1,
+            "mfi": 0.1,
             "bollinger_bands": 0.15,
-            "momentum_rsi_stoch_cci_wr_mfi": 0.25,
-            "volume_confirmation": 0.15,
-            "obv_momentum": 0.2,
-            "cmf_flow": 0.15,
-            "volume_delta_signal": 0.15,
-            "orderbook_imbalance": 0.15,
-            "mtf_trend_confluence": 0.35,
-            "volatility_index_signal": 0.05
-        },
-        "conservative_range": {
-            "ema_alignment": 0.2,
-            "sma_trend_filter": 0.15,
-            "ehlers_supertrend_alignment": 0.25,
-            "macd_alignment": 0.2,
-            "adx_strength": 0.15,
-            "ichimoku_confluence": 0.25,
-            "psar": 0.1,
-            "vwap": 0.1,
-            "vwma_cross": 0.05,
+            "vwap": 0.15,
+            "psar": 0.15,
             "sma_10": 0.05,
-            "bollinger_bands": 0.4,
-            "momentum_rsi_stoch_cci_wr_mfi": 0.45,
-            "volume_confirmation": 0.2,
-            "obv_momentum": 0.25,
-            "cmf_flow": 0.2,
-            "volume_delta_signal": 0.2,
-            "orderbook_imbalance": 0.2,
-            "mtf_trend_confluence": 0.15,
-            "volatility_index_signal": 0.2
->>>>>>> refs/remotes/origin/main
+            "orderbook_imbalance": 0.15,
+            "ehlers_supertrend_alignment": 0.3,
+            "macd_alignment": 0.15,
+            "adx_strength": 0.15,
+            "ichimoku_confluence": 0.3,
+            "obv_momentum": 0.15,
+            "cmf_flow": 0.1,
+            "mtf_trend_confluence": 0.3,
+            "volatility_index_signal": 0.15,
+            "vwma_cross": 0.15,
+            "volume_delta_signal": 0.1,
+            "kaufman_ama_cross": 0.18,
+            "relative_volume_confirmation": 0.1,
+            "market_structure_confluence": 0.25,
+            "dema_crossover": 0.15,
+            "keltner_breakout": 0.18,
+            "roc_signal": 0.1,
+            "candlestick_confirmation": 0.15,
+            "fibonacci_pivot_points_confluence": 0.18
         }
     }
 }
