@@ -1,0 +1,715 @@
+
+import asyncio
+import random
+import time
+from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Any, List, Dict, Optional
+
+# Assuming these are defined elsewhere or need to be mocked/imported
+# For demonstration, I'll define placeholders or assume they exist in the context.
+class ExchangeError(Exception):
+    pass
+
+class ConnectionError(Exception):
+    pass
+
+class Settings:
+    show_status_panel: bool = True
+    show_api_latency: bool = True
+    show_recent_trades: bool = True
+    rsi_overbought: float = 70.0
+class Settings:
+    show_status_panel: bool = True
+    show_api_latency: bool = True
+    show_recent_trades: bool = True
+    rsi_overbought: float = 70.0
+    rsi_oversold: float = 30.0
+    trade_interval: float = 1.0
+    snapshot_interval: float = 1.0
+    error_cooldown: float = 60.0
+    trend_period: int = 14
+    trend_period_multiplier: int = 2
+class Logger:
+    def info(self, message): print(f"INFO: {message}")
+    def error(self, message): print(f"ERROR: {message}")
+    def warning(self, message): print(f"WARNING: {message}")
+    def exception(self, message): print(f"EXCEPTION: {message}")
+
+logger = Logger()
+
+class Analysis:
+IS_TERMUX = False # Assume not in Termux for UI rendering
+        self.action = action
+class Analysis:
+    def __init__(self, action: str, confidence: float, reason: str, timestamp: float):
+        self.action = action
+class Settings:
+    show_status_panel: bool = True
+    show_api_latency: bool = True
+    show_recent_trades: bool = True
+    rsi_overbought: float = 70.0
+    rsi_oversold: float = 30.0
+    trade_interval: float = 1.0
+    snapshot_interval: float = 1.0
+    error_cooldown: float = 60.0
+    trend_period: int = 14
+    trend_period_multiplier: int = 2
+        self.macd_hist = macd_hist
+class Snapshot:
+    def __init__(self, symbol: str):
+        self.symbol: str = symbol
+        self.price: float = 0.0
+        self.timestamp: float = 0.0
+        self.analysis: Optional[Analysis] = None
+        self.indicators: Indicators = Indicators()
+        self.latency_ms: int = 0
+        self.error: Optional[str] = None
+        self.orderbook: Optional["Orderbook"] = None # Forward reference
+        self.qty = qty
+        self.entry_price = entry_price
+        self.order_id = order_id
+class Position:
+class Analysis:
+    def __init__(self, action: str, confidence: float, reason: str, timestamp: float, trend: str, macd_hist: float):
+        self.action = action
+        self.confidence = confidence
+        self.reason = reason
+        self.timestamp = timestamp
+        self.trend = trend
+        self.macd_hist = macd_hist
+    def __init__(self, symbol: str, side: str, price: float, qty: float, pnl: Optional[float] = None, order_id: Optional[str] = None):
+        self.symbol = symbol
+        self.side = side
+        self.price = price
+        self.qty = qty
+        self.pnl = pnl
+class MockConsole:
+    def print(self, *args, **kwargs): pass
+    def rule(self, *args, **kwargs): pass
+
+console = MockConsole()
+class MockLive:
+    def __init__(self, layout, refresh_per_second, console, screen): pass
+class Snapshot:
+    def __init__(self, symbol: str, qty: float, entry_price: float, order_id: str):
+        self.symbol: str = symbol
+        self.price: float = 0.0
+        self.timestamp: float = 0.0
+        self.analysis: Optional[Analysis] = None
+        self.indicators: Indicators = Indicators()
+        self.latency_ms: int = 0
+        self.error: Optional[str] = None
+        self.orderbook: Optional["Orderbook"] = None # Forward reference
+        self.qty = qty
+        self.entry_price = entry_price
+        self.order_id = order_id
+    SIMPLE = None
+class MockTable:
+    def __init__(self, **kwargs): pass
+    def add_column(self, *args, **kwargs): pass
+    def add_row(self, *args, **kwargs): pass
+    def __init__(self, **kwargs): pass
+class MockLayout:
+    def __init__(self, name=None): self.name = name
+    def split_column(self, *args, **kwargs): pass
+    def update(self, content): pass
+    def __init__(self, name=None): self.name = name
+Layout = MockLayout # Mocking Rich Layout class
+Table = MockTable # Mocking Rich Table class
+
+SIGNAL_SEMAPHORE = asyncio.Semaphore(1) # Mock semaphore
+Table = MockTable # Mocking Rich Table class
+# --- NEW: Bybit Orderbook Data Structure ---
+@dataclass
+class OrderbookEntry:
+    price: float
+    quantity: float
+class OrderbookEntry:
+@dataclass
+class Orderbook:
+    symbol: str
+    timestamp: float
+    bids: list[OrderbookEntry] = field(default_factory=list)
+    asks: list[OrderbookEntry] = field(default_factory=list)
+class MockLive:
+    def __init__(self, layout, refresh_per_second, console, screen): pass
+    def update(self, layout): pass
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc_val, exc_tb): pass
+
+Live = MockLive # Mocking Rich Live class
+class BybitAPI:
+class BybitAPI:
+    def __init__(self, api_key: str, api_secret: str, symbols: list[str]):
+    def __init__(self, api_key: str, api_secret: str, symbols: list[str]):
+        self._api_key = api_key
+        self._api_secret = api_secret
+        self._symbols = symbols
+        self._error_state: Dict[str, float] = {} # Symbol -> Cooldown until timestamp
+        # Mock client for demonstration
+class MockLayout:
+    def __init__(self, name=None): self.name = name
+    def split_column(self, *args, **kwargs): pass
+    def update(self, content): pass
+                    "result": {
+                        "buy": [[100.0 + i*0.1, 10.0 + i*0.5] for i in range(limit)],
+                        "sell": [[100.0 + (i+1)*0.1, 10.0 + i*0.5] for i in range(limit)]
+            def ticker(self, symbol):
+SIGNAL_SEMAPHORE = asyncio.Semaphore(1) # Mock semaphore
+Table = MockTable # Mocking Rich Table class
+        self.client = MockClient()
+# --- NEW: Bybit Orderbook Data Structure ---
+@dataclass
+class OrderbookEntry:
+    price: float
+    quantity: float
+
+@dataclass
+class Orderbook:
+    symbol: str
+    timestamp: float
+    bids: list[OrderbookEntry] = field(default_factory=list)
+    asks: list[OrderbookEntry] = field(default_factory=list)
+    # Add precision and/or decimal places if available from exchange API
+    # precision: int = 0
+# --- NEW: Bybit Public Data Fetching ---
+class BybitAPI:
+            logger.error(f"Error fetching Bybit price for {symbol}: {e}")
+            # Set cooldown on persistent errors
+    def __init__(self, api_key: str, api_secret: str, symbols: list[str]):
+        self._api_key = api_key
+        self._api_secret = api_secret
+        """
+        self._symbols = symbols
+        self._error_state: Dict[str, float] = {} # Symbol -> Cooldown until timestamp
+        # Mock client for demonstration
+        class MockClient:
+            def orderbook(self, symbol, limit):
+                # Simulate API response structure
+                return {
+                    "result": {
+                        "buy": [[100.0 + i*0.1, 10.0 + i*0.5] for i in range(limit)],
+                        "sell": [[100.0 + (i+1)*0.1, 10.0 + i*0.5] for i in range(limit)]
+                    }
+                }
+            def ticker(self, symbol):
+                 # Simulate ticker response structure
+                 return {"result": [{"last_price": str(random.uniform(99.0, 101.0))}]}
+        self.client = MockClient()
+    async def get_price(self, symbol: str) -> float:
+        """Fetches the current price for a given symbol."""
+        await asyncio.sleep(random.uniform(0.05, 0.2)) # Simulate network latency
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Rate limited for {symbol} price")
+
+        try:
+            # In a real implementation, use self.client.ticker(symbol=symbol)
+            # For mock:
+            ticker_data = self.client.ticker(symbol=symbol)
+            price = float(ticker_data['result'][0]['last_price'])
+            return price
+        except Exception as e:
+            logger.error(f"Error fetching Bybit price for {symbol}: {e}")
+            # Set cooldown on persistent errors
+            self._error_state[symbol] = time.time() + settings.error_cooldown
+            raise ExchangeError(f"Failed to fetch price for {symbol}")
+        # Mock client for demonstration
+    async def get_orderbook(self, symbol: str, limit: int = 50) -> Orderbook:
+        """
+        Fetches L2 orderbook data for a given symbol.
+        limit: Number of best bid/ask levels to retrieve.
+        """
+        await asyncio.sleep(random.uniform(0.05, 0.2)) # Simulate network latency
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Rate limited for {symbol} orderbook")
+
+        # --- Mock Orderbook Data Generation ---
+        # In a real implementation, this would involve calling the Bybit API.
+        try:
+            orderbook_data = self.client.orderbook(symbol=symbol, limit=limit)
+            bids_raw = orderbook_data['result']['buy']
+            asks_raw = orderbook_data['result']['sell']
+
+            bids = [OrderbookEntry(price=float(p), quantity=float(q)) for p, q in bids_raw]
+            asks = [OrderbookEntry(price=float(p), quantity=float(q)) for p, q in asks_raw]
+
+            bids.sort(key=lambda x: x.price, reverse=True)
+            asks.sort(key=lambda x: x.price)
+
+            return Orderbook(symbol=symbol, timestamp=time.time(), bids=bids, asks=asks)
+        except Exception as e:
+            logger.error(f"Error fetching Bybit orderbook for {symbol}: {e}")
+            self._error_state[symbol] = time.time() + settings.error_cooldown
+            raise ExchangeError(f"Failed to fetch orderbook for {symbol}")
+        except Exception as e:
+            logger.error(f"Error fetching Gemini price for {symbol}: {e}")
+            self._error_state[symbol] = time.time() + settings.error_cooldown
+            raise ExchangeError(f"Failed to fetch price for {symbol}")
+        # Mock client for demonstration
+        class MockClient:
+            def get_order_book(self, symbol, limit_levels):
+    async def get_orderbook(self, symbol: str, limit: int = 50) -> Orderbook:
+class GeminiAPI:
+    def __init__(self, api_key: str, api_secret: str, symbols: list[str]):
+        limit: Number of best bid/ask levels to retrieve.
+        """
+        self._symbols = symbols
+        self._error_state: Dict[str, float] = {}
+        # Mock client for demonstration
+
+        class MockClient:
+            def get_order_book(self, symbol, limit_levels):
+                # Simulate API response structure
+                return {
+                    "bids": [[100.0 + i*0.1, 10.0 + i*0.5] for i in range(limit_levels)],
+                    "asks": [[100.0 + (i+1)*0.1, 10.0 + i*0.5] for i in range(limit_levels)]
+                }
+            def get_ticker(self, symbol):
+                # Simulate ticker response structure
+                return {"last": str(random.uniform(99.0, 101.0))}
+    async def get_price(self, symbol: str) -> float:
+        """Fetches the current price for a given symbol."""
+        await asyncio.sleep(random.uniform(0.05, 0.2)) # Simulate network latency
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Rate limited for {symbol} price")
+
+        try:
+            ticker_data = self.client.get_ticker(symbol=symbol)
+            price = float(ticker_data["last"])
+            return price
+        except Exception as e:
+            logger.error(f"Error fetching Gemini price for {symbol}: {e}")
+            self._error_state[symbol] = time.time() + settings.error_cooldown
+            raise ExchangeError(f"Failed to fetch price for {symbol}")
+        async with SIGNAL_SEMAPHORE:
+            await asyncio.sleep(random.uniform(0.5, 2.0)) # Simulate AI processing time
+
+            # --- Mock AI Logic (Replace with actual API call) ---
+    async def get_orderbook(self, symbol: str, limit: int = 50) -> Orderbook:
+        """
+        Fetches L2 orderbook data for a given symbol.
+        limit: Number of best bid/ask levels to retrieve.
+        """
+        await asyncio.sleep(random.uniform(0.05, 0.2)) # Simulate network latency
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Rate limited for {symbol} orderbook")
+
+        # --- Mock Orderbook Data Generation for Gemini ---
+        try:
+            orderbook_data = self.client.get_order_book(symbol=symbol, limit_levels=limit)
+            bids_raw = orderbook_data['bids']
+            asks_raw = orderbook_data['asks']
+
+            bids = [OrderbookEntry(price=float(p), quantity=float(q)) for p, q in bids_raw]
+            asks = [OrderbookEntry(price=float(p), quantity=float(q)) for p, q in asks_raw]
+
+            bids.sort(key=lambda x: x.price, reverse=True)
+            asks.sort(key=lambda x: x.price)
+
+            return Orderbook(symbol=symbol, timestamp=time.time(), bids=bids, asks=asks)
+        except Exception as e:
+            logger.error(f"Error fetching Gemini orderbook for {symbol}: {e}")
+            self._error_state[symbol] = time.time() + settings.error_cooldown
+            raise ExchangeError(f"Failed to fetch orderbook for {symbol}")
+class AIAnalyzer:
+    def __init__(self):
+        # In a real scenario, this might initialize an AI model client or API connection
+        pass
+
+    async def analyze(self, symbol: str, price: float, history: list[dict[str, Any]], indicators: Indicators, orderbook: Optional[Orderbook] = None) -> Analysis:
+        async with SIGNAL_SEMAPHORE:
+            await asyncio.sleep(random.uniform(0.5, 2.0)) # Simulate AI processing time
+            # --- NEW: Incorporate orderbook analysis (example) ---
+# --- NEW: Update AIAnalyzer to potentially use orderbook data ---
+class AIAnalyzer:
+                ask_price = orderbook.asks[0].price if orderbook.asks else 0
+                spread = ask_price - bid_price if bid_price and ask_price else 0
+                bid_qty_total = sum(b.quantity for b in orderbook.bids[:5]) # Top 5 bids
+                ask_qty_total = sum(a.quantity for a in orderbook.asks[:5]) # Top 5 asks
+
+                if spread > 0 and price > 0:
+                    spread_pct = (spread / price) * 100
+                    if spread_pct > 0.1 and action == "HOLD": # Wide spread, might indicate low liquidity or consolidation
+                        reason += f" Wide spread ({spread_pct:.2f}%)."
+                        confidence *= 0.9 # Slightly reduce confidence
+
+    async def analyze(self, symbol: str, price: float, history: list[dict[str, Any]], indicators: Indicators, orderbook: Optional[Orderbook] = None) -> Analysis:
+        async with SIGNAL_SEMAPHORE:
+            await asyncio.sleep(random.uniform(0.5, 2.0)) # Simulate AI processing time
+
+            # --- Mock AI Logic (Replace with actual API call) ---
+            confidence = random.uniform(0.4, 0.95)
+            action = "HOLD"
+            reason = "Insufficient data or neutral indicators."
+
+            if indicators.rsi < settings.rsi_oversold - 5 and indicators.trend == "BULL":
+                action = "BUY"
+                confidence = min(confidence + 0.1, 0.95)
+                reason = f"RSI ({indicators.rsi:.0f}) is low, potential reversal."
+            elif indicators.rsi > settings.rsi_overbought + 5 and indicators.trend == "BEAR":
+                action = "SELL"
+                confidence = min(confidence + 0.1, 0.95)
+                reason = f"RSI ({indicators.rsi:.0f}) is high, potential reversal."
+            elif indicators.macd_hist > 0.01 and indicators.trend == "BULL":
+                action = "BUY"
+                confidence = min(confidence + 0.05, 0.95)
+                reason = "MACD histogram positive, bullish momentum."
+            elif indicators.macd_hist < -0.01 and indicators.trend == "BEAR":
+                action = "SELL"
+                confidence = min(confidence + 0.05, 0.95)
+                reason = "MACD histogram negative, bearish momentum."
+        macd_hist = random.uniform(-0.5, 0.5)
+# --- NEW: Update AIAnalyzer to potentially use orderbook data ---
+class AIAnalyzer:
+class Trader:
+    def __init__(self):
+        self.exchange = None # Will be set later
+        self.indicator_calculator = IndicatorCalculator()
+        self.analyzer = AIAnalyzer()
+        self.snapshots: Dict[str, Snapshot] = {}
+        self.history: list[dict[str, Any]] = [] # Mock trade history
+        self.positions: Dict[str, Position] = {} # Mock positions
+        self._error_cooldowns: Dict[str, float] = {} # Symbol -> Cooldown until timestamp
+    def calculate_indicators(self, price: float) -> Indicators:
+        # Mock implementation
+    async def analyze(self, symbol: str, price: float, history: list[dict[str, Any]], indicators: Indicators, orderbook: Optional[Orderbook] = None) -> Analysis:
+        async with SIGNAL_SEMAPHORE:
+            await asyncio.sleep(random.uniform(0.5, 2.0)) # Simulate AI processing time
+            # --- NEW: Incorporate orderbook analysis (example) ---
+            if orderbook:
+                bid_price = orderbook.bids[0].price if orderbook.bids else 0
+                ask_price = orderbook.asks[0].price if orderbook.asks else 0
+                spread = ask_price - bid_price if bid_price and ask_price else 0
+                bid_qty_total = sum(b.quantity for b in orderbook.bids[:5]) # Top 5 bids
+                ask_qty_total = sum(a.quantity for a in orderbook.asks[:5]) # Top 5 asks
+
+                if spread > 0 and price > 0:
+                    spread_pct = (spread / price) * 100
+                    if spread_pct > 0.1 and action == "HOLD": # Wide spread, might indicate low liquidity or consolidation
+                        reason += f" Wide spread ({spread_pct:.2f}%)."
+                        confidence *= 0.9 # Slightly reduce confidence
+
+                if bid_qty_total > ask_qty_total * 1.2 and action == "HOLD": # More buying pressure at the top
+                    action = "BUY"
+                    confidence = min(confidence + 0.05, 0.95)
+                    reason = "Strong buying pressure in orderbook."
+                elif ask_qty_total > bid_qty_total * 1.2 and action == "HOLD": # More selling pressure at the top
+                    action = "SELL"
+                    confidence = min(confidence + 0.05, 0.95)
+                    reason = "Strong selling pressure in orderbook."
+                bid_price = orderbook.bids[0].price if orderbook.bids else 0
+                ask_price = orderbook.asks[0].price if orderbook.asks else 0
+                spread = ask_price - bid_price if bid_price and ask_price else 0
+                bid_qty_total = sum(b.quantity for b in orderbook.bids[:5]) # Top 5 bids
+            # Add a random chance of error
+            if random.random() < 0.05: # 5% chance of AI error
+                raise ConnectionError("AI service unavailable.")
+                    spread_pct = (spread / price) * 100
+            return Analysis(action=action, confidence=confidence, reason=reason, timestamp=time.time(), trend=indicators.trend, macd_hist=indicators.macd_hist)
+                 self._error_cooldowns[symbol] = time.time() + settings.error_cooldown
+        except Exception as e:
+            logger.exception(f"Unexpected error processing {symbol}: {e}")
+            snapshot.error = f"Unexpected: {type(e).__name__}"
+                 self._error_cooldowns[symbol] = time.time() + settings.error_cooldown
+        finally:
+            snapshot.latency_ms = int((time.time() - start_time) * 1000)
+            self.snapshots[symbol] = snapshot # Store snapshot for UI
+
+    async def _manage_position(self, symbol: str, price: float, snapshot: Snapshot):
+        # Mock position management logic
+        if snapshot.analysis and snapshot.analysis.action != "HOLD":
+        # Mock implementation
+        return Indicators(rsi=rsi, trend=trend, macd_hist=macd_hist)
+                # In a real scenario, place order and update positions/history
+                new_pos_id = f"pos_{random.randint(1000, 9999)}"
+                self.positions[symbol] = Position(symbol=symbol, side="BUY", qty=1.0, entry_price=price, order_id=new_pos_id)
+                self.history.append({"symbol": symbol, "side": "BUY", "price": price, "qty": 1.0, "pnl": 0.0, "order_id": new_pos_id, "timestamp": time.time()})
+            elif snapshot.analysis.action == "SELL":
+                logger.info(f"Simulating SELL order for {symbol} at {price}")
+                # In a real scenario, place order and update positions/history
+                new_pos_id = f"pos_{random.randint(1000, 9999)}"
+                self.positions[symbol] = Position(symbol=symbol, side="SELL", qty=1.0, entry_price=price, order_id=new_pos_id)
+                self.history.append({"symbol": symbol, "side": "SELL", "price": price, "qty": 1.0, "pnl": 0.0, "order_id": new_pos_id, "timestamp": time.time()})
+        # Close existing positions if needed (simplified)
+        elif symbol in self.positions and price > 0:
+            snapshot.error = str(e)
+            # AI errors might also trigger cooldowns if they are frequent
+            if "AI service unavailable" in str(e):
+                 self._error_cooldowns[symbol] = time.time() + settings.error_cooldown
+        except Exception as e:
+            logger.exception(f"Unexpected error processing {symbol}: {e}")
+            snapshot.error = f"Unexpected: {type(e).__name__}"
+                 self._error_cooldowns[symbol] = time.time() + settings.error_cooldown
+        finally:
+            snapshot.latency_ms = int((time.time() - start_time) * 1000)
+            self.snapshots[symbol] = snapshot # Store snapshot for UI
+
+    async def _manage_position(self, symbol: str, price: float, snapshot: Snapshot):
+        # Mock position management logic
+        if snapshot.analysis and snapshot.analysis.action != "HOLD":
+        # Mock position management logic
+        if snapshot.analysis and snapshot.analysis.action != "HOLD":
+            if snapshot.analysis.action == "BUY":
+                logger.info(f"Simulating BUY order for {symbol} at {price}")
+                # In a real scenario, place order and update positions/history
+                new_pos_id = f"pos_{random.randint(1000, 9999)}"
+                self.positions[symbol] = Position(symbol=symbol, side="BUY", qty=1.0, entry_price=price, order_id=new_pos_id)
+                self.history.append({"symbol": symbol, "side": "BUY", "price": price, "qty": 1.0, "pnl": 0.0, "order_id": new_pos_id, "timestamp": time.time()})
+            elif snapshot.analysis.action == "SELL":
+                logger.info(f"Simulating SELL order for {symbol} at {price}")
+                # In a real scenario, place order and update positions/history
+                new_pos_id = f"pos_{random.randint(1000, 9999)}"
+                self.positions[symbol] = Position(symbol=symbol, side="SELL", qty=1.0, entry_price=price, order_id=new_pos_id)
+                self.history.append({"symbol": symbol, "side": "SELL", "price": price, "qty": 1.0, "pnl": 0.0, "order_id": new_pos_id, "timestamp": time.time()})
+        # Close existing positions if needed (simplified)
+        elif symbol in self.positions and price > 0:
+             pos = self.positions[symbol]
+             pnl_calc = (price - pos.entry_price) * pos.qty
+             if pos.side == "SELL":
+                 pnl_calc = -pnl_calc
+             logger.info(f"Closing position for {symbol} at {price}. PnL: {pnl_calc:.2f}")
+             # Update history with PnL
+             for trade in self.history:
+                 if trade.get("order_id") == pos.order_id:
+                     trade["pnl"] = pnl_calc
+                     break
+             del self.positions[symbol]
+            self.snapshots[symbol] = snapshot # Store snapshot for UI
+        # Mock position management logic
+        if snapshot.analysis and snapshot.analysis.action != "HOLD":
+            if snapshot.analysis.action == "BUY":
+class UI:
+    def __init__(self, trader: Trader):
+        self.trader = trader
+        self.snapshots: Dict[str, Snapshot] = {} # To be updated by trader
+                self.history.append({"symbol": symbol, "side": "BUY", "price": price, "qty": 1.0, "pnl": 0.0, "order_id": new_pos_id, "timestamp": time.time()})
+    async def run_ui_update(self):
+        # Mock UI update loop
+        self.snapshots = self.trader.snapshots # Get latest snapshots
+        await asyncio.sleep(settings.snapshot_interval)
+                self.positions[symbol] = Position(symbol=symbol, side="SELL", qty=1.0, entry_price=price, order_id=new_pos_id)
+    def _render_ui(self) -> Layout:
+        layout = Layout(name="root")
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="status_panel", size=4) if settings.show_status_panel else Layout(name="spacer", size=0),
+            Layout(name="body")
+        )
+             logger.info(f"Closing position for {symbol} at {price}. PnL: {pnl_calc:.2f}")
+        # --- Header Rendering (Mock) ---
+        header_content = "Trading Bot v2.0"
+        layout["header"].update(header_content)
+                     trade["pnl"] = pnl_calc
+        # --- Status Panel Rendering (Mock) ---
+        status_lines = ["[dim]System Status: OK[/]"]
+        if settings.show_status_panel:
+            layout["status_panel"].update("\n".join(status_lines))
+                if len(error_parts) > 1:
+                    display_error += ":" + error_parts[1].split('(')[0].strip()
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Symbol", style="bold", width=15)
+        table.add_column("Price", justify="right")
+        table.add_column("Action", justify="center", width=12)
+{latency_indicator}"
+        if not IS_TERMUX:
+            table.add_column("Indicators", justify="left")
+            action_str = "[dim]-[/]"
+        if not IS_TERMUX and settings.show_recent_trades:
+            table.add_column("Recent Trades", justify="left")
+            bids_str = "[dim]N/A[/]"
+        # --- NEW: Add Orderbook columns ---
+        if not IS_TERMUX:
+            table.add_column("Orderbook (Bids)", justify="right", width=20)
+        for symbol in sorted_symbols:
+            s = self.snapshots[symbol]
+            if s.price > 0:
+            latency_indicator = ""
+            if settings.show_api_latency:
+                latency_indicator = f"[dim]{s.latency_ms}ms[/]"
+            error_indicator = ""
+            if s.error:
+                error_parts = s.error.split(':')
+                display_error = error_parts[0]
+                if len(error_parts) > 1:
+                    display_error += ":" + error_parts[1].split('(')[0].strip()
+                error_indicator = f" [red]!{display_error[:20]}[/]"
+                    action_str = f"[{pnl_color}]{pos.side}[/]
+            symbol_display = f"[bold]{s.symbol}[/]{error_indicator}"
+            if latency_indicator:
+                symbol_display += f"
+{latency_indicator}"
+            price_str = "[dim]-"[/]"
+            action_str = "[dim]-"[/]"
+            indicator_str = ""
+            recent_trades_str = "[dim]N/A[/]"
+            bids_str = "[dim]N/A[/]"
+            asks_str = "[dim]N/A[/]"
+        for symbol in sorted_symbols:
+            if s.price > 0:
+                        if symbol_trades:
+                price_str = f"{s.price:.5f}"
+
+                if pos:
+                    current_pnl = Decimal(0)
+                    pnl_calc = (s.price - pos.entry_price) * pos.qty
+                    if pos.side == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                    pnl_color = "green" if current_pnl >= 0 else "red"
+                    action_str = f"[{pnl_color}]{pos.side}[/]
+[{pnl_color}]{current_pnl:+.2f}[/]"
+                    price_str += f"
+[{pnl_color}]{current_pnl:+.2f}[/]"
+
+                    if settings.show_recent_trades:
+                        # Filter trades for the current symbol and potentially the current position's order_id
+                        symbol_trades = [t for t in self.trader.history if t.get("symbol") == s.symbol and t.get("order_id") == pos.order_id]
+                        if not symbol_trades: # If no trades for current position, show last few trades for the symbol
+                            symbol_trades = [t for t in self.trader.history if t.get("symbol") == s.symbol][-3:]
+
+                        if symbol_trades:
+                            recent_trades_lines = []
+                            for trade in symbol_trades:
+                                trade_pnl_color = "green" if Decimal(trade.get('pnl', 0)) > 0 else "red"
+                                pnl_val = trade.get('pnl')
+                                if pnl_val is not None:
+                if not IS_TERMUX:
+                    rsi_color = "red" if s.indicators.rsi > settings.rsi_overbought else "green" if s.indicators.rsi < settings.rsi_oversold else "dim"
+                    trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                    indicator_str = (
+                        f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                        f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                        f"MACD:{s.indicators.macd_hist:+.2f}"
+                    current_pnl = Decimal(0)
+                row.append(recent_trades_str)
+            # --- NEW: Add Orderbook columns to the row ---
+                # --- NEW: Format Orderbook Data ---
+                if s.orderbook:
+                    # Display top few bids and asks, showing price and quantity
+                    # Format: Price(Qty) | Price(Qty) ...
+                    top_bids = s.orderbook.bids[:3] # Show top 3 bids
+                    top_asks = s.orderbook.asks[:3] # Show top 3 asks
+
+                    bids_parts = [f"{entry.price:.5f}({entry.quantity:.2f})" for entry in top_bids]
+                    asks_parts = [f"{entry.price:.5f}({entry.quantity:.2f})" for entry in top_asks]
+
+                    bids_str = " | ".join(bids_parts) if bids_parts else "[dim]N/A[/]"
+            row = [symbol_display, price_str, action_str]
+        api = BybitAPI(api_key, api_secret, symbols)
+        if not hasattr(api, 'get_orderbook'):
+            if not IS_TERMUX:
+                row.append(indicator_str)
+
+            if not IS_TERMUX and settings.show_recent_trades:
+                row.append(recent_trades_str)
+    elif exchange_name.lower() == "gemini":
+            # --- NEW: Add Orderbook columns to the row ---
+            if not IS_TERMUX:
+        logger.warning("Gemini orderbook fetching not implemented. Using mock data.")
+                row.append(bids_str)
+                row.append(asks_str)
+        if not hasattr(api, 'get_orderbook'):
+            table.add_row(*row)
+        layout["body"].update(table)
+    else:
+        return layout
+                                trade_pnl_color = "green" if Decimal(trade.get('pnl', 0)) > 0 else "red"
+# --- Main execution ---
+# --- NEW: Add Orderbook to Snapshot dataclass ---
+# (Already defined above with forward reference)
+    # --- Configuration ---
+# --- NEW: Update get_exchange_api to handle Bybit orderbook ---
+def get_exchange_api(exchange_name: str, api_key: str, api_secret: str, symbols: list[str]):
+    api_secret = "YOUR_API_SECRET"
+    symbols = ["BTCUSD", "ETHUSD"] # Example symbols
+
+    # --- Initialization ---
+    exchange_api = get_exchange_api(exchange_name, api_key, api_secret, symbols)
+        if not hasattr(api, 'get_orderbook'):
+            raise NotImplementedError("BybitAPI must implement get_orderbook method.")
+        return api
+    elif exchange_name.lower() == "gemini":
+    ui = UI(trader)
+
+    # --- Main Loop ---
+    with Live(ui._render_ui(), refresh_per_second=1.0 / settings.snapshot_interval, console=console, screen=True) as live:
+        while True:
+            try:
+                trade_task = asyncio.create_task(trader.run_trade_cycle())
+    else:
+        raise ValueError(f"Unsupported exchange: {exchange_name}")
+
+# --- Main execution ---
+
+                live.update(ui._render_ui())
+
+            except KeyboardInterrupt:
+            except Exception as e:
+                logger.exception(f"Error in main loop: {e}")
+                await asyncio.sleep(settings.trade_interval)
+def get_exchange_api(exchange_name: str, api_key: str, api_secret: str, symbols: list[str]):
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Exiting program.")
+    elif exchange_name.lower() == "gemini":
+            except KeyboardInterrupt:
+            except Exception as e:
+                logger.exception(f"Error in main loop: {e}")
+                await asyncio.sleep(settings.trade_interval)
+if __name__ == "__main__":
+    try:
+        if not hasattr(api, 'get_orderbook'):
+    except KeyboardInterrupt:
+        logger.info("Exiting program.")
+            if not hasattr(api, 'get_orderbook'):
+             raise NotImplementedError("GeminiAPI must implement get_orderbook method.")
+            return api
+    else:
+        raise ValueError(f"Unsupported exchange: {exchange_name}")
+
+# --- Main execution ---
+async def main():
+    # --- Configuration ---
+    exchange_name = "bybit" # or "gemini"
+    api_key = "YOUR_API_KEY"
+    api_secret = "YOUR_API_SECRET"
+    symbols = ["BTCUSD", "ETHUSD"] # Example symbols
+    # --- Initialization ---
+    exchange_api = get_exchange_api(exchange_name, api_key, api_secret, symbols)
+
+    trader = Trader()
+    trader.exchange = exchange_api # Assign the exchange API to the trader
+
+    ui = UI(trader)
+
+    # --- Main Loop ---
+    # Mocking the Live context manager for demonstration
+    with Live(ui._render_ui(), refresh_per_second=1.0 / settings.snapshot_interval, console=console, screen=True) as live:
+        while True:
+            try:
+    # --- Main Loop ---
+    # Mocking the Live context manager for demonstration
+    with Live(ui._render_ui(), refresh_per_second=1.0 / settings.snapshot_interval, console=console, screen=True) as live:
+        while True:
+            try:
+                trade_task = asyncio.create_task(trader.run_trade_cycle())
+                ui_update_task = asyncio.create_task(ui.run_ui_update())
+
+                await asyncio.gather(trade_task, ui_update_task)
+
+                live.update(ui._render_ui())
+
+            except KeyboardInterrupt:
+                logger.info("Shutdown signal received. Exiting...")
+                break
+            except Exception as e:
+                logger.exception(f"Error in main loop: {e}")
+                await asyncio.sleep(settings.trade_interval)
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Exiting program.")

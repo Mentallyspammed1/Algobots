@@ -1,0 +1,951 @@
+
+import asyncio
+import json
+import os
+import sys
+import time
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from decimal import Decimal
+from enum import Enum
+from pathlib import Path
+from typing import Any, Literal, Dict
+import random # Added for mock data simulation
+
+from rich import box
+from rich.console import Console
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
+from rich.text import Text
+
+# --- Constants ---
+MAX_RETRIES = 5
+RETRY_DELAY = 5  # seconds
+SIGNAL_SEMAPHORE_BOUND = 10 # Max concurrent AI calls
+# --- Globals ---
+console = Console()
+IS_TERMUX = os.environ.get("TERMUX_VERSION") is not None
+# --- Settings ---
+class Settings:
+    logging_level: str = "INFO"
+    log_file: str = "bot.log"
+    data_dir: str = "data"
+    config_file: str = "config.json"
+    snapshot_interval: float = 5.0 # seconds
+    trade_interval: float = 1.0 # seconds
+    ai_model: str = "gemini-2.5-flash-lite" # or "gpt-4o"
+    api_key: str = ""
+    api_secret: str = ""
+    symbols: list[str] = ["BTCUSD", "ETHUSD"] # Bybit symbols are often without hyphen
+    exchange: str = "bybit" # or "gemini"
+    leverage: int = 10
+    order_size: float = 10.0 # USD
+    take_profit_pct: float = 0.02 # 2%
+    stop_loss_pct: float = 0.01 # 1%
+    rsi_period: int = 14
+    rsi_oversold: int = 30
+    rsi_overbought: int = 70
+    macd_fast_period: int = 12
+    macd_slow_period: int = 26
+    macd_signal_period: int = 9
+    trend_period: int = 20 # For simple moving average trend
+    confidence_threshold: float = 0.6 # Minimum AI confidence to act
+    error_cooldown: int = 60 # seconds to wait before retrying failed API calls
+    # --- NEW: UI Settings ---
+    show_recent_trades: bool = True
+    show_api_latency: bool = True
+    show_status_panel: bool = True
+
+settings = Settings()
+
+# --- Logging ---
+log_dir = Path(settings.data_dir)
+log_dir.mkdir(parents=True, exist_ok=True)
+log_path = log_dir / settings.log_file
+
+logging_level_map = {
+    "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50
+}
+log_level = logging_level_map.get(settings.logging_level.upper(), 20)
+
+import logging
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(log_path),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# --- Semaphores ---
+# Limit concurrent AI calls to avoid rate limits and manage costs
+SIGNAL_SEMAPHORE = asyncio.Semaphore(SIGNAL_SEMAPHORE_BOUND)
+
+# --- Data Structures ---
+class Analysis:
+    action: Literal["BUY", "SELL", "HOLD"]
+    confidence: float
+    reason: str
+    timestamp: float
+
+    def __init__(self, action: str, confidence: float, reason: str, timestamp: float):
+        self.action = action
+        self.confidence = confidence
+        self.reason = reason
+        self.timestamp = timestamp
+
+@dataclass
+class Indicators:
+    rsi: float = 0.0
+    macd_hist: float = 0.0
+    trend: Literal["BULL", "BEAR", "FLAT"] = "FLAT"
+    sma: list[float] = field(default_factory=list)
+
+@dataclass
+class Snapshot:
+    symbol: str
+    price: float = 0.0
+    timestamp: float = 0.0
+    analysis: Analysis | None = None
+    indicators: Indicators = field(default_factory=Indicators)
+    latency_ms: int = 0 # NEW: API latency in milliseconds
+    error: str | None = None # NEW: Store API error message
+
+@dataclass
+class Position:
+    symbol: str
+    entry_price: float
+    qty: float
+    side: Literal["BUY", "SELL"]
+    entry_time: float
+    leverage: int
+    order_id: str # Added for Bybit order tracking
+
+class ExchangeError(Exception):
+    """Custom exception for exchange-related errors."""
+    pass
+
+# --- Exchange API Clients ---
+
+class BybitAPI:
+    def __init__(self, api_key: str, api_secret: str, symbols: list[str]):
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.symbols = symbols
+        self.positions: Dict[str, Position] = {}
+        self.history: list[dict[str, Any]] = [] # Trade history
+        self._mock_prices: Dict[str, float] = {s: 1000.0 for s in symbols}
+        self._mock_prices["BTCUSD"] = 40000.0
+        self._mock_prices["ETHUSD"] = 3000.0
+        self._last_update = time.time()
+        self._error_state: Dict[str, float] = {} # symbol: timestamp of last error
+        self._order_id_counter = 1 # Mock order ID
+
+        # Placeholder for actual Bybit client initialization
+        # import pybit
+        # self.client = pybit.usdt_perpetual.HTTP(
+        #     endpoint="https://api.bybit.com",
+        #     api_key=self.api_key,
+        #     api_secret=self.api_secret
+        # )
+        logger.info("BybitAPI initialized (using mock data for now).")
+
+    async def get_price(self, symbol: str) -> float:
+        await asyncio.sleep(random.uniform(0.05, 0.2)) # Simulate network latency
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Rate limited for {symbol}")
+
+        # Simulate price fluctuations
+        if time.time() - self._last_update > 10:
+            for s in self.symbols:
+                change = random.uniform(-0.01, 0.01)
+                self._mock_prices[s] *= (1 + change)
+            self._last_update = time.time()
+
+        price = self._mock_prices.get(symbol, 0.0)
+        if price == 0.0:
+            raise ExchangeError(f"Could not get price for {symbol}")
+        return price
+
+    async def place_order(self, symbol: str, side: str, qty: float, entry_price: float, leverage: int) -> Position:
+        await asyncio.sleep(random.uniform(0.1, 0.3))
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Failed to place order for {symbol}")
+
+        # Bybit requires order quantity in base currency units, not USD value.
+        # For simplicity, we'll use the entry_price to approximate this.
+        # In a real scenario, you'd need to fetch the symbol's lot size or minimum order quantity.
+        order_qty_units = qty # This is a simplification. Real Bybit requires base currency units.
+
+        self._order_id_counter += 1
+        order_id = f"mock_order_{self._order_id_counter}"
+
+        position = Position(
+            symbol=symbol,
+            entry_price=entry_price,
+            qty=order_qty_units,
+            side=side,
+            entry_time=time.time(),
+            leverage=leverage,
+            order_id=order_id
+        )
+        self.positions[symbol] = position
+        self.history.append({
+            "symbol": symbol,
+            "side": side,
+            "qty": order_qty_units,
+            "entry_price": entry_price,
+            "entry_time": time.time(),
+            "pnl": "0.00", # Placeholder
+            "order_id": order_id
+        })
+        logger.info(f"Placed {side} order for {order_qty_units} {symbol} at {entry_price} (Leverage: {leverage}x, Order ID: {order_id})")
+        return position
+
+    async def close_position(self, symbol: str, current_price: float) -> dict:
+        await asyncio.sleep(random.uniform(0.1, 0.3))
+        if symbol not in self.positions:
+            raise ExchangeError(f"No open position for {symbol}")
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Failed to close position for {symbol}")
+
+        pos = self.positions[symbol]
+        pnl = Decimal(0)
+
+        # Calculate PnL using the quantity in base currency units
+        if pos.side == "BUY":
+            pnl = (Decimal(current_price) - Decimal(pos.entry_price)) * Decimal(pos.qty)
+        else: # SELL
+            pnl = (Decimal(pos.entry_price) - Decimal(current_price)) * Decimal(pos.qty)
+
+        # Update history with PnL
+        for trade in reversed(self.history):
+            if trade["symbol"] == symbol and trade["order_id"] == pos.order_id and trade["pnl"] == "0.00": # Find the open trade by order_id
+                trade["pnl"] = f"{pnl:.6f}" # Bybit often uses more decimal places
+                trade["exit_price"] = current_price
+                trade["exit_time"] = time.time()
+                trade["type"] = "CLOSED"
+                break
+
+        logger.info(f"Closed {pos.side} position for {symbol} at {current_price}. PnL: {pnl:.6f}")
+        del self.positions[symbol]
+        return {"symbol": symbol, "pnl": f"{pnl:.6f}"}
+
+    def set_error_state(self, symbol: str, duration: int = 60):
+        """Simulate an API error for a given symbol."""
+        self._error_state[symbol] = time.time() + duration
+        logger.warning(f"Simulating API error for {symbol} for {duration} seconds.")
+
+class GeminiAPI:
+    def __init__(self, api_key: str, api_secret: str, symbols: list[str]):
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.symbols = symbols
+        self.positions: Dict[str, Position] = {}
+        self.history: list[dict[str, Any]] = [] # Trade history
+        self._mock_prices: Dict[str, float] = {s: 1000.0 for s in symbols}
+        self._mock_prices["BTCUSD"] = 40000.0
+        self._mock_prices["ETHUSD"] = 3000.0
+        self._last_update = time.time()
+        self._error_state: Dict[str, float] = {} # symbol: timestamp of last error
+        self._order_id_counter = 1 # Mock order ID
+
+        # Placeholder for actual Gemini client initialization
+        # import gemini_python
+        # self.client = gemini_python.GeminiAPI(
+        #     api_key=self.api_key,
+        #     api_secret=self.api_secret,
+        #     sandbox=False # Set to True for sandbox environment
+        # )
+        logger.info("GeminiAPI initialized (using mock data for now).")
+
+    async def get_price(self, symbol: str) -> float:
+        await asyncio.sleep(random.uniform(0.05, 0.2)) # Simulate network latency
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Rate limited for {symbol}")
+
+        # Simulate price fluctuations
+        if time.time() - self._last_update > 10:
+            for s in self.symbols:
+                change = random.uniform(-0.01, 0.01)
+                self._mock_prices[s] *= (1 + change)
+            self._last_update = time.time()
+
+        price = self._mock_prices.get(symbol, 0.0)
+        if price == 0.0:
+            raise ExchangeError(f"Could not get price for {symbol}")
+        return price
+
+    async def place_order(self, symbol: str, side: str, qty: float, entry_price: float, leverage: int) -> Position:
+        await asyncio.sleep(random.uniform(0.1, 0.3))
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Failed to place order for {symbol}")
+
+        # Gemini requires order quantity in base currency units.
+        # This is a simplification. Real Gemini requires specific precision.
+        order_qty_units = qty # This is a simplification.
+
+        self._order_id_counter += 1
+        order_id = f"mock_order_{self._order_id_counter}"
+
+        position = Position(
+            symbol=symbol,
+            entry_price=entry_price,
+            qty=order_qty_units,
+            side=side,
+            entry_time=time.time(),
+            leverage=leverage,
+            order_id=order_id
+        )
+        self.positions[symbol] = position
+        self.history.append({
+            "symbol": symbol,
+            "side": side,
+            "qty": order_qty_units,
+            "entry_price": entry_price,
+            "entry_time": time.time(),
+            "pnl": "0.00", # Placeholder
+            "order_id": order_id
+        })
+        logger.info(f"Placed {side} order for {order_qty_units} {symbol} at {entry_price} (Leverage: {leverage}x, Order ID: {order_id})")
+        return position
+
+    async def close_position(self, symbol: str, current_price: float) -> dict:
+        await asyncio.sleep(random.uniform(0.1, 0.3))
+        if symbol not in self.positions:
+            raise ExchangeError(f"No open position for {symbol}")
+        if symbol in self._error_state and time.time() < self._error_state[symbol]:
+            raise ExchangeError(f"API Error: Failed to close position for {symbol}")
+
+        pos = self.positions[symbol]
+        pnl = Decimal(0)
+
+        # Calculate PnL using the quantity in base currency units
+        if pos.side == "BUY":
+            pnl = (Decimal(current_price) - Decimal(pos.entry_price)) * Decimal(pos.qty)
+        else: # SELL
+            pnl = (Decimal(pos.entry_price) - Decimal(current_price)) * Decimal(pos.qty)
+
+        # Update history with PnL
+        for trade in reversed(self.history):
+            if trade["symbol"] == symbol and trade["order_id"] == pos.order_id and trade["pnl"] == "0.00": # Find the open trade by order_id
+                trade["pnl"] = f"{pnl:.6f}" # Gemini often uses more decimal places
+                trade["exit_price"] = current_price
+                trade["exit_time"] = time.time()
+                trade["type"] = "CLOSED"
+                break
+
+        logger.info(f"Closed {pos.side} position for {symbol} at {current_price}. PnL: {pnl:.6f}")
+        del self.positions[symbol]
+        return {"symbol": symbol, "pnl": f"{pnl:.6f}"}
+
+    def set_error_state(self, symbol: str, duration: int = 60):
+        """Simulate an API error for a given symbol."""
+        self._error_state[symbol] = time.time() + duration
+        logger.warning(f"Simulating API error for {symbol} for {duration} seconds.")
+
+
+# --- Factory to get the correct exchange API ---
+def get_exchange_api(exchange_name: str, api_key: str, api_secret: str, symbols: list[str]):
+    if exchange_name.lower() == "bybit":
+        return BybitAPI(api_key, api_secret, symbols)
+    elif exchange_name.lower() == "gemini":
+        return GeminiAPI(api_key, api_secret, symbols)
+    else:
+        raise ValueError(f"Unsupported exchange: {exchange_name}")
+
+
+# --- AI Analysis ---
+class AIAnalyzer:
+    def __init__(self, api_key: str, model: str):
+        self.api_key = api_key
+        self.model = model
+        # In a real scenario, initialize your AI client here (e.g., Gemini, OpenAI)
+        # For Gemini, you might use:
+        # import google.generativeai as genai
+        # genai.configure(api_key=self.api_key)
+        # self.model_client = genai.GenerativeModel(self.model)
+        logger.info(f"AIAnalyzer initialized with model: {self.model}")
+
+    async def analyze(self, symbol: str, price: float, history: list[dict[str, Any]], indicators: Indicators) -> Analysis:
+        async with SIGNAL_SEMAPHORE:
+            await asyncio.sleep(random.uniform(0.5, 2.0)) # Simulate AI processing time
+
+            # --- Mock AI Logic (Replace with actual API call) ---
+            # This is where the actual AI call would happen.
+            # We'll simulate some basic logic based on indicators and price.
+
+            # Example for Gemini:
+            # prompt = f"""
+            # Analyze the trading signal for {symbol} based on the following data:
+            # Current Price: {price}
+            # RSI: {indicators.rsi:.2f} (Oversold: {settings.rsi_oversold}, Overbought: {settings.rsi_overbought})
+            # MACD Histogram: {indicators.macd_hist:.4f}
+            # Trend (SMA {settings.trend_period} vs SMA {settings.trend_period*2}): {indicators.trend}
+            # Recent Trade History (last 5): {history[-5:]}
+
+            # Provide a trading action (BUY, SELL, HOLD), a confidence score (0.0 to 1.0), and a brief reason.
+            # Format your response as a JSON object: {{"action": "BUY", "confidence": 0.85, "reason": "RSI is low and trend is bullish."}}
+            # """
+            # try:
+            #     response = await self.model_client.generate_content_async(prompt)
+            #     result = json.loads(response.text)
+            #     action = result.get("action", "HOLD")
+            #     confidence = float(result.get("confidence", 0.0))
+            #     reason = result.get("reason", "Analysis failed.")
+            #     return Analysis(action=action, confidence=confidence, reason=reason, timestamp=time.time())
+            # except Exception as e:
+            #     logger.error(f"Error calling Gemini API: {e}")
+            #     raise ConnectionError("AI service unavailable.")
+
+
+            # --- Mock AI Logic (Simplified for demonstration) ---
+            confidence = random.uniform(0.4, 0.95)
+            action = "HOLD"
+            reason = "Insufficient data or neutral indicators."
+
+            if indicators.rsi < settings.rsi_oversold - 5 and indicators.trend == "BULL":
+                action = "BUY"
+                confidence = min(confidence + 0.1, 0.95) # Boost confidence if RSI is low and trend is up
+                reason = f"RSI ({indicators.rsi:.0f}) is low, potential reversal."
+            elif indicators.rsi > settings.rsi_overbought + 5 and indicators.trend == "BEAR":
+                action = "SELL"
+                confidence = min(confidence + 0.1, 0.95)
+                reason = f"RSI ({indicators.rsi:.0f}) is high, potential reversal."
+            elif indicators.macd_hist > 0.01 and indicators.trend == "BULL":
+                action = "BUY"
+                confidence = min(confidence + 0.05, 0.95)
+                reason = "MACD histogram positive, bullish momentum."
+            elif indicators.macd_hist < -0.01 and indicators.trend == "BEAR":
+                action = "SELL"
+                confidence = min(confidence + 0.05, 0.95)
+                reason = "MACD histogram negative, bearish momentum."
+
+            # Add a random chance of error
+            if random.random() < 0.05: # 5% chance of AI error
+                raise ConnectionError("AI service unavailable.")
+
+            return Analysis(action=action, confidence=confidence, reason=reason, timestamp=time.time())
+
+# --- Technical Indicators ---
+class IndicatorCalculator:
+    def __init__(self, period: int = 14):
+        self.period = period
+        self.prices: list[float] = []
+        self.rsi_values: list[float] = []
+        self.macd_values: list[tuple[float, float, float]] = [] # (macd, signal, histogram)
+        self.sma_values: list[float] = []
+        self.trend_sma: list[float] = [] # For trend calculation
+
+    def update_prices(self, price: float):
+        self.prices.append(price)
+        if len(self.prices) > self.period * 2: # Keep a reasonable history
+            self.prices.pop(0)
+
+    def calculate_rsi(self) -> float:
+        if len(self.prices) < self.period:
+            return 0.0
+
+        relevant_prices = self.prices[-self.period:]
+        gains = []
+        losses = []
+        for i in range(1, len(relevant_prices)):
+            diff = relevant_prices[i] - relevant_prices[i-1]
+            if diff > 0:
+                gains.append(diff)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(-diff)
+
+        avg_gain = sum(gains) / self.period
+        avg_loss = sum(losses) / self.period
+
+        if avg_loss == 0:
+            return 100.0
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
+    def calculate_macd(self) -> tuple[float, float, float]:
+        if len(self.prices) < settings.macd_slow_period + settings.macd_signal_period:
+            return 0.0, 0.0, 0.0
+
+        def _ema(prices: list[float], period: int) -> float:
+            if len(prices) < period: return 0.0
+            prices = prices[-period:]
+            ema = sum(prices[:period]) / period
+            multiplier = 2 / (period + 1)
+            for price in prices[period:]:
+                ema = (price - ema) * multiplier + ema
+            return ema
+
+        fast_ema = _ema(self.prices, settings.macd_fast_period)
+        slow_ema = _ema(self.prices, settings.macd_slow_period)
+        macd = fast_ema - slow_ema
+        signal = _ema(self.prices, settings.macd_signal_period) # Signal line is EMA of MACD line
+        histogram = macd - signal
+
+        return macd, signal, histogram
+
+    def calculate_sma(self, period: int) -> float:
+        if len(self.prices) < period:
+            return 0.0
+        return sum(self.prices[-period:]) / period
+
+    def calculate_trend(self) -> Literal["BULL", "BEAR", "FLAT"]:
+        sma_short = self.calculate_sma(settings.trend_period)
+        sma_long = self.calculate_sma(settings.trend_period * 2) # Example: longer SMA for trend
+
+        if sma_short > sma_long:
+            return "BULL"
+        elif sma_short < sma_long:
+            return "BEAR"
+        else:
+            return "FLAT"
+
+    def calculate_indicators(self, price: float) -> Indicators:
+        self.update_prices(price)
+        rsi = self.calculate_rsi()
+        macd, signal, histogram = self.calculate_macd()
+        trend = self.calculate_trend()
+        sma_short = self.calculate_sma(settings.trend_period)
+
+        return Indicators(rsi=rsi, macd_hist=histogram, trend=trend, sma=[sma_short])
+
+# --- Trader Logic ---
+class Trader:
+    def __init__(self, exchange: Any, analyzer: AIAnalyzer, indicator_calculator: IndicatorCalculator):
+        self.exchange = exchange
+        self.analyzer = analyzer
+        self.indicator_calculator = indicator_calculator
+        self.positions: Dict[str, Position] = {}
+        self.history: list[dict[str, Any]] = [] # Trade history
+        self.snapshots: Dict[str, Snapshot] = {}
+        self._last_trade_time: Dict[str, float] = defaultdict(float)
+        self._error_cooldowns: Dict[str, float] = defaultdict(float) # symbol: time until next retry
+
+    async def _manage_position(self, symbol: str, price: float, snapshot: Snapshot):
+        now = time.time()
+        pos = self.positions.get(symbol)
+
+        # --- Check for Stop Loss or Take Profit ---
+        if pos:
+            pnl = Decimal(0)
+            if pos.side == "BUY":
+                pnl = (Decimal(price) - Decimal(pos.entry_price)) * Decimal(pos.qty)
+            else: # SELL
+                pnl = (Decimal(pos.entry_price) - Decimal(price)) * Decimal(pos.qty)
+
+            tp_price = pos.entry_price * (1 + settings.take_profit_pct) if pos.side == "BUY" else pos.entry_price * (1 - settings.take_profit_pct)
+            sl_price = pos.entry_price * (1 - settings.stop_loss_pct) if pos.side == "BUY" else pos.entry_price * (1 + settings.stop_loss_pct)
+
+            # Check Take Profit
+            if (pos.side == "BUY" and price >= tp_price) or \
+               (pos.side == "SELL" and price <= tp_price):
+                try:
+                    await self.exchange.close_position(symbol, price)
+                    # Find and update the corresponding trade in history
+                    for trade in reversed(self.history):
+                        if trade["symbol"] == symbol and trade["order_id"] == pos.order_id and trade.get("type") != "CLOSED":
+                            trade["pnl"] = f"{pnl:.6f}"
+                            trade["exit_price"] = price
+                            trade["exit_time"] = now
+                            trade["type"] = "TP"
+                            break
+                    logger.info(f"Take Profit hit for {symbol} at {price}. PnL: {pnl:.6f}")
+                    return # Position closed, exit management
+                except ExchangeError as e:
+                    logger.error(f"Error closing position for TP {symbol}: {e}")
+                    self.exchange.set_error_state(symbol) # Simulate error
+                    snapshot.error = str(e) # Update snapshot with error
+
+            # Check Stop Loss
+            elif (pos.side == "BUY" and price <= sl_price) or \
+                 (pos.side == "SELL" and price >= sl_price):
+                try:
+                    await self.exchange.close_position(symbol, price)
+                    # Find and update the corresponding trade in history
+                    for trade in reversed(self.history):
+                        if trade["symbol"] == symbol and trade["order_id"] == pos.order_id and trade.get("type") != "CLOSED":
+                            trade["pnl"] = f"{pnl:.6f}"
+                            trade["exit_price"] = price
+                            trade["exit_time"] = now
+                            trade["type"] = "SL"
+                            break
+                    logger.info(f"Stop Loss hit for {symbol} at {price}. PnL: {pnl:.6f}")
+                    return # Position closed, exit management
+                except ExchangeError as e:
+                    logger.error(f"Error closing position for SL {symbol}: {e}")
+                    self.exchange.set_error_state(symbol)
+                    snapshot.error = str(e)
+
+        # --- Check for New Trade Signals ---
+        if snapshot.analysis and snapshot.analysis.action != "HOLD" and snapshot.analysis.confidence >= settings.confidence_threshold:
+            # Cooldown check
+            if now - self._last_trade_time[symbol] < settings.trade_interval:
+                return
+
+            # Check if already in a position for this symbol
+            if symbol in self.positions:
+                logger.warning(f"Already in a position for {symbol}. Skipping new trade signal.")
+                return
+
+            # Check for API errors before placing order
+            if symbol in self._error_cooldowns and now < self._error_cooldowns[symbol]:
+                logger.warning(f"Skipping trade for {symbol} due to recent API error cooldown.")
+                snapshot.error = f"Cooldown active ({int(self._error_cooldowns[symbol] - now)}s left)"
+                return
+
+            try:
+                side = snapshot.analysis.action
+                # For Bybit/Gemini, order_size is typically in quote currency (USD).
+                # Quantity calculation needs to be in base currency units.
+                # This is a simplification. In reality, you'd need to know the symbol's minimum order size and precision.
+                # We'll use the order_size directly as a proxy for quantity for this mock.
+                # A more accurate calculation would involve fetching symbol info.
+                order_size_usd = settings.order_size
+                qty_in_base_currency = order_size_usd / price if side == "BUY" else order_size_usd / price # This is a simplification for mock
+                # For leverage, the actual order size in USD is qty_in_base_currency * price.
+                # The margin required is (qty_in_base_currency * price) / leverage.
+
+                entry_price = price # Use current price as entry
+
+                # Place order
+                new_pos = await self.exchange.place_order(symbol, side, qty_in_base_currency, entry_price, settings.leverage)
+                self.positions[symbol] = new_pos
+                self._last_trade_time[symbol] = now
+                # Clear any previous error state if trade is successful
+                if symbol in self._error_cooldowns:
+                    del self._error_cooldowns[symbol]
+
+            except ExchangeError as e:
+                logger.error(f"Error placing order for {symbol}: {e}")
+                snapshot.error = str(e)
+                # Set cooldown for this symbol
+                self._error_cooldowns[symbol] = now + settings.error_cooldown
+                self.exchange.set_error_state(symbol) # Simulate error
+            except Exception as e:
+                logger.error(f"Unexpected error during order placement for {symbol}: {e}")
+                snapshot.error = f"Unexpected: {type(e).__name__}"
+                self._error_cooldowns[symbol] = now + settings.error_cooldown
+
+
+    async def run_trade_cycle(self):
+        tasks = []
+        for symbol in settings.symbols:
+            tasks.append(self.process_symbol(symbol))
+        await asyncio.gather(*tasks)
+
+    async def process_symbol(self, symbol: str):
+        start_time = time.time()
+        snapshot = Snapshot(symbol=symbol)
+        try:
+            # Fetch price and calculate indicators
+            price = await self.exchange.get_price(symbol)
+            snapshot.price = price
+            snapshot.timestamp = start_time
+
+            indicators = self.indicator_calculator.calculate_indicators(price)
+            snapshot.indicators = indicators
+
+            # Get AI analysis
+            analysis = await self.analyzer.analyze(symbol, price, self.history, indicators)
+            snapshot.analysis = analysis
+
+            # Manage positions and place trades
+            await self._manage_position(symbol, price, snapshot)
+
+        except ExchangeError as e:
+            logger.error(f"Exchange error for {symbol}: {e}")
+            snapshot.error = str(e)
+            # Set cooldown if it's a persistent error
+            if "Rate limited" in str(e) or "Failed to place order" in str(e) or "Could not get price" in str(e):
+                 self._error_cooldowns[symbol] = time.time() + settings.error_cooldown
+        except ConnectionError as e:
+            logger.error(f"Connection error for {symbol}: {e}")
+            snapshot.error = str(e)
+            # AI errors might also trigger cooldowns if they are frequent
+            if "AI service unavailable" in str(e):
+                 self._error_cooldowns[symbol] = time.time() + settings.error_cooldown
+        except Exception as e:
+            logger.exception(f"Unexpected error processing {symbol}: {e}")
+            snapshot.error = f"Unexpected: {type(e).__name__}"
+
+        finally:
+            snapshot.latency_ms = int((time.time() - start_time) * 1000)
+            self.snapshots[symbol] = snapshot # Store snapshot for UI
+
+
+# --- UI Rendering ---
+class UI:
+    def __init__(self, trader: Trader):
+        self.trader = trader
+        self.snapshots: Dict[str, Snapshot] = {}
+        self.start_time = time.time() # NEW: Track start time for uptime
+
+    def _render_ui(self) -> Layout:
+        layout = Layout(name="root")
+        layout.split_column(
+            Layout(name="header", size=3),
+            # --- NEW: Status Panel ---
+            Layout(name="status_panel", size=4) if settings.show_status_panel else Layout(name="spacer", size=0),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        header_text = Text(f"AI Trading Bot | Symbols: {', '.join(settings.symbols)} | Exchange: {settings.exchange} | Leverage: {settings.leverage}x", justify="center")
+        layout["header"].update(Panel(header_text, style="bold white on blue", box=box.SIMPLE))
+
+        # --- NEW: Status Panel ---
+        if settings.show_status_panel:
+            active_ai_calls = SIGNAL_SEMAPHORE_BOUND - SIGNAL_SEMAPHORE._value
+            uptime_delta = time.time() - self.start_time
+            uptime_str = str(timedelta(seconds=int(uptime_delta)))
+
+            status_parts = [
+                f"Bot Status: [green]Running[/]",
+                f"Uptime: [cyan]{uptime_str}[/]",
+                f"AI Calls: [yellow]{active_ai_calls}/{SIGNAL_SEMAPHORE_BOUND}[/]",
+                f"Log Level: [dim]{settings.logging_level}[/]",
+                f"Snapshot Interval: [dim]{settings.snapshot_interval}s[/]",
+                f"Trade Interval: [dim]{settings.trade_interval}s[/]"
+            ]
+            status_text = " | ".join(status_parts)
+            layout["status_panel"].update(Panel(status_text, style="on black", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Symbol", style="bold", width=15) # Increased width for symbol + indicators
+        table.add_column("Price", justify="right")
+        table.add_column("Action", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Indicators", justify="left")
+        # --- NEW: Add a column for Recent Trades ---
+        if not IS_TERMUX and settings.show_recent_trades:
+            table.add_column("Recent Trades", justify="left")
+
+        # Sort snapshots by symbol for consistent ordering
+        sorted_symbols = sorted(self.snapshots.keys())
+
+        for symbol in sorted_symbols:
+            s = self.snapshots[symbol]
+            pos = self.trader.positions.get(s.symbol)
+
+            # --- NEW: Prepare latency and error indicators ---
+            latency_indicator = ""
+            if settings.show_api_latency:
+                latency_indicator = f"[dim]{s.latency_ms}ms[/]"
+            error_indicator = ""
+            if s.error:
+                # Shorten error message for display
+                error_parts = s.error.split(':')
+                display_error = error_parts[0]
+                if len(error_parts) > 1:
+                    display_error += ":" + error_parts[1].split('(')[0].strip() # Take first part of detail if available
+                error_indicator = f" [red]!{display_error[:20]}[/]" # Limit error display length
+
+            # Combine symbol, latency, and error
+            symbol_display = f"[bold]{s.symbol}[/]{error_indicator}"
+            if latency_indicator:
+                symbol_display += f"\n{latency_indicator}"
+
+            price_str = "[dim]-[/]" # Default to dim if no price
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+            recent_trades_str = "[dim]N/A[/]" # Default value
+
+            if s.price > 0:
+                price_str = f"{s.price:.5f}" # Show price normally if available
+
+                # --- Position display ---
+                if pos:
+                    current_pnl = Decimal(0)
+                    pnl_calc = (s.price - pos.entry_price) * pos.qty
+                    if pos.side == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                    pnl_color = "green" if current_pnl >= 0 else "red"
+                    action_str = f"[{pnl_color}]{pos.side}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                    price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+                    # --- NEW: Get recent trades for this symbol ---
+                    if settings.show_recent_trades:
+                        symbol_trades = [t for t in self.trader.history if t["symbol"] == s.symbol and t.get("order_id") == pos.order_id][-1:] # Get the current open trade if any
+                        if not symbol_trades: # If no open trade, get last closed trades
+                            symbol_trades = [t for t in self.trader.history if t["symbol"] == s.symbol][-3:] # Get last 3 trades
+                        if symbol_trades:
+                            recent_trades_lines = []
+                            for trade in symbol_trades:
+                                trade_pnl_color = "green" if Decimal(trade.get('pnl', 0)) > 0 else "red"
+                                # Ensure 'pnl' key exists and is not None before formatting
+                                pnl_val = trade.get('pnl')
+                                if pnl_val is not None:
+                                    # Format PnL to 2 decimal places for display
+                                    formatted_pnl = f"{Decimal(pnl_val):+.2f}"
+                                    recent_trades_lines.append(f"[{trade_pnl_color}]{trade['side'][0]}{formatted_pnl}[/]")
+                                else:
+                                    recent_trades_lines.append(f"[dim]N/A[/]") # Handle missing pnl
+                            recent_trades_str = "\n".join(recent_trades_lines)
+
+                # --- AI Signal display ---
+                elif s.analysis and s.analysis.action != "HOLD":
+                    ai_color = "green" if s.analysis.action == "BUY" else "red"
+                    action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+                # --- Indicator summary (for non-Termux UI) ---
+                if not IS_TERMUX:
+                    rsi_color = "red" if s.indicators.rsi > settings.rsi_overbought else "green" if s.indicators.rsi < settings.rsi_oversold else "dim"
+                    trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                    indicator_str = (
+                        f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                        f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                        f"MACD:{s.indicators.macd_hist:+.2f}"
+                    )
+
+            row = [symbol_display, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            if not IS_TERMUX and settings.show_recent_trades:
+                row.append(recent_trades_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def run_ui_update(self):
+        # Update snapshots from trader
+        self.snapshots = self.trader.snapshots
+        layout = self._render_ui()
+        return layout
+
+# --- Main Execution ---
+async def main():
+    # --- Load Settings ---
+    if Path(settings.config_file).exists():
+        try:
+            with open(settings.config_file, "r") as f:
+                config_data = json.load(f)
+                # Update settings from config file
+                for key, value in config_data.items():
+                    if hasattr(settings, key):
+                        setattr(settings, key, value)
+            logger.info(f"Loaded settings from {settings.config_file}")
+        except Exception as e:
+            logger.error(f"Error loading config file {settings.config_file}: {e}")
+    else:
+        logger.warning(f"Config file {settings.config_file} not found. Using default settings.")
+        # Optionally, save default settings to config file
+        # with open(settings.config_file, "w") as f:
+        #     json.dump(settings.__dict__, f, indent=2)
+
+    # --- Initialize Components ---
+    try:
+        exchange_api = get_exchange_api(settings.exchange, settings.api_key, settings.api_secret, settings.symbols)
+    except ValueError as e:
+        logger.error(e)
+        sys.exit(1)
+
+    analyzer = AIAnalyzer(settings.api_key, settings.ai_model)
+    indicator_calculator = IndicatorCalculator(period=settings.rsi_period) # Use RSI period as base
+    trader = Trader(exchange_api, analyzer, indicator_calculator)
+    ui = UI(trader)
+
+    # --- Live UI Update ---
+    with Live(ui._render_ui(), refresh_per_second=1.0 / settings.snapshot_interval, console=console, screen=True) as live:
+        while True:
+            try:
+                # Run trade logic and UI update concurrently
+                trade_task = asyncio.create_task(trader.run_trade_cycle())
+                ui_update_task = asyncio.create_task(ui.run_ui_update())
+
+                await asyncio.gather(trade_task, ui_update_task)
+
+                # Update the live display
+                live.update(ui._render_ui())
+
+            except KeyboardInterrupt:
+                logger.info("Shutdown signal received. Exiting...")
+                break
+            except Exception as e:
+                logger.exception(f"Error in main loop: {e}")
+                # Add a small delay before retrying to prevent rapid failure loops
+                await asyncio.sleep(settings.trade_interval)
+
+if __name__ == "__main__":
+    # --- Argument Parsing for Settings ---
+    import argparse
+    # import random # Already imported above
+    # import logging # Already imported above
+
+    parser = argparse.ArgumentParser(description="AI Trading Bot")
+    parser.add_argument("--symbols", nargs='+', default=settings.symbols, help="List of trading symbols (e.g., BTCUSD ETHUSD)")
+    parser.add_argument("--exchange", type=str, default=settings.exchange, help="Exchange to connect to (e.g., bybit, gemini)")
+    parser.add_argument("--leverage", type=int, default=settings.leverage, help="Leverage to use for trading")
+    parser.add_argument("--order_size", type=float, default=settings.order_size, help="Order size in USD")
+    parser.add_argument("--ai_model", type=str, default=settings.ai_model, help="AI model to use (e.g., gemini-2.5-flash-lite)")
+    parser.add_argument("--log_level", type=str, default=settings.logging_level, help="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
+    parser.add_argument("--snapshot_interval", type=float, default=settings.snapshot_interval, help="Interval between UI snapshots in seconds")
+    parser.add_argument("--trade_interval", type=float, default=settings.trade_interval, help="Interval between trade checks in seconds")
+    # --- NEW: UI Arguments ---
+    parser.add_argument("--show_recent_trades", action='store_true', default=settings.show_recent_trades, help="Show recent trades column in UI")
+    parser.add_argument("--hide_recent_trades", dest='show_recent_trades', action='store_false', help="Hide recent trades column in UI")
+    parser.add_argument("--show_api_latency", action='store_true', default=settings.show_api_latency, help="Show API latency in UI")
+    parser.add_argument("--hide_api_latency", dest='show_api_latency', action='store_false', help="Hide API latency in UI")
+    parser.add_argument("--show_status_panel", action='store_true', default=settings.show_status_panel, help="Show status panel in UI")
+    parser.add_argument("--hide_status_panel", dest='show_status_panel', action='store_false', help="Hide status panel in UI")
+
+
+    args = parser.parse_args()
+
+    # Update settings from arguments
+    settings.symbols = args.symbols
+    settings.exchange = args.exchange
+    settings.leverage = args.leverage
+    settings.order_size = args.order_size
+    settings.ai_model = args.ai_model
+    settings.logging_level = args.log_level.upper()
+    settings.snapshot_interval = args.snapshot_interval
+    settings.trade_interval = args.trade_interval
+    # --- NEW: Update UI settings ---
+    settings.show_recent_trades = args.show_recent_trades
+    settings.show_api_latency = args.show_api_latency
+    settings.show_status_panel = args.show_status_panel
+
+    # Re-configure logging if level changed
+    if settings.logging_level in logging_level_map:
+        log_level = logging_level_map[settings.logging_level]
+        # Re-apply basicConfig to update the level
+        # Note: This might not work as expected if handlers are already configured.
+        # A more robust solution would involve getting the root logger and changing handler levels.
+        # For simplicity here, we'll just re-run basicConfig.
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+        logging.basicConfig(
+            level=numeric_level,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            handlers=[
+                logging.FileHandler(log_path),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+        logger.info(f"Logging level set to {settings.logging_level}")
+
+
+    # --- Load API Keys (Example: from environment variables or a secure store) ---
+    # In a real application, NEVER hardcode API keys. Use environment variables,
+    # a secrets manager, or a secure configuration file.
+    settings.api_key = os.environ.get("EXCHANGE_API_KEY", "YOUR_MOCK_API_KEY")
+    settings.api_secret = os.environ.get("EXCHANGE_API_SECRET", "YOUR_MOCK_API_SECRET")
+
+    if settings.api_key == "YOUR_MOCK_API_KEY" or settings.api_secret == "YOUR_MOCK_API_SECRET":
+        logger.warning("Using mock API keys. Set EXCHANGE_API_KEY and EXCHANGE_API_SECRET environment variables for real trading.")
+
+    asyncio.run(main())

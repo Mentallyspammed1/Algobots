@@ -1,0 +1,7510 @@
+#!/usr/bin/env python3
+# WhaleBot v8.2 - Async Fixes, Battery Saver, Enhanced UI, and Robustness
+
+import asyncio
+import aiohttp
+import json
+import logging
+import re
+import time
+import signal
+import sys
+import os
+import warnings
+import numpy as np
+import pandas as pd
+import pandas_ta as ta
+import google.generativeai as genai
+from datetime import datetime, timezone
+from typing import List, Dict, Optional, Tuple, Any
+from pydantic import BaseModel, Field, field_validator, ValidationError
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.live import Live
+from rich.layout import Layout
+from rich import box
+from decimal import Decimal, ROUND_HALF_UP, getcontext
+from pathlib import Path
+from logging.handlers import RotatingFileHandler
+from concurrent.futures import ThreadPoolExecutor
+
+# --- Suppress Warnings ---
+warnings.filterwarnings("ignore", category=UserWarning, module="pandas_ta")
+warnings.filterwarnings("ignore", category=FutureWarning, module="pandas") # For pandas .append
+
+# --- Global Setup ---
+getcontext().prec = 28  # High precision for financial calculations
+SIGNAL_SEMAPHORE = asyncio.Semaphore(3)  # Limit concurrent AI calls
+STATE_FILE = Path("whalebot_state.json")
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True)
+
+# Detect Termux environment for UI adjustments
+IS_TERMUX = "TERMUX_VERSION" in os.environ or os.get_terminal_size().columns < 100
+
+# --- Configuration ---
+
+class IndicatorSettings(BaseModel):
+    rsi_period: int = 14
+    ema_fast: int = 9
+    ema_slow: int = 21
+    atr_period: int = 14
+    bb_period: int = 20
+    bb_std: float = 2.0
+
+class TraderSettings(BaseModel):
+    initial_balance: Decimal = Field(Decimal("1000.00"), gt=0)
+    risk_per_trade: Decimal = Field(Decimal("0.02"), ge=0, le=1) # 2% risk per trade
+    min_rr: float = Field(1.2, gt=0) # Minimum Risk/Reward ratio
+    min_confidence: float = Field(0.75, ge=0, le=1) # Minimum AI confidence
+    trading_fee: Decimal = Field(Decimal("0.00055"), ge=0) # Bybit linear perpetual fee example
+    slippage: Decimal = Field(Decimal("0.0001"), ge=0) # Slippage in percentage
+    use_trailing_stop: bool = True
+    trailing_activation: Decimal = Field(Decimal("0.01"), ge=0) # 1% profit triggers trail
+    trailing_callback: Decimal = Field(Decimal("0.005"), ge=0) # 0.5% trail distance
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    gemini_api_key: str = Field(..., alias="GEMINI_API_KEY")
+    bybit_base_url: str = "https://api.bybit.com"
+    gemini_model_name: str = "gemini-2.5-flash-lite"
+
+    symbols: List[str] = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"]
+    interval: str = "5"  # Candlestick interval in minutes
+    category: str = "linear" # "linear" for USDT perpetuals
+    kline_limit: int = 200 # Number of candles to fetch for analysis
+    refresh_rate: int = 15 # seconds between UI updates and fetches
+
+    indicators: IndicatorSettings = IndicatorSettings()
+    trader: TraderSettings = TraderSettings()
+    logging_level: str = "INFO" # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+settings = Settings()
+
+# --- Logging Setup ---
+class LogManager:
+    def __init__(self):
+        self.log_file = LOG_DIR / "trace.log"
+        self.logger = logging.getLogger("WhaleBot_Trace")
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.propagate = False
+
+        if not self.logger.handlers:
+            fh = RotatingFileHandler(self.log_file, maxBytes=5*1024*1024, backupCount=3) # 5MB per file, 3 backups
+            fmt = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            fh.setFormatter(fmt)
+            self.logger.addHandler(fh)
+
+    def log(self, level: str, msg: str, **kwargs):
+        extra = f" | {json.dumps(kwargs, default=str)}" if kwargs else ""
+        try:
+            getattr(self.logger, level.lower())(f"{msg}{extra}")
+        except AttributeError:
+            self.logger.error(f"Invalid log level '{level}' used.")
+
+trace = LogManager()
+console = Console()
+
+# --- Data Models ---
+
+class PivotData(BaseModel):
+    pivot: float = 0.0
+    r1: float = 0.0
+    s1: float = 0.0
+    r2: float = 0.0
+    s2: float = 0.0
+
+class IndicatorData(BaseModel):
+    ema_fast: float = 0.0
+    ema_slow: float = 0.0
+    trend: str = "NEUTRAL" # BULL, BEAR, NEUTRAL
+    rsi: float = 50.0
+    macd_hist: float = 0.0
+    atr: float = 0.0
+    pivots: PivotData = Field(default_factory=PivotData)
+    nearest_s: float = 0.0 # Nearest support from recent lows
+    nearest_r: float = 0.0 # Nearest resistance from recent highs
+    ob_imbalance: float = 0.0 # Order book imbalance (-1 to 1)
+
+    @field_validator('*', mode='before')
+    def clean_numeric_fields(cls, v):
+        if isinstance(v, (float, int, np.floating)) and np.isfinite(v):
+            return float(v)
+        if isinstance(v, dict): # Allow dicts for nested models
+            return v
+        return 0.0 # Default to 0 for invalid or non-finite numbers
+
+class SignalAnalysis(BaseModel):
+    action: str = "HOLD" # BUY, SELL, HOLD
+    confidence: float = Field(0.0, ge=0.0, le=1.0)
+    reason: str = "N/A"
+    entry_price: Decimal = Decimal(0)
+    stop_loss: Decimal = Decimal(0)
+    take_profit: Decimal = Decimal(0)
+
+    @field_validator('action', mode='before')
+    def normalize_action(cls, v):
+        return v.upper().strip()
+
+    @field_validator('entry_price', 'stop_loss', 'take_profit', mode='before')
+    def quantize_decimal(cls, v):
+        try:
+            return Decimal(str(v)).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+        except Exception:
+            return Decimal(0)
+
+class MarketSnapshot(BaseModel):
+    symbol: str
+    price: Decimal = Decimal(0)
+    last_candle_time: int = 0
+    indicators: IndicatorData = Field(default_factory=IndicatorData)
+    analysis: Optional[SignalAnalysis] = None
+    last_ai_time: float = 0.0
+    error: Optional[str] = None
+    latency_ms: float = 0.0
+
+# --- 1. Resilient API Client ---
+
+class BybitClient:
+    def __init__(self):
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.conn: Optional[aiohttp.TCPConnector] = None
+        self.timeout = aiohttp.ClientTimeout(total=15, connect=7) # Increased timeout for robustness
+        self.daily_cache: Dict[str, Tuple[float, pd.DataFrame]] = {} # Cache for daily data
+
+    async def __aenter__(self):
+        if not self.session:
+            self.conn = aiohttp.TCPConnector(limit=50, ssl=False) # Increased connection limit, disable SSL verification if needed (use with caution)
+            self.session = aiohttp.ClientSession(connector=self.conn, timeout=self.timeout)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
+            await self.session.close()
+            self.session = None
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+
+    async def _get(self, url: str, params: dict, retries: int = 3, delay: float = 1.0) -> dict:
+        for i in range(retries):
+            try:
+                async with self.session.get(url, params=params) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+                    else:
+                        trace.log("WARNING", f"API request failed: {url} | Status: {resp.status} | Response: {await resp.text()}")
+            except aiohttp.ClientConnectorError as e:
+                trace.log("ERROR", f"Connection error for {url}: {e}")
+            except aiohttp.ClientError as e:
+                trace.log("ERROR", f"Client error for {url}: {e}")
+            except asyncio.TimeoutError:
+                trace.log("ERROR", f"Timeout error for {url}")
+            except Exception as e:
+                trace.log("ERROR", f"Unexpected error for {url}: {e}")
+
+            if i < retries - 1:
+                await asyncio.sleep(delay * (i + 1))
+        return {} # Return empty dict on failure
+
+    async def fetch_data(self, symbol: str) -> Tuple[pd.DataFrame, pd.DataFrame, Dict, Dict, float]:
+        t0 = time.perf_counter()
+
+        # Fetch data concurrently
+        kline_task = asyncio.create_task(
+            self._get(f"{settings.bybit_base_url}/v5/market/kline",
+                      {"category": settings.category, "symbol": symbol, "interval": settings.interval, "limit": settings.kline_limit})
+        )
+        ticker_task = asyncio.create_task(
+            self._get(f"{settings.bybit_base_url}/v5/market/tickers", {"category": settings.category, "symbol": symbol})
+        )
+        orderbook_task = asyncio.create_task(
+            self._get(f"{settings.bybit_base_url}/v5/market/orderbook", {"category": settings.category, "symbol": symbol, "limit": 20})
+        )
+
+        # Fetch daily data with caching
+        now = time.time()
+        daily_data = None
+        if symbol not in self.daily_cache or (now - self.daily_cache[symbol][0] > 3600): # Cache for 1 hour
+            daily_data = await self._get(f"{settings.bybit_base_url}/v5/market/kline",
+                                         {"category": settings.category, "symbol": symbol, "interval": "D", "limit": 5})
+            if daily_data and daily_data.get("retCode") == 0:
+                df_d = pd.DataFrame(daily_data["result"]["list"], columns=["startTime", "open", "high", "low", "close", "vol", "to"])
+                df_d = df_d.astype(float).sort_values("startTime")
+                self.daily_cache[symbol] = (now, df_d)
+            else:
+                daily_data = None # Ensure it's None if fetch failed
+        else:
+            daily_data = self.daily_cache[symbol][1]
+
+        # Wait for tasks to complete
+        kline_resp, ticker_resp, ob_resp = await asyncio.gather(kline_task, ticker_task, orderbook_task)
+
+        # Process kline data
+        if kline_resp.get("retCode") != 0:
+            trace.log("ERROR", f"Failed to fetch kline data for {symbol}: {kline_resp.get('retMsg', 'Unknown error')}")
+            return pd.DataFrame(), pd.DataFrame(), {}, {}, (time.perf_counter() - t0) * 1000
+
+        df_i = pd.DataFrame(kline_resp["result"]["list"], columns=["startTime", "open", "high", "low", "close", "vol", "to"])
+        df_i = df_i.astype(float).sort_values("startTime")
+        df_i["startTime"] = pd.to_datetime(df_i["startTime"], unit="ms")
+        df_i.set_index("startTime", inplace=True)
+
+        # Process ticker and orderbook data
+        ob = ob_resp.get("result", {})
+        tick = ticker_resp.get("result", {}).get("list", [{}])[0]
+
+        return df_i, daily_data if daily_data is not None else pd.DataFrame(), ob, tick, (time.perf_counter() - t0) * 1000
+
+# --- 2. Technical Analysis ---
+
+class TechnicalAnalyzer:
+    @staticmethod
+    def calculate(df: pd.DataFrame, df_daily: pd.DataFrame, orderbook: Dict) -> IndicatorData:
+        if len(df) < max(settings.indicators.rsi_period, settings.indicators.ema_slow, settings.indicators.atr_period, 20): # Ensure enough data
+            return IndicatorData()
+
+        s = settings.indicators
+
+        try:
+            # Calculate indicators using pandas_ta
+            df.ta.ema(length=s.ema_fast, append=True)
+            df.ta.ema(length=s.ema_slow, append=True)
+            df.ta.rsi(length=s.rsi_period, append=True)
+            df.ta.macd(append=True) # MACD default is 12, 26, 9
+            df.ta.atr(length=s.atr_period, append=True)
+            df.ta.bbands(length=s.bb_period, std=s.bb_std, append=True) # Bollinger Bands
+
+            # Get the latest values
+            last = df.iloc[-1]
+            ind = IndicatorData()
+
+            ind.ema_fast = last.get(f"EMA_{s.ema_fast}", 0.0)
+            ind.ema_slow = last.get(f"EMA_{s.ema_slow}", 0.0)
+            ind.trend = "BULL" if ind.ema_fast > ind.ema_slow else "BEAR" if ind.ema_fast < ind.ema_slow else "NEUTRAL"
+            ind.rsi = last.get(f"RSI_{s.rsi_period}", 50.0)
+            ind.macd_hist = last.get("MACDh_12_26_9", 0.0)
+            ind.atr = last.get(f"ATR_{s.atr_period}", 0.0)
+
+            # Calculate Pivots
+            if not df_daily.empty and len(df_daily) >= 2:
+                prev_day = df_daily.iloc[-2] # Use the second to last day's data
+                p = (prev_day['high'] + prev_day['low'] + prev_day['close']) / 3
+                r = prev_day['high'] - prev_day['low']
+                ind.pivots = PivotData(
+                    pivot=p,
+                    r1=p + 0.382*r, s1=p - 0.382*r,
+                    r2=p + 0.618*r, s2=p - 0.618*r
+                )
+            elif not df_daily.empty: # If only one day available, use its data
+                p = (df_daily['high'].iloc[-1] + df_daily['low'].iloc[-1] + df_daily['close'].iloc[-1]) / 3
+                r = df_daily['high'].iloc[-1] - df_daily['low'].iloc[-1]
+                ind.pivots = PivotData(
+                    pivot=p,
+                    r1=p + 0.382*r, s1=p - 0.382*r,
+                    r2=p + 0.618*r, s2=p - 0.618*r
+                )
+
+
+            # Nearest support/resistance from recent price action (last 10 candles)
+            if len(df) >= 10:
+                ind.nearest_r = df['high'].rolling(10).max().iloc[-1]
+                ind.nearest_s = df['low'].rolling(10).min().iloc[-1]
+            else:
+                ind.nearest_r = df['high'].iloc[-1]
+                ind.nearest_s = df['low'].iloc[-1]
+
+            # Order book imbalance
+            if orderbook and 'b' in orderbook and 'a' in orderbook:
+                bids = np.array(orderbook['b'], dtype=float)
+                asks = np.array(orderbook['a'], dtype=float)
+                if len(bids) > 0 and len(asks) > 0:
+                    bv, av = np.sum(bids[:, 1]), np.sum(asks[:, 1]) # Sum of quantities
+                    total_vol = bv + av
+                    if total_vol > 0:
+                        ind.ob_imbalance = (bv - av) / total_vol
+
+        except Exception as e:
+            trace.log("ERROR", f"Error during technical analysis: {e}")
+            return IndicatorData() # Return default if error occurs
+
+        return ind
+
+    @staticmethod
+    def should_trigger_ai(ind: IndicatorData, price: Decimal, last_ai_time: float) -> bool:
+        # Battery Saver: Only trigger AI if significant time has passed since last call or if conditions are extreme
+        if time.time() - last_ai_time < 300: # Minimum 5 minutes between AI calls for the same symbol
+            return False
+
+        p = float(price)
+
+        # Extreme RSI levels
+        if ind.rsi < 25 or ind.rsi > 75:
+            return True
+
+        # Price near significant levels (pivots, nearest S/R)
+        levels = [ind.pivots.pivot, ind.pivots.r1, ind.pivots.s1, ind.pivots.r2, ind.pivots.s2, ind.nearest_s, ind.nearest_r]
+        for lvl in levels:
+            if lvl > 0 and abs(p - lvl) / lvl < 0.003: # Within 0.3% of a level
+                return True
+
+        # Significant MACD histogram movement
+        if abs(ind.macd_hist) > (ind.atr * 0.15): # MACD histogram is significantly large relative to ATR
+            return True
+
+        # Significant Order Book Imbalance
+        if abs(ind.ob_imbalance) > 0.3: # If imbalance is greater than 30%
+            return True
+
+        return False
+
+# --- 3. AI Scalper ---
+
+class GeminiScalper:
+    def __init__(self):
+        try:
+            genai.configure(api_key=settings.gemini_api_key)
+            self.model = genai.GenerativeModel(settings.gemini_model_name)
+        except Exception as e:
+            trace.log("ERROR", f"Failed to initialize Gemini model: {e}")
+            self.model = None
+
+    async def analyze(self, symbol: str, price: Decimal, data: IndicatorData) -> SignalAnalysis:
+        if not self.model:
+            return SignalAnalysis(action="HOLD", confidence=0, reason="Model not initialized")
+
+        prompt = f"""
+        Analyze the following cryptocurrency market data for scalping opportunities on {symbol} at the current price of {price:.4f}.
+        Provide a JSON output with 'action' (BUY, SELL, or HOLD), 'confidence' (0.0 to 1.0), 'reason' (max 5 words), 'entry_price', 'stop_loss', and 'take_profit'.
+
+        Market Conditions:
+        - Trend (EMA {settings.indicators.ema_fast}/{settings.indicators.ema_slow}): {data.trend}
+        - RSI ({settings.indicators.rsi_period}): {data.rsi:.1f}
+        - MACD Histogram: {data.macd_hist:.4f}
+        - Order Book Imbalance: {data.ob_imbalance:.2f}
+        - Nearest Support: {data.nearest_s:.4f}
+        - Nearest Resistance: {data.nearest_r:.4f}
+        - Pivots: Pivot={data.pivots.pivot:.4f}, R1={data.pivots.r1:.4f}, S1={data.pivots.s1:.4f}, R2={data.pivots.r2:.4f}, S2={data.pivots.s2:.4f}
+        - ATR ({settings.indicators.atr_period}): {data.atr:.4f}
+
+        Consider the risk/reward ratio for trades. If no clear opportunity exists or confidence is low, return HOLD.
+
+        JSON Output Format:
+        {{
+          "action": "BUY" | "SELL" | "HOLD",
+          "confidence": float,
+          "reason": "string (max 5 words)",
+          "entry_price": float,
+          "stop_loss": float,
+          "take_profit": float
+        }}
+        """
+
+        async with SIGNAL_SEMAPHORE:
+            try:
+                resp = await asyncio.to_thread(
+                    self.model.generate_content, prompt,
+                    generation_config={"temperature": 0.1, "response_mime_type": "application/json"}
+                )
+
+                # --- Robust JSON Extraction and Cleaning ---
+                raw_response = resp.text
+                start_brace = raw_response.find('{')
+                end_brace = raw_response.rfind('}')
+
+                if start_brace != -1 and end_brace != -1 and start_brace < end_brace:
+                    # Extract the content between the first '{' and last '}'
+                    json_candidate = raw_response[start_brace : end_brace + 1]
+                    # Further clean up potential stray characters around the JSON object
+                    json_candidate = re.sub(r'^[\s\S]*?\{', '{', json_candidate) # Remove anything before the first {
+                    json_candidate = re.sub(r'\}[\s\S]*
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+                    text = json_candidate.strip()
+                else:
+                    # Fallback to markdown cleaning if direct JSON extraction fails
+                    text = re.sub(r"^```json\s*", "", raw_response, flags=re.MULTILINE)
+                    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+                    text = text.strip()
+
+                if not text:
+                    trace.log("ERROR", f"AI returned empty or invalid JSON response for {symbol}. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Empty AI response")
+
+                # Pre-validation: Check if it looks like a JSON object before parsing
+                if not text.startswith('{') or not text.endswith('}'):
+                    trace.log("ERROR", f"AI response is not a valid JSON object for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid JSON format")
+
+                # --- Pydantic Validation ---
+                try:
+                    an = SignalAnalysis.model_validate_json(text)
+                except ValidationError as e:
+                    trace.log("ERROR", f"Pydantic validation error for {symbol}. Raw AI response: '{text}'. Validation Error: {e}")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+                except json.JSONDecodeError:
+                    trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+
+                # --- Post-validation Checks ---
+                if an.action == "HOLD" or an.confidence < settings.trader.min_confidence:
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason=an.reason)
+
+                # Calculate risk and reward
+                risk = abs(an.entry_price - an.stop_loss)
+                reward = abs(an.take_profit - an.entry_price)
+
+                if risk == 0:
+                    trace.log("WARNING", f"AI suggested trade with zero risk for {symbol}. Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Zero risk trade")
+
+                rr_ratio = reward / risk
+                if rr_ratio < settings.trader.min_rr:
+                    trace.log("INFO", f"AI signal for {symbol} rejected due to low RR ({rr_ratio:.2f} < {settings.trader.min_rr}). Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Low RR")
+
+                # Ensure prices are valid and ordered correctly
+                if an.action == "BUY":
+                    if not (an.stop_loss < an.entry_price < an.take_profit):
+                        trace.log("WARNING", f"AI BUY signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid BUY prices")
+                elif an.action == "SELL":
+                    if not (an.take_profit < an.entry_price < an.stop_loss):
+                        trace.log("WARNING", f"AI SELL signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid SELL prices")
+
+                return an
+            except ValidationError as e:
+                # This catch is for Pydantic validation after JSON parsing
+                trace.log("ERROR", f"Pydantic validation error for {symbol} after JSON parsing. Raw AI response: '{text}'. Validation Error: {e}")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+            except json.JSONDecodeError:
+                # This catch is for the initial JSON parsing
+                trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+            except Exception as e:
+                # General catch-all for other unexpected errors during AI analysis
+                trace.log("ERROR", f"AI analysis failed for {symbol}. Raw response: '{text}'. Error: {e}", exc_info=True)
+                return SignalAnalysis(action="HOLD", confidence=0, reason="AI Error")
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+                    text = json_candidate.strip()
+                else:
+                    # Fallback to markdown cleaning if direct JSON extraction fails
+                    text = re.sub(r"^```json\s*", "", raw_response, flags=re.MULTILINE)
+                    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+                    text = text.strip()
+
+                if not text:
+                    trace.log("ERROR", f"AI returned empty or invalid JSON response for {symbol}. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Empty AI response")
+
+                # Pre-validation: Check if it looks like a JSON object before parsing
+                if not text.startswith('{') or not text.endswith('}'):
+                    trace.log("ERROR", f"AI response is not a valid JSON object for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid JSON format")
+
+                # --- Pydantic Validation ---
+                try:
+                    an = SignalAnalysis.model_validate_json(text)
+                except ValidationError as e:
+                    trace.log("ERROR", f"Pydantic validation error for {symbol}. Raw AI response: '{text}'. Validation Error: {e}")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+                except json.JSONDecodeError:
+                    trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+
+                # --- Post-validation Checks ---
+                if an.action == "HOLD" or an.confidence < settings.trader.min_confidence:
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason=an.reason)
+
+                # Calculate risk and reward
+                risk = abs(an.entry_price - an.stop_loss)
+                reward = abs(an.take_profit - an.entry_price)
+
+                if risk == 0:
+                    trace.log("WARNING", f"AI suggested trade with zero risk for {symbol}. Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Zero risk trade")
+
+                rr_ratio = reward / risk
+                if rr_ratio < settings.trader.min_rr:
+                    trace.log("INFO", f"AI signal for {symbol} rejected due to low RR ({rr_ratio:.2f} < {settings.trader.min_rr}). Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Low RR")
+
+                # Ensure prices are valid and ordered correctly
+                if an.action == "BUY":
+                    if not (an.stop_loss < an.entry_price < an.take_profit):
+                        trace.log("WARNING", f"AI BUY signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid BUY prices")
+                elif an.action == "SELL":
+                    if not (an.take_profit < an.entry_price < an.stop_loss):
+                        trace.log("WARNING", f"AI SELL signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid SELL prices")
+
+                return an
+            except ValidationError as e:
+                # This catch is for Pydantic validation after JSON parsing
+                trace.log("ERROR", f"Pydantic validation error for {symbol} after JSON parsing. Raw AI response: '{text}'. Validation Error: {e}")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+            except json.JSONDecodeError:
+                # This catch is for the initial JSON parsing
+                trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+            except Exception as e:
+                # General catch-all for other unexpected errors during AI analysis
+                trace.log("ERROR", f"AI analysis failed for {symbol}. Raw response: '{text}'. Error: {e}", exc_info=True)
+                return SignalAnalysis(action="HOLD", confidence=0, reason="AI Error")
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+                    text = json_candidate.strip()
+                else:
+                    # Fallback to markdown cleaning if direct JSON extraction fails
+                    text = re.sub(r"^```json\s*", "", raw_response, flags=re.MULTILINE)
+                    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+                    text = text.strip()
+
+                if not text:
+                    trace.log("ERROR", f"AI returned empty or invalid JSON response for {symbol}. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Empty AI response")
+
+                # Pre-validation: Check if it looks like a JSON object before parsing
+                if not text.startswith('{') or not text.endswith('}'):
+                    trace.log("ERROR", f"AI response is not a valid JSON object for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid JSON format")
+
+                # --- Pydantic Validation ---
+                try:
+                    an = SignalAnalysis.model_validate_json(text)
+                except ValidationError as e:
+                    trace.log("ERROR", f"Pydantic validation error for {symbol}. Raw AI response: '{text}'. Validation Error: {e}")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+                except json.JSONDecodeError:
+                    trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+
+                # --- Post-validation Checks ---
+                if an.action == "HOLD" or an.confidence < settings.trader.min_confidence:
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason=an.reason)
+
+                # Calculate risk and reward
+                risk = abs(an.entry_price - an.stop_loss)
+                reward = abs(an.take_profit - an.entry_price)
+
+                if risk == 0:
+                    trace.log("WARNING", f"AI suggested trade with zero risk for {symbol}. Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Zero risk trade")
+
+                rr_ratio = reward / risk
+                if rr_ratio < settings.trader.min_rr:
+                    trace.log("INFO", f"AI signal for {symbol} rejected due to low RR ({rr_ratio:.2f} < {settings.trader.min_rr}). Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Low RR")
+
+                # Ensure prices are valid and ordered correctly
+                if an.action == "BUY":
+                    if not (an.stop_loss < an.entry_price < an.take_profit):
+                        trace.log("WARNING", f"AI BUY signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid BUY prices")
+                elif an.action == "SELL":
+                    if not (an.take_profit < an.entry_price < an.stop_loss):
+                        trace.log("WARNING", f"AI SELL signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid SELL prices")
+
+                return an
+            except ValidationError as e:
+                # This catch is for Pydantic validation after JSON parsing
+                trace.log("ERROR", f"Pydantic validation error for {symbol} after JSON parsing. Raw AI response: '{text}'. Validation Error: {e}")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+            except json.JSONDecodeError:
+                # This catch is for the initial JSON parsing
+                trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+            except Exception as e:
+                # General catch-all for other unexpected errors during AI analysis
+                trace.log("ERROR", f"AI analysis failed for {symbol}. Raw response: '{text}'. Error: {e}", exc_info=True)
+                return SignalAnalysis(action="HOLD", confidence=0, reason="AI Error")
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+                    text = json_candidate.strip()
+                else:
+                    # Fallback to markdown cleaning if direct JSON extraction fails
+                    text = re.sub(r"^```json\s*", "", raw_response, flags=re.MULTILINE)
+                    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+                    text = text.strip()
+
+                if not text:
+                    trace.log("ERROR", f"AI returned empty or invalid JSON response for {symbol}. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Empty AI response")
+
+                # Pre-validation: Check if it looks like a JSON object before parsing
+                if not text.startswith('{') or not text.endswith('}'):
+                    trace.log("ERROR", f"AI response is not a valid JSON object for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid JSON format")
+
+                # --- Pydantic Validation ---
+                try:
+                    an = SignalAnalysis.model_validate_json(text)
+                except ValidationError as e:
+                    trace.log("ERROR", f"Pydantic validation error for {symbol}. Raw AI response: '{text}'. Validation Error: {e}")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+                except json.JSONDecodeError:
+                    trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+
+                # --- Post-validation Checks ---
+                if an.action == "HOLD" or an.confidence < settings.trader.min_confidence:
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason=an.reason)
+
+                # Calculate risk and reward
+                risk = abs(an.entry_price - an.stop_loss)
+                reward = abs(an.take_profit - an.entry_price)
+
+                if risk == 0:
+                    trace.log("WARNING", f"AI suggested trade with zero risk for {symbol}. Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Zero risk trade")
+
+                rr_ratio = reward / risk
+                if rr_ratio < settings.trader.min_rr:
+                    trace.log("INFO", f"AI signal for {symbol} rejected due to low RR ({rr_ratio:.2f} < {settings.trader.min_rr}). Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Low RR")
+
+                # Ensure prices are valid and ordered correctly
+                if an.action == "BUY":
+                    if not (an.stop_loss < an.entry_price < an.take_profit):
+                        trace.log("WARNING", f"AI BUY signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid BUY prices")
+                elif an.action == "SELL":
+                    if not (an.take_profit < an.entry_price < an.stop_loss):
+                        trace.log("WARNING", f"AI SELL signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid SELL prices")
+
+                return an
+            except ValidationError as e:
+                # This catch is for Pydantic validation after JSON parsing
+                trace.log("ERROR", f"Pydantic validation error for {symbol} after JSON parsing. Raw AI response: '{text}'. Validation Error: {e}")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+            except json.JSONDecodeError:
+                # This catch is for the initial JSON parsing
+                trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+            except Exception as e:
+                # General catch-all for other unexpected errors during AI analysis
+                trace.log("ERROR", f"AI analysis failed for {symbol}. Raw response: '{text}'. Error: {e}", exc_info=True)
+                return SignalAnalysis(action="HOLD", confidence=0, reason="AI Error")
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+                    text = json_candidate.strip()
+                else:
+                    # Fallback to markdown cleaning if direct JSON extraction fails
+                    text = re.sub(r"^```json\s*", "", raw_response, flags=re.MULTILINE)
+                    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+                    text = text.strip()
+
+                if not text:
+                    trace.log("ERROR", f"AI returned empty or invalid JSON response for {symbol}. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Empty AI response")
+
+                # Pre-validation: Check if it looks like a JSON object before parsing
+                if not text.startswith('{') or not text.endswith('}'):
+                    trace.log("ERROR", f"AI response is not a valid JSON object for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid JSON format")
+
+                # --- Pydantic Validation ---
+                try:
+                    an = SignalAnalysis.model_validate_json(text)
+                except ValidationError as e:
+                    trace.log("ERROR", f"Pydantic validation error for {symbol}. Raw AI response: '{text}'. Validation Error: {e}")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+                except json.JSONDecodeError:
+                    trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+
+                # --- Post-validation Checks ---
+                if an.action == "HOLD" or an.confidence < settings.trader.min_confidence:
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason=an.reason)
+
+                # Calculate risk and reward
+                risk = abs(an.entry_price - an.stop_loss)
+                reward = abs(an.take_profit - an.entry_price)
+
+                if risk == 0:
+                    trace.log("WARNING", f"AI suggested trade with zero risk for {symbol}. Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Zero risk trade")
+
+                rr_ratio = reward / risk
+                if rr_ratio < settings.trader.min_rr:
+                    trace.log("INFO", f"AI signal for {symbol} rejected due to low RR ({rr_ratio:.2f} < {settings.trader.min_rr}). Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Low RR")
+
+                # Ensure prices are valid and ordered correctly
+                if an.action == "BUY":
+                    if not (an.stop_loss < an.entry_price < an.take_profit):
+                        trace.log("WARNING", f"AI BUY signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid BUY prices")
+                elif an.action == "SELL":
+                    if not (an.take_profit < an.entry_price < an.stop_loss):
+                        trace.log("WARNING", f"AI SELL signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid SELL prices")
+
+                return an
+            except ValidationError as e:
+                # This catch is for Pydantic validation after JSON parsing
+                trace.log("ERROR", f"Pydantic validation error for {symbol} after JSON parsing. Raw AI response: '{text}'. Validation Error: {e}")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+            except json.JSONDecodeError:
+                # This catch is for the initial JSON parsing
+                trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+            except Exception as e:
+                # General catch-all for other unexpected errors during AI analysis
+                trace.log("ERROR", f"AI analysis failed for {symbol}. Raw response: '{text}'. Error: {e}", exc_info=True)
+                return SignalAnalysis(action="HOLD", confidence=0, reason="AI Error")
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+                    text = json_candidate.strip()
+                else:
+                    # Fallback to markdown cleaning if direct JSON extraction fails
+                    text = re.sub(r"^```json\s*", "", raw_response, flags=re.MULTILINE)
+                    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+                    text = text.strip()
+
+                if not text:
+                    trace.log("ERROR", f"AI returned empty or invalid JSON response for {symbol}. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Empty AI response")
+
+                # Pre-validation: Check if it looks like a JSON object before parsing
+                if not text.startswith('{') or not text.endswith('}'):
+                    trace.log("ERROR", f"AI response is not a valid JSON object for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid JSON format")
+
+                # --- Pydantic Validation ---
+                try:
+                    an = SignalAnalysis.model_validate_json(text)
+                except ValidationError as e:
+                    trace.log("ERROR", f"Pydantic validation error for {symbol}. Raw AI response: '{text}'. Validation Error: {e}")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+                except json.JSONDecodeError:
+                    trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+
+                # --- Post-validation Checks ---
+                if an.action == "HOLD" or an.confidence < settings.trader.min_confidence:
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason=an.reason)
+
+                # Calculate risk and reward
+                risk = abs(an.entry_price - an.stop_loss)
+                reward = abs(an.take_profit - an.entry_price)
+
+                if risk == 0:
+                    trace.log("WARNING", f"AI suggested trade with zero risk for {symbol}. Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Zero risk trade")
+
+                rr_ratio = reward / risk
+                if rr_ratio < settings.trader.min_rr:
+                    trace.log("INFO", f"AI signal for {symbol} rejected due to low RR ({rr_ratio:.2f} < {settings.trader.min_rr}). Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Low RR")
+
+                # Ensure prices are valid and ordered correctly
+                if an.action == "BUY":
+                    if not (an.stop_loss < an.entry_price < an.take_profit):
+                        trace.log("WARNING", f"AI BUY signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid BUY prices")
+                elif an.action == "SELL":
+                    if not (an.take_profit < an.entry_price < an.stop_loss):
+                        trace.log("WARNING", f"AI SELL signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid SELL prices")
+
+                return an
+            except ValidationError as e:
+                # This catch is for Pydantic validation after JSON parsing
+                trace.log("ERROR", f"Pydantic validation error for {symbol} after JSON parsing. Raw AI response: '{text}'. Validation Error: {e}")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+            except json.JSONDecodeError:
+                # This catch is for the initial JSON parsing
+                trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+            except Exception as e:
+                # General catch-all for other unexpected errors during AI analysis
+                trace.log("ERROR", f"AI analysis failed for {symbol}. Raw response: '{text}'. Error: {e}", exc_info=True)
+                return SignalAnalysis(action="HOLD", confidence=0, reason="AI Error")
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+                    text = json_candidate.strip()
+                else:
+                    # Fallback to markdown cleaning if direct JSON extraction fails
+                    text = re.sub(r"^```json\s*", "", raw_response, flags=re.MULTILINE)
+                    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+                    text = text.strip()
+
+                if not text:
+                    trace.log("ERROR", f"AI returned empty or invalid JSON response for {symbol}. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Empty AI response")
+
+                # Pre-validation: Check if it looks like a JSON object before parsing
+                if not text.startswith('{') or not text.endswith('}'):
+                    trace.log("ERROR", f"AI response is not a valid JSON object for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid JSON format")
+
+                # --- Pydantic Validation ---
+                try:
+                    an = SignalAnalysis.model_validate_json(text)
+                except ValidationError as e:
+                    trace.log("ERROR", f"Pydantic validation error for {symbol}. Raw AI response: '{text}'. Validation Error: {e}")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+                except json.JSONDecodeError:
+                    trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+
+                # --- Post-validation Checks ---
+                if an.action == "HOLD" or an.confidence < settings.trader.min_confidence:
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason=an.reason)
+
+                # Calculate risk and reward
+                risk = abs(an.entry_price - an.stop_loss)
+                reward = abs(an.take_profit - an.entry_price)
+
+                if risk == 0:
+                    trace.log("WARNING", f"AI suggested trade with zero risk for {symbol}. Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Zero risk trade")
+
+                rr_ratio = reward / risk
+                if rr_ratio < settings.trader.min_rr:
+                    trace.log("INFO", f"AI signal for {symbol} rejected due to low RR ({rr_ratio:.2f} < {settings.trader.min_rr}). Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Low RR")
+
+                # Ensure prices are valid and ordered correctly
+                if an.action == "BUY":
+                    if not (an.stop_loss < an.entry_price < an.take_profit):
+                        trace.log("WARNING", f"AI BUY signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid BUY prices")
+                elif an.action == "SELL":
+                    if not (an.take_profit < an.entry_price < an.stop_loss):
+                        trace.log("WARNING", f"AI SELL signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid SELL prices")
+
+                return an
+            except ValidationError as e:
+                # This catch is for Pydantic validation after JSON parsing
+                trace.log("ERROR", f"Pydantic validation error for {symbol} after JSON parsing. Raw AI response: '{text}'. Validation Error: {e}")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+            except json.JSONDecodeError:
+                # This catch is for the initial JSON parsing
+                trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+            except Exception as e:
+                # General catch-all for other unexpected errors during AI analysis
+                trace.log("ERROR", f"AI analysis failed for {symbol}. Raw response: '{text}'. Error: {e}", exc_info=True)
+                return SignalAnalysis(action="HOLD", confidence=0, reason="AI Error")
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
+, '}', json_candidate) # Remove anything after the last }
+                    text = json_candidate.strip()
+                else:
+                    # Fallback to markdown cleaning if direct JSON extraction fails
+                    text = re.sub(r"^```json\s*", "", raw_response, flags=re.MULTILINE)
+                    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+                    text = text.strip()
+
+                if not text:
+                    trace.log("ERROR", f"AI returned empty or invalid JSON response for {symbol}. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Empty AI response")
+
+                # Pre-validation: Check if it looks like a JSON object before parsing
+                if not text.startswith('{') or not text.endswith('}'):
+                    trace.log("ERROR", f"AI response is not a valid JSON object for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid JSON format")
+
+                # --- Pydantic Validation ---
+                try:
+                    an = SignalAnalysis.model_validate_json(text)
+                except ValidationError as e:
+                    trace.log("ERROR", f"Pydantic validation error for {symbol}. Raw AI response: '{text}'. Validation Error: {e}")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+                except json.JSONDecodeError:
+                    trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                    return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+
+                # --- Post-validation Checks ---
+                if an.action == "HOLD" or an.confidence < settings.trader.min_confidence:
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason=an.reason)
+
+                # Calculate risk and reward
+                risk = abs(an.entry_price - an.stop_loss)
+                reward = abs(an.take_profit - an.entry_price)
+
+                if risk == 0:
+                    trace.log("WARNING", f"AI suggested trade with zero risk for {symbol}. Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Zero risk trade")
+
+                rr_ratio = reward / risk
+                if rr_ratio < settings.trader.min_rr:
+                    trace.log("INFO", f"AI signal for {symbol} rejected due to low RR ({rr_ratio:.2f} < {settings.trader.min_rr}). Response: {text}")
+                    return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Low RR")
+
+                # Ensure prices are valid and ordered correctly
+                if an.action == "BUY":
+                    if not (an.stop_loss < an.entry_price < an.take_profit):
+                        trace.log("WARNING", f"AI BUY signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid BUY prices")
+                elif an.action == "SELL":
+                    if not (an.take_profit < an.entry_price < an.stop_loss):
+                        trace.log("WARNING", f"AI SELL signal prices invalid for {symbol}. Entry: {an.entry_price}, SL: {an.stop_loss}, TP: {an.take_profit}. Response: {text}")
+                        return SignalAnalysis(action="HOLD", confidence=an.confidence, reason="Invalid SELL prices")
+
+                return an
+            except ValidationError as e:
+                # This catch is for Pydantic validation after JSON parsing
+                trace.log("ERROR", f"Pydantic validation error for {symbol} after JSON parsing. Raw AI response: '{text}'. Validation Error: {e}")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="Invalid AI JSON structure")
+            except json.JSONDecodeError:
+                # This catch is for the initial JSON parsing
+                trace.log("ERROR", f"JSON decode error for {symbol}. Extracted: '{text}'. Raw response: '{raw_response}'")
+                return SignalAnalysis(action="HOLD", confidence=0, reason="JSON decode error")
+            except Exception as e:
+                # General catch-all for other unexpected errors during AI analysis
+                trace.log("ERROR", f"AI analysis failed for {symbol}. Raw response: '{text}'. Error: {e}", exc_info=True)
+                return SignalAnalysis(action="HOLD", confidence=0, reason="AI Error")
+
+# --- 4. Paper Trader ---
+
+class PaperTrader:
+    def __init__(self):
+        self.balance: Decimal = Decimal(0)
+        self.positions: Dict[str, Dict] = {}
+        self.history: List[Dict] = []
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='TraderThread') # For saving state
+        self._load_state()
+
+    def _load_state(self):
+        if STATE_FILE.exists():
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    d = json.load(f)
+                    self.balance = Decimal(d.get('balance', str(settings.trader.initial_balance)))
+                    self.history = d.get('history', [])
+                    self.positions = d.get('positions', {})
+                    # Convert Decimal strings back to Decimal objects
+                    for k, v in self.positions.items():
+                        for fld in ['entry_price', 'stop_loss', 'take_profit', 'qty', 'highest_price']:
+                            if fld in v and isinstance(v[fld], str):
+                                v[fld] = Decimal(v[fld])
+            except Exception as e:
+                trace.log("ERROR", f"Failed to load state file {STATE_FILE}: {e}")
+                # Initialize with defaults if loading fails
+                self.balance = settings.trader.initial_balance
+                self.history = []
+                self.positions = {}
+        else:
+            self.balance = settings.trader.initial_balance
+            self.history = []
+            self.positions = {}
+        trace.log("INFO", f"Trader state loaded. Balance: {self.balance}, Positions: {len(self.positions)}")
+
+    def save_state(self):
+        d = {
+            "balance": str(self.balance),
+            "history": self.history,
+            "positions": {
+                k: {key: str(val) if isinstance(val, Decimal) else val for key, val in v.items()}
+                for k, v in self.positions.items()
+            }
+        }
+        # Save asynchronously to avoid blocking the main loop
+        self.executor.submit(self._write_state, d)
+
+    def _write_state(self, data):
+        temp_file = STATE_FILE.with_suffix(".tmp")
+        try:
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_file, STATE_FILE) # Atomic replace
+        except Exception as e:
+            trace.log("ERROR", f"Failed to write state file: {e}")
+
+    def execute_trade_signal(self, snap: MarketSnapshot):
+        an = snap.analysis
+        if not an or an.action == "HOLD":
+            return
+
+        # Check if already in a position for this symbol
+        if snap.symbol in self.positions:
+            self._manage_open_position(snap)
+            return
+
+        # --- Open New Position ---
+        risk_amount = self.balance * settings.trader.risk_per_trade
+        stop_dist = abs(an.entry_price - an.stop_loss)
+
+        if stop_dist == 0:
+            trace.log("WARNING", f"Cannot open position for {snap.symbol}: Stop distance is zero.")
+            return
+
+        # Calculate quantity based on risk amount and stop distance
+        qty = (risk_amount / stop_dist).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP) # More precise quantity
+
+        # Calculate cost and check if affordable
+        cost = qty * an.entry_price
+        fees_on_entry = cost * settings.trader.trading_fee
+
+        if cost + fees_on_entry > self.balance:
+            trace.log("WARNING", f"Not enough balance to open {snap.symbol} position. Cost: {cost + fees_on_entry:.4f}, Balance: {self.balance:.4f}")
+            return
+
+        # Apply slippage to entry price
+        slip_amount = an.entry_price * settings.trader.slippage
+        real_entry_price = an.entry_price + slip_amount if an.action == "BUY" else an.entry_price - slip_amount
+
+        # Adjust stop loss and take profit based on slippage (optional, but good practice)
+        adjusted_stop_loss = an.stop_loss + slip_amount if an.action == "BUY" else an.stop_loss - slip_amount
+        adjusted_take_profit = an.take_profit + slip_amount if an.action == "BUY" else an.take_profit - slip_amount
+
+        # Update balance for fees
+        self.balance -= fees_on_entry
+
+        # Store position details
+        self.positions[snap.symbol] = {
+            "symbol": snap.symbol,
+            "side": an.action,
+            "qty": qty,
+            "entry_price": real_entry_price,
+            "stop_loss": adjusted_stop_loss,
+            "take_profit": adjusted_take_profit,
+            "highest_price": real_entry_price, # Track highest price for trailing stop
+            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "initial_sl": adjusted_stop_loss # Store initial SL for reference
+        }
+
+        self.balance -= (real_entry_price * qty) # Deduct actual cost
+        self.save_state()
+        trace.log("INFO", f"OPEN {snap.symbol} {an.action} | Qty: {qty:.5f} | Entry: {real_entry_price:.4f} | SL: {adjusted_stop_loss:.4f} | TP: {adjusted_take_profit:.4f}")
+
+    def _manage_open_position(self, snap: MarketSnapshot):
+        pos = self.positions[snap.symbol]
+        current_price = snap.price
+        side = pos['side']
+
+        # --- Trailing Stop Logic ---
+        if settings.trader.use_trailing_stop:
+            profit_pct = Decimal(0)
+            if side == "BUY":
+                if current_price > pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['highest_price'] - pos['entry_price']) / pos['entry_price']
+            elif side == "SELL":
+                if current_price < pos['highest_price']:
+                    pos['highest_price'] = current_price
+                profit_pct = (pos['entry_price'] - pos['highest_price']) / pos['entry_price']
+
+            if profit_pct >= settings.trader.trailing_activation:
+                trail_distance = pos['highest_price'] * settings.trader.trailing_callback
+                if side == "BUY":
+                    new_sl = pos['highest_price'] - trail_distance
+                    if new_sl > pos['stop_loss']: # Only move SL up
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} BUY -> {new_sl:.4f}")
+                elif side == "SELL":
+                    new_sl = pos['highest_price'] + trail_distance
+                    if new_sl < pos['stop_loss']: # Only move SL down
+                        pos['stop_loss'] = new_sl
+                        trace.log("INFO", f"TRAIL SL {snap.symbol} SELL -> {new_sl:.4f}")
+
+        # --- Check for Exit Conditions ---
+        exit_reason = None
+        if side == "BUY":
+            if current_price <= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price >= pos['take_profit']:
+                exit_reason = "TP"
+        elif side == "SELL":
+            if current_price >= pos['stop_loss']:
+                exit_reason = "SL"
+            elif current_price <= pos['take_profit']:
+                exit_reason = "TP"
+
+        if exit_reason:
+            self._close_position(snap, pos, current_price, exit_reason)
+
+    def _close_position(self, snap, pos, price, reason):
+        side = pos['side']
+
+        # Apply slippage to exit price
+        slip_amount = price * settings.trader.slippage
+        exit_price = price - slip_amount if side == "BUY" else price + slip_amount
+
+        # Calculate PnL
+        pnl_raw = (exit_price - pos['entry_price']) * pos['qty']
+        if side == "SELL":
+            pnl_raw = -pnl_raw
+
+        # Calculate trading fees on exit
+        fees_on_exit = exit_price * pos['qty'] * settings.trader.trading_fee
+
+        net_pnl = pnl_raw - fees_on_exit
+
+        # Update balance
+        self.balance += exit_price * pos['qty'] # Return principal
+        self.balance += net_pnl # Add net profit/loss
+
+        # Log historical trade
+        self.history.insert(0, {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "symbol": snap.symbol,
+            "side": side,
+            "qty": str(pos['qty']),
+            "entry_price": str(pos['entry_price']),
+            "exit_price": str(exit_price),
+            "pnl": str(net_pnl.quantize(Decimal("0.0001"))),
+            "reason": reason
+        })
+        self.history = self.history[:50] # Keep last 50 trades
+
+        # Remove from open positions
+        del self.positions[snap.symbol]
+
+        self.save_state()
+        trace.log("INFO", f"CLOSE {snap.symbol} {reason} | PnL: {net_pnl:.4f} | Bal: {self.balance:.4f}")
+
+# --- 5. Termux UI and Main Bot Logic ---
+
+class WhaleBot:
+    def __init__(self):
+        self.running = True
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        signal.signal(signal.SIGTERM, self._handle_sigint)
+
+        self.client = BybitClient()
+        self.analyzer = GeminiScalper()
+        self.trader = PaperTrader()
+        self.snapshots: Dict[str, MarketSnapshot] = {s: MarketSnapshot(symbol=s) for s in settings.symbols}
+        self.last_ui_update = 0
+
+    def _handle_sigint(self, signum, frame):
+        self.running = False
+        trace.log("INFO", f"Received signal {signum}, shutting down gracefully.")
+
+    def _render_ui(self) -> Layout:
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="body")
+        )
+
+        # --- Header ---
+        total_unrealized_pnl = Decimal(0)
+        for sym, pos in self.trader.positions.items():
+            snap = self.snapshots.get(sym)
+            if snap and snap.price > 0:
+                pnl = (snap.price - pos['entry_price']) * pos['qty']
+                if pos['side'] == "SELL":
+                    pnl = -pnl
+                total_unrealized_pnl += pnl
+
+        total_equity = self.trader.balance + total_unrealized_pnl
+        equity_color = "green" if total_equity >= settings.trader.initial_balance else "red"
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+
+        header_text = (
+            f"[bold]WhaleBot v8.2[/] | "
+            f"Balance: [cyan]${self.trader.balance:.2f}[/] | "
+            f"Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:.2f}[/] | "
+            f"Equity: [{equity_color}]${total_equity:.2f}[/]"
+        )
+        layout["header"].update(Panel(header_text, style="on blue", box=box.SIMPLE))
+
+        # --- Body Table ---
+        table = Table(expand=True, box=box.SIMPLE, padding=(0, 1), show_header=True)
+        table.add_column("Sym", style="bold", width=8)
+        table.add_column("Price", justify="right")
+        table.add_column("Act", justify="center", width=12)
+        if not IS_TERMUX:
+            table.add_column("Ind", justify="center")
+
+        # Sort snapshots by AI confidence (descending) for better visibility
+        sorted_snapshots = sorted(
+            [snap for snap in self.snapshots.values() if snap.price > 0],
+            key=lambda s: s.analysis.confidence if s.analysis else 0,
+            reverse=True
+        )
+
+        for s in sorted_snapshots:
+            pos = self.trader.positions.get(s.symbol)
+            price_str = f"{s.price:.3f}"
+            action_str = "[dim]-[/]"
+            indicator_str = ""
+
+            # Position display
+            if pos:
+                current_pnl = Decimal(0)
+                if s.price > 0:
+                    pnl_calc = (s.price - pos['entry_price']) * pos['qty']
+                    if pos['side'] == "SELL":
+                        pnl_calc = -pnl_calc
+                    current_pnl = pnl_calc
+
+                pnl_color = "green" if current_pnl >= 0 else "red"
+                action_str = f"[{pnl_color}]{pos['side']}[/]\n[{pnl_color}]{current_pnl:+.2f}[/]"
+                price_str += f"\n[{pnl_color}]{current_pnl:+.2f}[/]" # Show PnL next to price
+
+            # AI Signal display
+            elif s.analysis and s.analysis.action != "HOLD":
+                ai_color = "green" if s.analysis.action == "BUY" else "red"
+                action_str = f"[{ai_color}]{s.analysis.action}[/]\n[{ai_color}]{s.analysis.confidence*100:.0f}%[/]"
+
+            # Indicator summary (for non-Termux UI)
+            if not IS_TERMUX:
+                rsi_color = "red" if s.indicators.rsi > 70 else "green" if s.indicators.rsi < 30 else "dim"
+                trend_color = "green" if s.indicators.trend == "BULL" else "red" if s.indicators.trend == "BEAR" else "dim"
+                indicator_str = (
+                    f"RSI:[{rsi_color}]{s.indicators.rsi:.0f}[/] "
+                    f"T:[{trend_color}]{s.indicators.trend[0]}[/] "
+                    f"MACD:{s.indicators.macd_hist:+.2f}"
+                )
+
+            row = [s.symbol, price_str, action_str]
+            if not IS_TERMUX:
+                row.append(indicator_str)
+            table.add_row(*row)
+
+        layout["body"].update(table)
+        return layout
+
+    async def _process_symbol(self, symbol: str):
+        try:
+            df_i, df_d, ob, tick, lat = await self.client.fetch_data(symbol)
+            snap = self.snapshots[symbol]
+
+            if df_i.empty:
+                snap.error = "No kline data"
+                return
+
+            price = Decimal(str(tick.get("lastPrice", 0)))
+            snap.price = price
+            snap.latency_ms = lat
+            snap.error = None # Clear previous errors if fetch was successful
+
+            # Get timestamp of the latest candle fetched
+            try:
+                last_candle_ts = int(df_i.index[-1].timestamp())
+            except IndexError:
+                last_candle_ts = 0
+                snap.error = "Kline data empty after processing"
+
+            # Only re-analyze if new candle data or if managing an open position
+            if last_candle_ts == snap.last_candle_time and symbol not in self.trader.positions:
+                return
+
+            snap.last_candle_time = last_candle_ts
+            snap.indicators = TechnicalAnalyzer.calculate(df_i, df_d, ob)
+
+            # AI Analysis Trigger
+            if TechnicalAnalyzer.should_trigger_ai(snap.indicators, price, snap.last_ai_time):
+                snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
+                snap.last_ai_time = time.time()
+            else:
+                # Reset AI analysis if conditions are no longer met for AI trigger
+                if snap.analysis and snap.analysis.action != "HOLD":
+                    snap.analysis = SignalAnalysis(action="HOLD", confidence=snap.analysis.confidence, reason="Conditions changed")
+
+            # Execute trade if analysis provides a signal
+            if snap.analysis and snap.analysis.action != "HOLD":
+                self.trader.execute_trade_signal(snap)
+
+        except Exception as e:
+            trace.log("ERROR", f"Error processing {symbol}: {e}", exc_info=True)
+            snap = self.snapshots[symbol]
+            snap.error = str(e)
+
+    async def run(self):
+        console.print("[bold green]WhaleBot v8.2 Starting...[/]")
+        console.print(f"Using Gemini Model: {settings.gemini_model_name}")
+        console.print(f"Symbols: {', '.join(settings.symbols)}")
+        console.print(f"Interval: {settings.interval}m | Refresh Rate: {settings.refresh_rate}s")
+
+        # Initialize trader state
+        self.trader._load_state() # Ensure state is loaded before starting the loop
+
+        async with self.client:
+            try:
+                with Live(self._render_ui(), refresh_per_second=4, screen=True, console=console) as live:
+                    while self.running:
+                        # Fetch and process data for all symbols concurrently
+                        tasks = [self._process_symbol(s) for s in settings.symbols]
+                        await asyncio.gather(*tasks)
+
+                        # Update UI
+                        live.update(self._render_ui())
+
+                        # Calculate sleep time - longer if no open positions
+                        sleep_duration = settings.refresh_rate
+                        if not self.trader.positions:
+                            sleep_duration += 5 # Slightly longer pause if idle
+
+                        # Robust sleep to handle potential loop delays
+                        start_sleep = time.monotonic()
+                        while time.monotonic() - start_sleep < sleep_duration and self.running:
+                            live.update(self._render_ui()) # Update UI during sleep
+                            await asyncio.sleep(0.2)
+
+            except asyncio.CancelledError:
+                trace.log("INFO", "Main loop cancelled.")
+            except Exception as e:
+                trace.log("ERROR", f"An unhandled error occurred in the main loop: {e}", exc_info=True)
+            finally:
+                self.running = False # Ensure loop terminates
+                self.trader.save_state() # Save state one last time
+                console.print("\n[bold red]WhaleBot Shutdown Complete.[/]")
+
+if __name__ == "__main__":
+    # Basic validation for essential configuration
+    if not settings.gemini_api_key:
+        console.print("[bold red]Error: GEMINI_API_KEY is not set in .env file or environment variables.[/]")
+        sys.exit(1)
+
+    # Set logging level based on config
+    log_level_map = {
+        "DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL
+    }
+    numeric_level = log_level_map.get(settings.logging_level.upper(), logging.INFO)
+    logging.basicConfig(level=numeric_level)
+
+    try:
+        asyncio.run(WhaleBot().run())
+    except KeyboardInterrupt:
+        # Handled by signal handler, but good to have a fallback
+        pass
