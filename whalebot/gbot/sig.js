@@ -38,11 +38,11 @@ const NEON = {
 const CONFIG_FILE = 'config.json';
 const DEFAULTS = {
     symbol: 'BTCUSDT',
-    interval: '15',
+    interval: '3',
     limit: 300,
     loop_delay: 15,
-    gemini_model: 'gemini-1.5-flash',
-    min_confidence: 0.70,
+    gemini_model: 'gemini-2.5-flash-lite',
+    min_confidence: 0.50,
     max_drawdown_stop: 0.15,
     paper_trading: {
         initial_balance: 1000.00,
@@ -52,13 +52,13 @@ const DEFAULTS = {
         fee: 0.00055
     },
     indicators: {
-        rsi: 14,
+        rsi: 12,
         stoch_period: 14, stoch_k: 3, stoch_d: 3,
-        cci_period: 20,
-        bb_period: 20, bb_std: 2.0,
-        macd_fast: 12, macd_slow: 26, macd_sig: 9,
+        cci_period: 12,
+        bb_period: 40, bb_std: 2.0,
+        macd_fast: 3, macd_slow: 40, macd_sig: 89,
         adx_period: 14,
-        ehlers_period: 10, ehlers_mult: 3.0,
+        ehlers_period: 8, ehlers_mult: 1.5,
         vwap_period: 20 // VWAP period for smoothing/context
     },
     orderbook: {
