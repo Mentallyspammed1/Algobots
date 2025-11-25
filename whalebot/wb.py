@@ -122,8 +122,8 @@ def load_config(filepath: str, logger: logging.Logger) -> dict[str, Any]:
     """Load configuration from JSON file, creating a default if not found."""
     default_config = {
         # Core Settings
-        "symbol": "BTCUSDT",
-        "interval": "15",  # Changed "15m" to "15" to match Bybit API requirement
+        "symbol": "BCHUSDT",
+        "interval": "5",  # Changed "15m" to "15" to match Bybit API requirement
         "loop_delay": LOOP_DELAY_SECONDS,
         "orderbook_limit": 50,
         "signal_score_threshold": 2.0,

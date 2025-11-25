@@ -17,7 +17,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const config = {
   geminiApiKey: process.env.GEMINI_API_KEY,
-  tradingSymbol: process.env.TRADING_SYMBOL || 'POPCATUSDT',
+  tradingSymbol: process.env.TRADING_SYMBOL || 'BCHUSDT',
   liveDataMode: true,
   bybitApiKey: process.env.BYBIT_API_KEY,
   bybitApiSecret: process.env.BYBIT_API_SECRET,
@@ -359,7 +359,7 @@ class TradingBot {
 const bot = new TradingBot(
   new LogParser(config.tradingSymbol),
   new GeminiAnalyzer(config.geminiApiKey, config.tradingSymbol, {
-    model: "gemini-pro",
+    model: "gemini-2.5-flash-lite",
     retryDelay: 5000 // 5 seconds
   }),
   new SignalGenerator(config.tradingSymbol)

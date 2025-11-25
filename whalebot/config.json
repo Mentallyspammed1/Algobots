@@ -1,9 +1,9 @@
 {
-    "symbol": "BTCUSDT",
-    "interval": "15",
+    "symbol": "BCHUSDT",
+    "interval": "5",
     "loop_delay": 15,
     "orderbook_limit": 50,
-    "signal_score_threshold": 2.0,
+    "signal_score_threshold": 1.0,
     "volume_confirmation_multiplier": 1.5,
     "trade_management": {
         "enabled": true,
@@ -169,7 +169,11 @@
             "keltner_breakout": 0.18,
             "roc_signal": 0.1,
             "candlestick_confirmation": 0.15,
-            "fibonacci_pivot_points_confluence": 0.18
+            "fibonacci_pivot_points_confluence": 0.18,
+            "momentum_rsi_stoch_cci_wr_mfi": 0.18,
+            "volume_confirmation": 0.12
         }
-    }
+    },
+    "cooldown_sec": 60,
+    "hysteresis_ratio": 0.85
 }

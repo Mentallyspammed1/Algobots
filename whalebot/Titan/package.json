@@ -1,0 +1,50 @@
+{
+  "name": "whalewave-titan-refactored",
+  "version": "7.0.0",
+  "private": true,
+  "description": "Professional-grade cryptocurrency trading bot with AI analysis and comprehensive risk management",
+  "main": "whalewave_titan_refactored.js",
+  "type": "module",
+  "scripts": {
+    "start": "node whalewave_titan_refactored.js",
+    "test": "node --test",
+    "dev": "node --watch whalewave_titan_refactored.js",
+    "lint": "eslint *.js",
+    "setup": "node setup.js"
+  },
+  "keywords": [
+    "trading",
+    "bitcoin",
+    "cryptocurrency",
+    "ai",
+    "technical-analysis",
+    "trading-bot",
+    "bybit",
+    "gemini",
+    "paper-trading"
+  ],
+  "author": "MiniMax Agent",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^5.3.0",
+    "@google/generative-ai": "^0.2.1",
+    "dotenv": "^16.3.1",
+    "decimal.js": "^10.4.3"
+  },
+  "devDependencies": {
+    "eslint": "^8.54.0",
+    "eslint-plugin-node": "^11.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/whalewave-titan.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/whalewave-titan/issues"
+  },
+  "homepage": "https://github.com/yourusername/whalewave-titan#readme"
+}

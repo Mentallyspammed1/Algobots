@@ -1,5 +1,5 @@
 /**
- * ðŸŒŠ WHALEWAVE PRO - TITAN EDITION v7.1 (ENHANCED)
+ * 🌊 WHALEWAVE PRO - TITAN EDITION v7.1 (ENHANCED)
  * ===================================================
  * ENHANCEMENTS:
  * - Advanced weighted sentiment scoring with dynamic weights
@@ -1334,7 +1334,7 @@ class DataProvider {
         // Request interceptors
         this.api.interceptors.request.use(
             (config) => {
-                console.debug(`ðŸ”„ API Request: ${config.method?.toUpperCase()} ${config.url}`);
+                console.debug(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`);
                 return config;
             },
             (error) => Promise.reject(error)
@@ -1343,7 +1343,7 @@ class DataProvider {
         this.api.interceptors.response.use(
             (response) => response,
             (error) => {
-                console.error(`âŒ API Error: ${error.message}`);
+                console.error(`❌ API Error: ${error.message}`);
                 return Promise.reject(error);
             }
         );
@@ -1383,7 +1383,7 @@ class DataProvider {
                 lastError = error;
                 
                 if (attempt === maxRetries) {
-                    console.error(`âŒ Failed to fetch ${endpoint} after ${maxRetries + 1} attempts`);
+                    console.error(`❌ Failed to fetch ${endpoint} after ${maxRetries + 1} attempts`);
                     break;
                 }
                 
@@ -1392,7 +1392,7 @@ class DataProvider {
                     this.config.delays.retry, 
                     this.config.api.backoffFactor
                 );
-                console.warn(`âš ï¸ Retry ${attempt + 1}/${maxRetries} for ${endpoint} in ${delay}ms`);
+                console.warn(`⚠️ Retry ${attempt + 1}/${maxRetries} for ${endpoint} in ${delay}ms`);
                 await sleep(delay);
             }
         }
@@ -1445,7 +1445,7 @@ class DataProvider {
             return this.parseMarketData(ticker, kline, klineMTF, orderbook, daily, weekly);
             
         } catch (error) {
-            console.warn(COLORS.ORANGE(`âš ï¸ Data fetch failed: ${error.message}`));
+            console.warn(COLORS.ORANGE(`⚠️ Data fetch failed: ${error.message}`));
             return null;
         }
     }
@@ -1542,7 +1542,7 @@ class EnhancedPaperExchange {
         if (now.getDate() !== this.lastDailyReset.getDate()) {
             this.dailyPnL = new Decimal(0);
             this.lastDailyReset = now;
-            console.log(COLORS.GRAY('ðŸ“… Daily P&L reset'));
+            console.log(COLORS.GRAY('📅 Daily P&L reset'));
         }
     }
     
@@ -1554,7 +1554,7 @@ class EnhancedPaperExchange {
             this.startBalance.sub(this.balance).div(this.startBalance).mul(100);
             
         if (drawdown.gt(this.config.maxDrawdown)) {
-            console.error(COLORS.RED(`ðŸš¨ MAX DRAWDOWN HIT (${drawdown.toFixed(2)}%)`));
+            console.error(COLORS.RED(`🚨 MAX DRAWDOWN HIT (${drawdown.toFixed(2)}%)`));
             return false;
         }
         
@@ -1563,7 +1563,7 @@ class EnhancedPaperExchange {
             this.dailyPnL.div(this.startBalance).mul(100);
             
         if (dailyLossPct.lt(-this.config.dailyLossLimit)) {
-            console.error(COLORS.RED(`ðŸš¨ DAILY LOSS LIMIT HIT (${dailyLossPct.toFixed(2)}%)`));
+            console.error(COLORS.RED(`🚨 DAILY LOSS LIMIT HIT (${dailyLossPct.toFixed(2)}%)`));
             return false;
         }
         
@@ -1571,7 +1571,7 @@ class EnhancedPaperExchange {
         if (this.config.volatilityAdjustment) {
             const volatilityFactor = this.calculateVolatilityFactor();
             if (volatilityFactor > 2.0) {
-                console.warn(COLORS.YELLOW(`âš ï¸ High volatility detected (${volatilityFactor.toFixed(2)}x), reducing position size`));
+                console.warn(COLORS.YELLOW(`⚠️ High volatility detected (${volatilityFactor.toFixed(2)}x), reducing position size`));
                 return false;
             }
         }
@@ -1634,7 +1634,7 @@ class EnhancedPaperExchange {
             const rrRatio = reward / risk;
             
             if (rrRatio < 1.2) {
-                console.warn(COLORS.YELLOW(`âš ï¸ Poor risk-reward ratio: ${rrRatio.toFixed(2)}`));
+                console.warn(COLORS.YELLOW(`⚠️ Poor risk-reward ratio: ${rrRatio.toFixed(2)}`));
                 return false;
             }
         }
@@ -1749,7 +1749,7 @@ class EnhancedPaperExchange {
             this.metrics.totalFees = this.metrics.totalFees.add(fee);
             
             console.log(COLORS.GREEN(
-                `ðŸ“ˆ OPEN ${signal.action} [${signal.strategy}] ` +
+                `📈 OPEN ${signal.action} [${signal.strategy}] ` +
                 `@ ${executionPrice.toFixed(4)} | ` +
                 `Size: ${quantity.toFixed(4)} | ` +
                 `SL: ${stopLoss.toFixed(4)} | ` +
@@ -1983,10 +1983,10 @@ ENHANCED WEIGHTED SENTIMENT SCORE:
   Structure ${components.structure?.score?.toFixed(2) || 'N/A'}
 
 CRITICAL THRESHOLDS:
-- Strong BUY Signal: WSS â‰¥ ${config.indicators.weights.actionThreshold + 1} and Confidence â‰¥ 0.8
-- BUY Signal: WSS â‰¥ ${config.indicators.weights.actionThreshold} and Confidence â‰¥ 0.75
-- Strong SELL Signal: WSS â‰¤ -${config.indicators.weights.actionThreshold + 1} and Confidence â‰¥ 0.8
-- SELL Signal: WSS â‰¤ -${config.indicators.weights.actionThreshold} and Confidence â‰¥ 0.75
+- Strong BUY Signal: WSS ≥ ${config.indicators.weights.actionThreshold + 1} and Confidence ≥ 0.8
+- BUY Signal: WSS ≥ ${config.indicators.weights.actionThreshold} and Confidence ≥ 0.75
+- Strong SELL Signal: WSS ≤ -${config.indicators.weights.actionThreshold + 1} and Confidence ≥ 0.8
+- SELL Signal: WSS ≤ -${config.indicators.weights.actionThreshold} and Confidence ≥ 0.75
 - HOLD: All other conditions
 
 MARKET CONTEXT:
@@ -2178,24 +2178,24 @@ class EnhancedTradingEngine {
     async start() {
         console.clear();
         console.log(COLORS.bg(COLORS.BOLD(COLORS.PURPLE(
-            ` ðŸš€ WHALEWAVE TITAN v7.1 ENHANCED STARTING... `
+            ` 🚀 WHALEWAVE TITAN v7.1 ENHANCED STARTING... `
         ))));
         
         this.isRunning = true;
         
         this.setupSignalHandlers();
         
-        console.log(COLORS.GREEN('âœ… Enhanced engine started successfully'));
-        console.log(COLORS.GRAY(`ðŸ”§ Configuration: ${this.config.symbol}`));
-        console.log(COLORS.GRAY(`â±ï¸ Loop delay: ${this.config.delays.loop}ms`));
-        console.log(COLORS.CYAN('ðŸ“Š Enhanced Features: Multi-Component WSS, Volume Analysis, Order Flow'));
+        console.log(COLORS.GREEN('✅ Enhanced engine started successfully'));
+        console.log(COLORS.GRAY(`🔧 Configuration: ${this.config.symbol}`));
+        console.log(COLORS.GRAY(`⏱️ Loop delay: ${this.config.delays.loop}ms`));
+        console.log(COLORS.CYAN('📊 Enhanced Features: Multi-Component WSS, Volume Analysis, Order Flow'));
         
         await this.mainLoop();
     }
     
     setupSignalHandlers() {
         const shutdown = (signal) => {
-            console.log(COLORS.RED(`\nðŸ›‘ Received ${signal}. Starting graceful shutdown...`));
+            console.log(COLORS.RED(`\n🛑 Received ${signal}. Starting graceful shutdown...`));
             this.isRunning = false;
             this.displayEnhancedShutdownReport();
             process.exit(0);
@@ -2228,7 +2228,7 @@ class EnhancedTradingEngine {
                 const dataFetchTime = Date.now() - startTime;
                 
                 if (!marketData) {
-                    console.warn(COLORS.YELLOW('âš ï¸ Failed to fetch market data, retrying...'));
+                    console.warn(COLORS.YELLOW('⚠️ Failed to fetch market data, retrying...'));
                     await sleep(this.config.delays.retry);
                     continue;
                 }
@@ -2304,10 +2304,10 @@ class EnhancedTradingEngine {
     displayEnhancedDashboard(marketData, analysis, enhancedWSS, signal) {
         console.clear();
         
-        const border = COLORS.GRAY('â”€'.repeat(90));
+        const border = COLORS.GRAY('─'.repeat(90));
         console.log(border);
         console.log(COLORS.bg(COLORS.BOLD(COLORS.PURPLE(
-            ` ðŸŒŠ WHALEWAVE TITAN v7.1 ENHANCED | ${this.config.symbol} | $${marketData.price.toFixed(4)} `
+            ` 🌊 WHALEWAVE TITAN v7.1 ENHANCED | ${this.config.symbol} | $${marketData.price.toFixed(4)} `
         ))));
         console.log(border);
         
@@ -2319,17 +2319,17 @@ class EnhancedTradingEngine {
         const confidenceColor = wssConfidence >= 0.8 ? COLORS.GREEN :
                                wssConfidence >= 0.6 ? COLORS.YELLOW : COLORS.RED;
         
-        console.log(`ðŸŽ¯ ENHANCED WSS: ${wssColor(wssScore.toFixed(2))} | ` +
+        console.log(`🎯 ENHANCED WSS: ${wssColor(wssScore.toFixed(2))} | ` +
                    `Confidence: ${confidenceColor((wssConfidence * 100).toFixed(1))}% | ` +
                    `Signal: ${this.colorizeSignal(signal.action)} ` +
                    `(${(signal.confidence * 100).toFixed(0)}%)`);
         
-        console.log(COLORS.GRAY(`ðŸ“‹ Strategy: ${COLORS.BLUE(signal.strategy)} | ${signal.reason}`));
+        console.log(COLORS.GRAY(`📋 Strategy: ${COLORS.BLUE(signal.strategy)} | ${signal.reason}`));
         console.log(border);
         
         // Component breakdown
         const components = enhancedWSS.components;
-        console.log(`ðŸ”§ Components: ` +
+        console.log(`🔧 Components: ` +
                    `Trend ${this.colorizeComponent(components.trend?.score)} | ` +
                    `Momentum ${this.colorizeComponent(components.momentum?.score)} | ` +
                    `Volume ${this.colorizeComponent(components.volume?.score)} | ` +
@@ -2342,7 +2342,7 @@ class EnhancedTradingEngine {
                            analysis.marketRegime.includes('LOW') ? COLORS.GREEN : COLORS.YELLOW;
         const trendColor = analysis.trendMTF === 'BULLISH' ? COLORS.GREEN : COLORS.RED;
         
-        console.log(`ðŸ“Š Regime: ${regimeColor(analysis.marketRegime)} | ` +
+        console.log(`📊 Regime: ${regimeColor(analysis.marketRegime)} | ` +
                    `Volatility: ${COLORS.CYAN(Utils.safeNumber(analysis.volatility?.[analysis.volatility.length - 1], 0).toFixed(4))} | ` +
                    `Squeeze: ${analysis.isSqueeze ? COLORS.ORANGE('ACTIVE') : 'OFF'} | ` +
                    `MTF: ${trendColor(analysis.trendMTF)}`);
@@ -2354,7 +2354,7 @@ class EnhancedTradingEngine {
         const mfi = Utils.safeNumber(analysis.mfi?.[analysis.mfi.length - 1], 50);
         const adx = Utils.safeNumber(analysis.adx?.adx?.[analysis.adx.adx.length - 1], 0);
         
-        console.log(`ðŸ“ˆ RSI: ${this.colorizeIndicator(rsi, 'rsi')} | ` +
+        console.log(`📈 RSI: ${this.colorizeIndicator(rsi, 'rsi')} | ` +
                    `Williams %R: ${this.colorizeIndicator(williams, 'williams')} | ` +
                    `CCI: ${this.colorizeIndicator(cci, 'cci')} | ` +
                    `MFI: ${this.colorizeIndicator(mfi, 'mfi')} | ` +
@@ -2366,7 +2366,7 @@ class EnhancedTradingEngine {
         const volumeColor = volumeFlow.includes('BULLISH') ? COLORS.GREEN :
                            volumeFlow.includes('BEARISH') ? COLORS.RED : COLORS.YELLOW;
         
-        console.log(`ðŸ“Š Volume: ${volumeColor(volumeFlow)} | ` +
+        console.log(`📊 Volume: ${volumeColor(volumeFlow)} | ` +
                    `Ratio: ${COLORS.CYAN(Utils.safeNumber(analysis.volumeAnalysis?.volumeRatio?.[analysis.volumeAnalysis.volumeRatio.length - 1], 1).toFixed(2))}x | ` +
                    `OrderFlow: ${this.colorizeOrderFlow(analysis.orderBookAnalysis?.flow)} | ` +
                    `Imbalance: ${this.colorizeImbalance(analysis.orderBookAnalysis?.imbalance)}`);
@@ -2374,7 +2374,7 @@ class EnhancedTradingEngine {
         // Structure analysis
         const divColor = analysis.divergence.includes('BULLISH') ? COLORS.GREEN :
                         analysis.divergence.includes('BEARISH') ? COLORS.RED : COLORS.GRAY;
-        console.log(`ðŸ” Divergence: ${divColor(analysis.divergence)} | ` +
+        console.log(`🔍 Divergence: ${divColor(analysis.divergence)} | ` +
                    `FVG: ${analysis.fvg ? COLORS.YELLOW(analysis.fvg.type) : 'None'} | ` +
                    `SR Levels: ${COLORS.CYAN((analysis.supportResistance?.support?.length || 0) + (analysis.supportResistance?.resistance?.length || 0))}`);
         console.log(border);
@@ -2385,7 +2385,7 @@ class EnhancedTradingEngine {
         const profitColor = metrics.profitFactor > 1.5 ? COLORS.GREEN :
                            metrics.profitFactor > 1.0 ? COLORS.YELLOW : COLORS.RED;
         
-        console.log(`ðŸ’° Balance: ${COLORS.GREEN('$' + metrics.currentBalance.toFixed(2))} | ` +
+        console.log(`💰 Balance: ${COLORS.GREEN('$' + metrics.currentBalance.toFixed(2))} | ` +
                    `Daily P&L: ${pnlColor('$' + metrics.dailyPnL.toFixed(2))} | ` +
                    `Win Rate: ${COLORS.CYAN((metrics.winRate * 100).toFixed(1))}% | ` +
                    `Profit Factor: ${profitColor(metrics.profitFactor.toFixed(2))}`);
@@ -2394,7 +2394,7 @@ class EnhancedTradingEngine {
         if (metrics.openPosition) {
             const currentPnl = this.exchange.getCurrentPnL(marketData.price);
             const posColor = currentPnl.gte(0) ? COLORS.GREEN : COLORS.RED;
-            console.log(COLORS.BLUE(`ðŸ“ˆ OPEN: ${metrics.openPosition.side} @ ${metrics.openPosition.entry.toFixed(4)} | ` +
+            console.log(COLORS.BLUE(`📈 OPEN: ${metrics.openPosition.side} @ ${metrics.openPosition.entry.toFixed(4)} | ` +
                 `PnL: ${posColor(currentPnl.toFixed(2))} | ` +
                 `Conf: ${(metrics.openPosition.confidence * 100).toFixed(0)}% | ` +
                 `Strategy: ${metrics.openPosition.strategy}`));
@@ -2406,7 +2406,7 @@ class EnhancedTradingEngine {
         const avgMemory = this.performanceMetrics.memoryUsage.length > 0 ? 
             this.performanceMetrics.memoryUsage.reduce((sum, m) => sum + m, 0) / this.performanceMetrics.memoryUsage.length : 0;
         
-        console.log(COLORS.GRAY(`â±ï¸ Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m | ` +
+        console.log(COLORS.GRAY(`⏱️ Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m | ` +
                    `Avg Loop: ${this.stats.averageLoopTime.toFixed(0)}ms | ` +
                    `Memory: ${COLORS.CYAN(avgMemory.toFixed(1))}MB | ` +
                    `Success Rate: ${COLORS.CYAN(((this.stats.dataFetchSuccesses / this.stats.dataFetchAttempts) * 100).toFixed(1))}%`));
@@ -2472,36 +2472,36 @@ class EnhancedTradingEngine {
     }
     
     displayEnhancedShutdownReport() {
-        console.log(COLORS.RED('\nðŸ“Š ENHANCED SHUTDOWN REPORT'));
+        console.log(COLORS.RED('\n📊 ENHANCED SHUTDOWN REPORT'));
         console.log(COLORS.GRAY('='.repeat(60)));
         
         const metrics = this.exchange.getMetrics();
         const uptime = (Date.now() - this.startTime) / 1000 / 60; // minutes
         
-        console.log(`â±ï¸ Uptime: ${uptime.toFixed(1)} minutes`);
-        console.log(`ðŸ”„ Data Success Rate: ${(this.stats.dataFetchSuccesses / this.stats.dataFetchAttempts * 100).toFixed(1)}%`);
-        console.log(`ðŸ¤– AI Analysis Success: ${(this.stats.aiAnalysisCalls / this.stats.dataFetchSuccesses * 100).toFixed(1)}%`);
-        console.log(`ðŸŽ¯ Enhanced WSS Calculations: ${this.stats.wssCalculations}`);
-        console.log(`ðŸ“Š Volume Analyses: ${this.stats.volumeAnalyses}`);
-        console.log(`ðŸ“ˆ Order Book Analyses: ${this.stats.orderBookAnalyses}`);
-        console.log(`ðŸ’¼ Total Trades: ${metrics.totalTrades}`);
-        console.log(`ðŸ† Win Rate: ${(metrics.winRate * 100).toFixed(1)}%`);
-        console.log(`ðŸ’° Profit Factor: ${metrics.profitFactor.toFixed(2)}`);
-        console.log(`ðŸ’µ Final Balance: $${metrics.currentBalance.toFixed(2)}`);
-        console.log(`ðŸ“ˆ Total Return: ${metrics.totalReturn.toFixed(2)}%`);
-        console.log(`ðŸ“‰ Max Drawdown: ${metrics.maxDrawdown.toFixed(2)}%`);
-        console.log(`â±ï¸ Avg Trade Duration: ${metrics.avgTradeDuration.toFixed(1)} minutes`);
-        console.log(`ðŸ”„ Max Consecutive Losses: ${metrics.maxConsecutiveLosses}`);
-        console.log(`ðŸ’¸ Total Fees: $${metrics.totalFees.toFixed(4)}`);
+        console.log(`⏱️ Uptime: ${uptime.toFixed(1)} minutes`);
+        console.log(`🔄 Data Success Rate: ${(this.stats.dataFetchSuccesses / this.stats.dataFetchAttempts * 100).toFixed(1)}%`);
+        console.log(`🤖 AI Analysis Success: ${(this.stats.aiAnalysisCalls / this.stats.dataFetchSuccesses * 100).toFixed(1)}%`);
+        console.log(`🎯 Enhanced WSS Calculations: ${this.stats.wssCalculations}`);
+        console.log(`📊 Volume Analyses: ${this.stats.volumeAnalyses}`);
+        console.log(`📈 Order Book Analyses: ${this.stats.orderBookAnalyses}`);
+        console.log(`💼 Total Trades: ${metrics.totalTrades}`);
+        console.log(`🏆 Win Rate: ${(metrics.winRate * 100).toFixed(1)}%`);
+        console.log(`💰 Profit Factor: ${metrics.profitFactor.toFixed(2)}`);
+        console.log(`💵 Final Balance: $${metrics.currentBalance.toFixed(2)}`);
+        console.log(`📈 Total Return: ${metrics.totalReturn.toFixed(2)}%`);
+        console.log(`📉 Max Drawdown: ${metrics.maxDrawdown.toFixed(2)}%`);
+        console.log(`⏱️ Avg Trade Duration: ${metrics.avgTradeDuration.toFixed(1)} minutes`);
+        console.log(`🔄 Max Consecutive Losses: ${metrics.maxConsecutiveLosses}`);
+        console.log(`💸 Total Fees: $${metrics.totalFees.toFixed(4)}`);
         
         // Performance summary
         const avgMemory = this.performanceMetrics.memoryUsage.length > 0 ? 
             this.performanceMetrics.memoryUsage.reduce((sum, m) => sum + m, 0) / this.performanceMetrics.memoryUsage.length : 0;
-        console.log(`ðŸ–¥ï¸ Avg Memory Usage: ${avgMemory.toFixed(1)}MB`);
-        console.log(`âš¡ Avg Loop Time: ${this.stats.averageLoopTime.toFixed(0)}ms`);
+        console.log(`🖥️ Avg Memory Usage: ${avgMemory.toFixed(1)}MB`);
+        console.log(`⚡ Avg Loop Time: ${this.stats.averageLoopTime.toFixed(0)}ms`);
         
         console.log(COLORS.GRAY('='.repeat(60)));
-        console.log(COLORS.RED('ðŸ›‘ Enhanced engine stopped gracefully'));
+        console.log(COLORS.RED('🛑 Enhanced engine stopped gracefully'));
     }
 }
 
@@ -2511,10 +2511,10 @@ class EnhancedTradingEngine {
 
 async function main() {
     try {
-        console.log(COLORS.YELLOW('ðŸ”§ Loading enhanced configuration...'));
+        console.log(COLORS.YELLOW('🔧 Loading enhanced configuration...'));
         const config = await ConfigManager.load();
         
-        console.log(COLORS.GREEN('âœ… Configuration loaded successfully'));
+        console.log(COLORS.GREEN('✅ Configuration loaded successfully'));
         
         const engine = new EnhancedTradingEngine(config);
         await engine.start();
