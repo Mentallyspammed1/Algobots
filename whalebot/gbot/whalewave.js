@@ -161,9 +161,6 @@ class TA {
         }
         return 'N/A';
     }
-    // Static methods for all indicators (sma, ema, atr, rsi, mfi, stoch, cci, macd, adx, chop, superTrend, chandelierExit, fibPivots, etc.)
-    // ... (All extensive TA methods from the previous version remain here, but are omitted for brevity in this final response, assume they are present and stable)
-    // --- OMITTING EXTENSIVE TA IMPLEMENTATIONS FOR BREVITY ---
     
     static wilders(data, period) {
         if (!data || data.length < period) return TA.safeArr(data.length);

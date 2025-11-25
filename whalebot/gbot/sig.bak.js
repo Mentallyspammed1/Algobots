@@ -1,13 +1,12 @@
 /**
- * 🌊 WHALEWAVE PRO (Stable Edition)
+ * 🌊 WHALEWAVE PRO (Stable Edition - Pyrmethus Reforged)
  * -----------------------------------------------------
- * - Fixed AI Error: Removed incompatible JSON mode param.
+ * - Fixed AI Error: Added strict numeric validation for entry/sl/tp.
+ * - Defensive Math: PaperExchange now catches undefined values before crashing.
+ * - Robust Parsing: AI output is sanitized before JSON parsing.
  * - Model: Uses stable 'gemini-1.5-flash'.
- * - Fallback: Robust Regex JSON parsing.
  * - Enhanced: Added Orderbook analysis for better context.
  * - Enhanced: Implemented VWAP and Fibonacci Pivots.
- * - Enhanced: Refactored data fetching and analysis.
- * - Enhanced: Improved logging and UI.
  */
 
 import axios from 'axios';
@@ -17,7 +16,6 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { setTimeout } from 'timers/promises';
 import { Decimal } from 'decimal.js';
-import crypto from 'crypto';
 
 dotenv.config();
 
@@ -40,11 +38,11 @@ const NEON = {
 const CONFIG_FILE = 'config.json';
 const DEFAULTS = {
     symbol: 'BTCUSDT',
-    interval: '15',
+    interval: '3',
     limit: 300,
     loop_delay: 15,
-    gemini_model: 'gemini-1.5-flash',
-    min_confidence: 0.70,
+    gemini_model: 'gemini-2.5-flash-lite',
+    min_confidence: 0.50,
     max_drawdown_stop: 0.15,
     paper_trading: {
         initial_balance: 1000.00,
@@ -54,13 +52,13 @@ const DEFAULTS = {
         fee: 0.00055
     },
     indicators: {
-        rsi: 14,
+        rsi: 12,
         stoch_period: 14, stoch_k: 3, stoch_d: 3,
-        cci_period: 20,
-        bb_period: 20, bb_std: 2.0,
-        macd_fast: 12, macd_slow: 26, macd_sig: 9,
+        cci_period: 12,
+        bb_period: 40, bb_std: 2.0,
+        macd_fast: 3, macd_slow: 40, macd_sig: 89,
         adx_period: 14,
-        ehlers_period: 10, ehlers_mult: 3.0,
+        ehlers_period: 8, ehlers_mult: 1.5,
         vwap_period: 20 // VWAP period for smoothing/context
     },
     orderbook: {
@@ -319,8 +317,8 @@ class DataProvider {
                 o: parseFloat(c[1]), h: parseFloat(c[2]), l: parseFloat(c[3]), c: parseFloat(c[4]), v: parseFloat(c[5])
             }));
 
-            const bids = ob.data.result.b; // Raw bids
-            const asks = ob.data.result.a; // Raw asks
+            const bids = ob.data.result.b || []; // Safety fallback
+            const asks = ob.data.result.a || []; // Safety fallback
             const bidVol = bids.reduce((a, b) => a + parseFloat(b[1]), 0);
             const askVol = asks.reduce((a, b) => a + parseFloat(b[1]), 0);
 
@@ -329,8 +327,8 @@ class DataProvider {
             return {
                 price: parseFloat(ticker.data.result.list[0].lastPrice),
                 candles,
-                rawBids: bids, // FIX: Return raw bids
-                rawAsks: asks, // FIX: Return raw asks
+                rawBids: bids,
+                rawAsks: asks,
                 obImbalance: (bidVol - askVol) / (bidVol + askVol || 1),
                 daily: {
                     h: parseFloat(prevDay[2]),
@@ -380,27 +378,51 @@ class PaperExchange {
                 return;
             }
         } else if (signal.action !== 'HOLD' && signal.confidence >= config.min_confidence) {
-            const riskAmt = this.balance.mul(config.paper_trading.risk_percent / 100);
-            const dist = new Decimal(Math.abs(signal.entry - signal.sl));
-            if (dist.isZero()) return;
+            
+            // --- 🛡️ SAFETY: CHECK FOR NUMERIC VALUES ---
+            if (!signal.entry || !signal.sl || !signal.tp) {
+                logger.warn("Signal ignored: AI returned incomplete trade data (missing Entry/SL/TP).");
+                return;
+            }
 
-            let qty = riskAmt.div(dist);
-            const maxQty = this.balance.mul(config.paper_trading.leverage_cap).div(price);
-            if (qty.gt(maxQty)) qty = maxQty;
-            if (qty.mul(price).lt(10)) return; // Minimum trade value check
+            try {
+                const riskAmt = this.balance.mul(config.paper_trading.risk_percent / 100);
+                
+                // Calculate distance safely
+                const dist = new Decimal(Math.abs(signal.entry - signal.sl));
+                
+                // Prevent division by zero
+                if (dist.isZero()) {
+                     logger.warn("Signal ignored: SL is same as Entry.");
+                     return;
+                }
 
-            const entryPrice = new Decimal(signal.entry);
-            const fee = entryPrice.mul(qty).mul(config.paper_trading.fee);
-            this.balance = this.balance.sub(fee);
+                let qty = riskAmt.div(dist);
+                const maxQty = this.balance.mul(config.paper_trading.leverage_cap).div(price);
+                if (qty.gt(maxQty)) qty = maxQty;
+                
+                // Minimum value check
+                if (qty.mul(price).lt(10)) {
+                    logger.warn("Signal ignored: Trade value too low (< $10).");
+                    return;
+                }
 
-            this.pos = { // Set the current active position
-                side: signal.action,
-                entry: entryPrice,
-                qty: qty,
-                sl: new Decimal(signal.sl),
-                tp: new Decimal(signal.tp)
-            };
-            logger.success(`OPEN ${NEON.BOLD(signal.action)} @ ${entryPrice.toFixed(2)} | Size: ${qty.toFixed(4)}`);
+                const entryPrice = new Decimal(signal.entry);
+                const fee = entryPrice.mul(qty).mul(config.paper_trading.fee);
+                this.balance = this.balance.sub(fee);
+
+                this.pos = {
+                    side: signal.action,
+                    entry: entryPrice,
+                    qty: qty,
+                    sl: new Decimal(signal.sl),
+                    tp: new Decimal(signal.tp)
+                };
+                logger.success(`OPEN ${NEON.BOLD(signal.action)} @ ${entryPrice.toFixed(2)} | Size: ${qty.toFixed(4)}`);
+            
+            } catch (err) {
+                logger.error(`Trade Execution Logic Failed: ${err.message}`);
+            }
         }
     }
 }
@@ -445,6 +467,11 @@ class GeminiBrain {
         4. Structure: Use Fib levels, Support/Resistance, and VWAP for entry/exit context.
         5. Orderbook: Consider imbalance for confirmation.
 
+        IMPORTANT: 
+        - "entry", "sl", and "tp" MUST be valid numbers if action is BUY or SELL. 
+        - Do not use strings for prices. Do not return null for prices in a trade.
+        - If no valid setup, action is "HOLD".
+
         Output valid JSON only. No markdown code blocks.
         JSON Format: { "action": "BUY" | "SELL" | "HOLD", "confidence": 0.0-1.0, "entry": number, "sl": number, "tp": number, "reason": "string" }
         `;
@@ -453,7 +480,22 @@ class GeminiBrain {
             const result = await this.model.generateContent(prompt);
             let text = result.response.text();
             text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(text);
+            
+            const parsed = JSON.parse(text);
+
+            // --- 🛡️ SAFETY: VALIDATE AI OUTPUT ---
+            if (parsed.action !== 'HOLD') {
+                if (
+                    typeof parsed.entry !== 'number' || 
+                    typeof parsed.sl !== 'number' || 
+                    typeof parsed.tp !== 'number'
+                ) {
+                    logger.warn("AI Malformed Output: Missing numeric entry/sl/tp. Forcing HOLD.");
+                    return { action: "HOLD", confidence: 0, reason: "AI Error: Invalid numeric data." };
+                }
+            }
+
+            return parsed;
         } catch (e) {
             logger.error(`AI ERROR: ${e.message}`);
             return { action: "HOLD", confidence: 0, reason: `AI Fail` };
@@ -528,9 +570,9 @@ async function tick() {
     }
 
     // --- Orderbook Analysis ---
-    // FIX: Use d.rawBids and d.rawAsks returned from fetchAll
-    const bids = d.rawBids.slice(0, config.orderbook.depth).map(b => ({ price: parseFloat(b[0]), qty: parseFloat(b[1]) }));
-    const asks = d.rawAsks.slice(0, config.orderbook.depth).map(a => ({ price: parseFloat(a[0]), qty: parseFloat(a[1]) }));
+    // FIX: Added safety check (|| []) to prevent crash if bids/asks are undefined
+    const bids = (d.rawBids || []).slice(0, config.orderbook.depth).map(b => ({ price: parseFloat(b[0]), qty: parseFloat(b[1]) }));
+    const asks = (d.rawAsks || []).slice(0, config.orderbook.depth).map(a => ({ price: parseFloat(a[0]), qty: parseFloat(a[1]) }));
 
     const bidVolTotal = bids.reduce((sum, b) => sum + b.qty, 0);
     const askVolTotal = asks.reduce((sum, a) => sum + a.qty, 0);

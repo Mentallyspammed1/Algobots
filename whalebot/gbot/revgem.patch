@@ -1,0 +1,1170 @@
+Index: whalewave1.4.js
+===================================================================
+--- whalewave1.4.js	Original
++++ whalewave1.4.js	Refactored
+@@ -303,110 +303,748 @@
+         if (priceHigh > prevPriceHigh && rsiHigh < prevRsiHigh) return 'BEARISH_REGULAR';
+         const priceLow = Math.min(...closes.slice(len - period, len)); const rsiLow = Math.min(...rsi.slice(len - period, len));
+         const prevPriceLow = Math.min(...closes.slice(len - period * 2, len - period)); const prevRsiLow = Math.min(...rsi.slice(len - period * 2, len - period));
+         if (priceLow < prevPriceLow && rsiLow > prevRsiLow) return 'BULLISH_REGULAR';
+-        return 'NONE';
+-    }    static historicalVolatility(closes, period = 20) {
++        return 'NONE';// --- 📈 TECHNICAL ANALYSIS ENGINE (from v5.0) ---
++class TA {
++    /**
++     * Safely creates an array of a given size, initialized with nulls.
++     * @param {number} size - The desired size of the array.
++     * @returns {Array<any>} An array of the specified size filled with nulls.
++     */
++    static safeArr(size) {
++        return Array(size).fill(null);
++    }
++
++    /**
++     * Calculates the Simple Moving Average (SMA).
++     * @param {number[]} data - The input data array.
++     * @param {number} period - The lookback period.
++     * @returns {number[]} An array of SMA values.
++     */
++    static sma(data, period) {
++        const sma = TA.safeArr(data.length);
++        for (let i = period - 1; i < data.length; i++) {
++            let sum = 0;
++            for (let j = 0; j < period; j++) {
++                sum += data[i - j];
++            }
++            sma[i] = sum / period;
++        }
++        return sma;
++    }
++
++    /**
++     * Calculates the Exponential Moving Average (EMA).
++     * @param {number[]} data - The input data array.
++     * @param {number} period - The lookback period.
++     * @returns {number[]} An array of EMA values.
++     */
++    static ema(data, period) {
++        const ema = TA.safeArr(data.length);
++        const multiplier = 2 / (period + 1);
++        ema[0] = data[0]; // Initialize with the first data point
++
++        for (let i = 1; i < data.length; i++) {
++            ema[i] = (data[i] - ema[i - 1]) * multiplier + ema[i - 1];
++        }
++        return ema;
++    }
++
++    /**
++     * Calculates the Relative Strength Index (RSI).
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number} [period=14] - The lookback period.
++     * @returns {number[]} Array of RSI values.
++     */
++    static rsi(closes, period = 14) {
++        const rsi = TA.safeArr(closes.length);
++        const gains = [];
++        const losses = [];
++
++        for (let i = 1; i < closes.length; i++) {
++            const diff = closes[i] - closes[i - 1];
++            gains.push(diff > 0 ? diff : 0);
++            losses.push(diff < 0 ? -diff : 0);
++        }
++
++        const avgGain = TA.ema(gains, period);
++        const avgLoss = TA.ema(losses, period);
++
++        for (let i = 0; i < avgGain.length; i++) {
++            if (avgLoss[i] === 0) {
++                rsi[i + period] = 100; // Avoid division by zero
++            } else {
++                const rs = avgGain[i] / avgLoss[i];
++                rsi[i + period] = 100 - (100 / (1 + rs));
++            }
++        }
++        return rsi;
++    }
++
++    /**
++     * Calculates the Stochastic Oscillator.
++     * @param {number[]} highs - Array of high prices.
++     * @param {number[]} lows - Array of low prices.
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number} [kPeriod=14] - The lookback period for %K.
++     * @param {number} [dPeriod=3] - The smoothing period for %D.
++     * @returns {{k: number[], d: number[]}} Object containing %K and %D arrays.
++     */
++    static stoch(highs, lows, closes, kPeriod = 14, dPeriod = 3) {
++        const k = TA.safeArr(closes.length);
++        const d = TA.safeArr(closes.length);
++
++        for (let i = kPeriod - 1; i < closes.length; i++) {
++            let highestHigh = -Infinity;
++            let lowestLow = Infinity;
++            for (let j = 0; j < kPeriod; j++) {
++                highestHigh = Math.max(highestHigh, highs[i - j]);
++                lowestLow = Math.min(lowestLow, lows[i - j]);
++            }
++
++            const range = highestHigh - lowestLow;
++            if (range === 0) {
++                k[i] = 0; // Avoid division by zero
++            } else {
++                k[i] = ((closes[i] - lowestLow) / range) * 100;
++            }
++        }
++
++        // Calculate %D (SMA of %K)
++        for (let i = dPeriod - 1; i < k.length; i++) {
++            let sum = 0;
++            for (let j = 0; j < dPeriod; j++) {
++                sum += k[i - j];
++            }
++            d[i] = sum / dPeriod;
++        }
++
++        return { k, d };
++    }
++
++    /**
++     * Calculates the Moving Average Convergence Divergence (MACD).
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number} [fastPeriod=12] - The fast EMA period.
++     * @param {number} [slowPeriod=26] - The slow EMA period.
++     * @param {number} [signalPeriod=9] - The signal line EMA period.
++     * @returns {{macd: number[], signal: number[], hist: number[]}} Object containing MACD, signal line, and histogram arrays.
++     */
++    static macd(closes, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
++        const emaFast = TA.ema(closes, fastPeriod);
++        const emaSlow = TA.ema(closes, slowPeriod);
++        const macd = TA.safeArr(closes.length);
++        const signal = TA.safeArr(closes.length);
++        const hist = TA.safeArr(closes.length);
++
++        for (let i = 0; i < closes.length; i++) {
++            macd[i] = emaFast[i] - emaSlow[i];
++        }
++
++        const signalHist = TA.ema(macd, signalPeriod);
++        for (let i = 0; i < closes.length; i++) {
++            signal[i] = signalHist[i];
++            hist[i] = macd[i] - signal[i];
++        }
++
++        return { macd, signal, hist };
++    }
++
++    /**
++     * Calculates the Average True Range (ATR).
++     * @param {number[]} highs - Array of high prices.
++     * @param {number[]} lows - Array of low prices.
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number} [period=14] - The lookback period.
++     * @returns {number[]} Array of ATR values.
++     */
++    static atr(highs, lows, closes, period = 14) {
++        const tr = TA.safeArr(highs.length);
++        const atr = TA.safeArr(highs.length);
++
++        for (let i = 0; i < highs.length; i++) {
++            const h_l = highs[i] - lows[i];
++            const h_c = Math.abs(highs[i] - closes[i - 1]);
++            const l_c = Math.abs(lows[i] - closes[i - 1]);
++            tr[i] = Math.max(h_l, h_c, l_c);
++        }
++
++        // Initial ATR calculation using SMA for the first period
++        let sumTR = 0;
++        for (let i = 0; i < period; i++) {
++            sumTR += tr[i];
++        }
++        atr[period - 1] = sumTR / period;
++
++        // EMA calculation for subsequent ATR values
++        const multiplier = 2 / (period + 1);
++        for (let i = period; i < highs.length; i++) {
++            atr[i] = (tr[i] - atr[i - 1]) * multiplier + atr[i - 1];
++        }
++
++        return atr;
++    }
++
++    /**
++     * Calculates the Average Directional Index (ADX).
++     * @param {number[]} highs - Array of high prices.
++     * @param {number[]} lows - Array of low prices.
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number} [period=14] - The lookback period.
++     * @returns {number[]} Array of ADX values.
++     */
++    static adx(highs, lows, closes, period = 14) {
++        const adx = TA.safeArr(closes.length);
++        const diPlus = TA.safeArr(closes.length);
++        const diMinus = TA.safeArr(closes.length);
++        const atrValues = TA.atr(highs, lows, closes, period);
++
++        let prevHigh = highs[0];
++        let prevLow = lows[0];
++        let prevClose = closes[0];
++
++        for (let i = 1; i < closes.length; i++) {
++            const highDiff = highs[i] - prevHigh;
++            const lowDiff = prevLow - lows[i];
++
++            const plusDM = (highDiff > lowDiff && highDiff > 0) ? highDiff : 0;
++            const minusDM = (lowDiff > highDiff && lowDiff > 0) ? lowDiff : 0;
++
++            diPlus[i] = plusDM;
++            diMinus[i] = minusDM;
++
++            prevHigh = highs[i];
++            prevLow = lows[i];
++            prevClose = closes[i];
++        }
++
++        const smoothedPlusDM = TA.ema(diPlus, period);
++        const smoothedMinusDM = TA.ema(diMinus, period);
++
++        for (let i = period; i < closes.length; i++) {
++            const sumPlusDM = smoothedPlusDM[i];
++            const sumMinusDM = smoothedMinusDM[i];
++            const sumATR = atrValues[i];
++
++            if (sumATR === 0) {
++                adx[i] = 0; // Avoid division by zero
++                continue;
++            }
++
++            const plusDI = (sumPlusDM / sumATR) * 100;
++            const minusDI = (sumMinusDM / sumATR) * 100;
++
++            const adxVal = (Math.abs(plusDI - minusDI) / (plusDI + minusDI)) * 100;
++            adx[i] = isNaN(adxVal) ? 0 : adxVal; // Handle potential NaN
++        }
++
++        return adx;
++    }
++
++    /**
++     * Calculates historical volatility.
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number} [period=20] - The lookback period.
++     * @returns {number[]} Array of historical volatility values.
++     */
++    static historicalVolatility(closes, period = 20) {
+         const returns = [];
+-        for (let i = 1; i < closes.length; i++) returns.push(Math.log(closes[i] / closes[i - 1]));
++        for (let i = 1; i < closes.length; i++) {
++            // Ensure no division by zero or log of non-positive number
++            if (closes[i - 1] <= 0) {
++                returns.push(0); // Or handle as an error/skip
++                continue;
++            }
++            returns.push(Math.log(closes[i] / closes[i - 1]));
++        }
++
+         const volatility = TA.safeArr(closes.length);
+         for (let i = period; i < closes.length; i++) {
+             const slice = returns.slice(i - period + 1, i + 1);
+             const mean = slice.reduce((a, b) => a + b, 0) / period;
+             const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / period;
++            // Annualized volatility: sqrt(variance) * sqrt(trading_days_in_year)
++            // Assuming 365 trading days for annualization
+             volatility[i] = Math.sqrt(variance) * Math.sqrt(365);
+         }
+         return volatility;
+     }
++
++    /**
++     * Determines the market regime based on volatility.
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number[]} volatility - Array of historical volatility values.
++     * @param {number} [period=50] - The lookback period for average volatility.
++     * @returns {'HIGH_VOLATILITY' | 'LOW_VOLATILITY' | 'NORMAL'} The market regime.
++     */
+     static marketRegime(closes, volatility, period = 50) {
++        // Ensure volatility array is long enough for SMA calculation
++        if (volatility.length < period) {
++            return 'NORMAL'; // Not enough data to determine regime
++        }
++
+         const avgVol = TA.sma(volatility, period);
+         const currentVol = volatility[volatility.length - 1] || 0;
++        // Use the last calculated average volatility, default to 1 to avoid division by zero
+         const avgVolValue = avgVol[avgVol.length - 1] || 1;
++
++        if (avgVolValue === 0) return 'NORMAL'; // Avoid division by zero if average volatility is 0
++
+         if (currentVol > avgVolValue * 1.5) return 'HIGH_VOLATILITY';
+         if (currentVol < avgVolValue * 0.5) return 'LOW_VOLATILITY';
+         return 'NORMAL';
+     }
++
++    /**
++     * Calculates Fibonacci pivot points.
++     * @param {number} h - The highest price.
++     * @param {number} l - The lowest price.
++     * @param {number} c - The closing price.
++     * @returns {{P: number, R1: number, R2: number, S1: number, S2: number}} Fibonacci pivot levels.
++     */
+     static fibPivots(h, l, c) {
+-        const P = (h + l + c) / 3; const R = h - l;
+-        return { P, R1: P + 0.382 * R, R2: P + 0.618 * R, S1: P - 0.382 * R, S2: P - 0.618 * R };
++        const P = (h + l + c) / 3; // Pivot Point
++        const R = h - l; // Range
++        return {
++            P,
++            R1: P + 0.382 * R, // First Resistance
++            R2: P + 0.618 * R, // Second Resistance
++            S1: P - 0.382 * R, // First Support
++            S2: P - 0.618 * R  // Second Support
++        };
+     }
++
++    /**
++     * Calculates the Volume Weighted Average Price (VWAP).
++     * @param {Array<{c: number, v: number}>} candles - Array of candle data {close, volume}.
++     * @returns {number[]} Array of VWAP values.
++     */
++    static vwap(candles) {
++        const vwap = TA.safeArr(candles.length);
++        let cumulativeTPV = 0; // Cumulative Typical Price * Volume
++        let cumulativeV = 0; // Cumulative Volume
++
++        for (let i = 0; i < candles.length; i++) {
++            const typicalPrice = (candles[i].h + candles[i].l + candles[i].c) / 3;
++            const tpv = typicalPrice * candles[i].v;
++            cumulativeTPV += tpv;
++            cumulativeV += candles[i].v;
++
++            if (cumulativeV > 0) {
++                vwap[i] = cumulativeTPV / cumulativeV;
++            } else {
++                vwap[i] = 0; // Avoid division by zero
++            }
++        }
++        return vwap;
++    }
++
++    /**
++     * Detects price squeeze based on Bollinger Bands and Keltner Channels.
++     * @param {number[]} highs - Array of high prices.
++     * @param {number[]} lows - Array of low prices.
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number} [bbPeriod=20] - Bollinger Bands period.
++     * @param {number} [bbStdDev=2] - Bollinger Bands standard deviation.
++     * @param {number} [kcPeriod=20] - Keltner Channels period.
++     * @param {number} [kcMultiplier=2] - Keltner Channels multiplier.
++     * @returns {boolean[]} Array indicating if a squeeze is present (true) or not (false).
++     */
++    static isSqueeze(highs, lows, closes, bbPeriod = 20, bbStdDev = 2, kcPeriod = 20, kcMultiplier = 2) {
++        const squeeze = TA.safeArr(closes.length).fill(false);
++        const bbUpper = [];
++        const bbLower = [];
++        const kcUpper = [];
++        const kcLower = [];
++
++        // Calculate Bollinger Bands
++        const bbSma = TA.sma(closes, bbPeriod);
++        for (let i = bbPeriod - 1; i < closes.length; i++) {
++            const stdDev = Math.sqrt(closes.slice(i - bbPeriod + 1, i + 1).reduce((sum, val, idx, arr) => {
++                const mean = bbSma[i];
++                return sum + Math.pow(val - mean, 2);
++            }, 0) / bbPeriod);
++            bbUpper.push(bbSma[i] + bbStdDev * stdDev);
++            bbLower.push(bbSma[i] - bbStdDev * stdDev);
++        }
++
++        // Calculate Keltner Channels (using EMA and ATR)
++        const kcEma = TA.ema(closes, kcPeriod);
++        const atrValues = TA.atr(highs, lows, closes, kcPeriod);
++        for (let i = kcPeriod - 1; i < closes.length; i++) {
++            kcUpper.push(kcEma[i] + kcMultiplier * atrValues[i]);
++            kcLower.push(kcEma[i] - kcMultiplier * atrValues[i]);
++        }
++
++        // Determine squeeze condition
++        for (let i = Math.max(bbPeriod, kcPeriod) - 1; i < closes.length; i++) {
++            const bbWidth = bbUpper[i - (bbPeriod - 1)] - bbLower[i - (bbPeriod - 1)];
++            const kcWidth = kcUpper[i - (kcPeriod - 1)] - kcLower[i - (kcPeriod - 1)];
++
++            // Squeeze occurs when Bollinger Bands are narrower than Keltner Channels
++            if (bbWidth < kcWidth) {
++                squeeze[i] = true;
++            }
++        }
++
++        return squeeze;
++    }
++
++    /**
++     * Detects divergence between price and an oscillator (e.g., RSI).
++     * @param {number[]} prices - Array of prices.
++     * @param {number[]} oscillator - Array of oscillator values (e.g., RSI).
++     * @param {number} lookback - The lookback period for detecting peaks and troughs.
++     * @returns {string} 'BULLISH', 'BEARISH', or 'NONE'.
++     */
++    static detectDivergence(prices, oscillator, lookback) {
++        if (prices.length < lookback * 2 || oscillator.length < lookback * 2) {
++            return 'NONE';
++        }
++
++        const lastPrice = prices[prices.length - 1];
++        const lastOsc = oscillator[oscillator.length - 1];
++
++        // Find recent peaks and troughs in price and oscillator
++        const priceLastPeak = Math.max(...prices.slice(-lookback));
++        const priceLastTrough = Math.min(...prices.slice(-lookback));
++        const oscLastPeak = Math.max(...oscillator.slice(-lookback));
++        const oscLastTrough = Math.min(...oscillator.slice(-lookback));
++
++        const pricePrevPeak = Math.max(...prices.slice(-lookback * 2, -lookback));
++        const pricePrevTrough = Math.min(...prices.slice(-lookback * 2, -lookback));
++        const oscPrevPeak = Math.max(...oscillator.slice(-lookback * 2, -lookback));
++        const oscPrevTrough = Math.min(...oscillator.slice(-lookback * 2, -lookback));
++
++        // Bullish Divergence: Price makes lower lows, Oscillator makes higher lows
++        if (priceLastTrough < pricePrevTrough && oscLastTrough > oscPrevTrough) {
++            return 'BULLISH';
++        }
++
++        // Bearish Divergence: Price makes higher highs, Oscillator makes lower highs
++        if (priceLastPeak > pricePrevPeak && oscLastPeak < oscPrevPeak) {
++            return 'BEARISH';
++        }
++
++        return 'NONE';
++    }
++
++    /**
++     * Finds Fair Value Gaps (FVG).
++     * @param {Array<{h: number, l: number, c: number}>} candles - Array of candle data.
++     * @returns {Array<{price: number, type: 'BULLISH' | 'BEARISH', top: number, bottom: number}>} Array of FVG objects.
++     */
++    static findFVG(candles) {
++        const fvgs = [];
++        for (let i = 1; i < candles.length - 1; i++) {
++            const prevCandle = candles[i - 1];
++            const currentCandle = candles[i];
++            const nextCandle = candles[i + 1];
++
++            // Bullish FVG (Gap Down): High of current candle is higher than the low of the previous candle,
++            // and the low of the next candle is lower than the high of the current candle.
++            // The gap is between the high of the current candle and the low of the next candle.
++            if (currentCandle.h > prevCandle.l && nextCandle.l < currentCandle.h) {
++                const gapTop = currentCandle.h;
++                const gapBottom = nextCandle.l;
++                if (gapTop > gapBottom) { // Ensure it's a valid gap
++                    fvgs.push({
++                        price: (gapTop + gapBottom) / 2,
++                        type: 'BULLISH',
++                        top: gapTop,
++                        bottom: gapBottom
++                    });
++                }
++            }
++
++            // Bearish FVG (Gap Up): Low of current candle is lower than the high of the previous candle,
++            // and the high of the next candle is higher than the low of the current candle.
++            // The gap is between the low of the current candle and the high of the next candle.
++            if (currentCandle.l < prevCandle.h && nextCandle.h > currentCandle.l) {
++                const gapTop = nextCandle.h;
++                const gapBottom = currentCandle.l;
++                if (gapTop > gapBottom) { // Ensure it's a valid gap
++                    fvgs.push({
++                        price: (gapTop + gapBottom) / 2,
++                        type: 'BEARISH',
++                        top: gapTop,
++                        bottom: gapBottom
++                    });
++                }
++            }
++        }
++        // Return the most recent FVG if any exist
++        return fvgs.length > 0 ? [fvgs[fvgs.length - 1]] : [];
++    }
++
++    /**
++     * Calculates the trend direction based on moving averages.
++     * @param {number[]} closes - Array of closing prices.
++     * @param {number} shortPeriod - The period for the short-term moving average.
++     * @param {number} longPeriod - The period for the long-term moving average.
++     * @returns {number} 1 for bullish, -1 for bearish, 0 for neutral.
++     */
++    static trendDirection(closes, shortPeriod, longPeriod) {
++        if (closes.length < Math.max(shortPeriod, longPeriod)) {
++            return 0; // Not enough data
++        }
++        const shortMA = TA.ema(closes, shortPeriod);
++        const longMA = TA.ema(closes, longPeriod);
++
++        const lastShortMA = shortMA[shortMA.length - 1];
++        const lastLongMA = longMA[longMA.length - 1];
++
++        if (lastShortMA > lastLongMA) return 1; // Bullish
++        if (lastShortMA < lastLongMA) return -1; // Bearish
++        return 0; // Neutral
++    }
++
++    /**
++     * Calculates the slope of a linear regression line.
++     * @param {number[]} y - The dependent variable (e.g., prices).
++     * @param {number} n - The number of data points (period).
++     * @returns {number} The slope of the regression line.
++     */
++    static regressionSlope(y, n) {
++        if (y.length < n) return 0;
++        const x = Array.from({ length: n }, (_, i) => i + 1); // Independent variable (time)
++        const ySlice = y.slice(-n);
++
++        let sumX = 0;
++        let sumY = 0;
++        let sumXY = 0;
++        let sumX2 = 0;
++
++        for (let i = 0; i < n; i++) {
++            sumX += x[i];
++            sumY += ySlice[i];
++            sumXY += x[i] * ySlice[i];
++            sumX2 += x[i] * x[i];
++        }
++
++        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
++        return isNaN(slope) ? 0 : slope;
++    }
++
++    /**
++     * Calculates the R-squared value for a linear regression.
++     * @param {number[]} y - The dependent variable (e.g., prices).
++     * @param {number} n - The number of data points (period).
++     * @returns {number} The R-squared value.
++     */
++    static regressionR2(y, n) {
++        if (y.length < n) return 0;
++        const ySlice = y.slice(-n);
++        const slope = TA.regressionSlope(ySlice, n);
++        const x = Array.from({ length: n }, (_, i) => i + 1);
++
++        let sumY = 0;
++        for (let i = 0; i < n; i++) {
++            sumY += ySlice[i];
++        }
++        const meanY = sumY / n;
++
++        let ssRes = 0; // Sum of squares of residuals
++        let ssTot = 0; // Total sum of squares
++
++        for (let i = 0; i < n; i++) {
++            const predictedY = TA.ema(ySlice, n)[i] // Using EMA for prediction might be incorrect for R2, should be y_intercept + slope * x[i]
++            // Correct calculation for predicted Y using linear regression:
++            // Need to calculate intercept first: b = meanY - slope * meanX
++            const meanX = (n + 1) / 2;
++            const intercept = meanY - slope * meanX;
++            const predictedYLinear = intercept + slope * x[i];
++
++            ssRes += Math.pow(ySlice[i] - predictedYLinear, 2);
++            ssTot += Math.pow(ySlice[i] - meanY, 2);
++        }
++
++        if (ssTot === 0) return 1; // Avoid division by zero if all y values are the same
++        const r2 = 1 - (ssRes / ssTot);
++        return isNaN(r2) ? 0 : r2;
++    }
+ }
+ 
+ 
+ // --- 🛠️ UTILITIES & WSS CALCULATOR (from v5.0) ---
+ 
++/**
++ * Determines potential support and resistance levels from order book data.
++ * @param {Array<{p: number, q: number}>} bids - Array of bid orders.
++ * @param {Array<{p: number, q: number}>} asks - Array of ask orders.
++ * @param {number} currentClose - The current closing price.
++ * @param {number} maxLevels - The maximum number of support/resistance levels to return.
++ * @returns {{supportLevels: string[], resistanceLevels: string[]}} An object containing arrays of support and resistance levels.
++ */
+ function getOrderbookLevels(bids, asks, currentClose, maxLevels) {
+     const pricePoints = [...bids.map(b => b.p), ...asks.map(a => a.p)];
+     const uniquePrices = [...new Set(pricePoints)].sort((a, b) => a - b);
+     let potentialSR = [];
++
+     for (const price of uniquePrices) {
+         let bidVolAtPrice = bids.filter(b => b.p === price).reduce((s, b) => s + b.q, 0);
+         let askVolAtPrice = asks.filter(a => a.p === price).reduce((s, a) => s + a.q, 0);
++        // Identify potential support if bid volume is significantly higher than ask volume
+         if (bidVolAtPrice > askVolAtPrice * 2) potentialSR.push({ price, type: 'S' });
++        // Identify potential resistance if ask volume is significantly higher than bid volume
+         else if (askVolAtPrice > bidVolAtPrice * 2) potentialSR.push({ price, type: 'R' });
+     }
++
++    // Sort potential levels by their distance from the current close price
+     const sortedByDist = potentialSR.sort((a, b) => Math.abs(a.price - currentClose) - Math.abs(b.price - currentClose));
++
++    // Filter for support levels below the current close and take the top `maxLevels`
+     const supportLevels = sortedByDist.filter(p => p.type === 'S' && p.price < currentClose).slice(0, maxLevels).map(p => p.price.toFixed(2));
++    // Filter for resistance levels above the current close and take the top `maxLevels`
+     const resistanceLevels = sortedByDist.filter(p => p.type === 'R' && p.price > currentClose).slice(0, maxLevels).map(p => p.price.toFixed(2));
++
+     return { supportLevels, resistanceLevels };
+ }
+ 
++/**
++ * Calculates a Weighted Sentiment Score (WSS) based on various technical indicators.
++ * @param {object} analysis - An object containing all calculated technical indicators.
++ * @param {number} currentPrice - The current market price.
++ * @returns {number} The calculated WSS.
++ */
+ function calculateWSS(analysis, currentPrice) {
++    // Ensure config is available and has the necessary structure
++    if (typeof config === 'undefined' || !config.indicators || !config.indicators.wss_weights) {
++        console.error("Configuration for WSS weights is missing.");
++        return 0; // Return a neutral score or throw an error
++    }
+     const w = config.indicators.wss_weights;
+     let score = 0;
+     const last = analysis.closes.length - 1;
++
++    // Check if required analysis data exists and has enough points
++    if (!analysis || !analysis.closes || last < 0) {
++        console.error("Insufficient data for WSS calculation.");
++        return 0;
++    }
++
+     const { rsi, stoch, macd, reg, st, ce, fvg, divergence, buyWall, sellWall, atr } = analysis;
+ 
++    // --- Trend Score ---
+     let trendScore = 0;
+-    trendScore += (analysis.trendMTF === 'BULLISH' ? w.trend_mtf_weight : -w.trend_mtf_weight);
+-    if (st.trend[last] === 1) trendScore += w.trend_scalp_weight; else trendScore -= w.trend_scalp_weight;
+-    if (ce.trend[last] === 1) trendScore += w.trend_scalp_weight; else trendScore -= w.trend_scalp_weight;
+-    trendScore *= reg.r2[last];
++    // Higher weight for longer-term trend (MTF)
++    if (analysis.trendMTF) {
++        trendScore += (analysis.trendMTF === 'BULLISH' ? w.trend_mtf_weight : -w.trend_mtf_weight);
++    }
++    // Add weights for shorter-term trends (scalp)
++    if (st && st.trend && st.trend[last] !== undefined) {
++        trendScore += (st.trend[last] === 1 ? w.trend_scalp_weight : -w.trend_scalp_weight);
++    }
++    if (ce && ce.trend && ce.trend[last] !== undefined) {
++        trendScore += (ce.trend[last] === 1 ? w.trend_scalp_weight : -w.trend_scalp_weight);
++    }
++    // Multiply by regression slope (r2) for trend strength confirmation
++    if (reg && reg.r2 && reg.r2[last] !== undefined) {
++        trendScore *= reg.r2[last];
++    }
+     score += trendScore;
+ 
++    // --- Momentum Score ---
+     let momentumScore = 0;
+-    const rsiVal = rsi[last]; const stochK = stoch.k[last];
++    const rsiVal = rsi && rsi[last] !== undefined ? rsi[last] : 50; // Default to 50 if RSI is missing
++    const stochK = stoch && stoch.k && stoch.k[last] !== undefined ? stoch.k[last] : 50; // Default to 50 if StochK is missing
++
++    // Normalize RSI momentum: higher score for oversold, lower for overbought
+     if (rsiVal < 50) momentumScore += (50 - rsiVal) / 50; else momentumScore -= (rsiVal - 50) / 50;
++    // Normalize Stochastic momentum
+     if (stochK < 50) momentumScore += (50 - stochK) / 50; else momentumScore -= (stochK - 50) / 50;
+-    const macdHist = macd.hist[last];
++
++    // Add MACD histogram weight
++    const macdHist = macd && macd.hist && macd.hist[last] !== undefined ? macd.hist[last] : 0;
+     if (macdHist > 0) momentumScore += w.macd_weight; else if (macdHist < 0) momentumScore -= w.macd_weight;
++
++    // Apply normalized momentum weight
+     score += momentumScore * w.momentum_normalized_weight;
+ 
++    // --- Structure Score ---
+     let structureScore = 0;
+-    if (analysis.isSqueeze) structureScore += (analysis.trendMTF === 'BULLISH' ? w.squeeze_vol_weight : -w.squeeze_vol_weight);
+-    if (divergence.includes('BULLISH')) structureScore += w.divergence_weight;
+-    else if (divergence.includes('BEARISH')) structureScore -= w.divergence_weight;
++    // Squeeze indicator: positive for bullish, negative for bearish
++    if (analysis.isSqueeze && analysis.isSqueeze[last]) {
++        structureScore += (analysis.trendMTF === 'BULLISH' ? w.squeeze_vol_weight : -w.squeeze_vol_weight);
++    }
++    // Divergence: positive for bullish, negative for bearish
++    if (divergence && divergence.includes('BULLISH')) structureScore += w.divergence_weight;
++    else if (divergence && divergence.includes('BEARISH')) structureScore -= w.divergence_weight;
+ 
+     const price = currentPrice;
+-    const atrVal = atr[last];
+-    if (fvg) {
+-        if (fvg.type === 'BULLISH' && price > fvg.bottom && price < fvg.top) structureScore += w.liquidity_grab_weight;
+-        else if (fvg.type === 'BEARISH' && price < fvg.top && price > fvg.bottom) structureScore -= w.liquidity_grab_weight;
++    const atrVal = atr && atr[last] !== undefined ? atr[last] : 1; // Default ATR to 1
++    // Fair Value Gap (FVG) analysis: reward for price interacting with FVG in trend direction
++    if (fvg && fvg.length > 0 && fvg[0].price) { // Assuming fvg is an array with the latest FVG at index 0
++        if (fvg[0].type === 'BULLISH' && price > fvg[0].bottom && price < fvg[0].top) structureScore += w.liquidity_grab_weight;
++        else if (fvg[0].type === 'BEARISH' && price < fvg[0].top && price > fvg[0].bottom) structureScore -= w.liquidity_grab_weight;
+     }
++    // Liquidity grab near buy/sell walls, adjusted by ATR
+     if (buyWall && (price - buyWall) < atrVal) structureScore += w.liquidity_grab_weight * 0.5;
+     else if (sellWall && (sellWall - price) < atrVal) structureScore -= w.liquidity_grab_weight * 0.5;
+     score += structureScore;
+ 
+-    const volatility = analysis.volatility[analysis.volatility.length - 1] || 0;
+-    const avgVolatility = analysis.avgVolatility[analysis.avgVolatility.length - 1] || 1;
+-    const volRatio = volatility / avgVolatility;
++    // --- Volatility Adjustment ---
++    const volatility = analysis.volatility && analysis.volatility[analysis.volatility.length - 1] !== undefined ? analysis.volatility[analysis.volatility.length - 1] : 0;
++    const avgVolatility = analysis.avgVolatility && analysis.avgVolatility[analysis.avgVolatility.length - 1] !== undefined ? analysis.avgVolatility[analysis.avgVolatility.length - 1] : 1; // Default to 1
++    const volRatio = avgVolatility === 0 ? 1 : volatility / avgVolatility; // Avoid division by zero
+ 
+     let finalScore = score;
++    // Reduce score in high volatility, increase in low volatility
+     if (volRatio > 1.5) finalScore *= (1 - w.volatility_weight);
+     else if (volRatio < 0.5) finalScore *= (1 + w.volatility_weight);
+ 
+     return parseFloat(finalScore.toFixed(2));
+ }
+ 
+ // --- 📡 ENHANCED DATA PROVIDER (from v6.0) ---
+ class EnhancedDataProvider {
+-    constructor() { this.api = axios.create({ baseURL: 'https://api.bybit.com/v5/market', timeout: config.api.timeout }); }
++    constructor() {
++        // Ensure axios is available
++        if (typeof axios === 'undefined') {
++            throw new Error("axios is required but not loaded.");
++        }
++        // Ensure config is available
++        if (typeof config === 'undefined') {
++            throw new Error("config is required but not loaded.");
++        }
++        this.api = axios.create({ baseURL: 'https://api.bybit.com/v5/market', timeout: config.api.timeout });
++    }
++
++    /**
++     * Fetches data from the API with retry logic.
++     * @param {string} url - The API endpoint URL.
++     * @param {object} params - The request parameters.
++     * @param {number} [retries=config.api.retries] - The number of retry attempts.
++     * @returns {Promise<object>} The API response data.
++     * @throws {Error} If fetching fails after all retries.
++     */
+     async fetchWithRetry(url, params, retries = config.api.retries) {
+         for (let attempt = 0; attempt <= retries; attempt++) {
+-            try { return (await this.api.get(url, { params })).data; }
+-            catch (error) { if (attempt === retries) throw error; await setTimeout(Math.pow(config.api.backoff_factor, attempt) * 1000); }
++            try {
++                const response = await this.api.get(url, { params });
++                // Check for API errors in the response structure
++                if (response.data && response.data.retCode !== 0) {
++                    throw new Error(`API Error: ${response.data.retMsg} (Code: ${response.data.retCode})`);
++                }
++                return response.data;
++            } catch (error) {
++                console.error(`Fetch attempt ${attempt + 1}/${retries + 1} failed: ${error.message}`);
++                if (attempt === retries) {
++                    console.error(`Failed to fetch ${url} after ${retries + 1} attempts.`);
++                    throw error; // Re-throw the last error
++                }
++                // Exponential backoff
++                const delay = Math.pow(config.api.backoff_factor, attempt) * 1000;
++                await new Promise(resolve => setTimeout(resolve, delay));
++            }
+         }
+     }
++
++    /**
++     * Fetches all necessary data for analysis.
++     * @returns {Promise<object|null>} An object containing fetched data or null if fetching fails.
++     */
+     async fetchAll() {
+         try {
+             const [ticker, kline, klineMTF, ob, daily] = await Promise.all([
+                 this.fetchWithRetry('/tickers', { category: 'linear', symbol: config.symbol }),
+@@ -414,78 +1052,252 @@
+                 this.fetchWithRetry('/kline', { category: 'linear', symbol: config.symbol, interval: config.trend_interval, limit: 100 }),
+                 this.fetchWithRetry('/orderbook', { category: 'linear', symbol: config.symbol, limit: config.orderbook.depth }),
+                 this.fetchWithRetry('/kline', { category: 'linear', symbol: config.symbol, interval: 'D', limit: 2 })
+             ]);
+-            const parseC = (list) => list.reverse().map(c => ({ o: parseFloat(c[1]), h: parseFloat(c[2]), l: parseFloat(c[3]), c: parseFloat(c[4]), v: parseFloat(c[5]), t: parseInt(c[0]) }));
++
++            // Helper function to parse candle data
++            const parseCandles = (list) => list.reverse().map(c => ({
++                t: parseInt(c[0]), // Timestamp
++                o: parseFloat(c[1]), // Open
++                h: parseFloat(c[2]), // High
++                l: parseFloat(c[3]), // Low
++                c: parseFloat(c[4]), // Close
++                v: parseFloat(c[5]), // Volume
++            }));
++
++            // Validate fetched data structure before parsing
++            if (!ticker?.result?.list?.[0] || !kline?.result?.list || !klineMTF?.result?.list || !ob?.result?.b || !ob?.result?.a || !daily?.result?.list?.[1]) {
++                console.error("Incomplete data received from API.");
++                return null;
++            }
++
+             return {
+-                price: parseFloat(ticker.result.list[0].lastPrice), candles: parseC(kline.result.list), candlesMTF: parseC(klineMTF.result.list),
+-                bids: ob.result.b.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })), asks: ob.result.a.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
++                price: parseFloat(ticker.result.list[0].lastPrice),
++                candles: parseCandles(kline.result.list),
++                candlesMTF: parseCandles(klineMTF.result.list),
++                bids: ob.result.b.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
++                asks: ob.result.a.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
+                 daily: { h: parseFloat(daily.result.list[1][2]), l: parseFloat(daily.result.list[1][3]), c: parseFloat(daily.result.list[1][4]) },
+                 timestamp: Date.now()
+             };
+-        } catch (e) { console.warn(NEON.ORANGE(`[WARN] Data Fetch Fail: ${e.message}`)); return null; }
++        } catch (e) {
++            // Use NEON if available, otherwise fallback to console.warn
++            const logWarn = typeof NEON !== 'undefined' ? NEON.ORANGE : console.warn;
++            logWarn(`[WARN] Data Fetch Fail: ${e.message}`);
++            return null;
++        }
+     }
+ }
+ 
+ // --- 💰 EXCHANGE & RISK MANAGEMENT (from v6.0) ---
+ class EnhancedPaperExchange {
+     constructor() {
+-        this.balance = new Decimal(config.paper_trading.initial_balance); this.startBal = this.balance;
+-        this.pos = null; this.dailyPnL = new Decimal(0);
++        // Ensure config and Decimal are available
++        if (typeof config === 'undefined') throw new Error("config is required.");
++        if (typeof Decimal === 'undefined') throw new Error("Decimal.js is required.");
++        if (typeof NEON === 'undefined') console.warn("NEON is not defined. Using default console colors.");
++
++        this.balance = new Decimal(config.paper_trading.initial_balance);
++        this.startBal = this.balance;
++        this.pos = null; // Current open position: { side: 'BUY'|'SELL', entry: Decimal, qty: Decimal, sl: Decimal, tp: Decimal, strategy: string }
++        this.dailyPnL = new Decimal(0);
++        this.lastDailyReset = new Date(); // Track the last time daily PnL was reset
+     }
++
++    /**
++     * Resets daily PnL at the start of a new day.
++     */
++    resetDailyPnL() {
++        const now = new Date();
++        if (now.getDate() !== this.lastDailyReset.getDate()) {
++            this.dailyPnL = new Decimal(0);
++            this.lastDailyReset = now;
++            console.log("Daily PnL reset.");
++        }
++    }
++
++    /**
++     * Checks if trading is allowed based on risk parameters.
++     * @returns {boolean} True if trading is allowed, false otherwise.
++     */
+     canTrade() {
+-        const drawdown = this.startBal.sub(this.balance).div(this.startBal).mul(100);
+-        if (drawdown.gt(config.risk.max_drawdown)) { console.log(NEON.RED(`🚨 MAX DRAWDOWN HIT`)); return false; }
+-        const dailyLoss = this.dailyPnL.div(this.startBal).mul(100);
+-        if (dailyLoss.lt(-config.risk.daily_loss_limit)) { console.log(NEON.RED(`🚨 DAILY LOSS LIMIT HIT`)); return false; }
++        this.resetDailyPnL(); // Ensure daily PnL is up-to-date
++
++        const drawdown = this.startBal.isZero() ? new Decimal(0) : this.startBal.sub(this.balance).div(this.startBal).mul(100);
++        if (drawdown.gt(config.risk.max_drawdown)) {
++            const logError = typeof NEON !== 'undefined' ? NEON.RED : console.error;
++            logError(`🚨 MAX DRAWDOWN HIT (${drawdown.toFixed(2)}%)`);
++            return false;
++        }
++        const dailyLoss = this.startBal.isZero() ? new Decimal(0) : this.dailyPnL.div(this.startBal).mul(100);
++        if (dailyLoss.lt(new Decimal(config.risk.daily_loss_limit))) {
++            const logError = typeof NEON !== 'undefined' ? NEON.RED : console.error;
++            logError(`🚨 DAILY LOSS LIMIT HIT (${dailyLoss.toFixed(2)}%)`);
++            return false;
++        }
+         return true;
+     }
++
++    /**
++     * Evaluates the current market state and decides on trades.
++     * @param {number} priceVal - The current market price.
++     * @param {object} signal - The trading signal from the AI. { action: 'BUY'|'SELL'|'HOLD', confidence: number, entry: number, sl: number, tp: number, strategy: string }
++     */
+     evaluate(priceVal, signal) {
+-        if (!this.canTrade()) { if (this.pos) this.handlePositionClose(new Decimal(priceVal), "RISK_STOP"); return; }
++        // If risk limits are hit, close any open position and stop trading.
++        if (!this.canTrade()) {
++            if (this.pos) this.handlePositionClose(new Decimal(priceVal), "RISK_STOP");
++            return;
++        }
++
+         const price = new Decimal(priceVal);
+-        if (this.pos) this.handlePositionClose(price);
+-        if (!this.pos && signal.action !== 'HOLD' && signal.confidence >= config.min_confidence) { this.handlePositionOpen(price, signal); }
++
++        // Close existing position if necessary (SL/TP hit or signal change)
++        if (this.pos) {
++            // Check if the signal has changed to the opposite direction or is HOLD
++            if (signal.action !== 'HOLD' && signal.action !== this.pos.side) {
++                this.handlePositionClose(price, `SIGNAL_CHANGE (${signal.action})`);
++            } else {
++                this.handlePositionClose(price); // Check for SL/TP hits
++            }
++        }
++
++        // Open a new position if conditions are met and no position is open
++        if (!this.pos && signal.action !== 'HOLD' && signal.confidence >= config.min_confidence) {
++            this.handlePositionOpen(price, signal);
++        }
+     }
++
++    /**
++     * Handles closing an open position.
++     * @param {Decimal} price - The current price at which to close.
++     * @param {string|null} forceReason - Reason for forced closure (e.g., 'RISK_STOP', 'SIGNAL_CHANGE').
++     */
+     handlePositionClose(price, forceReason = null) {
+-        let close = false, reason = forceReason || '';
+-        if (this.pos.side === 'BUY') { if (forceReason || price.lte(this.pos.sl)) { close = true; reason = reason || 'SL Hit'; } else if (price.gte(this.pos.tp)) { close = true; reason = reason || 'TP Hit'; } } else { if (forceReason || price.gte(this.pos.sl)) { close = true; reason = reason || 'SL Hit'; } else if (price.lte(this.pos.tp)) { close = true; reason = reason || 'TP Hit'; } }
++        let close = false;
++        let reason = forceReason || '';
++
++        if (!this.pos) return; // No position to close
++
++        if (this.pos.side === 'BUY') {
++            if (forceReason || price.lte(this.pos.sl)) { // Stop Loss or forced close
++                close = true;
++                reason = reason || 'SL Hit';
++            } else if (price.gte(this.pos.tp)) { // Take Profit
++                close = true;
++                reason = reason || 'TP Hit';
++            }
++        } else { // SELL position
++            if (forceReason || price.gte(this.pos.sl)) { // Stop Loss or forced close
++                close = true;
++                reason = reason || 'SL Hit';
++            } else if (price.lte(this.pos.tp)) { // Take Profit
++                close = true;
++                reason = reason || 'TP Hit';
++            }
++        }
++
+         if (close) {
+             const slippage = price.mul(config.paper_trading.slippage);
+             const exitPrice = this.pos.side === 'BUY' ? price.sub(slippage) : price.add(slippage);
+             const rawPnl = this.pos.side === 'BUY' ? exitPrice.sub(this.pos.entry).mul(this.pos.qty) : this.pos.entry.sub(exitPrice).mul(this.pos.qty);
+             const fee = exitPrice.mul(this.pos.qty).mul(config.paper_trading.fee);
+             const netPnl = rawPnl.sub(fee);
+-            this.balance = this.balance.add(netPnl); this.dailyPnL = this.dailyPnL.add(netPnl);
+-            const color = netPnl.gte(0) ? NEON.GREEN : NEON.RED;
+-            console.log(`${NEON.BOLD(reason)}! PnL: ${color(netPnl.toFixed(2))} [${this.pos.strategy}]`);
++
++            this.balance = this.balance.add(netPnl);
++            this.dailyPnL = this.dailyPnL.add(netPnl);
++
++            const color = netPnl.gte(0) ? (typeof NEON !== 'undefined' ? NEON.GREEN : '\x1b[32m') : (typeof NEON !== 'undefined' ? NEON.RED : '\x1b[31m');
++            const resetColor = typeof NEON !== 'undefined' ? '' : '\x1b[0m';
++            console.log(`${reason}! PnL: ${color}${netPnl.toFixed(2)}${resetColor} [${this.pos.strategy}]`);
+             this.pos = null;
+         }
+     }
++
++    /**
++     * Handles opening a new position.
++     * @param {Decimal} price - The current price for entry calculation.
++     * @param {object} signal - The trading signal from the AI.
++     */
+     handlePositionOpen(price, signal) {
+-        const entry = new Decimal(signal.entry); const sl = new Decimal(signal.sl); const tp = new Decimal(signal.tp);
+-        const dist = entry.sub(sl).abs(); if (dist.isZero()) return;
++        const entry = new Decimal(signal.entry);
++        const sl = new Decimal(signal.sl);
++        const tp = new Decimal(signal.tp);
++
++        const dist = entry.sub(sl).abs(); // Distance between entry and stop loss
++        if (dist.isZero()) {
++            console.warn(typeof NEON !== 'undefined' ? NEON.YELLOW("WARN: Entry and SL are the same, cannot open position.") : "WARN: Entry and SL are the same, cannot open position.");
++            return;
++        }
++
++        // Calculate quantity based on risk percentage and stop loss distance
+         const riskAmt = this.balance.mul(config.paper_trading.risk_percent / 100);
+         let qty = riskAmt.div(dist);
++
++        // Cap quantity based on leverage
+         const maxQty = this.balance.mul(config.paper_trading.leverage_cap).div(price);
+-        if (qty.gt(maxQty)) qty = maxQty;
++        if (qty.gt(maxQty)) {
++            qty = maxQty;
++            console.warn(typeof NEON !== 'undefined' ? NEON.YELLOW(`WARN: Position size capped by leverage. Max Qty: ${maxQty.toFixed(4)}`) : `WARN: Position size capped by leverage. Max Qty: ${maxQty.toFixed(4)}`);
++        }
++
++        // Ensure quantity is positive
++        if (qty.isNegative() || qty.isZero()) {
++            console.warn(typeof NEON !== 'undefined' ? NEON.YELLOW("WARN: Calculated quantity is zero or negative. Cannot open position.") : "WARN: Calculated quantity is zero or negative. Cannot open position.");
++            return;
++        }
++
+         const slippage = price.mul(config.paper_trading.slippage);
+         const execPrice = signal.action === 'BUY' ? entry.add(slippage) : entry.sub(slippage);
+         const fee = execPrice.mul(qty).mul(config.paper_trading.fee);
++
++        // Check if balance is sufficient after considering fees
++        if (this.balance.lt(fee)) {
++            console.warn(typeof NEON !== 'undefined' ? NEON.YELLOW("WARN: Insufficient balance for fees. Cannot open position.") : "WARN: Insufficient balance for fees. Cannot open position.");
++            return;
++        }
++
++        // Deduct fees from balance before opening position
+         this.balance = this.balance.sub(fee);
+-        this.pos = { side: signal.action, entry: execPrice, qty: qty, sl: sl, tp: tp, strategy: signal.strategy };
+-        console.log(NEON.GREEN(`OPEN ${signal.action} [${signal.strategy}] @ ${execPrice.toFixed(4)} | Size: ${qty.toFixed(4)}`));
++
++        this.pos = {
++            side: signal.action,
++            entry: execPrice,
++            qty: qty,
++            sl: sl,
++            tp: tp,
++            strategy: signal.strategy
++        };
++
++        const logSuccess = typeof NEON !== 'undefined' ? NEON.GREEN : '\x1b[32m';
++        const resetColor = typeof NEON !== 'undefined' ? '' : '\x1b[0m';
++        console.log(`${logSuccess}OPEN ${signal.action} [${signal.strategy}] @ ${execPrice.toFixed(4)} | Size: ${qty.toFixed(4)} | SL: ${sl.toFixed(4)} | TP: ${tp.toFixed(4)}${resetColor}`);
+     }
+ }
+ 
+ // --- 🧠 MULTI-STRATEGY AI BRAIN (from v6.0) ---
+ class EnhancedGeminiBrain {
+     constructor() {
++        // Ensure necessary modules and config are available
++        if (typeof GoogleGenerativeAI === 'undefined') throw new Error("GoogleGenerativeAI is required.");
++        if (typeof config === 'undefined') throw new Error("config is required.");
++        if (typeof NEON === 'undefined') console.warn("NEON is not defined. Using default console colors.");
++
+         const key = process.env.GEMINI_API_KEY;
+-        if (!key) { console.error("Missing GEMINI_API_KEY"); process.exit(1); }
++        if (!key) {
++            console.error("Missing GEMINI_API_KEY environment variable.");
++            process.exit(1); // Exit if API key is critical
++        }
+         this.model = new GoogleGenerativeAI(key).getGenerativeModel({ model: config.gemini_model });
+     }
+ 
++    /**
++     * Analyzes market context and generates a trading signal using Gemini AI.
++     * @param {object} ctx - The context object containing market data and indicators.
++     * @returns {Promise<object>} The AI-generated trading signal.
++     */
+     async analyze(ctx) {
++        // Construct the prompt dynamically using context data
+         const prompt = `
+         ACT AS: Institutional Scalping Algorithm.
+         OBJECTIVE: Select the single best strategy (1-5) and provide a precise trade plan, or HOLD.
+ 
+@@ -495,13 +1307,13 @@
+ 
+         MARKET CONTEXT:
+         - Price: ${ctx.price} | Volatility: ${ctx.volatility} | Regime: ${ctx.marketRegime}
+         - Trend (15m): ${ctx.trend_mtf} | Trend (3m): ${ctx.trend_angle} (Slope) | ADX: ${ctx.adx}
+-        - Momentum: RSI=${ctx.rsi.toFixed(2)}, Stoch=${ctx.stoch_k.toFixed(0)}, MACD=${ctx.macd_hist.toFixed(4)}
+-        - Structure: VWAP=${ctx.vwap.toFixed(4)}, FVG=${ctx.fvg ? ctx.fvg.type + ' @ ' + ctx.fvg.price.toFixed(2) : 'None'}, Squeeze: ${ctx.isSqueeze}
++        - Momentum: RSI=${ctx.rsi?.toFixed(2) ?? 'N/A'}, Stoch=${ctx.stoch_k?.toFixed(0) ?? 'N/A'}, MACD=${ctx.macd_hist?.toFixed(4) ?? 'N/A'}
++        - Structure: VWAP=${ctx.vwap?.toFixed(4) ?? 'N/A'}, FVG=${ctx.fvg ? ctx.fvg.type + ' @ ' + ctx.fvg.price.toFixed(2) : 'None'}, Squeeze: ${ctx.isSqueeze}
+         - Divergence: ${ctx.divergence}
+-        - Key Levels: Fib P=${ctx.fibs.P.toFixed(2)}, S1=${ctx.fibs.S1.toFixed(2)}, R1=${ctx.fibs.R1.toFixed(2)}
+-        - Support/Resistance: ${ctx.sr_levels}
++        - Key Levels: Fib P=${ctx.fibs?.P?.toFixed(2) ?? 'N/A'}, S1=${ctx.fibs?.S1?.toFixed(2) ?? 'N/A'}, R1=${ctx.fibs?.R1?.toFixed(2) ?? 'N/A'}
++        - Support/Resistance: ${ctx.sr_levels?.join(', ') ?? 'N/A'}
+ 
+         STRATEGY ARCHETYPES:
+         1. TREND_SURFER (WSS Trend > 1.0): Pullback to VWAP/EMA, anticipate continuation.
+         2. VOLATILITY_BREAKOUT (Squeeze=YES): Trade in direction of MTF trend on volatility expansion.
+@@ -517,60 +1329,54 @@
+         `;
+ 
+         try {
+             const res = await this.model.generateContent(prompt);
+-            const text = res.response.text().replace(/```json|```/g, '').trim();
+-            const start = text.indexOf('{');
+-            const end = text.lastIndexOf('}');
+-            if (start === -1 || end === -1) throw new Error("Invalid JSON: AI response error");
+-            return JSON.parse(text.substring(start, end + 1));
+-        } catch (e) {
+-            return { action: "HOLD", confidence: 0, reason: `AI Comms Failure: ${e.message}` };
+-        }
+-    }
+-}
++            const text = res.response.text();
+ 
+-// --- 🔄 MAIN TRADING ENGINE (Colorization Implemented) ---
+-class TradingEngine {
+-    constructor() {
+-        this.dataProvider = new EnhancedDataProvider();
+-        this.exchange = new EnhancedPaperExchange();
+-        this.ai = new EnhancedGeminiBrain();
+-        this.isRunning = true;
+-    }
++            // Clean up the response text to extract JSON
++            const jsonMatch = text.match(/\{[\s\S]*\}/);
++            if (!jsonMatch) {
++                console.error("Gemini AI response did not contain valid JSON:", text);
++                return { action: 'HOLD', strategy: 'AI_ERROR', confidence: 0, entry: 0, sl: 0, tp: 0, reason: 'Invalid AI response format' };
++            }
+ 
+-    async start() {
+-        console.clear();
+-        console.log(NEON.bg(NEON.PURPLE(` 🚀 WHALEWAVE TITAN v6.1 STARTING... `)));
++            const signal = JSON.parse(jsonMatch[0]);
+ 
+-        while (this.isRunning) {
+-            try {
+-                const data = await this.dataProvider.fetchAll();
+-                if (!data) { await setTimeout(config.loop_delay * 1000); continue; }
++            // Validate the parsed signal structure
++            if (!signal || typeof signal.action === 'undefined' || typeof signal.strategy === 'undefined' || typeof signal.confidence === 'undefined') {
++                console.error("Parsed signal is missing required fields:", signal);
++                return { action: 'HOLD', strategy: 'AI_ERROR', confidence: 0, entry: 0, sl: 0, tp: 0, reason: 'Invalid signal structure from AI' };
++            }
+ 
+-                const analysis = await this.performAnalysis(data);
+-                const context = this.buildContext(data, analysis);
+-                const signal = await this.ai.analyze(context);
++            // Ensure numerical values are valid numbers, default to 0 if not
++            signal.confidence = typeof signal.confidence === 'number' && !isNaN(signal.confidence) ? signal.confidence : 0;
++            signal.entry = typeof signal.entry === 'number' && !isNaN(signal.entry) ? signal.entry : 0;
++            signal.sl = typeof signal.sl === 'number' && !isNaN(signal.sl) ? signal.sl : 0;
++            signal.tp = typeof signal.tp === 'number' && !isNaN(signal.tp) ? signal.tp : 0;
+ 
+-                this.displayDashboard(data, context, signal);
+-                this.exchange.evaluate(data.price, signal);
++            // Apply critical WSS filter
++            const wssThreshold = config.indicators.wss_weights.action_threshold;
++            if (signal.action === 'BUY' && ctx.wss < wssThreshold) {
++                signal.action = 'HOLD';
++                signal.reason = `WSS (${ctx.wss}) below BUY threshold (${wssThreshold})`;
++            } else if (signal.action === 'SELL' && ctx.wss > -wssThreshold) {
++                signal.action = 'HOLD';
++                signal.reason = `WSS (${ctx.wss}) above SELL threshold (${-wssThreshold})`;
++            }
+ 
+-            } catch (e) {
+-                console.error(NEON.RED(`Loop Critical Error: ${e.message}`));
++            // Add default reason if missing
++            if (!signal.reason) {
++                signal.reason = signal.action === 'HOLD' ? 'No clear signal or WSS filter applied.' : `Strategy: ${signal.strategy}`;
+             }
+-            await setTimeout(config.loop_delay * 1000);
+-        }
+-    }
+ 
+-    async performAnalysis(data) {
+-        const c = data.candles.map(x => x.c); const h = data.candles.map(x => x.h);
+-        const l = data.candles.map(x => x.l); const v = data.candles.map(x => x.v);
+-        const mtfC = data.candlesMTF.map(x => x.c);
++            return signal;
+ 
+-        const [rsi, stoch, macd, adx, mfi, chop, reg, bb, kc, atr, fvg, vwap, st, ce, cci] = await Promise.all([
+-            TA.rsi(c, config.indicators.rsi), TA.stoch(h, l, c, config.indicators.stoch_period, config.indicators.stoch_k, config.indicators.stoch_d),
+-            TA.macd(c, config.indicators.macd_fast, config.indicators.macd_slow, config.indicators.macd_sig), TA.adx(h, l, c, config.indicators.adx_period),
+-            TA.mfi(h, l, c, v, config.indicators.mfi), TA.chop(h, l, c, config.indicators.chop_period),
++        } catch (error) {
++            console.error("Error generating content from Gemini AI:", error);
++            return { action: 'HOLD', strategy: 'AI_ERROR', confidence: 0, entry: 0, sl: 0, tp: 0, reason: `Gemini API error: ${error.message}` };
++        }
++    }
++}
+             TA.linReg(c, config.indicators.linreg_period), TA.bollinger(c, config.indicators.bb_period, config.indicators.bb_std),            TA.keltner(h, l, c, config.indicators.kc_period, config.indicators.kc_mult), TA.atr(h, l, c, config.indicators.atr_period),
+             TA.findFVG(data.candles), TA.vwap(h, l, c, v, config.indicators.vwap_period),
+             TA.superTrend(h, l, c, config.indicators.atr_period, config.indicators.st_factor),
+             TA.chandelierExit(h, l, c, config.indicators.ce_period, config.indicators.ce_mult), TA.cci(h, l, c, config.indicators.cci_period)
