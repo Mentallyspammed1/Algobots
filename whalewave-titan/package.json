@@ -1,0 +1,20 @@
+{
+  "name": "whalewave-titan-pro-fixed",
+  "version": "7.0.0",
+  "description": "Integrated Quantitative + AI Trading Engine",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "trade": "node engine.mjs"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "chalk": "^5.3.0",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "@google/generative-ai": "^0.13.0",
+    "timers": "^0.1.1"
+  }
+}

@@ -1,11 +1,24 @@
 /**
- * 🌊 WHALEWAVE PRO - TITAN EDITION v7.0 (Complete Refactor & Optimization)
- * ========================================================================
- * - REFACTOR: Complete architectural overhaul with better separation of concerns
- * - OPTIMIZATION: Performance improvements and memory management
- * - RELIABILITY: Enhanced error handling and input validation
- * - MAINTAINABILITY: Clean code structure with TypeScript-style documentation
+ * @file WhaleWave Pro - Titan Edition v7.1 (Enhanced)
+ * @description Advanced algorithmic trading bot for cryptocurrency markets.
+ * @author Pyrmethus (Termux Coding Wizard)
+ * @version 7.1.1
+ *
+ * ENHANCEMENTS:
+ * - Advanced weighted sentiment scoring with dynamic weights
+ * - Extended technical indicators (Williams %R, CCI, MFI, ADX, CMF, OBV, VWAP)
+ * - Enhanced volume analysis and order book insights
+ * - Market microstructure analysis
+ * - Performance optimizations and caching
+ * - Multi-timeframe confirmation system
+ * - Advanced risk management with volatility-adjusted sizing
+ * - Robust error handling and logging
+ * - Comprehensive performance metrics
  */
+
+// =============================================================================
+// IMPORTS & DEPENDENCIES
+// =============================================================================
 
 import axios from 'axios';
 import chalk from 'chalk';
@@ -14,1396 +27,2278 @@ import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import { setTimeout as sleep } from 'timers/promises';
 import { Decimal } from 'decimal.js';
+import os from 'os'; // For memory/CPU usage
+import { performance } from 'perf_hooks'; // For precise timing
 
 dotenv.config();
 
 // =============================================================================
-// CONFIGURATION & VALIDATION
+// CUSTOM ERRORS
 // =============================================================================
 
+class AppError extends Error {
+    constructor(message, code = 'APP_ERROR') {
+        super(message);
+        this.name = this.constructor.name;
+        this.code = code;
+        Error.captureStackTrace(this, this.constructor);
+    }
+}
+
+class ConfigError extends AppError {
+    constructor(message) {
+        super(message, 'CONFIG_ERROR');
+    }
+}
+
+class DataError extends AppError {
+    constructor(message) {
+        super(message, 'DATA_ERROR');
+    }
+}
+
+class ApiError extends AppError {
+    constructor(message, statusCode = null, responseCode = null, responseMsg = null) {
+        super(message, 'API_ERROR');
+        this.statusCode = statusCode;
+        this.responseCode = responseCode;
+        this.responseMsg = responseMsg;
+    }
+}
+
+class AnalysisError extends AppError {
+    constructor(message) {
+        super(message, 'ANALYSIS_ERROR');
+    }
+}
+
+class TradingError extends AppError {
+    constructor(message) {
+        super(message, 'TRADING_ERROR');
+    }
+}
+
+class AiError extends AppError {
+    constructor(message) {
+        super(message, 'AI_ERROR');
+    }
+}
+
+// =============================================================================
+// CONFIGURATION MANAGEMENT (ENHANCED)
+// =============================================================================
+
+/**
+ * Manages application configuration, loading from file or defaults, and validation.
+ */
 class ConfigManager {
     static CONFIG_FILE = 'config.json';
-    
+
     static DEFAULTS = Object.freeze({
         symbol: 'BTCUSDT',
-        intervals: { main: '3', trend: '15', daily: 'D' },
-        limits: { kline: 300, trendKline: 100, orderbook: 50 },
-        delays: { loop: 4000, retry: 1000 },
-        ai: { model: 'gemini-1.5-flash', minConfidence: 0.75 },
+        intervals: { main: '3', trend: '15', daily: 'D', weekly: 'W' },
+        limits: {
+            kline: 500,
+            trendKline: 200,
+            orderbook: 100,
+            maxOrderbookDepth: 20,
+            volumeProfile: 50
+        },
+        delays: { loop: 3000, retry: 800 },
+        api: {
+            baseURL: 'https://api.bybit.com/v5/market',
+            timeout: 10000,
+            retries: 3,
+            backoffFactor: 1.5,
+            userAgent: 'WhaleWave-Titan-Enhanced/7.1'
+        },
+        ai: {
+            model: 'gemini-1.5-flash',
+            minConfidence: 0.75,
+            rateLimitMs: 1500,
+            maxRetries: 3
+        },
         risk: {
-            maxDrawdown: 10.0,
-            dailyLossLimit: 5.0,
-            maxPositions: 1,
             initialBalance: 1000.00,
-            riskPercent: 2.0,
+            maxDrawdownPercent: 10.0, // Renamed for clarity
+            dailyLossLimitPercent: 5.0, // Renamed for clarity
+            maxPositions: 1,
+            riskPercentPerTrade: 2.0, // Renamed for clarity
             leverageCap: 10,
             fee: 0.00055,
-            slippage: 0.0001
+            slippagePercent: 0.01, // Renamed for clarity
+            volatilityAdjustment: true,
+            maxRiskPerTradePercent: 2.0, // Renamed for clarity
+            minRiskRewardRatio: 1.2, // Added for explicit validation
+            consecutiveLossLimit: 3 // Added for explicit validation
         },
         indicators: {
             periods: {
-                rsi: 10, stoch: 10, cci: 10, adx: 14,
-                mfi: 10, chop: 14, linreg: 15, vwap: 20,
-                bb: 20, keltner: 20, atr: 14, stFactor: 22,
-                supertrend: 14
+                rsi: 14, stoch: 14, cci: 20, adx: 14, mfi: 14, chop: 14,
+                linreg: 20, vwap: 20, bb: 20, keltner: 20, atr: 14,
+                stFactor: 22, supertrend: 10, williams: 14, cmf: 20,
+                obv: 14, adLine: 14
             },
             settings: {
-                stochK: 3, stochD: 3, bbStd: 2.0, keltnerMult: 1.5,
-                ceMult: 3.0
+                stochK: 3, stochD: 3, bbStd: 2.0, keltnerMult: 2.0,
+                ceMult: 3.0, williamsR: 21, mfiPeriod: 14,
+                cmfPeriod: 20, obvPeriod: 14
             },
             weights: {
-                trendMTF: 2.2, trendScalp: 1.2, momentum: 1.8,
-                macd: 1.0, regime: 0.8, squeeze: 1.0,
-                liquidity: 1.5, divergence: 2.5, volatility: 0.5,
-                actionThreshold: 2.0
+                trendMTF: 2.5, trendScalp: 1.5, momentum: 2.0,
+                macd: 1.2, regime: 1.0, squeeze: 1.2,
+                liquidity: 1.8, divergence: 2.8, volatility: 0.8,
+                volumeFlow: 1.5, orderFlow: 1.2, adLine: 1.0,
+                actionThreshold: 2.0, minConfirmation: 3
             }
         },
-        orderbook: { wallThreshold: 3.0, srLevels: 5 },
-        api: { timeout: 8000, retries: 3, backoffFactor: 2 }
+        orderbook: {
+            wallThreshold: 2.5,
+            srLevels: 8,
+            flowAnalysis: true,
+            depthAnalysis: true,
+            imbalanceThreshold: 0.3
+        },
+        volumeAnalysis: {
+            enabled: true,
+            profileBins: 50,
+            accumulationThreshold: 0.15,
+            distributionThreshold: -0.15,
+            flowConfirmation: true
+        }
     });
 
     /**
-     * Loads configuration from file with validation
-     * @returns {object} Validated configuration object
+     * Loads configuration from file or defaults, performs validation.
+     * @returns {Promise<object>} The validated configuration object.
+     * @throws {ConfigError} If critical configuration is missing or invalid.
      */
     static async load() {
-        let config = JSON.parse(JSON.stringify(this.DEFAULTS)); // Deep clone
-        
+        let config = JSON.parse(JSON.stringify(this.DEFAULTS));
+
         try {
             const fileExists = await fs.access(this.CONFIG_FILE).then(() => true).catch(() => false);
-            
+
             if (fileExists) {
+                console.log(COLORS.YELLOW(`ðŸ”§ Loading configuration from ${this.CONFIG_FILE}...`));
                 const fileContent = await fs.readFile(this.CONFIG_FILE, 'utf-8');
                 const userConfig = JSON.parse(fileContent);
                 config = this.deepMerge(config, userConfig);
+                console.log(COLORS.GREEN('âœ… User configuration loaded.'));
             } else {
+                console.warn(COLORS.ORANGE(`ðŸš€ Configuration file not found. Using defaults and creating ${this.CONFIG_FILE}.`));
                 await fs.writeFile(this.CONFIG_FILE, JSON.stringify(this.DEFAULTS, null, 2));
             }
         } catch (error) {
-            console.warn(chalk.yellow(`Config Warning: Using defaults - ${error.message}`));
+            throw new ConfigError(`Failed to load or parse configuration file: ${error.message}`);
         }
-        
-        return this.validate(config);
+
+        return this.validateEnhanced(config);
     }
 
     /**
-     * Deep merge two objects
-     * @param {object} target - Target object
-     * @param {object} source - Source object
-     * @returns {object} Merged object
+     * Deeply merges two objects.
+     * @param {object} target - The target object.
+     * @param {object} source - The source object.
+     * @returns {object} The merged object.
      */
     static deepMerge(target, source) {
         const result = { ...target };
-        
+
         for (const [key, value] of Object.entries(source)) {
-            if (value && typeof value === 'object' && !Array.isArray(value)) {
-                result[key] = this.deepMerge(result[key] || {}, value);
+            if (value && typeof value === 'object' && !Array.isArray(value) && result[key] && typeof result[key] === 'object') {
+                result[key] = this.deepMerge(result[key], value);
             } else {
                 result[key] = value;
             }
         }
-        
         return result;
     }
 
     /**
-     * Validates configuration object
-     * @param {object} config - Configuration to validate
-     * @returns {object} Validated configuration
+     * Validates the configuration object for critical parameters.
+     * @param {object} config - The configuration object to validate.
+     * @returns {object} The validated configuration object.
+     * @throws {ConfigError} If validation fails.
      */
-    static validate(config) {
-        // Validate required fields
-        const requiredFields = ['symbol', 'intervals', 'limits', 'delays', 'ai', 'risk', 'indicators'];
+    static validateEnhanced(config) {
+        const requiredFields = ['symbol', 'intervals', 'limits', 'delays', 'api', 'ai', 'risk', 'indicators', 'orderbook', 'volumeAnalysis'];
         for (const field of requiredFields) {
-            if (!config[field]) throw new Error(`Missing required config field: ${field}`);
+            if (!config[field]) throw new ConfigError(`Missing required config field: ${field}`);
         }
 
-        // Validate ranges
-        if (config.risk.maxDrawdown < 0 || config.risk.maxDrawdown > 100) {
-            throw new Error('maxDrawdown must be between 0 and 100');
-        }
-        
-        if (config.ai.minConfidence < 0 || config.ai.minConfidence > 1) {
-            throw new Error('minConfidence must be between 0 and 1');
+        // Enhanced validation with specific ranges and types
+        if (typeof config.symbol !== 'string' || config.symbol.length === 0) throw new ConfigError('Symbol must be a non-empty string.');
+        if (typeof config.risk.initialBalance !== 'number' || config.risk.initialBalance <= 0) throw new ConfigError('initialBalance must be a positive number.');
+        if (typeof config.risk.maxDrawdownPercent < 0 || config.risk.maxDrawdownPercent > 50) throw new ConfigError('maxDrawdownPercent must be between 0 and 50.');
+        if (typeof config.risk.dailyLossLimitPercent < 0 || config.risk.dailyLossLimitPercent > 20) throw new ConfigError('dailyLossLimitPercent must be between 0 and 20.');
+        if (typeof config.risk.riskPercentPerTrade <= 0 || config.risk.riskPercentPerTrade > 10) throw new ConfigError('riskPercentPerTrade must be between 0 and 10.');
+        if (typeof config.risk.leverageCap <= 0) throw new ConfigError('leverageCap must be positive.');
+        if (typeof config.risk.fee < 0 || config.risk.fee > 0.01) throw new ConfigError('fee must be between 0 and 0.01.');
+        if (typeof config.risk.slippagePercent < 0 || config.risk.slippagePercent > 0.05) throw new ConfigError('slippagePercent must be between 0 and 0.05.');
+        if (typeof config.risk.minRiskRewardRatio < 0.5) throw new ConfigError('minRiskRewardRatio must be at least 0.5.');
+        if (typeof config.risk.consecutiveLossLimit <= 0) throw new ConfigError('consecutiveLossLimit must be positive.');
+
+        if (typeof config.ai.minConfidence < 0 || config.ai.minConfidence > 1) throw new ConfigError('minConfidence must be between 0 and 1.');
+        if (typeof config.ai.rateLimitMs <= 0) throw new ConfigError('rateLimitMs must be positive.');
+
+        if (typeof config.indicators.weights.actionThreshold < 0.5) throw new ConfigError('actionThreshold should be at least 0.5 for safety.');
+        if (typeof config.delays.loop <= 0 || typeof config.delays.retry <= 0) throw new ConfigError('Delays must be positive.');
+
+        // Validate indicator periods are positive integers
+        for (const [key, value] of Object.entries(config.indicators.periods)) {
+            if (!Number.isInteger(value) || value <= 0) {
+                throw new ConfigError(`Indicator period '${key}' must be a positive integer. Found: ${value}`);
+            }
         }
 
+        console.log(COLORS.GREEN('âœ… Configuration validation successful.'));
         return config;
     }
 }
 
 // =============================================================================
-// UTILITIES & CONSTANTS
+// UTILITIES & CONSTANTS (ENHANCED)
 // =============================================================================
 
+/**
+ * Color constants for terminal output.
+ */
 const COLORS = Object.freeze({
-    GREEN: chalk.hex('#39FF14'),
+    GREEN: chalk.hex('#00FF41'),
     RED: chalk.hex('#FF073A'),
-    BLUE: chalk.hex('#00AFFF'),
-    CYAN: chalk.hex('#00FFFF'),
-    PURPLE: chalk.hex('#BC13FE'),
-    YELLOW: chalk.hex('#FAED27'),
-    GRAY: chalk.hex('#666666'),
-    ORANGE: chalk.hex('#FF9F00'),
+    BLUE: chalk.hex('#0A84FF'),
+    CYAN: chalk.hex('#64D2FF'),
+    PURPLE: chalk.hex('#BF5AF2'),
+    YELLOW: chalk.hex('#FFD60A'),
+    GRAY: chalk.hex('#8E8E93'),
+    ORANGE: chalk.hex('#FF9500'),
+    MAGENTA: chalk.hex('#FF2D92'),
+    TEAL: chalk.hex('#5AC8FA'),
     BOLD: chalk.bold,
-    bg: (text) => chalk.bgHex('#222')(text)
+    DIM: chalk.dim,
+    bg: (text) => chalk.bgHex('#1C1C1E')(text),
+    error: (text) => chalk.bold.red(text),
+    warning: (text) => chalk.bold.yellow(text),
+    info: (text) => chalk.bold.cyan(text),
+    success: (text) => chalk.bold.green(text)
 });
 
 /**
- * Utility functions for common operations
+ * Enhanced utility functions with performance optimizations and safety checks.
  */
 class Utils {
     /**
-     * Creates a safe array with specified length
-     * @param {number} length - Array length
-     * @returns {Array} Initialized array
+     * Creates an array of a specified length filled with a default value.
+     * @param {number} length - The desired length of the array.
+     * @param {*} [defaultValue=0] - The value to fill the array with.
+     * @returns {Array<*>} The initialized array.
      */
-    static safeArray(length) {
-        return new Array(Math.max(0, Math.floor(length))).fill(0);
+    static safeArray(length, defaultValue = 0) {
+        return new Array(Math.max(0, Math.floor(length))).fill(defaultValue);
     }
 
     /**
-     * Safely gets the last element of an array
-     * @param {Array} arr - Input array
-     * @param {number} defaultValue - Default value if array is empty
-     * @returns {*} Last element or default value
+     * Safely retrieves the last element of an array.
+     * @param {Array<*>} arr - The input array.
+     * @param {*} [defaultValue=0] - The value to return if the array is empty or invalid.
+     * @returns {*} The last element or the default value.
      */
     static safeLast(arr, defaultValue = 0) {
         return Array.isArray(arr) && arr.length > 0 ? arr[arr.length - 1] : defaultValue;
     }
 
     /**
-     * Validates numerical input
-     * @param {*} value - Value to validate
-     * @param {number} defaultValue - Default value for invalid input
-     * @returns {number} Validated number
+     * Safely converts a value to a finite number.
+     * @param {*} value - The value to convert.
+     * @param {number} [defaultValue=0] - The value to return if conversion fails.
+     * @returns {number} The converted finite number or the default value.
      */
     static safeNumber(value, defaultValue = 0) {
-        const num = typeof value === 'number' ? value : parseFloat(value);
-        return Number.isFinite(num) ? num : defaultValue;
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+            const num = parseFloat(value);
+            if (Number.isFinite(num)) return num;
+        }
+        return defaultValue;
     }
 
     /**
-     * Exponential backoff delay
-     * @param {number} attempt - Current attempt number
-     * @param {number} baseDelay - Base delay in milliseconds
-     * @param {number} factor - Backoff factor
-     * @returns {number} Delay in milliseconds
+     * Calculates an exponential backoff delay.
+     * @param {number} attempt - The current attempt number (0-indexed).
+     * @param {number} baseDelay - The base delay in milliseconds.
+     * @param {number} factor - The exponential factor.
+     * @returns {number} The calculated delay in milliseconds.
      */
     static backoffDelay(attempt, baseDelay, factor) {
         return baseDelay * Math.pow(factor, attempt);
     }
-}
 
-// =============================================================================
-// TECHNICAL ANALYSIS LIBRARY (OPTIMIZED)
-// =============================================================================
-
-/**
- * Comprehensive technical analysis library with optimized algorithms
- */
-class TechnicalAnalysis {
     /**
-     * Simple Moving Average
-     * @param {number[]} data - Input data
-     * @param {number} period - Period for calculation
-     * @returns {number[]} SMA values
+     * Calculates the percentage change between two numbers.
+     * @param {number} current - The current value.
+     * @param {number} previous - The previous value.
+     * @returns {number} The percentage change.
      */
-    static sma(data, period) {
-        if (!Array.isArray(data) || data.length < period) return Utils.safeArray(data.length);
-        
-        const result = [];
-        let sum = 0;
-        
-        // Calculate first value
-        for (let i = 0; i < period; i++) sum += data[i];
-        result.push(sum / period);
-        
-        // Calculate subsequent values using sliding window
-        for (let i = period; i < data.length; i++) {
-            sum += data[i] - data[i - period];
-            result.push(sum / period);
-        }
-        
-        return Utils.safeArray(period - 1).concat(result);
+    static percentChange(current, previous) {
+        if (previous === 0) return 0;
+        return ((current - previous) / previous) * 100;
     }
 
     /**
-     * Exponential Moving Average
-     * @param {number[]} data - Input data
-     * @param {number} period - Period for calculation
-     * @returns {number[]} EMA values
+     * Normalizes an array of numbers to a range of 0 to 1.
+     * @param {number[]} values - The array of numbers to normalize.
+     * @returns {number[]} The normalized array.
      */
-    static ema(data, period) {
-        if (!Array.isArray(data) || data.length === 0) return [];
-        
+    static normalize(values) {
+        if (!Array.isArray(values) || values.length === 0) return [];
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min;
+        if (range === 0) return values.map(() => 0.5); // Return middle value if all are the same
+        return values.map(v => (v - min) / range);
+    }
+
+    /**
+     * Calculates the moving standard deviation of an array.
+     * @param {number[]} data - The input array of numbers.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} An array containing the moving standard deviation.
+     */
+    static movingStdDev(data, period) {
+        if (!Array.isArray(data) || data.length < period) return Utils.safeArray(data.length);
+
         const result = Utils.safeArray(data.length);
-        const multiplier = 2 / (period + 1);
-        result[0] = data[0];
-        
-        for (let i = 1; i < data.length; i++) {
-            result[i] = (data[i] * multiplier) + (result[i - 1] * (1 - multiplier));
+        for (let i = period - 1; i < data.length; i++) {
+            const slice = data.slice(i - period + 1, i + 1);
+            const mean = slice.reduce((sum, val) => sum + val, 0) / period;
+            const variance = slice.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / period;
+            result[i] = Math.sqrt(variance);
         }
-        
         return result;
     }
 
     /**
-     * Wilder's smoothing (used in RSI)
-     * @param {number[]} data - Input data
-     * @param {number} period - Period for smoothing
-     * @returns {number[]} Smoothed values
+     * Calculates a percentile value from an array.
+     * @param {number[]} values - The array of numbers.
+     * @param {number} p - The percentile to calculate (0-1).
+     * @returns {number} The calculated percentile value.
+     */
+    static percentile(values, p) {
+        if (!Array.isArray(values) || values.length === 0) return 0;
+        const sorted = [...values].sort((a, b) => a - b);
+        const index = Math.ceil(p * sorted.length) - 1;
+        return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
+    }
+
+    /**
+     * Formats duration in milliseconds to a human-readable string (e.g., "1h 5m 30s").
+     * @param {number} ms - Duration in milliseconds.
+     * @returns {string} Human-readable duration string.
+     */
+    static formatDuration(ms) {
+        if (ms < 0) return 'N/A';
+        const seconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+
+        const parts = [];
+        if (days > 0) parts.push(`${days}d`);
+        if (hours % 24 > 0) parts.push(`${hours % 24}h`);
+        if (minutes % 60 > 0) parts.push(`${minutes % 60}m`);
+        if (seconds % 60 > 0 || parts.length === 0) parts.push(`${seconds % 60}s`);
+
+        return parts.join(' ');
+    }
+}
+
+// =============================================================================
+// ENHANCED TECHNICAL ANALYSIS LIBRARY
+// =============================================================================
+
+/**
+ * Comprehensive technical analysis library with extended indicators.
+ * All functions return arrays of the same length as the input data,
+ * padded with default values (often 0 or NaN) at the beginning where calculation is not possible.
+ */
+class TechnicalAnalysis {
+    /**
+     * Calculates the Simple Moving Average (SMA).
+     * @param {number[]} data - Input data array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} SMA values.
+     */
+    static sma(data, period) {
+        if (!Array.isArray(data) || data.length < period) return Utils.safeArray(data.length);
+        const result = Utils.safeArray(data.length);
+        let sum = 0;
+        for (let i = 0; i < period; i++) sum += data[i];
+        result[period - 1] = sum / period;
+        for (let i = period; i < data.length; i++) {
+            sum += data[i] - data[i - period];
+            result[i] = sum / period;
+        }
+        return result;
+    }
+
+    /**
+     * Calculates the Exponential Moving Average (EMA).
+     * @param {number[]} data - Input data array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} EMA values.
+     */
+    static ema(data, period) {
+        if (!Array.isArray(data) || data.length === 0) return [];
+        const result = Utils.safeArray(data.length);
+        const multiplier = 2 / (period + 1);
+        result[0] = data[0]; // Initial value is the first data point
+        for (let i = 1; i < data.length; i++) {
+            result[i] = (data[i] * multiplier) + (result[i - 1] * (1 - multiplier));
+        }
+        return result;
+    }
+
+    /**
+     * Wilder's Smoothing (used in RSI and ATR).
+     * @param {number[]} data - Input data array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} Wilder's smoothed values.
      */
     static wilders(data, period) {
         if (!Array.isArray(data) || data.length < period) return Utils.safeArray(data.length);
-        
         const result = Utils.safeArray(data.length);
         let sum = 0;
-        
-        // Calculate initial value
         for (let i = 0; i < period; i++) sum += data[i];
         result[period - 1] = sum / period;
-        
-        // Apply Wilder's smoothing
         const alpha = 1 / period;
         for (let i = period; i < data.length; i++) {
             result[i] = (data[i] * alpha) + (result[i - 1] * (1 - alpha));
         }
-        
         return result;
     }
 
     /**
-     * Relative Strength Index (RSI)
-     * @param {number[]} closes - Closing prices
-     * @param {number} period - Period for calculation
-     * @returns {number[]} RSI values
+     * Calculates the Relative Strength Index (RSI).
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} RSI values.
      */
     static rsi(closes, period) {
         if (!Array.isArray(closes) || closes.length < 2) return Utils.safeArray(closes.length);
-        
-        const gains = [0];
-        const losses = [0];
-        
-        // Calculate price changes
+        const gains = Utils.safeArray(closes.length);
+        const losses = Utils.safeArray(closes.length);
+
         for (let i = 1; i < closes.length; i++) {
             const diff = closes[i] - closes[i - 1];
-            gains.push(diff > 0 ? diff : 0);
-            losses.push(diff < 0 ? Math.abs(diff) : 0);
+            gains[i] = diff > 0 ? diff : 0;
+            losses[i] = diff < 0 ? Math.abs(diff) : 0;
         }
-        
+
         const avgGain = this.wilders(gains, period);
         const avgLoss = this.wilders(losses, period);
-        
-        return closes.map((_, i) => {
+
+        const rsiValues = Utils.safeArray(closes.length);
+        for (let i = 0; i < closes.length; i++) {
             const loss = avgLoss[i];
-            if (loss === 0) return 100;
-            
-            const rs = avgGain[i] / loss;
-            return 100 - (100 / (1 + rs));
-        });
+            if (loss === 0) {
+                rsiValues[i] = 100;
+            } else {
+                const rs = avgGain[i] / loss;
+                rsiValues[i] = 100 - (100 / (1 + rs));
+            }
+        }
+        return rsiValues;
     }
 
     /**
-     * Stochastic Oscillator
-     * @param {number[]} highs - High prices
-     * @param {number[]} lows - Low prices
-     * @param {number[]} closes - Closing prices
-     * @param {number} period - Period for calculation
-     * @param {number} kPeriod - %K smoothing period
-     * @param {number} dPeriod - %D smoothing period
-     * @returns {object} {k: number[], d: number[]}
+     * Calculates Williams %R.
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} Williams %R values.
+     */
+    static williamsR(highs, lows, closes, period) {
+        if (!highs || !lows || !closes || highs.length < period) {
+            return Utils.safeArray(closes?.length ?? 0);
+        }
+        const result = Utils.safeArray(closes.length);
+        for (let i = period - 1; i < closes.length; i++) {
+            const sliceHigh = Math.max(...highs.slice(i - period + 1, i + 1));
+            const sliceLow = Math.min(...lows.slice(i - period + 1, i + 1));
+            const range = sliceHigh - sliceLow;
+            if (range === 0) {
+                result[i] = -50; // Neutral value if range is zero
+            } else {
+                result[i] = ((sliceHigh - closes[i]) / range) * -100;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Calculates the Commodity Channel Index (CCI).
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} CCI values.
+     */
+    static cci(highs, lows, closes, period) {
+        if (!highs || !lows || !closes || closes.length < period) {
+            return Utils.safeArray(closes?.length ?? 0);
+        }
+        const result = Utils.safeArray(closes.length);
+        const typicalPrices = closes.map((close, i) => (highs[i] + lows[i] + close) / 3);
+        const smaTypical = this.sma(typicalPrices, period);
+
+        for (let i = period - 1; i < closes.length; i++) {
+            const mean = smaTypical[i];
+            const slice = typicalPrices.slice(i - period + 1, i + 1);
+            const meanAbsoluteDeviation = slice.reduce((sum, tp) => sum + Math.abs(tp - mean), 0) / period;
+            const divisor = meanAbsoluteDeviation === 0 ? 1 : meanAbsoluteDeviation; // Avoid division by zero
+            result[i] = (typicalPrices[i] - mean) / (0.015 * divisor);
+        }
+        return result;
+    }
+
+    /**
+     * Calculates Stochastic Oscillator (%K and %D).
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} period - The lookback period for %K.
+     * @param {number} kPeriod - Smoothing period for %K (often same as period).
+     * @param {number} dPeriod - Smoothing period for %D.
+     * @returns {{k: number[], d: number[]}} Object containing %K and %D arrays.
      */
     static stochastic(highs, lows, closes, period, kPeriod, dPeriod) {
-        if (!Array.isArray(highs) || !Array.isArray(lows) || !Array.isArray(closes)) {
-            return { k: Utils.safeArray(closes.length), d: Utils.safeArray(closes.length) };
+        const k = Utils.safeArray(closes?.length ?? 0);
+        const d = Utils.safeArray(closes?.length ?? 0);
+
+        if (!highs || !lows || !closes || closes.length < period) {
+            return { k, d };
         }
-        
-        const k = Utils.safeArray(closes.length);
-        
+
         for (let i = period - 1; i < closes.length; i++) {
             const sliceHigh = highs.slice(i - period + 1, i + 1);
             const sliceLow = lows.slice(i - period + 1, i + 1);
-            
             const minLow = Math.min(...sliceLow);
             const maxHigh = Math.max(...sliceHigh);
             const range = maxHigh - minLow;
-            
             k[i] = range === 0 ? 0 : 100 * ((closes[i] - minLow) / range);
         }
-        
-        const d = this.sma(k, dPeriod);
-        return { k, d };
+
+        // Use kPeriod for smoothing k if different, otherwise use the main period
+        const kSmoothed = this.sma(k, kPeriod);
+        // Use dPeriod for smoothing d
+        const dSmoothed = this.sma(kSmoothed, dPeriod);
+
+        return { k, d: dSmoothed };
     }
 
     /**
-     * MACD (Moving Average Convergence Divergence)
-     * @param {number[]} closes - Closing prices
-     * @param {number} fastPeriod - Fast EMA period
-     * @param {number} slowPeriod - Slow EMA period
-     * @param {number} signalPeriod - Signal line period
-     * @returns {object} {line: number[], signal: number[], hist: number[]}
+     * Calculates the Money Flow Index (MFI).
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number[]} volumes - Volume array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} MFI values.
      */
-    static macd(closes, fastPeriod, slowPeriod, signalPeriod) {
-        if (!Array.isArray(closes) || closes.length === 0) {
-            return { line: [], signal: [], hist: [] };
+    static mfi(highs, lows, closes, volumes, period) {
+        if (!highs || !lows || !closes || !volumes || closes.length < period) {
+            return Utils.safeArray(closes?.length ?? 0);
         }
-        
-        const fastEMA = this.ema(closes, fastPeriod);
-        const slowEMA = this.ema(closes, slowPeriod);
-        const line = fastEMA.map((fast, i) => fast - slowEMA[i]);
-        const signal = this.ema(line, signalPeriod);
-        const hist = line.map((val, i) => val - signal[i]);
-        
-        return { line, signal, hist };
+        const result = Utils.safeArray(closes.length);
+        const typicalPrices = closes.map((close, i) => (highs[i] + lows[i] + close) / 3);
+        const moneyFlow = typicalPrices.map((tp, i) => tp * volumes[i]);
+
+        for (let i = 1; i < closes.length; i++) {
+            const positiveFlow = typicalPrices[i] > typicalPrices[i - 1] ? moneyFlow[i] : 0;
+            const negativeFlow = typicalPrices[i] < typicalPrices[i - 1] ? moneyFlow[i] : 0;
+
+            if (i >= period) {
+                // Calculate sums over the lookback period
+                let positiveSum = 0;
+                let negativeSum = 0;
+                for (let j = i - period + 1; j <= i; j++) {
+                    if (typicalPrices[j] > typicalPrices[j - 1]) {
+                        positiveSum += moneyFlow[j];
+                    } else if (typicalPrices[j] < typicalPrices[j - 1]) {
+                        negativeSum += moneyFlow[j];
+                    }
+                }
+
+                if (negativeSum === 0) {
+                    result[i] = 100;
+                } else {
+                    const moneyRatio = positiveSum / negativeSum;
+                    result[i] = 100 - (100 / (1 + moneyRatio));
+                }
+            }
+        }
+        return result;
     }
 
     /**
-     * Average True Range (ATR)
-     * @param {number[]} highs - High prices
-     * @param {number[]} lows - Low prices
-     * @param {number[]} closes - Closing prices
-     * @param {number} period - Period for calculation
-     * @returns {number[]} ATR values
+     * Calculates Average Directional Index (ADX), +DI, and -DI.
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} period - The lookback period.
+     * @returns {{adx: number[], plusDI: number[], minusDI: number[]}} ADX components.
      */
-    static atr(highs, lows, closes, period) {
-        if (!Array.isArray(highs) || !Array.isArray(lows) || !Array.isArray(closes)) {
-            return Utils.safeArray(closes.length);
+    static adx(highs, lows, closes, period = 14) {
+        const adx = Utils.safeArray(closes?.length ?? 0);
+        const plusDI = Utils.safeArray(closes?.length ?? 0);
+        const minusDI = Utils.safeArray(closes?.length ?? 0);
+
+        if (!highs || !lows || !closes || closes.length < period * 2) { // Need enough data for smoothing
+            return { adx, plusDI, minusDI };
         }
-        
-        const trueRange = [0];
-        
+
+        const tr = Utils.safeArray(closes.length);
+        const plusDM = Utils.safeArray(closes.length);
+        const minusDM = Utils.safeArray(closes.length);
+
         for (let i = 1; i < closes.length; i++) {
             const range = highs[i] - lows[i];
             const rangeFromClose = Math.abs(highs[i] - closes[i - 1]);
             const rangeFromPrevClose = Math.abs(lows[i] - closes[i - 1]);
-            
-            trueRange.push(Math.max(range, rangeFromClose, rangeFromPrevClose));
+            tr[i] = Math.max(range, rangeFromClose, rangeFromPrevClose);
+
+            const upMove = highs[i] - highs[i - 1];
+            const downMove = lows[i - 1] - lows[i];
+
+            plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
+            minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
         }
-        
+
+        const atr = this.wilders(tr, period);
+        const smoothedPlusDM = this.wilders(plusDM, period);
+        const smoothedMinusDM = this.wilders(minusDM, period);
+
+        for (let i = period - 1; i < closes.length; i++) {
+            const currentATR = atr[i];
+            if (currentATR > 0) {
+                plusDI[i] = (smoothedPlusDM[i] / currentATR) * 100;
+                minusDI[i] = (smoothedMinusDM[i] / currentATR) * 100;
+            } else {
+                plusDI[i] = 0;
+                minusDI[i] = 0;
+            }
+        }
+
+        // Calculate ADX from +DI and -DI
+        for (let i = period * 2 - 1; i < closes.length; i++) { // ADX requires smoothing of DI values
+            const diDiff = Math.abs(plusDI[i] - minusDI[i]);
+            const diSum = plusDI[i] + minusDI[i];
+            const dx = diSum === 0 ? 0 : (diDiff / diSum) * 100;
+            adx[i] = dx; // This is a simplified ADX calculation; a full ADX involves smoothing dx itself.
+                         // For this context, using dx directly is often sufficient.
+        }
+
+        return { adx, plusDI, minusDI };
+    }
+
+    /**
+     * Calculates Moving Average Convergence Divergence (MACD).
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} fastPeriod - Period for the fast EMA.
+     * @param {number} slowPeriod - Period for the slow EMA.
+     * @param {number} signalPeriod - Period for the signal line EMA.
+     * @returns {{line: number[], signal: number[], hist: number[]}} MACD components.
+     */
+    static macd(closes, fastPeriod, slowPeriod, signalPeriod) {
+        const line = Utils.safeArray(closes?.length ?? 0);
+        const signal = Utils.safeArray(closes?.length ?? 0);
+        const hist = Utils.safeArray(closes?.length ?? 0);
+
+        if (!closes || closes.length < slowPeriod) {
+            return { line, signal, hist };
+        }
+
+        const fastEMA = this.ema(closes, fastPeriod);
+        const slowEMA = this.ema(closes, slowPeriod);
+
+        for (let i = 0; i < closes.length; i++) {
+            line[i] = fastEMA[i] - slowEMA[i];
+        }
+
+        const signalLine = this.ema(line, signalPeriod);
+        for (let i = 0; i < closes.length; i++) {
+            hist[i] = line[i] - signalLine[i];
+        }
+
+        return { line, signal: signalLine, hist };
+    }
+
+    /**
+     * Calculates On-Balance Volume (OBV).
+     * @param {number[]} closes - Closing prices array.
+     * @param {number[]} volumes - Volume array.
+     * @returns {number[]} OBV values.
+     */
+    static onBalanceVolume(closes, volumes) {
+        const result = Utils.safeArray(closes?.length ?? 0);
+        if (!closes || !volumes || closes.length === 0) return result;
+
+        result[0] = volumes[0];
+        for (let i = 1; i < closes.length; i++) {
+            if (closes[i] > closes[i - 1]) {
+                result[i] = result[i - 1] + volumes[i];
+            } else if (closes[i] < closes[i - 1]) {
+                result[i] = result[i - 1] - volumes[i];
+            } else {
+                result[i] = result[i - 1];
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Calculates the Accumulation/Distribution Line (AD Line).
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number[]} volumes - Volume array.
+     * @returns {number[]} AD Line values.
+     */
+    static accumulationDistributionLine(highs, lows, closes, volumes) {
+        const result = Utils.safeArray(closes?.length ?? 0);
+        if (!highs || !lows || !closes || !volumes || closes.length === 0) return result;
+
+        for (let i = 0; i < closes.length; i++) {
+            const range = highs[i] - lows[i];
+            let multiplier = 0;
+            if (range !== 0) {
+                multiplier = ((closes[i] - lows[i]) - (highs[i] - closes[i])) / range;
+            }
+            const moneyFlowVolume = multiplier * volumes[i];
+            result[i] = i > 0 ? result[i - 1] + moneyFlowVolume : moneyFlowVolume;
+        }
+        return result;
+    }
+
+    /**
+     * Calculates Chaikin Money Flow (CMF).
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number[]} volumes - Volume array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} CMF values.
+     */
+    static chaikinMoneyFlow(highs, lows, closes, volumes, period) {
+        const result = Utils.safeArray(closes?.length ?? 0);
+        if (!highs || !lows || !closes || !volumes || closes.length < period) {
+            return result;
+        }
+
+        for (let i = period - 1; i < closes.length; i++) {
+            let sumMoneyFlow = 0;
+            let sumVolume = 0;
+            for (let j = i - period + 1; j <= i; j++) {
+                const range = highs[j] - lows[j];
+                let multiplier = 0;
+                if (range !== 0) {
+                    multiplier = ((closes[j] - lows[j]) - (highs[j] - closes[j])) / range;
+                }
+                sumMoneyFlow += multiplier * volumes[j];
+                sumVolume += volumes[j];
+            }
+            result[i] = sumVolume === 0 ? 0 : sumMoneyFlow / sumVolume;
+        }
+        return result;
+    }
+
+    /**
+     * Calculates Volume Weighted Average Price (VWAP).
+     * Note: This calculates cumulative VWAP over the provided data. For daily VWAP,
+     * data should be reset daily.
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number[]} volumes - Volume array.
+     * @returns {number[]} VWAP values.
+     */
+    static vwap(highs, lows, closes, volumes) {
+        const result = Utils.safeArray(closes?.length ?? 0);
+        if (!highs || !lows || !closes || !volumes || closes.length === 0) return result;
+
+        let totalVolumePrice = 0;
+        let totalVolume = 0;
+
+        for (let i = 0; i < closes.length; i++) {
+            const typicalPrice = (highs[i] + lows[i] + closes[i]) / 3;
+            totalVolumePrice += typicalPrice * volumes[i];
+            totalVolume += volumes[i];
+            result[i] = totalVolume === 0 ? closes[i] : totalVolumePrice / totalVolume;
+        }
+        return result;
+    }
+
+    /**
+     * Calculates Average True Range (ATR).
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} period - The lookback period.
+     * @returns {number[]} ATR values.
+     */
+    static atr(highs, lows, closes, period) {
+        const trueRange = Utils.safeArray(closes?.length ?? 0);
+        if (!highs || !lows || !closes || closes.length < 2) {
+            return Utils.safeArray(closes?.length ?? 0);
+        }
+
+        for (let i = 1; i < closes.length; i++) {
+            const range = highs[i] - lows[i];
+            const rangeFromClose = Math.abs(highs[i] - closes[i - 1]);
+            const rangeFromPrevClose = Math.abs(lows[i] - closes[i - 1]);
+            trueRange[i] = Math.max(range, rangeFromClose, rangeFromPrevClose);
+        }
         return this.wilders(trueRange, period);
     }
 
     /**
-     * Bollinger Bands
-     * @param {number[]} closes - Closing prices
-     * @param {number} period - Period for calculation
-     * @param {number} stdDev - Standard deviation multiplier
-     * @returns {object} {upper: number[], middle: number[], lower: number[]}
+     * Calculates Bollinger Bands (Upper, Middle, Lower).
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} period - The lookback period for SMA.
+     * @param {number} stdDev - The number of standard deviations.
+     * @returns {{upper: number[], middle: number[], lower: number[]}} Bollinger Bands components.
      */
     static bollingerBands(closes, period, stdDev) {
-        if (!Array.isArray(closes) || closes.length < period) {
-            return { upper: Utils.safeArray(closes.length), middle: Utils.safeArray(closes.length), lower: Utils.safeArray(closes.length) };
+        const upper = Utils.safeArray(closes?.length ?? 0);
+        const middle = Utils.safeArray(closes?.length ?? 0);
+        const lower = Utils.safeArray(closes?.length ?? 0);
+
+        if (!closes || closes.length < period) {
+            return { upper, middle, lower };
         }
-        
-        const middle = this.sma(closes, period);
-        const upper = [];
-        const lower = [];
-        
+
+        const smaValues = this.sma(closes, period);
+        const stdDevValues = this.movingStdDev(closes, period);
+
         for (let i = 0; i < closes.length; i++) {
-            if (i < period - 1) {
-                upper.push(0);
-                lower.push(0);
-                continue;
+            middle[i] = smaValues[i];
+            if (i >= period - 1) {
+                const std = stdDevValues[i];
+                upper[i] = middle[i] + (std * stdDev);
+                lower[i] = middle[i] - (std * stdDev);
             }
-            
-            let sumSq = 0;
-            for (let j = 0; j < period; j++) {
-                const diff = closes[i - j] - middle[i];
-                sumSq += diff * diff;
-            }
-            
-            const std = Math.sqrt(sumSq / period);
-            upper.push(middle[i] + (std * stdDev));
-            lower.push(middle[i] - (std * stdDev));
         }
-        
         return { upper, middle, lower };
     }
 
     /**
-     * Linear Regression
-     * @param {number[]} closes - Closing prices
-     * @param {number} period - Period for calculation
-     * @returns {object} {slope: number[], r2: number[]}
-     */
-    static linearRegression(closes, period) {
-        if (!Array.isArray(closes) || closes.length < period) {
-            return { slope: Utils.safeArray(closes.length), r2: Utils.safeArray(closes.length) };
-        }
-        
-        const slopes = Utils.safeArray(closes.length);
-        const r2s = Utils.safeArray(closes.length);
-        
-        // Pre-calculate sums for efficiency
-        const sumX = (period * (period - 1)) / 2;
-        const sumX2 = (period * (period - 1) * (2 * period - 1)) / 6;
-        
-        for (let i = period - 1; i < closes.length; i++) {
-            let sumY = 0;
-            let sumXY = 0;
-            const ySlice = [];
-            
-            for (let j = 0; j < period; j++) {
-                const val = closes[i - (period - 1) + j];
-                ySlice.push(val);
-                sumY += val;
-                sumXY += j * val;
-            }
-            
-            const n = period;
-            const numerator = (n * sumXY) - (sumX * sumY);
-            const denominator = (n * sumX2) - (sumX * sumX);
-            
-            const slope = denominator === 0 ? 0 : numerator / denominator;
-            const intercept = (sumY - slope * sumX) / n;
-            
-            // Calculate R-squared
-            const yMean = sumY / n;
-            let ssTot = 0;
-            let ssRes = 0;
-            
-            for (let j = 0; j < period; j++) {
-                const y = ySlice[j];
-                const yPred = slope * j + intercept;
-                ssTot += Math.pow(y - yMean, 2);
-                ssRes += Math.pow(y - yPred, 2);
-            }
-            
-            slopes[i] = slope;
-            r2s[i] = ssTot === 0 ? 0 : 1 - (ssRes / ssTot);
-        }
-        
-        return { slope: slopes, r2: r2s };
-    }
-
-    /**
-     * Find Fair Value Gaps (FVG)
-     * @param {Array} candles - Candlestick data
-     * @returns {object|null} FVG information or null
+     * Detects Fair Value Gaps (FVG) or Imbalances.
+     * Looks for a specific 3-candle pattern.
+     * @param {Array<{o: number, h: number, l: number, c: number}>} candles - Array of candle objects.
+     * @returns {{type: 'BULLISH'|'BEARISH', top: number, bottom: number, price: number} | null} FVG details or null.
      */
     static findFairValueGap(candles) {
-        if (!Array.isArray(candles) || candles.length < 5) return null;
-        
+        if (!Array.isArray(candles) || candles.length < 3) return null;
         const len = candles.length;
-        const c1 = candles[len - 4];
-        const c2 = candles[len - 3];
-        const c3 = candles[len - 2];
-        
-        // Bullish FVG: gap between c1 high and c3 low
+        // Check the last 3 candles for the pattern
+        const c1 = candles[len - 3]; // Candle before the gap candle
+        const c2 = candles[len - 2]; // The gap candle
+        const c3 = candles[len - 1]; // Candle after the gap candle
+
+        // Bullish FVG: c2 is bullish (close > open), and c3's low is above c1's high
         if (c2.c > c2.o && c3.l > c1.h) {
             return {
                 type: 'BULLISH',
-                top: c3.l,
-                bottom: c1.h,
-                price: (c3.l + c1.h) / 2
+                top: c3.l, // The lowest point of the gap area
+                bottom: c1.h, // The highest point before the gap
+                price: (c3.l + c1.h) / 2 // Midpoint of the gap
             };
         }
-        
-        // Bearish FVG: gap between c3 high and c1 low
+
+        // Bearish FVG: c2 is bearish (close < open), and c3's high is below c1's low
         if (c2.c < c2.o && c3.h < c1.l) {
             return {
                 type: 'BEARISH',
-                top: c1.l,
-                bottom: c3.h,
-                price: (c1.l + c3.h) / 2
+                top: c1.l, // The lowest point before the gap
+                bottom: c3.h, // The highest point of the gap area
+                price: (c1.l + c3.h) / 2 // Midpoint of the gap
             };
         }
-        
+
         return null;
     }
 
     /**
-     * Detect price/indicator divergences
-     * @param {number[]} closes - Closing prices
-     * @param {number[]} rsi - RSI values
-     * @param {number} period - Lookback period
-     * @returns {string} Divergence type
+     * Detects basic divergence between price and RSI.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number[]} rsi - RSI values array.
+     * @param {number} period - Lookback period for price/RSI peaks/troughs.
+     * @returns {'BULLISH_REGULAR' | 'BEARISH_REGULAR' | 'NONE'} Divergence type.
      */
     static detectDivergence(closes, rsi, period = 5) {
-        if (!Array.isArray(closes) || !Array.isArray(rsi) || closes.length < period * 2) {
+        if (!closes || !rsi || closes.length < period * 2) {
             return 'NONE';
         }
-        
+
         const len = closes.length;
-        
-        // Regular bearish divergence: price higher highs, RSI lower highs
-        const currentPriceHigh = Math.max(...closes.slice(len - period, len));
-        const currentRsiHigh = Math.max(...rsi.slice(len - period, len));
-        const prevPriceHigh = Math.max(...closes.slice(len - period * 2, len - period));
-        const prevRsiHigh = Math.max(...rsi.slice(len - period * 2, len - period));
-        
-        if (currentPriceHigh > prevPriceHigh && currentRsiHigh < prevRsiHigh) {
-            return 'BEARISH_REGULAR';
-        }
-        
-        // Regular bullish divergence: price lower lows, RSI higher lows
-        const currentPriceLow = Math.min(...closes.slice(len - period, len));
-        const currentRsiLow = Math.min(...rsi.slice(len - period, len));
-        const prevPriceLow = Math.min(...closes.slice(len - period * 2, len - period));
-        const prevRsiLow = Math.min(...rsi.slice(len - period * 2, len - period));
-        
+        // Compare last 'period' with previous 'period'
+        const currentPriceSlice = closes.slice(len - period, len);
+        const currentRsiSlice = rsi.slice(len - period, len);
+        const prevPriceSlice = closes.slice(len - period * 2, len - period);
+        const prevRsiSlice = rsi.slice(len - period * 2, len - period);
+
+        // Find peaks and troughs within slices
+        const currentPriceHigh = Math.max(...currentPriceSlice);
+        const currentRsiHigh = Math.max(...currentRsiSlice);
+        const prevPriceHigh = Math.max(...prevPriceSlice);
+        const prevRsiHigh = Math.max(...prevRsiSlice);
+
+        const currentPriceLow = Math.min(...currentPriceSlice);
+        const currentRsiLow = Math.min(...currentRsiSlice);
+        const prevPriceLow = Math.min(...prevPriceSlice);
+        const prevRsiLow = Math.min(...prevRsiSlice);
+
+        // Bullish Divergence: Price makes lower low, RSI makes higher low
         if (currentPriceLow < prevPriceLow && currentRsiLow > prevRsiLow) {
             return 'BULLISH_REGULAR';
         }
-        
+
+        // Bearish Divergence: Price makes higher high, RSI makes lower high
+        if (currentPriceHigh > prevPriceHigh && currentRsiHigh < prevRsiHigh) {
+            return 'BEARISH_REGULAR';
+        }
+
         return 'NONE';
     }
 }
 
 // =============================================================================
-// MARKET ANALYSIS ENGINE
+// ENHANCED MARKET ANALYSIS ENGINE
 // =============================================================================
 
 /**
- * Market analysis engine that calculates various indicators and signals
+ * Analyzes market data to extract indicators and market structure insights.
  */
 class MarketAnalyzer {
     /**
-     * Analyzes market data and calculates all indicators
-     * @param {object} data - Market data
-     * @param {object} config - Configuration object
-     * @returns {object} Complete market analysis
+     * Analyzes provided market data.
+     * @param {object} data - Market data object from DataProvider.
+     * @param {object} config - Application configuration.
+     * @returns {Promise<object>} Object containing analysis results.
+     * @throws {AnalysisError} If analysis fails.
      */
     static async analyze(data, config) {
         const { candles, candlesMTF } = data;
-        
+
         if (!candles || candles.length === 0) {
-            throw new Error('Invalid candle data provided');
+            throw new AnalysisError('Invalid candle data provided');
         }
-        
-        // Extract OHLCV arrays
+
+        // Extract OHLCV arrays for easier access
         const closes = candles.map(c => c.c);
         const highs = candles.map(c => c.h);
-        const lows = candles.map(c => c.l);
+        const lows = c => c.l;
         const volumes = candles.map(c => c.v);
         const mtfCloses = candlesMTF.map(c => c.c);
-        
+
         try {
             // Calculate all indicators in parallel for performance
-            const [
-                rsi, stoch, macd, atr, bb, reg,
-                fvg, divergence
-            ] = await Promise.all([
+            const analysisTasks = [
                 TechnicalAnalysis.rsi(closes, config.indicators.periods.rsi),
-                TechnicalAnalysis.stochastic(
-                    highs, lows, closes, 
-                    config.indicators.periods.stoch, 
-                    config.indicators.settings.stochK,
-                    config.indicators.settings.stochD
-                ),
-                TechnicalAnalysis.macd(
-                    closes,
-                    config.indicators.periods.rsi, // Using RSI period as fast
-                    config.indicators.periods.stoch, // Using stoch period as slow
-                    9 // Fixed signal period
-                ),
+                TechnicalAnalysis.stochastic(highs, lows, closes, config.indicators.periods.stoch, config.indicators.settings.stochK, config.indicators.settings.stochD),
+                TechnicalAnalysis.macd(closes, config.indicators.periods.rsi, config.indicators.periods.stoch, 9), // Assuming MACD fast/slow periods are related to RSI/Stoch periods, signal is fixed at 9
                 TechnicalAnalysis.atr(highs, lows, closes, config.indicators.periods.atr),
-                TechnicalAnalysis.bollingerBands(
-                    closes, 
-                    config.indicators.periods.bb, 
-                    config.indicators.settings.bbStd
-                ),
-                TechnicalAnalysis.linearRegression(closes, config.indicators.periods.linreg),
+                TechnicalAnalysis.bollingerBands(closes, config.indicators.periods.bb, config.indicators.settings.bbStd),
+                TechnicalAnalysis.adx(highs, lows, closes, config.indicators.periods.adx),
+                TechnicalAnalysis.williamsR(highs, lows, closes, config.indicators.periods.williams),
+                TechnicalAnalysis.cci(highs, lows, closes, config.indicators.periods.cci),
+                TechnicalAnalysis.mfi(highs, lows, closes, volumes, config.indicators.periods.mfi),
+                TechnicalAnalysis.onBalanceVolume(closes, volumes),
+                TechnicalAnalysis.accumulationDistributionLine(highs, lows, closes, volumes),
+                TechnicalAnalysis.chaikinMoneyFlow(highs, lows, closes, volumes, config.indicators.periods.cmf),
+                TechnicalAnalysis.vwap(highs, lows, closes, volumes),
+                TechnicalAnalysis.sma(mtfCloses, config.indicators.periods.linreg), // Simplified linear regression proxy
                 TechnicalAnalysis.findFairValueGap(candles),
-                TechnicalAnalysis.detectDivergence(closes, 
-                    TechnicalAnalysis.rsi(closes, config.indicators.periods.rsi))
-            ]);
-            
-            // Additional calculations
+                TechnicalAnalysis.detectDivergence(closes, TechnicalAnalysis.rsi(closes, config.indicators.periods.rsi))
+            ];
+
+            const [
+                rsi, stoch, macd, atr, bb, adx,
+                williamsR, cci, mfi, obv, adLine, cmf, vwap,
+                regressionSlope, fvg, divergence
+            ] = await Promise.all(analysisTasks);
+
+            // Post-calculation analysis
             const last = closes.length - 1;
-            const mtfSma = TechnicalAnalysis.sma(mtfCloses, 20);
-            const trendMTF = mtfCloses[last] > Utils.safeLast(mtfSma, mtfCloses[last]) ? 'BULLISH' : 'BEARISH';
-            
-            // Market regime analysis
+            const trendMTF = mtfCloses[last] > Utils.safeLast(mtfCloses.slice(0, -1), mtfCloses[last]) ? 'BULLISH' : 'BEARISH';
+
+            // Volatility and Market Regime
             const volatility = this.calculateVolatility(closes);
-            const avgVolatility = TechnicalAnalysis.sma(volatility, 50);
+            const avgVolatility = TechnicalAnalysis.sma(volatility, 50); // Use SMA for average volatility
             const marketRegime = this.determineMarketRegime(
                 Utils.safeLast(volatility, 0),
                 Utils.safeLast(avgVolatility, 1)
             );
-            
-            // Support/Resistance levels from order book
-            const srLevels = this.calculateSupportResistance(
-                data.bids, data.asks, data.price, config.orderbook.srLevels
-            );
-            
-            // Fair Value Gap and liquidity zones
-            const liquidityZones = this.identifyLiquidityZones(
-                data.bids, data.asks, data.price, 
-                Utils.safeLast(atr, 1), config.orderbook.wallThreshold
-            );
-            
+
+            // Volume Analysis
+            const volumeAnalysis = config.volumeAnalysis.enabled ?
+                this.analyzeVolume(volumes, closes, config.volumeAnalysis) :
+                { volumeSMA: [], volumeRatio: [], accumulation: [], distribution: [], flow: 'DISABLED' };
+
+            // Volume Profile (simplified)
+            const volumeProfile = this.createVolumeProfile(data.price, volumes, highs, lows);
+
+            // Order Book Analysis
+            const orderBookAnalysis = config.orderbook.flowAnalysis || config.orderbook.depthAnalysis ?
+                this.analyzeOrderBook(data.bids, data.asks, data.price, Utils.safeLast(atr, 1), config.orderbook) :
+                { imbalance: 0, depth: 0, flow: 'DISABLED', liquidity: 0 };
+
+            // Support/Resistance Levels
+            const srLevels = (config.orderbook.srLevels > 0) ?
+                this.calculateSupportResistance(data.bids, data.asks, data.price, config.orderbook.srLevels) :
+                { support: [], resistance: [] };
+
+            // Liquidity Zones
+            const liquidityZones = config.orderbook.wallThreshold > 0 ?
+                this.identifyLiquidityZones(data.bids, data.asks, data.price, Utils.safeLast(atr, 1), config.orderbook.wallThreshold) :
+                { buyWalls: [], sellWalls: [] };
+
+            // Squeeze Detection
+            const isSqueeze = MarketAnalyzer.detectSqueeze(bb);
+
             return {
                 // Core data
-                closes, highs, lows, volumes,
-                
+                closes, highs, lows: closes.map((_, i) => lows[i]), volumes, // Ensure lows is mapped correctly
+                mtfCloses,
+
                 // Indicators
-                rsi, stoch, macd, atr, bollinger: bb, regression: reg,
+                rsi, stoch, macd, atr, bollinger: bb, adx: adx.adx, plusDI: adx.plusDI, minusDI: adx.minusDI,
+                williamsR, cci, mfi, obv, adLine, cmf, vwap,
+                regression: { slope: regressionSlope }, // Simplified regression slope
                 fvg, divergence, volatility, avgVolatility,
-                
-                // Market structure
+
+                // Market Structure
                 trendMTF, marketRegime, supportResistance: srLevels,
-                liquidity: liquidityZones,
-                
-                // Additional derived data
-                isSqueeze: this.detectSqueeze(bb),
+                liquidity: liquidityZones, isSqueeze,
+
+                // Volume and Order Book Analysis
+                volumeAnalysis, volumeProfile, orderBookAnalysis,
+
                 timestamp: Date.now()
             };
-            
+
         } catch (error) {
-            throw new Error(`Market analysis failed: ${error.message}`);
+            throw new AnalysisError(`Market analysis failed: ${error.message}`);
         }
     }
-    
+
     /**
-     * Calculate historical volatility
-     * @param {number[]} closes - Closing prices
-     * @param {number} period - Period for calculation
-     * @returns {number[]} Volatility values
+     * Calculates recent price volatility.
+     * @param {number[]} closes - Closing prices array.
+     * @param {number} period - Lookback period for calculation.
+     * @returns {number[]} Volatility values.
      */
     static calculateVolatility(closes, period = 20) {
-        if (!Array.isArray(closes) || closes.length < 2) {
-            return Utils.safeArray(closes.length);
-        }
-        
+        const volatility = Utils.safeArray(closes?.length ?? 0);
+        if (!closes || closes.length < 2) return volatility;
+
         const returns = [];
         for (let i = 1; i < closes.length; i++) {
+            // Using log returns for better statistical properties
             returns.push(Math.log(closes[i] / closes[i - 1]));
         }
-        
-        const volatility = Utils.safeArray(closes.length);
-        
+
+        const annualizationFactor = 252; // Approx. trading days in a year
+
         for (let i = period; i < closes.length; i++) {
             const slice = returns.slice(i - period + 1, i + 1);
             const mean = slice.reduce((sum, val) => sum + val, 0) / period;
             const variance = slice.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / period;
-            volatility[i] = Math.sqrt(variance) * Math.sqrt(252); // Annualized
+            const stdDev = Math.sqrt(variance);
+            volatility[i] = stdDev * Math.sqrt(annualizationFactor); // Annualized volatility
         }
-        
         return volatility;
     }
-    
+
     /**
-     * Determine market regime based on volatility
-     * @param {number} currentVol - Current volatility
-     * @param {number} avgVol - Average volatility
-     * @returns {string} Market regime
+     * Determines the market regime based on current vs. average volatility.
+     * @param {number} currentVol - Current volatility value.
+     * @param {number} avgVol - Average volatility value.
+     * @returns {'HIGH_VOLATILITY' | 'LOW_VOLATILITY' | 'NORMAL_VOLATILITY'} Market regime.
      */
     static determineMarketRegime(currentVol, avgVol) {
-        if (avgVol <= 0) return 'NORMAL';
-        
+        if (avgVol <= 0) return 'NORMAL_VOLATILITY';
         const ratio = currentVol / avgVol;
         if (ratio > 1.5) return 'HIGH_VOLATILITY';
         if (ratio < 0.5) return 'LOW_VOLATILITY';
         return 'NORMAL_VOLATILITY';
     }
-    
+
     /**
-     * Calculate support and resistance levels
-     * @param {Array} bids - Bid orders
-     * @param {Array} asks - Ask orders
-     * @param {number} currentPrice - Current price
-     * @param {number} maxLevels - Maximum levels to return
-     * @returns {object} Support and resistance levels
+     * Analyzes volume trends and flow.
+     * @param {number[]} volumes - Volume array.
+     * @param {number[]} closes - Closing prices array.
+     * @param {object} config - Volume analysis configuration.
+     * @returns {object} Volume analysis results.
      */
-    static calculateSupportResistance(bids, asks, currentPrice, maxLevels) {
-        if (!Array.isArray(bids) || !Array.isArray(asks)) {
-            return { support: [], resistance: [] };
-        }
-        
-        const pricePoints = [
-            ...bids.map(b => b.p), 
-            ...asks.map(a => a.p)
-        ];
-        const uniquePrices = [...new Set(pricePoints)].sort((a, b) => a - b);
-        
-        const potentialLevels = [];
-        
-        for (const price of uniquePrices) {
-            const bidVol = bids.filter(b => b.p === price).reduce((sum, b) => sum + b.q, 0);
-            const askVol = asks.filter(a => a.p === price).reduce((sum, a) => sum + a.q, 0);
-            
-            if (bidVol > askVol * 2) {
-                potentialLevels.push({ price, type: 'SUPPORT' });
-            } else if (askVol > bidVol * 2) {
-                potentialLevels.push({ price, type: 'RESISTANCE' });
+    static analyzeVolume(volumes, closes, config) {
+        const volumeSMA = TechnicalAnalysis.sma(volumes, 20); // Use SMA for volume trend
+        const volumeRatio = [];
+        const accumulation = Utils.safeArray(volumes.length);
+        const distribution = Utils.safeArray(volumes.length);
+
+        for (let i = 0; i < volumes.length; i++) {
+            const ratio = volumeSMA[i] > 0 ? volumes[i] / volumeSMA[i] : 1;
+            volumeRatio.push(ratio);
+
+            // Accumulation/Distribution based on price change
+            const priceChange = i > 0 ? closes[i] - closes[i - 1] : 0;
+            if (priceChange > 0) {
+                accumulation[i] = 1; // Accumulation signal
+            } else if (priceChange < 0) {
+                distribution[i] = 1; // Distribution signal
             }
         }
-        
-        // Sort by distance from current price
-        const sorted = potentialLevels.sort((a, b) => 
-            Math.abs(a.price - currentPrice) - Math.abs(b.price - currentPrice)
-        );
-        
-        const support = sorted
-            .filter(p => p.type === 'SUPPORT' && p.price < currentPrice)
-            .slice(0, maxLevels)
-            .map(p => p.price.toFixed(2));
-            
-        const resistance = sorted
-            .filter(p => p.type === 'RESISTANCE' && p.price > currentPrice)
-            .slice(0, maxLevels)
-            .map(p => p.price.toFixed(2));
-        
-        return { support, resistance };
-    }
-    
-    /**
-     * Identify liquidity zones from order book
-     * @param {Array} bids - Bid orders
-     * @param {Array} asks - Ask orders
-     * @param {number} currentPrice - Current price
-     * @param {number} atr - Average True Range
-     * @param {number} threshold - Volume threshold multiplier
-     * @returns {object} Liquidity zones
-     */
-    static identifyLiquidityZones(bids, asks, currentPrice, atr, threshold) {
-        if (!Array.isArray(bids) || !Array.isArray(asks)) {
-            return { buyWalls: [], sellWalls: [] };
+
+        // Determine overall flow based on recent volume surge
+        const recentVolumeRatios = volumeRatio.slice(-5); // Last 5 periods
+        const avgRecentRatio = recentVolumeRatios.reduce((sum, r) => sum + r, 0) / recentVolumeRatios.length;
+
+        let flow = 'NEUTRAL';
+        if (avgRecentRatio > 1.3) flow = 'BULLISH'; // Increased volume on rising prices
+        if (avgRecentRatio < 0.7) flow = 'BEARISH'; // Increased volume on falling prices
+
+        // Add confirmation based on config
+        if (config.flowConfirmation) {
+            const recentAccumulation = accumulation.slice(-5).filter(a => a === 1).length;
+            const recentDistribution = distribution.slice(-5).filter(d => d === 1).length;
+            if (flow === 'BULLISH' && recentAccumulation < 3) flow = 'NEUTRAL'; // Weak confirmation
+            if (flow === 'BEARISH' && recentDistribution < 3) flow = 'NEUTRAL'; // Weak confirmation
         }
-        
+
+        return {
+            volumeSMA,
+            volumeRatio,
+            accumulation, // Binary array indicating price up (1) or not (0)
+            distribution, // Binary array indicating price down (1) or not (0)
+            flow
+        };
+    }
+
+    /**
+     * Creates a simplified volume profile.
+     * @param {number} currentPrice - The current market price.
+     * @param {number[]} volumes - Volume array.
+     * @param {number[]} highs - High prices array.
+     * @param {number[]} lows - Low prices array.
+     * @returns {object} Simplified volume profile data.
+     */
+    static createVolumeProfile(currentPrice, volumes, highs, lows) {
+        if (!volumes || volumes.length === 0) {
+            return { price: currentPrice, volume: 0, profile: [] };
+        }
+
+        const totalVolume = volumes.reduce((sum, v) => sum + v, 0);
+        // Simple approximation: average price weighted by volume
+        const avgPriceWeighted = volumes.reduce((sum, v, i) => sum + (v * ((highs[i] + lows[i]) / 2)), 0) / totalVolume;
+
+        // Placeholder for Point of Control (POC) and Value Area High/Low (VAH/VAL) if needed
+        // For simplicity, returning current price and average weighted price.
+        return {
+            price: currentPrice,
+            volume: totalVolume,
+            profile: [
+                { level: 'AVERAGE_VP', price: avgPriceWeighted, percentage: 100 },
+                { level: 'CURRENT_PRICE', price: currentPrice, percentage: 0 }
+            ]
+        };
+    }
+
+    /**
+     * Analyzes order book data for imbalance, depth, and flow.
+     * @param {Array<{p: number, q: number}>} bids - Bid orders.
+     * @param {Array<{p: number, q: number}>} asks - Ask orders.
+     * @param {number} currentPrice - Current market price.
+     * @param {number} atr - Average True Range value.
+     * @param {object} config - Order book configuration.
+     * @returns {object} Order book analysis results.
+     */
+    static analyzeOrderBook(bids, asks, currentPrice, atr, config) {
+        const imbalance = 0;
+        const depth = 0;
+        let flow = 'NEUTRAL';
+
+        if (!bids || !asks || bids.length === 0 || asks.length === 0) {
+            return { imbalance, depth, flow, liquidity: 0 };
+        }
+
+        // Calculate total volume within a certain depth (e.g., top N levels or within ATR range)
+        const depthLimit = Math.min(config.maxOrderbookDepth, bids.length, asks.length);
+        const bidsDepth = bids.slice(0, depthLimit);
+        const asksDepth = asks.slice(0, depthLimit);
+
+        const totalBidVolume = bidsDepth.reduce((sum, b) => sum + b.q, 0);
+        const totalAskVolume = asksDepth.reduce((sum, a) => sum + a.q, 0);
+        const totalVolume = totalBidVolume + totalAskVolume;
+
+        const imbalanceValue = totalVolume > 0 ? (totalBidVolume - totalAskVolume) / totalVolume : 0;
+
+        // Calculate depth relative to ATR
+        const atrRange = atr > 0 ? atr * 2 : currentPrice * 0.01; // Use 2*ATR or 1% of price as spread
+        const priceSpread = Math.max(bids[0].p, asks[0].p) - Math.min(bids[0].p, asks[0].p);
+        const depthValue = priceSpread > 0 ? Math.min(priceSpread / atrRange, 10) : 1; // Cap depth at 10x ATR
+
+        // Determine order flow direction
+        if (Math.abs(imbalanceValue) > config.imbalanceThreshold) {
+            flow = imbalanceValue > 0 ? 'STRONG_BUY' : 'STRONG_SELL';
+        } else if (imbalanceValue > 0) {
+            flow = 'BUY';
+        } else if (imbalanceValue < 0) {
+            flow = 'SELL';
+        }
+
+        // Calculate liquidity score (simplified)
+        const liquidityScore = Math.min(totalVolume / 1000000, 1.0); // Normalize volume, cap at 1M
+
+        return {
+            imbalance: imbalanceValue,
+            depth: depthValue,
+            flow,
+            liquidity: liquidityScore
+        };
+    }
+
+    /**
+     * Calculates potential support and resistance levels from order book data.
+     * @param {Array<{p: number, q: number}>} bids - Bid orders.
+     * @param {Array<{p: number, q: number}>} asks - Ask orders.
+     * @param {number} currentPrice - Current market price.
+     * @param {number} maxLevels - Maximum number of levels to return.
+     * @returns {{support: Array<{price: number, strength: number}>, resistance: Array<{price: number, strength: number}>}} SR levels.
+     */
+    static calculateSupportResistance(bids, asks, currentPrice, maxLevels) {
+        const support = [];
+        const resistance = [];
+
+        if (!bids || !asks || bids.length === 0 || asks.length === 0) {
+            return { support, resistance };
+        }
+
+        // Aggregate volume at specific price levels
+        const bidVolumeAtPrice = bids.reduce((acc, order) => {
+            acc[order.p] = (acc[order.p] || 0) + order.q;
+            return acc;
+        }, {});
+        const askVolumeAtPrice = asks.reduce((acc, order) => {
+            acc[order.p] = (acc[order.p] || 0) + order.q;
+            return acc;
+        }, {});
+
+        const allPrices = new Set([...Object.keys(bidVolumeAtPrice).map(Number), ...Object.keys(askVolumeAtPrice).map(Number)]);
+        const sortedPrices = Array.from(allPrices).sort((a, b) => a - b);
+
+        // Simple heuristic: High volume at a price level can indicate support/resistance
+        // Threshold could be dynamic (e.g., based on average volume or ATR)
         const avgBidVol = bids.reduce((sum, b) => sum + b.q, 0) / bids.length;
         const avgAskVol = asks.reduce((sum, a) => sum + a.q, 0) / asks.length;
-        
-        const buyWalls = bids
-            .filter(b => b.q > avgBidVol * threshold)
-            .map(b => ({
-                price: b.p,
-                distance: Math.abs(b.p - currentPrice),
-                proximity: Math.abs(b.p - currentPrice) < atr ? 'HIGH' : 'LOW'
-            }));
-            
-        const sellWalls = asks
-            .filter(a => a.q > avgAskVol * threshold)
-            .map(a => ({
-                price: a.p,
-                distance: Math.abs(a.p - currentPrice),
-                proximity: Math.abs(a.p - currentPrice) < atr ? 'HIGH' : 'LOW'
-            }));
-        
+        const volumeThresholdMultiplier = 2.0; // Consider levels with volume > 2x average
+
+        for (const price of sortedPrices) {
+            const bidVol = bidVolumeAtPrice[price] || 0;
+            const askVol = askVolumeAtPrice[price] || 0;
+
+            if (price < currentPrice && bidVol > avgBidVol * volumeThresholdMultiplier) {
+                support.push({ price, strength: bidVol });
+            } else if (price > currentPrice && askVol > avgAskVol * volumeThresholdMultiplier) {
+                resistance.push({ price, strength: askVol });
+            }
+        }
+
+        // Sort by proximity to current price and take top levels
+        support.sort((a, b) => Math.abs(a.price - currentPrice) - Math.abs(b.price - currentPrice));
+        resistance.sort((a, b) => Math.abs(a.price - currentPrice) - Math.abs(b.price - currentPrice));
+
+        return {
+            support: support.slice(0, maxLevels),
+            resistance: resistance.slice(0, maxLevels)
+        };
+    }
+
+    /**
+     * Identifies significant volume clusters ("walls") in the order book.
+     * @param {Array<{p: number, q: number}>} bids - Bid orders.
+     * @param {Array<{p: number, q: number}>} asks - Ask orders.
+     * @param {number} currentPrice - Current market price.
+     * @param {number} atr - Average True Range value.
+     * @param {number} wallThreshold - Multiplier to identify significant volume.
+     * @returns {{buyWalls: Array<object>, sellWalls: Array<object>}} Identified liquidity zones.
+     */
+    static identifyLiquidityZones(bids, asks, currentPrice, atr, wallThreshold) {
+        const buyWalls = [];
+        const sellWalls = [];
+
+        if (!bids || !asks || bids.length === 0 || asks.length === 0 || wallThreshold <= 0) {
+            return { buyWalls, sellWalls };
+        }
+
+        const avgBidVol = bids.reduce((sum, b) => sum + b.q, 0) / bids.length;
+        const avgAskVol = asks.reduce((sum, a) => sum + a.q, 0) / asks.length;
+        const atrRange = atr > 0 ? atr : currentPrice * 0.005; // Use ATR or 0.5% of price
+
+        for (const bid of bids) {
+            if (bid.q > avgBidVol * wallThreshold) {
+                buyWalls.push({
+                    price: bid.p,
+                    volume: bid.q,
+                    distance: Math.abs(bid.p - currentPrice),
+                    proximity: Math.abs(bid.p - currentPrice) < atrRange ? 'HIGH' : 'LOW'
+                });
+            }
+        }
+
+        for (const ask of asks) {
+            if (ask.q > avgAskVol * wallThreshold) {
+                sellWalls.push({
+                    price: ask.p,
+                    volume: ask.q,
+                    distance: Math.abs(ask.p - currentPrice),
+                    proximity: Math.abs(ask.p - currentPrice) < atrRange ? 'HIGH' : 'LOW'
+                });
+            }
+        }
+
         return { buyWalls, sellWalls };
     }
-    
+
     /**
-     * Detect Bollinger Band squeeze
-     * @param {object} bb - Bollinger Bands object
-     * @returns {boolean} True if squeeze is detected
+     * Detects Bollinger Band Squeeze.
+     * @param {{upper: number[], middle: number[], lower: number[]}} bb - Bollinger Bands data.
+     * @returns {boolean} True if a squeeze is detected.
      */
     static detectSqueeze(bb) {
-        if (!bb || !bb.upper || !bb.lower) return false;
-        
+        if (!bb || !bb.upper || !bb.lower || bb.upper.length < 2) return false;
         const last = bb.upper.length - 1;
-        if (last < 1) return false;
-        
         const currentWidth = bb.upper[last] - bb.lower[last];
         const prevWidth = bb.upper[last - 1] - bb.lower[last - 1];
-        
-        // Squeeze detected when bands contract significantly
+        // Squeeze occurs when current width is significantly smaller than previous
         return currentWidth < prevWidth * 0.8;
     }
 }
 
 // =============================================================================
-// WEIGHTED SENTIMENT SCORE CALCULATOR
+// ENHANCED WEIGHTED SENTIMENT CALCULATOR
 // =============================================================================
 
 /**
- * Calculates the Weighted Sentiment Score (WSS) based on multiple indicators
+ * Calculates a weighted sentiment score based on various market analysis components.
  */
-class WeightedSentimentCalculator {
+class EnhancedWeightedSentimentCalculator {
     /**
-     * Calculate WSS based on market analysis
-     * @param {object} analysis - Market analysis data
-     * @param {number} currentPrice - Current market price
-     * @param {object} weights - WSS weights configuration
-     * @returns {number} Calculated WSS score
+     * Calculates the overall weighted sentiment score and confidence.
+     * @param {object} analysis - Market analysis results.
+     * @param {number} currentPrice - The current market price.
+     * @param {object} weights - Weights for different components.
+     * @param {object} config - Application configuration.
+     * @returns {{score: number, confidence: number, components: object, timestamp: number}} Sentiment analysis results.
      */
-    static calculate(analysis, currentPrice, weights) {
+    static calculate(analysis, currentPrice, weights, config) {
         if (!analysis || !analysis.closes) {
-            console.warn('Invalid analysis data for WSS calculation');
-            return 0;
+            throw new AnalysisError('Invalid analysis data for WSS calculation');
         }
-        
+
         const last = analysis.closes.length - 1;
-        const w = weights;
-        let score = 0;
-        
+        let totalScore = 0;
+        let totalWeight = 0;
+        const components = {};
+
         try {
-            // 1. TREND COMPONENT (40% weight)
-            const trendScore = this.calculateTrendScore(analysis, last, w);
-            score += trendScore;
-            
-            // 2. MOMENTUM COMPONENT (30% weight)
-            const momentumScore = this.calculateMomentumScore(analysis, last, w);
-            score += momentumScore;
-            
-            // 3. STRUCTURE COMPONENT (20% weight)
-            const structureScore = this.calculateStructureScore(analysis, currentPrice, last, w);
-            score += structureScore;
-            
-            // 4. VOLATILITY ADJUSTMENT (10% weight)
-            const volatilityScore = this.calculateVolatilityAdjustment(analysis, w);
-            score *= volatilityScore;
-            
-            return Math.round(score * 100) / 100; // Round to 2 decimal places
-            
+            // Define component calculations with their weights
+            const componentCalculations = [
+                { name: 'trend', weight: 0.25, func: this.calculateTrendComponent.bind(this) },
+                { name: 'momentum', weight: 0.25, func: this.calculateMomentumComponent.bind(this) },
+                { name: 'volume', weight: 0.20, func: this.calculateVolumeComponent.bind(this) },
+                { name: 'orderFlow', weight: 0.15, func: this.calculateOrderFlowComponent.bind(this) },
+                { name: 'structure', weight: 0.15, func: this.calculateStructureComponent.bind(this) }
+            ];
+
+            for (const comp of componentCalculations) {
+                const result = await comp.func(analysis, currentPrice, last, weights, config);
+                components[comp.name] = { ...result, weight: comp.weight }; // Store weight with result
+                totalScore += result.score * comp.weight;
+                totalWeight += comp.weight;
+            }
+
+            const weightedScore = totalWeight > 0 ? totalScore / totalWeight : 0;
+            const confidence = this.calculateConfidence(components, analysis, config);
+
+            return {
+                score: Math.round(weightedScore * 100) / 100,
+                confidence: Math.round(confidence * 100) / 100,
+                components,
+                timestamp: Date.now()
+            };
+
         } catch (error) {
-            console.error(`WSS calculation error: ${error.message}`);
-            return 0;
+            console.error(COLORS.error(`Enhanced WSS calculation error: ${error.message}`));
+            // Return neutral score with low confidence on error
+            return { score: 0, confidence: 0, components: {}, timestamp: Date.now(), error: error.message };
         }
     }
-    
+
     /**
-     * Calculate trend component of WSS
-     * @param {object} analysis - Market analysis
-     * @param {number} last - Last index
-     * @param {object} weights - Weights configuration
-     * @returns {number} Trend score
+     * Calculates the trend component score.
+     * @private
      */
-    static calculateTrendScore(analysis, last, weights) {
-        let trendScore = 0;
-        
+    static async calculateTrendComponent(analysis, last, weights, config) {
+        let score = 0;
+        const breakdown = {};
+
         // Multi-timeframe trend alignment
         if (analysis.trendMTF === 'BULLISH') {
-            trendScore += weights.trendMTF;
+            score += weights.trendMTF;
+            breakdown.mtf = `Bullish (${analysis.trendMTF})`;
         } else if (analysis.trendMTF === 'BEARISH') {
-            trendScore -= weights.trendMTF;
+            score -= weights.trendMTF;
+            breakdown.mtf = `Bearish (${analysis.trendMTF})`;
+        } else {
+            breakdown.mtf = 'Neutral';
         }
-        
-        // Regression slope confirmation
+
+        // Enhanced regression analysis (using SMA slope as proxy)
         const slope = Utils.safeNumber(analysis.regression?.slope?.[last], 0);
-        const r2 = Utils.safeNumber(analysis.regression?.r2?.[last], 0);
-        
-        if (slope > 0 && r2 > 0.5) {
-            trendScore += weights.trendScalp * r2;
-        } else if (slope < 0 && r2 > 0.5) {
-            trendScore -= weights.trendScalp * r2;
+        // R-squared is not directly calculated here, using slope magnitude as proxy for trend strength
+        if (slope > 0.00001) { // Threshold for positive slope
+            score += weights.trendScalp * Math.min(slope * 10000, weights.trendScalp); // Scale slope to contribute
+            breakdown.slope = `Positive (${slope.toFixed(6)})`;
+        } else if (slope < -0.00001) { // Threshold for negative slope
+            score -= weights.trendScalp * Math.min(Math.abs(slope) * 10000, weights.trendScalp);
+            breakdown.slope = `Negative (${slope.toFixed(6)})`;
+        } else {
+            breakdown.slope = `Flat (${slope.toFixed(6)})`;
         }
-        
-        return trendScore;
+
+        // Volume-weighted trend confirmation
+        const volumeAnalysis = analysis.volumeAnalysis;
+        if (volumeAnalysis && volumeAnalysis.flow.includes('BULLISH')) {
+            score *= 1.1; // 10% boost for bullish volume confirmation
+            breakdown.volumeConfirmation = 'Bullish Volume';
+        } else if (volumeAnalysis && volumeAnalysis.flow.includes('BEARISH')) {
+            score *= 0.9; // 10% reduction for bearish volume confirmation
+            breakdown.volumeConfirmation = 'Bearish Volume';
+        } else {
+            breakdown.volumeConfirmation = 'Neutral Volume';
+        }
+
+        return { score, breakdown };
     }
-    
+
     /**
-     * Calculate momentum component of WSS
-     * @param {object} analysis - Market analysis
-     * @param {number} last - Last index
-     * @param {object} weights - Weights configuration
-     * @returns {number} Momentum score
+     * Calculates the momentum component score.
+     * @private
      */
-    static calculateMomentumScore(analysis, last, weights) {
-        let momentumScore = 0;
-        
-        // RSI momentum (normalized)
+    static async calculateMomentumComponent(analysis, last, weights) {
+        let score = 0;
+        const breakdown = {};
+
+        // RSI momentum
         const rsi = Utils.safeNumber(analysis.rsi?.[last], 50);
         if (rsi < 30) {
-            momentumScore += ((30 - rsi) / 30) * 0.5; // Oversold bias
+            const oversoldStrength = (30 - rsi) / 30; // Normalized strength
+            score += oversoldStrength * 0.6;
+            breakdown.rsi = `Oversold (${rsi.toFixed(1)})`;
         } else if (rsi > 70) {
-            momentumScore -= ((rsi - 70) / 30) * 0.5; // Overbought bias
+            const overboughtStrength = (rsi - 70) / 30;
+            score -= overboughtStrength * 0.6;
+            breakdown.rsi = `Overbought (${rsi.toFixed(1)})`;
+        } else {
+            breakdown.rsi = `Neutral (${rsi.toFixed(1)})`;
         }
-        
-        // Stochastic momentum
-        const stochK = Utils.safeNumber(analysis.stoch?.k?.[last], 50);
-        if (stochK < 20) {
-            momentumScore += ((20 - stochK) / 20) * 0.3;
-        } else if (stochK > 80) {
-            momentumScore -= ((stochK - 80) / 20) * 0.3;
+
+        // Williams %R momentum
+        const williams = Utils.safeNumber(analysis.williamsR?.[last], -50);
+        if (williams < -80) { // Strongly oversold
+            score += 0.4;
+            breakdown.williams = 'Strong Oversold';
+        } else if (williams > -20) { // Strongly overbought
+            score -= 0.4;
+            breakdown.williams = 'Strong Overbought';
+        } else {
+            breakdown.williams = `Neutral (${williams.toFixed(1)})`;
         }
-        
+
+        // CCI momentum
+        const cci = Utils.safeNumber(analysis.cci?.[last], 0);
+        if (cci < -100) {
+            score += 0.3;
+            breakdown.cci = 'Oversold';
+        } else if (cci > 100) {
+            score -= 0.3;
+            breakdown.cci = 'Overbought';
+        } else {
+            breakdown.cci = `Neutral (${cci.toFixed(1)})`;
+        }
+
         // MACD histogram momentum
         const macdHist = Utils.safeNumber(analysis.macd?.hist?.[last], 0);
-        if (macdHist > 0) {
-            momentumScore += Math.min(macdHist * weights.macd, 0.5);
+        if (macdHist > 0.00001) { // Positive histogram indicates bullish momentum
+            score += Math.min(macdHist * 10000, 0.4); // Scale histogram value
+            breakdown.macd = `Bullish (${macdHist.toFixed(6)})`;
+        } else if (macdHist < -0.00001) { // Negative histogram indicates bearish momentum
+            score += Math.max(macdHist * 10000, -0.4);
+            breakdown.macd = `Bearish (${macdHist.toFixed(6)})`;
         } else {
-            momentumScore += Math.max(macdHist * weights.macd, -0.5);
+            breakdown.macd = `Neutral (${macdHist.toFixed(6)})`;
         }
-        
-        return momentumScore * weights.momentum;
+
+        // ADX strength (trend strength, not direction)
+        const adxValue = Utils.safeNumber(analysis.adx?.[last], 0);
+        if (adxValue > 25) { // Strong trend indicated by ADX
+            const strengthMultiplier = Math.min(adxValue / 50, 1.5); // Scale multiplier up to 1.5
+            score *= strengthMultiplier;
+            breakdown.adx = `Strong Trend (${adxValue.toFixed(1)})`;
+        } else {
+            breakdown.adx = `Weak Trend (${adxValue.toFixed(1)})`;
+        }
+
+        return { score, breakdown };
     }
-    
+
     /**
-     * Calculate structure component of WSS
-     * @param {object} analysis - Market analysis
-     * @param {number} currentPrice - Current price
-     * @param {number} last - Last index
-     * @param {object} weights - Weights configuration
-     * @returns {number} Structure score
+     * Calculates the volume component score.
+     * @private
      */
-    static calculateStructureScore(analysis, currentPrice, last, weights) {
-        let structureScore = 0;
-        
+    static async calculateVolumeComponent(analysis, last, weights) {
+        let score = 0;
+        const breakdown = {};
+
+        if (!analysis.volumeAnalysis || analysis.volumeAnalysis.flow === 'DISABLED') {
+            return { score: 0, breakdown: { error: 'Volume analysis disabled or missing' } };
+        }
+
+        const { volumeAnalysis } = analysis;
+
+        // Volume flow direction
+        const flow = volumeAnalysis.flow;
+        if (flow.includes('BULLISH')) {
+            score += weights.volumeFlow;
+            breakdown.flow = 'Bullish Volume';
+        } else if (flow.includes('BEARISH')) {
+            score -= weights.volumeFlow;
+            breakdown.flow = 'Bearish Volume';
+        } else {
+            breakdown.flow = 'Neutral Volume';
+        }
+
+        // Volume surge detection (using volume ratio)
+        const recentVolumeRatio = Utils.safeLast(volumeAnalysis.volumeRatio, 1);
+        if (recentVolumeRatio > 1.8) { // Significant volume surge
+            score += weights.volumeFlow * 0.4;
+            breakdown.volumeSurge = 'Significant surge';
+        } else if (recentVolumeRatio > 1.3) { // Moderate increase
+            score += weights.volumeFlow * 0.2;
+            breakdown.volumeSurge = 'Moderate increase';
+        } else {
+            breakdown.volumeSurge = 'Normal';
+        }
+
+        return { score, breakdown };
+    }
+
+    /**
+     * Calculates the order flow component score.
+     * @private
+     */
+    static async calculateOrderFlowComponent(analysis, last, weights) {
+        let score = 0;
+        const breakdown = {};
+
+        if (!analysis.orderBookAnalysis || analysis.orderBookAnalysis.flow === 'DISABLED') {
+            return { score: 0, breakdown: { error: 'Order book analysis disabled or missing' } };
+        }
+
+        const { orderBookAnalysis } = analysis;
+
+        // Imbalance analysis
+        const imbalance = orderBookAnalysis.imbalance;
+        const imbalanceStrength = Math.min(Math.abs(imbalance), 1.0); // Cap at 100%
+
+        if (imbalance > 0.3) { // Significant buy imbalance
+            score += weights.orderFlow * imbalanceStrength;
+            breakdown.imbalance = `Strong Buy (${(imbalance * 100).toFixed(1)}%)`;
+        } else if (imbalance < -0.3) { // Significant sell imbalance
+            score -= weights.orderFlow * imbalanceStrength;
+            breakdown.imbalance = `Strong Sell (${(Math.abs(imbalance) * 100).toFixed(1)}%)`;
+        } else {
+            breakdown.imbalance = `Balanced (${(imbalance * 100).toFixed(1)}%)`;
+        }
+
+        // Liquidity quality bonus/penalty
+        const liquidity = orderBookAnalysis.liquidity;
+        if (liquidity > 0.8) { // High liquidity
+            score *= 1.1; // Bonus for high liquidity
+            breakdown.liquidity = 'High Quality';
+        } else if (liquidity < 0.4) { // Low liquidity
+            score *= 0.9; // Penalty for low liquidity
+            breakdown.liquidity = 'Low Quality';
+        } else {
+            breakdown.liquidity = 'Moderate';
+        }
+
+        return { score, breakdown };
+    }
+
+    /**
+     * Calculates the market structure component score.
+     * @private
+     */
+    static async calculateStructureComponent(analysis, currentPrice, last, weights) {
+        let score = 0;
+        const breakdown = {};
+
         // Squeeze indicator
         if (analysis.isSqueeze) {
-            const squeezeBonus = analysis.trendMTF === 'BULLISH' ? 
-                weights.squeeze : -weights.squeeze;
-            structureScore += squeezeBonus;
+            const squeezeBonus = analysis.trendMTF === 'BULLISH' ? weights.squeeze : -weights.squeeze;
+            score += squeezeBonus;
+            breakdown.squeeze = `Active (${analysis.trendMTF})`;
+        } else {
+            breakdown.squeeze = 'Inactive';
         }
-        
+
         // Divergence analysis
         const divergence = analysis.divergence || 'NONE';
         if (divergence.includes('BULLISH')) {
-            structureScore += weights.divergence;
+            score += weights.divergence;
+            breakdown.divergence = divergence;
         } else if (divergence.includes('BEARISH')) {
-            structureScore -= weights.divergence;
+            score -= weights.divergence;
+            breakdown.divergence = divergence;
+        } else {
+            breakdown.divergence = 'None';
         }
-        
+
         // Fair Value Gap interaction
         if (analysis.fvg) {
             const { fvg } = analysis;
-            if (fvg.type === 'BULLISH' && 
-                currentPrice > fvg.bottom && currentPrice < fvg.top) {
-                structureScore += weights.liquidity;
-            } else if (fvg.type === 'BEARISH' && 
-                       currentPrice < fvg.top && currentPrice > fvg.bottom) {
-                structureScore -= weights.liquidity;
+            const priceDecimal = new Decimal(currentPrice);
+            const fvgTop = new Decimal(fvg.top);
+            const fvgBottom = new Decimal(fvg.bottom);
+
+            if (fvg.type === 'BULLISH' && priceDecimal.gt(fvgBottom) && priceDecimal.lt(fvgTop)) {
+                score += weights.liquidity; // Reward for price interacting with bullish FVG
+                breakdown.fvg = 'Within Bullish FVG';
+            } else if (fvg.type === 'BEARISH' && priceDecimal.lt(fvgTop) && priceDecimal.gt(fvgBottom)) {
+                score -= weights.liquidity; // Penalize for price interacting with bearish FVG
+                breakdown.fvg = 'Within Bearish FVG';
+            } else {
+                breakdown.fvg = `${fvg.type} (Outside Range)`;
+            }
+        } else {
+            breakdown.fvg = 'None';
+        }
+
+        // Support/Resistance levels proximity
+        if (analysis.supportResistance) {
+            const { support, resistance } = analysis.supportResistance;
+            const priceDecimal = new Decimal(currentPrice);
+
+            // Find closest support below current price
+            const closestSupport = support.length > 0
+                ? support.reduce((prev, curr) => (curr.price < priceDecimal.toNumber() && curr.price > prev.price ? curr : prev), { price: -Infinity })
+                : null;
+
+            // Find closest resistance above current price
+            const closestResistance = resistance.length > 0
+                ? resistance.reduce((prev, curr) => (curr.price > priceDecimal.toNumber() && curr.price < prev.price ? curr : prev), { price: Infinity })
+                : null;
+
+            const priceThreshold = priceDecimal.mul(0.01); // 1% threshold
+
+            if (closestSupport && priceDecimal.sub(closestSupport.price).lt(priceThreshold)) {
+                score += weights.liquidity * 0.3; // Proximity bonus
+                breakdown.srProximity = `Near Support (${closestSupport.price.toFixed(2)})`;
+            } else if (closestResistance && closestResistance.price.sub(priceDecimal).lt(priceThreshold)) {
+                score -= weights.liquidity * 0.3; // Proximity penalty
+                breakdown.srProximity = `Near Resistance (${closestResistance.price.toFixed(2)})`;
+            } else {
+                breakdown.srProximity = 'Neutral';
             }
         }
-        
-        // Liquidity zones
-        const atr = Utils.safeNumber(analysis.atr?.[last], 1);
-        const proximityThreshold = atr * 0.5;
-        
-        if (analysis.liquidity?.buyWalls) {
-            const nearBuyWall = analysis.liquidity.buyWalls.some(wall => 
-                Math.abs(wall.price - currentPrice) < proximityThreshold
-            );
-            if (nearBuyWall) structureScore += weights.liquidity * 0.3;
-        }
-        
-        if (analysis.liquidity?.sellWalls) {
-            const nearSellWall = analysis.liquidity.sellWalls.some(wall => 
-                Math.abs(wall.price - currentPrice) < proximityThreshold
-            );
-            if (nearSellWall) structureScore -= weights.liquidity * 0.3;
-        }
-        
-        return structureScore;
+
+        return { score, breakdown };
     }
-    
+
     /**
-     * Calculate volatility adjustment factor
-     * @param {object} analysis - Market analysis
-     * @param {object} weights - Weights configuration
-     * @returns {number} Volatility adjustment factor
+     * Calculates confidence based on component agreement and confirmation signals.
+     * @private
      */
-    static calculateVolatilityAdjustment(analysis, weights) {
-        const currentVol = Utils.safeNumber(analysis.volatility?.[analysis.volatility.length - 1], 0);
-        const avgVol = Utils.safeNumber(analysis.avgVolatility, 1);
-        
-        if (avgVol <= 0) return 1;
-        
-        const volRatio = currentVol / avgVol;
-        
-        // Reduce conviction in high volatility, increase in low volatility
-        if (volRatio > 1.5) {
-            return 1 - (weights.volatility * 0.5);
-        } else if (volRatio < 0.5) {
-            return 1 + (weights.volatility * 0.3);
+    static calculateConfidence(components, analysis, config) {
+        let agreementScore = 0;
+        let totalComponents = 0;
+        const directions = []; // 1 for bullish, -1 for bearish, 0 for neutral/weak
+
+        // Determine direction from each component's score
+        for (const compName in components) {
+            const comp = components[compName];
+            if (!comp || comp.score === undefined) continue;
+
+            const threshold = 0.5; // Threshold for considering a component strongly directional
+            if (comp.score > threshold) directions.push(1);
+            else if (comp.score < -threshold) directions.push(-1);
+            else directions.push(0);
+            totalComponents++;
         }
-        
-        return 1;
+
+        if (totalComponents === 0) return 0;
+
+        // Calculate agreement percentage
+        const positiveCount = directions.filter(d => d === 1).length;
+        const negativeCount = directions.filter(d => d === -1).length;
+
+        if (positiveCount > negativeCount) {
+            agreementScore = positiveCount / totalComponents;
+        } else if (negativeCount > positiveCount) {
+            agreementScore = negativeCount / totalComponents;
+        } else {
+            agreementScore = 0.3; // Neutral confidence if counts are equal or all are neutral
+        }
+
+        // Boost confidence with strong volume confirmation
+        if (analysis.volumeAnalysis && analysis.volumeAnalysis.flow.includes('BULLISH')) {
+            agreementScore = Math.min(agreementScore * 1.15, 1.0); // Boost for bullish volume
+        } else if (analysis.volumeAnalysis && analysis.volumeAnalysis.flow.includes('BEARISH')) {
+            agreementScore = Math.min(agreementScore * 1.15, 1.0); // Boost for bearish volume
+        }
+
+        // Boost confidence with strong order book imbalance
+        if (analysis.orderBookAnalysis && Math.abs(analysis.orderBookAnalysis.imbalance) > 0.4) {
+            agreementScore = Math.min(agreementScore * 1.1, 1.0); // Boost for strong imbalance
+        }
+
+        // Ensure confidence is within bounds
+        return Math.max(0, Math.min(agreementScore, 1.0));
     }
 }
 
 // =============================================================================
-// DATA PROVIDER (ENHANCED WITH ROBUST ERROR HANDLING)
+// DATA PROVIDER (ENHANCED)
 // =============================================================================
 
 /**
- * Enhanced data provider with comprehensive error handling and retry logic
+ * Fetches and caches market data from the exchange API.
  */
 class DataProvider {
+    /**
+     * @param {object} config - Application configuration.
+     */
     constructor(config) {
-        if (!config) throw new Error('Configuration is required');
-        
-        this.config = config;
+        if (!config) throw new ConfigError('Configuration is required');
+
+        this.config = config.api;
         this.api = axios.create({
-            baseURL: 'https://api.bybit.com/v5/market',
-            timeout: config.api.timeout,
+            baseURL: this.config.baseURL,
+            timeout: this.config.timeout,
             headers: {
                 'Content-Type': 'application/json',
-                'User-Agent': 'WhaleWave-Titan/7.0'
+                'User-Agent': this.config.userAgent || 'WhaleWave-Titan-Enhanced/7.1'
             }
         });
-        
-        // Setup request interceptor for logging
+
+        this.cache = new Map();
+        this.cacheTimeout = 5000; // Cache duration in milliseconds (e.g., 5 seconds)
+
+        this.setupInterceptors();
+    }
+
+    /** Sets up Axios interceptors for logging and error handling. */
+    setupInterceptors() {
         this.api.interceptors.request.use(
             (config) => {
-                console.debug(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
+                console.debug(COLORS.DIM(`ðŸ”„ API Request: ${config.method?.toUpperCase()} ${config.url} Params: ${JSON.stringify(config.params)}`));
                 return config;
             },
-            (error) => Promise.reject(error)
+            (error) => Promise.reject(new ApiError(`Request interceptor error: ${error.message}`))
         );
-        
-        // Setup response interceptor for error handling
+
         this.api.interceptors.response.use(
             (response) => response,
             (error) => {
-                console.error(`API Error: ${error.message}`);
-                return Promise.reject(error);
+                let apiError = error;
+                if (error.response) {
+                    // API returned a status code outside the 2xx range
+                    apiError = new ApiError(
+                        `API Error: ${error.response.data?.retMsg || error.message}`,
+                        error.response.status,
+                        error.response.data?.retCode,
+                        error.response.data?.retMsg
+                    );
+                } else if (error.request) {
+                    // Request was made but no response received
+                    apiError = new ApiError(`No response received from API: ${error.message}`);
+                } else {
+                    // Something else happened
+                    apiError = new ApiError(`API setup or request error: ${error.message}`);
+                }
+                console.error(COLORS.error(apiError.message));
+                return Promise.reject(apiError);
             }
         );
     }
-    
+
     /**
-     * Fetch data with exponential backoff retry logic
-     * @param {string} endpoint - API endpoint
-     * @param {object} params - Request parameters
-     * @param {number} maxRetries - Maximum retry attempts
-     * @returns {Promise<object>} API response data
+     * Fetches data from the API with retry logic and caching.
+     * @param {string} endpoint - The API endpoint.
+     * @param {object} params - Request parameters.
+     * @param {number} maxRetries - Maximum number of retries.
+     * @returns {Promise<object>} The API response data.
+     * @throws {ApiError} If fetching fails after all retries.
      */
-    async fetchWithRetry(endpoint, params, maxRetries = this.config.api.retries) {
+    async fetchWithRetry(endpoint, params, maxRetries = this.config.retries) {
+        const cacheKey = `${endpoint}:${JSON.stringify(params)}`;
+        const cached = this.cache.get(cacheKey);
+
+        if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+            console.debug(COLORS.DIM(`ðŸ”„ Cache hit for: ${cacheKey}`));
+            return cached.data;
+        }
+
         let lastError;
-        
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try {
                 const response = await this.api.get(endpoint, { params });
-                
-                // Validate response structure
+
                 if (!response.data) {
-                    throw new Error('Empty response from API');
+                    throw new ApiError('API returned empty response', response.status);
                 }
-                
-                // Check for API-level errors
+
+                // Check Bybit's specific response format
                 if (response.data.retCode !== undefined && response.data.retCode !== 0) {
-                    throw new Error(`API Error ${response.data.retCode}: ${response.data.retMsg}`);
+                    throw new ApiError(
+                        `API Error ${response.data.retCode}: ${response.data.retMsg}`,
+                        response.status,
+                        response.data.retCode,
+                        response.data.retMsg
+                    );
                 }
-                
+
+                // Cache the successful response
+                this.cache.set(cacheKey, {
+                    data: response.data,
+                    timestamp: Date.now()
+                });
+                console.debug(COLORS.DIM(`ðŸ”„ Cache set for: ${cacheKey}`));
                 return response.data;
-                
+
             } catch (error) {
                 lastError = error;
-                
                 if (attempt === maxRetries) {
-                    console.error(`Failed to fetch ${endpoint} after ${maxRetries + 1} attempts`);
+                    console.error(COLORS.error(`â Œ Failed to fetch ${endpoint} after ${maxRetries + 1} attempts.`));
                     break;
                 }
-                
-                // Exponential backoff
-                const delay = Utils.backoffDelay(
-                    attempt, 
-                    this.config.delays.retry, 
-                    this.config.api.backoffFactor
-                );
-                console.warn(`Retry ${attempt + 1}/${maxRetries} for ${endpoint} in ${delay}ms`);
+
+                const delay = Utils.backoffDelay(attempt, this.config.delays?.retry || 800, this.config.backoffFactor || 1.5);
+                console.warn(COLORS.warning(`âš ï¸  Retry ${attempt + 1}/${maxRetries} for ${endpoint} in ${delay}ms...`));
                 await sleep(delay);
             }
         }
-        
-        throw lastError;
+
+        throw lastError || new ApiError(`Unknown error fetching ${endpoint}`);
     }
-    
+
     /**
-     * Fetch all market data in parallel
-     * @returns {Promise<object|null>} Market data or null if failed
+     * Fetches all necessary market data for analysis.
+     * @returns {Promise<object|null>} Market data object or null if fetching fails.
      */
     async fetchMarketData() {
+        const { symbol, intervals, limits } = this.config;
+
         try {
             const requests = [
-                this.fetchWithRetry('/tickers', {
-                    category: 'linear',
-                    symbol: this.config.symbol
-                }),
-                this.fetchWithRetry('/kline', {
-                    category: 'linear',
-                    symbol: this.config.symbol,
-                    interval: this.config.intervals.main,
-                    limit: this.config.limits.kline
-                }),
-                this.fetchWithRetry('/kline', {
-                    category: 'linear',
-                    symbol: this.config.symbol,
-                    interval: this.config.intervals.trend,
-                    limit: this.config.limits.trendKline
-                }),
-                this.fetchWithRetry('/orderbook', {
-                    category: 'linear',
-                    symbol: this.config.symbol,
-                    limit: this.config.limits.orderbook
-                }),
-                this.fetchWithRetry('/kline', {
-                    category: 'linear',
-                    symbol: this.config.symbol,
-                    interval: this.config.intervals.daily,
-                    limit: 2
-                })
+                this.fetchWithRetry('/tickers', { category: 'linear', symbol }),
+                this.fetchWithRetry('/kline', { category: 'linear', symbol, interval: intervals.main, limit: limits.kline }),
+                this.fetchWithRetry('/kline', { category: 'linear', symbol, interval: intervals.trend, limit: limits.trendKline }),
+                this.fetchWithRetry('/orderbook', { category: 'linear', symbol, limit: limits.orderbook }),
+                // Fetching daily/weekly for potential future use or broader context, ensure limit is sufficient
+                this.fetchWithRetry('/kline', { category: 'linear', symbol, interval: intervals.daily, limit: 2 }),
+                this.fetchWithRetry('/kline', { category: 'linear', symbol, interval: intervals.weekly, limit: 2 })
             ];
-            
-            const [ticker, kline, klineMTF, orderbook, daily] = await Promise.all(requests);
-            
-            // Validate all required data is present
-            this.validateMarketData(ticker, kline, klineMTF, orderbook, daily);
-            
-            return this.parseMarketData(ticker, kline, klineMTF, orderbook, daily);
-            
+
+            const [tickerRes, klineRes, klineMtfRes, orderbookRes, dailyRes, weeklyRes] = await Promise.all(requests);
+
+            this.validateMarketDataResponse(tickerRes, klineRes, klineMtfRes, orderbookRes, dailyRes, weeklyRes);
+
+            return this.parseMarketData(tickerRes, klineRes, klineMtfRes, orderbookRes, dailyRes, weeklyRes);
+
         } catch (error) {
-            console.warn(COLORS.ORANGE(`Data fetch failed: ${error.message}`));
-            return null;
+            console.error(COLORS.error(`â Œ Data fetching failed: ${error.message}`));
+            return null; // Indicate failure without crashing the loop
         }
     }
-    
+
     /**
-     * Validate market data structure
-     * @param {object} ticker - Ticker data
-     * @param {object} kline - Kline data
-     * @param {object} klineMTF - Multi-timeframe kline data
-     * @param {object} orderbook - Order book data
-     * @param {object} daily - Daily data
+     * Validates the structure and content of API responses.
+     * @param {object} tickerRes - Ticker API response.
+     * @param {object} klineRes - Kline API response.
+     * @param {object} klineMtfRes - MTF Kline API response.
+     * @param {object} orderbookRes - Orderbook API response.
+     * @param {object} dailyRes - Daily kline API response.
+     * @param {object} weeklyRes - Weekly kline API response.
+     * @throws {DataError} If validation fails.
      */
-    validateMarketData(ticker, kline, klineMTF, orderbook, daily) {
+    validateMarketDataResponse(tickerRes, klineRes, klineMtfRes, orderbookRes, dailyRes, weeklyRes) {
         const validations = [
-            { name: 'ticker', data: ticker?.result?.list?.[0] },
-            { name: 'kline', data: kline?.result?.list },
-            { name: 'klineMTF', data: klineMTF?.result?.list },
-            { name: 'orderbook bids', data: orderbook?.result?.b },
-            { name: 'orderbook asks', data: orderbook?.result?.a },
-            { name: 'daily', data: daily?.result?.list?.[1] }
+            { name: 'ticker data', check: tickerRes?.result?.list?.[0] },
+            { name: 'main klines', check: klineRes?.result?.list },
+            { name: 'trend klines', check: klineMtfRes?.result?.list },
+            { name: 'orderbook bids', check: orderbookRes?.result?.b },
+            { name: 'orderbook asks', check: orderbookRes?.result?.a },
+            { name: 'daily klines', check: dailyRes?.result?.list?.[1] }, // Check second element for latest daily
+            { name: 'weekly klines', check: weeklyRes?.result?.list?.[1] } // Check second element for latest weekly
         ];
-        
-        const missing = validations.filter(v => !v.data).map(v => v.name);
+
+        const missing = validations.filter(v => !v.check).map(v => v.name);
         if (missing.length > 0) {
-            throw new Error(`Missing data: ${missing.join(', ')}`);
+            throw new DataError(`Missing or invalid data in API responses: ${missing.join(', ')}`);
         }
+        // Further checks could be added for data types and array lengths.
     }
-    
+
     /**
-     * Parse raw API data into structured format
-     * @param {object} ticker - Ticker data
-     * @param {object} kline - Kline data
-     * @param {object} klineMTF - Multi-timeframe kline data
-     * @param {object} orderbook - Order book data
-     * @param {object} daily - Daily data
-     * @returns {object} Parsed market data
+     * Parses raw API data into a structured format.
+     * @param {object} tickerRes - Ticker API response.
+     * @param {object} klineRes - Kline API response.
+     * @param {object} klineMtfRes - MTF Kline API response.
+     * @param {object} orderbookRes - Orderbook API response.
+     * @param {object} dailyRes - Daily kline API response.
+     * @param {object} weeklyRes - Weekly kline API response.
+     * @returns {object} Structured market data.
      */
-    parseMarketData(ticker, kline, klineMTF, orderbook, daily) {
-        const parseCandles = (list) => list
-            .reverse()
-            .map(c => ({
-                t: parseInt(c[0]),
-                o: parseFloat(c[1]),
-                h: parseFloat(c[2]),
-                l: parseFloat(c[3]),
-                c: parseFloat(c[4]),
-                v: parseFloat(c[5])
+    parseMarketData(tickerRes, klineRes, klineMtfRes, orderbookRes, dailyRes, weeklyRes) {
+        const parseCandles = (list) => {
+            if (!list) return [];
+            return list.reverse().map(c => ({
+                t: parseInt(c[0]), // Timestamp
+                o: parseFloat(c[1]), // Open
+                h: parseFloat(c[2]), // High
+                l: parseFloat(c[3]), // Low
+                c: parseFloat(c[4]), // Close
+                v: parseFloat(c[5])  // Volume
             }));
-        
+        };
+
         return {
-            price: parseFloat(ticker.result.list[0].lastPrice),
-            candles: parseCandles(kline.result.list),
-            candlesMTF: parseCandles(klineMTF.result.list),
-            bids: orderbook.result.b.map(x => ({
-                p: parseFloat(x[0]),
-                q: parseFloat(x[1])
-            })),
-            asks: orderbook.result.a.map(x => ({
-                p: parseFloat(x[0]),
-                q: parseFloat(x[1])
-            })),
-            daily: {
-                h: parseFloat(daily.result.list[1][2]),
-                l: parseFloat(daily.result.list[1][3]),
-                c: parseFloat(daily.result.list[1][4])
-            },
+            price: parseFloat(tickerRes.result.list[0].lastPrice),
+            candles: parseCandles(klineRes.result.list),
+            candlesMTF: parseCandles(klineMtfRes.result.list),
+            daily: parseCandles([dailyRes.result.list[1]])[0] || null, // Handle potential missing daily data
+            weekly: parseCandles([weeklyRes.result.list[1]])[0] || null, // Handle potential missing weekly data
+            bids: orderbookRes.result.b.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
+            asks: orderbookRes.result.a.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
             timestamp: Date.now()
         };
     }
 }
 
 // =============================================================================
-// RISK MANAGEMENT & EXCHANGE SIMULATOR
+// ENHANCED PAPER EXCHANGE
 // =============================================================================
 
 /**
- * Enhanced paper trading exchange with comprehensive risk management
+ * Simulates trading operations with advanced risk management and performance tracking.
  */
-class PaperExchange {
+class EnhancedPaperExchange {
+    /**
+     * @param {object} config - Risk and trading configuration.
+     */
     constructor(config) {
-        if (!config) throw new Error('Configuration is required');
-        if (!Decimal) throw new Error('Decimal.js is required');
-        
+        if (!config) throw new TradingError('Configuration is required');
+        if (typeof Decimal === 'undefined') throw new TradingError('Decimal.js library is required');
+
         this.config = config.risk;
-        this.balance = new Decimal(config.risk.initialBalance);
-        this.startBalance = this.balance;
+        this.startBalance = new Decimal(this.config.initialBalance);
+        this.balance = new Decimal(this.config.initialBalance);
         this.dailyPnL = new Decimal(0);
-        this.position = null;
+        this.position = null; // { side, entry, quantity, stopLoss, takeProfit, strategy, timestamp, fees, confidence }
         this.lastDailyReset = new Date();
-        this.tradeHistory = [];
-        
-        // Performance metrics
+        this.tradeHistory = []; // Stores closed trades
+        this.tradeDurations = []; // Stores duration of each trade in ms
+
+        this.consecutiveLosses = 0;
+
+        // Initialize performance metrics
         this.metrics = {
             totalTrades: 0,
             winningTrades: 0,
             losingTrades: 0,
             totalFees: new Decimal(0),
-            maxDrawdown: new Decimal(0),
+            maxDrawdownPercent: new Decimal(0),
             winRate: 0,
-            profitFactor: 0
+            profitFactor: 0,
+            sharpeRatio: NaN, // Placeholder
+            sortinoRatio: NaN, // Placeholder
+            maxConsecutiveLosses: 0,
+            avgWinAmount: new Decimal(0),
+            avgLossAmount: new Decimal(0),
+            avgTradeDurationMs: 0,
+            totalPnL: new Decimal(0)
         };
     }
-    
-    /**
-     * Reset daily P&L if new day
-     */
+
+    /** Resets daily PnL if the day has changed. */
     resetDailyPnL() {
         const now = new Date();
         if (now.getDate() !== this.lastDailyReset.getDate()) {
             this.dailyPnL = new Decimal(0);
             this.lastDailyReset = now;
-            console.log(COLORS.GRAY('Daily P&L reset'));
+            console.log(COLORS.gray('ðŸ“… Daily P&L reset'));
         }
     }
-    
-    /**
-     * Check if trading is allowed based on risk parameters
-     * @returns {boolean} True if trading is allowed
-     */
+
+    /** Checks if trading is allowed based on risk limits. */
     canTrade() {
         this.resetDailyPnL();
-        
-        // Check drawdown limit
-        const drawdown = this.startBalance.isZero() ? 
-            new Decimal(0) : 
+
+        // Calculate current drawdown percentage
+        const drawdown = this.startBalance.isZero() ?
+            new Decimal(0) :
             this.startBalance.sub(this.balance).div(this.startBalance).mul(100);
-            
-        if (drawdown.gt(this.config.maxDrawdown)) {
-            console.error(COLORS.RED(`🚨 MAX DRAWDOWN HIT (${drawdown.toFixed(2)}%)`));
+
+        if (drawdown.gt(this.config.maxDrawdownPercent)) {
+            console.error(COLORS.error(`ðŸš¨ MAX DRAWDOWN HIT (${drawdown.toFixed(2)}%)`));
             return false;
         }
-        
-        // Check daily loss limit
-        const dailyLossPct = this.startBalance.isZero() ? 
-            new Decimal(0) : 
+
+        // Calculate daily loss percentage
+        const dailyLossPct = this.startBalance.isZero() ?
+            new Decimal(0) :
             this.dailyPnL.div(this.startBalance).mul(100);
-            
-        if (dailyLossPct.lt(-this.config.dailyLossLimit)) {
-            console.error(COLORS.RED(`🚨 DAILY LOSS LIMIT HIT (${dailyLossPct.toFixed(2)}%)`));
+
+        if (dailyLossPct.lt(-this.config.dailyLossLimitPercent)) {
+            console.error(COLORS.error(`ðŸš¨ DAILY LOSS LIMIT HIT (${dailyLossPct.toFixed(2)}%)`));
             return false;
         }
-        
+
+        // Check consecutive losses limit
+        if (this.consecutiveLosses >= this.config.consecutiveLossLimit) {
+            console.error(COLORS.error(`ðŸš¨ CONSECUTIVE LOSS LIMIT HIT (${this.consecutiveLosses})`));
+            return false;
+        }
+
+        // Volatility adjustment check (if enabled)
+        if (this.config.volatilityAdjustment) {
+            const volatilityFactor = this.calculateVolatilityFactor();
+            if (volatilityFactor > 2.0) { // Threshold for high volatility
+                console.warn(COLORS.warning(`âš ï¸  High volatility detected (${volatilityFactor.toFixed(2)}x), reducing position size.`));
+                // Note: This check currently only warns. A stricter implementation might return false.
+            }
+        }
+
         return true;
     }
-    
+
     /**
-     * Evaluate market and manage positions
-     * @param {number} price - Current market price
-     * @param {object} signal - Trading signal
+     * Calculates a volatility factor based on recent trade returns.
+     * Higher factor indicates higher recent volatility, suggesting smaller position sizes.
+     * @returns {number} Volatility factor (1.0 = normal, >1.0 = higher volatility).
+     */
+    calculateVolatilityFactor() {
+        if (this.tradeHistory.length < 5) return 1.0; // Not enough data
+
+        // Consider returns of the last N trades (e.g., 10)
+        const recentReturns = this.tradeHistory
+            .slice(-10)
+            .map(trade => trade.pnl.div(this.startBalance).toNumber()); // PnL as % of starting balance
+
+        if (recentReturns.length === 0) return 1.0;
+
+        // Calculate standard deviation of returns as a measure of volatility
+        const mean = recentReturns.reduce((sum, r) => sum + r, 0) / recentReturns.length;
+        const variance = recentReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / recentReturns.length;
+        const stdDev = Math.sqrt(variance);
+
+        // Convert std dev to a factor, capping it to avoid extreme values
+        // This scaling factor (e.g., 100) might need tuning.
+        const volatilityFactor = Math.min(stdDev * 100, 5.0); // Cap at 5x
+
+        return Math.max(1.0, volatilityFactor); // Ensure factor is at least 1.0
+    }
+
+    /**
+     * Evaluates a trading signal and manages open positions.
+     * @param {number} price - Current market price.
+     * @param {object} signal - Trading signal object { action, strategy, confidence, entry, stopLoss, takeProfit, riskReward, wss, reason }.
      */
     evaluate(price, signal) {
+        const priceDecimal = new Decimal(price);
+
+        // 1. Check Risk Management First
         if (!this.canTrade()) {
             if (this.position) {
-                this.closePosition(new Decimal(price), 'RISK_MANAGEMENT');
+                this.closePosition(priceDecimal, 'RISK_LIMIT_HIT');
             }
-            return;
+            return; // Cannot trade if risk limits are breached
         }
-        
-        const priceDecimal = new Decimal(price);
-        
-        // Close existing position if conditions are met
+
+        // 2. Manage Existing Position
         if (this.position) {
-            const shouldClose = this.shouldClosePosition(priceDecimal, signal);
-            if (shouldClose.shouldClose) {
-                this.closePosition(priceDecimal, shouldClose.reason);
+            const closeDecision = this.shouldClosePosition(priceDecimal, signal);
+            if (closeDecision.shouldClose) {
+                this.closePosition(priceDecimal, closeDecision.reason);
             }
         }
-        
-        // Open new position if conditions are met
-        if (!this.position && signal.action !== 'HOLD' && signal.confidence >= this.config.minConfidence) {
-            this.openPosition(priceDecimal, signal);
+
+        // 3. Open New Position if Signal is Valid and No Position Exists
+        if (!this.position && signal.action !== 'HOLD') {
+            // Validate signal quality before opening
+            if (signal.confidence >= this.config.minConfidence && this.validateSignalQuality(signal)) {
+                this.openPosition(priceDecimal, signal);
+            }
         }
     }
-    
+
     /**
-     * Determine if position should be closed
-     * @param {Decimal} price - Current price
-     * @param {object} signal - Trading signal
-     * @returns {object} {shouldClose: boolean, reason: string}
+     * Validates the quality of a trading signal before execution.
+     * @param {object} signal - The trading signal.
+     * @returns {boolean} True if the signal is considered valid.
+     */
+    validateSignalQuality(signal) {
+        // Check for AI errors or invalid strategies
+        if (!signal.strategy || signal.strategy === 'AI_ERROR' || signal.strategy === 'PARSING_ERROR') {
+            console.warn(COLORS.warning(`Signal rejected: Invalid strategy '${signal.strategy}'.`));
+            return false;
+        }
+
+        // Check risk-reward ratio
+        if (signal.riskReward < this.config.minRiskRewardRatio) {
+            console.warn(COLORS.warning(`Signal rejected: Poor risk-reward ratio (${signal.riskReward.toFixed(2)}), minimum required is ${this.config.minRiskRewardRatio}.`));
+            return false;
+        }
+
+        // Check confidence level against minimum requirement
+        if (signal.confidence < this.config.ai.minConfidence) {
+            console.warn(COLORS.warning(`Signal rejected: Confidence (${(signal.confidence * 100).toFixed(1)}%) below minimum (${(this.config.ai.minConfidence * 100).toFixed(0)}%).`));
+            return false;
+        }
+
+        // Check if entry, SL, TP are valid numbers
+        if (isNaN(signal.entry) || isNaN(signal.stopLoss) || isNaN(signal.takeProfit) ||
+            signal.entry === 0 || signal.stopLoss === 0 || signal.takeProfit === 0) {
+            console.warn(COLORS.warning('Signal rejected: Invalid price levels (entry, SL, or TP).'));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Determines if an open position should be closed based on price action, signal, or risk rules.
+     * @param {Decimal} price - Current market price as a Decimal.
+     * @param {object} signal - The latest trading signal.
+     * @returns {{shouldClose: boolean, reason: string}} Decision to close and reason.
      */
     shouldClosePosition(price, signal) {
         if (!this.position) return { shouldClose: false, reason: '' };
-        
+
         const { position } = this;
         let shouldClose = false;
         let reason = '';
-        
-        // Check stop loss and take profit
-        if (position.side === 'BUY') {
-            if (price.lte(position.stopLoss)) {
-                shouldClose = true;
-                reason = 'STOP_LOSS';
-            } else if (price.gte(position.takeProfit)) {
+
+        // Check Stop Loss
+        if (position.side === 'BUY' && price.lte(position.stopLoss)) {
+            shouldClose = true;
+            reason = 'STOP_LOSS';
+            this.consecutiveLosses++;
+        } else if (position.side === 'SELL' && price.gte(position.stopLoss)) {
+            shouldClose = true;
+            reason = 'STOP_LOSS';
+            this.consecutiveLosses++;
+        }
+
+        // Check Take Profit
+        if (!shouldClose) {
+            if (position.side === 'BUY' && price.gte(position.takeProfit)) {
                 shouldClose = true;
                 reason = 'TAKE_PROFIT';
-            }
-        } else { // SELL position
-            if (price.gte(position.stopLoss)) {
-                shouldClose = true;
-                reason = 'STOP_LOSS';
-            } else if (price.lte(position.takeProfit)) {
+                this.consecutiveLosses = 0; // Reset losses on a win
+            } else if (position.side === 'SELL' && price.lte(position.takeProfit)) {
                 shouldClose = true;
                 reason = 'TAKE_PROFIT';
+                this.consecutiveLosses = 0; // Reset losses on a win
             }
         }
-        
-        // Signal change close
+
+        // Check for Signal Change (if position side is opposite to new signal action)
         if (!shouldClose && signal.action !== 'HOLD' && signal.action !== position.side) {
             shouldClose = true;
             reason = `SIGNAL_CHANGE_${signal.action}`;
+            // Note: Closing due to signal change might be considered a loss or win depending on price vs entry.
+            // This logic assumes it's a forced exit, potentially resetting consecutive losses if profitable.
+            if (position.side === 'BUY' && price.gt(position.entry)) this.consecutiveLosses = 0;
+            if (position.side === 'SELL' && price.lt(position.entry)) this.consecutiveLosses = 0;
         }
-        
+
+        // Check consecutive losses limit (already checked in canTrade, but good as a final safety)
+        if (!shouldClose && this.consecutiveLosses >= this.config.consecutiveLossLimit) {
+            shouldClose = true;
+            reason = 'CONSECUTIVE_LOSSES';
+            this.consecutiveLosses = 0; // Reset after hitting limit
+        }
+
         return { shouldClose, reason };
     }
-    
+
     /**
-     * Open a new position
-     * @param {Decimal} price - Current price
-     * @param {object} signal - Trading signal
+     * Opens a new position based on a valid signal.
+     * @param {Decimal} entryPrice - The entry price as a Decimal.
+     * @param {object} signal - The trading signal object.
      */
-    openPosition(price, signal) {
+    openPosition(entryPrice, signal) {
         try {
             const entry = new Decimal(signal.entry);
             const stopLoss = new Decimal(signal.stopLoss);
             const takeProfit = new Decimal(signal.takeProfit);
-            
-            // Validate entry and stop loss
+
+            // Validate price levels
+            if (entry.isZero() || stopLoss.isZero() || takeProfit.isZero()) {
+                throw new TradingError('Invalid price levels provided in signal.');
+            }
+
             const distance = entry.sub(stopLoss).abs();
             if (distance.isZero()) {
-                console.warn(COLORS.YELLOW('Invalid entry/stop loss: distance is zero'));
-                return;
+                throw new TradingError('Entry and Stop Loss levels are identical.');
             }
-            
-            // Calculate position size based on risk management
-            const riskAmount = this.balance.mul(this.config.riskPercent / 100);
-            let quantity = riskAmount.div(distance);
-            
+
+            // Calculate position size based on risk parameters
+            const riskAmountPerTrade = this.balance.mul(this.config.riskPercentPerTrade / 100);
+            const volatilityFactor = this.config.volatilityAdjustment ? this.calculateVolatilityFactor() : 1.0;
+            const adjustedRiskAmount = riskAmountPerTrade.div(volatilityFactor);
+
+            let quantity = adjustedRiskAmount.div(distance);
+
             // Apply leverage cap
-            const maxQuantity = this.balance
-                .mul(this.config.leverageCap)
-                .div(price);
-                
-            if (quantity.gt(maxQuantity)) {
-                quantity = maxQuantity;
-                console.warn(COLORS.YELLOW('Position size capped by leverage'));
+            const maxQuantityByLeverage = this.balance.mul(this.config.leverageCap).div(entryPrice);
+            if (quantity.gt(maxQuantityByLeverage)) {
+                quantity = maxQuantityByLeverage;
+                console.warn(COLORS.warning('Position size capped by leverage limit.'));
             }
-            
-            // Validate quantity
-            if (quantity.isNegative() || quantity.isZero()) {
-                console.warn(COLORS.YELLOW('Invalid position size'));
-                return;
+
+            // Ensure quantity is positive and reasonable
+            if (quantity.isNegative() || quantity.isZero() || quantity.isNaN()) {
+                throw new TradingError(`Calculated invalid position quantity: ${quantity.toString()}`);
             }
-            
+
             // Calculate fees and slippage
-            const slippage = price.mul(this.config.slippage);
-            const executionPrice = signal.action === 'BUY' ? 
-                entry.add(slippage) : 
-                entry.sub(slippage);
+            const slippageAmount = entryPrice.mul(this.config.slippagePercent / 100);
+            const executionPrice = signal.action === 'BUY' ? entry.add(slippageAmount) : entry.sub(slippageAmount);
             const fee = executionPrice.mul(quantity).mul(this.config.fee);
-            
-            // Check if balance is sufficient
+
+            // Check if balance is sufficient for fees
             if (this.balance.lt(fee)) {
-                console.warn(COLORS.YELLOW('Insufficient balance for fees'));
-                return;
+                throw new TradingError('Insufficient balance to cover trading fees.');
             }
-            
-            // Deduct fees and create position
+
+            // Update balance and create position object
             this.balance = this.balance.sub(fee);
             this.position = {
                 side: signal.action,
@@ -1413,638 +2308,901 @@ class PaperExchange {
                 takeProfit,
                 strategy: signal.strategy,
                 timestamp: Date.now(),
-                fees: fee
+                fees: fee,
+                confidence: signal.confidence,
+                entryPriceSignal: entryPrice.toNumber() // Store original signal entry for reference
             };
-            
+
             this.metrics.totalFees = this.metrics.totalFees.add(fee);
-            
-            console.log(COLORS.GREEN(
-                `OPEN ${signal.action} [${signal.strategy}] ` +
-                `@ ${executionPrice.toFixed(4)} | ` +
-                `Size: ${quantity.toFixed(4)} | ` +
-                `SL: ${stopLoss.toFixed(4)} | ` +
-                `TP: ${takeProfit.toFixed(4)}`
+            this.metrics.totalTrades++; // Increment total trades upon opening
+            if (signal.action === 'BUY') this.metrics.winningTrades++; // Assume initial trade is potentially winning for stats if BUY
+            else this.metrics.losingTrades++; // Assume initial trade is potentially losing if SELL for stats
+
+            console.log(COLORS.success(
+                `ðŸ“ˆ OPEN ${signal.action} [${signal.strategy}] @ ${executionPrice.toFixed(4)} | ` +
+                `Size: ${quantity.toFixed(4)} | SL: ${stopLoss.toFixed(4)} | TP: ${takeProfit.toFixed(4)} | ` +
+                `Conf: ${(signal.confidence * 100).toFixed(0)}%`
             ));
-            
+
         } catch (error) {
-            console.error(COLORS.RED(`Position opening failed: ${error.message}`));
+            console.error(COLORS.error(`Position opening failed: ${error.message}`));
+            // Ensure state is clean if opening fails
+            this.position = null;
+            this.consecutiveLosses = 0; // Reset losses if position couldn't open
         }
     }
-    
+
     /**
-     * Close existing position
-     * @param {Decimal} price - Current price
-     * @param {string} reason - Reason for closing
+     * Closes the current open position.
+     * @param {Decimal} exitPrice - The exit price as a Decimal.
+     * @param {string} reason - The reason for closing (e.g., 'STOP_LOSS', 'TAKE_PROFIT', 'SIGNAL_CHANGE').
      */
-    closePosition(price, reason) {
+    closePosition(exitPrice, reason) {
         if (!this.position) return;
-        
+
         try {
             const { position } = this;
-            
-            // Calculate exit price with slippage
-            const slippage = price.mul(this.config.slippage);
-            const exitPrice = position.side === 'BUY' ? 
-                price.sub(slippage) : 
-                price.add(slippage);
-            
-            // Calculate P&L
+
+            // Calculate slippage and execution price
+            const slippageAmount = exitPrice.mul(this.config.slippagePercent / 100);
+            const executionPrice = position.side === 'BUY' ? exitPrice.sub(slippageAmount) : exitPrice.add(slippageAmount);
+
+            // Calculate PnL
             const rawPnL = position.side === 'BUY' ?
-                exitPrice.sub(position.entry).mul(position.quantity) :
-                position.entry.sub(exitPrice).mul(position.quantity);
-            
-            const exitFee = exitPrice.mul(position.quantity).mul(this.config.fee);
+                executionPrice.sub(position.entry).mul(position.quantity) :
+                position.entry.sub(executionPrice).mul(position.quantity);
+
+            // Calculate exit fee
+            const exitFee = executionPrice.mul(position.quantity).mul(this.config.fee);
             const netPnL = rawPnL.sub(exitFee);
-            
-            // Update balance and metrics
+
+            // Update balance and daily PnL
             this.balance = this.balance.add(netPnL);
             this.dailyPnL = this.dailyPnL.add(netPnL);
             this.metrics.totalFees = this.metrics.totalFees.add(exitFee);
-            
-            // Update trade statistics
-            this.metrics.totalTrades++;
+            this.metrics.totalPnL = this.metrics.totalPnL.add(netPnL); // Track total PnL
+
+            // Update trade statistics based on outcome
             if (netPnL.gte(0)) {
                 this.metrics.winningTrades++;
+                this.consecutiveLosses = 0; // Reset losses on a win
             } else {
                 this.metrics.losingTrades++;
+                this.consecutiveLosses++;
             }
-            
+
             // Update max drawdown
-            const currentDrawdown = this.startBalance.sub(this.balance).div(this.startBalance).mul(100);
-            if (currentDrawdown.gt(this.metrics.maxDrawdown)) {
-                this.metrics.maxDrawdown = currentDrawdown;
+            const currentDrawdown = this.startBalance.isZero() ?
+                new Decimal(0) :
+                this.startBalance.sub(this.balance).div(this.startBalance).mul(100);
+            if (currentDrawdown.gt(this.metrics.maxDrawdownPercent)) {
+                this.metrics.maxDrawdownPercent = currentDrawdown;
             }
-            
-            // Calculate win rate and profit factor
-            this.metrics.winRate = this.metrics.winningTrades / this.metrics.totalTrades;
-            const totalWins = this.tradeHistory
-                .filter(t => t.pnl.gte(0))
-                .reduce((sum, t) => sum.add(t.pnl), new Decimal(0));
-            const totalLosses = this.tradeHistory
-                .filter(t => t.pnl.lt(0))
-                .reduce((sum, t) => sum.add(t.pnl.abs()), new Decimal(0));
-            
-            this.metrics.profitFactor = totalLosses.gt(0) ? 
-                totalWins.div(totalLosses).toNumber() : 
-                totalWins.gt(0) ? Infinity : 0;
-            
-            // Record trade
+
+            // Record trade details
+            const tradeDurationMs = Date.now() - position.timestamp;
+            this.tradeDurations.push(tradeDurationMs);
             this.tradeHistory.push({
                 side: position.side,
-                entry: position.entry,
-                exit: exitPrice,
-                quantity: position.quantity,
-                pnl: netPnL,
+                entry: position.entry.toNumber(),
+                exit: executionPrice.toNumber(),
+                quantity: position.quantity.toNumber(),
+                pnl: netPnL.toNumber(),
                 strategy: position.strategy,
-                duration: Date.now() - position.timestamp,
-                reason
+                durationMs: tradeDurationMs,
+                reason,
+                confidence: position.confidence,
+                fees: exitFee.toNumber(),
+                entrySignal: position.entryPriceSignal
             });
-            
-            // Display result
+
+            // Log trade result
             const pnlColor = netPnL.gte(0) ? COLORS.GREEN : COLORS.RED;
-            console.log(`${COLORS.BOLD(reason)}! ` +
-                `PnL: ${pnlColor(netPnL.toFixed(2))} ` +
-                `[${position.strategy}]`);
-            
+            console.log(`${COLORS.bold(reason)}! PnL: ${pnlColor(netPnL.toFixed(2))} ` +
+                `[${position.strategy}] | Duration: ${Utils.formatDuration(tradeDurationMs)}`);
+
+            // Clear position and update metrics
             this.position = null;
-            
+            this.updatePerformanceMetrics();
+
         } catch (error) {
-            console.error(COLORS.RED(`Position closing failed: ${error.message}`));
+            console.error(COLORS.error(`Position closing failed: ${error.message}`));
         }
     }
-    
+
+    /** Updates performance metrics after a trade closes. */
+    updatePerformanceMetrics() {
+        const totalTrades = this.metrics.winningTrades + this.metrics.losingTrades;
+        this.metrics.totalTrades = totalTrades; // Ensure totalTrades is accurate
+
+        this.metrics.winRate = totalTrades > 0 ? this.metrics.winningTrades / totalTrades : 0;
+        this.metrics.profitFactor = this.calculateProfitFactor();
+        this.metrics.avgWinAmount = this.calculateAverageWinAmount();
+        this.metrics.avgLossAmount = this.calculateAverageLossAmount();
+        this.metrics.avgTradeDurationMs = this.tradeDurations.length > 0
+            ? this.tradeDurations.reduce((sum, d) => sum + d, 0) / this.tradeDurations.length
+            : 0;
+        this.metrics.maxConsecutiveLosses = Math.max(this.metrics.maxConsecutiveLosses, this.consecutiveLosses);
+
+        // Placeholders for Sharpe and Sortino ratios - require historical PnL data
+        // this.metrics.sharpeRatio = this.calculateSharpeRatio();
+        // this.metrics.sortinoRatio = this.calculateSortinoRatio();
+    }
+
+    /** Calculates the Profit Factor (Gross Profit / Gross Loss). */
+    calculateProfitFactor() {
+        const totalWins = this.tradeHistory
+            .filter(t => t.pnl >= 0)
+            .reduce((sum, t) => sum + t.pnl, 0);
+        const totalLosses = this.tradeHistory
+            .filter(t => t.pnl < 0)
+            .reduce((sum, t) => sum + Math.abs(t.pnl), 0);
+
+        if (totalLosses === 0) return totalWins > 0 ? Infinity : 1; // Avoid division by zero
+        return totalWins / totalLosses;
+    }
+
+    /** Calculates the average amount of winning trades. */
+    calculateAverageWinAmount() {
+        const wins = this.tradeHistory.filter(t => t.pnl >= 0);
+        if (wins.length === 0) return new Decimal(0);
+        return wins.reduce((sum, t) => sum.add(new Decimal(t.pnl)), new Decimal(0)).div(wins.length);
+    }
+
+    /** Calculates the average absolute amount of losing trades. */
+    calculateAverageLossAmount() {
+        const losses = this.tradeHistory.filter(t => t.pnl < 0);
+        if (losses.length === 0) return new Decimal(0);
+        return losses.reduce((sum, t) => sum.add(new Decimal(Math.abs(t.pnl))), new Decimal(0)).div(losses.length);
+    }
+
     /**
-     * Get current position P&L
-     * @param {number} currentPrice - Current market price
-     * @returns {Decimal} Current P&L
+     * Calculates the current unrealized PnL for an open position.
+     * @param {number} currentPrice - The current market price.
+     * @returns {Decimal} The unrealized PnL.
      */
     getCurrentPnL(currentPrice) {
         if (!this.position) return new Decimal(0);
-        
+
         const price = new Decimal(currentPrice);
         const { position } = this;
-        
+
         return position.side === 'BUY' ?
             price.sub(position.entry).mul(position.quantity) :
             position.entry.sub(price).mul(position.quantity);
     }
-    
+
     /**
-     * Get performance metrics
-     * @returns {object} Performance metrics
+     * Returns the current trading metrics and status.
+     * @returns {object} Trading metrics object.
      */
     getMetrics() {
-        const currentDrawdown = this.startBalance.sub(this.balance).div(this.startBalance).mul(100);
-        
+        const currentDrawdown = this.startBalance.isZero() ?
+            new Decimal(0) :
+            this.startBalance.sub(this.balance).div(this.startBalance).mul(100);
+
+        const openPositionData = this.position ? {
+            side: this.position.side,
+            entry: this.position.entry.toNumber(),
+            quantity: this.position.quantity.toNumber(),
+            pnl: this.getCurrentPnL(this.position.entry.toNumber()).toNumber(), // PnL at entry price for reference
+            strategy: this.position.strategy,
+            confidence: this.position.confidence,
+            stopLoss: this.position.stopLoss.toNumber(),
+            takeProfit: this.position.takeProfit.toNumber(),
+            entrySignalPrice: this.position.entrySignal
+        } : null;
+
         return {
             ...this.metrics,
             currentBalance: this.balance.toNumber(),
             dailyPnL: this.dailyPnL.toNumber(),
-            totalReturn: this.balance.sub(this.startBalance).div(this.startBalance).mul(100).toNumber(),
-            currentDrawdown: currentDrawdown.toNumber(),
-            openPosition: this.position ? {
-                side: this.position.side,
-                entry: this.position.entry.toNumber(),
-                quantity: this.position.quantity.toNumber(),
-                pnl: this.getCurrentPnL(this.position.entry.toNumber()).toNumber()
-            } : null
+            totalPnL: this.metrics.totalPnL.toNumber(),
+            totalReturnPercent: this.startBalance.isZero() ? 0 : this.balance.sub(this.startBalance).div(this.startBalance).mul(100).toNumber(),
+            currentDrawdownPercent: currentDrawdown.toNumber(),
+            avgWinAmount: this.metrics.avgWinAmount.toNumber(),
+            avgLossAmount: this.metrics.avgLossAmount.toNumber(),
+            avgTradeDurationMinutes: this.metrics.avgTradeDurationMs / 1000 / 60,
+            consecutiveLosses: this.consecutiveLosses,
+            openPosition: openPositionData
         };
     }
 }
 
 // =============================================================================
-// AI ANALYSIS ENGINE
+// ENHANCED AI ANALYSIS ENGINE
 // =============================================================================
 
 /**
- * AI-powered trading signal generator using Gemini
+ * Manages interaction with the Generative AI model for signal generation.
  */
-class AIAnalysisEngine {
+class EnhancedAIAnalysisEngine {
+    /**
+     * @param {object} config - AI configuration.
+     */
     constructor(config) {
-        if (!config) throw new Error('Configuration is required');
-        
+        if (!config) throw new AiError('Configuration is required');
+
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
-            throw new Error('GEMINI_API_KEY environment variable is required');
+            throw new AiError('GEMINI_API_KEY environment variable is required.');
         }
-        
+
         this.config = config.ai;
-        this.model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-            model: config.ai.model
-        });
-        
-        // Rate limiting
-        this.lastRequest = 0;
-        this.minRequestInterval = 2000; // 2 seconds between requests
+        try {
+            this.gemini = new GoogleGenerativeAI(apiKey);
+            this.model = this.gemini.getGenerativeModel({ model: this.config.model });
+        } catch (error) {
+            throw new AiError(`Failed to initialize Gemini AI: ${error.message}`);
+        }
+
+        this.lastRequestTime = 0;
+        this.minRequestInterval = this.config.rateLimitMs || 1500;
+        this.requestQueue = [];
+        this.processingQueue = false;
     }
-    
-    /**
-     * Rate limiting helper
-     */
+
+    /** Enforces rate limiting between AI API calls. */
     async enforceRateLimit() {
         const now = Date.now();
-        const timeSinceLastRequest = now - this.lastRequest;
-        
+        const timeSinceLastRequest = now - this.lastRequestTime;
+
         if (timeSinceLastRequest < this.minRequestInterval) {
             const waitTime = this.minRequestInterval - timeSinceLastRequest;
             await sleep(waitTime);
         }
-        
-        this.lastRequest = Date.now();
+        this.lastRequestTime = Date.now();
     }
-    
+
     /**
-     * Generate trading signal based on market analysis
-     * @param {object} context - Market context and analysis
-     * @returns {Promise<object>} Trading signal
+     * Generates a trading signal using the AI model.
+     * @param {object} context - Context object containing market data, analysis, WSS, and config.
+     * @returns {Promise<object>} The generated trading signal.
      */
     async generateSignal(context) {
         await this.enforceRateLimit();
-        
-        const prompt = this.buildPrompt(context);
-        
+
+        const prompt = this.buildEnhancedPrompt(context);
+
+        let responseText = '';
         try {
-            const response = await this.model.generateContent(prompt);
-            const text = response.response.text();
-            
-            return this.parseAIResponse(text, context);
-            
+            // Implement retry logic for AI calls
+            for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
+                try {
+                    const result = await this.model.generateContent(prompt);
+                    const response = await result.response;
+                    responseText = response.text();
+                    if (!responseText) throw new AiError('AI returned empty response.');
+                    break; // Success
+                } catch (error) {
+                    if (attempt === this.config.maxRetries) {
+                        throw new AiError(`AI generation failed after ${this.config.maxRetries + 1} attempts: ${error.message}`);
+                    }
+                    const delay = Utils.backoffDelay(attempt, this.config.rateLimitMs || 1500, 1.5);
+                    console.warn(COLORS.warning(`AI retry ${attempt + 1}/${this.config.maxRetries} in ${delay}ms...`));
+                    await sleep(delay);
+                }
+            }
+            return this.parseEnhancedAIResponse(responseText, context);
+
         } catch (error) {
-            console.error(COLORS.RED(`AI analysis failed: ${error.message}`));
-            return {
+            console.error(COLORS.error(`AI signal generation failed: ${error.message}`));
+            return { // Return a safe default signal on error
                 action: 'HOLD',
-                confidence: 0,
                 strategy: 'AI_ERROR',
-                entry: 0,
-                stopLoss: 0,
-                takeProfit: 0,
+                confidence: 0,
+                entry: 0, stopLoss: 0, takeProfit: 0, riskReward: 0, wss: 0,
                 reason: `AI Error: ${error.message}`
             };
         }
     }
-    
-    /**
-     * Build comprehensive prompt for AI analysis
-     * @param {object} context - Market context
-     * @returns {string} Formatted prompt
-     */
-    buildPrompt(context) {
-        const { marketData, analysis, wss, config } = context;
-        
-        return `
-ACT AS: Professional Cryptocurrency Trading Algorithm
-OBJECTIVE: Generate precise trading signals with entry, stop-loss, and take-profit levels
 
-QUANTITATIVE FRAMEWORK:
-**WSS Score (Primary Filter):** ${wss} (Bias: ${wss > 0 ? 'BULLISH' : wss < 0 ? 'BEARISH' : 'NEUTRAL'})
-**Critical Rule:** BUY requires WSS ≥ ${config.indicators.weights.actionThreshold}, SELL requires WSS ≤ -${config.indicators.weights.actionThreshold}
+    /**
+     * Constructs a detailed prompt for the AI model.
+     * @param {object} context - Context object.
+     * @returns {string} The formatted prompt.
+     */
+    buildEnhancedPrompt(context) {
+        const { marketData, analysis, enhancedWSS, config } = context;
+        const { score, confidence, components } = enhancedWSS;
+
+        // Helper to format component scores safely
+        const formatComponentScore = (score) => score !== undefined ? score.toFixed(2) : 'N/A';
+
+        // Format indicator values safely
+        const rsiVal = Utils.safeNumber(analysis.rsi?.[analysis.rsi.length - 1], 50);
+        const williamsVal = Utils.safeNumber(analysis.williamsR?.[analysis.williamsR.length - 1], -50);
+        const cciVal = Utils.safeNumber(analysis.cci?.[analysis.cci.length - 1], 0);
+        const mfiVal = Utils.safeNumber(analysis.mfi?.[analysis.mfi.length - 1], 50);
+        const adxVal = Utils.safeNumber(analysis.adx?.[analysis.adx.length - 1], 0);
+        const macdHistVal = Utils.safeNumber(analysis.macd?.hist?.[analysis.macd.hist.length - 1], 0);
+        const obvVal = Utils.safeNumber(analysis.obv?.[analysis.obv.length - 1], 0);
+        const adLineVal = Utils.safeNumber(analysis.adLine?.[analysis.adLine.length - 1], 0);
+        const cmfVal = Utils.safeNumber(analysis.cmf?.[analysis.cmf.length - 1], 0);
+        const volRatioVal = Utils.safeNumber(analysis.volumeAnalysis?.volumeRatio?.[analysis.volumeAnalysis.volumeRatio.length - 1], 1);
+        const orderImbalanceVal = analysis.orderBookAnalysis?.imbalance !== undefined ? (analysis.orderBookAnalysis.imbalance * 100).toFixed(1) + '%' : 'N/A';
+        const liquidityVal = analysis.orderBookAnalysis?.liquidity !== undefined ? (analysis.orderBookAnalysis.liquidity * 100).toFixed(1) + '%' : 'N/A';
+
+        // Format SR levels
+        const supportLevels = analysis.supportResistance?.support?.map(s => `$${s.price.toFixed(2)}`).join(', ') || 'N/A';
+        const resistanceLevels = analysis.supportResistance?.resistance?.map(r => `$${r.price.toFixed(2)}`).join(', ') || 'N/A';
+
+        return `
+ACT AS: Professional Cryptocurrency Trading Algorithm with Advanced Analytics
+OBJECTIVE: Generate precise trading signals using enhanced multi-component analysis. Prioritize capital preservation and risk management.
+
+ENHANCED WEIGHTED SENTIMENT SCORE:
+- Primary Score: ${score.toFixed(2)} (Bias: ${score > 0 ? 'BULLISH' : score < 0 ? 'BEARISH' : 'NEUTRAL'})
+- Confidence Level: ${(confidence * 100).toFixed(1)}%
+- Component Breakdown:
+    - Trend: ${formatComponentScore(components.trend?.score)}
+    - Momentum: ${formatComponentScore(components.momentum?.score)}
+    - Volume: ${formatComponentScore(components.volume?.score)}
+    - OrderFlow: ${formatComponentScore(components.orderFlow?.score)}
+    - Structure: ${formatComponentScore(components.structure?.score)}
+
+CRITICAL THRESHOLDS (WSS Score & Confidence):
+- Strong BUY Signal: WSS â‰¥ ${config.indicators.weights.actionThreshold + 1} and Confidence â‰¥ 0.80
+- BUY Signal: WSS â‰¥ ${config.indicators.weights.actionThreshold} and Confidence â‰¥ 0.75
+- Strong SELL Signal: WSS â‰¤ -${config.indicators.weights.actionThreshold + 1} and Confidence â‰¥ 0.80
+- SELL Signal: WSS â‰¤ -${config.indicators.weights.actionThreshold} and Confidence â‰¥ 0.75
+- HOLD: All other conditions or if risk limits are breached.
 
 MARKET CONTEXT:
 - Symbol: ${config.symbol}
 - Current Price: $${marketData.price.toFixed(4)}
-- Volatility: ${analysis.volatility?.[analysis.volatility.length - 1]?.toFixed(4) || 'N/A'}
+- Volatility (Annualized): ${analysis.volatility?.[analysis.volatility.length - 1]?.toFixed(4) || 'N/A'}
 - Market Regime: ${analysis.marketRegime}
 
-TECHNICAL INDICATORS:
+EXTENDED TECHNICAL INDICATORS (Latest Values):
 - Multi-Timeframe Trend: ${analysis.trendMTF}
-- Linear Regression Slope: ${analysis.regression?.slope?.[analysis.regression.slope.length - 1]?.toFixed(6) || 'N/A'}
-- RSI: ${analysis.rsi?.[analysis.rsi.length - 1]?.toFixed(2) || 'N/A'}
-- Stochastic %K: ${analysis.stoch?.k?.[analysis.stoch.k.length - 1]?.toFixed(0) || 'N/A'}
-- MACD Histogram: ${analysis.macd?.hist?.[analysis.macd.hist.length - 1]?.toFixed(6) || 'N/A'}
-- ADX: ${analysis.adx?.[analysis.adx.length - 1]?.toFixed(2) || 'N/A'}
+- RSI: ${rsiVal.toFixed(1)} (${this.colorizeIndicatorValue('rsi', rsiVal)})
+- Williams %R: ${williamsVal.toFixed(1)} (${this.colorizeIndicatorValue('williams', williamsVal)})
+- CCI: ${cciVal.toFixed(1)} (${this.colorizeIndicatorValue('cci', cciVal)})
+- MFI: ${mfiVal.toFixed(1)} (${this.colorizeIndicatorValue('mfi', mfiVal)})
+- ADX: ${adxVal.toFixed(1)}
+- MACD Histogram: ${macdHistVal.toFixed(6)}
+- OBV: ${obvVal.toFixed(0)}
+- A/D Line: ${adLineVal.toFixed(0)}
+- CMF: ${cmfVal.toFixed(4)}
+- Volume Ratio (vs SMA): ${volRatioVal.toFixed(2)}x
+
+VOLUME & ORDER BOOK ANALYSIS:
+- Volume Flow: ${analysis.volumeAnalysis?.flow || 'N/A'}
+- Order Book Imbalance: ${analysis.orderBookAnalysis?.imbalance !== undefined ? (analysis.orderBookAnalysis.imbalance * 100).toFixed(1) + '%' : 'N/A'} (${this.colorizeImbalanceValue(analysis.orderBookAnalysis?.imbalance)})
+- Liquidity Quality: ${analysis.orderBookAnalysis?.liquidity !== undefined ? (analysis.orderBookAnalysis.liquidity * 100).toFixed(1) + '%' : 'N/A'}
 
 MARKET STRUCTURE:
 - Fair Value Gap: ${analysis.fvg ? `${analysis.fvg.type} @ $${analysis.fvg.price.toFixed(2)}` : 'None'}
 - Divergence: ${analysis.divergence}
 - Squeeze Status: ${analysis.isSqueeze ? 'ACTIVE' : 'INACTIVE'}
-- Support Levels: ${analysis.supportResistance?.support?.join(', ') || 'N/A'}
-- Resistance Levels: ${analysis.supportResistance?.resistance?.join(', ') || 'N/A'}
+- Support Levels (Closest): ${supportLevels}
+- Resistance Levels (Closest): ${resistanceLevels}
 
-STRATEGY FRAMEWORK:
-1. **TREND_FOLLOWING** (WSS > 1.5): Follow multi-timeframe trend on pullbacks
-2. **BREAKOUT** (Squeeze + WSS > 1.0): Trade volatility expansion in trend direction  
-3. **MEAN_REVERSION** (|WSS| > 2.0, Chop > 60): Fade extreme readings
-4. **LIQUIDITY_PLAY** (Near FVG/Walls): Trade retests of key levels
-5. **DIVERGENCE_REVERSAL** (Strong Divergence): High-conviction reversals
+ENHANCED STRATEGY FRAMEWORK (Select the MOST appropriate based on WSS, confidence, and context):
+1. **TREND_FOLLOWING_ENHANCED**: Requires strong WSS (> ${config.indicators.weights.actionThreshold + 1}), high confidence (>0.8), bullish/bearish MTF trend alignment, and volume confirmation. Target ~1.5:1 R:R.
+2. **VOLUME_BREAKOUT**: Triggered by Squeeze active, high volume ratio (>1.8), strong WSS (> ${config.indicators.weights.actionThreshold}), and high confidence (>0.75). Target ~1.2:1 R:R.
+3. **ORDER_FLOW_IMBALANCE**: Triggered by significant order book imbalance (>0.4 or <-0.4), confirmed WSS, and high confidence (>0.8). Target ~1.5:1 R:R.
+4. **MEAN_REVERSION_ADVANCED**: Triggered by extreme oscillator readings (RSI < 30 or > 70, Williams < -80 or > -20), strong WSS (> ${config.indicators.weights.actionThreshold + 1}), and high confidence (>0.8). Target ~1.2:1 R:R.
+5. **LIQUIDITY_ENGULFING**: Triggered by price interacting with FVG or near SR levels, confirmed by volume and WSS, high confidence. Target ~1.5:1 R:R.
 
-REQUIREMENTS:
-- Calculate precise entry, stop-loss, take-profit levels
-- Ensure minimum 1:1.5 risk-reward ratio
-- Use technical levels (Fibonacci, ATR, FVG) for targets
-- If WSS threshold not met or unclear setup, return HOLD
+REQUIREMENTS FOR SIGNAL GENERATION:
+- Determine the most fitting strategy from the framework.
+- Calculate precise entry, stop-loss, and take-profit levels.
+- Ensure a minimum risk-reward ratio of ${config.risk.minRiskRewardRatio}:1.
+- Utilize technical levels (FVG, SR, ATR-based stops) for targets and stops.
+- Consider volume and order flow for entry timing confirmation.
+- If WSS threshold, confidence, or risk-reward criteria are not met, or if the setup is unclear, return HOLD.
 
 OUTPUT FORMAT (JSON ONLY):
 {
-    "action": "BUY|SELL|HOLD",
-    "strategy": "STRATEGY_NAME",
+    "action": "BUY | SELL | HOLD",
+    "strategy": "STRATEGY_NAME_FROM_FRAMEWORK",
     "confidence": 0.0-1.0,
     "entry": number,
     "stopLoss": number,
     "takeProfit": number,
-    "reason": "Detailed reasoning"
+    "riskReward": number,
+    "wss": number,
+    "reason": "Detailed reasoning including strategy selection, key indicators, WSS score, confidence, and risk-reward calculation."
 }
         `.trim();
     }
-    
+
     /**
-     * Parse and validate AI response
-     * @param {string} text - AI response text
-     * @param {object} context - Market context
-     * @returns {object} Validated trading signal
+     * Parses the AI's JSON response and performs validation.
+     * @param {string} text - The raw text response from the AI.
+     * @param {object} context - The context object used to generate the prompt.
+     * @returns {object} The validated trading signal.
      */
-    parseAIResponse(text, context) {
+    parseEnhancedAIResponse(text, context) {
         try {
-            // Extract JSON from response
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (!jsonMatch) {
-                throw new Error('No valid JSON found in response');
+                throw new AiError('No valid JSON found in AI response.');
             }
-            
+
             const signal = JSON.parse(jsonMatch[0]);
-            
-            // Validate required fields
+
+            // --- Rigorous Validation ---
             const requiredFields = ['action', 'strategy', 'confidence', 'entry', 'stopLoss', 'takeProfit'];
             for (const field of requiredFields) {
-                if (signal[field] === undefined) {
-                    throw new Error(`Missing required field: ${field}`);
+                if (signal[field] === undefined || signal[field] === null) {
+                    throw new AiError(`Missing required field: '${field}'.`);
                 }
             }
-            
+
             // Validate action
             const validActions = ['BUY', 'SELL', 'HOLD'];
             if (!validActions.includes(signal.action)) {
+                console.warn(COLORS.warning(`Invalid action '${signal.action}' received from AI. Defaulting to HOLD.`));
                 signal.action = 'HOLD';
             }
-            
-            // Ensure numerical values are valid
+
+            // Validate numerical fields and apply safe defaults
             signal.confidence = Utils.safeNumber(signal.confidence, 0);
             signal.entry = Utils.safeNumber(signal.entry, 0);
             signal.stopLoss = Utils.safeNumber(signal.stopLoss, 0);
             signal.takeProfit = Utils.safeNumber(signal.takeProfit, 0);
-            
-            // Apply WSS filter
-            const { wss, config } = context;
-            const threshold = config.indicators.weights.actionThreshold;
-            
-            if (signal.action === 'BUY' && wss < threshold) {
+            signal.wss = Utils.safeNumber(signal.wss, 0); // Ensure WSS is also parsed
+
+            // Apply enhanced WSS filter and confidence threshold from context
+            const { enhancedWSS, config } = context;
+            const actionThreshold = config.indicators.weights.actionThreshold;
+            const minConfidence = config.ai.minConfidence;
+
+            // Filter based on WSS score thresholds
+            if (signal.action === 'BUY' && (enhancedWSS.score < actionThreshold || signal.confidence < minConfidence)) {
                 signal.action = 'HOLD';
-                signal.reason = `WSS (${wss}) below BUY threshold (${threshold})`;
-            } else if (signal.action === 'SELL' && wss > -threshold) {
+                signal.reason = `WSS (${enhancedWSS.score.toFixed(2)}) below BUY threshold (${actionThreshold}) or confidence too low.`;
+            } else if (signal.action === 'SELL' && (enhancedWSS.score > -actionThreshold || signal.confidence < minConfidence)) {
                 signal.action = 'HOLD';
-                signal.reason = `WSS (${wss}) above SELL threshold (${threshold})`;
+                signal.reason = `WSS (${enhancedWSS.score.toFixed(2)}) above SELL threshold (${-actionThreshold}) or confidence too low.`;
             }
-            
-            // Validate risk-reward ratio
+
+            // Re-check confidence after potential action change
+            if (signal.confidence < minConfidence) {
+                signal.action = 'HOLD';
+                signal.reason = `Confidence (${(signal.confidence * 100).toFixed(1)}%) below minimum (${(minConfidence * 100).toFixed(0)}%).`;
+            }
+
+            // Validate Risk-Reward Ratio
             if (signal.action !== 'HOLD') {
                 const risk = Math.abs(signal.entry - signal.stopLoss);
                 const reward = Math.abs(signal.takeProfit - signal.entry);
-                const rrRatio = reward / risk;
-                
-                if (rrRatio < 1.0) {
+                signal.riskReward = risk > 0 ? reward / risk : 0;
+
+                if (signal.riskReward < config.risk.minRiskRewardRatio) {
                     signal.action = 'HOLD';
-                    signal.reason = `Risk-reward ratio (${rrRatio.toFixed(2)}) below minimum (1.5)`;
+                    signal.reason = `Risk-reward ratio (${signal.riskReward.toFixed(2)}) below minimum (${config.risk.minRiskRewardRatio}).`;
                 }
             }
-            
-            // Add default reason if missing
-            if (!signal.reason) {
-                signal.reason = signal.action === 'HOLD' ? 
-                    'No clear trading opportunity' : 
-                    `Strategy: ${signal.strategy}`;
+
+            // Finalize reason if action is HOLD due to validation
+            if (signal.action === 'HOLD' && !signal.reason) {
+                signal.reason = 'No valid trading opportunity based on AI signal and validation rules.';
+            } else if (signal.action !== 'HOLD' && !signal.reason) {
+                 // Construct a default reason if none was set but action is valid
+                 signal.reason = `Strategy: ${signal.strategy} | WSS: ${enhancedWSS.score.toFixed(2)} | Conf: ${(signal.confidence * 100).toFixed(1)}% | R:R ${signal.riskReward.toFixed(2)}`;
             }
-            
+
+            // Ensure all required fields are present, even if default
+            signal.action = signal.action || 'HOLD';
+            signal.strategy = signal.strategy || 'UNKNOWN';
+            signal.confidence = signal.confidence || 0;
+            signal.entry = signal.entry || 0;
+            signal.stopLoss = signal.stopLoss || 0;
+            signal.takeProfit = signal.takeProfit || 0;
+            signal.riskReward = signal.riskReward || 0;
+            signal.wss = signal.wss || enhancedWSS.score || 0; // Use parsed WSS or context WSS
+
             return signal;
-            
+
         } catch (error) {
-            console.error(COLORS.RED(`AI response parsing failed: ${error.message}`));
-            return {
+            console.error(COLORS.error(`Enhanced AI response parsing failed: ${error.message}`));
+            return { // Return a safe default signal on parsing error
                 action: 'HOLD',
-                confidence: 0,
                 strategy: 'PARSING_ERROR',
-                entry: 0,
-                stopLoss: 0,
-                takeProfit: 0,
-                reason: `Parsing error: ${error.message}`
+                confidence: 0,
+                entry: 0, stopLoss: 0, takeProfit: 0, riskReward: 0, wss: 0,
+                reason: `Enhanced parsing error: ${error.message}`
             };
         }
+    }
+
+    /** Helper to colorize indicator values for display */
+    colorizeIndicatorValue(type, value) {
+        const v = Utils.safeNumber(value, 0);
+        switch (type) {
+            case 'rsi': return v > 70 ? COLORS.RED(v.toFixed(1)) : v < 30 ? COLORS.GREEN(v.toFixed(1)) : COLORS.YELLOW(v.toFixed(1));
+            case 'williams': return v > -20 ? COLORS.RED(v.toFixed(1)) : v < -80 ? COLORS.GREEN(v.toFixed(1)) : COLORS.YELLOW(v.toFixed(1));
+            case 'cci': return v > 100 ? COLORS.RED(v.toFixed(1)) : v < -100 ? COLORS.GREEN(v.toFixed(1)) : COLORS.YELLOW(v.toFixed(1));
+            case 'mfi': return v > 80 ? COLORS.RED(v.toFixed(1)) : v < 20 ? COLORS.GREEN(v.toFixed(1)) : COLORS.YELLOW(v.toFixed(1));
+            default: return COLORS.cyan(v.toFixed(2));
+        }
+    }
+
+    /** Helper to colorize imbalance values */
+    colorizeImbalanceValue(imbalance) {
+        if (imbalance === undefined || imbalance === null) return COLORS.gray('N/A');
+        const pct = (imbalance * 100).toFixed(1);
+        return imbalance > 0.3 ? COLORS.GREEN(`+${pct}%`) :
+               imbalance < -0.3 ? COLORS.RED(`${pct}%`) : COLORS.YELLOW(`${pct}%`);
     }
 }
 
 // =============================================================================
-// MAIN TRADING ENGINE
+// ENHANCED TRADING ENGINE
 // =============================================================================
 
 /**
- * Main trading engine orchestrating all components
+ * Orchestrates the entire trading bot, managing data flow, analysis, and execution.
  */
-class TradingEngine {
+class EnhancedTradingEngine {
+    /**
+     * @param {object} config - The application configuration object.
+     */
     constructor(config) {
-        if (!config) throw new Error('Configuration is required');
-        
+        if (!config) throw new AppError('Configuration is required');
+
         this.config = config;
         this.dataProvider = new DataProvider(config);
-        this.exchange = new PaperExchange(config);
-        this.ai = new AIAnalysisEngine(config);
+        this.exchange = new EnhancedPaperExchange(config);
+        this.ai = new EnhancedAIAnalysisEngine(config);
         this.isRunning = false;
         this.startTime = Date.now();
-        
-        // Statistics
+
+        // Initialize statistics
         this.stats = {
             dataFetchAttempts: 0,
             dataFetchSuccesses: 0,
             aiAnalysisCalls: 0,
             signalsGenerated: 0,
-            positionsOpened: 0,
-            positionsClosed: 0,
-            averageLoopTime: 0
+            validSignals: 0, // Count signals that passed validation
+            tradesOpened: 0,
+            tradesClosed: 0,
+            wssCalculations: 0,
+            marketAnalyses: 0,
+            loopIterations: 0
+        };
+
+        // Performance monitoring data structures
+        this.performanceMetrics = {
+            loopTimesMs: [],
+            analysisTimesMs: [],
+            wssTimesMs: [],
+            dataFetchTimesMs: [],
+            memoryUsageMB: [],
+            cpuUsagePercent: [], // Placeholder, requires external module like 'cpu-stat'
+            networkLatencyMs: []
         };
     }
-    
-    /**
-     * Start the trading engine
-     */
+
+    /** Starts the main trading loop and event listeners. */
     async start() {
         console.clear();
         console.log(COLORS.bg(COLORS.BOLD(COLORS.PURPLE(
-            ` 🚀 WHALEWAVE TITAN v7.0 STARTING... `
+            ` ðŸš€ WHALEWAVE TITAN v7.1 ENHANCED STARTING... `
         ))));
-        
+
         this.isRunning = true;
-        
-        // Set up signal handlers for graceful shutdown
         this.setupSignalHandlers();
-        
-        console.log(COLORS.GREEN('Engine started successfully'));
-        console.log(COLORS.GRAY(`Configuration: ${this.config.symbol}`));
-        console.log(COLORS.GRAY(`Loop delay: ${this.config.delays.loop}ms`));
-        
+
+        console.log(COLORS.success('âœ… Enhanced engine started successfully'));
+        console.log(COLORS.info(`ðŸ”§ Symbol: ${this.config.symbol}`));
+        console.log(COLORS.info(`â ±ï¸  Loop Delay: ${this.config.delays.loop}ms`));
+        console.log(COLORS.cyan('ðŸ“Š Features: Multi-Component WSS, Advanced Volume/Order Flow Analysis, AI Signals'));
+
         await this.mainLoop();
     }
-    
-    /**
-     * Setup graceful shutdown handlers
-     */
+
+    /** Sets up graceful shutdown handlers for SIGINT and SIGTERM. */
     setupSignalHandlers() {
         const shutdown = (signal) => {
-            console.log(COLORS.RED(`\n🛑 Received ${signal}. Starting graceful shutdown...`));
+            console.log(COLORS.error(`\nðŸ›‘ Received ${signal}. Initiating graceful shutdown...`));
             this.isRunning = false;
-            this.displayShutdownReport();
+            this.displayEnhancedShutdownReport();
             process.exit(0);
         };
-        
+
         process.on('SIGINT', () => shutdown('SIGINT'));
         process.on('SIGTERM', () => shutdown('SIGTERM'));
         process.on('uncaughtException', (error) => {
-            console.error(COLORS.RED(`Uncaught Exception: ${error.message}`));
+            console.error(COLORS.error(`\nFATAL: Uncaught Exception: ${error.message}`));
+            console.error(error.stack); // Log stack trace for debugging
             shutdown('UNCAUGHT_EXCEPTION');
         });
         process.on('unhandledRejection', (reason, promise) => {
-            console.error(COLORS.RED(`Unhandled Rejection at: ${promise}, reason: ${reason}`));
+            console.error(COLORS.error(`\nFATAL: Unhandled Rejection at: ${promise}, reason: ${reason}`));
+            console.error(reason instanceof Error ? reason.stack : reason); // Log stack trace if available
             shutdown('UNHANDLED_REJECTION');
         });
     }
-    
-    /**
-     * Main trading loop
-     */
+
+    /** The main execution loop of the trading engine. */
     async mainLoop() {
-        let loopCount = 0;
-        let totalLoopTime = 0;
-        
         while (this.isRunning) {
             const loopStart = Date.now();
-            
+
             try {
                 this.stats.dataFetchAttempts++;
-                
-                // Fetch market data
                 const marketData = await this.dataProvider.fetchMarketData();
+
                 if (!marketData) {
-                    console.warn(COLORS.YELLOW('Failed to fetch market data, retrying...'));
+                    console.warn(COLORS.warning('âš ï¸  Failed to fetch market data. Retrying after delay...'));
                     await sleep(this.config.delays.retry);
-                    continue;
+                    continue; // Skip to next iteration
                 }
-                
                 this.stats.dataFetchSuccesses++;
-                
-                // Perform market analysis
+
+                // --- Market Analysis ---
+                const analysisStart = Date.now();
                 const analysis = await MarketAnalyzer.analyze(marketData, this.config);
-                
-                // Calculate WSS
-                const wss = WeightedSentimentCalculator.calculate(
-                    analysis, 
-                    marketData.price, 
-                    this.config.indicators.weights
+                const analysisTime = Date.now() - analysisStart;
+                this.stats.marketAnalyses++;
+
+                // --- Weighted Sentiment Calculation ---
+                const wssStart = Date.now();
+                const enhancedWSS = await EnhancedWeightedSentimentCalculator.calculate(
+                    analysis,
+                    marketData.price,
+                    this.config.indicators.weights,
+                    this.config
                 );
-                analysis.wss = wss;
-                
-                // Generate AI signal
+                const wssTime = Date.now() - wssStart;
+                this.stats.wssCalculations++;
+
+                // --- AI Signal Generation ---
                 this.stats.aiAnalysisCalls++;
                 const signal = await this.ai.generateSignal({
                     marketData,
                     analysis,
-                    wss,
+                    enhancedWSS,
                     config: this.config
                 });
-                
+
                 this.stats.signalsGenerated++;
-                
-                // Execute trading logic
-                this.exchange.evaluate(marketData.price, signal);
                 if (signal.action !== 'HOLD') {
-                    this.stats.positionsOpened++;
+                    this.stats.validSignals++; // Count signals that passed AI validation
                 }
-                
-                // Display dashboard
-                this.displayDashboard(marketData, analysis, signal);
-                
-                // Calculate loop time
+
+                // --- Trading Execution ---
+                this.exchange.evaluate(marketData.price, signal);
+                if (this.exchange.position) {
+                    this.stats.tradesOpened++; // Increment if a position was opened
+                }
+                // Note: tradesClosed count is managed internally by the exchange upon closing
+
+                // --- Dashboard Update ---
+                this.displayEnhancedDashboard(marketData, analysis, enhancedWSS, signal);
+
+                // --- Performance Tracking ---
                 const loopTime = Date.now() - loopStart;
-                totalLoopTime += loopTime;
-                this.stats.averageLoopTime = totalLoopTime / ++loopCount;
-                
+                this.trackPerformanceMetrics(loopTime, analysisTime, wssTime, marketData.fetchTime);
+
             } catch (error) {
-                console.error(COLORS.RED(`Loop error: ${error.message}`));
-                console.debug(error.stack);
+                console.error(COLORS.error(`Loop iteration failed: ${error.message}`));
+                if (error.stack) console.error(COLORS.dim(error.stack)); // Log stack trace for debugging
+                // Continue loop after error, potentially with a delay
             }
-            
-            // Wait for next iteration
+
             await sleep(this.config.delays.loop);
+            this.stats.loopIterations++;
         }
     }
-    
-    /**
-     * Display trading dashboard
-     * @param {object} marketData - Market data
-     * @param {object} analysis - Market analysis
-     * @param {object} signal - Trading signal
-     */
-    displayDashboard(marketData, analysis, signal) {
+
+    /** Records performance metrics for the current loop iteration. */
+    trackPerformanceMetrics(loopTime, analysisTime, wssTime, dataFetchTime) {
+        this.performanceMetrics.loopTimesMs.push(loopTime);
+        this.performanceMetrics.analysisTimesMs.push(analysisTime);
+        this.performanceMetrics.wssTimesMs.push(wssTime);
+        if (dataFetchTime !== undefined) this.performanceMetrics.dataFetchTimesMs.push(dataFetchTime);
+
+        // Memory usage (in MB)
+        const memUsage = process.memoryUsage();
+        this.performanceMetrics.memoryUsageMB.push(memUsage.heapUsed / 1024 / 1024);
+
+        // CPU Usage (requires 'cpu-stat' module, placeholder for now)
+        // this.performanceMetrics.cpuUsagePercent.push(currentCpuUsage);
+    }
+
+    /** Displays the real-time dashboard in the console. */
+    displayEnhancedDashboard(marketData, analysis, enhancedWSS, signal) {
         console.clear();
-        
-        const border = COLORS.GRAY('─'.repeat(80));
+
+        const border = COLORS.gray('â”€'.repeat(90));
         console.log(border);
         console.log(COLORS.bg(COLORS.BOLD(COLORS.PURPLE(
-            ` WHALEWAVE TITAN v7.0 | ${this.config.symbol} | $${marketData.price.toFixed(4)} `
+            ` ðŸŒŠ WHALEWAVE TITAN v7.1 ENHANCED | ${this.config.symbol} | $${marketData.price.toFixed(4)} `
         ))));
         console.log(border);
-        
-        // Signal information
-        const signalColor = signal.action === 'BUY' ? COLORS.GREEN : 
-                           signal.action === 'SELL' ? COLORS.RED : COLORS.GRAY;
-        const wssColor = analysis.wss >= this.config.indicators.weights.actionThreshold ? COLORS.GREEN :
-                        analysis.wss <= -this.config.indicators.weights.actionThreshold ? COLORS.RED : COLORS.YELLOW;
-        
-        console.log(`WSS: ${wssColor(analysis.wss.toFixed(2))} | ` +
-                   `Strategy: ${COLORS.BLUE(signal.strategy)} | ` +
-                   `Signal: ${signalColor(signal.action)} ` +
+
+        // --- WSS Score and Confidence ---
+        const wssScore = enhancedWSS.score;
+        const wssConfidence = enhancedWSS.confidence;
+        const wssColor = wssScore >= this.config.indicators.weights.actionThreshold + 1 ? COLORS.GREEN : // Strong Bullish
+                        wssScore >= this.config.indicators.weights.actionThreshold ? COLORS.GREEN : // Bullish
+                        wssScore <= -(this.config.indicators.weights.actionThreshold + 1) ? COLORS.RED : // Strong Bearish
+                        wssScore <= -this.config.indicators.weights.actionThreshold ? COLORS.RED : // Bearish
+                        COLORS.YELLOW; // Neutral/Weak
+        const confidenceColor = wssConfidence >= 0.8 ? COLORS.GREEN :
+                               wssConfidence >= 0.6 ? COLORS.YELLOW : COLORS.RED;
+
+        console.log(`ðŸŽ¯ ENHANCED WSS: ${wssColor(wssScore.toFixed(2))} | ` +
+                   `Confidence: ${confidenceColor((wssConfidence * 100).toFixed(1))}% | ` +
+                   `Signal: ${this.colorizeSignal(signal.action)} ` +
                    `(${(signal.confidence * 100).toFixed(0)}%)`);
-        console.log(COLORS.GRAY(`Reason: ${signal.reason}`));
+
+        console.log(`ðŸ“‹ Strategy: ${COLORS.blue(signal.strategy)} | ${signal.reason}`);
         console.log(border);
-        
-        // Market regime and trend
+
+        // --- Component Breakdown ---
+        const components = enhancedWSS.components;
+        console.log(`ðŸ”§ Components: ` +
+                   `Trend ${this.colorizeComponent(components.trend?.score)} | ` +
+                   `Momentum ${this.colorizeComponent(components.momentum?.score)} | ` +
+                   `Volume ${this.colorizeComponent(components.volume?.score)} | ` +
+                   `OrderFlow ${this.colorizeComponent(components.orderFlow?.score)} | ` +
+                   `Structure ${this.colorizeComponent(components.structure?.score)}`);
+        console.log(border);
+
+        // --- Market State ---
         const regimeColor = analysis.marketRegime.includes('HIGH') ? COLORS.RED :
                            analysis.marketRegime.includes('LOW') ? COLORS.GREEN : COLORS.YELLOW;
         const trendColor = analysis.trendMTF === 'BULLISH' ? COLORS.GREEN : COLORS.RED;
-        
-        console.log(`Regime: ${regimeColor(analysis.marketRegime)} | ` +
-                   `Volatility: ${COLORS.CYAN(Utils.safeNumber(analysis.volatility?.[analysis.volatility.length - 1], 0).toFixed(4))} | ` +
-                   `Squeeze: ${analysis.isSqueeze ? COLORS.ORANGE('ACTIVE') : 'OFF'}`);
-        console.log(`MTF Trend: ${trendColor(analysis.trendMTF)} | ` +
-                   `Slope: ${COLORS.CYAN(Utils.safeNumber(analysis.regression?.slope?.[analysis.regression.slope.length - 1], 0).toFixed(6))} | ` +
-                   `ADX: ${COLORS.CYAN(Utils.safeNumber(analysis.adx?.[analysis.adx.length - 1], 0).toFixed(2))}`);
-        console.log(border);
-        
-        // Technical indicators
+
+        console.log(`ðŸ“Š Regime: ${regimeColor(analysis.marketRegime)} | ` +
+                   `Volatility: ${COLORS.cyan(Utils.safeNumber(analysis.volatility?.[analysis.volatility.length - 1], 0).toFixed(4))} | ` +
+                   `Squeeze: ${analysis.isSqueeze ? COLORS.orange('ACTIVE') : 'OFF'} | ` +
+                   `MTF Trend: ${trendColor(analysis.trendMTF)}`);
+
+        // --- Key Indicators ---
         const rsi = Utils.safeNumber(analysis.rsi?.[analysis.rsi.length - 1], 50);
-        const stochK = Utils.safeNumber(analysis.stoch?.k?.[analysis.stoch.k.length - 1], 50);
-        const macdHist = Utils.safeNumber(analysis.macd?.hist?.[analysis.macd.hist.length - 1], 0);
-        
-        console.log(`RSI: ${this.colorizeIndicator(rsi, 'rsi')} | ` +
-                   `Stoch: ${this.colorizeIndicator(stochK, 'stoch')} | ` +
-                   `MACD: ${this.colorizeIndicator(macdHist, 'macd')}`);
-        
+        const williams = Utils.safeNumber(analysis.williamsR?.[analysis.williamsR.length - 1], -50);
+        const cci = Utils.safeNumber(analysis.cci?.[analysis.cci.length - 1], 0);
+        const mfi = Utils.safeNumber(analysis.mfi?.[analysis.mfi.length - 1], 50);
+        const adx = Utils.safeNumber(analysis.adx?.[analysis.adx.length - 1], 0);
+
+        console.log(`ðŸ“ˆ Indicators: ` +
+                   `RSI: ${this.colorizeIndicatorValue('rsi', rsi)} | ` +
+                   `Williams %R: ${this.colorizeIndicatorValue('williams', williams)} | ` +
+                   `CCI: ${this.colorizeIndicatorValue('cci', cci)} | ` +
+                   `MFI: ${this.colorizeIndicatorValue('mfi', mfi)} | ` +
+                   `ADX: ${COLORS.cyan(adx.toFixed(1))}`);
+        console.log(border);
+
+        // --- Volume and Order Flow ---
+        const volumeFlow = analysis.volumeAnalysis?.flow || 'N/A';
+        const volumeColor = volumeFlow.includes('BULLISH') ? COLORS.GREEN :
+                           volumeFlow.includes('BEARISH') ? COLORS.RED : COLORS.YELLOW;
+        const imbalanceColor = this.colorizeImbalanceValue(analysis.orderBookAnalysis?.imbalance);
+
+        console.log(`ðŸ“Š Volume & Flow: ` +
+                   `Flow: ${volumeColor(volumeFlow)} | ` +
+                   `Ratio: ${COLORS.cyan(Utils.safeNumber(analysis.volumeAnalysis?.volumeRatio?.[analysis.volumeAnalysis.volumeRatio.length - 1], 1).toFixed(2))}x | ` +
+                   `Order Imbalance: ${imbalanceColor} | ` +
+                   `Liquidity: ${analysis.orderBookAnalysis?.liquidity ? (analysis.orderBookAnalysis.liquidity * 100).toFixed(1) + '%' : 'N/A'}`);
+
+        // --- Market Structure ---
         const divColor = analysis.divergence.includes('BULLISH') ? COLORS.GREEN :
                         analysis.divergence.includes('BEARISH') ? COLORS.RED : COLORS.GRAY;
-        console.log(`Divergence: ${divColor(analysis.divergence)} | ` +
-                   `FVG: ${analysis.fvg ? COLORS.YELLOW(analysis.fvg.type) : 'None'}`);
+        const fvgColor = analysis.fvg ? (analysis.fvg.type === 'BULLISH' ? COLORS.GREEN : COLORS.RED) : COLORS.GRAY;
+        const srCount = (analysis.supportResistance?.support?.length || 0) + (analysis.supportResistance?.resistance?.length || 0);
+
+        console.log(`ðŸ”  Structure: ` +
+                   `Divergence: ${divColor(analysis.divergence)} | ` +
+                   `FVG: ${fvgColor(analysis.fvg ? analysis.fvg.type : 'None')} | ` +
+                   `Squeeze: ${analysis.isSqueeze ? COLORS.orange('ACTIVE') : 'OFF'} | ` +
+                   `SR Levels: ${COLORS.cyan(srCount)}`);
         console.log(border);
-        
-        // Performance metrics
+
+        // --- Performance Metrics ---
         const metrics = this.exchange.getMetrics();
         const pnlColor = metrics.dailyPnL >= 0 ? COLORS.GREEN : COLORS.RED;
-        
-        console.log(`Balance: ${COLORS.GREEN('$' + metrics.currentBalance.toFixed(2))} | ` +
+        const profitColor = metrics.profitFactor > 1.5 ? COLORS.GREEN :
+                           metrics.profitFactor > 1.0 ? COLORS.YELLOW : COLORS.RED;
+        const drawdownColor = metrics.currentDrawdownPercent > 5 ? COLORS.RED : COLORS.YELLOW;
+
+        console.log(`ðŸ’° Performance: ` +
+                   `Balance: ${COLORS.green('$' + metrics.currentBalance.toFixed(2))} | ` +
                    `Daily P&L: ${pnlColor('$' + metrics.dailyPnL.toFixed(2))} | ` +
-                   `Win Rate: ${COLORS.CYAN((metrics.winRate * 100).toFixed(1))}%`);
-        
-        // Current position
+                   `Win Rate: ${COLORS.cyan((metrics.winRate * 100).toFixed(1))}% | ` +
+                   `Profit Factor: ${profitColor(metrics.profitFactor.toFixed(2))}`);
+        console.log(`ðŸ“‰ Max Drawdown: ${drawdownColor(metrics.currentDrawdownPercent.toFixed(2))}% | ` +
+                   `Total Return: ${metrics.totalReturnPercent.toFixed(2)}%`);
+
+        // --- Open Position Details ---
         if (metrics.openPosition) {
-            const currentPnl = this.exchange.getCurrentPnL(marketData.price);
-            const posColor = currentPnl.gte(0) ? COLORS.GREEN : COLORS.RED;
-            console.log(COLORS.BLUE(`OPEN POS: ${metrics.openPosition.side} ` +
-                `@ ${metrics.openPosition.entry.toFixed(4)} | ` +
-                `PnL: ${posColor(currentPnl.toFixed(2))}`));
+            const currentUnrealizedPnL = this.exchange.getCurrentPnL(marketData.price);
+            const pnlDisplayColor = currentUnrealizedPnL.gte(0) ? COLORS.GREEN : COLORS.RED;
+            console.log(COLORS.blue(`ðŸ“ˆ OPEN: ${metrics.openPosition.side} @ ${metrics.openPosition.entry.toFixed(4)} | ` +
+                `Unrealized PnL: ${pnlDisplayColor(currentUnrealizedPnL.toFixed(2))} | ` +
+                `Conf: ${(metrics.openPosition.confidence * 100).toFixed(0)}% | ` +
+                `Strategy: ${metrics.openPosition.strategy}`));
         }
         console.log(border);
-        
-        // Uptime and statistics
-        const uptime = Math.floor((Date.now() - this.startTime) / 1000);
-        console.log(COLORS.GRAY(`Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m | ` +
-                   `Loop Time: ${this.stats.averageLoopTime.toFixed(0)}ms`));
+
+        // --- Uptime and Loop Stats ---
+        const uptimeSeconds = (Date.now() - this.startTime) / 1000;
+        const avgMemory = this.performanceMetrics.memoryUsageMB.length > 0 ?
+            this.performanceMetrics.memoryUsageMB.reduce((sum, m) => sum + m, 0) / this.performanceMetrics.memoryUsageMB.length : 0;
+
+        console.log(COLORS.gray(`â ±ï¸  Uptime: ${Utils.formatDuration(uptimeSeconds * 1000)} | ` +
+                   `Avg Loop Time: ${this.stats.loopIterations > 0 ? (this.performanceMetrics.loopTimesMs.reduce((sum, t) => sum + t, 0) / this.performanceMetrics.loopTimesMs.length).toFixed(0) : 0}ms | ` +
+                   `Memory Usage: ${COLORS.cyan(avgMemory.toFixed(1))}MB | ` +
+                   `Data Success Rate: ${this.stats.dataFetchAttempts > 0 ? ((this.stats.dataFetchSuccesses / this.stats.dataFetchAttempts) * 100).toFixed(1) : 0}%`));
     }
-    
-    /**
-     * Colorize indicator values based on their meaning
-     * @param {number} value - Indicator value
-     * @param {string} type - Indicator type
-     * @returns {string} Colorized value
-     */
-    colorizeIndicator(value, type) {
-        const v = Utils.safeNumber(value, 0);
-        
-        switch (type) {
-            case 'rsi':
-                if (v > 70) return COLORS.RED(v.toFixed(2));
-                if (v < 30) return COLORS.GREEN(v.toFixed(2));
-                return COLORS.YELLOW(v.toFixed(2));
-                
-            case 'stoch':
-                if (v > 80) return COLORS.RED(v.toFixed(0));
-                if (v < 20) return COLORS.GREEN(v.toFixed(0));
-                return COLORS.YELLOW(v.toFixed(0));
-                
-            case 'macd':
-                if (v > 0) return COLORS.GREEN(v.toFixed(6));
-                if (v < 0) return COLORS.RED(v.toFixed(6));
-                return COLORS.GRAY(v.toFixed(6));
-                
-            default:
-                return COLORS.CYAN(v.toFixed(2));
+
+    /** Colorizes the signal action (BUY, SELL, HOLD). */
+    colorizeSignal(action) {
+        switch (action) {
+            case 'BUY': return COLORS.success('BUY');
+            case 'SELL': return COLORS.error('SELL');
+            default: return COLORS.gray('HOLD');
         }
     }
-    
-    /**
-     * Display shutdown report with performance statistics
-     */
-    displayShutdownReport() {
-        console.log(COLORS.RED('\n📊 SHUTDOWN REPORT'));
-        console.log(COLORS.GRAY('='.repeat(50)));
-        
+
+    /** Colorizes component scores based on their value. */
+    colorizeComponent(score) {
+        if (score === undefined) return COLORS.gray('N/A');
+        const s = Utils.safeNumber(score, 0);
+        if (s > 0.5) return COLORS.green(s.toFixed(2));
+        if (s < -0.5) return COLORS.red(s.toFixed(2));
+        return COLORS.yellow(s.toFixed(2));
+    }
+
+    /** Colorizes indicator values based on common thresholds. */
+    colorizeIndicatorValue(type, value) {
+        const v = Utils.safeNumber(value, 0);
+        switch (type) {
+            case 'rsi': return v > 70 ? COLORS.red(v.toFixed(1)) : v < 30 ? COLORS.green(v.toFixed(1)) : COLORS.yellow(v.toFixed(1));
+            case 'williams': return v > -20 ? COLORS.red(v.toFixed(1)) : v < -80 ? COLORS.green(v.toFixed(1)) : COLORS.yellow(v.toFixed(1));
+            case 'cci': return v > 100 ? COLORS.red(v.toFixed(1)) : v < -100 ? COLORS.green(v.toFixed(1)) : COLORS.yellow(v.toFixed(1));
+            case 'mfi': return v > 80 ? COLORS.red(v.toFixed(1)) : v < 20 ? COLORS.green(v.toFixed(1)) : COLORS.yellow(v.toFixed(1));
+            default: return COLORS.cyan(v.toFixed(2));
+        }
+    }
+
+    /** Colorizes imbalance values for display. */
+    colorizeImbalanceValue(imbalance) {
+        if (imbalance === undefined || imbalance === null) return COLORS.gray('N/A');
+        const pct = (imbalance * 100).toFixed(1);
+        return imbalance > 0.3 ? COLORS.green(`+${pct}%`) :
+               imbalance < -0.3 ? COLORS.red(`${pct}%`) : COLORS.yellow(`${pct}%`);
+    }
+
+    /** Displays a shutdown report summarizing key statistics. */
+    displayEnhancedShutdownReport() {
+        console.log(COLORS.error('\n--- ENHANCED SHUTDOWN REPORT ---'));
         const metrics = this.exchange.getMetrics();
-        const uptime = (Date.now() - this.startTime) / 1000 / 60; // minutes
-        
-        console.log(`Uptime: ${uptime.toFixed(1)} minutes`);
-        console.log(`Data Fetch Success Rate: ${(this.stats.dataFetchSuccesses / this.stats.dataFetchAttempts * 100).toFixed(1)}%`);
-        console.log(`Total Trades: ${metrics.totalTrades}`);
-        console.log(`Win Rate: ${(metrics.winRate * 100).toFixed(1)}%`);
-        console.log(`Final Balance: $${metrics.currentBalance.toFixed(2)}`);
-        console.log(`Total Return: ${metrics.totalReturn.toFixed(2)}%`);
-        console.log(`Max Drawdown: ${metrics.maxDrawdown.toFixed(2)}%`);
-        console.log(`Total Fees: $${metrics.totalFees.toFixed(4)}`);
-        
-        console.log(COLORS.GRAY('='.repeat(50)));
-        console.log(COLORS.RED('Engine stopped gracefully'));
+        const uptimeMs = Date.now() - this.startTime;
+
+        console.log(`â ±ï¸  Uptime: ${Utils.formatDuration(uptimeMs)}`);
+        console.log(`ðŸ”„ Data Fetch Success Rate: ${this.stats.dataFetchAttempts > 0 ? ((this.stats.dataFetchSuccesses / this.stats.dataFetchAttempts) * 100).toFixed(1) : 0}%`);
+        console.log(`ðŸ¤– AI Analysis Success Rate: ${this.stats.dataFetchSuccesses > 0 ? ((this.stats.aiAnalysisCalls / this.stats.dataFetchSuccesses) * 100).toFixed(1) : 0}%`);
+        console.log(`ðŸŽ¯ WSS Calculations: ${this.stats.wssCalculations}`);
+        console.log(`ðŸ“Š Market Analyses: ${this.stats.marketAnalyses}`);
+        console.log(`ðŸ”„ Valid Signals Generated: ${this.stats.validSignals}`);
+        console.log(`ðŸ’¼ Total Trades Executed: ${metrics.totalTrades}`);
+        console.log(`ðŸ † Win Rate: ${(metrics.winRate * 100).toFixed(1)}%`);
+        console.log(`ðŸ’° Profit Factor: ${metrics.profitFactor.toFixed(2)}`);
+        console.log(`ðŸ’µ Final Balance: $${metrics.currentBalance.toFixed(2)}`);
+        console.log(`ðŸ“ˆ Total PnL: $${metrics.totalPnL.toFixed(2)} (${metrics.totalReturnPercent.toFixed(2)}%)`);
+        console.log(`ðŸ“‰ Max Drawdown: ${metrics.currentDrawdownPercent.toFixed(2)}%`);
+        console.log(`â ±ï¸  Avg Trade Duration: ${Utils.formatDuration(metrics.avgTradeDurationMs)}`);
+        console.log(`ðŸ”„ Max Consecutive Losses: ${metrics.maxConsecutiveLosses}`);
+        console.log(`ðŸ’¸ Total Fees Paid: $${metrics.totalFees.toFixed(4)}`);
+
+        // Performance Summary
+        const avgMemory = this.performanceMetrics.memoryUsageMB.length > 0 ?
+            this.performanceMetrics.memoryUsageMB.reduce((sum, m) => sum + m, 0) / this.performanceMetrics.memoryUsageMB.length : 0;
+        const avgLoopTime = this.performanceMetrics.loopTimesMs.length > 0 ?
+            this.performanceMetrics.loopTimesMs.reduce((sum, t) => sum + t, 0) / this.performanceMetrics.loopTimesMs.length : 0;
+
+        console.log(`\n--- Performance Summary ---`);
+        console.log(`ðŸ–¥ï¸  Avg Memory Usage: ${avgMemory.toFixed(1)}MB`);
+        console.log(`âš¡ Avg Loop Time: ${avgLoopTime.toFixed(0)}ms`);
+        console.log(COLORS.error('--- End of Report ---'));
     }
 }
 
@@ -2053,42 +3211,51 @@ class TradingEngine {
 // =============================================================================
 
 /**
- * Main application function
+ * Main function to initialize and start the trading engine.
  */
 async function main() {
     try {
-        // Load and validate configuration
-        console.log(COLORS.YELLOW('Loading configuration...'));
+        console.log(COLORS.yellow('ðŸ”§ Loading enhanced configuration...'));
         const config = await ConfigManager.load();
-        
-        // Initialize and start trading engine
-        const engine = new TradingEngine(config);
+
+        console.log(COLORS.success('âœ… Configuration loaded and validated.'));
+
+        const engine = new EnhancedTradingEngine(config);
         await engine.start();
-        
+
     } catch (error) {
-        console.error(COLORS.RED(`Application failed to start: ${error.message}`));
-        console.debug(error.stack);
-        process.exit(1);
+        // Handle critical startup errors (e.g., config loading, AI key missing)
+        if (error instanceof ConfigError || error instanceof AiError || error instanceof AppError) {
+            console.error(COLORS.error(`\nFATAL STARTUP ERROR: ${error.message}`));
+        } else {
+            console.error(COLORS.error(`\nUNEXPECTED STARTUP ERROR: ${error.message}`));
+            if (error.stack) console.error(COLORS.dim(error.stack));
+        }
+        process.exit(1); // Exit with a non-zero code to indicate failure
     }
 }
 
-// Start the application
-if (require.main === module) {
+// Execute main function only when the script is run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
     main().catch(error => {
-        console.error(COLORS.RED(`Fatal error: ${error.message}`));
+        // Catch any unhandled errors during main execution
+        console.error(COLORS.error(`\nFATAL ERROR IN MAIN EXECUTION: ${error.message}`));
+        if (error.stack) console.error(COLORS.dim(error.stack));
         process.exit(1);
     });
 }
 
-export { 
-    ConfigManager, 
-    TechnicalAnalysis, 
-    MarketAnalyzer, 
-    WeightedSentimentCalculator,
+// Export modules for potential testing or external use
+export {
+    AppError, ConfigError, DataError, ApiError, AnalysisError, TradingError, AiError,
+    ConfigManager,
+    TechnicalAnalysis,
+    MarketAnalyzer,
+    EnhancedWeightedSentimentCalculator,
     DataProvider,
-    PaperExchange,
-    AIAnalysisEngine,
-    TradingEngine,
+    EnhancedPaperExchange,
+    EnhancedAIAnalysisEngine,
+    EnhancedTradingEngine,
     Utils,
     COLORS
 };

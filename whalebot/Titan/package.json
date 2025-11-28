@@ -4,6 +4,7 @@
   "private": true,
   "description": "Professional-grade cryptocurrency trading bot with AI analysis and comprehensive risk management",
   "main": "whalewave_titan_refactored.js",
+
   "type": "module",
   "scripts": {
     "start": "node whalewave_titan_refactored.js",

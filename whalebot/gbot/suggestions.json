@@ -1,0 +1,53 @@
+
+[
+  {
+    "id": 1,
+    "code_snippet": "function greet(name) { console.log(`Hello, ${name}!`); } greet('World');",
+    "description": "A simple JavaScript function to greet a person by name."
+  },
+  {
+    "id": 2,
+    "code_snippet": "const numbers = [1, 2, 3, 4, 5]; const doubled = numbers.map(num => num * 2); console.log(doubled);",
+    "description": "JavaScript array map function to double each element in an array."
+  },
+  {
+    "id": 3,
+    "code_snippet": "for (let i = 0; i < 5; i++) { console.log(`Iteration number ${i}`); }",
+    "description": "A basic for loop in JavaScript that iterates 5 times."
+  },
+  {
+    "id": 4,
+    "code_snippet": "const person = { name: 'Alice', age: 30 }; console.log(person.name);",
+    "description": "JavaScript object literal and accessing its properties."
+  },
+  {
+    "id": 5,
+    "code_snippet": "const isAdult = age => age >= 18; console.log(isAdult(25)); console.log(isAdult(15));",
+    "description": "Arrow function in JavaScript to check if a person is an adult."
+  },
+  {
+    "id": 6,
+    "code_snippet": "let result = 10 + 5 * 2; console.log(result); // Output: 20",
+    "description": "Basic arithmetic operations in JavaScript, demonstrating order of operations."
+  },
+  {
+    "id": 7,
+    "code_snippet": "const fruits = ['apple', 'banana', 'cherry']; if (fruits.includes('banana')) { console.log('Banana is in the list!'); }",
+    "description": "JavaScript array includes method to check for the presence of an element."
+  },
+  {
+    "id": 8,
+    "code_snippet": "function factorial(n) { return n <= 1 ? 1 : n * factorial(n - 1); } console.log(factorial(5));",
+    "description": "Recursive JavaScript function to calculate the factorial of a number."
+  },
+  {
+    "id": 9,
+    "code_snippet": "const numbers = [10, 20, 30, 40]; const sum = numbers.reduce((accumulator, currentValue) => accumulator + currentValue, 0); console.log(sum);",
+    "description": "JavaScript array reduce method to calculate the sum of array elements."
+  },
+  {
+    "id": 10,
+    "code_snippet": "setTimeout(() => { console.log('This message appears after 2 seconds.'); }, 2000);",
+    "description": "JavaScript setTimeout function to execute code after a delay."
+  }
+]

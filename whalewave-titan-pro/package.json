@@ -1,0 +1,28 @@
+{
+  "name": "whalewave-titan-pro",
+  "version": "7.0.0",
+  "description": "Integrated Quantitative + AI Trading Engine",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "trade": "node engine.js",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.13.0",
+    "axios": "^1.6.8",
+    "chalk": "^5.3.0",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "timers": "^0.1.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {}
+  }
+}
