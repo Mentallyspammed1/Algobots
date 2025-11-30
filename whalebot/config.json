@@ -1,6 +1,6 @@
 {
     "symbol": "BCHUSDT",
-    "interval": "5",
+    "interval": "1",
     "loop_delay": 15,
     "orderbook_limit": 50,
     "signal_score_threshold": 1.0,
@@ -9,9 +9,9 @@
         "enabled": true,
         "account_balance": 1000.0,
         "risk_per_trade_percent": 1.0,
-        "stop_loss_atr_multiple": 1.5,
-        "take_profit_atr_multiple": 2.0,
-        "max_open_positions": 1,
+        "stop_loss_atr_multiple": 3.5,
+        "take_profit_atr_multiple": 2.1,
+        "max_open_positions": 3,
         "order_precision": 5,
         "price_precision": 3,
         "slippage_percent": 0.001,
@@ -20,14 +20,14 @@
     "mtf_analysis": {
         "enabled": true,
         "higher_timeframes": [
-            "60",
-            "240"
+            "5",
+            "15"
         ],
         "trend_indicators": [
             "ema",
             "ehlers_supertrend"
         ],
-        "trend_period": 50,
+        "trend_period": 20,
         "mtf_request_delay_seconds": 0.5
     },
     "ml_enhancement": {
@@ -60,12 +60,12 @@
         "mfi_period": 14,
         "psar_acceleration": 0.02,
         "psar_max_acceleration": 0.2,
-        "sma_short_period": 10,
-        "sma_long_period": 50,
-        "fibonacci_window": 60,
+        "sma_short_period": 8,
+        "sma_long_period": 22,
+        "fibonacci_window": 100,
         "ehlers_fast_period": 10,
         "ehlers_fast_multiplier": 2.0,
-        "ehlers_slow_period": 20,
+        "ehlers_slow_period": 22,
         "ehlers_slow_multiplier": 3.0,
         "macd_fast_period": 12,
         "macd_slow_period": 26,
