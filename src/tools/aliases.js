@@ -1,0 +1,20 @@
+module.exports = [
+    { name: 'upload', target: 'write_file' },
+    { name: 'download', target: 'read_file' },
+    { name: 'cat', target: 'read_file' },
+    { name: 'ls', target: 'list_directory' },
+    { name: 'rm', target: 'delete_file' },
+    { name: 'rmdir', target: 'delete_directory' },
+    { name: 'mkdir', target: 'make_directory' },
+    { name: 'touch', target: 'touch_file' },
+    { name: 'mv', target: 'rename_path' },
+    { name: 'cp', target: 'copy_path' },
+    { name: 'analyze', target: 'analyze_file' },
+    { name: 'edit', target: 'edit_file' },
+    { name: 'chmod', target: 'change_permissions' },
+    { name: 'chown', target: 'change_owner' },
+    { name: 'toast', target: 'termux_toast' },
+    { name: 'vibrate', target: 'termux_vibrate' },
+    { name: 'clipboard_get', target: 'termux_clipboard_get' },
+    { name: 'clipboard_set', target: 'termux_clipboard_set' }
+];
