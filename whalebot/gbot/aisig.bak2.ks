@@ -1,10 +1,10 @@
 /**
- * 🌊 WHALEWAVE PRO - LEVIATHAN v2.3 (HYBRID TRIGGER HUD)
- * ======================================================
- * - Finalized Hybrid Trigger Logic
- * - Enhanced HUD with Fisher, ATR, Imbalance, AI Entry/Vol
- * - All previous V2.2+ features integrated (Risk Sizing, Iceberg,
-Filters, etc.)
+ * 🌊 WHALEWAVE PRO - LEVIATHAN v2.2 (HUD ENHANCED)
+ * ================================================
+ * - Feature: Expanded HUD (Fisher, ATR, Imbalance)
+ * - Fixed: Bybit V5 Ticker Parsing
+ * - Fixed: Gemini JSON Markdown Stripping
+ * - Core: Latency & Circuit Breaker Protection
  */
 
 import axios from 'axios';
@@ -43,7 +43,7 @@ class ConfigManager {
         limits: { kline: 300, orderbook: 20 },
         delays: { loop: 3000, retry: 2000, wsReconnect: 1000 },
         ai: { 
-            model: 'gemini-1.5-flash', 
+            model: 'gemini-2.5-flash-flash', 
             minConfidence: 0.85,
             maxTokens: 300
         },
@@ -245,7 +245,7 @@ class AIBrain {
         this.config = config.ai;
         this.model = new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({ 
             model: this.config.model,
-            generationConfig: { responseMimeType: "application/json", maxOutputTokens: this.config.maxTokens }
+            generationConfig: { responseMimeType: "application/json" }
         });
     }
 
@@ -270,24 +270,16 @@ class AIBrain {
             "confidence": 0.0 to 1.0,
             "sl": number,
             "tp": number,
-            "reason": "Short string explanation",
-            "volatilityForecast": "HIGH" | "MEDIUM" | "LOW",
-            "optimalEntry": number
+            "reason": "Short string explanation"
         }`;
 
         try {
             const result = await this.model.generateContent(prompt);
             let rawText = result.response.text();
             rawText = rawText.replace(/```json|```/g, '').trim();
-            
-            let signal = JSON.parse(rawText);
-            // Add default fields if AI fails to generate them (safety for engine)
-            signal.aiEntry = signal.optimalEntry || 0; 
-            if (!['HIGH', 'MEDIUM', 'LOW'].includes(signal.volatilityForecast)) signal.volatilityForecast = 'MEDIUM';
-
-            return signal;
+            return JSON.parse(rawText);
         } catch (e) {
-            return { action: "HOLD", confidence: 0, volatilityForecast: 'MEDIUM', aiEntry: 0 };
+            return { action: "HOLD", confidence: 0 };
         }
     }
 }
@@ -299,9 +291,9 @@ class MarketData {
         this.onUpdate = onUpdate;
         this.ws = null;
         this.buffers = {
-            scalping: [], 
-            main: [],     
-            trend: []     
+            scalping: [], // 1m
+            main: [],     // 5m
+            trend: []     // 15m
         };
         this.lastPrice = 0;
         this.orderbook = { bids: [], asks: [] };
@@ -366,10 +358,10 @@ class MarketData {
                     this.onUpdate('price');
                 }
             } else if (msg.topic?.startsWith('orderbook')) {
-                const frame = Array.isArray(msg.data) ? msg.data[0] : msg.data;
-                // Use isReady check to determine snapshot vs delta
-                const isSnapshot = !this.orderbook.bids.length || msg.type === 'snapshot'; 
-                this.onUpdate({ type: isSnapshot ? 'snapshot' : 'delta', bids: frame.b, asks: frame.a }, isSnapshot);
+                if (msg.type === 'snapshot') {
+                    this.orderbook.bids = msg.data.b.map(x=>({p:parseFloat(x[0]), q:parseFloat(x[1])}));
+                    this.orderbook.asks = msg.data.a.map(x=>({p:parseFloat(x[0]), q:parseFloat(x[1])}));
+                }
             } else if (msg.topic?.startsWith('kline')) {
                 const k = msg.data[0];
                 const interval = msg.topic.split('.')[1];
@@ -402,256 +394,97 @@ class MarketData {
     }
 }
 
-// === ORDERBOOK PROCESSOR ===
-class OrderbookProcessor {
+// === EXECUTION ENGINE ===
+class Exchange {
     constructor(config) {
-        this.config = config;
-        this.snapshot = { bids: [], asks: [] };
-        this.isReady = false;
-    }
-
-    process(orderbook, isSnapshot) {
-        if (isSnapshot) {
-            this.snapshot = orderbook;
-            this.isReady = true;
-        } else if (this.isReady) {
-            // Full merge logic would go here to apply deltas to snapshot
-            // For simplicity, we rely on the MarketData class to pass a full book snapshot often enough
-            // For now, we just update if it's a snapshot or if we have processed one before
-        }
-        return this.analysis();
-    }
-
-    analysis() {
-        const bidTotal = this.snapshot.bids.reduce((sum, b) => sum + b.q, 0);
-        const askTotal = this.snapshot.asks.reduce((sum, a) => sum + a.q, 0);
-        const imbalance = (bidTotal - askTotal) / (bidTotal + askTotal || 1);
-        const midPrice = (this.snapshot.bids[0]?.p || 0 + this.snapshot.asks[0]?.p || 0) / 2;
-        return { imbalance, midPrice, bidSize: bidTotal, askSize: askTotal };
-    }
-}
-
-// === EXCHANGE BASE CLASSES ===
-class BaseExchange {
-    getBalance() { return this.balance; }
-    getPos() { return this.pos; }
-}
-
-class LiveBybitExchange extends BaseExchange {
-    constructor(config) {
-        super();
         this.config = config;
         this.symbol = config.symbol;
-        this.apiKey = process.env.BYBIT_API_KEY;
-        this.apiSecret = process.env.BYBIT_API_SECRET;
-        if (!this.apiKey || !this.apiSecret) { console.error(COLOR.RED("[LiveBybitExchange] MISSING BYBIT API KEYS. Exiting.")); process.exit(1); }
-        this.client = axios.create({ baseURL: 'https://api.bybit.com'});
-        this.pos = null;
-        this.balance = 0;
-        this.updateWallet();
+        this.isLive = config.live_trading;
+        
+        if (this.isLive) {
+            this.client = axios.create({ baseURL: 'https://api.bybit.com' });
+            this.apiKey = process.env.BYBIT_API_KEY;
+            this.apiSecret = process.env.BYBIT_API_SECRET;
+        }
+
+        // Paper state
+        this.balance = 10000;
+        this.position = null;
+        this.lastPrice = 0; 
     }
 
-    async signRequest(method, endpoint, params) {
+    async getSignature(params) {
         const ts = Date.now().toString();
         const recvWindow = '5000';
-        const payload = method === 'GET' ? new URLSearchParams(params).toString() : JSON.stringify(params);
+        const payload = JSON.stringify(params);
         const signStr = ts + this.apiKey + recvWindow + payload;
-        const signature = crypto.createHmac('sha256', this.apiSecret).update(signStr).digest('hex');
-        return {
-            'X-BAPI-API-KEY': this.apiKey, 'X-BAPI-TIMESTAMP': ts, 'X-BAPI-SIGN': signature,
-            'X-BAPI-RECV-WINDOW': recvWindow, 'Content-Type': 'application/json'
-        };
+        return crypto.createHmac('sha256', this.apiSecret).update(signStr).digest('hex');
     }
 
-    async apiCall(method, endpoint, params = {}) {
-        const headers = await this.signRequest(method, endpoint, params);
+    async execute(action, qty, sl, tp) {
+        if (!this.isLive) {
+            const entry = this.lastPrice;
+            this.position = { action, qty, entry, sl, tp };
+            console.log(COLOR.GREEN(`[PAPER] Executed ${action} ${qty} @ ${entry.toFixed(2)}`));
+            return true;
+        }
+
         try {
-            const res = method === 'GET'
-                ? await this.client.get(endpoint, { headers, params })
-                : await this.client.post(endpoint, params, { headers });
-            if (res.data.retCode !== 0) throw new Error(`Bybit API Error ${res.data.retCode}: ${res.data.retMsg}`);
-            return res.data.result;
-        } catch (e) {
-            console.error(COLOR.RED(`[LiveBybitExchange] API Call Error (${method} ${endpoint} ${JSON.stringify(params)}): ${e.message}`));
-            return null;
-        }
-    }
+            const params = {
+                category: 'linear',
+                symbol: this.symbol,
+                side: action === 'BUY' ? 'Buy' : 'Sell',
+                orderType: 'Market',
+                qty: qty.toString(),
+                stopLoss: sl.toString(),
+                takeProfit: tp.toString(),
+                timeInForce: 'GTC'
+            };
 
-    async updateWallet() {
-        try {
-            const res = await this.apiCall('GET', '/v5/account/wallet-balance', { accountType: 'UNIFIED', coin: 'USDT' });
-            if (res && res.list && res.list[0]?.coin && res.list[0].coin[0]?.walletBalance) {
-                this.balance = parseFloat(res.list[0].coin[0].walletBalance);
-            }
-            // Simplified position retrieval for PnL tracking in HUD
-        } catch (e) {
-            console.error(COLOR.RED(`[LiveBybitExchange] Failed to update wallet/positions: ${e.message}`));
-            this.balance = 0;
-        }
-    }
+            const ts = Date.now().toString();
+            const sign = await this.getSignature(params);
+            
+            const res = await this.client.post('/v5/order/create', params, {
+                headers: {
+                    'X-BAPI-API-KEY': this.apiKey,
+                    'X-BAPI-TIMESTAMP': ts,
+                    'X-BAPI-SIGN': sign,
+                    'X-BAPI-RECV-WINDOW': '5000',
+                    'Content-Type': 'application/json'
+                }
+            });
 
-    async evaluate(price, signal) {
-        await this.updateWallet();
-        if (this.pos) {
-            if (signal.action !== 'HOLD' && signal.action !== this.pos.side) {
-                console.log(COLOR.YELLOW("[LiveBybitExchange] Signal Flip! Closing existing position..."));
-                await this.close(price);
-            }
-            return;
-        }
-        if (signal.action === 'HOLD') return;
-
-        const entry = new Decimal(price);
-        let sl = new Decimal(signal.sl !== undefined ? signal.sl : entry.mul(0.995));
-        let tp = new Decimal(signal.tp !== undefined ? signal.tp : entry.mul(1.0075));
-
-        // Ensure R/R > 1.5
-        const riskDistance = entry.sub(sl).abs();
-        const rewardDistance = tp.sub(entry).abs();
-
-        if (riskDistance.gt(0) && rewardDistance.div(riskDistance).lt(1.5)) {
-            if (signal.action === 'BUY') {
-                tp = entry.plus(riskDistance.mul(1.5));
+            if (res.data.retCode === 0) {
+                console.log(COLOR.GREEN(`[LIVE] Order Success: ${res.data.result.orderId}`));
+                return true;
             } else {
-                tp = entry.minus(riskDistance.mul(1.5));
+                console.error(COLOR.RED(`[LIVE] Order Failed: ${res.data.retMsg}`));
+                return false;
             }
-            if (tp.lt(0) || tp.eq(entry) || (signal.action === 'BUY' && tp.lt(entry)) || (signal.action === 'SELL' && tp.gt(entry))) {
-                 console.log(COLOR.GRAY(`[LiveBybitExchange] Adjusted TP out of bounds. Holding trade.`));
-                 return;
-            }
+        } catch (e) {
+            console.error(COLOR.RED(`[LIVE] Execution Error: ${e.message}`));
+            return false;
         }
-
-        const dist = entry.sub(sl).abs();
-        if (dist.eq(0)) {
-            console.warn(COLOR.YELLOW(`[LiveBybitExchange] Stop loss distance is zero. Holding.`));
-            return;
-        }
-
-        const qty = Utils.calcSize(this.balance, price, sl, this.config.risk.maxRiskPerTrade);
-        if (qty.lte(0)) return;
-
-        await this.apiCall('POST', '/v5/position/set-leverage', { category: 'linear', symbol: this.symbol, buyLeverage: this.config.risk.leverage, sellLeverage: this.config.risk.leverage });
-
-        const side = signal.action === 'BUY' ? 'Buy' : 'Sell';
-        const orderParams = {
-            category: 'linear', symbol: this.symbol, side, orderType: 'Market',
-            qty: qty.toString(), stopLoss: sl.toString(), takeProfit: tp.toString(), timeInForce: 'GTC'
-        };
-        const res = await this.apiCall('POST', '/v5/order/create', orderParams);
-
-        if (res) console.log(COLOR.GREEN(`[LiveBybitExchange] LIVE ORDER SENT: ${signal.action} ${qty.toString()}`));
-        else console.error(COLOR.RED(`[LiveBybitExchange] Failed to place live order.`));
     }
 
     async close(price) {
         if (!this.position) return 0;
         
         let pnl = 0;
-        // Live close logic omitted for brevity, rely on position tracker for PnL in live
-        console.log(COLOR.PURPLE(`[LIVE] Position Closed (manual close logic needed).`));
-        this.position = null;
-        return pnl;
+        if (!this.isLive) {
+            const diff = this.position.action === 'BUY' ? price - this.position.entry : this.position.entry - price;
+            pnl = diff * this.position.qty;
+            this.balance += pnl;
+            this.position = null;
+            console.log(COLOR.PURPLE(`[PAPER] Closed @ ${price.toFixed(2)} | PnL: ${pnl.toFixed(2)}`));
+            return pnl;
+        } else {
+            return 0; 
+        }
     }
 }
 
-// === PAPER EXCHANGE ===
-class PaperExchange extends BaseExchange {
-    constructor(config) {
-        super();
-        this.cfg = config.risk;
-        this.symbol = config.symbol;
-        this.balance = new Decimal(this.cfg.initialBalance);
-        this.startBal = this.balance;
-        this.pos = null;
-        this.lastPrice = 0;
-    }
-
-    evaluate(price, signal) {
-        const px = new Decimal(price);
-        this.lastPrice = price;
-
-        if (this.pos) {
-            const isFlip = signal.action !== 'HOLD' && signal.action !== this.pos.side;
-            const closeOnHold = signal.action === 'HOLD';
-            let slHit = false;
-            let tpHit = false;
-            if (this.pos.side === 'BUY') {
-                if (px.lte(this.pos.sl)) slHit = true;
-                if (px.gte(this.pos.tp)) tpHit = true;
-            } else { // SELL
-                if (px.gte(this.pos.sl)) slHit = true;
-                if (px.lte(this.pos.tp)) tpHit = true;
-            }
-
-            if (isFlip || closeOnHold || slHit || tpHit) {
-                let reason = '';
-                if (isFlip) reason = 'SIGNAL_FLIP';
-                else if (closeOnHold) reason = 'HOLD_EXIT';
-                else if (slHit) reason = 'STOP_LOSS_HIT';
-                else if (tpHit) reason = 'TAKE_PROFIT_HIT';
-                const pnl = this.close(px, reason);
-                if (pnl !== 0) this.parent.circuitBreaker.updatePnL(pnl);
-            }
-            return;
-        }
-        if (signal.action === 'HOLD') return;
-        if ((signal.confidence || 0) < this.config.minConfidence) return;
-
-        this.open(px, signal);
-    }
-
-    open(price, sig) {
-        const entry = new Decimal(price);
-        let sl = new Decimal(sig.sl !== undefined ? sig.sl : entry.mul(0.995));
-        let tp = new Decimal(sig.tp !== undefined ? sig.tp : entry.mul(1.0075));
-
-        // Ensure R/R > 1.5
-        const riskDistance = entry.sub(sl).abs();
-        const rewardDistance = tp.sub(entry).abs();
-
-        if (riskDistance.gt(0) && rewardDistance.div(riskDistance).lt(this.cfg.rewardRatio)) {
-            if (sig.action === 'BUY') {
-                tp = entry.plus(riskDistance.mul(this.cfg.rewardRatio));
-            } else {
-                tp = entry.minus(riskDistance.mul(1.5));
-            }
-            if (tp.lt(0) || tp.eq(entry) || (sig.action === 'BUY' && tp.lt(entry)) || (sig.action === 'SELL' && tp.gt(entry))) {
-                console.log(COLOR.GRAY(`[PaperExchange] Adjusted TP out of bounds. Holding trade.`));
-                return;
-            }
-        }
-
-        const dist = entry.sub(sl).abs();
-        if (dist.eq(0)) {
-            console.warn(COLOR.YELLOW(`[PaperExchange] Stop loss distance is zero. Holding.`));
-            return;
-        }
-
-        const qty = Utils.calcSize(this.balance, price, sl, this.cfg.maxRiskPerTrade);
-        if (qty.lte(0)) {
-            console.warn(COLOR.YELLOW(`[PaperExchange] Calculated quantity is zero. Holding.`));
-            return;
-        }
-
-        this.pos = { side: sig.action, entry, qty, sl, tp, strategy: sig.strategy || 'PAPER' };
-        console.log(COLOR.GREEN(`[PaperExchange] PAPER OPEN ${sig.action} ${qty.toString()} @ ${entry.toFixed(2)}`));
-    }
-
-    close(price, reason) {
-        const p = this.pos;
-        if (!p) return 0;
-        const diff = p.action === 'BUY' ? price.sub(p.entry) : new Decimal(p.entry).sub(price);
-        const pnl = diff.mul(p.qty).mul(new Decimal(1).sub(this.cfg.fee).sub(this.cfg.slippage));
-        this.balance = this.balance.add(pnl);
-        const col = pnl.gte(0) ? COLOR.GREEN : COLOR.RED;
-        console.log(col(`[PaperExchange] ${reason}: PnL ${pnl.toFixed(2)} | New Bal: ${this.balance.toFixed(2)}`));
-        this.pos = null;
-        return pnl.toNumber();
-    }
-}
-
-
-// === MAIN ENGINE ===
+// === CORE CONTROLLER ===
 class Leviathan {
     constructor() {
         this.init();
@@ -659,26 +492,23 @@ class Leviathan {
 
     async init() {
         console.clear();
-        console.log(COLOR.bg(COLOR.BOLD(COLOR.ORANGE(' 🐋 LEVIATHAN v2.3: HUD ENHANCED '))));
+        console.log(COLOR.bg(COLOR.BOLD(COLOR.ORANGE(' 🐋 LEVIATHAN v2.2: HUD ENHANCED '))));
         
         this.config = await ConfigManager.load();
         this.circuitBreaker = new CircuitBreaker(this.config);
-        this.exchange = this.config.live_trading ? new LiveBybitExchange(this.config) : new PaperExchange(this.config);
+        this.exchange = new Exchange(this.config);
         this.ai = new AIBrain(this.config);
         this.data = new MarketData(this.config, (type) => this.onTick(type));
         
         this.isProcessing = false;
-        this.aiLastQueryTime = 0;
-        this.aiThrottleMs = 5000;
-        
         await this.data.start();
+        
         this.circuitBreaker.setBalance(this.exchange.balance);
     }
 
     async onTick(type) {
         const price = this.data.lastPrice;
-        // Safety Guard: Check Price, Kline type, buffer readiness, and Circuit Breaker
-        if (this.isProcessing || type !== 'kline' || !price || isNaN(price) || price === 0 || this.circuitBreaker.triggered) return;
+        if (this.isProcessing || type !== 'kline' || !price || isNaN(price) || price === 0) return;
         
         this.isProcessing = true;
         this.exchange.lastPrice = price; 
@@ -731,23 +561,9 @@ class Leviathan {
                 }
             }
 
-            // 5. HYBRID TRIGGER REFINEMENT
-            const now = Date.now();
-            const scoreThreshold = this.config.indicators.threshold;
-            const fisherSign = Math.sign(currentFisher);
-            
-            let shouldQueryAI = false;
-            
-            if (Math.abs(score) >= scoreThreshold && (now - this.aiLastQueryTime > this.aiThrottleMs)) {
-                if (Math.sign(score) === fisherSign || Math.abs(score) >= 4.0) { 
-                    shouldQueryAI = true;
-                }
-            }
-
-            let decision = { action: 'HOLD', confidence: 0, aiEntry: 0, volatilityForecast: 'MEDIUM' }; 
-
-            if (this.circuitBreaker.canTrade() && !this.exchange.position && shouldQueryAI) {
-                this.aiLastQueryTime = now;
+            // 5. Trigger Logic
+            if (this.circuitBreaker.canTrade() && !this.exchange.position && Math.abs(score) >= this.config.indicators.threshold) {
+                // Use a dedicated console log so we don't break the HUD line accidentally
                 process.stdout.write(`\n`); 
                 console.log(COLOR.CYAN(`[Trigger] Score ${score.toFixed(2)} hit threshold. Querying Gemini...`));
                 
@@ -757,7 +573,7 @@ class Leviathan {
                     atr: currentAtr, imbalance, score
                 };
 
-                decision = await this.ai.analyze(context);
+                const decision = await this.ai.analyze(context);
                 
                 if (decision.confidence >= this.config.ai.minConfidence && decision.action !== 'HOLD') {
                     const sl = decision.sl || (decision.action === 'BUY' ? price - 2*currentAtr : price + 2*currentAtr);
@@ -771,7 +587,8 @@ class Leviathan {
                 }
             }
 
-            this.renderHUD(price, score, currentRsi, this.data.latency, currentFisher, currentAtr, imbalance, decision);
+            // 6. Updated HUD Call
+            this.renderHUD(price, score, currentRsi, this.data.latency, currentFisher, currentAtr, imbalance);
 
         } catch (e) {
             console.error(COLOR.RED(`[Loop Error] ${e.message}`));
@@ -780,33 +597,26 @@ class Leviathan {
         }
     }
 
-    renderHUD(price, score, rsi, latency, fisher, atr, imbalance, aiSignal) {
+    // UPDATED RENDER HUD
+    renderHUD(price, score, rsi, latency, fisher, atr, imbalance) {
         const time = Utils.timestamp();
         const latColor = latency > 500 ? COLOR.RED : COLOR.GREEN;
         const scoreColor = score > 0 ? COLOR.GREEN : COLOR.RED;
-        const fishColor = fisher > 0 ? COLOR.BLUE : COLOR.PURPLE;
+        const fishColor = fisher > 0 ? COLOR.GREEN : COLOR.RED;
         const imbColor = imbalance > 0 ? COLOR.GREEN : COLOR.RED;
         const posText = this.exchange.position ? `${this.exchange.position.action}` : 'FLAT';
         
-        // Safe retrieval of AI data
-        const volText = aiSignal.volatilityForecast ? `Vol: ${aiSignal.volatilityForecast.substring(0,1)}` : 'Vol: M';
-        const entryText = aiSignal.aiEntry && aiSignal.aiEntry > 0 ? `E: ${aiSignal.aiEntry.toFixed(2)}` : 'E: N/A';
-        const volColor = aiSignal.volatilityForecast === 'HIGH' ? COLOR.RED : COLOR.GREEN;
-
         process.stdout.write(
-            `\r${COLOR.GRAY(time)} | ${COLOR.BOLD(this.config.symbol)} ${price.toFixed(2)} | ` +
+            `\r${COLOR.GRAY(time)} | ${COLOR.BOLD(price.toFixed(2))} | ` +
             `Lat: ${latColor(latency+'ms')} | ` +
             `Score: ${scoreColor(score.toFixed(1))} | ` +
             `RSI: ${rsi.toFixed(1)} | ` +
             `Fish: ${fishColor(fisher.toFixed(2))} | ` +
             `ATR: ${atr.toFixed(2)} | ` +
             `Imb: ${imbColor((imbalance*100).toFixed(0)+'%')} | ` +
-            `${COLOR.YELLOW(posText)} | ` + 
-            `${volColor(volText)} | ` + 
-            `${COLOR.CYAN(entryText)}`
+            `${COLOR.YELLOW(posText)}      `
         );
     }
 }
 
-// === START ===
 new Leviathan();

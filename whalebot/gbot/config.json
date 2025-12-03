@@ -1,65 +1,42 @@
 {
-  "symbol": "BCHUSDT",
-  "live_trading": false,
-  "intervals": {
-    "scalping": "1",
-    "main": "3",
-    "trend": "15"
-  },
-  "limits": {
-    "kline": {
-      "scalping": 300,
-      "main": 300,
-      "trend": 100
+    "symbol": "TRUMPUSDT",
+    "live_trading": true,
+    "intervals": {
+        "scalping": "1",
+        "main": "3",
+        "trend": "5"
     },
-    "orderbook": 10
-  },
-  "delays": {
-    "loop": 4000,
-    "retry": 1000,
-    "wsReconnect": 2000
-  },
-  "ai": {
-    "model": "gemini-2.5-flash-lite",
-    "minConfidence": 0.75
-  },
-  "risk": {
-    "maxDrawdown": 10.0,
-    "shockBuffer": 0.10,
-    "leverageCap": 10,
-    "fee": 0.00055,
-    "slippage": 0.0001,
-    "volatilityAdjustment": true,
-    "GTfactor": 0.85,
-    "maintenanceWarning": 0.90,
-    "initialBalance": 10000,
-    "maxRiskPerTrade": 1.0,
-    "minConfidence": 0.75
-  },
-  "indicators": {
-    "rsi": 14,
-    "stoch": 14,
-    "mfi": 14,
-    "fisher_period": 10,
-    "laguerre_gamma": 0.5,
-    "ema_low": 5,
-    "ema_high": 13,
-    "adx_period": 14,
-    "atr_period": 14,
-    "obv_period": 20,
-    "vwap_period": 20,
-    "bb_period": 20,
-    "bb_std_dev": 2,
-    "stoch_rsi_k_period": 14,
-    "stoch_rsi_d_period": 3,
-    "kama_period": 10,
-    "weights": {
-      "trend_mtf": 2.2,
-      "scalping_momentum": 2.5,
-      "order_flow": 1.5,
-      "structure": 1.2,
-      "actionThreshold": 2.0,
-      "price_impact": 0.3
+    "limits": {
+        "kline": 300,
+        "orderbook": 30
+    },
+    "delays": {
+        "loop": 3000,
+        "retry": 2000,
+        "wsReconnect": 1000
+    },
+    "ai": {
+        "model": "gemini-2.5-flash-lite",
+        "minConfidence": 0.80,
+        "maxTokens": 300
+    },
+    "risk": {
+        "maxDailyLoss": 5.0,
+        "maxRiskPerTrade": 1.0,
+        "leverage": 10,
+        "fee": 0.00055,
+        "slippage": 0.0001,
+        "rewardRatio": 1.5
+    },
+    "indicators": {
+        "rsi": 12,
+        "fisher": 10,
+        "atr": 10,
+        "bb": {
+            "period": 20,
+            "std": 2
+        },
+        "laguerre": 0.5,
+        "threshold": 1.8
     }
-  }
 }
