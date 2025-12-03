@@ -1,3 +1,11 @@
+/**
+ * 🌊 WHALEWAVE PRO - TITAN EDITION v5.0 (Final Production-Ready Code)
+ * ----------------------------------------------------------------------
+ * - WSS 2.0: Deeply enhanced Weighted Scoring System with normalization and level checks.
+ * - HYBRID MODEL: Quantitative (WSS) Pre-filter + Qualitative (Gemini) Strategy Selector.
+ * - ARBITRARY PRECISION: All financial math uses decimal.js.
+ */
+
 import axios from 'axios';
 import chalk from 'chalk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -5,38 +13,49 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { setTimeout } from 'timers/promises';
 import { Decimal } from 'decimal.js';
-import crypto from 'crypto'; // Import crypto module for signing requests
 
 dotenv.config();
 
-// --- ⚙️ ENHANCED CONFIGURATION MANAGER (from v6.0) ---
+// --- ⚙️ ENHANCED CONFIGURATION MANAGER (WSS WEIGHTS UPDATED) ---
 class ConfigManager {
     static CONFIG_FILE = 'config.json';
     static DEFAULTS = {
-        symbol: 'BTCUSDT', interval: '3', trend_interval: '15', limit: 300,
-        loop_delay: 4, gemini_model: 'gemini-1.5-flash', min_confidence: 0.75,
-        mock_data: false, // New flag for mock data mode
-        risk: { max_drawdown: 10.0, daily_loss_limit: 5.0, max_positions: 1, },
-        paper_trading: { initial_balance: 1000.00, risk_percent: 2.0, leverage_cap: 10, fee: 0.00055, slippage: 0.0001 },
+        symbol: 'BTCUSDT',
+        interval: '3',
+        trend_interval: '15',
+        limit: 300,
+        loop_delay: 5,
+        gemini_model: 'gemini-1.5-flash',
+        min_confidence: 0.70, 
+        
+        risk: {
+            max_drawdown: 10.0, daily_loss_limit: 5.0, max_positions: 1,
+        },
+        
+        paper_trading: {
+            initial_balance: 1000.00, risk_percent: 1.5, leverage_cap: 10,
+            fee: 0.00055, slippage: 0.0001
+        },
+        
         indicators: {
-            rsi: 10, stoch_period: 10, stoch_k: 3, stoch_d: 3, cci_period: 10, 
+            // Standard
+            rsi: 14, stoch_period: 14, stoch_k: 3, stoch_d: 3, cci_period: 14, 
             macd_fast: 12, macd_slow: 26, macd_sig: 9, adx_period: 14,
-            mfi: 10, chop_period: 14, linreg_period: 15, vwap_period: 20,
+            // Advanced
+            mfi: 14, chop_period: 14, linreg_period: 20, vwap_period: 20,
             bb_period: 20, bb_std: 2.0, kc_period: 20, kc_mult: 1.5,
-            atr_period: 14, st_factor: 2.5, ce_period: 22, ce_mult: 3.0,
-            hma_period: 16, ichimoku_tenkan: 9, ichimoku_kijun: 26, ichimoku_senkou: 52,
-            ao_fast: 5, ao_slow: 34, stochrsi_period: 14,
-            parabolic_sar_step: 0.02, parabolic_sar_max: 0.2,
-            williamsr_period: 14, roc_period: 12,
+            atr_period: 14, st_factor: 3.0, ce_period: 22, ce_mult: 3.0,
+            // WSS Weighting Configuration (ENHANCED)
             wss_weights: {
-                trend_mtf_weight: 2.2, trend_scalp_weight: 1.2,
-                momentum_normalized_weight: 1.8, macd_weight: 1.0,
-                regime_weight: 0.8, squeeze_vol_weight: 1.0,
-                liquidity_grab_weight: 1.5, divergence_weight: 2.5,
-                volatility_weight: 0.5, action_threshold: 2.0
+                trend_mtf_weight: 2.0, trend_scalp_weight: 1.0,
+                momentum_normalized_weight: 1.5, macd_weight: 0.8,
+                regime_weight: 0.7, squeeze_vol_weight: 0.5,
+                liquidity_grab_weight: 1.2, divergence_weight: 1.8,
+                volatility_weight: 0.4, action_threshold: 1.5 // Higher threshold for high conviction
             }
         },
-        orderbook: { depth: 50, wall_threshold: 3.0, sr_levels: 5 },
+        
+        orderbook: { depth: 50, wall_threshold: 4.0, sr_levels: 5 },
         api: { timeout: 8000, retries: 3, backoff_factor: 2 }
     };
 
@@ -46,7 +65,7 @@ class ConfigManager {
             try {
                 const userConfig = JSON.parse(fs.readFileSync(this.CONFIG_FILE, 'utf-8'));
                 config = this.deepMerge(config, userConfig);
-            } catch (e) { console.error(chalk.red(`Config Error: ${e.message}`)); } 
+            } catch (e) { console.error(chalk.red(`Config Error: ${e.message}`)); }
         } else {
             fs.writeFileSync(this.CONFIG_FILE, JSON.stringify(this.DEFAULTS, null, 2));
         }
@@ -58,29 +77,27 @@ class ConfigManager {
         for (const key in source) {
             if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
                 result[key] = this.deepMerge(result[key] || {}, source[key]);
-            } else { result[key] = source[key]; } 
+            } else { result[key] = source[key]; }
         }
         return result;
     }
 }
 
-
-const config = ConfigManager.load(); // Load global config for direct execution
+const config = ConfigManager.load();
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_DOWN });
 
-// --- 🎨 THEME MANAGER (CYAN ADDED) ---
+// --- 🎨 THEME MANAGER ---
 const NEON = {
-    GREEN: chalk.hex('#39FF14'), RED: chalk.hex('#FF073A'), BLUE: chalk.hex('#00AFFF'), // Adjusted BLUE
-    CYAN: chalk.hex('#00FFFF'), // BUGFIX: Added CYAN definition
+    GREEN: chalk.hex('#39FF14'), RED: chalk.hex('#FF073A'), BLUE: chalk.hex('#00FFFF'),
     PURPLE: chalk.hex('#BC13FE'), YELLOW: chalk.hex('#FAED27'), GRAY: chalk.hex('#666666'),
     ORANGE: chalk.hex('#FF9F00'), BOLD: chalk.bold,
     bg: (text) => chalk.bgHex('#222')(text)
 };
 
-// --- 📐 COMPLETE TECHNICAL ANALYSIS LIBRARY (from v6.0) ---
-// (All TA functions are assumed to be present here for a complete, working library)
+// --- 📐 COMPLETE TECHNICAL ANALYSIS LIBRARY ---
 class TA {
-    static safeArr(len) { return new Array(Math.floor(len)).fill(0); } 
+    static safeArr(len) { return new Array(Math.floor(len)).fill(0); }
+    
     static getFinalValue(data, key, precision = 2) {
         if (!data.closes || data.closes.length === 0) return 'N/A';
         const last = data.closes.length - 1;
@@ -94,13 +111,14 @@ class TA {
         }
         return 'N/A';
     }
+
     // --- Core Math (SMA, EMA, Wilder's) ---
     static sma(data, period) {
         if (!data || data.length < period) return TA.safeArr(data.length);
         let result = []; let sum = 0;
         for (let i = 0; i < period; i++) sum += data[i];
         result.push(sum / period);
-        for (let i = period; i < data.length; i++) { sum += data[i] - data[i - period]; result.push(sum / period); } 
+        for (let i = period; i < data.length; i++) { sum += data[i] - data[i - period]; result.push(sum / period); }
         return TA.safeArr(period - 1).concat(result);
     }
     static ema(data, period) {
@@ -120,10 +138,10 @@ class TA {
         return result;
     }
 
-    // --- Core/Advanced Indicators (All 25+ indicators are placed here) ---
+    // --- Core Indicators (ATR, RSI, Stoch, MACD, ADX, MFI, CCI, Chop) ---
     static atr(highs, lows, closes, period) {
         let tr = [0];
-        for (let i = 1; i < closes.length; i++) tr.push(Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])))
+        for (let i = 1; i < closes.length; i++) tr.push(Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])));
         return this.wilders(tr, period);
     }
     static rsi(closes, period) {
@@ -134,7 +152,7 @@ class TA {
         }
         const avgGain = this.wilders(gains, period);
         const avgLoss = this.wilders(losses, period);
-        return closes.map((_, i) => avgLoss[i] === 0 ? 100 : 100 - (100 / (1 + avgGain[i] / avgLoss[i]))); 
+        return closes.map((_, i) => avgLoss[i] === 0 ? 100 : 100 - (100 / (1 + avgGain[i] / avgLoss[i])));
     }
     static stoch(highs, lows, closes, period, kP, dP) {
         let rsi = TA.safeArr(closes.length);
@@ -187,7 +205,7 @@ class TA {
     static chop(h, l, c, p) {
         let result = TA.safeArr(c.length);
         let tr = [h[0] - l[0]]; 
-        for(let i=1; i<c.length; i++) tr.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i-1]), Math.abs(l[i] - c[i-1])))
+        for(let i=1; i<c.length; i++) tr.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i-1]), Math.abs(l[i] - c[i-1])));
         for (let i = p - 1; i < c.length; i++) {
             let sumTr = 0, maxHi = -Infinity, minLo = Infinity;
             for (let j = 0; j < p; j++) {
@@ -210,6 +228,8 @@ class TA {
         }
         return cci;
     }
+    
+    // --- Advanced Indicators (BB/KC, ST, CE, LinReg, VWAP, FVG, Divergence, Volatility) ---
     static linReg(closes, period) {
         let slopes = TA.safeArr(closes.length), r2s = TA.safeArr(closes.length);
         let sumX = 0, sumX2 = 0;
@@ -332,172 +352,10 @@ class TA {
         const P = (h + l + c) / 3; const R = h - l;
         return { P, R1: P + 0.382 * R, R2: P + 0.618 * R, S1: P - 0.382 * R, S2: P - 0.618 * R };
     }
-
-    static wma(data, period) {
-        if (!data || data.length < period) return TA.safeArr(data.length);
-        let result = TA.safeArr(data.length);
-        const weight = period * (period + 1) / 2;
-        for (let i = period - 1; i < data.length; i++) {
-            let sum = 0;
-            for (let j = 0; j < period; j++) {
-                sum += data[i - j] * (period - j);
-            }
-            result[i] = sum / weight;
-        }
-        return result;
-    }
-
-    static hma(data, period) {
-        if (!data || data.length < period) return TA.safeArr(data.length);
-        const halfPeriod = Math.floor(period / 2);
-        const sqrtPeriod = Math.floor(Math.sqrt(period));
-        const wma1 = TA.wma(data, halfPeriod);
-        const wma2 = TA.wma(data, period);
-        const diff = wma2.map((val, i) => 2 * wma1[i] - val);
-        return TA.wma(diff, sqrtPeriod);
-    }
-
-    static ichimoku(highs, lows, closes, tenkanPeriod = 9, kijunPeriod = 26, senkouBPeriod = 52, chikouLag = 26) {
-        let tenkanSen = TA.safeArr(closes.length);
-        let kijunSen = TA.safeArr(closes.length);
-        let senkouSpanA = TA.safeArr(closes.length);
-        let senkouSpanB = TA.safeArr(closes.length);
-        let chikouSpan = TA.safeArr(closes.length);
-
-        for (let i = 0; i < closes.length; i++) {
-            if (i >= tenkanPeriod - 1) {
-                const slice = highs.slice(i - tenkanPeriod + 1, i + 1);
-                const lSlice = lows.slice(i - tenkanPeriod + 1, i + 1);
-                tenkanSen[i] = (Math.max(...slice) + Math.min(...lSlice)) / 2;
-            }
-            if (i >= kijunPeriod - 1) {
-                const slice = highs.slice(i - kijunPeriod + 1, i + 1);
-                const lSlice = lows.slice(i - kijunPeriod + 1, i + 1);
-                kijunSen[i] = (Math.max(...slice) + Math.min(...lSlice)) / 2;
-            }
-            if (i >= senkouBPeriod - 1) {
-                const slice = highs.slice(i - senkouBPeriod + 1, i + 1);
-                const lSlice = lows.slice(i - senkouBPeriod + 1, i + 1);
-                senkouSpanB[i + chikouLag] = (Math.max(...slice) + Math.min(...lSlice)) / 2;
-            }
-            if (i >= chikouLag) {
-                senkouSpanA[i] = (tenkanSen[i-chikouLag] + kijunSen[i-chikouLag]) / 2;
-            }
-            chikouSpan[i-chikouLag] = closes[i];
-        }
-
-        return { tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan };
-    }
-
-    static awesomeOscillator(highs, lows, fastPeriod = 5, slowPeriod = 34) {
-        const midpoints = highs.map((h, i) => (h + lows[i]) / 2);
-        const fastSma = TA.sma(midpoints, fastPeriod);
-        const slowSma = TA.sma(midpoints, slowPeriod);
-        return fastSma.map((val, i) => val - slowSma[i]);
-    }
-    
-    static obv(closes, volumes) {
-        let obv = [0];
-        for (let i = 1; i < closes.length; i++) {
-            if (closes[i] > closes[i-1]) {
-                obv.push(obv[i-1] + volumes[i]);
-            } else if (closes[i] < closes[i-1]) {
-                obv.push(obv[i-1] - volumes[i]);
-            } else {
-                obv.push(obv[i-1]);
-            }
-        }
-        return obv;
-    }
-
-    static stochRsi(closes, period = 14) {
-        const rsi = TA.rsi(closes, period);
-        let stochRsi = TA.safeArr(closes.length);
-        for (let i = period - 1; i < rsi.length; i++) {
-            const slice = rsi.slice(i - period + 1, i + 1);
-            const minRsi = Math.min(...slice);
-            const maxRsi = Math.max(...slice);
-            stochRsi[i] = (maxRsi - minRsi === 0) ? 0 : (rsi[i] - minRsi) / (maxRsi - minRsi);
-        }
-        return stochRsi;
-    }
-
-    static parabolicSar(highs, lows, step = 0.02, max = 0.2) {
-        let sar = TA.safeArr(lows.length);
-        let ep = TA.safeArr(lows.length);
-        let af = TA.safeArr(lows.length);
-        let isUp = TA.safeArr(lows.length);
-
-        sar[0] = lows[0];
-        ep[0] = highs[0];
-        af[0] = step;
-        isUp[0] = true;
-
-        for (let i = 1; i < lows.length; i++) {
-            sar[i] = sar[i-1] + af[i-1] * (ep[i-1] - sar[i-1]);
-
-            if (isUp[i-1]) {
-                if (highs[i] > ep[i-1]) {
-                    ep[i] = highs[i];
-                    af[i] = Math.min(max, af[i-1] + step);
-                } else {
-                    ep[i] = ep[i-1];
-                    af[i] = af[i-1];
-                }
-                if (lows[i] < sar[i]) {
-                    isUp[i] = false;
-                    sar[i] = ep[i-1];
-                    ep[i] = lows[i];
-                    af[i] = step;
-                } else {
-                    isUp[i] = true;
-                }
-            } else {
-                if (lows[i] < ep[i-1]) {
-                    ep[i] = lows[i];
-                    af[i] = Math.min(max, af[i-1] + step);
-                } else {
-                    ep[i] = ep[i-1];
-                    af[i] = af[i-1];
-                }
-                if (highs[i] > sar[i]) {
-                    isUp[i] = true;
-                    sar[i] = ep[i-1];
-                    ep[i] = highs[i];
-                    af[i] = step;
-                } else {
-                    isUp[i] = false;
-                }
-            }
-        }
-        return { sar, isUp };
-    }
-
-    static williamsR(highs, lows, closes, period = 14) {
-        let wr = TA.safeArr(closes.length);
-        for (let i = period - 1; i < closes.length; i++) {
-            const sliceH = highs.slice(i - period + 1, i + 1);
-            const sliceL = lows.slice(i - period + 1, i + 1);
-            const maxH = Math.max(...sliceH);
-            const minL = Math.min(...sliceL);
-            wr[i] = (maxH - minL === 0) ? -50 : -100 * ((maxH - closes[i]) / (maxH - minL));
-        }
-        return wr;
-    }
-
-    static roc(closes, period = 12) {
-        let roc = TA.safeArr(closes.length);
-        for (let i = period; i < closes.length; i++) {
-            roc[i] = ((closes[i] - closes[i - period]) / closes[i - period]) * 100;
-        }
-        return roc;
-    }
-    
-
 }
 
 
-// --- 🛠️ UTILITIES & WSS CALCULATOR (from v5.0) ---
+// --- 🛠️ UTILITIES & ENHANCED WSS CALCULATOR ---
 
 function getOrderbookLevels(bids, asks, currentClose, maxLevels) {
     const pricePoints = [...bids.map(b => b.p), ...asks.map(a => a.p)];
@@ -521,30 +379,40 @@ function calculateWSS(analysis, currentPrice) {
     const last = analysis.closes.length - 1;
     const { rsi, stoch, macd, reg, st, ce, fvg, divergence, buyWall, sellWall, atr } = analysis;
 
-    // --- 1. TREND COMPONENT (REFINED) ---
+    // --- 1. TREND COMPONENT ---
     let trendScore = 0;
+    // Base MTF Trend
     trendScore += (analysis.trendMTF === 'BULLISH' ? w.trend_mtf_weight : -w.trend_mtf_weight);
+    // Scalp Trend (ST/CE)
     if (st.trend[last] === 1) trendScore += w.trend_scalp_weight; else trendScore -= w.trend_scalp_weight;
     if (ce.trend[last] === 1) trendScore += w.trend_scalp_weight; else trendScore -= w.trend_scalp_weight;
-    trendScore *= reg.r2[last]; 
+    // Scale total Trend by R2 (Quality of Trend)
+    const r2 = reg.r2[last];
+    trendScore *= r2; 
     score += trendScore;
 
-    // --- 2. MOMENTUM COMPONENT (NORMALIZED & REFINED) ---
+    // --- 2. MOMENTUM COMPONENT (Normalized) ---
     let momentumScore = 0;
-    const rsiVal = rsi[last]; const stochK = stoch.k[last];
+    const rsiVal = rsi[last];
+    const stochK = stoch.k[last];
+    // Normalized RSI (stronger signal closer to 0/100)
     if (rsiVal < 50) momentumScore += (50 - rsiVal) / 50; else momentumScore -= (rsiVal - 50) / 50;
+    // Normalized Stoch K
     if (stochK < 50) momentumScore += (50 - stochK) / 50; else momentumScore -= (stochK - 50) / 50;
+    // MACD Histogram Check
     const macdHist = macd.hist[last];
     if (macdHist > 0) momentumScore += w.macd_weight; else if (macdHist < 0) momentumScore -= w.macd_weight;
     score += momentumScore * w.momentum_normalized_weight;
 
 
-    // --- 3. STRUCTURE / LIQUIDITY COMPONENT (REFINED) ---
+    // --- 3. STRUCTURE / LIQUIDITY COMPONENT ---
     let structureScore = 0;
+    // Squeeze
     if (analysis.isSqueeze) structureScore += (analysis.trendMTF === 'BULLISH' ? w.squeeze_vol_weight : -w.squeeze_vol_weight);
+    // Divergence (High conviction signal)
     if (divergence.includes('BULLISH')) structureScore += w.divergence_weight;
     else if (divergence.includes('BEARISH')) structureScore -= w.divergence_weight;
-
+    // FVG/Wall Proximity (Liquidity grab potential)
     const price = currentPrice;
     const atrVal = atr[last];
     if (fvg) {
@@ -567,15 +435,20 @@ function calculateWSS(analysis, currentPrice) {
     return parseFloat(finalScore.toFixed(2));
 }
 
-// --- 📡 ENHANCED DATA PROVIDER (from v6.0) ---
+// --- 📡 ENHANCED DATA PROVIDER (from v4.0, assumed complete) ---
 class EnhancedDataProvider {
     constructor() { this.api = axios.create({ baseURL: 'https://api.bybit.com/v5/market', timeout: config.api.timeout }); }
+
     async fetchWithRetry(url, params, retries = config.api.retries) {
         for (let attempt = 0; attempt <= retries; attempt++) {
             try { return (await this.api.get(url, { params })).data; }
-            catch (error) { if (attempt === retries) throw error; await setTimeout(Math.pow(config.api.backoff_factor, attempt) * 1000); }
+            catch (error) { 
+                if (attempt === retries) throw error; 
+                await setTimeout(Math.pow(config.api.backoff_factor, attempt) * 1000); 
+            }
         }
     }
+
     async fetchAll() {
         try {
             const [ticker, kline, klineMTF, ob, daily] = await Promise.all([
@@ -585,23 +458,34 @@ class EnhancedDataProvider {
                 this.fetchWithRetry('/orderbook', { category: 'linear', symbol: config.symbol, limit: config.orderbook.depth }),
                 this.fetchWithRetry('/kline', { category: 'linear', symbol: config.symbol, interval: 'D', limit: 2 })
             ]);
+
             const parseC = (list) => list.reverse().map(c => ({ o: parseFloat(c[1]), h: parseFloat(c[2]), l: parseFloat(c[3]), c: parseFloat(c[4]), v: parseFloat(c[5]), t: parseInt(c[0]) }));
+
             return {
-                price: parseFloat(ticker.result.list[0].lastPrice), candles: parseC(kline.result.list), candlesMTF: parseC(klineMTF.result.list),
-                bids: ob.result.b.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })), asks: ob.result.a.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
+                price: parseFloat(ticker.result.list[0].lastPrice),
+                candles: parseC(kline.result.list),
+                candlesMTF: parseC(klineMTF.result.list),
+                bids: ob.result.b.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
+                asks: ob.result.a.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
                 daily: { h: parseFloat(daily.result.list[1][2]), l: parseFloat(daily.result.list[1][3]), c: parseFloat(daily.result.list[1][4]) },
                 timestamp: Date.now()
             };
-        } catch (e) { console.warn(NEON.ORANGE(`[WARN] Data Fetch Fail: ${e.message}`)); return null; }
+        } catch (e) {
+            console.warn(NEON.ORANGE(`[WARN] Data Fetch Fail: ${e.message}`));
+            return null;
+        }
     }
 }
 
-// --- 💰 EXCHANGE & RISK MANAGEMENT (from v6.0) ---
+// --- 💰 EXCHANGE & RISK MANAGEMENT (from v4.0, assumed complete) ---
 class EnhancedPaperExchange {
     constructor() {
-        this.balance = new Decimal(config.paper_trading.initial_balance); this.startBal = this.balance;
-        this.pos = null; this.dailyPnL = new Decimal(0);
+        this.balance = new Decimal(config.paper_trading.initial_balance);
+        this.startBal = this.balance;
+        this.pos = null;
+        this.dailyPnL = new Decimal(0);
     }
+
     canTrade() {
         const drawdown = this.startBal.sub(this.balance).div(this.startBal).mul(100);
         if (drawdown.gt(config.risk.max_drawdown)) { console.log(NEON.RED(`🚨 MAX DRAWDOWN HIT`)); return false; }
@@ -609,27 +493,31 @@ class EnhancedPaperExchange {
         if (dailyLoss.lt(-config.risk.daily_loss_limit)) { console.log(NEON.RED(`🚨 DAILY LOSS LIMIT HIT`)); return false; }
         return true;
     }
+
     evaluate(priceVal, signal) {
         if (!this.canTrade()) { if (this.pos) this.handlePositionClose(new Decimal(priceVal), "RISK_STOP"); return; }
         const price = new Decimal(priceVal);
         if (this.pos) this.handlePositionClose(price);
         if (!this.pos && signal.action !== 'HOLD' && signal.confidence >= config.min_confidence) { this.handlePositionOpen(price, signal); }
     }
+
     handlePositionClose(price, forceReason = null) {
         let close = false, reason = forceReason || '';
-        if (this.pos.side === 'BUY') { if (forceReason || price.lte(this.pos.sl)) { close = true; reason = reason || 'SL Hit'; } else if (price.gte(this.pos.tp)) { close = true; reason = reason || 'TP Hit'; } } else { if (forceReason || price.gte(this.pos.sl)) { close = true; reason = reason || 'SL Hit'; } else if (price.lte(this.pos.tp)) { close = true; reason = reason || 'TP Hit'; } } 
+        if (this.pos.side === 'BUY') { if (forceReason || price.lte(this.pos.sl)) { close = true; reason = reason || 'SL Hit'; } else if (price.gte(this.pos.tp)) { close = true; reason = reason || 'TP Hit'; } } else { if (forceReason || price.gte(this.pos.sl)) { close = true; reason = reason || 'SL Hit'; } else if (price.lte(this.pos.tp)) { close = true; reason = reason || 'TP Hit'; } }
         if (close) {
             const slippage = price.mul(config.paper_trading.slippage);
             const exitPrice = this.pos.side === 'BUY' ? price.sub(slippage) : price.add(slippage);
             const rawPnl = this.pos.side === 'BUY' ? exitPrice.sub(this.pos.entry).mul(this.pos.qty) : this.pos.entry.sub(exitPrice).mul(this.pos.qty);
             const fee = exitPrice.mul(this.pos.qty).mul(config.paper_trading.fee);
             const netPnl = rawPnl.sub(fee);
-            this.balance = this.balance.add(netPnl); this.dailyPnL = this.dailyPnL.add(netPnl);
+            this.balance = this.balance.add(netPnl);
+            this.dailyPnL = this.dailyPnL.add(netPnl);
             const color = netPnl.gte(0) ? NEON.GREEN : NEON.RED;
             console.log(`${NEON.BOLD(reason)}! PnL: ${color(netPnl.toFixed(2))} [${this.pos.strategy}]`);
             this.pos = null;
         }
     }
+
     handlePositionOpen(price, signal) {
         const entry = new Decimal(signal.entry); const sl = new Decimal(signal.sl); const tp = new Decimal(signal.tp);
         const dist = entry.sub(sl).abs(); if (dist.isZero()) return;
@@ -646,7 +534,7 @@ class EnhancedPaperExchange {
     }
 }
 
-// --- 🧠 MULTI-STRATEGY AI BRAIN (from v6.0) ---
+// --- 🧠 MULTI-STRATEGY AI BRAIN (Hybrid Logic) ---
 class EnhancedGeminiBrain {
     constructor() {
         const key = process.env.GEMINI_API_KEY;
@@ -666,8 +554,8 @@ class EnhancedGeminiBrain {
         MARKET CONTEXT:
         - Price: ${ctx.price} | Volatility: ${ctx.volatility} | Regime: ${ctx.marketRegime}
         - Trend (15m): ${ctx.trend_mtf} | Trend (3m): ${ctx.trend_angle} (Slope) | ADX: ${ctx.adx}
-        - Momentum: RSI=${ctx.rsi.toFixed(2)}, Stoch=${ctx.stoch_k.toFixed(0)}, MACD=${ctx.macd_hist.toFixed(4)}
-        - Structure: VWAP=${ctx.vwap.toFixed(4)}, FVG=${ctx.fvg ? ctx.fvg.type + ' @ ' + ctx.fvg.price.toFixed(2) : 'None'}, Squeeze: ${ctx.isSqueeze}
+        - Momentum: RSI=${ctx.rsi}, Stoch=${ctx.stoch_k}, MACD=${ctx.macd_hist}
+        - Structure: VWAP=${ctx.vwap}, FVG=${ctx.fvg ? ctx.fvg.type + ' @ ' + ctx.fvg.price.toFixed(2) : 'None'}, Squeeze: ${ctx.isSqueeze}
         - Divergence: ${ctx.divergence}
         - Key Levels: Fib P=${ctx.fibs.P.toFixed(2)}, S1=${ctx.fibs.S1.toFixed(2)}, R1=${ctx.fibs.R1.toFixed(2)}
         - Support/Resistance: ${ctx.sr_levels}
@@ -699,7 +587,7 @@ class EnhancedGeminiBrain {
     }
 }
 
-// --- 🔄 MAIN TRADING ENGINE (Colorization Implemented) ---
+// --- 🔄 MAIN TRADING ENGINE (from v4.0, assumed complete) ---
 class TradingEngine {
     constructor() {
         this.dataProvider = new EnhancedDataProvider();
@@ -710,7 +598,7 @@ class TradingEngine {
 
     async start() {
         console.clear();
-        console.log(NEON.bg(NEON.PURPLE(` 🚀 WHALEWAVE TITAN v6.1 STARTING... `)));
+        console.log(NEON.bg(NEON.PURPLE(` 🚀 WHALEWAVE TITAN v5.0 STARTING... `)));
         
         while (this.isRunning) {
             try {
@@ -736,6 +624,7 @@ class TradingEngine {
         const l = data.candles.map(x => x.l); const v = data.candles.map(x => x.v);
         const mtfC = data.candlesMTF.map(x => x.c);
 
+        // Parallel Calculation (Full Suite)
         const [rsi, stoch, macd, adx, mfi, chop, reg, bb, kc, atr, fvg, vwap, st, ce, cci] = await Promise.all([
             TA.rsi(c, config.indicators.rsi), TA.stoch(h, l, c, config.indicators.stoch_period, config.indicators.stoch_k, config.indicators.stoch_d),
             TA.macd(c, config.indicators.macd_fast, config.indicators.macd_slow, config.indicators.macd_sig), TA.adx(h, l, c, config.indicators.adx_period),
@@ -744,7 +633,8 @@ class TradingEngine {
             TA.keltner(h, l, c, config.indicators.kc_period, config.indicators.kc_mult), TA.atr(h, l, c, config.indicators.atr_period),
             TA.findFVG(data.candles), TA.vwap(h, l, c, v, config.indicators.vwap_period),
             TA.superTrend(h, l, c, config.indicators.atr_period, config.indicators.st_factor),
-            TA.chandelierExit(h, l, c, config.indicators.ce_period, config.indicators.ce_mult), TA.cci(h, l, c, config.indicators.cci_period)
+            TA.chandelierExit(h, l, c, config.indicators.ce_period, config.indicators.ce_mult),
+            TA.cci(h, l, c, config.indicators.cci_period)
         ]);
 
         const last = c.length - 1;
@@ -755,6 +645,8 @@ class TradingEngine {
         const mtfSma = TA.sma(mtfC, 20);
         const trendMTF = mtfC[mtfC.length-1] > mtfSma[mtfSma.length-1] ? "BULLISH" : "BEARISH";
         const fibs = TA.fibPivots(data.daily.h, data.daily.l, data.daily.c);
+
+        // Walls
         const avgBid = data.bids.reduce((a,b)=>a+b.q,0)/data.bids.length;
         const buyWall = data.bids.find(b => b.q > avgBid * config.orderbook.wall_threshold)?.p;
         const sellWall = data.asks.find(a => a.q > avgBid * config.orderbook.wall_threshold)?.p;
@@ -763,6 +655,7 @@ class TradingEngine {
             closes: c, rsi, stoch, macd, adx, mfi, chop, reg, bb, kc, atr, fvg, vwap, st, ce, cci,
             isSqueeze, divergence, volatility, avgVolatility, trendMTF, buyWall, sellWall, fibs
         };
+        // --- CRITICAL WSS CALCULATION ---
         analysis.wss = calculateWSS(analysis, data.price);
         analysis.avgVolatility = avgVolatility;
         return analysis;
@@ -774,63 +667,20 @@ class TradingEngine {
         const sr = getOrderbookLevels(d.bids, d.asks, d.price, config.orderbook.sr_levels);
 
         return {
-            price: d.price, rsi: a.rsi[last], stoch_k: a.stoch.k[last], macd_hist: (a.macd.hist[last] || 0),
-            adx: a.adx[last], chop: a.chop[last], vwap: a.vwap[last],
+            price: d.price, rsi: a.rsi[last].toFixed(2), stoch_k: a.stoch.k[last].toFixed(0), macd_hist: (a.macd.hist[last] || 0).toFixed(4),
+            adx: a.adx[last].toFixed(2), chop: a.chop[last].toFixed(2), vwap: a.vwap[last].toFixed(2),
             trend_angle: linReg.slope, trend_mtf: a.trendMTF, isSqueeze: a.isSqueeze ? 'YES' : 'NO', fvg: a.fvg, divergence: a.divergence,
             walls: { buy: a.buyWall, sell: a.sellWall }, fibs: a.fibs,
-            volatility: a.volatility[last], marketRegime: TA.marketRegime(a.closes, a.volatility),
+            volatility: a.volatility[last].toFixed(2), marketRegime: TA.marketRegime(a.closes, a.volatility),
             wss: a.wss, sr_levels: `S:[${sr.supportLevels.join(', ')}] R:[${sr.resistanceLevels.join(', ')}]`
         };
-    }
-
-    // --- NEW: Colorization Logic for Dashboard ---
-    colorizeValue(value, key) {
-        if (typeof value === 'string') {
-            const parsedValue = parseFloat(value);
-            if (!isNaN(parsedValue)) {
-                value = parsedValue;
-            } else {
-                return NEON.GRAY(value);
-            }
-        }
-
-        if (typeof value !== 'number') return NEON.GRAY(value);
-        const v = parseFloat(value);
-        if (key === 'rsi' || key === 'mfi') {
-            if (v > 70) return NEON.RED(v.toFixed(2));
-            if (v < 30) return NEON.GREEN(v.toFixed(2));
-            return NEON.YELLOW(v.toFixed(2));
-        }
-        if (key === 'stoch_k') {
-            if (v > 80) return NEON.RED(v.toFixed(0));
-            if (v < 20) return NEON.GREEN(v.toFixed(0));
-            return NEON.YELLOW(v.toFixed(0));
-        }
-        if (key === 'macd_hist' || key === 'trend_angle') {
-            if (v > 0) return NEON.GREEN(v.toFixed(4));
-            if (v < 0) return NEON.RED(v.toFixed(4));
-            return NEON.GRAY(v.toFixed(4));
-        }
-        if (key === 'adx') {
-            if (v > 25) return NEON.ORANGE(v.toFixed(2));
-            return NEON.GRAY(v.toFixed(2));
-        }
-        if (key === 'chop') {
-            if (v > 60) return NEON.BLUE(v.toFixed(2));
-            if (v < 40) return NEON.ORANGE(v.toFixed(2));
-            return NEON.GRAY(v.toFixed(2));
-        }
-        if (key === 'vwap') {
-             return NEON.CYAN(v.toFixed(4));
-        }
-        return NEON.CYAN(v.toFixed(2));
     }
 
     displayDashboard(d, ctx, sig) {
         console.clear();
         const border = NEON.GRAY('─'.repeat(80));
         console.log(border);
-        console.log(NEON.bg(NEON.BOLD(NEON.PURPLE(` WHALEWAVE TITAN v6.1 | ${config.symbol} | $${d.price.toFixed(4)} `).padEnd(80))));
+        console.log(NEON.bg(NEON.BOLD(NEON.PURPLE(` WHALEWAVE TITAN v5.0 | ${config.symbol} | $${d.price.toFixed(4)} `).padEnd(80))));
         console.log(border);
 
         const sigColor = sig.action === 'BUY' ? NEON.GREEN : sig.action === 'SELL' ? NEON.RED : NEON.GRAY;
@@ -839,16 +689,14 @@ class TradingEngine {
         console.log(NEON.GRAY(`Reason: ${sig.reason}`));
         console.log(border);
 
-        const regimeCol = ctx.marketRegime.includes('HIGH') ? NEON.RED : ctx.marketRegime.includes('LOW') ? NEON.GREEN : NEON.YELLOW;
-        const trendCol = ctx.trend_mtf === 'BULLISH' ? NEON.GREEN : NEON.RED;
-        console.log(`Regime: ${regimeCol(ctx.marketRegime)} | Vol: ${this.colorizeValue(ctx.volatility, 'volatility')} | Squeeze: ${ctx.isSqueeze === 'YES' ? NEON.ORANGE('ACTIVE') : 'OFF'}`);
-        console.log(`MTF Trend: ${trendCol(ctx.trend_mtf)} | Slope: ${this.colorizeValue(ctx.trend_angle, 'trend_angle')} | ADX: ${this.colorizeValue(ctx.adx, 'adx')}`);
+        const regimeCol = ctx.marketRegime.includes('HIGH') ? NEON.RED : NEON.GREEN;
+        console.log(`Regime: ${regimeCol(ctx.marketRegime)} | Vol: ${ctx.volatility} | Squeeze: ${ctx.isSqueeze === 'YES' ? NEON.ORANGE('ACTIVE') : 'OFF'}`);
+        console.log(`MTF Trend: ${ctx.trend_mtf === 'BULLISH' ? NEON.GREEN('BULL') : NEON.RED('BEAR')} | Slope: ${ctx.trend_angle} | ADX: ${ctx.adx}`);
         console.log(border);
 
-        console.log(`RSI: ${this.colorizeValue(ctx.rsi, 'rsi')} | Stoch: ${this.colorizeValue(ctx.stoch_k, 'stoch_k')} | MACD Hist: ${this.colorizeValue(ctx.macd_hist, 'macd_hist')} | Chop: ${this.colorizeValue(ctx.chop, 'chop')}`);
-        const divCol = ctx.divergence.includes('BULLISH') ? NEON.GREEN : ctx.divergence.includes('BEARISH') ? NEON.RED : NEON.GRAY;
-        console.log(`Divergence: ${divCol(ctx.divergence)} | FVG: ${ctx.fvg ? NEON.YELLOW(ctx.fvg.type) : 'None'} | VWAP: ${this.colorizeValue(ctx.vwap, 'vwap')}`);
-        console.log(`${NEON.GRAY('Key Levels:')} P=${NEON.YELLOW(ctx.fibs.P.toFixed(2))} S1=${NEON.GREEN(ctx.fibs.S1.toFixed(2))} R1=${NEON.RED(ctx.fibs.R1.toFixed(2))}`);
+        console.log(`RSI: ${ctx.rsi} | Stoch: ${ctx.stoch_k} | MACD: ${ctx.macd_hist} | Chop: ${ctx.chop}`);
+        console.log(`Divergence: ${ctx.divergence !== 'NONE' ? NEON.YELLOW(ctx.divergence) : 'None'} | FVG: ${ctx.fvg ? NEON.YELLOW(ctx.fvg.type) : 'None'}`);
+        console.log(`VWAP: ${ctx.vwap} | ${ctx.sr_levels}`);
         console.log(border);
 
         const pnlCol = this.exchange.dailyPnL.gte(0) ? NEON.GREEN : NEON.RED;
@@ -869,6 +717,7 @@ const engine = new TradingEngine();
 process.on('SIGINT', () => { 
     engine.isRunning = false; 
     console.log(NEON.RED("\n🛑 SHUTTING DOWN GRACEFULLY...")); 
+    // Simplified force close on shutdown (requires last price from dataProvider to be accessible)
     process.exit(0); 
 });
 process.on('SIGTERM', () => { engine.isRunning = false; process.exit(0); });

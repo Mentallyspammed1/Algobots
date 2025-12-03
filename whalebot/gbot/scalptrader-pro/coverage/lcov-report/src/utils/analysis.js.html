@@ -1,0 +1,301 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/utils/analysis.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/utils</a> analysis.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">11.62% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>10/86</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">1.72% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>1/58</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">7.14% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>1/14</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">19.6% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>10/51</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const config = require('../config');
+const NEON = require('../utils/colors');
+&nbsp;
+function <span class="fstat-no" title="function not covered" >getOrderbookLevels(</span>bids, asks, currentClose, maxLevels) {
+    const pricePoints = <span class="cstat-no" title="statement not covered" >[...bids.map(<span class="fstat-no" title="function not covered" >b </span>=&gt; <span class="cstat-no" title="statement not covered" >b.p)</span>, ...asks.map(<span class="fstat-no" title="function not covered" >a </span>=&gt; <span class="cstat-no" title="statement not covered" >a.p)</span>];</span>
+    const uniquePrices = <span class="cstat-no" title="statement not covered" >[...new Set(pricePoints)].sort(<span class="fstat-no" title="function not covered" >(a</span>, b) =&gt; <span class="cstat-no" title="statement not covered" >a - b)</span>;</span>
+    let potentialSR = <span class="cstat-no" title="statement not covered" >[];</span>
+<span class="cstat-no" title="statement not covered" >    for (const price of uniquePrices) {</span>
+        let bidVolAtPrice = <span class="cstat-no" title="statement not covered" >bids.filter(<span class="fstat-no" title="function not covered" >b </span>=&gt; <span class="cstat-no" title="statement not covered" >b.p === price)</span>.reduce(<span class="fstat-no" title="function not covered" >(s</span>, b) =&gt; <span class="cstat-no" title="statement not covered" >s + b.q,</span> 0);</span>
+        let askVolAtPrice = <span class="cstat-no" title="statement not covered" >asks.filter(<span class="fstat-no" title="function not covered" >a </span>=&gt; <span class="cstat-no" title="statement not covered" >a.p === price)</span>.reduce(<span class="fstat-no" title="function not covered" >(s</span>, a) =&gt; <span class="cstat-no" title="statement not covered" >s + a.q,</span> 0);</span>
+<span class="cstat-no" title="statement not covered" >        if (bidVolAtPrice &gt; askVolAtPrice * 2) <span class="cstat-no" title="statement not covered" >potentialSR.push({ price, type: 'S' });</span></span>
+        else <span class="cstat-no" title="statement not covered" >if (askVolAtPrice &gt; bidVolAtPrice * 2) <span class="cstat-no" title="statement not covered" >potentialSR.push({ price, type: 'R' });</span></span>
+    }
+    const sortedByDist = <span class="cstat-no" title="statement not covered" >potentialSR.sort(<span class="fstat-no" title="function not covered" >(a</span>, b) =&gt; <span class="cstat-no" title="statement not covered" >Math.abs(a.price - currentClose) - Math.abs(b.price - currentClose))</span>;</span>
+    const supportLevels = <span class="cstat-no" title="statement not covered" >sortedByDist.filter(<span class="fstat-no" title="function not covered" >p </span>=&gt; <span class="cstat-no" title="statement not covered" >p.type === 'S' &amp;&amp; p.price &lt; currentClose)</span>.slice(0, maxLevels).map(<span class="fstat-no" title="function not covered" >p </span>=&gt; <span class="cstat-no" title="statement not covered" >p.price.toFixed(2))</span>;</span>
+    const resistanceLevels = <span class="cstat-no" title="statement not covered" >sortedByDist.filter(<span class="fstat-no" title="function not covered" >p </span>=&gt; <span class="cstat-no" title="statement not covered" >p.type === 'R' &amp;&amp; p.price &gt; currentClose)</span>.slice(0, maxLevels).map(<span class="fstat-no" title="function not covered" >p </span>=&gt; <span class="cstat-no" title="statement not covered" >p.price.toFixed(2))</span>;</span>
+<span class="cstat-no" title="statement not covered" >    return { supportLevels, resistanceLevels };</span>
+}
+&nbsp;
+function calculateWSS(analysis, currentPrice) {
+    const w = config.indicators.wss_weights;
+    let score = 0;
+    const last = analysis.closes.length - 1;
+    const { rsi, stoch, macd, reg, superTrend, chandelierExit, fvg, divergence, buyWall, sellWall, atr } = analysis;
+&nbsp;
+    // --- 1. TREND COMPONENT (REFINED) ---
+    let trendScore = 0;
+    trendScore += (analysis.trendMTF === 'BULLISH' ? <span class="branch-0 cbranch-no" title="branch not covered" >w.trend_mtf_weight </span>: -w.trend_mtf_weight);
+    if (superTrend.trend[last] === 1) <span class="cstat-no" title="statement not covered" >trendScore += w.trend_scalp_weight; </span>else <span class="cstat-no" title="statement not covered" >trendScore -= w.trend_scalp_weight;</span>
+<span class="cstat-no" title="statement not covered" >    if (chandelierExit.trend[last] === 1) <span class="cstat-no" title="statement not covered" >trendScore += w.trend_scalp_weight; </span>else <span class="cstat-no" title="statement not covered" >trendScore -= w.trend_scalp_weight;</span></span>
+<span class="cstat-no" title="statement not covered" >    trendScore *= reg.r2[last]; </span>
+<span class="cstat-no" title="statement not covered" >    score += trendScore;</span>
+&nbsp;
+    // --- 2. MOMENTUM COMPONENT (NORMALIZED &amp; REFINED) ---
+    let momentumScore = <span class="cstat-no" title="statement not covered" >0;</span>
+    const rsiVal = <span class="cstat-no" title="statement not covered" >rsi[last];</span> const stochK = <span class="cstat-no" title="statement not covered" >stoch.k[last];</span>
+<span class="cstat-no" title="statement not covered" >    if (rsiVal &lt; 50) <span class="cstat-no" title="statement not covered" >momentumScore += (50 - rsiVal) / 50; </span>else <span class="cstat-no" title="statement not covered" >momentumScore -= (rsiVal - 50) / 50;</span></span>
+<span class="cstat-no" title="statement not covered" >    if (stochK &lt; 50) <span class="cstat-no" title="statement not covered" >momentumScore += (50 - stochK) / 50; </span>else <span class="cstat-no" title="statement not covered" >momentumScore -= (stochK - 50) / 50;</span></span>
+    const macdHist = <span class="cstat-no" title="statement not covered" >macd.hist[last];</span>
+<span class="cstat-no" title="statement not covered" >    if (macdHist &gt; 0) <span class="cstat-no" title="statement not covered" >momentumScore += w.macd_weight; </span>else <span class="cstat-no" title="statement not covered" >if (macdHist &lt; 0) <span class="cstat-no" title="statement not covered" >momentumScore -= w.macd_weight;</span></span></span>
+<span class="cstat-no" title="statement not covered" >    score += momentumScore * w.momentum_normalized_weight;</span>
+&nbsp;
+&nbsp;
+    // --- 3. STRUCTURE / LIQUIDITY COMPONENT (REFINED) ---
+    let structureScore = <span class="cstat-no" title="statement not covered" >0;</span>
+<span class="cstat-no" title="statement not covered" >    if (analysis.isSqueeze) <span class="cstat-no" title="statement not covered" >structureScore += (analysis.trendMTF === 'BULLISH' ? w.squeeze_vol_weight : -w.squeeze_vol_weight);</span></span>
+<span class="cstat-no" title="statement not covered" >    if (divergence.includes('BULLISH')) <span class="cstat-no" title="statement not covered" >structureScore += w.divergence_weight;</span></span>
+    else <span class="cstat-no" title="statement not covered" >if (divergence.includes('BEARISH')) <span class="cstat-no" title="statement not covered" >structureScore -= w.divergence_weight;</span></span>
+&nbsp;
+    const price = <span class="cstat-no" title="statement not covered" >currentPrice;</span>
+    const atrVal = <span class="cstat-no" title="statement not covered" >atr[last];</span>
+<span class="cstat-no" title="statement not covered" >    if (fvg) {</span>
+<span class="cstat-no" title="statement not covered" >        if (fvg.type === 'BULLISH' &amp;&amp; price &gt; fvg.bottom &amp;&amp; price &lt; fvg.top) <span class="cstat-no" title="statement not covered" >structureScore += w.liquidity_grab_weight;</span></span>
+        else <span class="cstat-no" title="statement not covered" >if (fvg.type === 'BEARISH' &amp;&amp; price &lt; fvg.top &amp;&amp; price &gt; fvg.bottom) <span class="cstat-no" title="statement not covered" >structureScore -= w.liquidity_grab_weight;</span></span>
+    }
+<span class="cstat-no" title="statement not covered" >    if (buyWall &amp;&amp; (price - buyWall) &lt; atrVal) <span class="cstat-no" title="statement not covered" >structureScore += w.liquidity_grab_weight * 0.5; </span></span>
+    else <span class="cstat-no" title="statement not covered" >if (sellWall &amp;&amp; (sellWall - price) &lt; atrVal) <span class="cstat-no" title="statement not covered" >structureScore -= w.liquidity_grab_weight * 0.5;</span></span>
+<span class="cstat-no" title="statement not covered" >    score += structureScore;</span>
+&nbsp;
+    // --- 4. FINAL VOLATILITY ADJUSTMENT ---
+    const volatility = <span class="cstat-no" title="statement not covered" >analysis.volatility[analysis.volatility.length - 1] || 0;</span>
+    const avgVolatility = <span class="cstat-no" title="statement not covered" >analysis.avgVolatility[analysis.avgVolatility.length - 1] || 1;</span>
+    const volRatio = <span class="cstat-no" title="statement not covered" >volatility / avgVolatility;</span>
+&nbsp;
+    let finalScore = <span class="cstat-no" title="statement not covered" >score;</span>
+<span class="cstat-no" title="statement not covered" >    if (volRatio &gt; 1.5) <span class="cstat-no" title="statement not covered" >finalScore *= (1 - w.volatility_weight);</span></span>
+    else <span class="cstat-no" title="statement not covered" >if (volRatio &lt; 0.5) <span class="cstat-no" title="statement not covered" >finalScore *= (1 + w.volatility_weight);</span></span>
+    
+<span class="cstat-no" title="statement not covered" >    return parseFloat(finalScore.toFixed(2));</span>
+}
+&nbsp;
+module.exports = { getOrderbookLevels, calculateWSS };
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2025-12-02T21:58:15.809Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

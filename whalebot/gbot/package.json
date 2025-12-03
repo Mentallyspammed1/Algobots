@@ -9,9 +9,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "bybit-api": "^4.4.2",
+    "decimal.js": "^10.6.0",
     "dotenv": "^17.2.3",
     "node-fetch": "^3.3.2",
     "ws": "^8.18.3"

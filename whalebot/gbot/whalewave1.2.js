@@ -377,7 +377,7 @@ function calculateWSS(analysis, currentPrice) {
     const w = config.indicators.wss_weights;
     let score = 0;
     const last = analysis.closes.length - 1;
-    const { rsi, stoch, macd, reg, st, ce, fvg, divergence, buyWall, sellWall, atr } = analysis;
+    const { rsi, stoch, macd, reg, st, ce, fvg, divergence, buyWall, sellWall, atr, mfi, chop, cci, bb, kc } = analysis; // Added mfi, chop, cci, bb, kc
 
     // --- 1. TREND COMPONENT ---
     let trendScore = 0;
@@ -395,10 +395,18 @@ function calculateWSS(analysis, currentPrice) {
     let momentumScore = 0;
     const rsiVal = rsi[last];
     const stochK = stoch.k[last];
+    const mfiVal = mfi[last]; // Added MFI
+    const cciVal = cci[last]; // Added CCI
+
     // Normalized RSI (stronger signal closer to 0/100)
     if (rsiVal < 50) momentumScore += (50 - rsiVal) / 50; else momentumScore -= (rsiVal - 50) / 50;
     // Normalized Stoch K
     if (stochK < 50) momentumScore += (50 - stochK) / 50; else momentumScore -= (stochK - 50) / 50;
+    // Normalized MFI
+    if (mfiVal < 50) momentumScore += (50 - mfiVal) / 50; else momentumScore -= (mfiVal - 50) / 50;
+    // Normalized CCI (using 0 as midpoint)
+    if (cciVal < 0) momentumScore += (0 - cciVal) / 100; else momentumScore -= (cciVal - 0) / 100; // Assuming CCI ranges approx -100 to 100
+
     // MACD Histogram Check
     const macdHist = macd.hist[last];
     if (macdHist > 0) momentumScore += w.macd_weight; else if (macdHist < 0) momentumScore -= w.macd_weight;
@@ -423,7 +431,12 @@ function calculateWSS(analysis, currentPrice) {
     else if (sellWall && (sellWall - price) < atrVal) structureScore -= w.liquidity_grab_weight * 0.5;
     score += structureScore;
 
-    // --- 4. FINAL VOLATILITY ADJUSTMENT ---
+    // --- 4. CHOPPINESS (Ranges and Trends) ---
+    const chopVal = chop[last]; // Added Chop
+    if (chopVal > 61.8) score -= w.regime_weight * 0.5; // Penalty for chop, higher chop -> lower score magnitude
+    else if (chopVal < 38.2) score += w.regime_weight * 0.5; // Bonus for trending, lower chop -> higher score magnitude
+
+    // --- 5. FINAL VOLATILITY ADJUSTMENT ---
     const volatility = analysis.volatility[analysis.volatility.length - 1] || 0;
     const avgVolatility = analysis.avgVolatility[analysis.avgVolatility.length - 1] || 1;
     const volRatio = volatility / avgVolatility;
@@ -554,22 +567,26 @@ class EnhancedGeminiBrain {
         MARKET CONTEXT:
         - Price: ${ctx.price} | Volatility: ${ctx.volatility} | Regime: ${ctx.marketRegime}
         - Trend (15m): ${ctx.trend_mtf} | Trend (3m): ${ctx.trend_angle} (Slope) | ADX: ${ctx.adx}
-        - Momentum: RSI=${ctx.rsi}, Stoch=${ctx.stoch_k}, MACD=${ctx.macd_hist}
+        - Momentum: RSI=${ctx.rsi}, Stoch=${ctx.stoch_k}, MACD=${ctx.macd_hist}, MFI=${ctx.mfi}, CCI=${ctx.cci}
         - Structure: VWAP=${ctx.vwap}, FVG=${ctx.fvg ? ctx.fvg.type + ' @ ' + ctx.fvg.price.toFixed(2) : 'None'}, Squeeze: ${ctx.isSqueeze}
         - Divergence: ${ctx.divergence}
         - Key Levels: Fib P=${ctx.fibs.P.toFixed(2)}, S1=${ctx.fibs.S1.toFixed(2)}, R1=${ctx.fibs.R1.toFixed(2)}
         - Support/Resistance: ${ctx.sr_levels}
+        - Volatility Channels: BB_Upper=${ctx.bb_upper}, BB_Lower=${ctx.bb_lower}, KC_Upper=${ctx.kc_upper}, KC_Lower=${ctx.kc_lower}
+        - Trend Strength: SuperTrend=${ctx.st_trend} (${ctx.st_value}), ChandelierExit=${ctx.ce_trend} (${ctx.ce_value})
+        - Chop Zone: ${ctx.chop} (Above 61.8 = Choppy, Below 38.2 = Trending)
 
         STRATEGY ARCHETYPES:
-        1. TREND_SURFER (WSS Trend > 1.0): Pullback to VWAP/EMA, anticipate continuation.
-        2. VOLATILITY_BREAKOUT (Squeeze=YES): Trade in direction of MTF trend on volatility expansion.
-        3. MEAN_REVERSION (WSS Momentum < -1.0 or > 1.0, Chop > 60): Fade extreme RSI/Stoch.
-        4. LIQUIDITY_GRAB (Price Near FVG/Wall): Fade or trade the retest/bounce of a liquidity zone.
-        5. DIVERGENCE_HUNT (Divergence != NONE): High conviction reversal trade using swing high/low for SL.
+        1. TREND_SURFER (WSS Trend > 1.0, Strong ADX, Aligned ST/CE): Pullback to VWAP/EMA, anticipate continuation. Look for strong trend confirmation.
+        2. VOLATILITY_BREAKOUT (Squeeze=YES, High Volume, Clear Direction from MTF Trend): Trade in direction of MTF trend on volatility expansion. Target channel breakouts.
+        3. MEAN_REVERSION (WSS Momentum < -1.0 or > 1.0, Extreme RSI/Stoch/MFI/CCI, Price near BB/KC bands): Fade extreme readings when price is at overbought/oversold levels. Target mean (EMA/SMA).
+        4. LIQUIDITY_GRAB (Price Near FVG/Wall, High Volatility): Fade or trade the retest/bounce of a liquidity zone. Use ATR for target sizing.
+        5. DIVERGENCE_HUNT (Divergence != NONE, Confluence with other momentum indicators): High conviction reversal trade using swing high/low for SL. Confirm with MFI/CCI.
 
         INSTRUCTIONS:
         - If the WSS does not meet the threshold, or if no strategy is clear, return "HOLD".
-        - Calculate precise entry, SL, and TP (1:1.5 RR minimum, use ATR/Pivot/FVG for targets).
+        - Calculate precise entry, SL, and TP (1:1.5 RR minimum, use ATR/Pivot/FVG/Channel bounds for targets).
+        - Provide a concise but comprehensive reason for the trade, referencing specific indicators and market conditions from the CONTEXT above.
 
         OUTPUT JSON ONLY: { "action": "BUY"|"SELL"|"HOLD", "strategy": "STRATEGY_NAME", "confidence": 0.0-1.0, "entry": number, "sl": number, "tp": number, "reason": "string" }
         `;
@@ -598,7 +615,7 @@ class TradingEngine {
 
     async start() {
         console.clear();
-        console.log(NEON.bg(NEON.PURPLE(` 🚀 WHALEWAVE TITAN v5.0 STARTING... `)));
+        console.log(NEON.bg(NEON.BOLD(NEON.PURPLE(` 🚀 WHALEWAVE TITAN v5.0 STARTING... `))));
         
         while (this.isRunning) {
             try {
@@ -663,6 +680,22 @@ class TradingEngine {
 
     buildContext(d, a) {
         const last = a.closes.length - 1;
+        // Defensive check for 'last' index in analysis results
+        if (last < 0 || a.rsi.length <= last || a.stoch.k.length <= last || a.macd.hist.length <= last ||
+            a.adx.length <= last || a.chop.length <= last || a.vwap.length <= last ||
+            a.volatility.length <= last || a.reg.slope.length <= last || a.mfi.length <= last || a.cci.length <= last ||
+            a.bb.upper.length <= last || a.kc.upper.length <= last || a.st.trend.length <= last || a.ce.trend.length <= last) {
+            // Return a default context or throw an error if analysis data is insufficient
+            return {
+                price: d.price, rsi: 0, stoch_k: 0, macd_hist: 0, adx: 0, chop: 0, vwap: 0,
+                trend_angle: 0, trend_mtf: 'NONE', isSqueeze: 'NO', fvg: null, divergence: 'NONE',
+                walls: { buy: undefined, sell: undefined }, fibs: {}, volatility: 0, marketRegime: 'NORMAL',
+                wss: 0, sr_levels: 'S:[] R:[]',
+                mfi: 0, cci: 0, bb_upper: 0, bb_lower: 0, kc_upper: 0, kc_lower: 0,
+                st_trend: 'NONE', st_value: 0, ce_trend: 'NONE', ce_value: 0, atr: 0
+            };
+        }
+
         const linReg = TA.getFinalValue(a, 'reg', 4);
         const sr = getOrderbookLevels(d.bids, d.asks, d.price, config.orderbook.sr_levels);
 
@@ -672,11 +705,27 @@ class TradingEngine {
             trend_angle: linReg.slope, trend_mtf: a.trendMTF, isSqueeze: a.isSqueeze ? 'YES' : 'NO', fvg: a.fvg, divergence: a.divergence,
             walls: { buy: a.buyWall, sell: a.sellWall }, fibs: a.fibs,
             volatility: a.volatility[last].toFixed(2), marketRegime: TA.marketRegime(a.closes, a.volatility),
-            wss: a.wss, sr_levels: `S:[${sr.supportLevels.join(', ')}] R:[${sr.resistanceLevels.join(', ')}]`
+            wss: a.wss, sr_levels: `S:[${sr.supportLevels.join(', ')}] R:[${sr.resistanceLevels.join(', ')}]`,
+            mfi: a.mfi[last].toFixed(2), cci: a.cci[last].toFixed(2),
+            bb_upper: a.bb.upper[last].toFixed(2), bb_lower: a.bb.lower[last].toFixed(2),
+            kc_upper: a.kc.upper[last].toFixed(2), kc_lower: a.kc.lower[last].toFixed(2),
+            st_trend: a.st.trend[last] === 1 ? 'BULLISH' : 'BEARISH', st_value: a.st.value[last].toFixed(2),
+            ce_trend: a.ce.trend[last] === 1 ? 'BULLISH' : 'BEARISH', ce_value: a.ce.value[last].toFixed(2),
+            atr: a.atr[last].toFixed(2)
         };
     }
 
     displayDashboard(d, ctx, sig) {
+        // Defensive check for ctx.wss and ctx.marketRegime
+        const wss = ctx.wss !== undefined ? ctx.wss : 0;
+        const marketRegime = ctx.marketRegime || 'NORMAL';
+        const trendMTF = ctx.trend_mtf || 'NONE';
+        const isSqueeze = ctx.isSqueeze || 'NO';
+        const divergence = ctx.divergence || 'NONE';
+        const fvg = ctx.fvg;
+        const vwap = ctx.vwap;
+
+
         console.clear();
         const border = NEON.GRAY('─'.repeat(80));
         console.log(border);
@@ -684,19 +733,21 @@ class TradingEngine {
         console.log(border);
 
         const sigColor = sig.action === 'BUY' ? NEON.GREEN : sig.action === 'SELL' ? NEON.RED : NEON.GRAY;
-        const wssColor = ctx.wss >= config.indicators.wss_weights.action_threshold ? NEON.GREEN : ctx.wss <= -config.indicators.wss_weights.action_threshold ? NEON.RED : NEON.YELLOW;
-        console.log(`WSS: ${wssColor(ctx.wss)} | Strategy: ${NEON.BLUE(sig.strategy || 'SEARCHING')} | Signal: ${sigColor(sig.action)} (${(sig.confidence*100).toFixed(0)}%)`);
+        const wssColor = wss >= config.indicators.wss_weights.action_threshold ? NEON.GREEN : wss <= -config.indicators.wss_weights.action_threshold ? NEON.RED : NEON.YELLOW;
+        console.log(`WSS: ${wssColor(wss)} | Strategy: ${NEON.BLUE(sig.strategy || 'SEARCHING')} | Signal: ${sigColor(sig.action)} (${(sig.confidence*100).toFixed(0)}%)`);
         console.log(NEON.GRAY(`Reason: ${sig.reason}`));
         console.log(border);
 
-        const regimeCol = ctx.marketRegime.includes('HIGH') ? NEON.RED : NEON.GREEN;
-        console.log(`Regime: ${regimeCol(ctx.marketRegime)} | Vol: ${ctx.volatility} | Squeeze: ${ctx.isSqueeze === 'YES' ? NEON.ORANGE('ACTIVE') : 'OFF'}`);
+        const regimeCol = marketRegime.includes('HIGH') ? NEON.RED : NEON.GREEN;
+        console.log(`Regime: ${regimeCol(marketRegime)} | Vol: ${ctx.volatility} | Squeeze: ${isSqueeze === 'YES' ? NEON.ORANGE('ACTIVE') : 'OFF'}`);
         console.log(`MTF Trend: ${ctx.trend_mtf === 'BULLISH' ? NEON.GREEN('BULL') : NEON.RED('BEAR')} | Slope: ${ctx.trend_angle} | ADX: ${ctx.adx}`);
         console.log(border);
 
-        console.log(`RSI: ${ctx.rsi} | Stoch: ${ctx.stoch_k} | MACD: ${ctx.macd_hist} | Chop: ${ctx.chop}`);
-        console.log(`Divergence: ${ctx.divergence !== 'NONE' ? NEON.YELLOW(ctx.divergence) : 'None'} | FVG: ${ctx.fvg ? NEON.YELLOW(ctx.fvg.type) : 'None'}`);
-        console.log(`VWAP: ${ctx.vwap} | ${ctx.sr_levels}`);
+        console.log(`RSI: ${ctx.rsi} | Stoch: ${ctx.stoch_k} | MACD: ${ctx.macd_hist} | MFI: ${ctx.mfi} | CCI: ${ctx.cci}`); // Updated line
+        console.log(`Chop: ${ctx.chop} | Divergence: ${divergence !== 'NONE' ? NEON.YELLOW(divergence) : 'None'} | FVG: ${fvg ? NEON.YELLOW(fvg.type) : 'None'}`); // Updated line
+        console.log(`VWAP: ${ctx.vwap} | BB: ${ctx.bb_upper}/${ctx.bb_lower} | KC: ${ctx.kc_upper}/${ctx.kc_lower}`); // New line
+        console.log(`SuperTrend: ${ctx.st_trend} (${ctx.st_value}) | ChandelierExit: ${ctx.ce_trend} (${ctx.ce_value}) | ATR: ${ctx.atr}`); // New line
+        console.log(`${NEON.GRAY('Key Levels:')} P=${NEON.YELLOW(ctx.fibs.P.toFixed(2))} S1=${NEON.GREEN(ctx.fibs.S1.toFixed(2))} R1=${NEON.RED(ctx.fibs.R1.toFixed(2))}`);
         console.log(border);
 
         const pnlCol = this.exchange.dailyPnL.gte(0) ? NEON.GREEN : NEON.RED;

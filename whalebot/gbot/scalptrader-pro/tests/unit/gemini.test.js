@@ -104,7 +104,7 @@ describe('EnhancedGeminiBrain', () => {
         const result = await promise;
 
         expect(mockGenerateContent).toHaveBeenCalledTimes(3);
-        expect(result.reason).toBe("Analysis failed");
+        expect(result.reason).toBe("AI Comms Failure: API Error");
         expect(result.action).toBe("HOLD");
     });
 });

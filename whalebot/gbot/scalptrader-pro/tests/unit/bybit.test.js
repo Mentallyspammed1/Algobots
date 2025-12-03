@@ -33,14 +33,14 @@ describe('Bybit Service', () => {
 
         expect(mockWebSocket.send).toHaveBeenCalledWith(JSON.stringify({
             op: 'subscribe',
-            args: [`kline.${config.TIMEFRAME}.${config.SYMBOL}`]
+            args: [`kline.${config.interval}.${config.symbol}`]
         }));
     });
 
     it('should call the message callback on new kline message', () => {
         bybit.connect(onMessageCallback);
         const messageHandler = mockWebSocket.on.mock.calls.find(call => call[0] === 'message')[1];
-        const mockMessage = { topic: `kline.${config.TIMEFRAME}.${config.SYMBOL}`, data: 'test data' };
+        const mockMessage = { topic: `kline.${config.interval}.${config.symbol}`, data: 'test data' };
         messageHandler(JSON.stringify(mockMessage));
         expect(onMessageCallback).toHaveBeenCalledWith(mockMessage);
     });

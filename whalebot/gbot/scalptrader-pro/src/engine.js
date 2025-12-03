@@ -5,14 +5,14 @@ const { EnhancedDataProvider } = require('./services/data-provider');
 const { EnhancedPaperExchange } = require('./services/exchange');
 const NEON = require('./utils/colors');
 const { Decimal } = require('decimal.js');
-const { getOrderbookLevels, calculateWSS } = require('../utils/analysis');
+const { getOrderbookLevels, calculateWSS } = require('./utils/analysis');
 const TA = require('./indicators'); // Import all TA functions as an object
 
 // Global Decimal settings, needs to be done once
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_DOWN });
 
 class TradingEngine {
-    constructor() {
+    constructor() { // Reverted constructor
         this.dataProvider = new EnhancedDataProvider();
         this.exchange = new EnhancedPaperExchange();
         this.ai = new EnhancedGeminiBrain();
@@ -38,7 +38,7 @@ class TradingEngine {
             } catch (e) {
                 console.error(NEON.RED(`Loop Critical Error: ${e.message}`));
             }
-            await new Promise(r => setTimeout(r, config.loop_delay * 1000));
+            await new Promise(r => setTimeout(r, config.loop_delay * 1000)); // Reverted delay
         }
     }
 
@@ -59,6 +59,21 @@ class TradingEngine {
         ]);
 
         const last = c.length - 1;
+        // Ensure that c.length is at least 1 before accessing c[last]
+        // This check is important as indicators can return arrays that are shorter than config.limit
+        // leading to 'undefined' access if not careful.
+        // For example, if c is an empty array, last would be -1.
+        if (last < 0) { // Handle case where candles array is empty or too short
+            // Potentially log an error or return a default analysis object
+            // For now, let's return a minimal analysis to prevent immediate crashes
+            return {
+                closes: c, rsi: [], stoch: {k:[],d:[]}, macd: {line:[],signal:[],hist:[]}, adx: [], mfi: [], chop: [], reg: {slope:[],r2:[]}, 
+                bb: {upper:[],middle:[],lower:[]}, kc: {upper:[],middle:[],lower:[]}, atr: [], fvg: null, vwap: [], st: {trend:[],value:[]}, 
+                ce: {trend:[],value:[]}, cci: [], isSqueeze: false, divergence: 'NONE', volatility: [], avgVolatility: [], 
+                trendMTF: 'NONE', buyWall: undefined, sellWall: undefined, fibs: {}
+            };
+        }
+
         const isSqueeze = (bb.upper[last] < kc.upper[last]) && (bb.lower[last] > kc.lower[last]);
         const divergence = TA.detectDivergence(c, rsi);
         const volatility = TA.historicalVolatility(c);
@@ -81,6 +96,19 @@ class TradingEngine {
 
     buildContext(d, a) {
         const last = a.closes.length - 1;
+        // Defensive check for 'last' index in analysis results
+        if (last < 0 || a.rsi.length <= last || a.stoch.k.length <= last || a.macd.hist.length <= last ||
+            a.adx.length <= last || a.chop.length <= last || a.vwap.length <= last ||
+            a.volatility.length <= last || a.reg.slope.length <= last) {
+            // Return a default context or throw an error if analysis data is insufficient
+            return {
+                price: d.price, rsi: 0, stoch_k: 0, macd_hist: 0, adx: 0, chop: 0, vwap: 0,
+                trend_angle: 0, trend_mtf: 'NONE', isSqueeze: 'NO', fvg: null, divergence: 'NONE',
+                walls: { buy: undefined, sell: undefined }, fibs: {}, volatility: 0, marketRegime: 'NORMAL',
+                wss: 0, sr_levels: 'S:[] R:[]'
+            };
+        }
+        
         const linReg = TA.linReg(a.closes, config.indicators.linreg_period); // Recalculate as TA.reg is slope/r2 object
         const sr = getOrderbookLevels(d.bids, d.asks, d.price, config.orderbook.sr_levels);
 
@@ -128,6 +156,16 @@ class TradingEngine {
     }
 
     displayDashboard(d, ctx, sig) {
+        // Defensive check for ctx.wss and ctx.marketRegime
+        const wss = ctx.wss !== undefined ? ctx.wss : 0;
+        const marketRegime = ctx.marketRegime || 'NORMAL';
+        const trendMTF = ctx.trend_mtf || 'NONE';
+        const isSqueeze = ctx.isSqueeze || 'NO';
+        const divergence = ctx.divergence || 'NONE';
+        const fvg = ctx.fvg;
+        const vwap = ctx.vwap;
+
+
         console.clear();
         const border = NEON.GRAY('─'.repeat(80));
         console.log(border);
@@ -135,20 +173,20 @@ class TradingEngine {
         console.log(border);
 
         const sigColor = sig.action === 'BUY' ? NEON.GREEN : sig.action === 'SELL' ? NEON.RED : NEON.GRAY;
-        const wssColor = ctx.wss >= config.indicators.wss_weights.action_threshold ? NEON.GREEN : ctx.wss <= -config.indicators.wss_weights.action_threshold ? NEON.RED : NEON.YELLOW;
-        console.log(`WSS: ${wssColor(ctx.wss)} | Strategy: ${NEON.BLUE(sig.strategy || 'SEARCHING')} | Signal: ${sigColor(sig.action)} (${(sig.confidence*100).toFixed(0)}%)`);
+        const wssColor = wss >= config.indicators.wss_weights.action_threshold ? NEON.GREEN : wss <= -config.indicators.wss_weights.action_threshold ? NEON.RED : NEON.YELLOW;
+        console.log(`WSS: ${wssColor(wss)} | Strategy: ${NEON.BLUE(sig.strategy || 'SEARCHING')} | Signal: ${sigColor(sig.action)} (${(sig.confidence*100).toFixed(0)}%)`);
         console.log(NEON.GRAY(`Reason: ${sig.reason}`));
         console.log(border);
 
-        const regimeCol = ctx.marketRegime.includes('HIGH') ? NEON.RED : ctx.marketRegime.includes('LOW') ? NEON.GREEN : NEON.YELLOW;
-        const trendCol = ctx.trend_mtf === 'BULLISH' ? NEON.GREEN : NEON.RED;
-        console.log(`Regime: ${regimeCol(ctx.marketRegime)} | Vol: ${this.colorizeValue(ctx.volatility, 'volatility')} | Squeeze: ${ctx.isSqueeze === 'YES' ? NEON.ORANGE('ACTIVE') : 'OFF'}`);
-        console.log(`MTF Trend: ${trendCol(ctx.trend_mtf)} | Slope: ${this.colorizeValue(ctx.trend_angle, 'trend_angle')} | ADX: ${this.colorizeValue(ctx.adx, 'adx')}`);
+        const regimeCol = marketRegime.includes('HIGH') ? NEON.RED : marketRegime.includes('LOW') ? NEON.GREEN : NEON.YELLOW;
+        const trendCol = trendMTF === 'BULLISH' ? NEON.GREEN : NEON.RED;
+        console.log(`Regime: ${regimeCol(marketRegime)} | Vol: ${this.colorizeValue(ctx.volatility, 'volatility')} | Squeeze: ${isSqueeze === 'YES' ? NEON.ORANGE('ACTIVE') : 'OFF'}`);
+        console.log(`MTF Trend: ${trendCol(trendMTF)} | Slope: ${this.colorizeValue(ctx.trend_angle, 'trend_angle')} | ADX: ${this.colorizeValue(ctx.adx, 'adx')}`);
         console.log(border);
 
         console.log(`RSI: ${this.colorizeValue(ctx.rsi, 'rsi')} | Stoch: ${this.colorizeValue(ctx.stoch_k, 'stoch_k')} | MACD Hist: ${this.colorizeValue(ctx.macd_hist, 'macd_hist')} | Chop: ${this.colorizeValue(ctx.chop, 'chop')}`);
-        const divCol = ctx.divergence.includes('BULLISH') ? NEON.GREEN : ctx.divergence.includes('BEARISH') ? NEON.RED : NEON.GRAY;
-        console.log(`Divergence: ${divCol(ctx.divergence)} | FVG: ${ctx.fvg ? NEON.YELLOW(ctx.fvg.type) : 'None'} | VWAP: ${this.colorizeValue(ctx.vwap, 'vwap')}`);
+        const divCol = divergence.includes('BULLISH') ? NEON.GREEN : divergence.includes('BEARISH') ? NEON.RED : NEON.GRAY;
+        console.log(`Divergence: ${divCol(divergence)} | FVG: ${fvg ? NEON.YELLOW(fvg.type) : 'None'} | VWAP: ${this.colorizeValue(vwap, 'vwap')}`);
         console.log(`${NEON.GRAY('Key Levels:')} P=${NEON.YELLOW(ctx.fibs.P.toFixed(2))} S1=${NEON.GREEN(ctx.fibs.S1.toFixed(2))} R1=${NEON.RED(ctx.fibs.R1.toFixed(2))}`);
         console.log(border);
 

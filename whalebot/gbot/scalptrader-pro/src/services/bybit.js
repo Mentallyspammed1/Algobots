@@ -9,10 +9,10 @@ function connect(onMessageCallback) {
         console.log(NEON.GREEN('Bybit WebSocket connected.'));
         const subscribeMsg = {
             op: 'subscribe',
-            args: [`kline.${config.TIMEFRAME}.${config.SYMBOL}`]
+            args: [`kline.${config.interval}.${config.symbol}`]
         };
         ws.send(JSON.stringify(subscribeMsg));
-        console.log(NEON.CYAN(`Subscribed to kline.${config.TIMEFRAME}.${config.SYMBOL}`));
+        console.log(NEON.CYAN(`Subscribed to kline.${config.interval}.${config.symbol}`));
     });
 
     ws.on('message', (data) => {

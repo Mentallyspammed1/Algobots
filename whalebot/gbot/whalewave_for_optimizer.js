@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { setTimeout } from 'timers/promises';
 import { Decimal } from 'decimal.js';
-import crypto from 'crypto'; // Import crypto module for signing requests
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -65,7 +65,6 @@ class ConfigManager {
 }
 
 
-const config = ConfigManager.load(); // Load global config for direct execution
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_DOWN });
 
 // --- 🎨 THEME MANAGER (CYAN ADDED) ---
@@ -213,7 +212,7 @@ class TA {
     static linReg(closes, period) {
         let slopes = TA.safeArr(closes.length), r2s = TA.safeArr(closes.length);
         let sumX = 0, sumX2 = 0;
-        for (let i = 0; i < period; i++) { sumX += i; sumX2 += i * i; }
+        for (let i = 0; i < period; i++) { sumX += i; sumX2 += i * i; } 
         for (let i = period - 1; i < closes.length; i++) {
             let sumY = 0, sumXY = 0;
             const ySlice = [];
@@ -239,7 +238,7 @@ class TA {
         const sma = this.sma(closes, period);
         let upper = [], lower = [], middle = sma;
         for (let i = 0; i < closes.length; i++) {
-            if (i < period - 1) { upper.push(0); lower.push(0); continue; }
+            if (i < period - 1) { upper.push(0); lower.push(0); continue; } 
             let sumSq = 0;
             for (let j = 0; j < period; j++) sumSq += Math.pow(closes[i - j] - sma[i], 2);
             const std = Math.sqrt(sumSq / period);
@@ -259,7 +258,7 @@ class TA {
             let dn = (highs[i] + lows[i]) / 2 - factor * atr[i];
             if (i > 0) {
                 const prevST = st[i-1];
-                if (trend[i-1] === 1) { up = up; dn = Math.max(dn, prevST); } else { up = Math.min(up, prevST); dn = dn; }
+                if (trend[i-1] === 1) { up = up; dn = Math.max(dn, prevST); } else { up = Math.min(up, prevST); dn = dn; } 
             }
             if (closes[i] > up) trend[i] = 1; else if (closes[i] < dn) trend[i] = -1; else trend[i] = trend[i-1];
             st[i] = trend[i] === 1 ? dn : up;
@@ -499,7 +498,8 @@ class TA {
 
 // --- 🛠️ UTILITIES & WSS CALCULATOR (from v5.0) ---
 
-function getOrderbookLevels(bids, asks, currentClose, maxLevels) {
+function getOrderbookLevels(bids, asks, currentClose, config) {
+    const maxLevels = config.orderbook.sr_levels;
     const pricePoints = [...bids.map(b => b.p), ...asks.map(a => a.p)];
     const uniquePrices = [...new Set(pricePoints)].sort((a, b) => a - b);
     let potentialSR = [];
@@ -515,7 +515,7 @@ function getOrderbookLevels(bids, asks, currentClose, maxLevels) {
     return { supportLevels, resistanceLevels };
 }
 
-function calculateWSS(analysis, currentPrice) {
+function calculateWSS(analysis, currentPrice, config) {
     const w = config.indicators.wss_weights;
     let score = 0;
     const last = analysis.closes.length - 1;
@@ -569,60 +569,151 @@ function calculateWSS(analysis, currentPrice) {
 
 // --- 📡 ENHANCED DATA PROVIDER (from v6.0) ---
 class EnhancedDataProvider {
-    constructor() { this.api = axios.create({ baseURL: 'https://api.bybit.com/v5/market', timeout: config.api.timeout }); }
-    async fetchWithRetry(url, params, retries = config.api.retries) {
+    constructor(config) { 
+        this.config = config;
+        this.bybitApiKey = process.env.BYBIT_API_KEY;
+        this.bybitApiSecret = process.env.BYBIT_API_SECRET;
+
+        if (!this.config.mock_data && (!this.bybitApiKey || !this.bybitApiSecret)) {
+            console.error(chalk.red("BYBIT_API_KEY or BYBIT_API_SECRET not set in environment variables. Running in mock_data mode if you want to skip API calls."));
+            process.exit(1);
+        }
+
+        this.api = axios.create({ 
+            baseURL: 'https://api.bybit.com/v5/market', 
+            timeout: this.config.api.timeout 
+        }); 
+    }
+
+    _signRequest(parameters, timestamp, recvWindow) {
+        // Sort parameters alphabetically
+        const sortedParams = Object.keys(parameters).sort().map(key => `${key}=${parameters[key]}`).join('&');
+        const paramStr = sortedParams;
+
+        const sign = crypto.createHmac('sha256', this.bybitApiSecret)
+            .update(timestamp + this.bybitApiKey + recvWindow + paramStr)
+            .digest('hex');
+        
+        return {
+            'X-BAPI-API-KEY': this.bybitApiKey,
+            'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-RECV-WINDOW': recvWindow,
+            'X-BAPI-SIGN': sign,
+            'Content-Type': 'application/json' // Bybit V5 often expects JSON type
+        };
+    }
+
+    async fetchWithRetry(endpoint, parameters, retries = this.config.api.retries, isPrivate = false) {
+        if (this.config.mock_data) {
+            return { result: { list: [], category: 'linear' }, retCode: 0, retMsg: 'OK' }; // Dummy response structure
+        }
+
+        const recvWindow = '5000'; // Default recvWindow
+        const timestamp = Date.now().toString();
+        
+        let headers = {};
+        // For public data, we also sign as per Bybit V5 requirement
+        headers = this._signRequest(parameters, timestamp, recvWindow);
+        
+
         for (let attempt = 0; attempt <= retries; attempt++) {
-            try { return (await this.api.get(url, { params })).data; }
-            catch (error) { if (attempt === retries) throw error; await setTimeout(Math.pow(config.api.backoff_factor, attempt) * 1000); }
+            try { 
+                const response = await this.api.get(endpoint, { 
+                    params: parameters, 
+                    headers: headers 
+                });
+                return response.data;
+            }
+            catch (error) { 
+                console.error(NEON.RED(`[BYBIT API Error] Attempt ${attempt + 1}/${retries + 1} for ${endpoint}: ${error.message}`));
+                if (error.response) {
+                    console.error(NEON.RED(`Status: ${error.response.status}, Data: ${JSON.stringify(error.response.data)}`));
+                }
+                if (attempt === retries) throw error; 
+                await setTimeout(Math.pow(this.config.api.backoff_factor, attempt) * 1000); 
+            }
         }
     }
     async fetchAll() {
+        if (this.config.mock_data) {
+            console.warn(NEON.YELLOW("[WARN] Running in Mock Data Mode. Returning dummy data."));
+            const dummyPrice = 500 + Math.random() * 50; // Simulate price fluctuation
+            const dummyCandles = [];
+            const now = Date.now();
+            for (let i = 0; i < 300; i++) {
+                const open = dummyPrice + (Math.random() - 0.5) * 5;
+                const close = dummyPrice + (Math.random() - 0.5) * 5;
+                const high = Math.max(open, close) + Math.random() * 2;
+                const low = Math.min(open, close) - Math.random() * 2;
+                const volume = 100 + Math.random() * 50;
+                dummyCandles.push({
+                    o: open,
+                    h: high,
+                    l: low,
+                    c: close,
+                    v: volume,
+                    t: now - (300 - i) * 3 * 60 * 1000 // Simulate 3-minute intervals
+                });
+            }
+
+            return {
+                price: dummyPrice,
+                candles: dummyCandles,
+                candlesMTF: dummyCandles.slice(0, 100), // Simplified MTF
+                bids: [{ p: dummyPrice - 1, q: 10 }, { p: dummyPrice - 2, q: 15 }],
+                asks: [{ p: dummyPrice + 1, q: 12 }, { p: dummyPrice + 2, q: 18 }],
+                daily: { h: dummyPrice + 10, l: dummyPrice - 10, c: dummyPrice },
+                timestamp: now
+            };
+        }
         try {
             const [ticker, kline, klineMTF, ob, daily] = await Promise.all([
-                this.fetchWithRetry('/tickers', { category: 'linear', symbol: config.symbol }),
-                this.fetchWithRetry('/kline', { category: 'linear', symbol: config.symbol, interval: config.interval, limit: config.limit }),
-                this.fetchWithRetry('/kline', { category: 'linear', symbol: config.symbol, interval: config.trend_interval, limit: 100 }),
-                this.fetchWithRetry('/orderbook', { category: 'linear', symbol: config.symbol, limit: config.orderbook.depth }),
-                this.fetchWithRetry('/kline', { category: 'linear', symbol: config.symbol, interval: 'D', limit: 2 })
-            ]);
-            const parseC = (list) => list.reverse().map(c => ({ o: parseFloat(c[1]), h: parseFloat(c[2]), l: parseFloat(c[3]), c: parseFloat(c[4]), v: parseFloat(c[5]), t: parseInt(c[0]) }));
-            return {
+                this.fetchWithRetry('tickers', { category: 'linear', symbol: this.config.symbol }),
+                this.fetchWithRetry('kline', { category: 'linear', symbol: this.config.symbol, interval: this.config.interval, limit: this.config.limit }),
+                this.fetchWithRetry('kline', { category: 'linear', symbol: this.config.symbol, interval: this.config.trend_interval, limit: 100 }),
+                this.fetchWithRetry('orderbook', { category: 'linear', symbol: this.config.symbol, limit: this.config.orderbook.depth }),
+                this.fetchWithRetry('kline', { category: 'linear', symbol: this.config.symbol, interval: 'D', limit: 2 })
+            ]);            const parseC = (list) => list.reverse().map(c => ({ o: parseFloat(c[1]), h: parseFloat(c[2]), l: parseFloat(c[3]), c: parseFloat(c[4]), v: parseFloat(c[5]), t: parseInt(c[0]) }));
+            return { 
                 price: parseFloat(ticker.result.list[0].lastPrice), candles: parseC(kline.result.list), candlesMTF: parseC(klineMTF.result.list),
                 bids: ob.result.b.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })), asks: ob.result.a.map(x => ({ p: parseFloat(x[0]), q: parseFloat(x[1]) })),
                 daily: { h: parseFloat(daily.result.list[1][2]), l: parseFloat(daily.result.list[1][3]), c: parseFloat(daily.result.list[1][4]) },
                 timestamp: Date.now()
             };
-        } catch (e) { console.warn(NEON.ORANGE(`[WARN] Data Fetch Fail: ${e.message}`)); return null; }
+        } catch (e) { console.warn(NEON.ORANGE(`[WARN] Data Fetch Fail: ${e.message}`)); return null; } 
     }
 }
 
 // --- 💰 EXCHANGE & RISK MANAGEMENT (from v6.0) ---
 class EnhancedPaperExchange {
-    constructor() {
-        this.balance = new Decimal(config.paper_trading.initial_balance); this.startBal = this.balance;
-        this.pos = null; this.dailyPnL = new Decimal(0);
+    constructor(config) {
+        this.config = config;
+        this.balance = new Decimal(this.config.paper_trading.initial_balance); 
+        this.startBal = this.balance; 
+        this.pos = null; 
+        this.dailyPnL = new Decimal(0);
     }
     canTrade() {
         const drawdown = this.startBal.sub(this.balance).div(this.startBal).mul(100);
-        if (drawdown.gt(config.risk.max_drawdown)) { console.log(NEON.RED(`🚨 MAX DRAWDOWN HIT`)); return false; }
+        if (drawdown.gt(this.config.risk.max_drawdown)) { console.log(NEON.RED(`🚨 MAX DRAWDOWN HIT`)); return false; }
         const dailyLoss = this.dailyPnL.div(this.startBal).mul(100);
-        if (dailyLoss.lt(-config.risk.daily_loss_limit)) { console.log(NEON.RED(`🚨 DAILY LOSS LIMIT HIT`)); return false; }
+        if (dailyLoss.lt(-this.config.risk.daily_loss_limit)) { console.log(NEON.RED(`🚨 DAILY LOSS LIMIT HIT`)); return false; }
         return true;
     }
     evaluate(priceVal, signal) {
         if (!this.canTrade()) { if (this.pos) this.handlePositionClose(new Decimal(priceVal), "RISK_STOP"); return; }
         const price = new Decimal(priceVal);
         if (this.pos) this.handlePositionClose(price);
-        if (!this.pos && signal.action !== 'HOLD' && signal.confidence >= config.min_confidence) { this.handlePositionOpen(price, signal); }
+        if (!this.pos && signal.action !== 'HOLD' && signal.confidence >= this.config.min_confidence) { this.handlePositionOpen(price, signal); }
     }
     handlePositionClose(price, forceReason = null) {
         let close = false, reason = forceReason || '';
         if (this.pos.side === 'BUY') { if (forceReason || price.lte(this.pos.sl)) { close = true; reason = reason || 'SL Hit'; } else if (price.gte(this.pos.tp)) { close = true; reason = reason || 'TP Hit'; } } else { if (forceReason || price.gte(this.pos.sl)) { close = true; reason = reason || 'SL Hit'; } else if (price.lte(this.pos.tp)) { close = true; reason = reason || 'TP Hit'; } } 
         if (close) {
-            const slippage = price.mul(config.paper_trading.slippage);
+            const slippage = price.mul(this.config.paper_trading.slippage);
             const exitPrice = this.pos.side === 'BUY' ? price.sub(slippage) : price.add(slippage);
             const rawPnl = this.pos.side === 'BUY' ? exitPrice.sub(this.pos.entry).mul(this.pos.qty) : this.pos.entry.sub(exitPrice).mul(this.pos.qty);
-            const fee = exitPrice.mul(this.pos.qty).mul(config.paper_trading.fee);
+            const fee = exitPrice.mul(this.pos.qty).mul(this.config.paper_trading.fee);
             const netPnl = rawPnl.sub(fee);
             this.balance = this.balance.add(netPnl); this.dailyPnL = this.dailyPnL.add(netPnl);
             const color = netPnl.gte(0) ? NEON.GREEN : NEON.RED;
@@ -633,25 +724,25 @@ class EnhancedPaperExchange {
     handlePositionOpen(price, signal) {
         const entry = new Decimal(signal.entry); const sl = new Decimal(signal.sl); const tp = new Decimal(signal.tp);
         const dist = entry.sub(sl).abs(); if (dist.isZero()) return;
-        const riskAmt = this.balance.mul(config.paper_trading.risk_percent / 100);
+        const riskAmt = this.balance.mul(this.config.paper_trading.risk_percent / 100);
         let qty = riskAmt.div(dist);
-        const maxQty = this.balance.mul(config.paper_trading.leverage_cap).div(price);
+        const maxQty = this.balance.mul(this.config.paper_trading.leverage_cap).div(price);
         if (qty.gt(maxQty)) qty = maxQty;
-        const slippage = price.mul(config.paper_trading.slippage);
+        const slippage = price.mul(this.config.paper_trading.slippage);
         const execPrice = signal.action === 'BUY' ? entry.add(slippage) : entry.sub(slippage);
-        const fee = execPrice.mul(qty).mul(config.paper_trading.fee);
+        const fee = execPrice.mul(qty).mul(this.config.paper_trading.fee);
         this.balance = this.balance.sub(fee);
         this.pos = { side: signal.action, entry: execPrice, qty: qty, sl: sl, tp: tp, strategy: signal.strategy };
         console.log(NEON.GREEN(`OPEN ${signal.action} [${signal.strategy}] @ ${execPrice.toFixed(4)} | Size: ${qty.toFixed(4)}`));
-    }
-}
+    }}
 
 // --- 🧠 MULTI-STRATEGY AI BRAIN (from v6.0) ---
 class EnhancedGeminiBrain {
-    constructor() {
+    constructor(config) {
+        this.config = config;
         const key = process.env.GEMINI_API_KEY;
         if (!key) { console.error("Missing GEMINI_API_KEY"); process.exit(1); }
-        this.model = new GoogleGenerativeAI(key).getGenerativeModel({ model: config.gemini_model });
+        this.model = new GoogleGenerativeAI(key).getGenerativeModel({ model: this.config.gemini_model });
     }
 
     async analyze(ctx) {
@@ -661,7 +752,7 @@ class EnhancedGeminiBrain {
 
         QUANTITATIVE BIAS:
         - **WSS Score (Crucial Filter):** ${ctx.wss} (Bias: ${ctx.wss > 0 ? 'BULLISH' : 'BEARISH'})
-        - CRITICAL RULE: Action must align with WSS. BUY requires WSS >= ${config.indicators.wss_weights.action_threshold}. SELL requires WSS <= -${config.indicators.wss_weights.action_threshold}.
+        - CRITICAL RULE: Action must align with WSS. BUY requires WSS >= ${this.config.indicators.wss_weights.action_threshold}. SELL requires WSS <= -${this.config.indicators.wss_weights.action_threshold}.
 
         MARKET CONTEXT:
         - Price: ${ctx.price} | Volatility: ${ctx.volatility} | Regime: ${ctx.marketRegime}
@@ -685,7 +776,6 @@ class EnhancedGeminiBrain {
 
         OUTPUT JSON ONLY: { "action": "BUY"|"SELL"|"HOLD", "strategy": "STRATEGY_NAME", "confidence": 0.0-1.0, "entry": number, "sl": number, "tp": number, "reason": "string" }
         `;
-
         try {
             const res = await this.model.generateContent(prompt);
             const text = res.response.text().replace(/```json|```/g, '').trim();
@@ -701,21 +791,23 @@ class EnhancedGeminiBrain {
 
 // --- 🔄 MAIN TRADING ENGINE (Colorization Implemented) ---
 class TradingEngine {
-    constructor() {
-        this.dataProvider = new EnhancedDataProvider();
-        this.exchange = new EnhancedPaperExchange();
-        this.ai = new EnhancedGeminiBrain();
+    constructor(config) {
+        this.config = config;
+        this.dataProvider = new EnhancedDataProvider(config);
+        this.exchange = new EnhancedPaperExchange(config);
+        this.ai = new EnhancedGeminiBrain(config);
         this.isRunning = true;
+        Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_DOWN });
     }
 
     async start() {
-        console.clear();
+        // console.clear(); // Disabled for optimizer
         console.log(NEON.bg(NEON.PURPLE(` 🚀 WHALEWAVE TITAN v6.1 STARTING... `)));
         
         while (this.isRunning) {
             try {
                 const data = await this.dataProvider.fetchAll();
-                if (!data) { await setTimeout(config.loop_delay * 1000); continue; }
+                if (!data) { await setTimeout(this.config.loop_delay * 1000); continue; } 
 
                 const analysis = await this.performAnalysis(data);
                 const context = this.buildContext(data, analysis);
@@ -727,7 +819,7 @@ class TradingEngine {
             } catch (e) {
                 console.error(NEON.RED(`Loop Critical Error: ${e.message}`));
             }
-            await setTimeout(config.loop_delay * 1000);
+            await setTimeout(this.config.loop_delay * 1000);
         }
     }
 
@@ -736,15 +828,19 @@ class TradingEngine {
         const l = data.candles.map(x => x.l); const v = data.candles.map(x => x.v);
         const mtfC = data.candlesMTF.map(x => x.c);
 
-        const [rsi, stoch, macd, adx, mfi, chop, reg, bb, kc, atr, fvg, vwap, st, ce, cci] = await Promise.all([
-            TA.rsi(c, config.indicators.rsi), TA.stoch(h, l, c, config.indicators.stoch_period, config.indicators.stoch_k, config.indicators.stoch_d),
-            TA.macd(c, config.indicators.macd_fast, config.indicators.macd_slow, config.indicators.macd_sig), TA.adx(h, l, c, config.indicators.adx_period),
-            TA.mfi(h, l, c, v, config.indicators.mfi), TA.chop(h, l, c, config.indicators.chop_period),
-            TA.linReg(c, config.indicators.linreg_period), TA.bollinger(c, config.indicators.bb_period, config.indicators.bb_std),
-            TA.keltner(h, l, c, config.indicators.kc_period, config.indicators.kc_mult), TA.atr(h, l, c, config.indicators.atr_period),
-            TA.findFVG(data.candles), TA.vwap(h, l, c, v, config.indicators.vwap_period),
-            TA.superTrend(h, l, c, config.indicators.atr_period, config.indicators.st_factor),
-            TA.chandelierExit(h, l, c, config.indicators.ce_period, config.indicators.ce_mult), TA.cci(h, l, c, config.indicators.cci_period)
+        const [rsi, stoch, macd, adx, mfi, chop, reg, bb, kc, atr, fvg, vwap, st, ce, cci, hma, ichimoku, ao, obv] = await Promise.all([
+            TA.rsi(c, this.config.indicators.rsi), TA.stoch(h, l, c, this.config.indicators.stoch_period, this.config.indicators.stoch_k, this.config.indicators.stoch_d),
+            TA.macd(c, this.config.indicators.macd_fast, this.config.indicators.macd_slow, this.config.indicators.macd_sig), TA.adx(h, l, c, this.config.indicators.adx_period),
+            TA.mfi(h, l, c, v, this.config.indicators.mfi), TA.chop(h, l, c, this.config.indicators.chop_period),
+            TA.linReg(c, this.config.indicators.linreg_period), TA.bollinger(c, this.config.indicators.bb_period, this.config.indicators.bb_std),
+            TA.keltner(h, l, c, this.config.indicators.kc_period, this.config.indicators.kc_mult), TA.atr(h, l, c, this.config.indicators.atr_period),
+            TA.findFVG(data.candles), TA.vwap(h, l, c, v, this.config.indicators.vwap_period),
+            TA.superTrend(h, l, c, this.config.indicators.atr_period, this.config.indicators.st_factor),
+            TA.chandelierExit(h, l, c, this.config.indicators.ce_period, this.config.indicators.ce_mult), TA.cci(h, l, c, this.config.indicators.cci_period),
+            TA.hma(c, this.config.indicators.hma_period),
+            TA.ichimoku(h, l, c, this.config.indicators.ichimoku_tenkan, this.config.indicators.ichimoku_kijun, this.config.indicators.ichimoku_senkou),
+            TA.awesomeOscillator(h, l, this.config.indicators.ao_fast, this.config.indicators.ao_slow),
+            TA.obv(c, v)
         ]);
 
         const last = c.length - 1;
@@ -756,14 +852,14 @@ class TradingEngine {
         const trendMTF = mtfC[mtfC.length-1] > mtfSma[mtfSma.length-1] ? "BULLISH" : "BEARISH";
         const fibs = TA.fibPivots(data.daily.h, data.daily.l, data.daily.c);
         const avgBid = data.bids.reduce((a,b)=>a+b.q,0)/data.bids.length;
-        const buyWall = data.bids.find(b => b.q > avgBid * config.orderbook.wall_threshold)?.p;
-        const sellWall = data.asks.find(a => a.q > avgBid * config.orderbook.wall_threshold)?.p;
+        const buyWall = data.bids.find(b => b.q > avgBid * this.config.orderbook.wall_threshold)?.p;
+        const sellWall = data.asks.find(a => a.q > avgBid * this.config.orderbook.wall_threshold)?.p;
 
         const analysis = { 
-            closes: c, rsi, stoch, macd, adx, mfi, chop, reg, bb, kc, atr, fvg, vwap, st, ce, cci,
+            closes: c, rsi, stoch, macd, adx, mfi, chop, reg, bb, kc, atr, fvg, vwap, st, ce, cci, hma, ichimoku, ao, obv,
             isSqueeze, divergence, volatility, avgVolatility, trendMTF, buyWall, sellWall, fibs
         };
-        analysis.wss = calculateWSS(analysis, data.price);
+        analysis.wss = calculateWSS(analysis, data.price, this.config);
         analysis.avgVolatility = avgVolatility;
         return analysis;
     }
@@ -771,7 +867,7 @@ class TradingEngine {
     buildContext(d, a) {
         const last = a.closes.length - 1;
         const linReg = TA.getFinalValue(a, 'reg', 4);
-        const sr = getOrderbookLevels(d.bids, d.asks, d.price, config.orderbook.sr_levels);
+        const sr = getOrderbookLevels(d.bids, d.asks, d.price, this.config);
 
         return {
             price: d.price, rsi: a.rsi[last], stoch_k: a.stoch.k[last], macd_hist: (a.macd.hist[last] || 0),
@@ -830,11 +926,11 @@ class TradingEngine {
         console.clear();
         const border = NEON.GRAY('─'.repeat(80));
         console.log(border);
-        console.log(NEON.bg(NEON.BOLD(NEON.PURPLE(` WHALEWAVE TITAN v6.1 | ${config.symbol} | $${d.price.toFixed(4)} `).padEnd(80))));
+        console.log(NEON.bg(NEON.BOLD(NEON.PURPLE(` WHALEWAVE TITAN v6.1 | ${this.config.symbol} | $${d.price.toFixed(4)} `).padEnd(80))));
         console.log(border);
 
         const sigColor = sig.action === 'BUY' ? NEON.GREEN : sig.action === 'SELL' ? NEON.RED : NEON.GRAY;
-        const wssColor = ctx.wss >= config.indicators.wss_weights.action_threshold ? NEON.GREEN : ctx.wss <= -config.indicators.wss_weights.action_threshold ? NEON.RED : NEON.YELLOW;
+        const wssColor = ctx.wss >= this.config.indicators.wss_weights.action_threshold ? NEON.GREEN : ctx.wss <= -this.config.indicators.wss_weights.action_threshold ? NEON.RED : NEON.YELLOW;
         console.log(`WSS: ${wssColor(ctx.wss)} | Strategy: ${NEON.BLUE(sig.strategy || 'SEARCHING')} | Signal: ${sigColor(sig.action)} (${(sig.confidence*100).toFixed(0)}%)`);
         console.log(NEON.GRAY(`Reason: ${sig.reason}`));
         console.log(border);
@@ -865,11 +961,13 @@ class TradingEngine {
 }
 
 // --- START ---
-const engine = new TradingEngine();
-process.on('SIGINT', () => { 
-    engine.isRunning = false; 
-    console.log(NEON.RED("\n🛑 SHUTTING DOWN GRACEFULLY...")); 
-    process.exit(0); 
-});
-process.on('SIGTERM', () => { engine.isRunning = false; process.exit(0); });
-engine.start();
+// const engine = new TradingEngine();
+// process.on('SIGINT', () => { 
+//     engine.isRunning = false; 
+//     console.log(NEON.RED("\n🛑 SHUTTING DOWN GRACEFULLY...")); 
+//     process.exit(0);
+// });
+// process.on('SIGTERM', () => { engine.isRunning = false; process.exit(0); });
+// engine.start();
+
+export { TradingEngine, ConfigManager };
