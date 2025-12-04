@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 Trading Bot – Refactored & Enhanced
@@ -21,26 +20,22 @@ vectorised pandas operations, and robust error handling.
 import logging
 import os
 import sys
-import urllib
 import time
-from datetime import UTC, datetime, timedelta
+import urllib
+from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Tuple, Dict, Optional, List
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
 import requests
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
+from logger_setup import SensitiveFormatter
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
-from logger_setup import SensitiveFormatter
-
-from logger_setup import SensitiveFormatter
-
 
 # --------------------------------------------------------------------------- #
 # Global Settings & Constants
@@ -58,7 +53,7 @@ NEON_CYAN = Fore.CYAN
 RESET = Style.RESET_ALL
 
 # Indicator colour map (used in display)
-INDICATOR_COLORS: Dict[str, str] = {
+INDICATOR_COLORS: dict[str, str] = {
     "SMA_10": Fore.LIGHTBLUE_EX,
     "SMA_Long": Fore.BLUE,
     "EMA_Short": Fore.LIGHTMAGENTA_EX,
@@ -151,7 +146,7 @@ MIN_CANDLESTICK_PATTERNS_BARS = 2
 def retry_on_exception(
     retries: int = MAX_API_RETRIES,
     delay: int = RETRY_DELAY_SECONDS,
-    allowed_exceptions: Tuple[type, ...] = (requests.exceptions.RequestException,),
+    allowed_exceptions: tuple[type, ...] = (requests.exceptions.RequestException,),
 ):
     """
     Decorator that retries a function on specified exceptions.
@@ -163,7 +158,7 @@ def retry_on_exception(
             while attempt < retries:
                 try:
                     return func(*args, **kwargs)
-                except allowed_exceptions as exc:
+                except allowed_exceptions:
                     attempt += 1
                     if attempt >= retries:
                         raise
@@ -258,15 +253,15 @@ class TradeManagement:
 @dataclass
 class MTFAnalysis:
     enabled: bool = True
-    higher_timeframes: List[str] = field(default_factory=lambda: ["60", "240"])
-    trend_indicators: List[str] = field(default_factory=lambda: ["ema", "ehlers_supertrend"])
+    higher_timeframes: list[str] = field(default_factory=lambda: ["60", "240"])
+    trend_indicators: list[str] = field(default_factory=lambda: ["ema", "ehlers_supertrend"])
     trend_period: int = 50
     mtf_request_delay_seconds: float = 0.5
 
 
 @dataclass
 class WeightSets:
-    default_scalping: Dict[str, float] = field(default_factory=lambda: {
+    default_scalping: dict[str, float] = field(default_factory=lambda: {
         "ema_alignment": 0.22,
         "sma_trend_filter": 0.28,
         "momentum_rsi_stoch_cci_wr_mfi": 0.18,
@@ -307,7 +302,7 @@ class Config:
     trade_management: TradeManagement = field(default_factory=TradeManagement)
     mtf_analysis: MTFAnalysis = field(default_factory=MTFAnalysis)
     indicator_settings: IndicatorSettings = field(default_factory=IndicatorSettings)
-    indicators: Dict[str, bool] = field(
+    indicators: dict[str, bool] = field(
         default_factory=lambda: {
             "ema_alignment": True,
             "sma_trend_filter": True,
@@ -341,7 +336,7 @@ class Config:
             "roc": True,
             "candlestick_patterns": True,
             "fibonacci_pivot_points": True,
-        }
+        },
     )
     weight_sets: WeightSets = field(default_factory=WeightSets)
 
@@ -356,7 +351,7 @@ def load_config(filepath: str, logger: logging.Logger) -> Config:
     """
     if not Path(filepath).exists():
         logger.warning(
-            f"{NEON_YELLOW}Configuration file not found. Creating default config at {filepath}.{RESET}"
+            f"{NEON_YELLOW}Configuration file not found. Creating default config at {filepath}.{RESET}",
         )
         default_cfg = Config()
         with Path(filepath).open("w", encoding="utf-8") as f:
@@ -385,7 +380,7 @@ def load_config(filepath: str, logger: logging.Logger) -> Config:
         return cfg
     except Exception as exc:
         logger.error(
-            f"{NEON_RED}Failed to load config: {exc}. Using defaults.{RESET}"
+            f"{NEON_RED}Failed to load config: {exc}. Using defaults.{RESET}",
         )
         return Config()
 
@@ -406,8 +401,8 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(
             SensitiveFormatter(
-                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}"
-            )
+                f"{NEON_BLUE}%(asctime)s - %(levelname)s - %(message)s{RESET}",
+            ),
         )
         logger.addHandler(console_handler)
 
@@ -419,7 +414,7 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
             backupCount=5,
         )
         file_handler.setFormatter(
-            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
         )
         logger.addHandler(file_handler)
 
@@ -471,8 +466,8 @@ class BybitClient:
         self,
         method: Literal["GET", "POST"],
         endpoint: str,
-        params: Optional[Dict[str, Any]],
-    ) -> Optional[Dict[str, Any]]:
+        params: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
         if not self.api_key or not self.api_secret:
             self.logger.error(
                 f"{NEON_RED}API_KEY or API_SECRET not set for signed request.{RESET}",
@@ -526,18 +521,18 @@ class BybitClient:
         return self._handle_api_response(response)
 
     def bybit_request(
-        self, method: Literal["GET", "POST"], endpoint: str, params: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, method: Literal["GET", "POST"], endpoint: str, params: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         # For public endpoints like klines and orderbook, signing is not required.
         # We use _send_signed_request as a general wrapper, but for public data,
         # we can simplify the call if needed, or just ensure signed=False is used.
         # For simplicity here, we'll use a direct request for public data if not signed.
         if method == "GET" and not params:
             params = {}  # Ensure params is not None for urlencode
-        
+
         timestamp = str(int(time.time() * 1000))
         url = f"{self.base_url}{endpoint}"
-        
+
         if method == "GET":
             query_string = urllib.parse.urlencode(params) if params else ""
             self.logger.debug(f"GET Request: {url}?{query_string}")
@@ -554,18 +549,18 @@ class BybitClient:
                 json=params,
                 timeout=REQUEST_TIMEOUT,
             )
-            
+
         return self._handle_api_response(response)
 
 
-    def _handle_api_response(self, response: requests.Response) -> Optional[Dict[str, Any]]:
+    def _handle_api_response(self, response: requests.Response) -> dict[str, Any] | None:
         try:
             response.raise_for_status()
             data = response.json()
             if data.get("retCode") != 0:
                 self.logger.error(
                     f"{NEON_RED}Bybit API Error: {data.get('retMsg')} "
-                    f"(Code: {data.get('retCode')}){RESET}"
+                    f"(Code: {data.get('retCode')}){RESET}",
                 )
                 return None
             return data
@@ -573,7 +568,7 @@ class BybitClient:
             self.logger.error(f"{NEON_RED}API response error: {exc}{RESET}")
             return None
 
-    def fetch_current_price(self, symbol: str) -> Optional[Decimal]:
+    def fetch_current_price(self, symbol: str) -> Decimal | None:
         endpoint = "/v5/market/tickers"
         params = {"category": "linear", "symbol": symbol}
         response = self.bybit_request("GET", endpoint, params)
@@ -591,7 +586,7 @@ class BybitClient:
         symbol: str,
         interval: str,
         limit: int,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         endpoint = "/v5/market/kline"
         params = {
             "category": "linear",
@@ -617,7 +612,7 @@ class BybitClient:
                 df["start_time"].astype(int),
                 unit="ms",
                 utc=True,
-                errors='coerce' # Add this to handle out-of-bounds datetimes
+                errors="coerce", # Add this to handle out-of-bounds datetimes
             ).dt.tz_convert(TIMEZONE)
             for col in ["open", "high", "low", "close", "volume", "turnover"]:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -637,7 +632,7 @@ class BybitClient:
         )
         return None
 
-    def fetch_orderbook(self, symbol: str, limit: int) -> Optional[Dict[str, Any]]:
+    def fetch_orderbook(self, symbol: str, limit: int) -> dict[str, Any] | None:
         endpoint = "/v5/market/orderbook"
         params = {"category": "linear", "symbol": symbol, "limit": limit}
         response = self.bybit_request("GET", endpoint, params)
@@ -662,7 +657,7 @@ class PositionManager:
         self.config = config
         self.logger = logger
         self.symbol = symbol
-        self.open_positions: List[Dict[str, Any]] = []
+        self.open_positions: list[dict[str, Any]] = []
 
         self.trade_management = config.trade_management
         self.max_open_positions = self.trade_management.max_open_positions
@@ -702,7 +697,7 @@ class PositionManager:
         side: Literal["BUY", "SELL"],
         current_price: Decimal,
         atr_value: Decimal,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         if not self.trade_management.enabled:
             self.logger.info(
                 f"{NEON_YELLOW}[{self.symbol}] Trade management disabled. Skipping opening position.{RESET}",
@@ -763,7 +758,7 @@ class PositionManager:
 
     def _close_position(
         self,
-        position: Dict[str, Any],
+        position: dict[str, Any],
         close_price: Decimal,
         closed_by: str,
     ) -> None:
@@ -774,9 +769,9 @@ class PositionManager:
 
     def _check_and_close_position(
         self,
-        position: Dict[str, Any],
+        position: dict[str, Any],
         current_price: Decimal,
-    ) -> Tuple[bool, Decimal, str]:
+    ) -> tuple[bool, Decimal, str]:
         side = position["side"]
         sl = position["stop_loss"]
         tp = position["take_profit"]
@@ -807,7 +802,7 @@ class PositionManager:
         if not self.trade_management.enabled or not self.open_positions:
             return
 
-        to_remove: List[int] = []
+        to_remove: list[int] = []
         for idx, pos in enumerate(self.open_positions):
             if pos["status"] != "OPEN":
                 continue
@@ -832,7 +827,7 @@ class PositionManager:
             p for i, p in enumerate(self.open_positions) if i not in to_remove
         ]
 
-    def get_open_positions(self) -> List[Dict[str, Any]]:
+    def get_open_positions(self) -> list[dict[str, Any]]:
         return [p for p in self.open_positions if p["status"] == "OPEN"]
 
 
@@ -847,13 +842,13 @@ class PerformanceTracker:
     def __init__(self, logger: logging.Logger, config: Config):
         self.logger = logger
         self.config = config
-        self.trades: List[Dict[str, Any]] = []
+        self.trades: list[dict[str, Any]] = []
         self.total_pnl = Decimal("0")
         self.wins = 0
         self.losses = 0
         self.trading_fee_percent = Decimal(str(config.trade_management.trading_fee_percent))
 
-    def record_trade(self, position: Dict[str, Any], pnl: Decimal) -> None:
+    def record_trade(self, position: dict[str, Any], pnl: Decimal) -> None:
         trade = {
             "entry_time": position["entry_time"],
             "exit_time": position["exit_time"],
@@ -882,7 +877,7 @@ class PerformanceTracker:
             f"{NEON_CYAN}[{position['symbol']}] Trade recorded. PnL (before fees): {pnl.normalize():.2f}, Total Fees: {total_fees.normalize():.2f}, Current Total PnL (after fees): {self.total_pnl.normalize():.2f}, Wins: {self.wins}, Losses: {self.losses}{RESET}",
         )
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         total_trades = len(self.trades)
         win_rate = (self.wins / total_trades * 100) if total_trades > 0 else 0
 
@@ -934,8 +929,8 @@ class TradingAnalyzer:
         self.config = config
         self.logger = logger
         self.symbol = symbol
-        self.indicator_values: Dict[str, Any] = {}
-        self.fib_levels: Dict[str, Decimal] = {}
+        self.indicator_values: dict[str, Any] = {}
+        self.fib_levels: dict[str, Decimal] = {}
         self.weights = config.weight_sets.default_scalping
         self.isd = config.indicator_settings
 
@@ -1214,7 +1209,7 @@ class TradingAnalyzer:
         self,
         period: int,
         multiplier: float,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         if len(self.df) < period * 3:
             self.logger.debug(
                 f"[{self.symbol}] Not enough data for Ehlers SuperTrend (period={period}). Need at least {period * 3} bars.",
@@ -1294,7 +1289,7 @@ class TradingAnalyzer:
         fast_period: int,
         slow_period: int,
         signal_period: int,
-    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series, pd.Series]:
         ema_fast = self.df["close"].ewm(span=fast_period, adjust=False).mean()
         ema_slow = self.df["close"].ewm(span=slow_period, adjust=False).mean()
         macd_line = ema_fast - ema_slow
@@ -1316,7 +1311,7 @@ class TradingAnalyzer:
         period: int,
         k_period: int,
         d_period: int,
-    ) -> Tuple[pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series]:
         rsi = self.calculate_rsi(period)
         lowest = rsi.rolling(window=period, min_periods=period).min()
         highest = rsi.rolling(window=period, min_periods=period).max()
@@ -1332,7 +1327,7 @@ class TradingAnalyzer:
         self,
         period: int,
         std_dev: float,
-    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series, pd.Series]:
         middle = self.df["close"].rolling(window=period, min_periods=period).mean()
         std = self.df["close"].rolling(window=period, min_periods=period).std()
         upper = middle + std * std_dev
@@ -1364,7 +1359,7 @@ class TradingAnalyzer:
         ratio = pos_sum / neg_sum.replace(0, np.nan)
         return 100 - (100 / (1 + ratio))
 
-    def calculate_obv(self, ema_period: int) -> Tuple[pd.Series, pd.Series]:
+    def calculate_obv(self, ema_period: int) -> tuple[pd.Series, pd.Series]:
         direction = np.sign(self.df["close"].diff().fillna(0))
         obv = (direction * self.df["volume"]).cumsum()
         obv_ema = obv.ewm(span=ema_period, adjust=False).mean()
@@ -1386,7 +1381,7 @@ class TradingAnalyzer:
         self,
         acceleration: float,
         max_acceleration: float,
-    ) -> Tuple[pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series]:
         if len(self.df) < MIN_DATA_POINTS_PSAR:
             return pd.Series(np.nan, index=self.df.index), pd.Series(np.nan, index=self.df.index)
 
@@ -1421,17 +1416,16 @@ class TradingAnalyzer:
                 af = acceleration
                 ep = high.iloc[i] if bull.iloc[i] else low.iloc[i]
                 psar.iloc[i] = min(low.iloc[i], low.iloc[i - 1]) if bull.iloc[i] else max(high.iloc[i], high.iloc[i - 1])
+            elif bull.iloc[i]:
+                if high.iloc[i] > ep:
+                    ep = high.iloc[i]
+                    af = min(af + acceleration, max_acceleration)
+                psar.iloc[i] = min(psar.iloc[i], low.iloc[i], low.iloc[i - 1])
             else:
-                if bull.iloc[i]:
-                    if high.iloc[i] > ep:
-                        ep = high.iloc[i]
-                        af = min(af + acceleration, max_acceleration)
-                    psar.iloc[i] = min(psar.iloc[i], low.iloc[i], low.iloc[i - 1])
-                else:
-                    if low.iloc[i] < ep:
-                        ep = low.iloc[i]
-                        af = min(af + acceleration, max_acceleration)
-                    psar.iloc[i] = max(psar.iloc[i], high.iloc[i], high.iloc[i - 1])
+                if low.iloc[i] < ep:
+                    ep = low.iloc[i]
+                    af = min(af + acceleration, max_acceleration)
+                psar.iloc[i] = max(psar.iloc[i], high.iloc[i], high.iloc[i - 1])
 
         direction = pd.Series(0, index=close.index, dtype=int)
         direction[psar < close] = 1
@@ -1535,7 +1529,7 @@ class TradingAnalyzer:
         self,
         period: int,
         atr_multiplier: float,
-    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series, pd.Series]:
         if "ATR" not in self.df.columns:
             atr = self._calculate_true_range().ewm(span=period, adjust=False).mean()
             self.df["ATR"] = atr
@@ -1604,7 +1598,7 @@ class TradingAnalyzer:
     def _get_indicator_value(self, key: str, default: Any = np.nan) -> Any:
         return self.indicator_values.get(key, default)
 
-    def _check_orderbook(self, current_price: Decimal, orderbook_data: Dict[str, Any]) -> float:
+    def _check_orderbook(self, current_price: Decimal, orderbook_data: dict[str, Any]) -> float:
         bids = orderbook_data.get("b", [])
         asks = orderbook_data.get("a", [])
 
@@ -1620,7 +1614,7 @@ class TradingAnalyzer:
         )
         return float(imbalance)
 
-    def calculate_support_resistance_from_orderbook(self, orderbook_data: Dict[str, Any]) -> None:
+    def calculate_support_resistance_from_orderbook(self, orderbook_data: dict[str, Any]) -> None:
         bids = orderbook_data.get("b", [])
         asks = orderbook_data.get("a", [])
 
@@ -1724,15 +1718,15 @@ class TradingAnalyzer:
     def generate_trading_signal(
         self,
         current_price: Decimal,
-        orderbook_data: Optional[Dict[str, Any]],
-        mtf_trends: Dict[str, str],
-    ) -> Tuple[str, float, Dict[str, float]]:
+        orderbook_data: dict[str, Any] | None,
+        mtf_trends: dict[str, str],
+    ) -> tuple[str, float, dict[str, float]]:
         """
         Compute a composite signal score based on enabled indicators.
         Returns (final_signal, signal_score, signal_breakdown).
         """
         signal_score = 0.0
-        signal_breakdown: Dict[str, float] = {}
+        signal_breakdown: dict[str, float] = {}
         active = self.config.indicators
         weights = self.weights
 
@@ -1909,10 +1903,10 @@ class TradingAnalyzer:
             senkou_a = self._get_indicator_value("Senkou_Span_A")
             senkou_b = self._get_indicator_value("Senkou_Span_B")
             chikou = self._get_indicator_value("Chikou_Span")
-            
+
             if not any(pd.isna(val) for val in [tenkan, kijun, senkou_a, senkou_b, chikou]):
                 contrib = weights.get("ichimoku_confluence", 0) * trend_strength
-                
+
                 # Tenkan/Kijun crossover
                 if tenkan > kijun and self.df["Tenkan_Sen"].iloc[-2] <= self.df["Kijun_Sen"].iloc[-2]:
                     signal_score += contrib * 0.5
@@ -1924,7 +1918,7 @@ class TradingAnalyzer:
                 # Cloud breakout
                 kumo_upper = max(senkou_a, senkou_b)
                 kumo_lower = min(senkou_a, senkou_b)
-                
+
                 if current_close > kumo_upper and self.df["close"].iloc[-2] <= max(self.df["Senkou_Span_A"].iloc[-2], self.df["Senkou_Span_B"].iloc[-2]):
                     signal_score += contrib * 0.7
                     signal_breakdown["Ichimoku Cloud"] = contrib * 0.7
@@ -2037,7 +2031,7 @@ class TradingAnalyzer:
         if active.get("candlestick_patterns", False):
             pattern = self._get_indicator_value("Candlestick_Pattern", "No Pattern")
             weight = weights.get("candlestick_confirmation", 0)
-            
+
             if pattern == "Bullish Engulfing" or pattern == "Bullish Hammer":
                 signal_score += weight
                 signal_breakdown["Candlestick Pattern"] = weight
@@ -2052,7 +2046,7 @@ class TradingAnalyzer:
             total_mtf_indicators = len(mtf_trends)
 
             mtf_weight = weights.get("mtf_trend_confluence", 0)
-            
+
             if total_mtf_indicators > 0:
                 if mtf_buy_count == total_mtf_indicators:
                     mtf_contribution = mtf_weight * 1.5
@@ -2087,14 +2081,14 @@ class TradingAnalyzer:
         kijun_period: int,
         senkou_span_b_period: int,
         chikou_span_offset: int,
-    ) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
         high = self.df["high"]
         low = self.df["low"]
         close = self.df["close"]
 
         tenkan = (high.rolling(window=tenkan_period).max() + low.rolling(window=tenkan_period).min()) / 2
         kijun = (high.rolling(window=kijun_period).max() + low.rolling(window=kijun_period).min()) / 2
-        
+
         senkou_a = ((tenkan + kijun) / 2).shift(kijun_period)
         senkou_b = ((high.rolling(window=senkou_span_b_period).max() + low.rolling(window=senkou_span_b_period).min()) / 2).shift(kijun_period)
         chikou = close.shift(-chikou_span_offset)
@@ -2110,7 +2104,7 @@ class TradingAnalyzer:
         high_val = recent["high"].max()
         low_val = recent["low"].min()
         diff = high_val - low_val
-        
+
         price_precision_str = "0." + "0" * (self.config.trade_management.price_precision - 1) + "1"
 
         self.fib_levels = {
@@ -2129,9 +2123,9 @@ class TradingAnalyzer:
 
         prev = self.df.iloc[-2]
         pivot = (prev["high"] + prev["low"] + prev["close"]) / 3
-        
+
         price_precision_str = "0." + "0" * (self.config.trade_management.price_precision - 1) + "1"
-        
+
         self.indicator_values["Pivot"] = pivot.quantize(Decimal(price_precision_str), rounding=ROUND_DOWN)
         self.indicator_values["R1"] = (2 * pivot - prev["low"]).quantize(Decimal(price_precision_str), rounding=ROUND_DOWN)
         self.indicator_values["R2"] = (pivot + (prev["high"] - prev["low"])).quantize(Decimal(price_precision_str), rounding=ROUND_DOWN)
@@ -2147,12 +2141,12 @@ def display_indicator_values_and_price(
     logger: logging.Logger,
     current_price: Decimal,
     analyzer: TradingAnalyzer,
-    orderbook_data: Optional[Dict[str, Any]],
-    mtf_trends: Dict[str, str],
-    signal_breakdown: Optional[Dict[str, float]] = None,
+    orderbook_data: dict[str, Any] | None,
+    mtf_trends: dict[str, str],
+    signal_breakdown: dict[str, float] | None = None,
 ) -> None:
     """Display current market data, indicators, and signal breakdown."""
-    
+
     logger.info(f"{NEON_BLUE}--- Current Market Data & Indicators ---{RESET}")
     logger.info(f"{NEON_GREEN}Current Price: {current_price.normalize()}{RESET}")
 
@@ -2181,7 +2175,7 @@ def display_indicator_values_and_price(
         r2 = analyzer._get_indicator_value("R2")
         s1 = analyzer._get_indicator_value("S1")
         s2 = analyzer._get_indicator_value("S2")
-        
+
         if all(val is not None for val in [pivot, r1, r2, s1, s2]):
             logger.info(f"{NEON_CYAN}--- Fibonacci Pivot Points ---{RESET}")
             logger.info(f"  {INDICATOR_COLORS.get('Pivot', NEON_YELLOW)}Pivot              : {pivot.normalize()}{RESET}")
@@ -2277,16 +2271,16 @@ def display_indicator_values_and_price(
 # --------------------------------------------------------------------------- #
 def main() -> None:
     """Main trading bot execution loop."""
-    
+
     # Load environment variables
     API_KEY = os.getenv("BYBIT_API_KEY")
     API_SECRET = os.getenv("BYBIT_API_SECRET")
     BASE_URL = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
-    
+
     if not API_KEY or not API_SECRET:
         print(f"{NEON_RED}Error: BYBIT_API_KEY and BYBIT_API_SECRET must be set in environment variables.{RESET}")
         sys.exit(1)
-    
+
     # Setup logging and configuration
     logger = setup_logger("wgwhalex_bot")
     config = load_config(CONFIG_FILE, logger)
@@ -2295,7 +2289,7 @@ def main() -> None:
 
     # Validate intervals
     valid_intervals = ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"]
-    
+
     if config.interval not in valid_intervals:
         logger.error(f"{NEON_RED}Invalid primary interval '{config.interval}'. Exiting.{RESET}")
         sys.exit(1)
@@ -2317,7 +2311,7 @@ def main() -> None:
     while True:
         try:
             logger.info(f"{NEON_PURPLE}--- New Analysis Loop ({datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}) ---{RESET}")
-            
+
             # Fetch current price
             current_price = bybit_client.fetch_current_price(config.symbol)
             if current_price is None:
@@ -2338,12 +2332,12 @@ def main() -> None:
                 orderbook_data = bybit_client.fetch_orderbook(config.symbol, config.orderbook_limit)
 
             # Multi-timeframe analysis
-            mtf_trends: Dict[str, str] = {}
+            mtf_trends: dict[str, str] = {}
             if config.mtf_analysis.enabled:
                 for htf_interval in config.mtf_analysis.higher_timeframes:
                     logger.debug(f"Fetching klines for MTF interval: {htf_interval}")
                     htf_df = bybit_client.fetch_klines(config.symbol, htf_interval, 1000)
-                    
+
                     if htf_df is not None and not htf_df.empty:
                         for trend_ind in config.mtf_analysis.trend_indicators:
                             temp_analyzer = TradingAnalyzer(
@@ -2357,7 +2351,7 @@ def main() -> None:
                             logger.debug(f"MTF Trend ({htf_interval}, {trend_ind}): {trend}")
                     else:
                         logger.warning(f"{NEON_YELLOW}Could not fetch klines for {htf_interval}.{RESET}")
-                    
+
                     time.sleep(config.mtf_analysis.mtf_request_delay_seconds)
 
             # Initialize analyzer and calculate indicators
@@ -2408,7 +2402,7 @@ def main() -> None:
                 for pos in open_positions:
                     logger.info(
                         f"  - {pos['side']} @ {pos['entry_price'].normalize()} "
-                        f"(SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}){RESET}"
+                        f"(SL: {pos['stop_loss'].normalize()}, TP: {pos['take_profit'].normalize()}){RESET}",
                     )
             else:
                 logger.info(f"{NEON_CYAN}No open positions.{RESET}")
@@ -2418,7 +2412,7 @@ def main() -> None:
             logger.info(
                 f"{NEON_YELLOW}Performance: Total PnL: {perf_summary['total_pnl'].normalize():.2f}, "
                 f"Wins: {perf_summary['wins']}, Losses: {perf_summary['losses']}, "
-                f"Win Rate: {perf_summary['win_rate']}{RESET}"
+                f"Win Rate: {perf_summary['win_rate']}{RESET}",
             )
 
             logger.info(f"{NEON_PURPLE}--- Loop Finished. Waiting {config.loop_delay}s ---{RESET}")

@@ -6,9 +6,7 @@ import time
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask
-from flask import jsonify
-from flask import request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from indicators import calculate_indicators
 from pybit.unified_trading import HTTP
@@ -20,7 +18,7 @@ CORS(app)
 
 # --- Logging Configuration ---
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 # --- API Key Configuration ---
@@ -30,7 +28,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not BYBIT_API_KEY or not BYBIT_API_SECRET:
     logging.error(
-        "CRITICAL: Bybit API Key or Secret not found. Please check your .env file."
+        "CRITICAL: Bybit API Key or Secret not found. Please check your .env file.",
     )
 if not GEMINI_API_KEY:
     logging.warning("Gemini API Key not found. The insight feature will be disabled.")
@@ -77,7 +75,7 @@ def log_message(message, level="info"):
     """Adds a message to the in-memory log."""
     timestamp = time.strftime("%H:%M:%S")
     BOT_STATE["logs"].append(
-        {"timestamp": timestamp, "level": level, "message": message}
+        {"timestamp": timestamp, "level": level, "message": message},
     )
 
     # Also log to console
@@ -111,7 +109,7 @@ def trading_bot_loop():
             )
             if klines_res.get("retCode") != 0:
                 log_message(
-                    f"Failed to fetch klines: {klines_res.get('retMsg')}", "error"
+                    f"Failed to fetch klines: {klines_res.get('retMsg')}", "error",
                 )
                 time.sleep(int(config["interval"]) * 60)
                 continue
@@ -143,7 +141,7 @@ def trading_bot_loop():
 
             # 3. Fetch Position and Balance
             position_res = session.get_positions(
-                category="linear", symbol=config["symbol"]
+                category="linear", symbol=config["symbol"],
             )
             balance_res = session.get_wallet_balance(accountType="UNIFIED", coin="USDT")
 
@@ -299,14 +297,14 @@ def trading_bot_loop():
                         "peak_price": None,
                     }  # Reset position info
                     balance_res = session.get_wallet_balance(
-                        accountType="UNIFIED", coin="USDT"
+                        accountType="UNIFIED", coin="USDT",
                     )  # Refresh balance
                     if (
                         balance_res.get("retCode") == 0
                         and balance_res["result"]["list"]
                     ):
                         balance = float(
-                            balance_res["result"]["list"][0]["totalWalletBalance"]
+                            balance_res["result"]["list"][0]["totalWalletBalance"],
                         )
 
                 # Place new order
@@ -398,15 +396,15 @@ def start_bot():
 
     if not api_key or not api_secret:
         return jsonify(
-            {"status": "error", "message": "API key and secret are required."}
+            {"status": "error", "message": "API key and secret are required."},
         ), 400
 
     BOT_STATE["config"] = config
     BOT_STATE["config"]["ef_period"] = config.get(
-        "ef_period", 10
+        "ef_period", 10,
     )  # Default Ehlers-Fisher period
     BOT_STATE["config"]["trailingStopPct"] = config.get(
-        "trailingStopPct", 0.5
+        "trailingStopPct", 0.5,
     )  # Default Trailing Stop Loss Percentage
     BOT_STATE["config"]["macd_fast_period"] = config.get("macd_fast_period", 12)
     BOT_STATE["config"]["macd_slow_period"] = config.get("macd_slow_period", 26)
@@ -414,12 +412,12 @@ def start_bot():
     BOT_STATE["config"]["bb_period"] = config.get("bb_period", 20)
     BOT_STATE["config"]["bb_std_dev"] = config.get("bb_std_dev", 2.0)
     BOT_STATE["bybit_session"] = HTTP(
-        testnet=False, api_key=api_key, api_secret=api_secret
+        testnet=False, api_key=api_key, api_secret=api_secret,
     )  # LIVE TRADING
 
     # Verify API connection
     balance_check = BOT_STATE["bybit_session"].get_wallet_balance(
-        accountType="UNIFIED", coin="USDT"
+        accountType="UNIFIED", coin="USDT",
     )
     if balance_check.get("retCode") != 0:
         log_message(f"API connection failed: {balance_check.get('retMsg')}", "error")
@@ -427,21 +425,21 @@ def start_bot():
             {
                 "status": "error",
                 "message": f"API connection failed: {balance_check.get('retMsg')}",
-            }
+            },
         ), 400
 
     log_message("API connection successful.", "success")
 
     # Fetch instrument info for precision
     instrument_info = BOT_STATE["bybit_session"].get_instruments_info(
-        category="linear", symbol=config["symbol"]
+        category="linear", symbol=config["symbol"],
     )
     if instrument_info.get("retCode") == 0 and instrument_info["result"]["list"]:
         price_precision = (
             len(
                 instrument_info["result"]["list"][0]["priceFilter"]["tickSize"].split(
-                    "."
-                )[-1]
+                    ".",
+                )[-1],
             )
             if "." in instrument_info["result"]["list"][0]["priceFilter"]["tickSize"]
             else 0
@@ -450,7 +448,7 @@ def start_bot():
             len(
                 instrument_info["result"]["list"][0]["lotFilter"]["qtyStep"].split(".")[
                     -1
-                ]
+                ],
             )
             if "." in instrument_info["result"]["list"][0]["lotFilter"]["qtyStep"]
             else 0
@@ -519,7 +517,7 @@ def get_status():
             "running": BOT_STATE["running"],
             "dashboard": BOT_STATE["dashboard"],
             "logs": list(BOT_STATE["logs"]),
-        }
+        },
     )
 
 
@@ -527,7 +525,7 @@ def get_status():
 def get_gemini_insight():
     if not GEMINI_API_KEY:
         return jsonify(
-            {"status": "error", "message": "Gemini API key not configured on server."}
+            {"status": "error", "message": "Gemini API key not configured on server."},
         ), 503
 
     data = request.json

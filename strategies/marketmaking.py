@@ -2,8 +2,7 @@ import logging
 import random
 import time
 import uuid
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from typing import Literal
 
 
@@ -75,7 +74,7 @@ class MockExchange:
 
     def __init__(self, initial_balance_base: float, initial_balance_quote: float):
         self._order_book: dict[str, dict[str, float]] = {
-            "BTC/USD": {"bid": 30000.0, "ask": 30010.0}
+            "BTC/USD": {"bid": 30000.0, "ask": 30010.0},
         }
         self._balances: dict[str, float] = {
             "BTC": initial_balance_base,
@@ -102,7 +101,7 @@ class MockExchange:
         return self._balances.get(currency, 0.0)
 
     def place_order(
-        self, symbol: str, type: str, side: str, price: float, amount: float
+        self, symbol: str, type: str, side: str, price: float, amount: float,
     ) -> Order | None:
         """Simulates placing an order."""
         if type != "limit":
@@ -113,7 +112,7 @@ class MockExchange:
         order = Order(order_id, symbol, type, side, price, amount)
         self._open_orders[order_id] = order
         logger.info(
-            f"Placed {side} order {order_id} for {amount} {symbol.split('/')[0]} @ {price}"
+            f"Placed {side} order {order_id} for {amount} {symbol.split('/')[0]} @ {price}",
         )
         self._process_order(order)  # Try to fill immediately
         return order
@@ -168,7 +167,7 @@ class MockExchange:
             if order.price >= order_book["ask"]:
                 fill_price = order_book["ask"]
                 fill_amount = min(
-                    order.amount - order.filled_amount, order.amount
+                    order.amount - order.filled_amount, order.amount,
                 )  # For simplicity, fill fully
 
                 self._balances[order.symbol.split("/")[0]] += fill_amount
@@ -189,7 +188,7 @@ class MockExchange:
                 }
                 self._trade_history.append(trade)
                 logger.info(
-                    f"Filled BUY order {order.order_id}: {fill_amount} @ {fill_price}. New balances: {self._balances}"
+                    f"Filled BUY order {order.order_id}: {fill_amount} @ {fill_price}. New balances: {self._balances}",
                 )
                 if order.status == "filled" and order.order_id in self._open_orders:
                     del self._open_orders[order.order_id]  # Remove filled order
@@ -218,7 +217,7 @@ class MockExchange:
                 }
                 self._trade_history.append(trade)
                 logger.info(
-                    f"Filled SELL order {order.order_id}: {fill_amount} @ {fill_price}. New balances: {self._balances}"
+                    f"Filled SELL order {order.order_id}: {fill_amount} @ {fill_price}. New balances: {self._balances}",
                 )
                 if order.status == "filled" and order.order_id in self._open_orders:
                     del self._open_orders[order.order_id]  # Remove filled order
@@ -255,10 +254,10 @@ class MarketMakingStrategy:
     def _update_position(self):
         """Updates the current base currency position from exchange balance."""
         self.current_position_base = self.exchange.get_balance(
-            self.config.base_currency
+            self.config.base_currency,
         )
         logger.debug(
-            f"Current {self.config.base_currency} position: {self.current_position_base:.4f}"
+            f"Current {self.config.base_currency} position: {self.current_position_base:.4f}",
         )
 
     def _calculate_target_prices(self, bid: float, ask: float) -> tuple[float, float]:
@@ -277,7 +276,7 @@ class MarketMakingStrategy:
 
         if abs(deviation) > self.config.max_inventory_deviation_base:
             logger.warning(
-                f"Inventory deviation high: {deviation:.4f} {self.config.base_currency}. Adjusting prices aggressively."
+                f"Inventory deviation high: {deviation:.4f} {self.config.base_currency}. Adjusting prices aggressively.",
             )
             # If we have too much base currency (long), lower sell price, raise buy price (to sell more)
             if deviation > 0:  # We are long base currency
@@ -337,7 +336,7 @@ class MarketMakingStrategy:
                 )
             else:
                 logger.warning(
-                    f"Insufficient {self.config.quote_currency} balance ({self.exchange.get_balance(self.config.quote_currency):.2f}) to place buy order for {required_quote:.2f}."
+                    f"Insufficient {self.config.quote_currency} balance ({self.exchange.get_balance(self.config.quote_currency):.2f}) to place buy order for {required_quote:.2f}.",
                 )
 
         # Place new sell order if needed
@@ -356,7 +355,7 @@ class MarketMakingStrategy:
                 )
             else:
                 logger.warning(
-                    f"Insufficient {self.config.base_currency} balance ({self.exchange.get_balance(self.config.base_currency):.4f}) to place sell order for {self.config.order_size_base:.4f}."
+                    f"Insufficient {self.config.base_currency} balance ({self.exchange.get_balance(self.config.base_currency):.4f}) to place sell order for {self.config.order_size_base:.4f}.",
                 )
 
     def _check_risk_limits(self) -> bool:
@@ -374,7 +373,7 @@ class MarketMakingStrategy:
 
         if total_exposure_usd > self.config.max_exposure_usd:
             logger.critical(
-                f"Max exposure limit breached! {total_exposure_usd:.2f} USD > {self.config.max_exposure_usd:.2f} USD. Halting strategy."
+                f"Max exposure limit breached! {total_exposure_usd:.2f} USD > {self.config.max_exposure_usd:.2f} USD. Halting strategy.",
             )
             return False
 
@@ -384,14 +383,14 @@ class MarketMakingStrategy:
         current_day = time.gmtime().tm_yday
         if current_day != self.last_pnl_reset_day:
             logger.info(
-                f"New day, resetting daily PnL (was {self.daily_pnl_usd:.2f} USD)."
+                f"New day, resetting daily PnL (was {self.daily_pnl_usd:.2f} USD).",
             )
             self.daily_pnl_usd = 0.0
             self.last_pnl_reset_day = current_day
 
         if self.daily_pnl_usd < -self.config.max_loss_per_day_usd:
             logger.critical(
-                f"Daily loss limit breached! PnL: {self.daily_pnl_usd:.2f} USD. Halting strategy."
+                f"Daily loss limit breached! PnL: {self.daily_pnl_usd:.2f} USD. Halting strategy.",
             )
             return False
 
@@ -422,7 +421,7 @@ class MarketMakingStrategy:
 
                 # 4. Calculate Target Prices (with inventory adjustment)
                 target_buy_price, target_sell_price = self._calculate_target_prices(
-                    bid, ask
+                    bid, ask,
                 )
 
                 # 5. Manage Orders (cancel/replace)
@@ -433,7 +432,7 @@ class MarketMakingStrategy:
                     f"[{self.config.symbol}] Mid: {self.last_mid_price:.2f}, "
                     f"Target Buy: {target_buy_price:.2f}, Target Sell: {target_sell_price:.2f}, "
                     f"Position: {self.current_position_base:.4f} {self.config.base_currency}, "
-                    f"USD Balance: {self.exchange.get_balance(self.config.quote_currency):.2f}"
+                    f"USD Balance: {self.exchange.get_balance(self.config.quote_currency):.2f}",
                 )
 
             except KeyboardInterrupt:

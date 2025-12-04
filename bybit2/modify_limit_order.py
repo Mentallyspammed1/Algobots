@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -10,12 +8,12 @@ init(autoreset=True)
 
 
 def modify_limit_order(
-    order_id: str, symbol: str, new_price: str, new_qty: str, category: str = "linear"
+    order_id: str, symbol: str, new_price: str, new_qty: str, category: str = "linear",
 ):
     print(
         Fore.MAGENTA
         + f"\n# Attempting to modify order {order_id} for {symbol} to Price: {new_price}, Quantity: {new_qty}...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -27,12 +25,12 @@ def modify_limit_order(
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -41,7 +39,7 @@ def modify_limit_order(
         print(
             Fore.CYAN
             + f"  # Sending amendment request for Order ID: {order_id}, Symbol: {symbol}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Amend an existing order
@@ -62,7 +60,7 @@ def modify_limit_order(
             print(
                 Fore.GREEN
                 + f"  # Order {order_id} for {symbol} modified successfully!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(Fore.GREEN + f"    Response: {response['result']}" + Style.RESET_ALL)
         else:
@@ -72,7 +70,7 @@ def modify_limit_order(
                 print(
                     Fore.RED
                     + f"  # Error Message: {response['retMsg']}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     except Exception as e:
@@ -80,13 +78,13 @@ def modify_limit_order(
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable, API keys are valid, and the order ID/symbol/category are correct."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
         Fore.MAGENTA
         + "\n# The order modification incantation is complete!\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
 
@@ -98,22 +96,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     # IMPORTANT: Replace with a real order ID, symbol, and desired new price/quantity from your testnet account!
@@ -127,14 +125,14 @@ if __name__ == "__main__":
         print(
             Fore.YELLOW
             + "\n  # WARNING: Please replace 'YOUR_ORDER_ID_HERE' with an actual order ID from your Bybit testnet account."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # This script will not function correctly without a valid order ID."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
     else:
         modify_limit_order(
-            dummy_order_id, dummy_symbol, dummy_new_price, dummy_new_qty, dummy_category
+            dummy_order_id, dummy_symbol, dummy_new_price, dummy_new_qty, dummy_category,
         )

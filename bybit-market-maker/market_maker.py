@@ -4,14 +4,16 @@ from datetime import datetime
 from order_manager import OrderManager
 from pybit.unified_trading import HTTP
 from risk_manager import RiskManager
-from utils import PerformanceTracker
-from utils import calculate_order_sizes
-from utils import calculate_order_step
-from utils import calculate_spread
-from utils import calculate_volatility
-from utils import format_price
-from utils import format_quantity
-from utils import setup_logger
+from utils import (
+    PerformanceTracker,
+    calculate_order_sizes,
+    calculate_order_step,
+    calculate_spread,
+    calculate_volatility,
+    format_price,
+    format_quantity,
+    setup_logger,
+)
 from websocket_manager import WebSocketManager
 
 
@@ -26,7 +28,7 @@ class MarketMaker:
 
         # Setup logger
         self.logger = setup_logger(
-            "MarketMaker", self.env_config["log_file"], self.env_config["log_level"]
+            "MarketMaker", self.env_config["log_file"], self.env_config["log_level"],
         )
 
         # Initialize Bybit client
@@ -71,7 +73,7 @@ class MarketMaker:
             )
 
         self.logger.info(
-            f"Initialized Bybit client for {self.env_config['environment']}"
+            f"Initialized Bybit client for {self.env_config['environment']}",
         )
         if self.config["advanced"]["enable_websocket"]:
             self.ws_manager = WebSocketManager(
@@ -184,7 +186,7 @@ class MarketMaker:
             return self.position
         try:
             response = self.client.get_positions(
-                category=self.config["trading"]["market_type"], symbol=self.symbol
+                category=self.config["trading"]["market_type"], symbol=self.symbol,
             )
 
             if response["retCode"] == 0 and response["result"]["list"]:
@@ -220,7 +222,7 @@ class MarketMaker:
             response = self.client.get_wallet_balance(
                 accountType="UNIFIED"
                 if self.config["trading"]["market_type"] == "linear"
-                else "SPOT"
+                else "SPOT",
             )
 
             if response["retCode"] == 0:
@@ -301,7 +303,7 @@ class MarketMaker:
                     "side": "Buy",
                     "price": format_price(buy_price),
                     "qty": format_quantity(buy_sizes[i]),
-                }
+                },
             )
 
             # Sell orders
@@ -311,7 +313,7 @@ class MarketMaker:
                     "side": "Sell",
                     "price": format_price(sell_price),
                     "qty": format_quantity(sell_sizes[i]),
-                }
+                },
             )
 
         return buy_orders, sell_orders
@@ -339,7 +341,7 @@ class MarketMaker:
             # Check if position should be closed
             if position and position["size"] > 0:
                 should_close, reason = self.risk_manager.should_close_position(
-                    position, market_data["mid"]
+                    position, market_data["mid"],
                 )
 
                 if should_close:
@@ -371,7 +373,7 @@ class MarketMaker:
                             "time_in_force": self.config["execution"]["time_in_force"],
                             "reduce_only": False,
                             "close_on_trigger": False,
-                        }
+                        },
                     )
 
                 placed_orders = self.order_manager.place_orders(all_orders)
@@ -410,7 +412,7 @@ class MarketMaker:
 
             if response["retCode"] == 0:
                 self.logger.info(
-                    f"Position closed: {side} {position['size']} {self.symbol}"
+                    f"Position closed: {side} {position['size']} {self.symbol}",
                 )
             else:
                 self.logger.error(f"Failed to close position: {response['retMsg']}")
@@ -433,10 +435,10 @@ class MarketMaker:
             self.logger.info("-" * 50)
             self.logger.info(f"Balance: ${balance:.2f}")
             self.logger.info(
-                f"P&L: ${stats.get('total_pnl', 0):.2f} ({stats.get('roi', 0):.2f}%)"
+                f"P&L: ${stats.get('total_pnl', 0):.2f} ({stats.get('roi', 0):.2f}%)",
             )
             self.logger.info(
-                f"Trades: {stats.get('total_trades', 0)} (Win Rate: {stats.get('win_rate', 0):.1f}%)"
+                f"Trades: {stats.get('total_trades', 0)} (Win Rate: {stats.get('win_rate', 0):.1f}%)",
             )
             self.logger.info(f"Sharpe Ratio: {stats.get('sharpe_ratio', 0):.2f}")
             self.logger.info("-" * 50)
@@ -450,13 +452,13 @@ class MarketMaker:
             self.logger.info(f"Spread: {self.spread:.4%}")
             self.logger.info(f"Volatility: {self.volatility:.4%}")
             self.logger.info(
-                f"Position: {self.position['size']} @ ${self.position['avg_price']:.2f}"
+                f"Position: {self.position['size']} @ ${self.position['avg_price']:.2f}",
             )
             self.logger.info(f"Inventory Ratio: {self.inventory_ratio:.2%}")
             self.logger.info("-" * 50)
             self.logger.info("ORDER STATUS")
             self.logger.info(
-                f"Active Orders: {order_summary['total_orders']} (Buy: {order_summary['buy_orders']}, Sell: {order_summary['sell_orders']})"
+                f"Active Orders: {order_summary['total_orders']} (Buy: {order_summary['buy_orders']}, Sell: {order_summary['sell_orders']})",
             )
             self.logger.info(f"Order Value: ${order_summary['total_value']:.2f}")
             self.logger.info("=" * 50)
@@ -468,7 +470,7 @@ class MarketMaker:
         """Main bot loop"""
         self.logger.info("Starting Market Maker Bot...")
         self.logger.info(
-            f"Trading {self.symbol} on {self.config['trading']['market_type']} market"
+            f"Trading {self.symbol} on {self.config['trading']['market_type']} market",
         )
         self.running = True
 

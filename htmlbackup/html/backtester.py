@@ -15,7 +15,7 @@ BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
 
 # --- Logging ---
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 # --- Bybit Session (for historical data) ---
@@ -50,10 +50,10 @@ DEFAULT_CONFIG = {
 
 # --- Data Fetching ---
 def fetch_historical_klines(
-    symbol: str, interval: str, start_time: int, end_time: int
+    symbol: str, interval: str, start_time: int, end_time: int,
 ) -> list:
     logging.info(
-        f"Fetching historical klines for {symbol} ({interval}) from {start_time} to {end_time}"
+        f"Fetching historical klines for {symbol} ({interval}) from {start_time} to {end_time}",
     )
     klines = []
     limit = 200  # Max limit per request
@@ -96,7 +96,7 @@ def fetch_historical_klines(
                 klines[-1]["timestamp"] / 1000
             )  # Move current_time to the oldest fetched kline
             logging.info(
-                f"Fetched {len(fetched_klines)} klines. Total: {len(klines)}. Oldest timestamp: {datetime.datetime.fromtimestamp(current_time)}"
+                f"Fetched {len(fetched_klines)} klines. Total: {len(klines)}. Oldest timestamp: {datetime.datetime.fromtimestamp(current_time)}",
             )
             time.sleep(0.1)  # Be nice to the API
         else:
@@ -131,7 +131,7 @@ def run_backtest(klines: list, config: dict) -> dict:
         if (
             i
             < max(
-                config["supertrend_length"], config["rsi_length"], config["ef_period"]
+                config["supertrend_length"], config["rsi_length"], config["ef_period"],
             )
             + 1
         ):
@@ -177,10 +177,10 @@ def run_backtest(klines: list, config: dict) -> dict:
                         "exit_price": current_price,
                         "pnl": pnl,
                         "type": "close",
-                    }
+                    },
                 )
                 logging.debug(
-                    f"Closed short at {current_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}"
+                    f"Closed short at {current_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}",
                 )
                 position_size = 0
                 current_position_side = None
@@ -200,7 +200,7 @@ def run_backtest(klines: list, config: dict) -> dict:
                 MIN_ORDER_VALUE = 5  # Default minimum order value in USDT
                 if qty < MIN_ORDER_VALUE:
                     logging.debug(
-                        f"Calculated quantity {qty:.4f} is less than minimum order value {MIN_ORDER_VALUE}. Order not placed."
+                        f"Calculated quantity {qty:.4f} is less than minimum order value {MIN_ORDER_VALUE}. Order not placed.",
                     )
                     continue  # Skip order placement if qty is too small
 
@@ -208,7 +208,7 @@ def run_backtest(klines: list, config: dict) -> dict:
                 # This part of the original logic is still relevant to ensure we don't exceed available balance
                 max_qty_from_balance = (balance * config["leverage"]) / current_price
                 qty = min(
-                    qty, max_qty_from_balance
+                    qty, max_qty_from_balance,
                 )  # Ensure we don't open a position larger than our balance allows
 
                 if (
@@ -226,10 +226,10 @@ def run_backtest(klines: list, config: dict) -> dict:
                             "entry_price": entry_price,
                             "qty": position_size,
                             "type": "open",
-                        }
+                        },
                     )
                     logging.debug(
-                        f"Opened long at {entry_price:.2f} Qty: {position_size:.4f} Balance: {balance:.2f}"
+                        f"Opened long at {entry_price:.2f} Qty: {position_size:.4f} Balance: {balance:.2f}",
                     )
                     peak_price = (
                         current_price  # Initialize peak price for trailing stop
@@ -252,10 +252,10 @@ def run_backtest(klines: list, config: dict) -> dict:
                         "exit_price": current_price,
                         "pnl": pnl,
                         "type": "close",
-                    }
+                    },
                 )
                 logging.debug(
-                    f"Closed long at {current_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}"
+                    f"Closed long at {current_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}",
                 )
                 position_size = 0
                 current_position_side = None
@@ -275,7 +275,7 @@ def run_backtest(klines: list, config: dict) -> dict:
                 MIN_ORDER_VALUE = 5  # Default minimum order value in USDT
                 if qty < MIN_ORDER_VALUE:
                     logging.debug(
-                        f"Calculated quantity {qty:.4f} is less than minimum order value {MIN_ORDER_VALUE}. Order not placed."
+                        f"Calculated quantity {qty:.4f} is less than minimum order value {MIN_ORDER_VALUE}. Order not placed.",
                     )
                     continue  # Skip order placement if qty is too small
 
@@ -295,10 +295,10 @@ def run_backtest(klines: list, config: dict) -> dict:
                             "entry_price": entry_price,
                             "qty": position_size,
                             "type": "open",
-                        }
+                        },
                     )
                     logging.debug(
-                        f"Opened short at {entry_price:.2f} Qty: {position_size:.4f} Balance: {balance:.2f}"
+                        f"Opened short at {entry_price:.2f} Qty: {position_size:.4f} Balance: {balance:.2f}",
                     )
                     peak_price = (
                         current_price  # Initialize peak price for trailing stop
@@ -323,7 +323,7 @@ def run_backtest(klines: list, config: dict) -> dict:
             ):
                 current_stop_loss_price = new_trailing_stop_price
                 logging.debug(
-                    f"Trailing SL (long) moved to {current_stop_loss_price:.2f}"
+                    f"Trailing SL (long) moved to {current_stop_loss_price:.2f}",
                 )
 
             sl_price = current_stop_loss_price  # Use the potentially trailed stop loss
@@ -340,10 +340,10 @@ def run_backtest(klines: list, config: dict) -> dict:
                         "exit_price": sl_price,
                         "pnl": pnl,
                         "type": "SL",
-                    }
+                    },
                 )
                 logging.debug(
-                    f"SL hit (long) at {sl_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}"
+                    f"SL hit (long) at {sl_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}",
                 )
                 position_size = 0
                 current_position_side = None
@@ -361,10 +361,10 @@ def run_backtest(klines: list, config: dict) -> dict:
                         "exit_price": tp_price,
                         "pnl": pnl,
                         "type": "TP",
-                    }
+                    },
                 )
                 logging.debug(
-                    f"TP hit (long) at {tp_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}"
+                    f"TP hit (long) at {tp_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}",
                 )
                 position_size = 0
                 current_position_side = None
@@ -386,7 +386,7 @@ def run_backtest(klines: list, config: dict) -> dict:
             ):
                 current_stop_loss_price = new_trailing_stop_price
                 logging.debug(
-                    f"Trailing SL (short) moved to {current_stop_loss_price:.2f}"
+                    f"Trailing SL (short) moved to {current_stop_loss_price:.2f}",
                 )
 
             sl_price = current_stop_loss_price  # Use the potentially trailed stop loss
@@ -403,10 +403,10 @@ def run_backtest(klines: list, config: dict) -> dict:
                         "exit_price": sl_price,
                         "pnl": pnl,
                         "type": "SL",
-                    }
+                    },
                 )
                 logging.debug(
-                    f"SL hit (short) at {sl_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}"
+                    f"SL hit (short) at {sl_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}",
                 )
                 position_size = 0
                 current_position_side = None
@@ -424,10 +424,10 @@ def run_backtest(klines: list, config: dict) -> dict:
                         "exit_price": tp_price,
                         "pnl": pnl,
                         "type": "TP",
-                    }
+                    },
                 )
                 logging.debug(
-                    f"TP hit (short) at {tp_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}"
+                    f"TP hit (short) at {tp_price:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}",
                 )
                 position_size = 0
                 current_position_side = None
@@ -455,27 +455,27 @@ def run_backtest(klines: list, config: dict) -> dict:
                 "exit_price": klines[-1]["close"],
                 "pnl": pnl,
                 "type": "final_close",
-            }
+            },
         )
         logging.debug(
-            f"Final close at {klines[-1]['close']:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}"
+            f"Final close at {klines[-1]['close']:.2f} PnL: {pnl:.2f} Balance: {balance:.2f}",
         )
 
     total_pnl = balance - config["initial_balance"]
     num_trades = len(
-        [t for t in trades if t["type"] in ["close", "SL", "TP", "final_close"]]
+        [t for t in trades if t["type"] in ["close", "SL", "TP", "final_close"]],
     )
     winning_trades = len(
         [
             t
             for t in trades
             if t["type"] in ["close", "TP", "final_close"] and t["pnl"] > 0
-        ]
+        ],
     )
     win_rate = (winning_trades / num_trades * 100) if num_trades > 0 else 0
 
     logging.info(
-        f"Backtest finished. Total PnL: {total_pnl:.2f} USDT. Trades: {num_trades}. Win Rate: {win_rate:.2f}%"
+        f"Backtest finished. Total PnL: {total_pnl:.2f} USDT. Trades: {num_trades}. Win Rate: {win_rate:.2f}%",
     )
     return {
         "total_pnl": total_pnl,
@@ -506,7 +506,7 @@ def optimize_strategy(klines: list, param_ranges: dict) -> dict:
             current_config[key] = combo[j]
 
         logging.info(
-            f"Testing combination {i + 1}/{total_combinations}: {current_config}"
+            f"Testing combination {i + 1}/{total_combinations}: {current_config}",
         )
         result = run_backtest(klines, current_config)
 
@@ -516,7 +516,7 @@ def optimize_strategy(klines: list, param_ranges: dict) -> dict:
             logging.info(f"New best PnL: {best_pnl:.2f} with config: {best_config}")
 
     logging.info(
-        f"Optimization complete. Best PnL: {best_pnl:.2f} with config: {best_config}"
+        f"Optimization complete. Best PnL: {best_pnl:.2f} with config: {best_config}",
     )
     return best_config
 
@@ -526,7 +526,7 @@ if __name__ == "__main__":
     # Define the time range for historical data (e.g., last 3 months)
     end_timestamp = int(datetime.datetime.now().timestamp())
     start_timestamp = int(
-        (datetime.datetime.now() - datetime.timedelta(days=90)).timestamp()
+        (datetime.datetime.now() - datetime.timedelta(days=90)).timestamp(),
     )
 
     # Fetch data
@@ -565,5 +565,5 @@ if __name__ == "__main__":
         # For example, update the config in supertrend.html or backbone.py with these values.
     else:
         logging.error(
-            "No historical klines fetched. Cannot run backtest or optimization."
+            "No historical klines fetched. Cannot run backtest or optimization.",
         )

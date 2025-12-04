@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -10,12 +8,12 @@ init(autoreset=True)
 
 
 def place_perpetual_limit_buy(
-    symbol: str = "ETHUSDT", qty: str = "0.01", price: str = "2000"
+    symbol: str = "ETHUSDT", qty: str = "0.01", price: str = "2000",
 ):
     print(
         Fore.MAGENTA
         + f"\n# Initiating a limit buy order for {qty} {symbol} at {price} on Bybit v5 Linear Perpetual Futures...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -27,12 +25,12 @@ def place_perpetual_limit_buy(
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -41,7 +39,7 @@ def place_perpetual_limit_buy(
         print(
             Fore.CYAN
             + f"  # Attempting to place a limit buy order for {qty} {symbol} at {price}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Place a limit order
@@ -65,17 +63,17 @@ def place_perpetual_limit_buy(
             print(
                 Fore.GREEN
                 + "  # Limit buy order placed successfully!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(
                 Fore.GREEN
                 + f"    Order ID: {order_info.get('orderId')}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(
                 Fore.GREEN
                 + f"    Order Link ID: {order_info.get('orderLinkId')}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(Fore.RED + "  # Failed to place limit buy order." + Style.RESET_ALL)
@@ -84,7 +82,7 @@ def place_perpetual_limit_buy(
                 print(
                     Fore.RED
                     + f"  # Error Message: {response['retMsg']}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     except Exception as e:
@@ -92,11 +90,11 @@ def place_perpetual_limit_buy(
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable, API keys are valid, and you have sufficient balance."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
-        Fore.MAGENTA + "\n# The limit buy incantation is complete!\n" + Style.RESET_ALL
+        Fore.MAGENTA + "\n# The limit buy incantation is complete!\n" + Style.RESET_ALL,
     )
 
 
@@ -108,22 +106,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     place_perpetual_limit_buy("ETHUSDT", "0.01", "2000")

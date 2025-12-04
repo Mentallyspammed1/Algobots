@@ -19,7 +19,7 @@ def git_log_summary(num_commits: int = 10):
     print(f"Fetching summary of last {num_commits} commits...")
     try:
         output = run_git_command(
-            ["git", "log", f"-n{num_commits}", "--pretty=format:%h - %an, %ar : %s"]
+            ["git", "log", f"-n{num_commits}", "--pretty=format:%h - %an, %ar : %s"],
         )
         print("--- Git Log Summary ---")
         print(output)

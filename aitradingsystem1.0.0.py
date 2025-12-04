@@ -7,10 +7,8 @@ import logging
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import datetime
-from datetime import timedelta
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -25,7 +23,7 @@ try:
     BYBIT_INTEGRATION_ENABLED = True
 except ImportError:
     logging.warning(
-        "Pybit library not found. Bybit integration disabled. Install with: pip install pybit"
+        "Pybit library not found. Bybit integration disabled. Install with: pip install pybit",
     )
     BYBIT_INTEGRATION_ENABLED = False
 
@@ -36,7 +34,7 @@ BYBIT_API_SECRET = os.environ.get("BYBIT_API_SECRET")
 
 # --- Logging Setup ---
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -103,7 +101,7 @@ class Order:
 # --- Bybit Adapter ---
 class BybitAdapter:
     def __init__(
-        self, api_key: str, api_secret: str, retry_cfg: RetryConfig = RetryConfig()
+        self, api_key: str, api_secret: str, retry_cfg: RetryConfig = RetryConfig(),
     ):
         if not BYBIT_INTEGRATION_ENABLED:
             raise RuntimeError("Bybit integration not enabled. Please install 'pybit'.")
@@ -133,7 +131,7 @@ class BybitAdapter:
                     + np.random.rand() * self.retry_cfg.jitter
                 )
                 logger.warning(
-                    f"Retryable Bybit error: {type(e).__name__} attempt={attempt} sleep={sleep_for:.2f}s"
+                    f"Retryable Bybit error: {type(e).__name__} attempt={attempt} sleep={sleep_for:.2f}s",
                 )
                 await asyncio.sleep(sleep_for)
 
@@ -168,15 +166,15 @@ class BybitAdapter:
         return status_map.get(bybit_status, OrderStatus.UNKNOWN)
 
     def get_historical_klines(
-        self, symbol: str, interval: str, limit: int = 200
+        self, symbol: str, interval: str, limit: int = 200,
     ) -> pd.DataFrame:
         logger.info(
-            f"Fetching historical klines for {symbol} ({interval}, limit={limit})"
+            f"Fetching historical klines for {symbol} ({interval}, limit={limit})",
         )
         try:
             category = "linear" if symbol.endswith("USDT") else "inverse"
             response = self.session.get_kline(
-                category=category, symbol=symbol, interval=interval, limit=limit
+                category=category, symbol=symbol, interval=interval, limit=limit,
             )
             if response and response["retCode"] == 0 and response["result"]["list"]:
                 data = response["result"]["list"]
@@ -204,7 +202,7 @@ class BybitAdapter:
             return pd.DataFrame()
 
     def get_real_time_market_data(
-        self, symbol: str, timeframe: str = "1m"
+        self, symbol: str, timeframe: str = "1m",
     ) -> dict[str, Any]:
         logger.info(f"Fetching {timeframe} data for {symbol} from Bybit")
         try:
@@ -219,7 +217,7 @@ class BybitAdapter:
                 raise ValueError(f"Unsupported symbol format: {symbol}")
             ticker_info = self.session.get_tickers(category=category, symbol=symbol)
             klines_1d = self.session.get_kline(
-                category=category, symbol=symbol, interval="D", limit=1
+                category=category, symbol=symbol, interval="D", limit=1,
             )
             if (
                 ticker_info
@@ -274,10 +272,10 @@ class BybitAdapter:
         logger.info("Fetching Bybit account info")
         try:
             wallet_balance_response = self.session.get_wallet_balance(
-                account_type="UNIFIED", coin="USDT"
+                account_type="UNIFIED", coin="USDT",
             )
             positions_response = self.session.get_positions(
-                category="linear", account_type="UNIFIED"
+                category="linear", account_type="UNIFIED",
             )
             total_balance = available_balance = 0.0
             if (
@@ -289,7 +287,7 @@ class BybitAdapter:
                     if balance_entry["coin"] == "USDT":
                         total_balance = float(balance_entry.get("balance", 0))
                         available_balance = float(
-                            balance_entry.get("availableBalance", 0)
+                            balance_entry.get("availableBalance", 0),
                         )
                         break
             processed_positions = []
@@ -307,7 +305,7 @@ class BybitAdapter:
                                 "side": "long" if pos.get("side") == "Buy" else "short",
                                 "unrealized_pnl": float(pos.get("unrealisedPnl", 0)),
                                 "entry_price": float(pos.get("avgPrice", 0)),
-                            }
+                            },
                         )
             return {
                 "total_balance_usd": total_balance,
@@ -332,7 +330,7 @@ class BybitAdapter:
         client_order_id: str | None = None,
     ):
         logger.info(
-            f"Placing Bybit order: {symbol} {side} {order_type} {qty} @ {price}"
+            f"Placing Bybit order: {symbol} {side} {order_type} {qty} @ {price}",
         )
         if not client_order_id:
             client_order_id = (
@@ -383,7 +381,7 @@ class BybitAdapter:
                 )
                 self.orders[client_order_id] = new_order
                 logger.info(
-                    f"Order placed: {new_order.client_order_id}, Bybit ID: {new_order.bybit_order_id}"
+                    f"Order placed: {new_order.client_order_id}, Bybit ID: {new_order.bybit_order_id}",
                 )
                 return {"status": "success", "order": new_order}
             error_msg = (
@@ -414,7 +412,7 @@ class BybitAdapter:
             return None
         internal_order = self.orders.get(client_order_id) if client_order_id else None
         logger.info(
-            f"Fetching order status for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}"
+            f"Fetching order status for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}",
         )
         try:
             response = self.session.get_order(
@@ -427,10 +425,10 @@ class BybitAdapter:
                 order_data = response["result"]
                 if internal_order:
                     internal_order.bybit_order_id = order_data.get(
-                        "orderId", internal_order.bybit_order_id
+                        "orderId", internal_order.bybit_order_id,
                     )
                     internal_order.status = self._map_bybit_order_status(
-                        order_data.get("orderStatus", internal_order.status.value)
+                        order_data.get("orderStatus", internal_order.status.value),
                     )
                     internal_order.updated_at = datetime.utcnow()
                     internal_order.price = (
@@ -454,7 +452,7 @@ class BybitAdapter:
                         else internal_order.take_profit
                     )
                     logger.info(
-                        f"Updated order {internal_order.client_order_id} status to {internal_order.status}"
+                        f"Updated order {internal_order.client_order_id} status to {internal_order.status}",
                     )
                     return internal_order
                 temp_order = Order(
@@ -473,7 +471,7 @@ class BybitAdapter:
                     if order_data.get("takeProfit")
                     else None,
                     status=self._map_bybit_order_status(
-                        order_data.get("orderStatus")
+                        order_data.get("orderStatus"),
                     ),
                     bybit_order_id=order_data.get("orderId"),
                     created_at=datetime.utcnow(),
@@ -481,7 +479,7 @@ class BybitAdapter:
                 )
                 self.orders[temp_order.client_order_id] = temp_order
                 logger.info(
-                    f"Fetched and cached new order {temp_order.client_order_id} with status {temp_order.status}"
+                    f"Fetched and cached new order {temp_order.client_order_id} with status {temp_order.status}",
                 )
                 return temp_order
             error_msg = (
@@ -490,12 +488,12 @@ class BybitAdapter:
                 else "No response"
             )
             logger.error(
-                f"Failed to fetch Bybit order {order_id}/{client_order_id}: {error_msg}"
+                f"Failed to fetch Bybit order {order_id}/{client_order_id}: {error_msg}",
             )
             return None
         except Exception as e:
             logger.error(
-                f"Exception fetching Bybit order {order_id}/{client_order_id}: {e}"
+                f"Exception fetching Bybit order {order_id}/{client_order_id}: {e}",
             )
             return None
 
@@ -504,7 +502,7 @@ class BybitAdapter:
         open_orders_from_bybit = []
         try:
             response = self.session.get_orders(
-                category="linear", symbol=symbol, orderStatus="Open"
+                category="linear", symbol=symbol, orderStatus="Open",
             )
             if (
                 response
@@ -517,10 +515,10 @@ class BybitAdapter:
                     if client_order_id and client_order_id in self.orders:
                         internal_order = self.orders[client_order_id]
                         internal_order.bybit_order_id = order_data.get(
-                            "orderId", internal_order.bybit_order_id
+                            "orderId", internal_order.bybit_order_id,
                         )
                         internal_order.status = self._map_bybit_order_status(
-                            order_data.get("orderStatus", internal_order.status.value)
+                            order_data.get("orderStatus", internal_order.status.value),
                         )
                         internal_order.updated_at = datetime.utcnow()
                         internal_order.price = (
@@ -540,7 +538,7 @@ class BybitAdapter:
                         )
                         internal_order.take_profit = (
                             float(
-                                order_data.get("takeProfit", internal_order.take_profit)
+                                order_data.get("takeProfit", internal_order.take_profit),
                             )
                             if order_data.get("takeProfit")
                             else internal_order.take_profit
@@ -563,7 +561,7 @@ class BybitAdapter:
                             if order_data.get("takeProfit")
                             else None,
                             status=self._map_bybit_order_status(
-                                order_data.get("orderStatus")
+                                order_data.get("orderStatus"),
                             ),
                             bybit_order_id=order_data.get("orderId"),
                             created_at=datetime.utcnow(),
@@ -595,7 +593,7 @@ class BybitAdapter:
             OrderStatus.PARTIALLY_FILLED,
         ]:
             logger.warning(
-                f"Order {client_order_id} not cancellable: {internal_order.status}"
+                f"Order {client_order_id} not cancellable: {internal_order.status}",
             )
             return {
                 "status": "failed",
@@ -605,7 +603,7 @@ class BybitAdapter:
             internal_order.status = OrderStatus.PENDING_CANCEL
             internal_order.updated_at = datetime.utcnow()
         logger.info(
-            f"Cancelling order for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}"
+            f"Cancelling order for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}",
         )
         try:
             response = self.session.cancel_order(
@@ -616,7 +614,7 @@ class BybitAdapter:
             )
             if response and response["retCode"] == 0:
                 logger.info(
-                    f"Order cancellation request sent for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}"
+                    f"Order cancellation request sent for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}",
                 )
                 return {"status": "success", "message": "Cancellation request sent."}
             error_msg = (
@@ -625,7 +623,7 @@ class BybitAdapter:
                 else "No response"
             )
             logger.error(
-                f"Failed cancellation for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}: {error_msg}"
+                f"Failed cancellation for {symbol}, order_id: {order_id}, client_order_id: {client_order_id}: {error_msg}",
             )
             if internal_order:
                 internal_order.status = OrderStatus.REJECTED
@@ -696,7 +694,7 @@ class RiskPolicy:
             )
         if proposed_position_value > available_balance * 5:
             logger.warning(
-                f"Position value ({proposed_position_value:.2f}) high vs available ({available_balance:.2f})."
+                f"Position value ({proposed_position_value:.2f}) high vs available ({available_balance:.2f}).",
             )
         return True, "Trade proposal valid."
 
@@ -767,17 +765,17 @@ class TradingFunctions:
         }
 
     def get_real_time_market_data(
-        self, symbol: str, timeframe: str = "1m"
+        self, symbol: str, timeframe: str = "1m",
     ) -> dict[str, Any]:
         if self.bybit_adapter:
             return self.bybit_adapter.get_real_time_market_data(symbol, timeframe)
         logger.warning(
-            "Bybit adapter not available, using stub get_real_time_market_data."
+            "Bybit adapter not available, using stub get_real_time_market_data.",
         )
         return self.stub_data["get_real_time_market_data"]
 
     def calculate_advanced_indicators(
-        self, symbol: str, period: int = 14
+        self, symbol: str, period: int = 14,
     ) -> dict[str, float]:
         logger.info(f"Calculating indicators for {symbol} (period={period})")
         return self.stub_data["calculate_advanced_indicators"]
@@ -797,7 +795,7 @@ class TradingFunctions:
         take_profit: float | None = None,
     ) -> dict[str, Any]:
         logger.info(
-            f"Risk analysis for {symbol}: size={position_size}, entry={entry_price}, SL={stop_loss}, TP={take_profit}"
+            f"Risk analysis for {symbol}: size={position_size}, entry={entry_price}, SL={stop_loss}, TP={take_profit}",
         )
         position_value = position_size * entry_price if entry_price is not None else 0
         risk_reward_ratio = max_drawdown_risk = volatility_score = correlation_risk = 0
@@ -819,7 +817,7 @@ class TradingFunctions:
             )
         if proposed_position_value > available_balance * 5:
             logger.warning(
-                f"Position value ({proposed_position_value:.2f}) high vs available ({available_balance:.2f})."
+                f"Position value ({proposed_position_value:.2f}) high vs available ({available_balance:.2f}).",
             )
         return True, "Trade proposal valid."
 
@@ -877,7 +875,7 @@ class TradingAISystem:
         if BYBIT_INTEGRATION_ENABLED and BYBIT_API_KEY and BYBIT_API_SECRET:
             try:
                 self.bybit_adapter = BybitAdapter(
-                    BYBIT_API_KEY, BYBIT_API_SECRET, self.retry_cfg
+                    BYBIT_API_KEY, BYBIT_API_SECRET, self.retry_cfg,
                 )
                 self.trading_funcs = TradingFunctions(self.bybit_adapter)
                 self.risk_policy = RiskPolicy(self.bybit_adapter)
@@ -889,7 +887,7 @@ class TradingAISystem:
                 self.risk_policy = None
         else:
             logger.warning(
-                "Bybit integration disabled/missing keys. Using stub trading functions."
+                "Bybit integration disabled/missing keys. Using stub trading functions.",
             )
             self.trading_funcs = TradingFunctions()
 
@@ -903,7 +901,7 @@ class TradingAISystem:
         market_data = self.trading_funcs.get_real_time_market_data(symbol)
         indicators = self.trading_funcs.calculate_advanced_indicators(symbol)
         portfolio_status = self.trading_funcs.get_portfolio_status(
-            "UNIFIED"
+            "UNIFIED",
         )  # Assuming 'UNIFIED' account_id
 
         prompt = f"""
@@ -962,7 +960,7 @@ async def main():
         return
     if not BYBIT_API_KEY or not BYBIT_API_SECRET:
         logger.error(
-            "BYBIT_API_KEY or BYBIT_API_SECRET not set. Cannot run Bybit examples."
+            "BYBIT_API_KEY or BYBIT_API_SECRET not set. Cannot run Bybit examples.",
         )
         return
 
@@ -982,8 +980,7 @@ async def main():
         dummy_chart_path = "dummy_chart.png"
         if not os.path.exists(dummy_chart_path):
             try:
-                from PIL import Image
-                from PIL import ImageDraw
+                from PIL import Image, ImageDraw
 
                 img = Image.new("RGB", (60, 30), color=(255, 255, 255))
                 d = ImageDraw.Draw(img)
@@ -995,13 +992,13 @@ async def main():
                 dummy_chart_path = None
         if dummy_chart_path and os.path.exists(dummy_chart_path):
             logger.info(
-                f"--- Analyzing Market Chart for {symbol_to_trade} (placeholder) ---"
+                f"--- Analyzing Market Chart for {symbol_to_trade} (placeholder) ---",
             )
             chart_analysis = await system.analyze_market_charts(
-                dummy_chart_path, symbol_to_trade
+                dummy_chart_path, symbol_to_trade,
             )
             logger.info(
-                f"Chart Analysis Result: {json.dumps(chart_analysis, indent=2)}"
+                f"Chart Analysis Result: {json.dumps(chart_analysis, indent=2)}",
             )
 
         # Simulate Trade Execution (based on AI suggestion)
@@ -1020,7 +1017,7 @@ async def main():
             ai_suggested_take_profit = ai_suggested_entry_price * 1.05
 
             logger.info(
-                f"Simulating AI suggestion: {ai_suggested_side} {ai_suggested_order_type} {ai_suggested_qty} @ {ai_suggested_entry_price}"
+                f"Simulating AI suggestion: {ai_suggested_side} {ai_suggested_order_type} {ai_suggested_qty} @ {ai_suggested_entry_price}",
             )
             trade_execution_result = await system.execute_ai_trade_suggestion(
                 symbol=symbol_to_trade,
@@ -1032,7 +1029,7 @@ async def main():
                 take_profit=ai_suggested_take_profit,
             )
             logger.info(
-                f"Trade Execution Result: {json.dumps(trade_execution_result, indent=2)}"
+                f"Trade Execution Result: {json.dumps(trade_execution_result, indent=2)}",
             )
 
             if trade_execution_result.get("status") == "success":
@@ -1050,7 +1047,7 @@ async def main():
                     logger.warning("Could not retrieve updated order status.")
         else:
             logger.warning(
-                f"Could not fetch price for {symbol_to_trade}. Skipping trade simulation."
+                f"Could not fetch price for {symbol_to_trade}. Skipping trade simulation.",
             )
 
         logger.info("--- Trading cycle completed. Sleeping for 60 seconds ---")

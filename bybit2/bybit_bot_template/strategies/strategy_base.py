@@ -1,5 +1,4 @@
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Any
 
 # Assuming logger is available via the client or globally
@@ -29,7 +28,7 @@ class StrategyBase(ABC):
         self.interval = params.get("interval", "1")  # Default interval
 
         self.logger.info(
-            f"StrategyBase initialized for {self.symbol} ({self.interval})"
+            f"StrategyBase initialized for {self.symbol} ({self.interval})",
         )
 
     @abstractmethod
@@ -43,7 +42,6 @@ class StrategyBase(ABC):
                         {'timestamp': '...', 'open': '...', 'high': '...', 'low': '...', 'close': '...', ...}
 
         """
-        pass
 
     @abstractmethod
     async def on_position_update(self, position_data: dict[str, Any]):
@@ -56,7 +54,6 @@ class StrategyBase(ABC):
                            {'symbol': '...', 'side': '...', 'size': '...', 'entryPrice': '...', 'unrealisedPnl': '...', ...}
 
         """
-        pass
 
     async def on_order_update(self, order_data: dict[str, Any]):
         """Callback method executed when an order status changes (e.g., filled, cancelled).
@@ -67,10 +64,9 @@ class StrategyBase(ABC):
 
         """
         self.logger.debug(
-            f"Order update received (default handler): {order_data.get('orderId', 'N/A')}"
+            f"Order update received (default handler): {order_data.get('orderId', 'N/A')}",
         )
         # Default implementation does nothing, can be overridden by specific strategies.
-        pass
 
     async def generate_signals(self):
         """This method is intended for strategies that generate signals based on
@@ -78,7 +74,6 @@ class StrategyBase(ABC):
         reacting to kline/position updates. It might be called periodically.
         """
         self.logger.debug("generate_signals called (default handler).")
-        pass
 
     async def manage_tp_sl(self, position_data: dict[str, Any]):
         """Manages Take Profit and Stop Loss orders for the current position.
@@ -88,21 +83,20 @@ class StrategyBase(ABC):
         # Placeholder for TP/SL management logic.
         # This might involve checking current price against TP/SL levels
         # and potentially placing/modifying orders via self.client.
-        pass
 
     async def enter_position(self, side: str, price: float, qty: str):
         """Helper method to enter a position with TP/SL.
         This can be a common utility for strategies.
         """
         self.logger.info(
-            f"Attempting to enter {side} position for {self.symbol} at {price} with qty {qty}"
+            f"Attempting to enter {side} position for {self.symbol} at {price} with qty {qty}",
         )
 
         # Basic check to avoid entering if already in a position (can be more sophisticated)
         current_pos = self.state.get("current_position")
         if current_pos and current_pos.get("symbol") == self.symbol:
             self.logger.warning(
-                f"Already in a position for {self.symbol}. Skipping entry."
+                f"Already in a position for {self.symbol}. Skipping entry.",
             )
             return
 
@@ -118,12 +112,12 @@ class StrategyBase(ABC):
             stop_loss_price = str(
                 price * (1 - stop_loss_pct)
                 if side == "Buy"
-                else price * (1 + stop_loss_pct)
+                else price * (1 + stop_loss_pct),
             )
             take_profit_price = str(
                 price * (1 + take_profit_pct)
                 if side == "Buy"
-                else price * (1 - take_profit_pct)
+                else price * (1 - take_profit_pct),
             )
 
             # Place the order (using Market order for simplicity in this helper)
@@ -138,12 +132,12 @@ class StrategyBase(ABC):
 
             if order_result and order_result.get("retCode") == 0:
                 self.logger.success(
-                    f"Successfully placed {side} Market order for {self.symbol}. Order ID: {order_result.get('result', {}).get('orderId')}"
+                    f"Successfully placed {side} Market order for {self.symbol}. Order ID: {order_result.get('result', {}).get('orderId')}",
                 )
                 # Note: Actual state update should ideally happen upon receiving position update
             else:
                 self.logger.error(
-                    f"Failed to place {side} Market order: {order_result}"
+                    f"Failed to place {side} Market order: {order_result}",
                 )
 
         except Exception as e:
@@ -152,7 +146,7 @@ class StrategyBase(ABC):
     async def exit_position(self, side: str, price: float):
         """Helper method to exit the current position."""
         self.logger.info(
-            f"Attempting to exit {side} position for {self.symbol} at {price}"
+            f"Attempting to exit {side} position for {self.symbol} at {price}",
         )
 
         current_pos = self.state.get("current_position")
@@ -170,18 +164,18 @@ class StrategyBase(ABC):
                 side=exit_side,
                 order_type="Market",
                 qty=str(
-                    abs(float(current_pos.get("size")))
+                    abs(float(current_pos.get("size"))),
                 ),  # Use the size of the current position
                 reduce_only=True,  # Ensure this order only closes the position
             )
 
             if order_result and order_result.get("retCode") == 0:
                 self.logger.success(
-                    f"Successfully placed exit order for {self.symbol}. Order ID: {order_result.get('result', {}).get('orderId')}"
+                    f"Successfully placed exit order for {self.symbol}. Order ID: {order_result.get('result', {}).get('orderId')}",
                 )
             else:
                 self.logger.error(
-                    f"Failed to place exit order for {self.symbol}: {order_result}"
+                    f"Failed to place exit order for {self.symbol}: {order_result}",
                 )
 
         except Exception as e:

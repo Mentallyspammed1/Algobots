@@ -11,11 +11,7 @@ from decimal import Decimal
 from typing import Any
 
 import websocket
-from scalper_core.constants import NB
-from scalper_core.constants import NG
-from scalper_core.constants import NR
-from scalper_core.constants import NY
-from scalper_core.constants import RST
+from scalper_core.constants import NB, NG, NR, NY, RST
 
 
 class BybitWebSocket:

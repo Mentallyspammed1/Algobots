@@ -1,13 +1,10 @@
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 import pandas as pd
 from algobots_types import OrderBlock  # Assuming this is available
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 
 from .strategy_template import StrategyTemplate
 
@@ -51,7 +48,7 @@ class MarketMakingStrategy(StrategyTemplate):
         # --- New Upgrades Parameters ---
         hedge_cooldown_s: int = 60,  # Cooldown for hedging in seconds
         rebalance_fraction: Decimal = Decimal(
-            "1.0"
+            "1.0",
         ),  # Fraction of position to rebalance
         simulate: bool = False,  # Wet-run flag
         max_signals_per_cycle: int = 5,  # Cap on signals per cycle
@@ -71,7 +68,7 @@ class MarketMakingStrategy(StrategyTemplate):
         self.use_trend_filter = use_trend_filter
         # Convert BPS to decimal percentage once here
         self.sr_level_avoidance_pct = self._bps_to_pct(
-            Decimal(str(sr_level_avoidance_bps))
+            Decimal(str(sr_level_avoidance_bps)),
         )
         self.use_order_block_logic = use_order_block_logic
         # Convert BPS to decimal percentage once here
@@ -87,7 +84,7 @@ class MarketMakingStrategy(StrategyTemplate):
         # --- New Upgrades Assignments ---
         self.hedge_cooldown_s = hedge_cooldown_s
         self._last_hedge_time = datetime.utcnow() - timedelta(
-            seconds=hedge_cooldown_s * 2
+            seconds=hedge_cooldown_s * 2,
         )  # Initialize to allow immediate hedging
         self.rebalance_fraction = rebalance_fraction
         self.simulate = simulate
@@ -101,21 +98,21 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.YELLOW
                 + f"Rebalance threshold ({self.rebalance_threshold}) exceeds max position size ({self.max_position_size}). Adjusting to {self.max_position_size}."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             self.rebalance_threshold = self.max_position_size
         if self.rebalance_aggressiveness not in ["MARKET", "AGGRESSIVE_LIMIT"]:
             self.logger.warning(
                 Fore.YELLOW
                 + f"Invalid rebalance_aggressiveness '{self.rebalance_aggressiveness}'. Defaulting to 'MARKET'."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             self.rebalance_aggressiveness = "MARKET"
         if self.min_order_quantity <= 0:
             self.logger.warning(
                 Fore.YELLOW
                 + f"Min order quantity must be positive. Setting to {self.base_order_quantity / 2 if self.base_order_quantity > 0 else Decimal('0.0001')}."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             self.min_order_quantity = (
                 self.base_order_quantity / 2
@@ -126,7 +123,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.YELLOW
                 + f"Max order quantity ({self.max_order_quantity}) must be greater than min order quantity ({self.min_order_quantity}). Setting max to {self.min_order_quantity * 2}."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             self.max_order_quantity = (
                 self.min_order_quantity * 2
@@ -140,7 +137,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.YELLOW
                 + f"Base order quantity ({self.base_order_quantity}) is outside min/max order quantity range. Adjusting to be within bounds."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             self.base_order_quantity = max(
                 self.min_order_quantity,
@@ -150,12 +147,12 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.YELLOW
                 + f"Hedge ratio ({self.hedge_ratio}) must be between 0 and 1. Defaulting to 0.2."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             self.hedge_ratio = Decimal("0.2")
 
         self.logger.info(
-            Fore.CYAN + "Summoning Enhanced MarketMakingStrategy..." + Style.RESET_ALL
+            Fore.CYAN + "Summoning Enhanced MarketMakingStrategy..." + Style.RESET_ALL,
         )
 
     def _bps_to_pct(self, bps: Decimal) -> Decimal:
@@ -163,7 +160,7 @@ class MarketMakingStrategy(StrategyTemplate):
         return bps / Decimal("10000")
 
     def _calculate_volatility_adjusted_size(
-        self, latest_atr: Decimal, current_price: Decimal
+        self, latest_atr: Decimal, current_price: Decimal,
     ) -> Decimal:
         """Calculate order size adjusted for volatility, with a minimum and maximum size cap."""
         if (
@@ -174,7 +171,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.debug(
                 Fore.YELLOW
                 + f"Volatility adjustment disabled or invalid data. Using base order quantity: {self.base_order_quantity}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return self.base_order_quantity
 
@@ -193,7 +190,7 @@ class MarketMakingStrategy(StrategyTemplate):
         self.logger.debug(
             Fore.GREEN
             + f"Volatility-Adjusted Size: {adjusted_size:.4f} (Base: {self.base_order_quantity}, Multiplier: {size_multiplier:.4f})"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return adjusted_size
 
@@ -204,14 +201,14 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.debug(
                 Fore.YELLOW
                 + f"Calculated hedge size {hedge_size:.4f} is below min_order_quantity {self.min_order_quantity:.4f}. Not hedging."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return Decimal("0")  # Don't hedge if size is too small
 
         self.logger.debug(
             Fore.CYAN
             + f"Hedging {hedge_size:.4f} of position {current_position_size}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return min(hedge_size, self.max_position_size)
 
@@ -233,7 +230,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.RED
                 + f"DataFrame missing required columns: {required_cols}. Cannot generate signals."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return []
 
@@ -252,7 +249,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.RED
                 + "Critical indicator values (close, atr, ehlers_supersmoother) are NaN. Cannot generate signals."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return []
 
@@ -263,10 +260,10 @@ class MarketMakingStrategy(StrategyTemplate):
         # Upgrade 9: Add defense against stale data
         now_utc = datetime.utcnow().replace(tzinfo=None)
         if now_utc - timestamp.to_pydatetime().replace(tzinfo=None) > timedelta(
-            seconds=self.max_data_age_s
+            seconds=self.max_data_age_s,
         ):
             self.logger.warning(
-                Fore.YELLOW + "Data is stale. Skipping cycle." + Style.RESET_ALL
+                Fore.YELLOW + "Data is stale. Skipping cycle." + Style.RESET_ALL,
             )
             return []
 
@@ -285,14 +282,14 @@ class MarketMakingStrategy(StrategyTemplate):
 
         # --- Calculate Dynamic Order Size ---
         order_quantity = self._calculate_volatility_adjusted_size(
-            latest_atr, current_price
+            latest_atr, current_price,
         )
         # Upgrade 3: Additional Check for Order Quantity
         if order_quantity <= 0:  # Ensure order quantity is valid
             self.logger.warning(
                 Fore.RED
                 + "Calculated order quantity is zero or less. Skipping signal generation."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return []
 
@@ -306,13 +303,13 @@ class MarketMakingStrategy(StrategyTemplate):
                 * Decimal("10000")
             )
             dynamic_spread_bps = min(
-                self.max_spread_bps, self.spread_bps + atr_spread_adj
+                self.max_spread_bps, self.spread_bps + atr_spread_adj,
             )
             # Upgrade 2: Improved Logging for Dynamic Spread
             self.logger.debug(
                 Fore.BLUE
                 + f"Dynamic spread adjusted from {self.spread_bps} to {dynamic_spread_bps:.2f} bps due to ATR."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
         # --- Trend Filter & Skew ---
@@ -330,7 +327,7 @@ class MarketMakingStrategy(StrategyTemplate):
 
             # Using inventory_skew_intensity for trend skew as per original code, can be separated later
             trend_skew_factor = self.inventory_skew_intensity / Decimal(
-                "10000"
+                "10000",
             )  # This is still a percentage
             if trend_direction == "Uptrend":
                 skewed_mid_price *= (
@@ -344,7 +341,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.debug(
                 Fore.MAGENTA
                 + f"Trend: {trend_direction}, Skewed Mid Price (after trend): {skewed_mid_price:.8f}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
         # --- Inventory Skew ---
@@ -362,7 +359,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.debug(
                 Fore.YELLOW
                 + f"Signed Inventory: {signed_inventory:.4f}, Inventory Ratio: {inventory_ratio:.4f}, Inventory Skew Adjustment: {inventory_skew_adjustment:.8f}, Adjusted Mid Price (after inventory): {skewed_mid_price:.8f}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
         # --- Calculate Bid/Ask from skewed mid price ---
@@ -397,7 +394,7 @@ class MarketMakingStrategy(StrategyTemplate):
                 self.logger.debug(
                     Fore.CYAN
                     + f"Adjusted BID to {bid_price:.8f} to avoid support/OB at {s_lvl:.8f}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
         for r_lvl in all_resistance:
@@ -409,7 +406,7 @@ class MarketMakingStrategy(StrategyTemplate):
                 self.logger.debug(
                     Fore.CYAN
                     + f"Adjusted ASK to {ask_price:.8f} to avoid resistance/OB at {r_lvl:.8f}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
         # Ensure bid is always below ask
@@ -424,18 +421,18 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.RED
                 + f"Bid {bid_price:.8f} was >= Ask {ask_price:.8f} after adjustments. Re-adjusted prices."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
         # --- Hedging Logic ---
         # Upgrade 2: Cooldown between hedges
         if datetime.utcnow() - self._last_hedge_time < timedelta(
-            seconds=self.hedge_cooldown_s
+            seconds=self.hedge_cooldown_s,
         ):
             self.logger.info(
                 Fore.YELLOW
                 + f"Skipping hedge: Cooldown active. Next hedge in {self.hedge_cooldown_s - (datetime.utcnow() - self._last_hedge_time).total_seconds():.2f}s."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             # Upgrade 6: Advanced Hedge Size Calculation
@@ -464,12 +461,12 @@ class MarketMakingStrategy(StrategyTemplate):
                                 "strategy_id": "MM_HEDGE",
                                 "created_at": datetime.utcnow(),
                             },
-                        )
+                        ),
                     )  # Upgrade 1: Add timestamp
                     self.logger.info(
                         Fore.YELLOW
                         + f"Initiating Hedge: Side={hedge_side}, Qty={hedge_quantity:.4f}, Current Inventory={signed_inventory:.4f}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     self._last_hedge_time = (
                         datetime.utcnow()
@@ -481,7 +478,7 @@ class MarketMakingStrategy(StrategyTemplate):
                     self.logger.debug(
                         Fore.BLUE
                         + f"Simulated Hedge: Side={hedge_side}, Qty={hedge_quantity:.4f}, Current Inventory={signed_inventory:.4f}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
 
         # --- Final Signal Generation for Bid/Ask (main market making) ---
@@ -494,7 +491,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.info(
                 Fore.YELLOW
                 + f"Skipping BUY signal: Max position size ({self.max_position_size}) would be exceeded. Current: {current_position_size}, Order: {order_quantity}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         elif (
             bid_price > 0 and order_quantity >= self.min_order_quantity
@@ -512,12 +509,12 @@ class MarketMakingStrategy(StrategyTemplate):
                             "strategy_id": "MM_BID",
                             "created_at": datetime.utcnow(),
                         },
-                    )
+                    ),
                 )  # Upgrade 1: Add timestamp
                 self.logger.info(
                     Fore.GREEN
                     + f"Generated BUY LIMIT signal @ {bid_price:.8f}, Qty: {order_quantity:.4f}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 signals_generated_this_cycle += 1
                 if signals_generated_this_cycle >= self.max_signals_per_cycle:
@@ -526,7 +523,7 @@ class MarketMakingStrategy(StrategyTemplate):
                 self.logger.debug(
                     Fore.BLUE
                     + f"Simulated BUY LIMIT signal @ {bid_price:.8f}, Qty: {order_quantity:.4f}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
         # If position is too large on sell side, don't place new sell
@@ -537,7 +534,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.info(
                 Fore.YELLOW
                 + f"Skipping SELL signal: Max position size ({self.max_position_size}) would be exceeded. Current: {current_position_size}, Order: {order_quantity}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         elif (
             ask_price > 0 and order_quantity >= self.min_order_quantity
@@ -555,12 +552,12 @@ class MarketMakingStrategy(StrategyTemplate):
                             "strategy_id": "MM_ASK",
                             "created_at": datetime.utcnow(),
                         },
-                    )
+                    ),
                 )  # Upgrade 1: Add timestamp
                 self.logger.info(
                     Fore.GREEN
                     + f"Generated SELL LIMIT signal @ {ask_price:.8f}, Qty: {order_quantity:.4f}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 signals_generated_this_cycle += 1
                 if signals_generated_this_cycle >= self.max_signals_per_cycle:
@@ -569,7 +566,7 @@ class MarketMakingStrategy(StrategyTemplate):
                 self.logger.debug(
                     Fore.BLUE
                     + f"Simulated SELL LIMIT signal @ {ask_price:.8f}, Qty: {order_quantity:.4f}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
         # Upgrade 8: Emit summary signal
@@ -605,7 +602,7 @@ class MarketMakingStrategy(StrategyTemplate):
                     else Decimal("0"),
                     "created_at": datetime.utcnow(),
                 },
-            )
+            ),
         )
 
         return signals
@@ -630,7 +627,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.RED
                 + "No position or empty DataFrame. Skipping exit signals."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return []
 
@@ -642,7 +639,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.warning(
                 Fore.RED
                 + "Critical indicator values (close, atr) are NaN for exit signals. Cannot generate exit signals."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return []
 
@@ -656,10 +653,10 @@ class MarketMakingStrategy(StrategyTemplate):
         # Upgrade 9: Add defense against stale data
         now_utc = datetime.utcnow().replace(tzinfo=None)
         if now_utc - timestamp.to_pydatetime().replace(tzinfo=None) > timedelta(
-            seconds=self.max_data_age_s
+            seconds=self.max_data_age_s,
         ):
             self.logger.warning(
-                Fore.YELLOW + "Data is stale. Skipping exit cycle." + Style.RESET_ALL
+                Fore.YELLOW + "Data is stale. Skipping exit cycle." + Style.RESET_ALL,
             )
             return []
 
@@ -676,7 +673,7 @@ class MarketMakingStrategy(StrategyTemplate):
                     self.logger.warning(
                         Fore.RED
                         + f"PANIC EXIT (Long): Stop-Loss triggered at {current_price:.8f} (Entry: {entry_price:.8f}, SL: {stop_loss_trigger_price:.8f})"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     # Upgrade 5: Wet-run flag
                     if not self.simulate:
@@ -691,7 +688,7 @@ class MarketMakingStrategy(StrategyTemplate):
                                     "strategy_id": "MM_PANIC_EXIT",
                                     "created_at": datetime.utcnow(),
                                 },
-                            )
+                            ),
                         )  # Upgrade 1: Add timestamp
                         # Upgrade 3: Auto-tune stop_loss_atr_multiplier
                         if pnl < 0:
@@ -708,7 +705,7 @@ class MarketMakingStrategy(StrategyTemplate):
                         self.logger.info(
                             Fore.MAGENTA
                             + f"Adjusted stop_loss_atr_multiplier to {self.stop_loss_atr_multiplier:.4f} (Wins: {self.win_count}, Losses: {self.loss_count})"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
 
                         signals_generated_this_cycle += 1
@@ -718,7 +715,7 @@ class MarketMakingStrategy(StrategyTemplate):
                         self.logger.debug(
                             Fore.BLUE
                             + f"Simulated PANIC EXIT (Long): Stop-Loss triggered at {current_price:.8f}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                     return exit_signals  # Prioritize panic exit to avoid further losses
             elif current_position_side == "SHORT":
@@ -729,7 +726,7 @@ class MarketMakingStrategy(StrategyTemplate):
                     self.logger.warning(
                         Fore.RED
                         + f"PANIC EXIT (Short): Stop-Loss triggered at {current_price:.8f} (Entry: {entry_price:.8f}, SL: {stop_loss_trigger_price:.8f})"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     # Upgrade 5: Wet-run flag
                     if not self.simulate:
@@ -744,7 +741,7 @@ class MarketMakingStrategy(StrategyTemplate):
                                     "strategy_id": "MM_PANIC_EXIT",
                                     "created_at": datetime.utcnow(),
                                 },
-                            )
+                            ),
                         )  # Upgrade 1: Add timestamp
                         # Upgrade 3: Auto-tune stop_loss_atr_multiplier
                         if pnl < 0:
@@ -761,7 +758,7 @@ class MarketMakingStrategy(StrategyTemplate):
                         self.logger.info(
                             Fore.MAGENTA
                             + f"Adjusted stop_loss_atr_multiplier to {self.stop_loss_atr_multiplier:.4f} (Wins: {self.win_count}, Losses: {self.loss_count})"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
 
                         signals_generated_this_cycle += 1
@@ -771,7 +768,7 @@ class MarketMakingStrategy(StrategyTemplate):
                         self.logger.debug(
                             Fore.BLUE
                             + f"Simulated PANIC EXIT (Short): Stop-Loss triggered at {current_price:.8f}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                     return exit_signals  # Prioritize panic exit
 
@@ -783,7 +780,7 @@ class MarketMakingStrategy(StrategyTemplate):
             self.logger.info(
                 Fore.YELLOW
                 + f"Rebalancing: Position size ({current_position_size}) >= threshold ({self.rebalance_threshold})."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             exit_side = "SELL" if current_position_side == "LONG" else "BUY"
 
@@ -795,7 +792,7 @@ class MarketMakingStrategy(StrategyTemplate):
                 self.logger.warning(
                     Fore.YELLOW
                     + f"Rebalance quantity {rebalance_quantity:.4f} is too small to execute. Skipping."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 return []
 
@@ -813,12 +810,12 @@ class MarketMakingStrategy(StrategyTemplate):
                                 "strategy_id": "MM_REBALANCE",
                                 "created_at": datetime.utcnow(),
                             },
-                        )
+                        ),
                     )  # Upgrade 1: Add timestamp
                     self.logger.info(
                         Fore.YELLOW
                         + f"Generated MARKET REBALANCE signal: Side={exit_side}, Qty={rebalance_quantity:.4f}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     signals_generated_this_cycle += 1
                     if signals_generated_this_cycle >= self.max_signals_per_cycle:
@@ -827,7 +824,7 @@ class MarketMakingStrategy(StrategyTemplate):
                     self.logger.debug(
                         Fore.BLUE
                         + f"Simulated MARKET REBALANCE signal: Side={exit_side}, Qty={rebalance_quantity:.4f}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
 
             else:  # AGGRESSIVE_LIMIT
@@ -835,7 +832,7 @@ class MarketMakingStrategy(StrategyTemplate):
                 aggressive_price = current_price
                 # Calculate an aggressive limit price: current price adjusted by a small fraction of the spread
                 aggressive_limit_adjustment = self._bps_to_pct(
-                    self.spread_bps / Decimal("4")
+                    self.spread_bps / Decimal("4"),
                 )  # Half of the half spread
                 if (
                     exit_side == "SELL"
@@ -861,12 +858,12 @@ class MarketMakingStrategy(StrategyTemplate):
                                 "strategy_id": "MM_REBALANCE",
                                 "created_at": datetime.utcnow(),
                             },
-                        )
+                        ),
                     )  # Upgrade 1: Add timestamp
                     self.logger.info(
                         Fore.YELLOW
                         + f"Generated AGGRESSIVE LIMIT REBALANCE signal: Side={exit_side}, Price={aggressive_price:.8f}, Qty={rebalance_quantity:.4f}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     signals_generated_this_cycle += 1
                     if signals_generated_this_cycle >= self.max_signals_per_cycle:
@@ -875,7 +872,7 @@ class MarketMakingStrategy(StrategyTemplate):
                     self.logger.debug(
                         Fore.BLUE
                         + f"Simulated AGGRESSIVE LIMIT REBALANCE signal: Side={exit_side}, Price={aggressive_price:.8f}, Qty={rebalance_quantity:.4f}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
 
         # Upgrade 8: Emit summary signal
@@ -900,12 +897,12 @@ class MarketMakingStrategy(StrategyTemplate):
                     else Decimal("0"),
                     "created_at": datetime.utcnow(),
                 },
-            )
+            ),
         )
 
         self.logger.info(
             Fore.GREEN
             + f"Generated {len(exit_signals)} exit signals: {exit_signals}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return exit_signals

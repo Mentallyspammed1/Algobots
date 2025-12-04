@@ -1,8 +1,7 @@
 import sys
 import unittest
 from decimal import Decimal
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
@@ -60,7 +59,7 @@ class TestEhlersSupertrendStrategy(unittest.TestCase):
         )
         if len(self.df) < self.min_required_bars:
             self.df = create_sample_kline_df(
-                rows=self.min_required_bars + 10
+                rows=self.min_required_bars + 10,
             )  # Ensure enough rows
 
     @patch("indicators.calculate_ehlers_fisher_strategy")
@@ -76,13 +75,13 @@ class TestEhlersSupertrendStrategy(unittest.TestCase):
         mock_calculate_ehlers_fisher_strategy.return_value = self.df.copy()
         mock_calculate_supertrend.return_value = self.df.copy()
         mock_calculate_sma.return_value = pd.Series(
-            [Decimal("100")] * len(self.df), index=self.df.index
+            [Decimal("100")] * len(self.df), index=self.df.index,
         )
 
         result_df = self.strategy._calculate_indicators(self.df.copy())
 
         mock_calculate_ehlers_fisher_strategy.assert_called_once_with(
-            self.df.copy(), length=self.strategy.ehlers_period
+            self.df.copy(), length=self.strategy.ehlers_period,
         )
         mock_calculate_supertrend.assert_called_once_with(
             self.df.copy(),
@@ -90,12 +89,12 @@ class TestEhlersSupertrendStrategy(unittest.TestCase):
             multiplier=self.strategy.supertrend_multiplier,
         )
         mock_calculate_sma.assert_called_once_with(
-            self.df.copy(), length=self.strategy.sma_period
+            self.df.copy(), length=self.strategy.sma_period,
         )
         self.assertIn("sma", result_df.columns)
 
     @patch(
-        "strategies.ehlerssupertrendstrategy.EhlersSupertrendStrategy._calculate_indicators"
+        "strategies.ehlerssupertrendstrategy.EhlersSupertrendStrategy._calculate_indicators",
     )
     def test_generate_signals_buy(self, mock_calculate_indicators):
         # Setup mock DataFrame with specific indicator values for a BUY signal
@@ -125,7 +124,7 @@ class TestEhlersSupertrendStrategy(unittest.TestCase):
         self.assertEqual(signals[0][1], mock_df["close"].iloc[-1])
 
     @patch(
-        "strategies.ehlerssupertrendstrategy.EhlersSupertrendStrategy._calculate_indicators"
+        "strategies.ehlerssupertrendstrategy.EhlersSupertrendStrategy._calculate_indicators",
     )
     def test_generate_signals_sell(self, mock_calculate_indicators):
         # Setup mock DataFrame with specific indicator values for a SELL signal
@@ -155,7 +154,7 @@ class TestEhlersSupertrendStrategy(unittest.TestCase):
         self.assertEqual(signals[0][1], mock_df["close"].iloc[-1])
 
     @patch(
-        "strategies.ehlerssupertrendstrategy.EhlersSupertrendStrategy._calculate_indicators"
+        "strategies.ehlerssupertrendstrategy.EhlersSupertrendStrategy._calculate_indicators",
     )
     def test_generate_exit_signals_long_position(self, mock_calculate_indicators):
         # Setup mock DataFrame for exiting a long position
@@ -180,7 +179,7 @@ class TestEhlersSupertrendStrategy(unittest.TestCase):
         self.assertEqual(exit_signals[0][0], "SELL_TO_CLOSE")
 
     @patch(
-        "strategies.ehlerssupertrendstrategy.EhlersSupertrendStrategy._calculate_indicators"
+        "strategies.ehlerssupertrendstrategy.EhlersSupertrendStrategy._calculate_indicators",
     )
     def test_generate_exit_signals_short_position(self, mock_calculate_indicators):
         # Setup mock DataFrame for exiting a short position

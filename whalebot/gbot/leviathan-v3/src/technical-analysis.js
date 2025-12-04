@@ -1,31 +1,39 @@
-import { average, safeArray, stdDev } from './utils.js';
+import { safeArray, average } from './utils.js';
 
 /**
- * This file contains pure-function versions of the original technical analysis logic,
- * plus new standard indicators.
+ * This file contains pure-function versions of standard technical analysis indicators.
+ * @module TechnicalAnalysis
  */
 
-// UTILITY INDICATORS (used by other indicators)
-function ema(closes, period) {
+/**
+ * Calculates Exponential Moving Average (EMA).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period for the EMA.
+ * @returns {number[]} Array of EMA values.
+ */
+export function ema(closes, period) {
     if (closes.length < period) return safeArray(closes.length);
     const results = safeArray(closes.length);
     const multiplier = 2 / (period + 1);
     
-    // Initial value is a simple moving average
     let sum = 0;
     for (let i = 0; i < period; i++) {
         sum += closes[i];
     }
     results[period - 1] = sum / period;
 
-    // Calculate subsequent EMA values
     for (let i = period; i < closes.length; i++) {
         results[i] = (closes[i] - results[i - 1]) * multiplier + results[i - 1];
     }
     return results;
 }
 
-// PRIMARY INDICATORS
+/**
+ * Calculates Relative Strength Index (RSI).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} [period=14] - The time period for the RSI.
+ * @returns {number[]} Array of RSI values.
+ */
 export function rsi(closes, period = 14) {
     if (!closes.length || closes.length <= period) return safeArray(closes.length);
     
@@ -58,6 +66,13 @@ export function rsi(closes, period = 14) {
     return rsi;
 }
 
+/**
+ * Calculates the Fisher Transform.
+ * @param {number[]} highs - Array of high prices.
+ * @param {number[]} lows - Array of low prices.
+ * @param {number} [period=9] - The time period.
+ * @returns {number[]} Array of Fisher Transform values.
+ */
 export function fisher(highs, lows, period = 9) {
     const len = highs.length;
     const fish = safeArray(len);
@@ -79,6 +94,14 @@ export function fisher(highs, lows, period = 9) {
     return fish;
 }
 
+/**
+ * Calculates Average True Range (ATR).
+ * @param {number[]} highs - Array of high prices.
+ * @param {number[]} lows - Array of low prices.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} [period=14] - The time period.
+ * @returns {number[]} Array of ATR values.
+ */
 export function atr(highs, lows, closes, period = 14) {
     const len = closes.length;
     const tr = safeArray(len);
@@ -97,6 +120,13 @@ export function atr(highs, lows, closes, period = 14) {
     return atr;
 }
 
+/**
+ * Calculates Bollinger Bands.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period.
+ * @param {number} stdDevMultiplier - The standard deviation multiplier.
+ * @returns {{upper: number[], mid: number[], lower: number[]}} - An object with arrays for upper, middle, and lower bands.
+ */
 export function bollinger(closes, period, stdDevMultiplier) {
     if (closes.length < period) return { upper: [], mid: [], lower: [] };
     const mid = safeArray(closes.length);
@@ -114,8 +144,14 @@ export function bollinger(closes, period, stdDevMultiplier) {
     return { upper, mid, lower };
 }
 
-// --- NEW INDICATORS ---
-
+/**
+ * Calculates Moving Average Convergence Divergence (MACD).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} fastPeriod - The fast EMA period.
+ * @param {number} slowPeriod - The slow EMA period.
+ * @param {number} signalPeriod - The signal line EMA period.
+ * @returns {{macd: number[], signal: number[], histogram: number[]}} - An object with arrays for MACD line, signal line, and histogram.
+ */
 export function macd(closes, fastPeriod, slowPeriod, signalPeriod) {
     if (closes.length < slowPeriod) return { macd: [], signal: [], histogram: [] };
     const emaFast = ema(closes, fastPeriod);
@@ -126,6 +162,15 @@ export function macd(closes, fastPeriod, slowPeriod, signalPeriod) {
     return { macd: macdLine, signal: signalLine, histogram: histogram };
 }
 
+/**
+ * Calculates Stochastic RSI.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} rsiPeriod - The RSI period.
+ * @param {number} stochPeriod - The stochastic period.
+ * @param {number} kPeriod - The %K period.
+ * @param {number} dPeriod - The %D period.
+ * @returns {{k: number[], d: number[]}} - An object with arrays for %K and %D lines.
+ */
 export function stochRSI(closes, rsiPeriod, stochPeriod, kPeriod, dPeriod) {
     const rsiValues = rsi(closes, rsiPeriod);
     const len = rsiValues.length;
@@ -147,6 +192,14 @@ export function stochRSI(closes, rsiPeriod, stochPeriod, kPeriod, dPeriod) {
     return { k, d };
 }
 
+/**
+ * Calculates the Average Directional Index (ADX).
+ * @param {number[]} highs - Array of high prices.
+ * @param {number[]} lows - Array of low prices.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period.
+ * @returns {{adx: number[], pdi: number[], ndi: number[]}} - An object with arrays for ADX, +DI, and -DI lines.
+ */
 export function adx(highs, lows, closes, period) {
     if (highs.length < period * 2) return { adx: [], pdi: [], ndi: [] };
     const len = highs.length;
@@ -155,7 +208,7 @@ export function adx(highs, lows, closes, period) {
     const ndi = safeArray(len);
 
     for (let i = 1; i < len; i++) {
-        tr[i] = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
+        tr[i] = Math.max(highs[i]-lows[i], Math.abs(highs[i]-closes[i-1]), Math.abs(lows[i]-closes[i-1]));
         const upMove = highs[i] - highs[i-1];
         const downMove = lows[i-1] - lows[i];
         pdi[i] = upMove > downMove && upMove > 0 ? upMove : 0;
@@ -185,4 +238,27 @@ export function adx(highs, lows, closes, period) {
     
     const adxLine = ema(dx, period);
     return { adx: adxLine, pdi: pdiLine, ndi: ndiLine };
+}
+
+/**
+ * Calculates Williams %R.
+ * @param {number[]} highs - Array of high prices.
+ * @param {number[]} lows - Array of low prices.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} [period=14] - The time period.
+ * @returns {number[]} Array of Williams %R values.
+ */
+export function williamsR(highs, lows, closes, period = 14) {
+    const len = closes.length;
+    const wr = safeArray(len);
+    for (let i = period - 1; i < len; i++) {
+        const highestHigh = Math.max(...highs.slice(i - period + 1, i + 1));
+        const lowestLow = Math.min(...lows.slice(i - period + 1, i + 1));
+        if (highestHigh === lowestLow) {
+            wr[i] = -50; // Neutral value
+        } else {
+            wr[i] = ((highestHigh - closes[i]) / (highestHigh - lowestLow)) * -100;
+        }
+    }
+    return wr;
 }

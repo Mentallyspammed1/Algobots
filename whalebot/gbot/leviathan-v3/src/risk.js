@@ -33,7 +33,17 @@ export class CircuitBreaker {
         }
     }
 
-    canTrade() {
-        return !this.triggered;
+    isOpen() {
+        return this.triggered;
+    }
+    
+    trip(reason) {
+        this.triggered = true;
+        console.error(COLOR.RED(`[CircuitBreaker] TRIP forced by reason: ${reason}`));
+    }
+    
+    reset() {
+        this.triggered = false;
+        console.log(COLOR.GREEN(`[CircuitBreaker] Manually reset.`));
     }
 }

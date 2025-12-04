@@ -89,7 +89,7 @@ def get_klines(symbol, interval, limit=200):
     """Fetches kline data from Bybit."""
     try:
         response = session.get_kline(
-            category=CATEGORY, symbol=symbol, interval=interval, limit=limit
+            category=CATEGORY, symbol=symbol, interval=interval, limit=limit,
         )
         if response and response["retCode"] == 0:
             data = response["result"]["list"]
@@ -119,7 +119,7 @@ def get_klines(symbol, interval, limit=200):
             df = df.set_index("start_time")
             return df.sort_index()  # Ensure ascending order by time
         log_message(
-            f"Error fetching klines for {symbol}, {interval}: {response}", "ERROR"
+            f"Error fetching klines for {symbol}, {interval}: {response}", "ERROR",
         )
         return None
     except Exception as e:
@@ -155,7 +155,7 @@ def calculate_indicators(df):
 
     # ATR
     df["atr"] = ta.volatility.average_true_range(
-        df["high"], df["low"], df["close"], window=ATR_PERIOD
+        df["high"], df["low"], df["close"], window=ATR_PERIOD,
     )
 
     return df
@@ -193,7 +193,7 @@ def get_current_price(symbol):
 
 
 def place_order(
-    symbol, side, qty, order_type="Market", stop_loss=None, take_profit=None
+    symbol, side, qty, order_type="Market", stop_loss=None, take_profit=None,
 ):
     """Places a market order with optional Stop Loss and Take Profit."""
     try:
@@ -208,11 +208,11 @@ def place_order(
         }
         if stop_loss is not None:
             params["stopLoss"] = str(
-                round(stop_loss, 2)
+                round(stop_loss, 2),
             )  # Round SL to 2 decimal places
         if take_profit is not None:
             params["takeProfit"] = str(
-                round(take_profit, 2)
+                round(take_profit, 2),
             )  # Round TP to 2 decimal places
 
         response = session.place_order(**params)
@@ -351,7 +351,7 @@ def run_bot():
         current_price = get_current_price(SYMBOL)
         if current_price is None:
             log_message(
-                "Failed to get current price. Retrying in 60 seconds.", "WARNING"
+                "Failed to get current price. Retrying in 60 seconds.", "WARNING",
             )
             time.sleep(60)
             continue
@@ -406,7 +406,7 @@ def run_bot():
         if current_trade_state["position"]:
             pos = current_trade_state["position"]
             log_message(
-                f"Open position found: {pos['side']} {pos['size']:.3f} at {pos['entry_price']:.2f}"
+                f"Open position found: {pos['side']} {pos['size']:.3f} at {pos['entry_price']:.2f}",
             )
 
             # --- Position Management (Exit Strategies) ---
@@ -692,7 +692,7 @@ def run_bot():
                 account_balance = get_account_balance()
                 if account_balance == 0:
                     log_message(
-                        "Could not get account balance. Cannot place trade.", "ERROR"
+                        "Could not get account balance. Cannot place trade.", "ERROR",
                     )
                     time.sleep(60)
                     continue
@@ -700,7 +700,7 @@ def run_bot():
                 current_atr = df_1m["atr"].iloc[-1]
                 if pd.isna(current_atr) or current_atr == 0:
                     log_message(
-                        "ATR is not available or zero. Cannot place trade.", "ERROR"
+                        "ATR is not available or zero. Cannot place trade.", "ERROR",
                     )
                     time.sleep(60)
                     continue
@@ -762,7 +762,7 @@ def run_bot():
 
                 if order_id:
                     log_message(
-                        f"Trade entered successfully. Order ID: {order_id}", "SUCCESS"
+                        f"Trade entered successfully. Order ID: {order_id}", "SUCCESS",
                     )
                     # Update global trade state
                     current_trade_state["position"] = {

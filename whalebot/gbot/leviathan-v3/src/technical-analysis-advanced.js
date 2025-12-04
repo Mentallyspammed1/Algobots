@@ -1,25 +1,19 @@
 import { safeArray, average } from './utils.js';
-// CORRECTED: Import stochRSI as it's a dependency for schaffTC
-import { rsi, atr, stochRSI } from './technical-analysis.js';
+import { rsi, atr, stochRSI, ema } from './technical-analysis.js';
 
-// --- HELPER FUNCTIONS for Advanced Indicators ---
+/**
+ * This file contains pure-function versions of advanced technical analysis indicators.
+ * @module TechnicalAnalysisAdvanced
+ */
 
-function ema(closes, period) {
-    if (closes.length < period) return safeArray(closes.length);
-    const results = safeArray(closes.length);
-    const multiplier = 2 / (period + 1);
-    let sum = 0;
-    for (let i = 0; i < period; i++) {
-        sum += closes[i];
-    }
-    results[period - 1] = sum / period;
-    for (let i = period; i < closes.length; i++) {
-        results[i] = (closes[i] - results[i - 1]) * multiplier + results[i - 1];
-    }
-    return results;
-}
 
-function sma(closes, period) {
+/**
+ * Calculates Simple Moving Average (SMA).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period for the SMA.
+ * @returns {number[]} Array of SMA values.
+ */
+export function sma(closes, period) {
     if (closes.length < period) return safeArray(closes.length);
     const results = safeArray(closes.length);
     for(let i = period - 1; i < closes.length; i++) {
@@ -29,7 +23,13 @@ function sma(closes, period) {
     return results;
 }
 
-function wma(closes, period) {
+/**
+ * Calculates Weighted Moving Average (WMA).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period for the WMA.
+ * @returns {number[]} Array of WMA values.
+ */
+export function wma(closes, period) {
     if (closes.length < period) return safeArray(closes.length);
     const results = safeArray(closes.length);
     const weightSum = (period * (period + 1)) / 2;
@@ -43,9 +43,13 @@ function wma(closes, period) {
     return results;
 }
 
-// --- 10 ADVANCED INDICATORS ---
-
-/** 1. T3 Moving Average */
+/** 
+ * Calculates T3 Moving Average.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period.
+ * @param {number} [vFactor=0.7] - The volume factor.
+ * @returns {number[]} Array of T3 values.
+ */
 export function t3(closes, period, vFactor = 0.7) {
     if (closes.length < period * 6) return safeArray(closes.length);
     const ema1 = ema(closes, period);
@@ -61,7 +65,15 @@ export function t3(closes, period, vFactor = 0.7) {
     return ema6.map((_, i) => c1 * ema6[i] + c2 * ema5[i] + c3 * ema4[i] + c4 * ema3[i]);
 }
 
-/** 2. SuperTrend */
+/** 
+ * Calculates SuperTrend.
+ * @param {number[]} highs - Array of high prices.
+ * @param {number[]} lows - Array of low prices.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period.
+ * @param {number} [multiplier=3] - The ATR multiplier.
+ * @returns {{trend: number[], direction: number[]}} - An object with arrays for the trend line and direction.
+ */
 export function superTrend(highs, lows, closes, period, multiplier = 3) {
     if (highs.length < period) return { trend: [], direction: [] };
     const atrVals = atr(highs, lows, closes, period);
@@ -78,7 +90,15 @@ export function superTrend(highs, lows, closes, period, multiplier = 3) {
     return { trend, direction };
 }
 
-/** 3. VWAP (Volume Weighted Average Price) */
+/** 
+ * Calculates Volume Weighted Average Price (VWAP).
+ * This is a session-based indicator. The implementation here is a continuous version.
+ * @param {number[]} highs - Array of high prices.
+ * @param {number[]} lows - Array of low prices.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number[]} volumes - Array of volumes.
+ * @returns {number[]} Array of VWAP values.
+ */
 export function vwap(highs, lows, closes, volumes) {
     let cumulativePV = 0, cumulativeVol = 0;
     return closes.map((_, i) => {
@@ -89,7 +109,12 @@ export function vwap(highs, lows, closes, volumes) {
     });
 }
 
-/** 4. Hull Moving Average (HMA) */
+/** 
+ * Calculates Hull Moving Average (HMA).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period.
+ * @returns {number[]} Array of HMA values.
+ */
 export function hullMA(closes, period) {
     const halfPeriod = Math.floor(period / 2);
     const sqrtPeriod = Math.floor(Math.sqrt(period));
@@ -99,7 +124,14 @@ export function hullMA(closes, period) {
     return wma(diff, sqrtPeriod);
 }
 
-/** 5. Choppiness Index */
+/** 
+ * Calculates Choppiness Index.
+ * @param {number[]} highs - Array of high prices.
+ * @param {number[]} lows - Array of low prices.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period.
+ * @returns {number[]} Array of Choppiness Index values.
+ */
 export function choppiness(highs, lows, closes, period) {
     if (highs.length < period) return safeArray(highs.length);
     const results = safeArray(highs.length);
@@ -121,7 +153,14 @@ export function choppiness(highs, lows, closes, period) {
     return results;
 }
 
-/** 6. Connors RSI (CRSI) */
+/** 
+ * Calculates Connors RSI (CRSI).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} [rsiPeriod=3] - The period for the main RSI component.
+ * @param {number} [streakRsiPeriod=2] - The period for the streak RSI component.
+ * @param {number} [rankPeriod=100] - The period for the percentile rank component.
+ * @returns {number[]} Array of CRSI values.
+ */
 export function connorsRSI(closes, rsiPeriod = 3, streakRsiPeriod = 2, rankPeriod = 100) {
     const rsi1 = rsi(closes, rsiPeriod);
     const streaks = safeArray(closes.length);
@@ -139,7 +178,12 @@ export function connorsRSI(closes, rsiPeriod = 3, streakRsiPeriod = 2, rankPerio
     return rsi1.map((_, i) => (rsi1[i] + rsi2[i] + rank[i]) / 3);
 }
 
-/** 7. Kaufman Efficiency Ratio (KER) */
+/** 
+ * Calculates Kaufman Efficiency Ratio (KER).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period.
+ * @returns {number[]} Array of KER values.
+ */
 export function kaufmanER(closes, period) {
     const len = closes.length;
     const er = safeArray(len);
@@ -154,7 +198,16 @@ export function kaufmanER(closes, period) {
     return er;
 }
 
-/** 8. Ichimoku Cloud (Core Components) */
+/** 
+ * Calculates Ichimoku Cloud components.
+ * @param {number[]} highs - Array of high prices.
+ * @param {number[]} lows - Array of low prices.
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} [span1=9] - Tenkan-sen period.
+ * @param {number} [span2=26] - Kijun-sen period.
+ * @param {number} [span3=52] - Senkou Span B period.
+ * @returns {{conv: number[], base: number[], spanA: number[], spanB: number[]}} - Ichimoku components.
+ */
 export function ichimoku(highs, lows, closes, span1 = 9, span2 = 26, span3 = 52) {
     const len = highs.length;
     const conv = safeArray(len), base = safeArray(len), spanA = safeArray(len), spanB = safeArray(len);
@@ -167,14 +220,26 @@ export function ichimoku(highs, lows, closes, span1 = 9, span2 = 26, span3 = 52)
     return { conv, base, spanA, spanB };
 }
 
-/** 9. Schaff Trend Cycle (STC) */
+/** 
+ * Calculates Schaff Trend Cycle (STC).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} [fast=23] - Fast MACD period.
+ * @param {number} [slow=50] - Slow MACD period.
+ * @param {number} [cycle=10] - STC cycle length.
+ * @returns {number[]} Array of STC values.
+ */
 export function schaffTC(closes, fast = 23, slow = 50, cycle = 10) {
     const macdLine = ema(closes, fast).map((v, i) => v - ema(closes, slow)[i]);
     const stoch = stochRSI(macdLine, cycle, cycle, 3, 3);
     return ema(stoch.k, 3);
 }
 
-/** 10. Detrended Price Oscillator (DPO) */
+/** 
+ * Calculates Detrended Price Oscillator (DPO).
+ * @param {number[]} closes - Array of closing prices.
+ * @param {number} period - The time period.
+ * @returns {number[]} Array of DPO values.
+ */
 export function dpo(closes, period) {
     if (closes.length < period) return safeArray(closes.length);
     const offset = Math.floor((period / 2) + 1);

@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def cancel_all_orders_for_symbol(symbol: str = "DOGEUSDT", category: str = "line
     print(
         Fore.MAGENTA
         + f"\n# Initiating the ritual to cancel all open orders for {symbol} in category {category}...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def cancel_all_orders_for_symbol(symbol: str = "DOGEUSDT", category: str = "line
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,7 +37,7 @@ def cancel_all_orders_for_symbol(symbol: str = "DOGEUSDT", category: str = "line
         print(
             Fore.CYAN
             + f"  # Sending cancellation request for all orders of Symbol: {symbol}, Category: {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Cancel all orders for a specific symbol and category
@@ -51,7 +49,7 @@ def cancel_all_orders_for_symbol(symbol: str = "DOGEUSDT", category: str = "line
             print(
                 Fore.GREEN
                 + f"  # All open orders for {symbol} cancelled successfully!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(Fore.GREEN + f"    Response: {response['result']}" + Style.RESET_ALL)
         else:
@@ -61,7 +59,7 @@ def cancel_all_orders_for_symbol(symbol: str = "DOGEUSDT", category: str = "line
                 print(
                     Fore.RED
                     + f"  # Error Message: {response['retMsg']}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     except Exception as e:
@@ -69,13 +67,13 @@ def cancel_all_orders_for_symbol(symbol: str = "DOGEUSDT", category: str = "line
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable, API keys are valid, and the symbol/category are correct."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
         Fore.MAGENTA
         + "\n# The mass order cancellation incantation is complete!\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
 
@@ -87,22 +85,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     cancel_all_orders_for_symbol("DOGEUSDT", "linear")

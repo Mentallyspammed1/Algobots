@@ -50,7 +50,7 @@ class MarketMakingBot:
         self.exchange.cancel_all_orders(self.symbol)
         for order in new_orders:
             self.exchange.place_order(
-                self.symbol, order["side"], order["price"], order["quantity"]
+                self.symbol, order["side"], order["price"], order["quantity"],
             )
 
     def print_status(self):

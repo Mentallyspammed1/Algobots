@@ -7,8 +7,7 @@ import sqlite3
 import subprocess
 import sys
 import time
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from threading import Thread
@@ -18,10 +17,7 @@ import joblib
 import numpy as np
 import requests
 import websockets
-from colorama import Back
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Back, Fore, Style, init
 from dotenv import load_dotenv
 from sklearn.ensemble import RandomForestClassifier
 
@@ -42,7 +38,7 @@ CONFIG = {
     },
     "REFRESH_INTERVAL": int(os.environ.get("REFRESH_INTERVAL", "9")),
     "MAX_ORDERBOOK_DEPTH_DISPLAY": int(
-        os.environ.get("MAX_ORDERBOOK_DEPTH_DISPLAY", "50")
+        os.environ.get("MAX_ORDERBOOK_DEPTH_DISPLAY", "50"),
     ),
     "ORDER_FETCH_LIMIT": int(os.environ.get("ORDER_FETCH_LIMIT", "200")),
     "DEFAULT_EXCHANGE_TYPE": "linear",
@@ -60,22 +56,22 @@ CONFIG = {
     "STOCH_D_PERIOD": int(os.environ.get("STOCH_D_PERIOD", "3")),
     "STOCH_RSI_OVERSOLD": decimal.Decimal(os.environ.get("STOCH_RSI_OVERSOLD", "20")),
     "STOCH_RSI_OVERBOUGHT": decimal.Decimal(
-        os.environ.get("STOCH_RSI_OVERBOUGHT", "80")
+        os.environ.get("STOCH_RSI_OVERBOUGHT", "80"),
     ),
     "PIVOT_TIMEFRAME": os.environ.get("PIVOT_TIMEFRAME", "30m"),
     "PNL_PRECISION": int(os.environ.get("PNL_PRECISION", "2")),
     "MIN_PRICE_DISPLAY_PRECISION": int(
-        os.environ.get("MIN_PRICE_DISPLAY_PRECISION", "3")
+        os.environ.get("MIN_PRICE_DISPLAY_PRECISION", "3"),
     ),
     "STOCH_RSI_DISPLAY_PRECISION": int(
-        os.environ.get("STOCH_RSI_DISPLAY_PRECISION", "3")
+        os.environ.get("STOCH_RSI_DISPLAY_PRECISION", "3"),
     ),
     "VOLUME_DISPLAY_PRECISION": int(os.environ.get("VOLUME_DISPLAY_PRECISION", "0")),
     "BALANCE_DISPLAY_PRECISION": int(os.environ.get("BALANCE_DISPLAY_PRECISION", "2")),
     "FETCH_BALANCE_ASSET": os.environ.get("FETCH_BALANCE_ASSET", "USDT"),
     "DEFAULT_ORDER_TYPE": os.environ.get("DEFAULT_ORDER_TYPE", "market").lower(),
     "LIMIT_ORDER_SELECTION_TYPE": os.environ.get(
-        "LIMIT_ORDER_SELECTION_TYPE", "interactive"
+        "LIMIT_ORDER_SELECTION_TYPE", "interactive",
     ).lower(),
     "BYBIT_LEVERAGE_DEFAULT": int(os.environ.get("BYBIT_LEVERAGE_DEFAULT", "10")),
     "EMAIL_ALERTS": os.environ.get("EMAIL_ALERTS", "False").lower() == "true",
@@ -169,7 +165,7 @@ def get_market_info(exchange, symbol):
         )
         if not exchange.markets or symbol not in exchange.markets:
             print_color(
-                f"{Fore.CYAN}# Summoning market list...", style=Style.DIM, end="\r"
+                f"{Fore.CYAN}# Summoning market list...", style=Style.DIM, end="\r",
             )
             exchange.load_markets(True)
         sys.stdout.write("\033[K")
@@ -302,7 +298,7 @@ def calculate_stoch_rsi(rsi_values, k_period, d_period):
             stoch_rsi_d_list.append(decimal.Decimal("0"))
         else:
             stoch_rsi_d_list.append(
-                ((rsi_values[i] - lowest) / (highest - lowest)) * decimal.Decimal("100")
+                ((rsi_values[i] - lowest) / (highest - lowest)) * decimal.Decimal("100"),
             )
 
     if len(stoch_rsi_d_list) < d_period:
@@ -310,7 +306,7 @@ def calculate_stoch_rsi(rsi_values, k_period, d_period):
     stoch_rsi_d = sum(stoch_rsi_d_list[-d_period:]) / d_period
 
     return stoch_rsi_k.quantize(decimal.Decimal("0.00")), stoch_rsi_d.quantize(
-        decimal.Decimal("0.00")
+        decimal.Decimal("0.00"),
     )
 
 
@@ -375,7 +371,7 @@ def fetch_market_data(exchange, symbol, config):
     ]
 
     print_color(
-        f"{Fore.CYAN}# Contacting exchange spirits...", style=Style.DIM, end="\r"
+        f"{Fore.CYAN}# Contacting exchange spirits...", style=Style.DIM, end="\r",
     )
     for call in api_calls:
         try:
@@ -389,7 +385,7 @@ def fetch_market_data(exchange, symbol, config):
                 ]
             elif call["desc"] == "balance":
                 results[call["desc"]] = data.get("total", {}).get(
-                    config["FETCH_BALANCE_ASSET"]
+                    config["FETCH_BALANCE_ASSET"],
                 )
             elif call["desc"] == "open_orders" or call["desc"] == "account":
                 results[call["desc"]] = data
@@ -424,7 +420,7 @@ def fetch_market_data(exchange, symbol, config):
             raise e
         except Exception as e:
             print_color(
-                f"Error fetching {call['desc']}: {e}", color=Fore.RED, style=Style.DIM
+                f"Error fetching {call['desc']}: {e}", color=Fore.RED, style=Style.DIM,
             )
             error_occurred = True
 
@@ -435,7 +431,7 @@ def fetch_market_data(exchange, symbol, config):
 def analyze_orderbook_volume(exchange, symbol, market_info, config):
     try:
         orderbook = exchange.fetch_order_book(
-            symbol, limit=config["MAX_ORDERBOOK_DEPTH_DISPLAY"]
+            symbol, limit=config["MAX_ORDERBOOK_DEPTH_DISPLAY"],
         )
         bids = orderbook["bids"]
         asks = orderbook["asks"]
@@ -450,7 +446,7 @@ def analyze_orderbook_volume(exchange, symbol, market_info, config):
             amount_d = decimal.Decimal(str(amount))
             total_bid_vol += amount_d
             bid_map.append(
-                {"price": price_d, "amount": amount_d, "cumulative_vol": total_bid_vol}
+                {"price": price_d, "amount": amount_d, "cumulative_vol": total_bid_vol},
             )
 
         for price, amount in asks:
@@ -458,7 +454,7 @@ def analyze_orderbook_volume(exchange, symbol, market_info, config):
             amount_d = decimal.Decimal(str(amount))
             total_ask_vol += amount_d
             ask_map.append(
-                {"price": price_d, "amount": amount_d, "cumulative_vol": total_ask_vol}
+                {"price": price_d, "amount": amount_d, "cumulative_vol": total_ask_vol},
             )
 
         return {
@@ -473,13 +469,13 @@ def analyze_orderbook_volume(exchange, symbol, market_info, config):
 
 def display_header(symbol, timestamp, balance, config):
     print(
-        f"{Fore.CYAN}{Style.BRIGHT}╔═══════════════════════════════════════════════════════════════════════════════════╗"
+        f"{Fore.CYAN}{Style.BRIGHT}╔═══════════════════════════════════════════════════════════════════════════════════╗",
     )
     print(
-        f"║ {Style.BRIGHT}{symbol.upper():<20}{Style.RESET_ALL}{Fore.CYAN}{Style.BRIGHT}│ {timestamp:<40} {Style.RESET_ALL}{Fore.CYAN}{Style.BRIGHT}│ Balance ({config['FETCH_BALANCE_ASSET']}): {Fore.GREEN}{format_decimal(balance, config['BALANCE_DISPLAY_PRECISION']):<10}{Style.RESET_ALL}{Fore.CYAN}{Style.BRIGHT} ║"
+        f"║ {Style.BRIGHT}{symbol.upper():<20}{Style.RESET_ALL}{Fore.CYAN}{Style.BRIGHT}│ {timestamp:<40} {Style.RESET_ALL}{Fore.CYAN}{Style.BRIGHT}│ Balance ({config['FETCH_BALANCE_ASSET']}): {Fore.GREEN}{format_decimal(balance, config['BALANCE_DISPLAY_PRECISION']):<10}{Style.RESET_ALL}{Fore.CYAN}{Style.BRIGHT} ║",
     )
     print(
-        f"╚═══════════════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}"
+        f"╚═══════════════════════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}",
     )
 
 
@@ -519,7 +515,7 @@ def display_ticker_and_trend(ticker_info, indicators_info, config, market_info):
         end="",
     )
     print_color(
-        f" | Trend: {trend_color}{'Up' if trend_color == Fore.GREEN else 'Down' if trend_color == Fore.RED else 'Neutral'}{Style.RESET_ALL}"
+        f" | Trend: {trend_color}{'Up' if trend_color == Fore.GREEN else 'Down' if trend_color == Fore.RED else 'Neutral'}{Style.RESET_ALL}",
     )
     return last_price
 
@@ -540,7 +536,7 @@ def display_indicators(indicators_info, config, market_info, last_price):
         " | EMA12: {} | EMA34: {}".format(
             format_decimal(indicators_info["ema12"], price_prec, min_disp_prec),
             format_decimal(indicators_info["ema34"], price_prec, min_disp_prec),
-        )
+        ),
     )
 
     print_color(
@@ -569,7 +565,7 @@ def display_indicators(indicators_info, config, market_info, last_price):
             stoch_d_color = Fore.RED
 
     print_color(
-        f" | Stoch-RSI: {stoch_k_color}{format_decimal(stoch_rsi_k, stoch_rsi_prec)}{Style.RESET_ALL} / {stoch_d_color}{format_decimal(stoch_rsi_d, stoch_rsi_prec)}{Style.RESET_ALL}"
+        f" | Stoch-RSI: {stoch_k_color}{format_decimal(stoch_rsi_k, stoch_rsi_prec)}{Style.RESET_ALL} / {stoch_d_color}{format_decimal(stoch_rsi_d, stoch_rsi_prec)}{Style.RESET_ALL}",
     )
 
 
@@ -586,10 +582,10 @@ def display_position(position_info, ticker_info, market_info, config):
         size_str = pos.get("contracts", "0")
         entry_price_str = pos.get("entryPrice", "0")
         liq_price = format_decimal(
-            pos.get("liquidationPrice", "N/A"), price_prec, min_disp_prec
+            pos.get("liquidationPrice", "N/A"), price_prec, min_disp_prec,
         )
         mark_price = format_decimal(
-            pos.get("markPrice", "N/A"), price_prec, min_disp_prec
+            pos.get("markPrice", "N/A"), price_prec, min_disp_prec,
         )
         leverage = pos.get("leverage", "N/A")
         quote_asset = pos.get("quoteAsset", config["FETCH_BALANCE_ASSET"])
@@ -665,7 +661,7 @@ def display_pivots(pivots_info, current_price, market_info, config):
             level_color = Fore.CYAN
 
         if current_price and abs(
-            current_price - level_value
+            current_price - level_value,
         ) < current_price * decimal.Decimal("0.0005"):
             level_color = Fore.MAGENTA + Style.BRIGHT
 
@@ -737,7 +733,7 @@ def display_orderbook(analyzed_orderbook, market_info, config):
             bid_color = Fore.GREEN + Back.LIGHTBLACK_EX
 
         print_color(
-            f"║ {ask_color}{ask_price_str:<15}{Style.RESET_ALL}{Fore.RED}{ask_vol_str:<18}{Style.RESET_ALL}{Fore.LIGHTRED_EX}{ask_cum_vol_str:<18}{Style.RESET_ALL}{Fore.BLUE}│{Style.RESET_ALL} {bid_color}{bid_price_str:<15}{Style.RESET_ALL}{Fore.GREEN}{bid_vol_str:<18}{Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{bid_cum_vol_str:<18}{Style.RESET_ALL}{Fore.BLUE}║"
+            f"║ {ask_color}{ask_price_str:<15}{Style.RESET_ALL}{Fore.RED}{ask_vol_str:<18}{Style.RESET_ALL}{Fore.LIGHTRED_EX}{ask_cum_vol_str:<18}{Style.RESET_ALL}{Fore.BLUE}│{Style.RESET_ALL} {bid_color}{bid_price_str:<15}{Style.RESET_ALL}{Fore.GREEN}{bid_vol_str:<18}{Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{bid_cum_vol_str:<18}{Style.RESET_ALL}{Fore.BLUE}║",
         )
 
         ask_map[f"A{i + 1}"] = ask["price"]
@@ -778,7 +774,7 @@ def display_volume_analysis(analyzed_orderbook, market_info, config):
     )
 
     print_color(
-        f"  Volume Analysis: Bid {Fore.GREEN}{bid_percentage:.1f}%{Style.RESET_ALL} | Ask {Fore.RED}{ask_percentage:.1f}%{Style.RESET_ALL} | Bias: {vol_color}{vol_diff:.1f}%{Style.RESET_ALL}"
+        f"  Volume Analysis: Bid {Fore.GREEN}{bid_percentage:.1f}%{Style.RESET_ALL} | Ask {Fore.RED}{ask_percentage:.1f}%{Style.RESET_ALL} | Bias: {vol_color}{vol_diff:.1f}%{Style.RESET_ALL}",
     )
 
 
@@ -794,25 +790,25 @@ def display_open_orders(open_orders):
         amount = format_decimal(order.get("amount", 0), 4)
         price = format_decimal(order.get("price", 0), 4)
         print_color(
-            f"  [{idx}] ID: {order_id} | {side_color}{side}{Style.RESET_ALL} {amount} @ {price} | Type: {order.get('type')}"
+            f"  [{idx}] ID: {order_id} | {side_color}{side}{Style.RESET_ALL} {amount} @ {price} | Type: {order.get('type')}",
         )
 
 
 def display_account_info(account_data, balance_info, config):
     print_color("\n--- Account Info ---", color=Fore.BLUE)
     equity = format_decimal(
-        account_data.get("equity", "N/A"), config["BALANCE_DISPLAY_PRECISION"]
+        account_data.get("equity", "N/A"), config["BALANCE_DISPLAY_PRECISION"],
     )
     margin = format_decimal(
-        account_data.get("availableMargin", "N/A"), config["BALANCE_DISPLAY_PRECISION"]
+        account_data.get("availableMargin", "N/A"), config["BALANCE_DISPLAY_PRECISION"],
     )
     risk_rate = format_decimal(account_data.get("riskRate", "N/A"), 2)
     leverage = account_data.get("leverage", "N/A")
     print_color(
-        f"  Equity: {Fore.GREEN}{equity}{Style.RESET_ALL} | Available Margin: {Fore.GREEN}{margin}{Style.RESET_ALL}"
+        f"  Equity: {Fore.GREEN}{equity}{Style.RESET_ALL} | Available Margin: {Fore.GREEN}{margin}{Style.RESET_ALL}",
     )
     print_color(
-        f"  Risk Rate: {Fore.YELLOW}{risk_rate}{Style.RESET_ALL} | Leverage: {Fore.YELLOW}{leverage}x{Style.RESET_ALL}"
+        f"  Risk Rate: {Fore.YELLOW}{risk_rate}{Style.RESET_ALL} | Leverage: {Fore.YELLOW}{leverage}x{Style.RESET_ALL}",
     )
     balance_str = (
         format_decimal(balance_info, config["BALANCE_DISPLAY_PRECISION"])
@@ -820,7 +816,7 @@ def display_account_info(account_data, balance_info, config):
         else "N/A"
     )
     print_color(
-        f"  Wallet Balance ({config['FETCH_BALANCE_ASSET']}): {Fore.GREEN}{balance_str}{Style.RESET_ALL}"
+        f"  Wallet Balance ({config['FETCH_BALANCE_ASSET']}): {Fore.GREEN}{balance_str}{Style.RESET_ALL}",
     )
 
 
@@ -834,7 +830,7 @@ def display_combined_analysis(analysis_data, market_info, config):
     open_orders = analysis_data.get("open_orders", [])
     account_info = analysis_data.get("account", {})
     timestamp = analysis_data.get(
-        "timestamp", exchange.iso8601(exchange.milliseconds())
+        "timestamp", exchange.iso8601(exchange.milliseconds()),
     )
 
     symbol = market_info["symbol"]
@@ -843,7 +839,7 @@ def display_combined_analysis(analysis_data, market_info, config):
 
     display_header(symbol, timestamp, balance_info, config)
     last_price = display_ticker_and_trend(
-        ticker_info, indicators_info, config, market_info
+        ticker_info, indicators_info, config, market_info,
     )
     display_indicators(indicators_info, config, market_info, last_price)
     display_position(position_info, ticker_info, market_info, config)
@@ -870,7 +866,7 @@ def place_market_order(exchange, symbol, side, amount_str, market_info):
 
         confirm = (
             input(
-                f"Confirm {side.upper()} market order for {amount_d} {symbol}? (y/n): "
+                f"Confirm {side.upper()} market order for {amount_d} {symbol}? (y/n): ",
             )
             .strip()
             .lower()
@@ -880,7 +876,7 @@ def place_market_order(exchange, symbol, side, amount_str, market_info):
             return
 
         order = exchange.create_market_order(
-            symbol, side, float(amount_d), params={"positionIdx": 0}
+            symbol, side, float(amount_d), params={"positionIdx": 0},
         )
         print_color(f"Order placed: {order['id']}", color=Fore.GREEN)
         termux_toast(f"Market {side.upper()} {amount_d} on {symbol}", duration="short")
@@ -910,7 +906,7 @@ def place_limit_order(exchange, symbol, side, amount_str, price_str, market_info
 
         confirm = (
             input(
-                f"Confirm {side.upper()} limit order for {amount_d} {symbol} @ {price_d}? (y/n): "
+                f"Confirm {side.upper()} limit order for {amount_d} {symbol} @ {price_d}? (y/n): ",
             )
             .strip()
             .lower()
@@ -920,25 +916,25 @@ def place_limit_order(exchange, symbol, side, amount_str, price_str, market_info
             return
 
         order = exchange.create_limit_order(
-            symbol, side, float(amount_d), float(price_d), params={"positionIdx": 0}
+            symbol, side, float(amount_d), float(price_d), params={"positionIdx": 0},
         )
         print_color(f"Order placed: {order['id']}", color=Fore.GREEN)
         termux_toast(
-            f"Limit {side.upper()} {amount_d} @ {price_d} on {symbol}", duration="short"
+            f"Limit {side.upper()} {amount_d} @ {price_d} on {symbol}", duration="short",
         )
     except Exception as e:
         print_color(f"Error placing limit order: {e}", color=Fore.RED)
 
 
 def close_position(
-    exchange, symbol, side, amount_str, market_info, is_market=True, price_str=None
+    exchange, symbol, side, amount_str, market_info, is_market=True, price_str=None,
 ):
     opposite_side = "sell" if side == "long" else "buy"
     if is_market:
         place_market_order(exchange, symbol, opposite_side, amount_str, market_info)
     else:
         place_limit_order(
-            exchange, symbol, opposite_side, amount_str, price_str, market_info
+            exchange, symbol, opposite_side, amount_str, price_str, market_info,
         )
 
 
@@ -957,7 +953,7 @@ def manage_close_position(exchange, symbol, positions, market_info):
     if choice == "all":
         confirm = (
             input(
-                "Are you sure you want to close ALL positions for this symbol? (y/n): "
+                "Are you sure you want to close ALL positions for this symbol? (y/n): ",
             )
             .strip()
             .lower()
@@ -967,7 +963,7 @@ def manage_close_position(exchange, symbol, positions, market_info):
             return
         for pos in positions:
             close_position(
-                exchange, symbol, pos["side"], str(pos["contracts"]), market_info
+                exchange, symbol, pos["side"], str(pos["contracts"]), market_info,
             )
         print_color("All positions closed.", color=Fore.GREEN)
     else:
@@ -977,7 +973,7 @@ def manage_close_position(exchange, symbol, positions, market_info):
                 pos = positions[idx]
                 available_amount = decimal.Decimal(str(pos["contracts"]))
                 amount_input = input(
-                    f"Amount to close ({available_amount} available, or 'all'): "
+                    f"Amount to close ({available_amount} available, or 'all'): ",
                 ).strip()
                 amount_to_close = (
                     available_amount
@@ -1038,7 +1034,7 @@ def manage_cancel_order(exchange, symbol, open_orders):
     if choice == "all":
         confirm = (
             input(
-                "Are you sure you want to cancel ALL open orders for this symbol? (y/n): "
+                "Are you sure you want to cancel ALL open orders for this symbol? (y/n): ",
             )
             .strip()
             .lower()
@@ -1079,7 +1075,7 @@ def set_leverage(exchange, symbol, leverage):
         leverage_int = int(leverage)
         if not 1 <= leverage_int <= 100:  # Example range, check Bybit for actual limits
             print_color(
-                "Invalid leverage value. Must be between 1 and 100.", color=Fore.RED
+                "Invalid leverage value. Must be between 1 and 100.", color=Fore.RED,
             )
             return
 
@@ -1317,11 +1313,11 @@ class SmartOrderExecutor:
             try:
                 if price:
                     order = self.exchange.create_limit_order(
-                        self.symbol, side, float(current_amount), float(price)
+                        self.symbol, side, float(current_amount), float(price),
                     )
                 else:
                     order = self.exchange.create_market_order(
-                        self.symbol, side, float(current_amount)
+                        self.symbol, side, float(current_amount),
                     )
 
                 orders.append(order)
@@ -1383,7 +1379,7 @@ class TradingAnalytics:
                 "exit_price": decimal.Decimal(str(trade.get("exit_price", 0))),
                 "pnl": decimal.Decimal(str(trade.get("pnl", 0))),
                 "fees": decimal.Decimal(str(trade.get("fee", {}).get("cost", 0))),
-            }
+            },
         )
 
     def calculate_metrics(self):
@@ -1410,7 +1406,7 @@ class TradingAnalytics:
         profit_factor = (
             abs(
                 sum(t["pnl"] for t in winning_trades)
-                / sum(t["pnl"] for t in losing_trades)
+                / sum(t["pnl"] for t in losing_trades),
             )
             if losing_trades and sum(t["pnl"] for t in losing_trades) != 0
             else 0
@@ -1472,16 +1468,16 @@ class TradingAnalytics:
 
         pnl_color = Fore.GREEN if metrics["total_pnl"] > 0 else Fore.RED
         print_color(
-            f"Total P&L: {pnl_color}{metrics['total_pnl']:.2f}{Style.RESET_ALL}"
+            f"Total P&L: {pnl_color}{metrics['total_pnl']:.2f}{Style.RESET_ALL}",
         )
 
         print_color(
-            f"Win Rate: {Fore.GREEN if metrics['win_rate'] > 50 else Fore.RED}{metrics['win_rate']:.1f}%{Style.RESET_ALL}"
+            f"Win Rate: {Fore.GREEN if metrics['win_rate'] > 50 else Fore.RED}{metrics['win_rate']:.1f}%{Style.RESET_ALL}",
         )
         print_color(f"Profit Factor: {metrics['profit_factor']:.2f}")
         print_color(f"Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
         print_color(
-            f"Max Drawdown: {Fore.YELLOW}{metrics['max_drawdown']:.1f}%{Style.RESET_ALL}"
+            f"Max Drawdown: {Fore.YELLOW}{metrics['max_drawdown']:.1f}%{Style.RESET_ALL}",
         )
 
 
@@ -1575,7 +1571,7 @@ class MultiTimeframeAnalyzer:
         result = self.analyze_all_timeframes()
 
         print_color(
-            "\n═══ Multi-Timeframe Analysis ═══", color=Fore.BLUE, style=Style.BRIGHT
+            "\n═══ Multi-Timeframe Analysis ═══", color=Fore.BLUE, style=Style.BRIGHT,
         )
 
         for tf in self.timeframes:
@@ -1591,7 +1587,7 @@ class MultiTimeframeAnalyzer:
 
                 print_color(
                     f"{tf:>3}: {trend_color}{data['trend']:>8}{Style.RESET_ALL} | "
-                    f"RSI: {data['rsi']:.1f}"
+                    f"RSI: {data['rsi']:.1f}",
                 )
 
         signal_color = (
@@ -1723,7 +1719,7 @@ class AlertSystem:
                 print_color("Telegram alert sent", color=Fore.GREEN, style=Style.DIM)
             else:
                 print_color(
-                    f"Telegram alert failed: {response.status_code}", color=Fore.RED
+                    f"Telegram alert failed: {response.status_code}", color=Fore.RED,
                 )
 
         except Exception as e:
@@ -1739,7 +1735,7 @@ class AlertSystem:
             msg.attach(MIMEText(message, "plain"))
 
             with smtplib.SMTP(
-                self.email_config["smtp_server"], self.email_config["smtp_port"]
+                self.email_config["smtp_server"], self.email_config["smtp_port"],
             ) as server:
                 server.starttls()
                 server.login(
@@ -1756,14 +1752,14 @@ class AlertSystem:
     def send_webhook_alert(self, message, priority):
         try:
             payload = {
-                "content": f"**Bybit Terminal Alert ({priority.upper()})**: {message}"
+                "content": f"**Bybit Terminal Alert ({priority.upper()})**: {message}",
             }
             response = requests.post(self.webhook_url, json=payload, timeout=5)
             if response.status_code == 204:  # Discord webhook success
                 print_color("Webhook alert sent", color=Fore.GREEN, style=Style.DIM)
             else:
                 print_color(
-                    f"Webhook alert failed: {response.status_code}", color=Fore.RED
+                    f"Webhook alert failed: {response.status_code}", color=Fore.RED,
                 )
         except Exception as e:
             print_color(f"Webhook error: {e}", color=Fore.RED)
@@ -1930,7 +1926,7 @@ class BacktestEngine:
 
     def run_backtest(self, start_date, end_date, timeframe="1h"):
         print_color(
-            f"Starting backtest from {start_date} to {end_date}", color=Fore.CYAN
+            f"Starting backtest from {start_date} to {end_date}", color=Fore.CYAN,
         )
 
         since = self.exchange.parse8601(start_date)
@@ -1939,7 +1935,7 @@ class BacktestEngine:
         while since < self.exchange.parse8601(end_date):
             try:
                 ohlcv_batch = self.exchange.fetch_ohlcv(
-                    self.symbol, timeframe, since=since, limit=1000
+                    self.symbol, timeframe, since=since, limit=1000,
                 )
 
                 if not ohlcv_batch:
@@ -1969,7 +1965,7 @@ class BacktestEngine:
             if signal["action"] == "buy" and position is None:
                 position = {
                     "entry_price": decimal.Decimal(
-                        str(current_candle[4])
+                        str(current_candle[4]),
                     ),  # close price
                     "size": balance
                     * decimal.Decimal("0.95")
@@ -1990,7 +1986,7 @@ class BacktestEngine:
                         "exit_price": float(exit_price),
                         "pnl": float(pnl),
                         "balance": float(balance),
-                    }
+                    },
                 )
 
                 position = None
@@ -1999,7 +1995,7 @@ class BacktestEngine:
             if position:
                 current_equity += float(
                     (decimal.Decimal(str(current_candle[4])) - position["entry_price"])
-                    * position["size"]
+                    * position["size"],
                 )
             equity_curve.append(current_equity)
 
@@ -2015,7 +2011,7 @@ class BacktestEngine:
                     "exit_price": float(exit_price),
                     "pnl": float(pnl),
                     "balance": float(balance),
-                }
+                },
             )
 
         self.results = self.calculate_backtest_metrics(trades, balance, equity_curve)
@@ -2076,19 +2072,19 @@ class BacktestEngine:
 
         print_color(f"Initial Balance: ${self.initial_balance}", color=Fore.WHITE)
         print_color(
-            f"Final Balance: ${self.results['final_balance']:.2f}", color=Fore.WHITE
+            f"Final Balance: ${self.results['final_balance']:.2f}", color=Fore.WHITE,
         )
 
         return_color = Fore.GREEN if self.results["total_return"] > 0 else Fore.RED
         print_color(
-            f"Total Return: {return_color}{self.results['total_return']:.2f}%{Style.RESET_ALL}"
+            f"Total Return: {return_color}{self.results['total_return']:.2f}%{Style.RESET_ALL}",
         )
 
         print_color(f"Total Trades: {self.results['num_trades']}")
         print_color(f"Win Rate: {self.results['win_rate']:.1f}%")
         print_color(f"Sharpe Ratio: {self.results['sharpe_ratio']:.2f}")
         print_color(
-            f"Max Drawdown: {Fore.YELLOW}{self.results['max_drawdown']:.1f}%{Style.RESET_ALL}"
+            f"Max Drawdown: {Fore.YELLOW}{self.results['max_drawdown']:.1f}%{Style.RESET_ALL}",
         )
 
 
@@ -2172,7 +2168,7 @@ class OrderBookAnalyzer:
                         "amount": float(amount),
                         "side": side,
                         "size_ratio": float(amount / avg_amount),
-                    }
+                    },
                 )
 
         return sorted(large_orders, key=lambda x: x["amount"], reverse=True)[:5]
@@ -2204,7 +2200,7 @@ class OrderBookAnalyzer:
                         "total_amount": amount,
                         "order_count": 1,
                         "type": level_type,
-                    }
+                    },
                 )
 
         significant_clusters = [
@@ -2314,7 +2310,7 @@ class MLTradingBot:
             return None
 
         features = np.array(
-            [float(sma_fast), float(sma_slow), float(rsi), float(momentum)]
+            [float(sma_fast), float(sma_slow), float(rsi), float(momentum)],
         ).reshape(1, -1)
         return features
 
@@ -2377,7 +2373,7 @@ class MLTradingBot:
 def run_analysis_cycle(exchange, symbol, market_info, config, alert_system=None):
     fetched_data, data_error = fetch_market_data(exchange, symbol, config)
     analyzed_orderbook, orderbook_error = analyze_orderbook_volume(
-        exchange, symbol, market_info, config
+        exchange, symbol, market_info, config,
     )
 
     ohlcv_data_indicator = fetched_data.get("indicator_ohlcv")
@@ -2396,7 +2392,7 @@ def run_analysis_cycle(exchange, symbol, market_info, config, alert_system=None)
     pivot_info = None
 
     if ohlcv_data_indicator and len(ohlcv_data_indicator) > max(
-        CONFIG["SMA2_PERIOD"], CONFIG["EMA2_PERIOD"]
+        CONFIG["SMA2_PERIOD"], CONFIG["EMA2_PERIOD"],
     ):
         closes = [decimal.Decimal(str(o[4])) for o in ohlcv_data_indicator]
         all_rsi_values = []
@@ -2410,12 +2406,12 @@ def run_analysis_cycle(exchange, symbol, market_info, config, alert_system=None)
         indicators_info["ema12"] = calculate_ema(closes, CONFIG["EMA1_PERIOD"])
         indicators_info["ema34"] = calculate_ema(closes, CONFIG["EMA2_PERIOD"])
         indicators_info["momentum"] = calculate_momentum(
-            closes, CONFIG["MOMENTUM_PERIOD"]
+            closes, CONFIG["MOMENTUM_PERIOD"],
         )
         indicators_info["rsi"] = calculate_rsi(closes, CONFIG["RSI_PERIOD"])
 
         stoch_k, stoch_d = calculate_stoch_rsi(
-            all_rsi_values, CONFIG["STOCH_K_PERIOD"], CONFIG["STOCH_D_PERIOD"]
+            all_rsi_values, CONFIG["STOCH_K_PERIOD"], CONFIG["STOCH_D_PERIOD"],
         )
         indicators_info["stoch_rsi_k"] = stoch_k
         indicators_info["stoch_rsi_d"] = stoch_d
@@ -2510,7 +2506,7 @@ def main():
             "api": {
                 "public": "https://api-testnet.bybit.com",
                 "private": "https://api-testnet.bybit.com",
-            }
+            },
         }
 
     exchange = ccxt.bybit(exchange_config)
@@ -2554,7 +2550,7 @@ def main():
         if cycle_successful:
             action = (
                 input(
-                    f"\n{Style.BRIGHT}{Fore.BLUE}Action (refresh/buy/sell/close/orders/cancel/account/leverage/alert/backtest/exit): {Style.RESET_ALL}"
+                    f"\n{Style.BRIGHT}{Fore.BLUE}Action (refresh/buy/sell/close/orders/cancel/account/leverage/alert/backtest/exit): {Style.RESET_ALL}",
                 )
                 .strip()
                 .lower()
@@ -2570,12 +2566,12 @@ def main():
                     place_market_order(exchange, symbol, side, amount_str, market_info)
                 elif CONFIG["LIMIT_ORDER_SELECTION_TYPE"] == "interactive":
                     print_color(
-                        f"\nSelect a price level for {side.upper()}:", color=Fore.CYAN
+                        f"\nSelect a price level for {side.upper()}:", color=Fore.CYAN,
                     )
                     if side == "buy":
                         price_choice = (
                             input(
-                                "Choose BID level (e.g., B1, B5) or type price manually: "
+                                "Choose BID level (e.g., B1, B5) or type price manually: ",
                             )
                             .strip()
                             .upper()
@@ -2584,7 +2580,7 @@ def main():
                     else:
                         price_choice = (
                             input(
-                                "Choose ASK level (e.g., A1, A5) or type price manually: "
+                                "Choose ASK level (e.g., A1, A5) or type price manually: ",
                             )
                             .strip()
                             .upper()
@@ -2622,7 +2618,7 @@ def main():
                 else:  # manual limit entry
                     price_str = input(f"Enter limit price for {side}: ").strip()
                     place_limit_order(
-                        exchange, symbol, side, amount_str, price_str, market_info
+                        exchange, symbol, side, amount_str, price_str, market_info,
                     )
 
             elif action == "close":
@@ -2633,7 +2629,7 @@ def main():
                 manage_cancel_order(exchange, symbol, open_orders)
             elif action == "account":
                 display_account_info(
-                    fetched_data["account"], fetched_data["balance"], CONFIG
+                    fetched_data["account"], fetched_data["balance"], CONFIG,
                 )
             elif action == "leverage":
                 lev = input("Enter leverage (e.g., 10): ").strip()

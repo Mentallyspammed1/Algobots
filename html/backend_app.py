@@ -5,11 +5,8 @@ import time
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI
-from fastapi import HTTPException
-from indicators_api import calculate_ema
-from indicators_api import calculate_rsi
-from indicators_api import calculate_supertrend
+from fastapi import FastAPI, HTTPException
+from indicators_api import calculate_ema, calculate_rsi, calculate_supertrend
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -67,7 +64,7 @@ async def get_klines(symbol: str = "BTCUSDT", interval: str = "15", limit: int =
                 low=low_price,
                 close=close_price,
                 volume=volume,
-            )
+            ),
         )
     return mock_klines
 
@@ -77,7 +74,7 @@ async def get_bot_status():
     """Reads and returns the current state of the trading bot from bot_state.json."""
     if not os.path.exists(BOT_STATE_FILE):
         raise HTTPException(
-            status_code=404, detail="Bot state file not found. Is the bot running?"
+            status_code=404, detail="Bot state file not found. Is the bot running?",
         )
 
     try:
@@ -91,7 +88,7 @@ async def get_bot_status():
         )
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"An unexpected error occurred: {e}"
+            status_code=500, detail=f"An unexpected error occurred: {e}",
         )
 
 

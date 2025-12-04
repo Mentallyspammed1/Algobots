@@ -17,7 +17,7 @@ class RiskManager:
         self.open_orders_value = 0
 
     def check_risk_limits(
-        self, current_balance: float, position: dict
+        self, current_balance: float, position: dict,
     ) -> tuple[bool, str]:
         """Check if any risk limits are breached"""
         # Reset daily limits if new day
@@ -53,7 +53,7 @@ class RiskManager:
         return True, "All risk checks passed"
 
     def calculate_position_size(
-        self, balance: float, price: float, side: str, existing_position: float = 0
+        self, balance: float, price: float, side: str, existing_position: float = 0,
     ) -> float:
         """Calculate safe position size based on risk parameters"""
         # Use Kelly Criterion inspired sizing
@@ -83,14 +83,14 @@ class RiskManager:
 
         # Apply maximum position limit
         max_position_value = min(
-            balance * self.config["max_leverage"], self.config["position_limit"]
+            balance * self.config["max_leverage"], self.config["position_limit"],
         )
         max_position_size = max_position_value / price
 
         return min(position_size, max_position_size)
 
     def should_close_position(
-        self, position: dict, current_price: float
+        self, position: dict, current_price: float,
     ) -> tuple[bool, str]:
         """Determine if position should be closed based on risk parameters"""
         if not position or position.get("size", 0) == 0:

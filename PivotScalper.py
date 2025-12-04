@@ -8,8 +8,7 @@ import urllib.parse
 import pandas as pd
 import pandas_ta as ta
 import requests
-from colorama import Fore
-from colorama import init
+from colorama import Fore, init
 from dotenv import load_dotenv
 
 # Initialize colorama
@@ -53,7 +52,7 @@ def get_user_input(prompt, default, input_type=float, validation=None):
         except ValueError:
             print(
                 Fore.RED
-                + f"⚠️ Invalid input. Please enter a valid {input_type.__name__}"
+                + f"⚠️ Invalid input. Please enter a valid {input_type.__name__}",
             )
 
 
@@ -74,7 +73,7 @@ def generate_signature(secret, params):
     """HMAC-SHA256 signature with parameter validation"""
     param_string = urllib.parse.urlencode(sorted(params.items()))
     return hmac.new(
-        secret.encode("utf-8"), param_string.encode("utf-8"), hashlib.sha256
+        secret.encode("utf-8"), param_string.encode("utf-8"), hashlib.sha256,
     ).hexdigest()
 
 
@@ -98,11 +97,11 @@ def bybit_request(method, endpoint, params=None, data=None):
 
         if method == "GET":
             response = requests.get(
-                f"{API_ENDPOINT}{endpoint}", params=req_params, headers=headers
+                f"{API_ENDPOINT}{endpoint}", params=req_params, headers=headers,
             )
         else:
             response = requests.post(
-                f"{API_ENDPOINT}{endpoint}", json=req_params, headers=headers
+                f"{API_ENDPOINT}{endpoint}", json=req_params, headers=headers,
             )
 
         response.raise_for_status()

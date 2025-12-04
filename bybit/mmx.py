@@ -15,21 +15,12 @@ import os
 import sys
 import time
 import uuid
-from collections import defaultdict
-from collections import deque
+from collections import defaultdict, deque
 from collections.abc import Callable
 from contextlib import asynccontextmanager
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
-from dataclasses import fields
-from datetime import UTC
-from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import ROUND_UP
-from decimal import Decimal
-from decimal import DecimalException
-from decimal import getcontext
+from dataclasses import asdict, dataclass, field, fields
+from datetime import UTC, datetime
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, DecimalException, getcontext
 from typing import Any
 
 import psutil
@@ -56,12 +47,9 @@ except ImportError:
     notification = None  # Ensure notification is None if plyer isn't found
 
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # Initialize colorama for cross-platform color support
 init(autoreset=True)
@@ -154,7 +142,7 @@ def print_neon_header(text: str, color: str = NEON_BLUE, length: int = 80) -> No
 
 
 def print_neon_separator(
-    length: int = 80, char: str = "─", color: str = NEON_BLUE
+    length: int = 80, char: str = "─", color: str = NEON_BLUE,
 ) -> None:
     """Print neon separator line"""
     if not config.NEON_COLORS_ENABLED:
@@ -238,10 +226,10 @@ class MarketState:
     best_ask: Decimal = Decimal("0")
 
     open_orders: dict[str, dict[str, Any]] = field(
-        default_factory=dict
+        default_factory=dict,
     )  # order_id -> {details}
     positions: dict[str, dict[str, Any]] = field(
-        default_factory=dict
+        default_factory=dict,
     )  # "Long" or "Short" -> {details}
 
     last_update_time: float = 0.0  # Timestamp of last market data update (WS)
@@ -249,10 +237,10 @@ class MarketState:
     available_balance: Decimal = Decimal("0")
 
     price_history: deque[dict[str, Decimal]] = field(
-        default_factory=lambda: deque(maxlen=100)
+        default_factory=lambda: deque(maxlen=100),
     )  # Stores {'price': Decimal, 'timestamp': float}
     trade_history: deque[dict[str, Any]] = field(
-        default_factory=lambda: deque(maxlen=500)
+        default_factory=lambda: deque(maxlen=500),
     )  # Stores filled trade details
 
     data_quality_score: float = 1.0  # Overall score for market data quality
@@ -261,7 +249,7 @@ class MarketState:
         """Adds current mid_price to history."""
         if self.mid_price > Decimal("0"):
             self.price_history.append(
-                {"price": self.mid_price, "timestamp": time.time()}
+                {"price": self.mid_price, "timestamp": time.time()},
             )
 
     def add_trade(self, trade_data: dict[str, Any]):
@@ -279,14 +267,14 @@ class MarketState:
             or self.best_ask <= Decimal("0")
         ):
             bot_health.update_component(
-                "market_data_freshness", 0.0, "Market data invalid (zero prices)"
+                "market_data_freshness", 0.0, "Market data invalid (zero prices)",
             )
             self.data_quality_score = 0.0
             return False
 
         if age > timeout_seconds:
             bot_health.update_component(
-                "market_data_freshness", 0.0, f"Market data stale: {age:.1f}s"
+                "market_data_freshness", 0.0, f"Market data stale: {age:.1f}s",
             )
             self.data_quality_score = 0.0
             return False
@@ -314,10 +302,10 @@ class SymbolInfo:
     min_order_value: Decimal = Decimal("10.0")
 
     bid_levels: list[tuple[Decimal, Decimal]] = field(
-        default_factory=list
+        default_factory=list,
     )  # (price, quantity)
     ask_levels: list[tuple[Decimal, Decimal]] = field(
-        default_factory=list
+        default_factory=list,
     )  # (price, quantity)
 
     def update_orderbook_depth(self, bids: list[list[str]], asks: list[list[str]]):
@@ -407,15 +395,15 @@ class SessionStats:
 
     # PnL tracking
     profit_history: deque[tuple[float, Decimal]] = field(
-        default_factory=lambda: deque(maxlen=100)
+        default_factory=lambda: deque(maxlen=100),
     )  # (timestamp, total_pnl)
     max_drawdown: Decimal = Decimal(
-        "0"
+        "0",
     )  # As a percentage of initial capital or peak equity
     peak_pnl: Decimal = Decimal("0")
 
     api_error_counts: defaultdict[str, int] = field(
-        default_factory=lambda: defaultdict(int)
+        default_factory=lambda: defaultdict(int),
     )
 
     def get_uptime_formatted(self) -> str:
@@ -447,10 +435,10 @@ class SessionStats:
             drawdown = (self.peak_pnl - current_pnl) / self.peak_pnl
             self.max_drawdown = max(self.max_drawdown, drawdown)
         elif current_pnl < Decimal(
-            "0"
+            "0",
         ):  # If peak is 0 or negative, and current is negative
             self.max_drawdown = max(
-                self.max_drawdown, abs(current_pnl)
+                self.max_drawdown, abs(current_pnl),
             )  # Simple absolute drawdown if no profit yet
 
 
@@ -461,7 +449,7 @@ class SystemMonitor:
     process: psutil.Process = field(default_factory=psutil.Process)
     _peak_memory_mb: float = 0.0
     _cpu_usage_history: deque[float] = field(
-        default_factory=lambda: deque(maxlen=60)
+        default_factory=lambda: deque(maxlen=60),
     )  # Last 60 seconds of CPU usage
 
     def get_memory_usage(self) -> float:
@@ -502,10 +490,10 @@ class SystemMonitor:
         cpu_score = max(0.0, 1.0 - (current_cpu / 100.0))  # 100% CPU is 0 score
 
         bot_health.update_component(
-            "system_memory", float(mem_score), f"Mem: {current_mem:.1f}MB"
+            "system_memory", float(mem_score), f"Mem: {current_mem:.1f}MB",
         )
         bot_health.update_component(
-            "system_cpu", float(cpu_score), f"CPU: {current_cpu:.1f}%"
+            "system_cpu", float(cpu_score), f"CPU: {current_cpu:.1f}%",
         )
 
     def cleanup_memory(self) -> int:
@@ -542,7 +530,7 @@ class BotHealth:
                 "last_check": time.time(),
                 "message": "OK",
                 "weight": 1.0,
-            }
+            },
         )
 
         # Set component weights
@@ -567,7 +555,7 @@ class BotHealth:
         self.components["order_latency_performance"]["weight"] = 1.0
 
     def update_component(
-        self, name: str, score: float, message: str = "OK", weight: float | None = None
+        self, name: str, score: float, message: str = "OK", weight: float | None = None,
     ):
         """Update component with weighted score"""
         current_weight = self.components[name]["weight"] if weight is None else weight
@@ -577,7 +565,7 @@ class BotHealth:
                 "last_check": time.time(),
                 "message": message,
                 "weight": current_weight,  # Use specified weight or existing
-            }
+            },
         )
         self._calculate_overall_score()
 
@@ -627,7 +615,7 @@ class AdaptiveRateLimiter:
     """Advanced rate limiter with dynamic backoff and token bucket algorithm."""
 
     def __init__(
-        self, config_ref: "BotConfig"
+        self, config_ref: "BotConfig",
     ):  # Type hint as string for forward reference
         self.config = config_ref  # Store a reference to the config object
         self.tokens = Decimal(str(self.config.RATE_LIMIT_BURST_LIMIT))
@@ -651,24 +639,24 @@ class AdaptiveRateLimiter:
                 ):  # Very high success, slightly increase rate
                     self.current_rate = min(
                         Decimal(
-                            str(self.config.RATE_LIMIT_REQUESTS_PER_SECOND * 1.5)
+                            str(self.config.RATE_LIMIT_REQUESTS_PER_SECOND * 1.5),
                         ),  # Cap at 1.5x default
                         self.current_rate * Decimal("1.05"),  # Gentle increase
                     )
                     self.backoff_factor = max(
-                        Decimal("1.0"), self.backoff_factor * Decimal("0.9")
+                        Decimal("1.0"), self.backoff_factor * Decimal("0.9"),
                     )  # Reduce backoff
                 elif (
                     recent_success_avg < 0.7
                 ):  # Low success, significantly decrease rate and increase backoff
                     self.current_rate = max(
                         Decimal(
-                            str(self.config.RATE_LIMIT_REQUESTS_PER_SECOND * 0.3)
+                            str(self.config.RATE_LIMIT_REQUESTS_PER_SECOND * 0.3),
                         ),  # Min 0.3x default
                         self.current_rate * Decimal("0.9"),  # More aggressive decrease
                     )
                     self.backoff_factor = min(
-                        Decimal("5.0"), self.backoff_factor * Decimal("1.2")
+                        Decimal("5.0"), self.backoff_factor * Decimal("1.2"),
                     )  # Max 5x backoff
                 else:  # Moderate success, gently adjust towards default and reduce backoff
                     self.current_rate = (
@@ -676,7 +664,7 @@ class AdaptiveRateLimiter:
                         + Decimal(str(self.config.RATE_LIMIT_REQUESTS_PER_SECOND))
                     ) / Decimal("2")
                     self.backoff_factor = max(
-                        Decimal("1.0"), self.backoff_factor * Decimal("0.95")
+                        Decimal("1.0"), self.backoff_factor * Decimal("0.95"),
                     )
 
             # Add tokens based on current rate and elapsed time
@@ -709,7 +697,7 @@ class AdaptiveRateLimiter:
         # Immediately adjust backoff slightly to react faster to consecutive successes
         if success:
             self.backoff_factor = max(
-                Decimal("1.0"), self.backoff_factor * Decimal("0.99")
+                Decimal("1.0"), self.backoff_factor * Decimal("0.99"),
             )
 
 
@@ -736,19 +724,19 @@ class BotConfig:
         30  # How often to refresh balance (HTTP, if WS down)
     )
     CAPITAL_ALLOCATION_PERCENTAGE: Decimal = Decimal(
-        "0.05"
+        "0.05",
     )  # % of available balance to consider for trade size
     ABNORMAL_SPREAD_THRESHOLD: Decimal = Decimal("0.015")  # For warning/CB
     REBALANCE_ORDER_TYPE: str = "Market"  # "Market" or "Limit"
     REBALANCE_PRICE_OFFSET_PERCENTAGE: Decimal = Decimal(
-        "0"
+        "0",
     )  # Offset for Limit rebalance orders
     MAX_POSITION_SIZE: Decimal = Decimal(
-        "0.1"
+        "0.1",
     )  # Max % of available balance for a single position
     VOLATILITY_ADJUSTMENT: bool = True  # Enable dynamic spread adjustment
     MAX_SLIPPAGE_PERCENTAGE: Decimal = Decimal(
-        "0.001"
+        "0.001",
     )  # Max allowed slippage for executed trades (warning)
     ORDERBOOK_DEPTH_LEVELS: int = 25  # Number of levels to subscribe to for orderbook
     HEARTBEAT_INTERVAL: int = 30  # Interval for internal heartbeats and health checks
@@ -769,16 +757,16 @@ class BotConfig:
 
     ADAPTIVE_QUANTITY_ENABLED: bool = True
     ADAPTIVE_QUANTITY_PERFORMANCE_FACTOR: Decimal = Decimal(
-        "0.1"
+        "0.1",
     )  # Influence of performance on quantity
 
     # Circuit Breaker Config (integrated)
     CIRCUIT_BREAKER_ENABLED: bool = True
     CB_PNL_STOP_LOSS_PCT: Decimal = Decimal(
-        "0.02"
+        "0.02",
     )  # PnL loss percentage to trigger critical CB
     CB_ABNORMAL_SPREAD_PCT: Decimal = Decimal(
-        "0.015"
+        "0.015",
     )  # Abnormal spread percentage to trigger minor CB
     CB_STALE_DATA_TIMEOUT_SEC: int = (
         30  # Max seconds for market data freshness before CB
@@ -885,7 +873,7 @@ class BotConfig:
             and 0 <= self.TRADING_END_HOUR_UTC <= 23
         ):
             raise ValueError(
-                "TRADING_START_HOUR_UTC and TRADING_END_HOUR_UTC must be between 0 and 23"
+                "TRADING_START_HOUR_UTC and TRADING_END_HOUR_UTC must be between 0 and 23",
             )
 
         if not (
@@ -896,14 +884,14 @@ class BotConfig:
             <= 1.0
         ):
             raise ValueError(
-                "Circuit breaker thresholds must be in ascending order for severity (CRITICAL <= MAJOR <= MINOR)."
+                "Circuit breaker thresholds must be in ascending order for severity (CRITICAL <= MAJOR <= MINOR).",
             )
         if not (
             0 <= self.CB_LOW_CONNECTION_THRESHOLD <= 1.0
             and 0 <= self.CB_LOW_ORDER_SUCCESS_THRESHOLD <= 1.0
         ):
             raise ValueError(
-                "Circuit breaker connection/success thresholds must be between 0 and 1."
+                "Circuit breaker connection/success thresholds must be between 0 and 1.",
             )
 
     def get_hash(self) -> str:
@@ -979,12 +967,12 @@ class ConfigManager:
         except Exception as e:
             self.load_errors += 1
             print(
-                f"ERROR: Error loading configuration (attempt {self.load_errors}): {e}"
+                f"ERROR: Error loading configuration (attempt {self.load_errors}): {e}",
             )
 
             if self.load_errors >= self.max_load_errors:
                 print(
-                    "CRITICAL: Max configuration load errors reached. Using default config. Please fix config.json immediately."
+                    "CRITICAL: Max configuration load errors reached. Using default config. Please fix config.json immediately.",
                 )
                 return BotConfig()
 
@@ -1047,7 +1035,7 @@ class EnhancedLogger:
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
         self.trade_logger = logging.getLogger(
-            f"{name}.trades"
+            f"{name}.trades",
         )  # Initialize trade_logger here
         self.trade_logger.setLevel(logging.INFO)
         # self.setup_logging() # Call setup in init, but needs config to be ready
@@ -1069,11 +1057,11 @@ class EnhancedLogger:
         console_handler = logging.StreamHandler(sys.stdout)
         if LOG_AS_JSON:
             formatter = logging.Formatter(
-                '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": %(message)s}'
+                '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": %(message)s}',
             )
         else:
             formatter = logging.Formatter(
-                f"{NEON_CYAN}%(asctime)s{NC} {BOLD}[%(levelname)s]{NC} %(message)s"
+                f"{NEON_CYAN}%(asctime)s{NC} {BOLD}[%(levelname)s]{NC} %(message)s",
             )
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)
@@ -1093,7 +1081,7 @@ class EnhancedLogger:
         trade_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s"
             if not LOG_AS_JSON
-            else '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "event": "trade_journal", "data": %(message)s}'
+            else '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "event": "trade_journal", "data": %(message)s}',
         )
         trade_file_handler = logging.handlers.RotatingFileHandler(
             trade_journal_path,
@@ -1113,7 +1101,7 @@ class EnhancedLogger:
             self.trade_logger.info(
                 f"TRADE: Side={trade_data.get('side')}, Price={trade_data.get('price')}, "
                 f"Qty={trade_data.get('quantity')}, OrderID={trade_data.get('order_id')}, "
-                f"Slippage={trade_data.get('slippage_pct'):.4f}, Latency={trade_data.get('latency'):.3f}s"
+                f"Slippage={trade_data.get('slippage_pct'):.4f}, Latency={trade_data.get('latency'):.3f}s",
             )
 
     def info(self, msg, *args, **kwargs):
@@ -1168,7 +1156,7 @@ market_state = MarketState()
 session_stats = SessionStats()
 system_monitor = SystemMonitor()
 rate_limiter = AdaptiveRateLimiter(
-    config
+    config,
 )  # Now `config` is guaranteed to be initialized
 
 
@@ -1198,15 +1186,15 @@ class PerformanceMonitor:
 
         if duration > 5.0:  # Threshold for a "slow" API call
             self.slow_operations.append(
-                {"operation": operation, "duration": duration, "timestamp": time.time()}
+                {"operation": operation, "duration": duration, "timestamp": time.time()},
             )
             self.performance_alerts += 1
             log.warning(
-                f"Slow API call detected: {operation}", duration=f"{duration:.3f}s"
+                f"Slow API call detected: {operation}", duration=f"{duration:.3f}s",
             )
 
         rate_limiter.record_success(
-            duration < 10.0
+            duration < 10.0,
         )  # Assume success if not excessively slow
 
     def record_order_latency(self, duration: float):
@@ -1280,7 +1268,7 @@ class PluginManager:
                 try:
                     # Dynamically import the module
                     spec = importlib.util.spec_from_file_location(
-                        module_name, os.path.join(folder, file)
+                        module_name, os.path.join(folder, file),
                     )
                     if spec is None:
                         raise ImportError(f"Could not load spec for {module_name}")
@@ -1296,13 +1284,13 @@ class PluginManager:
                             log.info(f"Plugin '{module_name}' loaded successfully.")
                         else:
                             log.warning(
-                                f"Plugin '{module_name}' register() did not return a callable."
+                                f"Plugin '{module_name}' register() did not return a callable.",
                             )
                     else:
                         log.debug(f"Plugin '{module_name}' has no 'register' function.")
                 except Exception as e:
                     log.error(
-                        f"Failed to load plugin '{module_name}': {e}", exc_info=True
+                        f"Failed to load plugin '{module_name}': {e}", exc_info=True,
                     )
 
         # If a specific strategy plugin is configured, ensure it exists
@@ -1311,7 +1299,7 @@ class PluginManager:
             and config.STRATEGY_PLUGIN_NAME not in self.plugins
         ):
             log.critical(
-                f"Configured strategy plugin '{config.STRATEGY_PLUGIN_NAME}' not found or failed to load. Please check plugin folder and config."
+                f"Configured strategy plugin '{config.STRATEGY_PLUGIN_NAME}' not found or failed to load. Please check plugin folder and config.",
             )
             global _SHUTDOWN_REQUESTED  # Explicitly declare global to modify
             _SHUTDOWN_REQUESTED = (
@@ -1347,7 +1335,7 @@ class EnhancedBybitClient:
         self.testnet = testnet
         self.loop = loop
         self.http = HTTP(
-            testnet=testnet, api_key=key, api_secret=secret, recv_window=20000
+            testnet=testnet, api_key=key, api_secret=secret, recv_window=20000,
         )
         self.public_ws: WebSocket | None = None
         self.private_ws: WebSocket | None = None
@@ -1376,7 +1364,7 @@ class EnhancedBybitClient:
         # Check shutdown flag immediately upon entering reconnect logic
         if _SHUTDOWN_REQUESTED:
             self.log.info(
-                f"Shutdown requested, not attempting to reconnect {ws_type} WS."
+                f"Shutdown requested, not attempting to reconnect {ws_type} WS.",
             )
             self._reconnect_tasks.pop(ws_type, None)  # Clean up task reference
             return
@@ -1384,7 +1372,7 @@ class EnhancedBybitClient:
         attempt = self.connection_attempts[ws_type]
         delay = self.reconnect_delays[min(attempt, len(self.reconnect_delays) - 1)]
         self.log.info(
-            f"Attempting to reconnect {ws_type} WS in {delay}s", attempt=attempt + 1
+            f"Attempting to reconnect {ws_type} WS in {delay}s", attempt=attempt + 1,
         )
 
         await asyncio.sleep(delay)
@@ -1392,7 +1380,7 @@ class EnhancedBybitClient:
         # Re-check shutdown flag after sleep
         if _SHUTDOWN_REQUESTED:
             self.log.info(
-                f"Shutdown requested after reconnect delay, not reconnecting {ws_type} WS."
+                f"Shutdown requested after reconnect delay, not reconnecting {ws_type} WS.",
             )
             self._reconnect_tasks.pop(ws_type, None)
             return
@@ -1419,7 +1407,7 @@ class EnhancedBybitClient:
             self.log.info(f"🟢 {ws_type.capitalize()} WebSocket connected.")
             self.connection_attempts[ws_type] = 0  # Reset attempts on success
             self.bot_health.update_component(
-                f"ws_{ws_type}_connection", 1.0, f"{ws_type.capitalize()} WS Connected"
+                f"ws_{ws_type}_connection", 1.0, f"{ws_type.capitalize()} WS Connected",
             )
             self.market_state.last_heartbeat = (
                 time.time()
@@ -1443,7 +1431,7 @@ class EnhancedBybitClient:
                 # Ensure only one reconnect task per WS type is active
                 if ws_type not in self._reconnect_tasks:
                     future = asyncio.run_coroutine_threadsafe(
-                        self.reconnect_ws(ws_type), self.loop
+                        self.reconnect_ws(ws_type), self.loop,
                     )
                     self._reconnect_tasks[ws_type] = future
                 else:
@@ -1471,7 +1459,7 @@ class EnhancedBybitClient:
             if not _SHUTDOWN_REQUESTED and self.loop.is_running():
                 if ws_type not in self._reconnect_tasks:
                     future = asyncio.run_coroutine_threadsafe(
-                        self.reconnect_ws(ws_type), self.loop
+                        self.reconnect_ws(ws_type), self.loop,
                     )
                     self._reconnect_tasks[ws_type] = future
 
@@ -1538,7 +1526,7 @@ class EnhancedBybitClient:
                 self.private_ws.wallet_stream(callback=self._on_private_ws_message)
                 self.private_ws.execution_stream(callback=self._on_private_ws_message)
                 self.log.info(
-                    "Subscribed to private streams (order, position, wallet, execution)"
+                    "Subscribed to private streams (order, position, wallet, execution)",
                 )
             except Exception as e:
                 self.log.error(f"Failed to subscribe to private topics: {e}")
@@ -1612,24 +1600,24 @@ class EnhancedBybitClient:
                             msg_payload=msg,
                         )
                         self.bot_health.update_component(
-                            "ws_public_data_quality", 0.5, "Public WS Data Incomplete"
+                            "ws_public_data_quality", 0.5, "Public WS Data Incomplete",
                         )  # Partial score
 
         except (KeyError, IndexError, ValueError, TypeError, DecimalException) as e:
             self.log.error(f"Error processing public WS message: {e}", msg_payload=msg)
             self.performance_monitor.record_error("websocket_public_error")
             self.bot_health.update_component(
-                "ws_public_data_quality", 0.0, f"Public WS Data Error: {e}"
+                "ws_public_data_quality", 0.0, f"Public WS Data Error: {e}",
             )
             if sentry_sdk:
                 sentry_sdk.capture_exception(e)
         except Exception as e:
             self.log.critical(
-                f"Critical error in public WS handler: {e}", exc_info=True
+                f"Critical error in public WS handler: {e}", exc_info=True,
             )
             self.performance_monitor.record_error("websocket_public_critical")
             self.bot_health.update_component(
-                "ws_public_data_quality", 0.0, f"Public WS Critical Error: {e}"
+                "ws_public_data_quality", 0.0, f"Public WS Critical Error: {e}",
             )
             if sentry_sdk:
                 sentry_sdk.capture_exception(e)
@@ -1726,7 +1714,7 @@ class EnhancedBybitClient:
         if msg.get("op") == "response" and "id" in msg:
             req_id = msg["id"]
             asyncio.create_task(
-                self._resolve_ws_command_future(req_id, msg)
+                self._resolve_ws_command_future(req_id, msg),
             )  # Resolve future in a task to not block WS thread
             return  # This message was a command response, don't process as topic update
 
@@ -1750,7 +1738,7 @@ class EnhancedBybitClient:
                             self.market_state.open_orders.pop(order_id, None)
                             self.session_stats.orders_filled += 1
                             self.log.info(
-                                "Order fully filled and closed.", order_id=order_id
+                                "Order fully filled and closed.", order_id=order_id,
                             )
                         # Trade processing is now handled by the 'execution' topic handler
 
@@ -1777,7 +1765,7 @@ class EnhancedBybitClient:
 
                     elif order_status in ["New", "PartiallyFilled", "PendingNew"]:
                         current_order_entry = self.market_state.open_orders.get(
-                            order_id, {}
+                            order_id, {},
                         )
                         self.market_state.open_orders[order_id] = {
                             "client_order_id": order_data.get(
@@ -1785,17 +1773,17 @@ class EnhancedBybitClient:
                                 current_order_entry.get("client_order_id", "N/A"),
                             ),
                             "symbol": order_data.get(
-                                "symbol", current_order_entry.get("symbol")
+                                "symbol", current_order_entry.get("symbol"),
                             ),
                             "side": order_data.get(
-                                "side", current_order_entry.get("side")
+                                "side", current_order_entry.get("side"),
                             ),
                             "price": Decimal(
                                 str(
                                     order_data.get(
-                                        "price", current_order_entry.get("price", "0")
-                                    )
-                                )
+                                        "price", current_order_entry.get("price", "0"),
+                                    ),
+                                ),
                             ),
                             "qty": Decimal(str(order_data.get("qty", "0"))),
                             "status": order_status,
@@ -1803,7 +1791,7 @@ class EnhancedBybitClient:
                                 order_data.get(
                                     "createdTime",
                                     current_order_entry.get("timestamp", 0),
-                                )
+                                ),
                             )
                             / 1000,
                         }
@@ -1830,17 +1818,17 @@ class EnhancedBybitClient:
                             )
                         else:
                             unrealised_pnl = Decimal(
-                                str(pos_data.get("unrealisedPnl", "0"))
+                                str(pos_data.get("unrealisedPnl", "0")),
                             )
                             self.market_state.positions[side] = {
                                 "size": current_size,
                                 "avg_price": Decimal(
-                                    str(pos_data.get("avgPrice", "0"))
+                                    str(pos_data.get("avgPrice", "0")),
                                 ),
                                 "unrealisedPnl": unrealised_pnl,
                                 "leverage": Decimal(str(pos_data.get("leverage", "1"))),
                                 "liq_price": Decimal(
-                                    str(pos_data.get("liqPrice", "0"))
+                                    str(pos_data.get("liqPrice", "0")),
                                 ),
                             }
                             self.log.debug(
@@ -1860,7 +1848,7 @@ class EnhancedBybitClient:
                 for wallet_data in msg["data"]:
                     if wallet_data.get("coin") == "USDT":
                         self.market_state.available_balance = Decimal(
-                            str(wallet_data.get("availableToWithdraw", "0"))
+                            str(wallet_data.get("availableToWithdraw", "0")),
                         )
                         self.market_state.last_balance_update = time.time()
                         self.log.debug(
@@ -1880,17 +1868,17 @@ class EnhancedBybitClient:
             self.log.error(f"Error processing private WS message: {e}", msg_payload=msg)
             self.performance_monitor.record_error("websocket_private_error")
             self.bot_health.update_component(
-                "ws_private_data_quality", 0.0, f"Private WS Data Error: {e}"
+                "ws_private_data_quality", 0.0, f"Private WS Data Error: {e}",
             )
             if sentry_sdk:
                 sentry_sdk.capture_exception(e)
         except Exception as e:
             self.log.critical(
-                f"Critical error in private WS handler: {e}", exc_info=True
+                f"Critical error in private WS handler: {e}", exc_info=True,
             )
             self.performance_monitor.record_error("websocket_private_critical")
             self.bot_health.update_component(
-                "ws_private_data_quality", 0.0, f"Private WS Critical Error: {e}"
+                "ws_private_data_quality", 0.0, f"Private WS Critical Error: {e}",
             )
             if sentry_sdk:
                 sentry_sdk.capture_exception(e)
@@ -1904,16 +1892,16 @@ class EnhancedBybitClient:
                 self.log.debug(f"Resolved WS command future for req_id: {req_id}")
             else:
                 self.log.debug(
-                    f"No active future found for req_id: {req_id} or already done."
+                    f"No active future found for req_id: {req_id} or already done.",
                 )
 
     async def _send_ws_command(
-        self, op: str, args: list[Any], timeout: int = 10
+        self, op: str, args: list[Any], timeout: int = 10,
     ) -> dict | None:
         """Sends a WebSocket command and waits for its response."""
         if not self.private_ws or not self._private_connected.is_set():
             self.log.warning(
-                f"Cannot send WS command '{op}': Private WS not connected."
+                f"Cannot send WS command '{op}': Private WS not connected.",
             )
             return {"retCode": -1, "retMsg": "Private WS not connected."}
 
@@ -1937,12 +1925,12 @@ class EnhancedBybitClient:
             return response
         except TimeoutError:
             self.log.error(
-                f"WS command '{op}' timed out after {timeout}s", req_id=req_id
+                f"WS command '{op}' timed out after {timeout}s", req_id=req_id,
             )
             return {"retCode": -1, "retMsg": "WS Command Timeout"}
         except Exception as e:
             self.log.error(
-                f"Error sending WS command '{op}': {e}", req_id=req_id, exc_info=True
+                f"Error sending WS command '{op}': {e}", req_id=req_id, exc_info=True,
             )
             return {"retCode": -1, "retMsg": f"WS Command Error: {e}"}
         finally:
@@ -1961,7 +1949,7 @@ class EnhancedBybitClient:
             self.performance_monitor.record_api_call(duration, method_name)
 
     async def api_call_with_retry(
-        self, api_method: Callable, *args, **kwargs
+        self, api_method: Callable, *args, **kwargs,
     ) -> dict | None:
         """Enhanced API call with robust retry logic and error handling."""
         method_name = getattr(api_method, "__name__", str(api_method))
@@ -1974,7 +1962,7 @@ class EnhancedBybitClient:
                     if response and response.get("retCode") == 0:
                         rate_limiter.record_success(True)
                         self.bot_health.update_component(
-                            f"api_status_{method_name}", 1.0, "API Call OK"
+                            f"api_status_{method_name}", 1.0, "API Call OK",
                         )
                         return response
 
@@ -2005,17 +1993,17 @@ class EnhancedBybitClient:
                     if ret_code in [10001, 10006, 30034, 30035, 10018, 10005]:
                         if attempt < 5:
                             delay = min(
-                                30, 2 * (2 ** (attempt - 1))
+                                30, 2 * (2 ** (attempt - 1)),
                             )  # Exponential backoff, max 30s
                             self.log.debug(
-                                f"Retrying API call {method_name} in {delay}s..."
+                                f"Retrying API call {method_name} in {delay}s...",
                             )
                             await asyncio.sleep(delay)
                             continue
                     # Non-retryable errors (e.g., invalid signature, param error)
                     elif ret_code in [10007, 10002]:
                         self.log.error(
-                            f"Non-retryable API error: {ret_msg}", error_code=ret_code
+                            f"Non-retryable API error: {ret_msg}", error_code=ret_code,
                         )
                         self.bot_health.update_component(
                             f"api_status_{method_name}",
@@ -2024,7 +2012,7 @@ class EnhancedBybitClient:
                         )
                         if sentry_sdk:
                             sentry_sdk.capture_message(
-                                f"Non-retryable API error {ret_code}: {ret_msg}"
+                                f"Non-retryable API error {ret_code}: {ret_msg}",
                             )
                         return None
                     else:  # Unhandled errors
@@ -2039,7 +2027,7 @@ class EnhancedBybitClient:
                         )
                         if sentry_sdk:
                             sentry_sdk.capture_message(
-                                f"Unhandled API error {ret_code}: {ret_msg}"
+                                f"Unhandled API error {ret_code}: {ret_msg}",
                             )
                         return None
 
@@ -2051,11 +2039,11 @@ class EnhancedBybitClient:
                         exc_info=True,
                     )
                     self.performance_monitor.record_error(
-                        f"api_exception_{method_name}"
+                        f"api_exception_{method_name}",
                     )
                     rate_limiter.record_success(False)
                     self.bot_health.update_component(
-                        f"api_status_{method_name}", 0.0, f"API Exception: {e}"
+                        f"api_status_{method_name}", 0.0, f"API Exception: {e}",
                     )
                     if sentry_sdk:
                         sentry_sdk.capture_exception(e)
@@ -2063,12 +2051,12 @@ class EnhancedBybitClient:
                     if attempt < 5:
                         delay = min(30, 2 * (2 ** (attempt - 1)))
                         self.log.debug(
-                            f"Retrying API call {method_name} in {delay}s due to exception..."
+                            f"Retrying API call {method_name} in {delay}s due to exception...",
                         )
                         await asyncio.sleep(delay)
                     else:
                         self.log.critical(
-                            f"API call failed after all retries: {method_name} - {e}"
+                            f"API call failed after all retries: {method_name} - {e}",
                         )
                         return None
 
@@ -2097,11 +2085,11 @@ class EnhancedBybitClient:
 
                 # Check for data freshness using market_state's method
                 self.market_state.is_data_fresh(
-                    self.config.CB_STALE_DATA_TIMEOUT_SEC
+                    self.config.CB_STALE_DATA_TIMEOUT_SEC,
                 )  # This updates health component internally
 
                 await asyncio.sleep(
-                    self.config.HEARTBEAT_INTERVAL / 2
+                    self.config.HEARTBEAT_INTERVAL / 2,
                 )  # Check more frequently than full interval
             except Exception as e:
                 self.log.error(f"Error in connection monitoring: {e}", exc_info=True)
@@ -2125,35 +2113,35 @@ class EnhancedBybitClient:
                 lot_size_filter = instrument.get("lotSizeFilter", {})
 
                 self.symbol_info.price_precision = Decimal(
-                    str(price_filter.get("tickSize", "0.0001"))
+                    str(price_filter.get("tickSize", "0.0001")),
                 )
                 self.symbol_info.qty_precision = Decimal(
-                    str(lot_size_filter.get("qtyStep", "0.001"))
+                    str(lot_size_filter.get("qtyStep", "0.001")),
                 )
                 self.symbol_info.min_price = Decimal(
-                    str(price_filter.get("minPrice", "0"))
+                    str(price_filter.get("minPrice", "0")),
                 )
                 self.symbol_info.min_qty = Decimal(
-                    str(lot_size_filter.get("minQty", "0"))
+                    str(lot_size_filter.get("minQty", "0")),
                 )
                 self.symbol_info.max_qty = Decimal(
-                    str(lot_size_filter.get("maxOrderQty", "1000000"))
+                    str(lot_size_filter.get("maxOrderQty", "1000000")),
                 )
                 self.symbol_info.min_order_value = Decimal(
-                    str(lot_size_filter.get("minOrderAmt", "10.0"))
+                    str(lot_size_filter.get("minOrderAmt", "10.0")),
                 )
 
                 self.log.info(
-                    "📊 Symbol info loaded successfully", symbol=self.config.SYMBOL
+                    "📊 Symbol info loaded successfully", symbol=self.config.SYMBOL,
                 )
                 self.bot_health.update_component(
-                    "symbol_info_load", 1.0, "Symbol info loaded"
+                    "symbol_info_load", 1.0, "Symbol info loaded",
                 )
                 return True
 
         self.log.error("❌ Failed to fetch symbol info", symbol=self.config.SYMBOL)
         self.bot_health.update_component(
-            "symbol_info_load", 0.0, "Failed to load symbol info"
+            "symbol_info_load", 0.0, "Failed to load symbol info",
         )
         return False
 
@@ -2170,7 +2158,7 @@ class EnhancedBybitClient:
             return True
 
         self.log.critical(
-            "❌ API credentials validation failed. Check API key/secret and permissions."
+            "❌ API credentials validation failed. Check API key/secret and permissions.",
         )
         self.bot_health.update_component("api_credentials", 0.0, "Credentials FAILED")
         if sentry_sdk:
@@ -2180,7 +2168,7 @@ class EnhancedBybitClient:
     async def get_wallet_balance(self) -> bool:
         """Fetches and updates wallet balance."""
         response = await self.api_call_with_retry(
-            self.http.get_wallet_balance, accountType="UNIFIED"
+            self.http.get_wallet_balance, accountType="UNIFIED",
         )
 
         if response and response.get("retCode") == 0:
@@ -2191,7 +2179,7 @@ class EnhancedBybitClient:
                         available_to_withdraw = coin.get("availableToWithdraw")
                         if available_to_withdraw:
                             self.market_state.available_balance = Decimal(
-                                str(available_to_withdraw)
+                                str(available_to_withdraw),
                             )
                         else:
                             self.market_state.available_balance = Decimal("0")
@@ -2229,7 +2217,7 @@ class EnhancedBybitClient:
                         "timestamp": float(order.get("createdTime", 0)) / 1000,
                     }
             self.log.debug(
-                f"Fetched {len(self.market_state.open_orders)} open orders via HTTP"
+                f"Fetched {len(self.market_state.open_orders)} open orders via HTTP",
             )
             return True
         self.log.warning("Failed to fetch open orders via HTTP")
@@ -2261,7 +2249,7 @@ class EnhancedBybitClient:
                         "liq_price": Decimal(str(pos.get("liqPrice", "0"))),
                     }
             self.log.debug(
-                f"Fetched {len(self.market_state.positions)} positions via HTTP"
+                f"Fetched {len(self.market_state.positions)} positions via HTTP",
             )
             # Recalculate PnL after position sync
             total_pnl = sum(
@@ -2287,7 +2275,7 @@ class EnhancedBybitClient:
 
         try:
             quantized_qty = qty.quantize(
-                self.symbol_info.qty_precision, rounding=ROUND_DOWN
+                self.symbol_info.qty_precision, rounding=ROUND_DOWN,
             )
             if quantized_qty <= 0 or quantized_qty < self.symbol_info.min_qty:
                 self.log.warning(
@@ -2324,7 +2312,7 @@ class EnhancedBybitClient:
                     return None
                 rounding = ROUND_DOWN if side == "Buy" else ROUND_UP
                 quantized_price = price.quantize(
-                    self.symbol_info.price_precision, rounding=rounding
+                    self.symbol_info.price_precision, rounding=rounding,
                 )
 
                 if quantized_price <= 0 or quantized_price < self.symbol_info.min_price:
@@ -2407,10 +2395,10 @@ class EnhancedBybitClient:
 
             # --- Fallback to HTTP if WS fails ---
             self.log.warning(
-                f"WS order.create failed ({response.get('retMsg', 'Unknown')}), attempting HTTP fallback."
+                f"WS order.create failed ({response.get('retMsg', 'Unknown')}), attempting HTTP fallback.",
             )
             http_response = await self.api_call_with_retry(
-                self.http.place_order, **order_params
+                self.http.place_order, **order_params,
             )
 
             if http_response and http_response.get("retCode") == 0:
@@ -2470,7 +2458,7 @@ class EnhancedBybitClient:
         """Amends an existing order, prioritizing WS then HTTP."""
         if not order_id and not client_order_id:
             self.log.error(
-                "Either order_id or client_order_id must be provided for amendment."
+                "Either order_id or client_order_id must be provided for amendment.",
             )
             return False
 
@@ -2485,14 +2473,14 @@ class EnhancedBybitClient:
             amend_params["orderLinkId"] = client_order_id
         if new_price is not None:
             amend_params["price"] = str(
-                new_price.quantize(self.symbol_info.price_precision)
+                new_price.quantize(self.symbol_info.price_precision),
             )
         if new_qty is not None:
             amend_params["qty"] = str(new_qty.quantize(self.symbol_info.qty_precision))
 
         if not amend_params.get("price") and not amend_params.get("qty"):
             self.log.warning(
-                f"No new price or quantity provided for amendment of order {order_id}."
+                f"No new price or quantity provided for amendment of order {order_id}.",
             )
             return False
 
@@ -2528,10 +2516,10 @@ class EnhancedBybitClient:
 
         # --- Fallback to HTTP if WS fails ---
         self.log.warning(
-            f"WS order.amend failed ({response.get('retMsg', 'Unknown')}), attempting HTTP fallback."
+            f"WS order.amend failed ({response.get('retMsg', 'Unknown')}), attempting HTTP fallback.",
         )
         http_response = await self.api_call_with_retry(
-            self.http.amend_order, **amend_params
+            self.http.amend_order, **amend_params,
         )
 
         if http_response and http_response.get("retCode") == 0:
@@ -2565,12 +2553,12 @@ class EnhancedBybitClient:
         return False
 
     async def cancel_order(
-        self, order_id: str | None = None, client_order_id: str | None = None
+        self, order_id: str | None = None, client_order_id: str | None = None,
     ) -> bool:
         """Cancels a specific order, prioritizing WS then HTTP."""
         if not order_id and not client_order_id:
             self.log.error(
-                "Either order_id or client_order_id must be provided for cancellation."
+                "Either order_id or client_order_id must be provided for cancellation.",
             )
             return False
 
@@ -2600,16 +2588,16 @@ class EnhancedBybitClient:
                 order_id=order_id,
             )
             self.market_state.open_orders.pop(
-                order_id, None
+                order_id, None,
             )  # Ensure removal from local state
             return True
 
         # --- Fallback to HTTP if WS fails ---
         self.log.warning(
-            f"WS order.cancel failed ({response.get('retMsg', 'Unknown')}), attempting HTTP fallback."
+            f"WS order.cancel failed ({response.get('retMsg', 'Unknown')}), attempting HTTP fallback.",
         )
         http_response = await self.api_call_with_retry(
-            self.http.cancel_order, **cancel_params
+            self.http.cancel_order, **cancel_params,
         )
 
         if http_response and http_response.get("retCode") == 0:
@@ -2658,7 +2646,7 @@ class EnhancedBybitClient:
 
         # --- Fallback to HTTP if WS fails ---
         self.log.warning(
-            f"WS order.cancel-all failed ({response.get('retMsg', 'Unknown')}), attempting HTTP fallback."
+            f"WS order.cancel-all failed ({response.get('retMsg', 'Unknown')}), attempting HTTP fallback.",
         )
         http_response = await self.api_call_with_retry(
             self.http.cancel_all_orders,
@@ -2669,12 +2657,12 @@ class EnhancedBybitClient:
         if http_response and http_response.get("retCode") == 0:
             order_count = len(self.market_state.open_orders)
             self.log.info(
-                "🧹 All orders cancelled via HTTP (WS fallback)", count=order_count
+                "🧹 All orders cancelled via HTTP (WS fallback)", count=order_count,
             )
             self.market_state.open_orders.clear()
             self.session_stats.orders_cancelled += order_count
             self.send_toast(
-                f"🧹 {order_count} orders cancelled (HTTP)", "orange", "white"
+                f"🧹 {order_count} orders cancelled (HTTP)", "orange", "white",
             )
             return True
 

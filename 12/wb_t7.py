@@ -13,13 +13,9 @@ import os
 import time
 import warnings
 from collections.abc import Callable
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import ROUND_HALF_UP
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, getcontext
 from functools import (
     wraps,  # Removed lru_cache import if not used elsewhere, or keep if needed for other methods.
 )
@@ -30,8 +26,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore
-from colorama import Style
+from colorama import Fore, Style
 from colorama import init as colorama_init
 from dotenv import load_dotenv
 
@@ -43,7 +38,7 @@ try:
 except ImportError:
     TALIB_AVAILABLE = False
     print(
-        f"{Fore.YELLOW}Warning: TA-Lib not found. Falling back to Pandas/Numpy implementations. For better performance, install TA-Lib: pip install TA-Lib{Style.RESET_ALL}"
+        f"{Fore.YELLOW}Warning: TA-Lib not found. Falling back to Pandas/Numpy implementations. For better performance, install TA-Lib: pip install TA-Lib{Style.RESET_ALL}",
     )
 
 # ----------------------------------------------------------------------------
@@ -111,7 +106,7 @@ def setup_logger(name: str) -> logging.Logger:
         # Console handler
         console_handler = logging.StreamHandler()
         console_formatter = ColoredFormatter(
-            "%(asctime)s │ %(levelname)-8s │ %(message)s", datefmt="%H:%M:%S"
+            "%(asctime)s │ %(levelname)-8s │ %(message)s", datefmt="%H:%M:%S",
         )
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
@@ -120,7 +115,7 @@ def setup_logger(name: str) -> logging.Logger:
         log_file_name = f"{name}_{datetime.now().strftime('%Y%m%d')}.log"
         file_handler = logging.FileHandler(LOG_DIR / log_file_name)
         file_formatter = logging.Formatter(
-            "%(asctime)s │ %(levelname)-8s │ %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+            "%(asctime)s │ %(levelname)-8s │ %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
         )
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
@@ -148,14 +143,14 @@ def retry_api_call(max_attempts: int = 3, delay: int = 5, backoff_factor: float 
                     if status_code in RETRY_ERROR_CODES:
                         wait_time = delay * (backoff_factor ** (attempt - 1))
                         LOGGER.warning(
-                            f"{NEON_YELLOW}API request failed (Attempt {attempt}/{max_attempts}, Status: {status_code}). Retrying in {wait_time:.1f}s...{RESET}"
+                            f"{NEON_YELLOW}API request failed (Attempt {attempt}/{max_attempts}, Status: {status_code}). Retrying in {wait_time:.1f}s...{RESET}",
                         )
                         time.sleep(wait_time)
                     else:
                         LOGGER.error(f"{NEON_RED}Fatal API error: {e}{RESET}")
                         raise  # Re-raise for non-retryable errors
             LOGGER.error(
-                f"{NEON_RED}API call failed after {max_attempts} attempts. Aborting.{RESET}"
+                f"{NEON_RED}API call failed after {max_attempts} attempts. Aborting.{RESET}",
             )
             return None  # Indicate failure after max retries
 
@@ -397,7 +392,7 @@ def load_config(fp: Path) -> BotConfig:
 
     if not fp.exists():
         LOGGER.warning(
-            f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}"
+            f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}",
         )
         try:
             fp.write_text(json.dumps(defaults, indent=4))
@@ -411,7 +406,7 @@ def load_config(fp: Path) -> BotConfig:
         merged = deep_merge(defaults, user_cfg)  # Deep merge user config onto defaults
     except (OSError, json.JSONDecodeError) as e:
         LOGGER.error(
-            f"{NEON_RED}Error with config file: {e}. Attempting to rebuild default.{RESET}"
+            f"{NEON_RED}Error with config file: {e}. Attempting to rebuild default.{RESET}",
         )
         backup_fp = fp.with_name(f"{fp.stem}.bak_{int(time.time())}{fp.suffix}")
         try:
@@ -419,14 +414,14 @@ def load_config(fp: Path) -> BotConfig:
             fp.write_text(json.dumps(defaults, indent=4))  # Write fresh default
         except OSError as backup_err:
             LOGGER.error(
-                f"{NEON_RED}Could not back up corrupt config: {backup_err}{RESET}"
+                f"{NEON_RED}Could not back up corrupt config: {backup_err}{RESET}",
             )
         merged = defaults  # Use defaults if rebuild fails or is needed
 
     # Validate critical settings
     if merged["interval"] not in VALID_INTERVALS:
         LOGGER.warning(
-            f"{NEON_YELLOW}Invalid interval '{merged['interval']}' in config. Falling back to default '15'.{RESET}"
+            f"{NEON_YELLOW}Invalid interval '{merged['interval']}' in config. Falling back to default '15'.{RESET}",
         )
         merged["interval"] = "15"
 
@@ -443,28 +438,28 @@ class BybitClient:
     """A client to interact with the Bybit API."""
 
     def __init__(
-        self, base_url: str, api_key: str, api_secret: str, log: logging.Logger
+        self, base_url: str, api_key: str, api_secret: str, log: logging.Logger,
     ):
         self.base_url = base_url
         self.api_key = api_key
         self.api_secret = api_secret
         self.log = log
         self.kline_cache: dict[
-            str, Any
+            str, Any,
         ] = {}  # {f"{symbol}_{interval}_{limit}": {'data': df, 'timestamp': time}}
 
     def _generate_signature(self, params: dict) -> str:
         """Generates the HMAC SHA256 signature for Bybit API requests."""
         param_str = "&".join(
-            [f"{key}={value}" for key, value in sorted(params.items())]
+            [f"{key}={value}" for key, value in sorted(params.items())],
         )
         return hmac.new(
-            self.api_secret.encode(), param_str.encode(), hashlib.sha256
+            self.api_secret.encode(), param_str.encode(), hashlib.sha256,
         ).hexdigest()
 
     @retry_api_call()
     def _bybit_request(
-        self, method: str, endpoint: str, params: dict[str, Any] = None
+        self, method: str, endpoint: str, params: dict[str, Any] = None,
     ) -> dict | None:
         """Sends a signed request to the Bybit API with retry logic."""
         params = params or {}
@@ -492,7 +487,7 @@ class BybitClient:
         except requests.exceptions.RequestException as e:
             # The retry_api_call decorator will catch this, but good to log here too for context
             self.log.error(
-                f"{NEON_RED}Bybit request failed: {e}. Response: {getattr(e.response, 'text', 'N/A')}{RESET}"
+                f"{NEON_RED}Bybit request failed: {e}. Response: {getattr(e.response, 'text', 'N/A')}{RESET}",
             )
             raise  # Re-raise to allow decorator to handle retries
 
@@ -517,17 +512,17 @@ class BybitClient:
                             return Decimal(str(last_price)) if last_price else None
                         except InvalidOperation:
                             self.log.error(
-                                f"{NEON_RED}Invalid price format received for {symbol}: '{last_price}'{RESET}"
+                                f"{NEON_RED}Invalid price format received for {symbol}: '{last_price}'{RESET}",
                             )
                             return None
         self.log.error(
-            f"{NEON_RED}Could not fetch current price for {symbol}. Response: {response_data}{RESET}"
+            f"{NEON_RED}Could not fetch current price for {symbol}. Response: {response_data}{RESET}",
         )
         return None
 
     @retry_api_call()
     def fetch_klines(
-        self, symbol: str, interval: str, limit: int = 200
+        self, symbol: str, interval: str, limit: int = 200,
     ) -> pd.DataFrame:
         """Fetches historical K-line data with caching."""
         kline_key = f"{symbol}_{interval}_{limit}"
@@ -542,7 +537,7 @@ class BybitClient:
             ].copy()  # Return a copy to prevent external modification
 
         self.log.info(
-            f"{NEON_BLUE}Fetching fresh Kline data for {symbol} ({interval})...{RESET}"
+            f"{NEON_BLUE}Fetching fresh Kline data for {symbol} ({interval})...{RESET}",
         )
         endpoint = "/v5/market/kline"
         params = {
@@ -574,14 +569,14 @@ class BybitClient:
 
             # Convert timestamp to datetime (coercing errors means invalid times become NaT)
             df["start_time"] = pd.to_datetime(
-                pd.to_numeric(df["start_time"], errors="coerce"), unit="ms"
+                pd.to_numeric(df["start_time"], errors="coerce"), unit="ms",
             )
 
             # Convert financial columns to Decimal safely
             for col in ["open", "high", "low", "close", "volume", "turnover"]:
                 # Using apply with _to_decimal ensures Decimal objects for each element
                 df[col] = df[col].apply(
-                    lambda x: Decimal(str(x)) if pd.notna(x) else Decimal("NaN")
+                    lambda x: Decimal(str(x)) if pd.notna(x) else Decimal("NaN"),
                 )
 
             # Drop rows with any NaN values in critical columns
@@ -592,7 +587,7 @@ class BybitClient:
 
             if df.empty:
                 self.log.warning(
-                    f"{NEON_YELLOW}Fetched Kline data is empty after processing for {symbol}, interval {interval}.{RESET}"
+                    f"{NEON_YELLOW}Fetched Kline data is empty after processing for {symbol}, interval {interval}.{RESET}",
                 )
                 return pd.DataFrame()
 
@@ -601,7 +596,7 @@ class BybitClient:
             return df
 
         self.log.error(
-            f"{NEON_RED}Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}"
+            f"{NEON_RED}Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}",
         )
         return pd.DataFrame()
 
@@ -618,7 +613,7 @@ class BybitClient:
         ):
             return response_data["result"]
         self.log.warning(
-            f"{NEON_YELLOW}Could not fetch order book for {symbol}. Response: {response_data}{RESET}"
+            f"{NEON_YELLOW}Could not fetch order book for {symbol}. Response: {response_data}{RESET}",
         )
         return None
 
@@ -635,7 +630,7 @@ class Indicators:
     def _to_decimal_series_safe(series: pd.Series) -> pd.Series:
         """Helper to convert series to Decimal type safely, handling NaN/None."""
         return series.apply(
-            lambda x: Decimal(str(x)) if pd.notna(x) else Decimal("NaN")
+            lambda x: Decimal(str(x)) if pd.notna(x) else Decimal("NaN"),
         )
 
     @staticmethod
@@ -644,7 +639,7 @@ class Indicators:
         # Check if the series *actually* contains Decimal objects before casting
         # If it's already numeric (e.g., float64) or mixed, just convert directly
         return series.apply(
-            lambda x: float(x) if isinstance(x, Decimal) and not x.is_nan() else np.nan
+            lambda x: float(x) if isinstance(x, Decimal) and not x.is_nan() else np.nan,
         ).to_numpy(dtype=float)
 
     @staticmethod
@@ -654,11 +649,11 @@ class Indicators:
             np_array = Indicators._convert_series_to_float_np(series)
             result = talib.SMA(np_array, timeperiod=window)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=series.index)
+                pd.Series(result, index=series.index),
             )
 
         return Indicators._to_decimal_series_safe(
-            series.rolling(window=window, min_periods=1).mean()
+            series.rolling(window=window, min_periods=1).mean(),
         )
 
     @staticmethod
@@ -668,16 +663,16 @@ class Indicators:
             np_array = Indicators._convert_series_to_float_np(series)
             result = talib.EMA(np_array, timeperiod=span)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=series.index)
+                pd.Series(result, index=series.index),
             )
 
         return Indicators._to_decimal_series_safe(
-            series.ewm(span=span, adjust=False).mean()
+            series.ewm(span=span, adjust=False).mean(),
         )
 
     @staticmethod
     def atr(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int,
     ) -> pd.Series:
         """Decimal-safe Average True Range."""
         if TALIB_AVAILABLE:
@@ -686,7 +681,7 @@ class Indicators:
             np_close = Indicators._convert_series_to_float_np(close)
             result = talib.ATR(np_high, np_low, np_close, timeperiod=window)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=high.index)
+                pd.Series(result, index=high.index),
             )
 
         tr1 = high - low
@@ -702,7 +697,7 @@ class Indicators:
             np_close = Indicators._convert_series_to_float_np(close)
             result = talib.RSI(np_close, timeperiod=window)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=close.index)
+                pd.Series(result, index=close.index),
             )
 
         delta = close.diff()
@@ -712,31 +707,31 @@ class Indicators:
         avg_loss = Indicators.ema(loss, span=window)
         rs = avg_gain / avg_loss.replace(Decimal("0"), Decimal("NaN"))
         return (Decimal("100") - (Decimal("100") / (Decimal("1") + rs))).fillna(
-            Decimal("50")
+            Decimal("50"),
         )
 
     @staticmethod
     def macd(
-        close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
+        close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9,
     ) -> pd.DataFrame:
         """Decimal-safe Moving Average Convergence Divergence."""
         if TALIB_AVAILABLE:
             np_close = Indicators._convert_series_to_float_np(close)
             macd_line, signal_line, hist = talib.MACD(
-                np_close, fastperiod=fast, slowperiod=slow, signalperiod=signal
+                np_close, fastperiod=fast, slowperiod=slow, signalperiod=signal,
             )
             return pd.DataFrame(
                 {
                     "macd": Indicators._to_decimal_series_safe(
-                        pd.Series(macd_line, index=close.index)
+                        pd.Series(macd_line, index=close.index),
                     ),
                     "signal": Indicators._to_decimal_series_safe(
-                        pd.Series(signal_line, index=close.index)
+                        pd.Series(signal_line, index=close.index),
                     ),
                     "histogram": Indicators._to_decimal_series_safe(
-                        pd.Series(hist, index=close.index)
+                        pd.Series(hist, index=close.index),
                     ),
-                }
+                },
             )
 
         ema_fast = Indicators.ema(close, span=fast)
@@ -745,12 +740,12 @@ class Indicators:
         signal_line = Indicators.ema(macd_line, span=signal)
         histogram = macd_line - signal_line
         return pd.DataFrame(
-            {"macd": macd_line, "signal": signal_line, "histogram": histogram}
+            {"macd": macd_line, "signal": signal_line, "histogram": histogram},
         )
 
     @staticmethod
     def adx(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14,
     ) -> pd.DataFrame:
         """Decimal-safe Average Directional Index."""
         if TALIB_AVAILABLE:
@@ -758,33 +753,33 @@ class Indicators:
             np_low = Indicators._convert_series_to_float_np(low)
             np_close = Indicators._convert_series_to_float_np(close)
             plus_di, minus_di, adx = talib.ADX(
-                np_high, np_low, np_close, timeperiod=window
+                np_high, np_low, np_close, timeperiod=window,
             )
             return pd.DataFrame(
                 {
                     "+DI": Indicators._to_decimal_series_safe(
-                        pd.Series(plus_di, index=high.index)
+                        pd.Series(plus_di, index=high.index),
                     ),
                     "-DI": Indicators._to_decimal_series_safe(
-                        pd.Series(minus_di, index=high.index)
+                        pd.Series(minus_di, index=high.index),
                     ),
                     "ADX": Indicators._to_decimal_series_safe(
-                        pd.Series(adx, index=high.index)
+                        pd.Series(adx, index=high.index),
                     ),
-                }
+                },
             )
 
         plus_dm = high.diff()
         minus_dm = low.diff().mul(Decimal("-1"))
         plus_dm_s = Indicators.ema(
             plus_dm.where(
-                (plus_dm > Decimal("0")) & (plus_dm > minus_dm), Decimal("0")
+                (plus_dm > Decimal("0")) & (plus_dm > minus_dm), Decimal("0"),
             ),
             span=window,
         )
         minus_dm_s = Indicators.ema(
             minus_dm.where(
-                (minus_dm > Decimal("0")) & (minus_dm > plus_dm), Decimal("0")
+                (minus_dm > Decimal("0")) & (minus_dm > plus_dm), Decimal("0"),
             ),
             span=window,
         )
@@ -824,26 +819,26 @@ class Indicators:
             return pd.DataFrame(
                 {
                     "k": Indicators._to_decimal_series_safe(
-                        pd.Series(slowk, index=close.index)
+                        pd.Series(slowk, index=close.index),
                     ),
                     "d": Indicators._to_decimal_series_safe(
-                        pd.Series(slowd, index=close.index)
+                        pd.Series(slowd, index=close.index),
                     ),
-                }
+                },
             )
 
         highest_high = high.rolling(window=k_period).max()
         lowest_low = low.rolling(window=k_period).min()
         denominator = (highest_high - lowest_low).replace(Decimal("0"), Decimal("NaN"))
         k_line = ((close - lowest_low) / denominator * Decimal("100")).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
         d_line = Indicators.sma(k_line, window=d_period)
         return pd.DataFrame({"k": k_line, "d": d_line})
 
     @staticmethod
     def stoch_rsi(
-        close: pd.Series, rsi_period: int = 14, k_period: int = 3, d_period: int = 3
+        close: pd.Series, rsi_period: int = 14, k_period: int = 3, d_period: int = 3,
     ) -> pd.DataFrame:
         """Decimal-safe Stochastic RSI."""
         if TALIB_AVAILABLE:
@@ -860,12 +855,12 @@ class Indicators:
             return pd.DataFrame(
                 {
                     "stoch_rsi_k": Indicators._to_decimal_series_safe(
-                        pd.Series(stochrsi_k, index=close.index)
+                        pd.Series(stochrsi_k, index=close.index),
                     ),
                     "stoch_rsi_d": Indicators._to_decimal_series_safe(
-                        pd.Series(stochrsi_d, index=close.index)
+                        pd.Series(stochrsi_d, index=close.index),
                     ),
-                }
+                },
             )
 
         rsi_vals = Indicators.rsi(close, window=rsi_period)
@@ -873,7 +868,7 @@ class Indicators:
         max_rsi = rsi_vals.rolling(window=k_period).max()
         denominator = (max_rsi - min_rsi).replace(Decimal("0"), Decimal("NaN"))
         stoch_rsi_val = ((rsi_vals - min_rsi) / denominator * Decimal("100")).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
         k_line = Indicators.sma(stoch_rsi_val, window=k_period)
         d_line = Indicators.sma(k_line, window=d_period)
@@ -899,7 +894,7 @@ class Indicators:
                 maximum=float(max_acceleration),
             )
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=high.index)
+                pd.Series(result, index=high.index),
             )
 
         psar = pd.Series([Decimal("NaN")] * len(close), index=close.index, dtype=object)
@@ -932,7 +927,7 @@ class Indicators:
                 new_psar = prev_psar + af * (ep - prev_psar)
                 # SAR should not be above current or previous two lows in an uptrend
                 psar.iloc[i] = min(
-                    new_psar, curr_l, low.iloc[i - 1] if i > 1 else curr_l
+                    new_psar, curr_l, low.iloc[i - 1] if i > 1 else curr_l,
                 )  # Ensure SAR stays below price
                 if curr_h > ep:  # New extreme point reached
                     ep, af = curr_h, min(af + acceleration, max_acceleration)
@@ -947,7 +942,7 @@ class Indicators:
                 new_psar = prev_psar + af * (ep - prev_psar)
                 # SAR should not be below current or previous two highs in a downtrend
                 psar.iloc[i] = max(
-                    new_psar, curr_h, high.iloc[i - 1] if i > 1 else curr_h
+                    new_psar, curr_h, high.iloc[i - 1] if i > 1 else curr_h,
                 )  # Ensure SAR stays above price
                 if curr_l < ep:  # New extreme point reached
                     ep, af = curr_l, min(af + acceleration, max_acceleration)
@@ -971,7 +966,7 @@ class Indicators:
             np_volume = Indicators._convert_series_to_float_np(volume)
             result = talib.OBV(np_close, np_volume)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=close.index)
+                pd.Series(result, index=close.index),
             )
 
         obv = pd.Series([Decimal("0")] * len(close), index=close.index, dtype=object)
@@ -998,7 +993,7 @@ class Indicators:
 
     @staticmethod
     def adi(
-        high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
+        high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series,
     ) -> pd.Series:
         """Decimal-safe Accumulation/Distribution Index."""
         if TALIB_AVAILABLE:
@@ -1008,7 +1003,7 @@ class Indicators:
             np_volume = Indicators._convert_series_to_float_np(volume)
             result = talib.AD(np_high, np_low, np_close, np_volume)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=high.index)
+                pd.Series(result, index=high.index),
             )
 
         mfm_denom = (high - low).replace(Decimal("0"), Decimal("NaN"))
@@ -1031,7 +1026,7 @@ class Indicators:
             np_close = Indicators._convert_series_to_float_np(close)
             result = talib.CCI(np_high, np_low, np_close, timeperiod=window)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=high.index)
+                pd.Series(result, index=high.index),
             )
 
         typical_price = (high + low + close) / Decimal("3")
@@ -1048,7 +1043,7 @@ class Indicators:
             return sum(abs(val - mean_val) for val in x_dec) / Decimal(str(len(x_dec)))
 
         mean_dev_series = typical_price.rolling(window=window).apply(
-            _mean_dev_decimal, raw=False
+            _mean_dev_decimal, raw=False,
         )  # raw=False to pass Series objects
 
         return (
@@ -1058,7 +1053,7 @@ class Indicators:
 
     @staticmethod
     def williams_r(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14,
     ) -> pd.Series:
         """Decimal-safe Williams %R."""
         if TALIB_AVAILABLE:
@@ -1067,7 +1062,7 @@ class Indicators:
             np_close = Indicators._convert_series_to_float_np(close)
             result = talib.WILLR(np_high, np_low, np_close, timeperiod=window)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=high.index)
+                pd.Series(result, index=high.index),
             )
 
         highest_high = high.rolling(window=window).max()
@@ -1091,7 +1086,7 @@ class Indicators:
             np_volume = Indicators._convert_series_to_float_np(volume)
             result = talib.MFI(np_high, np_low, np_close, np_volume, timeperiod=window)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=high.index)
+                pd.Series(result, index=high.index),
             )
 
         typical_price = (high + low + close) / Decimal("3")
@@ -1111,7 +1106,7 @@ class Indicators:
         )
         mf_ratio = pos_sum / neg_sum.replace(Decimal("0"), Decimal("NaN"))
         return (Decimal("100") - (Decimal("100") / (Decimal("1") + mf_ratio))).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
 
     @staticmethod
@@ -1121,11 +1116,11 @@ class Indicators:
             np_close = Indicators._convert_series_to_float_np(close)
             result = talib.MOM(np_close, timeperiod=period)
             return Indicators._to_decimal_series_safe(
-                pd.Series(result, index=close.index)
+                pd.Series(result, index=close.index),
             )
 
         return ((close.diff(period) / close.shift(period)) * Decimal("100")).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
 
     @staticmethod
@@ -1172,7 +1167,7 @@ class Indicators:
         # Let's use (high+low)/2 for a more standard AO calculation if possible, else stick to close.
         # For compatibility, keeping median_price as (close + close.shift(1)) / 2 based on your prior code structure.
         median_price = (close + close.shift(1)).fillna(close) / Decimal(
-            "2"
+            "2",
         )  # Use close if shift(1) is NaN
         sma_short = Indicators.sma(median_price, window=short_period)
         sma_long = Indicators.sma(median_price, window=long_period)
@@ -1180,7 +1175,7 @@ class Indicators:
 
     @staticmethod
     def vi(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14,
     ) -> pd.DataFrame:
         """Decimal-safe Vortex Indicator (VI)."""
         if TALIB_AVAILABLE:
@@ -1188,17 +1183,17 @@ class Indicators:
             np_low = Indicators._convert_series_to_float_np(low)
             np_close = Indicators._convert_series_to_float_np(close)
             plus_vi, minus_vi = talib.VORTEX(
-                np_high, np_low, np_close, timeperiod=window
+                np_high, np_low, np_close, timeperiod=window,
             )
             return pd.DataFrame(
                 {
                     "+VI": Indicators._to_decimal_series_safe(
-                        pd.Series(plus_vi, index=high.index)
+                        pd.Series(plus_vi, index=high.index),
                     ),
                     "-VI": Indicators._to_decimal_series_safe(
-                        pd.Series(minus_vi, index=high.index)
+                        pd.Series(minus_vi, index=high.index),
                     ),
-                }
+                },
             )
 
         tr = Indicators.atr(high, low, close, 1).rolling(window=window).sum()
@@ -1208,17 +1203,17 @@ class Indicators:
         minus_vm = (low - high.shift(1)).abs()
 
         plus_vi = (plus_vm.rolling(window=window, min_periods=1).sum() / tr).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
         minus_vi = (minus_vm.rolling(window=window, min_periods=1).sum() / tr).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
 
         return pd.DataFrame({"+VI": plus_vi, "-VI": minus_vi})
 
     @staticmethod
     def bb(
-        close: pd.Series, window: int = 20, std_dev_mult: Decimal = Decimal("2")
+        close: pd.Series, window: int = 20, std_dev_mult: Decimal = Decimal("2"),
     ) -> pd.DataFrame:
         """Decimal-safe Bollinger Bands (BB)."""
         if TALIB_AVAILABLE:
@@ -1233,15 +1228,15 @@ class Indicators:
             return pd.DataFrame(
                 {
                     "upper": Indicators._to_decimal_series_safe(
-                        pd.Series(upper, index=close.index)
+                        pd.Series(upper, index=close.index),
                     ),
                     "middle": Indicators._to_decimal_series_safe(
-                        pd.Series(middle, index=close.index)
+                        pd.Series(middle, index=close.index),
                     ),
                     "lower": Indicators._to_decimal_series_safe(
-                        pd.Series(lower, index=close.index)
+                        pd.Series(lower, index=close.index),
                     ),
-                }
+                },
             )
 
         sma = Indicators.sma(close, window=window)
@@ -1273,7 +1268,7 @@ class Indicators:
         # Using element-wise multiplication here
         fve_values = (price_ema * vol_sma).rolling(window=window, min_periods=1).sum()
         return fve_values.apply(
-            lambda x: Decimal(str(x)) if pd.notna(x) else Decimal("NaN")
+            lambda x: Decimal(str(x)) if pd.notna(x) else Decimal("NaN"),
         )
 
     # --- New Indicators ---
@@ -1302,7 +1297,7 @@ class Indicators:
                 "upper": Indicators._to_decimal_series_safe(upper_band),
                 "middle": Indicators._to_decimal_series_safe(middle_band),
                 "lower": Indicators._to_decimal_series_safe(lower_band),
-            }
+            },
         )
 
     @staticmethod
@@ -1350,7 +1345,7 @@ class Indicators:
                 "senkou_span_a": Indicators._to_decimal_series_safe(senkou_span_a),
                 "senkou_span_b": Indicators._to_decimal_series_safe(senkou_span_b),
                 "chikou_span": Indicators._to_decimal_series_safe(chikou_span),
-            }
+            },
         )
 
     @staticmethod
@@ -1373,19 +1368,19 @@ class Indicators:
 
         # Calculate Final Upper Band and Final Lower Band
         final_upper_band = pd.Series(
-            [Decimal("NaN")] * len(close), index=close.index, dtype=object
+            [Decimal("NaN")] * len(close), index=close.index, dtype=object,
         )
         final_lower_band = pd.Series(
-            [Decimal("NaN")] * len(close), index=close.index, dtype=object
+            [Decimal("NaN")] * len(close), index=close.index, dtype=object,
         )
 
         supertrend_vals = pd.Series(
-            [Decimal("NaN")] * len(close), index=close.index, dtype=object
+            [Decimal("NaN")] * len(close), index=close.index, dtype=object,
         )
 
         # Initialize trend
         trend = pd.Series(
-            [0] * len(close), index=close.index, dtype=int
+            [0] * len(close), index=close.index, dtype=int,
         )  # 1 for uptrend, -1 for downtrend, 0 for initial
 
         # Initialize first values if enough data
@@ -1436,7 +1431,7 @@ class Indicators:
                 final_upper_band.iloc[i] = basic_upper_band.iloc[i]
             else:
                 final_upper_band.iloc[i] = min(
-                    basic_upper_band.iloc[i], final_upper_band.iloc[i - 1]
+                    basic_upper_band.iloc[i], final_upper_band.iloc[i - 1],
                 )
 
             # If previous close was below previous final lower band, then current final lower band is basic_lower_band
@@ -1444,7 +1439,7 @@ class Indicators:
                 final_lower_band.iloc[i] = basic_lower_band.iloc[i]
             else:
                 final_lower_band.iloc[i] = max(
-                    basic_lower_band.iloc[i], final_lower_band.iloc[i - 1]
+                    basic_lower_band.iloc[i], final_lower_band.iloc[i - 1],
                 )
 
             # Determine trend and Supertrend value
@@ -1481,10 +1476,10 @@ class TradeSignal:
     signal: str | None  # "buy" or "sell"
     confidence: float  # 0.0 to 1.0
     conditions: list[str] = field(
-        default_factory=list
+        default_factory=list,
     )  # List of contributing conditions
     levels: dict[str, Decimal] = field(
-        default_factory=dict
+        default_factory=dict,
     )  # Calculated SL/TP/other levels
 
 
@@ -1522,22 +1517,22 @@ class TradingAnalyzer:
         atr_period = self.cfg["atr_period"]
         if self.df.empty or len(self.df) < atr_period:
             self.log.warning(
-                f"{NEON_YELLOW}Not enough data for ATR ({len(self.df)}/{atr_period} bars). ATR set to 0.{RESET}"
+                f"{NEON_YELLOW}Not enough data for ATR ({len(self.df)}/{atr_period} bars). ATR set to 0.{RESET}",
             )
             self.atr_value = Decimal("0")
             return
 
         atr_series = Indicators.atr(
-            self.df.high, self.df.low, self.df.close, atr_period
+            self.df.high, self.df.low, self.df.close, atr_period,
         )
         if not atr_series.empty and not pd.isna(atr_series.iloc[-1]):
             self.atr_value = atr_series.iloc[-1].quantize(
-                Decimal("0.00001")
+                Decimal("0.00001"),
             )  # Quantize for consistent logging/comparison
         else:
             self.atr_value = Decimal("0")
             self.log.warning(
-                f"{NEON_YELLOW}ATR calculation resulted in NaN for {self.symbol}. ATR set to 0.{RESET}"
+                f"{NEON_YELLOW}ATR calculation resulted in NaN for {self.symbol}. ATR set to 0.{RESET}",
             )
         self.indicator_values["atr"] = self.atr_value
 
@@ -1550,13 +1545,13 @@ class TradingAnalyzer:
         required_data = max(adx_period, bb_window, ema_long_period)
         if len(self.df) < required_data + 10:  # Add a buffer for robust calculations
             self.log.warning(
-                f"{NEON_YELLOW}Insufficient data to reliably detect market condition ({len(self.df)}/{required_data + 10} bars). Defaulting to 'low_volatility'.{RESET}"
+                f"{NEON_YELLOW}Insufficient data to reliably detect market condition ({len(self.df)}/{required_data + 10} bars). Defaulting to 'low_volatility'.{RESET}",
             )
             return "low_volatility"
 
         # Calculate ADX
         adx_data = Indicators.adx(
-            self.df.high, self.df.low, self.df.close, window=adx_period
+            self.df.high, self.df.low, self.df.close, window=adx_period,
         )
         adx_val = (
             adx_data["ADX"].iloc[-1]
@@ -1569,7 +1564,7 @@ class TradingAnalyzer:
             self.df.close,
             window=bb_window,
             std_dev_mult=Decimal(
-                str(self.cfg.get_nested("indicator_periods.bb_std", 2))
+                str(self.cfg.get_nested("indicator_periods.bb_std", 2)),
             ),
         )
         bb_upper = bb_data["upper"].iloc[-1] if not bb_data.empty else Decimal("0")
@@ -1585,7 +1580,7 @@ class TradingAnalyzer:
 
         # Recent ATR mean for volatility context
         atr_series = Indicators.atr(
-            self.df.high, self.df.low, self.df.close, self.cfg["atr_period"]
+            self.df.high, self.df.low, self.df.close, self.cfg["atr_period"],
         )
         recent_atr_mean = (
             atr_series.iloc[-min(10, len(atr_series)) :].mean()
@@ -1597,24 +1592,24 @@ class TradingAnalyzer:
         adx_trend_threshold = Decimal(
             str(
                 self.cfg.get_nested(
-                    "market_condition_detection.adx_trend_threshold", 25
-                )
-            )
+                    "market_condition_detection.adx_trend_threshold", 25,
+                ),
+            ),
         )
         atr_vol_multiplier = Decimal(
             str(
                 self.cfg.get_nested(
                     "market_condition_detection.atr_volatility_threshold_multiplier",
                     1.5,
-                )
-            )
+                ),
+            ),
         )
         bb_range_multiplier = Decimal(
             str(
                 self.cfg.get_nested(
-                    "market_condition_detection.bb_bandwidth_threshold_multiplier", 0.8
-                )
-            )
+                    "market_condition_detection.bb_bandwidth_threshold_multiplier", 0.8,
+                ),
+            ),
         )
 
         # Determine conditions
@@ -1670,7 +1665,7 @@ class TradingAnalyzer:
 
         self.log.info(
             f"Detected Market Condition: {NEON_PURPLE}{condition.upper()}{RESET} "
-            f"(ADX: {adx_val:.2f}, ATR: {self.atr_value:.5f}, BB Bandwidth: {bb_bandwidth:.4f})"
+            f"(ADX: {adx_val:.2f}, ATR: {self.atr_value:.5f}, BB Bandwidth: {bb_bandwidth:.4f})",
         )
         return condition
 
@@ -1678,10 +1673,10 @@ class TradingAnalyzer:
         """Selects indicator weights based on market condition."""
         # This function now uses the detected market condition
         selected_weights = self.cfg["weight_sets"].get(
-            self.market_condition, self.cfg["weight_sets"]["low_volatility"]
+            self.market_condition, self.cfg["weight_sets"]["low_volatility"],
         )
         self.log.info(
-            f"Using weight set: {NEON_PURPLE}{self.market_condition.upper()}{RESET}"
+            f"Using weight set: {NEON_PURPLE}{self.market_condition.upper()}{RESET}",
         )
         return selected_weights
 
@@ -1794,7 +1789,7 @@ class TradingAnalyzer:
         return None
 
     def _analyze_order_book_walls(
-        self, order_book: dict[str, Any]
+        self, order_book: dict[str, Any],
     ) -> tuple[bool, bool, dict[str, Decimal], dict[str, Decimal]]:
         """Detect bullish/bearish walls from bids/asks."""
         enabled = self.cfg.get_nested("order_book_analysis.enabled", False)
@@ -1802,14 +1797,14 @@ class TradingAnalyzer:
             return False, False, {}, {}
 
         depth_to_check = int(
-            self.cfg.get_nested("order_book_analysis.depth_to_check", 10)
+            self.cfg.get_nested("order_book_analysis.depth_to_check", 10),
         )
         wall_threshold_multiplier = Decimal(
             str(
                 self.cfg.get_nested(
-                    "order_book_analysis.wall_threshold_multiplier", 2.0
-                )
-            )
+                    "order_book_analysis.wall_threshold_multiplier", 2.0,
+                ),
+            ),
         )
 
         bids = [
@@ -1857,7 +1852,7 @@ class TradingAnalyzer:
         )
 
     def calculate_fibonacci_retracement(
-        self, high: Decimal, low: Decimal, current_price: Decimal
+        self, high: Decimal, low: Decimal, current_price: Decimal,
     ) -> None:
         """Calculates Fibonacci retracement levels based on a given high and low."""
         diff = high - low
@@ -1927,7 +1922,7 @@ class TradingAnalyzer:
                     self.levels["Resistance"][label] = val.quantize(precision)
 
     def find_nearest_levels(
-        self, current_price: Decimal, num_levels: int = 5
+        self, current_price: Decimal, num_levels: int = 5,
     ) -> tuple[list[tuple[str, Decimal]], list[tuple[str, Decimal]]]:
         """Finds the nearest support and resistance levels from calculated Fibonacci and Pivot Points."""
         supports: list[tuple[str, Decimal]] = []
@@ -2140,7 +2135,7 @@ class TradingAnalyzer:
         # Ensure latest price data is used for levels calculation
         if self.df.empty:
             self.log.error(
-                f"{NEON_RED}DataFrame is empty, cannot perform analysis.{RESET}"
+                f"{NEON_RED}DataFrame is empty, cannot perform analysis.{RESET}",
             )
             return
 
@@ -2168,7 +2163,7 @@ class TradingAnalyzer:
 
         # Calculate and store indicator values dynamically
         for name in sorted(
-            cfg_ind.keys()
+            cfg_ind.keys(),
         ):  # Iterate through indicators defined in config
             if not cfg_ind.get(name):
                 continue  # Skip if indicator is disabled
@@ -2186,7 +2181,7 @@ class TradingAnalyzer:
                             param_obj.default is inspect.Parameter.empty
                         ):  # Mandatory parameter missing
                             self.log.warning(
-                                f"{NEON_YELLOW}Skipping '{name}': Missing mandatory parameter '{param_name}'.{RESET}"
+                                f"{NEON_YELLOW}Skipping '{name}': Missing mandatory parameter '{param_name}'.{RESET}",
                             )
                             params_for_method = None  # Mark as uncallable
                             break
@@ -2213,7 +2208,7 @@ class TradingAnalyzer:
                             )
             except Exception as e:
                 self.log.error(
-                    f"{NEON_RED}Error calculating indicator '{name}': {e}{RESET}"
+                    f"{NEON_RED}Error calculating indicator '{name}': {e}{RESET}",
                 )
                 self.indicator_values[name] = (
                     None  # Ensure it's explicitly None on error
@@ -2273,11 +2268,11 @@ class TradingAnalyzer:
         log_lines.append(f"\n{NEON_BLUE}─ Order Book Walls:{RESET}")
         if has_bull:
             log_lines.append(
-                f"{NEON_GREEN}  Bullish Walls Found: {', '.join([f'{k}:{v:,.0f}' for k, v in bullish_details.items()])}{RESET}"
+                f"{NEON_GREEN}  Bullish Walls Found: {', '.join([f'{k}:{v:,.0f}' for k, v in bullish_details.items()])}{RESET}",
             )
         if has_bear:
             log_lines.append(
-                f"{NEON_RED}  Bearish Walls Found: {', '.join([f'{k}:{v:,.0f}' for k, v in bearish_details.items()])}{RESET}"
+                f"{NEON_RED}  Bearish Walls Found: {', '.join([f'{k}:{v:,.0f}' for k, v in bearish_details.items()])}{RESET}",
             )
         if not has_bull and not has_bear:
             log_lines.append("  No significant walls detected.")
@@ -2354,10 +2349,10 @@ class TradingAnalyzer:
                     value.get("stoch_rsi_d", Decimal("0")),
                 )
                 stoch_oversold_threshold = Decimal(
-                    str(self.cfg.get("stoch_rsi_oversold_threshold", 20))
+                    str(self.cfg.get("stoch_rsi_oversold_threshold", 20)),
                 )
                 stoch_overbought_threshold = Decimal(
-                    str(self.cfg.get("stoch_rsi_overbought_threshold", 80))
+                    str(self.cfg.get("stoch_rsi_overbought_threshold", 80)),
                 )
                 if k < stoch_oversold_threshold and k > d:
                     raw_score += weight_dec
@@ -2477,12 +2472,12 @@ class TradingAnalyzer:
                 if tenkan > kijun:  # Current bullish alignment
                     raw_score += weight_dec * Decimal("0.3")
                     conditions_met.append(
-                        "Ichimoku Bullish Alignment (Tenkan over Kijun)"
+                        "Ichimoku Bullish Alignment (Tenkan over Kijun)",
                     )
                 elif tenkan < kijun:  # Current bearish alignment
                     raw_score -= weight_dec * Decimal("0.3")
                     conditions_met.append(
-                        "Ichimoku Bearish Alignment (Tenkan under Kijun)"
+                        "Ichimoku Bearish Alignment (Tenkan under Kijun)",
                     )
 
             elif name == "supertrend":
@@ -2506,12 +2501,12 @@ class TradingAnalyzer:
         ob_walls = self.indicator_values.get("order_book_walls", {})
         if ob_walls.get("bullish"):
             raw_score += Decimal(
-                str(self.cfg.get("order_book_support_confidence_boost", 0))
+                str(self.cfg.get("order_book_support_confidence_boost", 0)),
             )
             conditions_met.append("Order Book: Bullish Wall")
         if ob_walls.get("bearish"):
             raw_score -= Decimal(
-                str(self.cfg.get("order_book_resistance_confidence_boost", 0))
+                str(self.cfg.get("order_book_resistance_confidence_boost", 0)),
             )
             conditions_met.append("Order Book: Bearish Wall")
 
@@ -2530,17 +2525,17 @@ class TradingAnalyzer:
 
             if signal == "buy":
                 sl = (current_price - (self.atr_value * atr_multiple_sl)).quantize(
-                    Decimal("0.00001")
+                    Decimal("0.00001"),
                 )
                 tp = (current_price + (self.atr_value * atr_multiple_tp)).quantize(
-                    Decimal("0.00001")
+                    Decimal("0.00001"),
                 )
             else:  # sell
                 sl = (current_price + (self.atr_value * atr_multiple_sl)).quantize(
-                    Decimal("0.00001")
+                    Decimal("0.00001"),
                 )
                 tp = (current_price - (self.atr_value * atr_multiple_tp)).quantize(
-                    Decimal("0.00001")
+                    Decimal("0.00001"),
                 )
 
         # Normalize score to a confidence level (0.0 to 1.0)
@@ -2561,7 +2556,7 @@ class TradingAnalyzer:
         confidence = round(min(1.0, confidence), 2)
 
         return TradeSignal(
-            signal, confidence, conditions_met, {"stop_loss": sl, "take_profit": tp}
+            signal, confidence, conditions_met, {"stop_loss": sl, "take_profit": tp},
         )
 
 
@@ -2572,7 +2567,7 @@ def main():
     """Main function to initialize and run the trading bot loop."""
     if not API_KEY or not API_SECRET:
         LOGGER.critical(
-            f"{NEON_RED}API credentials (BYBIT_API_KEY, BYBIT_API_SECRET) are missing in .env file. Running in analysis-only mode.{RESET}"
+            f"{NEON_RED}API credentials (BYBIT_API_KEY, BYBIT_API_SECRET) are missing in .env file. Running in analysis-only mode.{RESET}",
         )
         bybit_client = None  # Set client to None if API keys are missing
     else:
@@ -2583,20 +2578,20 @@ def main():
     ).upper()
     interval = (
         input(
-            f"{NEON_BLUE}Enter interval ({', '.join(VALID_INTERVALS)}) (default {CFG['interval']}): {RESET}"
+            f"{NEON_BLUE}Enter interval ({', '.join(VALID_INTERVALS)}) (default {CFG['interval']}): {RESET}",
         )
         or CFG["interval"]
     )
 
     if interval not in VALID_INTERVALS:
         LOGGER.warning(
-            f"{NEON_YELLOW}Invalid interval '{interval}'. Falling back to default '{CFG['interval']}'.{RESET}"
+            f"{NEON_YELLOW}Invalid interval '{interval}'. Falling back to default '{CFG['interval']}'.{RESET}",
         )
         interval = CFG["interval"]
 
     symbol_logger = setup_logger(symbol)  # Specific logger for the symbol
     symbol_logger.info(
-        f"🚀 WhaleBot Enhanced starting for {NEON_PURPLE}{symbol}{RESET} on interval {NEON_PURPLE}{interval}{RESET}"
+        f"🚀 WhaleBot Enhanced starting for {NEON_PURPLE}{symbol}{RESET} on interval {NEON_PURPLE}{interval}{RESET}",
     )
 
     last_signal_time = 0.0
@@ -2611,16 +2606,16 @@ def main():
                 price = bybit_client.fetch_current_price(symbol)
                 if price is None:
                     symbol_logger.error(
-                        f"{NEON_RED}Failed to fetch current price. Retrying in {CFG['retry_delay']}s...{RESET}"
+                        f"{NEON_RED}Failed to fetch current price. Retrying in {CFG['retry_delay']}s...{RESET}",
                     )
                     time.sleep(CFG["retry_delay"])
                     continue
             else:  # If running in analysis-only mode without API keys
                 symbol_logger.warning(
-                    f"{NEON_YELLOW}Running in analysis-only mode. No live price/kline/orderbook will be fetched.{RESET}"
+                    f"{NEON_YELLOW}Running in analysis-only mode. No live price/kline/orderbook will be fetched.{RESET}",
                 )
                 symbol_logger.info(
-                    f"{NEON_YELLOW}Please manually provide current price (e.g., 28000.0) or press enter to skip:{RESET}"
+                    f"{NEON_YELLOW}Please manually provide current price (e.g., 28000.0) or press enter to skip:{RESET}",
                 )
                 manual_price_input = input()
                 try:
@@ -2629,13 +2624,13 @@ def main():
                     # doesn't allow for historical chart analysis required for indicators.
                     # We need to explicitly state this limitation.
                     symbol_logger.warning(
-                        f"{NEON_YELLOW}Manual price input is for demonstration. Cannot run full indicator analysis without historical Kline data. Skipping cycle.{RESET}"
+                        f"{NEON_YELLOW}Manual price input is for demonstration. Cannot run full indicator analysis without historical Kline data. Skipping cycle.{RESET}",
                     )
                     time.sleep(CFG["analysis_interval"])
                     continue
                 except (InvalidOperation, ValueError):
                     symbol_logger.warning(
-                        f"{NEON_YELLOW}Invalid or no manual price provided. Skipping analysis cycle.{RESET}"
+                        f"{NEON_YELLOW}Invalid or no manual price provided. Skipping analysis cycle.{RESET}",
                     )
                     time.sleep(CFG["analysis_interval"])
                     continue
@@ -2661,7 +2656,7 @@ def main():
                             ):
                                 # Attempt to get period from CFG["indicator_periods"]
                                 period_val = CFG.get_nested(
-                                    f"indicator_periods.{param_name}", None
+                                    f"indicator_periods.{param_name}", None,
                                 )
 
                                 if period_val is not None:
@@ -2671,21 +2666,21 @@ def main():
                                             "multiplier" in param_name
                                         ):  # Multipliers can be float/decimal
                                             min_data_needed = max(
-                                                min_data_needed, 1
+                                                min_data_needed, 1,
                                             )  # Multipliers don't directly add to data length
                                         else:  # Periods usually integer
                                             min_data_needed = max(
-                                                min_data_needed, int(period_val)
+                                                min_data_needed, int(period_val),
                                             )
                                     except (ValueError, TypeError):
                                         symbol_logger.warning(
-                                            f"{NEON_YELLOW}Config error: Period '{param_name}' for indicator '{name}' is not a valid number. Defaulting to 1 for calculation.{RESET}"
+                                            f"{NEON_YELLOW}Config error: Period '{param_name}' for indicator '{name}' is not a valid number. Defaulting to 1 for calculation.{RESET}",
                                         )
                                         min_data_needed = max(min_data_needed, 1)
                             # Special case for Ichimoku shifts as they require data before/after current point
                             elif name == "ichimoku" and param_name == "chikou_shift":
                                 shift_val = CFG.get_nested(
-                                    "indicator_periods.ichimoku_chikou_shift", 26
+                                    "indicator_periods.ichimoku_chikou_shift", 26,
                                 )
                                 min_data_needed = max(min_data_needed, shift_val)
 
@@ -2696,7 +2691,7 @@ def main():
                 df = bybit_client.fetch_klines(symbol, interval, min_data_needed)
                 if df.empty or len(df) < min_data_needed:
                     symbol_logger.warning(
-                        f"{NEON_YELLOW}Insufficient Kline data ({len(df)}/{min_data_needed} bars). Retrying...{RESET}"
+                        f"{NEON_YELLOW}Insufficient Kline data ({len(df)}/{min_data_needed} bars). Retrying...{RESET}",
                     )
                     time.sleep(CFG["retry_delay"])
                     continue
@@ -2704,13 +2699,13 @@ def main():
                 current_time = time.time()
                 if current_time - last_ob_fetch_time >= CFG["order_book_debounce_s"]:
                     order_book = bybit_client.fetch_order_book(
-                        symbol, CFG["order_book_depth_to_check"]
+                        symbol, CFG["order_book_depth_to_check"],
                     )
                     last_ob_fetch_time = current_time
             else:
                 # In analysis-only mode, we don't have live klines or order book
                 symbol_logger.info(
-                    f"{NEON_YELLOW}No Bybit client available. Cannot fetch live data. Waiting for next cycle...{RESET}"
+                    f"{NEON_YELLOW}No Bybit client available. Cannot fetch live data. Waiting for next cycle...{RESET}",
                 )
                 time.sleep(CFG["analysis_interval"])
                 continue  # Skip analysis if no real data source
@@ -2721,13 +2716,13 @@ def main():
             # Ensure price is not None before passing to analyze
             if price is None:
                 symbol_logger.error(
-                    f"{NEON_RED}Price is None, cannot perform analysis. Skipping cycle.{RESET}"
+                    f"{NEON_RED}Price is None, cannot perform analysis. Skipping cycle.{RESET}",
                 )
                 time.sleep(CFG["analysis_interval"])
                 continue
 
             analyzer.analyze(
-                price, timestamp_str, order_book
+                price, timestamp_str, order_book,
             )  # Pass price and order_book
 
             trade_signal = analyzer.generate_trading_signal(price)
@@ -2759,23 +2754,23 @@ def main():
                 symbol_logger.info(signal_message)
             elif trade_signal.signal:
                 symbol_logger.info(
-                    f"{NEON_YELLOW}Signal detected ({trade_signal.signal.upper()}) but still in cooldown period ({int(CFG['signal_cooldown_s'] - (current_time - last_signal_time))}s remaining).{RESET}"
+                    f"{NEON_YELLOW}Signal detected ({trade_signal.signal.upper()}) but still in cooldown period ({int(CFG['signal_cooldown_s'] - (current_time - last_signal_time))}s remaining).{RESET}",
                 )
             # Log that no trade signal was generated this cycle if confidence is too low or no signal
             else:
                 symbol_logger.info(
-                    f"{NEON_BLUE}No trade signal generated (score too low or neutral).{RESET}"
+                    f"{NEON_BLUE}No trade signal generated (score too low or neutral).{RESET}",
                 )
 
             time.sleep(CFG["analysis_interval"])  # Wait for next analysis cycle
 
     except KeyboardInterrupt:
         symbol_logger.info(
-            f"\n{NEON_YELLOW}User stopped analysis. Shutting down...{RESET}"
+            f"\n{NEON_YELLOW}User stopped analysis. Shutting down...{RESET}",
         )
     except Exception as e:
         symbol_logger.exception(
-            f"{NEON_RED}An unexpected critical error occurred: {e}{RESET}"
+            f"{NEON_RED}An unexpected critical error occurred: {e}{RESET}",
         )
         time.sleep(CFG["retry_delay"] * 2)  # Wait longer on critical errors
 

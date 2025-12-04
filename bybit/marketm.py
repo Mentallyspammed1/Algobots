@@ -2,20 +2,21 @@ import logging
 import os
 import sys  # For sys.exit
 import time
-from decimal import ROUND_DOWN  # Import ROUND_UP
-from decimal import ROUND_UP  # Import ROUND_UP
-from decimal import Decimal  # Import ROUND_UP
-from decimal import getcontext  # Import ROUND_UP
+from decimal import (
+    ROUND_DOWN,  # Import ROUND_UP
+    ROUND_UP,  # Import ROUND_UP
+    Decimal,  # Import ROUND_UP
+    getcontext,  # Import ROUND_UP
+)
 
 # Ensure Decimal precision for financial calculations
 getcontext().prec = 10  # Set precision for Decimal operations
 
 # Import pybit components
 try:
-    from pybit.unified_trading import HTTP
-    from pybit.unified_trading import WebSocket
+    from pybit.unified_trading import HTTP, WebSocket
 except ImportError:
-    logging.error("Please install pybit: pip install pybit")
+    logging.exception("Please install pybit: pip install pybit")
     sys.exit(1)
 
 # --- CONFIGURATION ---
@@ -31,28 +32,28 @@ CONFIG = {
     "CATEGORY": "spot",  # Use 'linear' for perpetual futures, 'spot' for spot market
     "SPREAD_PERCENT": Decimal("0.001"),  # 0.1% spread (as Decimal)
     "ORDER_SIZE_USDT": Decimal(
-        "10.0"
+        "10.0",
     ),  # Order size in USDT (as Decimal) - this will be PER LEVEL
     "INVENTORY_TARGET": Decimal(
-        "0"
+        "0",
     ),  # Target base asset (e.g., BTC) inventory. 0 = neutral.
     "INVENTORY_SKEW_FACTOR": Decimal("0.0001"),  # Skew factor for inventory management
     "ORDER_LEVELS": 2,  # Number of order levels to place on each side (e.g., 2 bids, 2 asks)
     "LEVEL_PRICE_OFFSET_FACTOR": Decimal(
-        "0.00005"
+        "0.00005",
     ),  # Additional spread per level (e.g., 0.005% per level)
     "ORDER_ID_PREFIX": "my_mm_bot",  # Unique prefix for bot-placed orders
     "HEARTBEAT_INTERVAL_SEC": 5,  # How often the main loop sleeps
     "ORDER_PLACEMENT_INTERVAL_SEC": 3,  # How often to check and place/update orders
     "MAX_SPREAD_PERCENT": Decimal(
-        "0.005"
+        "0.005",
     ),  # Max allowed spread (0.5%) before halting order placement
     "CIRCUIT_BREAKER_TIMEOUT_SEC": 300,  # Time in seconds before circuit breaker can reset (5 minutes)
     "MAX_CONSECUTIVE_ERRORS": 5,  # How many consecutive errors before activating circuit breaker
     "WS_RECONNECT_INTERVAL_SEC": 5,  # How long to wait before attempting WebSocket reconnect
     "WS_MAX_RECONNECT_ATTEMPTS": 10,  # Max reconnect attempts before activating circuit breaker
     "ORDER_AMEND_TOLERANCE_PERCENT": Decimal(
-        "0.00005"
+        "0.00005",
     ),  # Price/Qty diff % to trigger amend instead of cancel/place
 }
 
@@ -111,7 +112,7 @@ class MarketMaker:
         # --- Initialize API Sessions ---
         # REST API for placing/canceling orders and fetching account data
         self.session = HTTP(
-            testnet=True, api_key=self.api_key, api_secret=self.api_secret
+            testnet=True, api_key=self.api_key, api_secret=self.api_secret,
         )
 
         # Websocket will be connected in run() after initial setup
@@ -134,7 +135,7 @@ class MarketMaker:
         ):
             try:
                 logging.info(
-                    f"Attempting WebSocket connection (Attempt {self.ws_reconnect_attempts + 1}/{self.config['WS_MAX_RECONNECT_ATTEMPTS']})..."
+                    f"Attempting WebSocket connection (Attempt {self.ws_reconnect_attempts + 1}/{self.config['WS_MAX_RECONNECT_ATTEMPTS']})...",
                 )
                 self.ws = WebSocket(
                     testnet=True,
@@ -162,7 +163,7 @@ class MarketMaker:
                 )
                 logging.info("WebSocket connection established and subscriptions made.")
             except Exception as e:
-                logging.error(f"Failed to connect WebSocket: {e}")
+                logging.exception(f"Failed to connect WebSocket: {e}")
                 self.ws_reconnect_attempts += 1
                 if (
                     self.ws_reconnect_attempts
@@ -172,15 +173,15 @@ class MarketMaker:
                         2 ** (self.ws_reconnect_attempts - 1)
                     )  # Exponential backoff
                     logging.warning(
-                        f"Retrying WebSocket connection in {min(sleep_time, 60)} seconds..."
+                        f"Retrying WebSocket connection in {min(sleep_time, 60)} seconds...",
                     )
                     time.sleep(
-                        min(sleep_time, 60)
+                        min(sleep_time, 60),
                     )  # Cap sleep time to avoid excessive delays
                 else:
-                    logging.error("Max WebSocket reconnect attempts reached.")
+                    logging.exception("Max WebSocket reconnect attempts reached.")
                     self.activate_circuit_breaker(
-                        f"Max WebSocket reconnect attempts reached: {e}"
+                        f"Max WebSocket reconnect attempts reached: {e}",
                     )
                     break  # Exit loop, circuit breaker will handle
 
@@ -192,12 +193,12 @@ class MarketMaker:
             return response.get("result")
         error_msg = response.get("retMsg", "Unknown error")
         logging.error(
-            f"{action_name} failed: retCode={response.get('retCode')}, retMsg={error_msg}, data={response.get('result')}"
+            f"{action_name} failed: retCode={response.get('retCode')}, retMsg={error_msg}, data={response.get('result')}",
         )
         self.consecutive_errors += 1
         if self.consecutive_errors >= self.config["MAX_CONSECUTIVE_ERRORS"]:
             self.activate_circuit_breaker(
-                f"Too many API errors during {action_name}: {error_msg}"
+                f"Too many API errors during {action_name}: {error_msg}",
             )
         return None
 
@@ -222,21 +223,21 @@ class MarketMaker:
             current_spread_percent = (ask_price - bid_price) / self.mid_price
             if current_spread_percent > self.max_spread_percent:
                 logging.warning(
-                    f"Spread too wide ({current_spread_percent:.4f} > {self.max_spread_percent:.4f}), not placing orders."
+                    f"Spread too wide ({current_spread_percent:.4f} > {self.max_spread_percent:.4f}), not placing orders.",
                 )
                 return
 
             logging.debug(
-                f"Received Orderbook Update - Bid: {bid_price}, Ask: {ask_price}, Mid: {self.mid_price}, Spread: {current_spread_percent:.4f}"
+                f"Received Orderbook Update - Bid: {bid_price}, Ask: {ask_price}, Mid: {self.mid_price}, Spread: {current_spread_percent:.4f}",
             )
 
         except (KeyError, IndexError, ValueError, TypeError) as e:
-            logging.error(
-                f"Error processing order book update: {e} | Message: {message}"
+            logging.exception(
+                f"Error processing order book update: {e} | Message: {message}",
             )
             self.activate_circuit_breaker(f"Orderbook data parsing error: {e}")
         except Exception as e:
-            logging.error(f"Unexpected error in _on_orderbook_update: {e}")
+            logging.exception(f"Unexpected error in _on_orderbook_update: {e}")
             self.activate_circuit_breaker(f"Unexpected error in orderbook update: {e}")
 
     def _on_position_update(self, message: dict):
@@ -266,14 +267,14 @@ class MarketMaker:
                             self.current_inventory = Decimal("0")
 
                     logging.info(
-                        f"Position update received. Current inventory: {self.current_inventory} {self.symbol}"
+                        f"Position update received. Current inventory: {self.current_inventory} {self.symbol}",
                     )
                     return
         except (KeyError, ValueError, TypeError) as e:
-            logging.error(f"Error processing position update: {e} | Message: {message}")
+            logging.exception(f"Error processing position update: {e} | Message: {message}")
             self.activate_circuit_breaker(f"Position data parsing error: {e}")
         except Exception as e:
-            logging.error(f"Unexpected error in _on_position_update: {e}")
+            logging.exception(f"Unexpected error in _on_position_update: {e}")
             self.activate_circuit_breaker(f"Unexpected error in position update: {e}")
 
     def _on_order_update(self, message: dict):
@@ -292,14 +293,14 @@ class MarketMaker:
                 order_link_id = order.get("orderLinkId")
                 order_id = order.get("orderId")
                 order_status = order.get(
-                    "orderStatus"
+                    "orderStatus",
                 )  # New, PartiallyFilled, Filled, Cancelled, Rejected, Expired
                 side = order.get("side")
                 price = Decimal(order.get("price", "0"))
                 qty = Decimal(order.get("qty", "0"))
 
                 if symbol != self.symbol or not order_link_id.startswith(
-                    self.config["ORDER_ID_PREFIX"]
+                    self.config["ORDER_ID_PREFIX"],
                 ):
                     continue  # Not our order or not for our symbol
 
@@ -321,24 +322,24 @@ class MarketMaker:
                             "level": level,
                         }
                         logging.debug(
-                            f"Order updated: {order_link_id} Status: {order_status} Price: {price} Qty: {qty}"
+                            f"Order updated: {order_link_id} Status: {order_status} Price: {price} Qty: {qty}",
                         )
                     elif order_status in ["Filled", "Cancelled", "Rejected", "Expired"]:
                         if order_link_id in self.active_orders:
                             del self.active_orders[order_link_id]
                             logging.info(
-                                f"Order removed: {order_link_id} Status: {order_status}"
+                                f"Order removed: {order_link_id} Status: {order_status}",
                             )
                     else:
                         logging.warning(
-                            f"Unhandled order status for {order_link_id}: {order_status}"
+                            f"Unhandled order status for {order_link_id}: {order_status}",
                         )
 
         except (KeyError, ValueError, TypeError) as e:
-            logging.error(f"Error processing order update: {e} | Message: {message}")
+            logging.exception(f"Error processing order update: {e} | Message: {message}")
             self.activate_circuit_breaker(f"Order data parsing error: {e}")
         except Exception as e:
-            logging.error(f"Unexpected error in _on_order_update: {e}")
+            logging.exception(f"Unexpected error in _on_order_update: {e}")
             self.activate_circuit_breaker(f"Unexpected error in order update: {e}")
 
     def get_instrument_info(self):
@@ -347,7 +348,7 @@ class MarketMaker:
         for i in range(retries):
             with self.api_lock:
                 response = self.session.get_instruments_info(
-                    category=self.category, symbol=self.symbol
+                    category=self.category, symbol=self.symbol,
                 )
                 result = self._handle_api_response(response, "Get Instruments Info")
                 if result and result.get("list"):
@@ -357,22 +358,22 @@ class MarketMaker:
 
                     self.price_tick_size = Decimal(price_filter.get("tickSize", "0.01"))
                     self.qty_step_size = Decimal(
-                        lot_size_filter.get("qtyStep", "0.0001")
+                        lot_size_filter.get("qtyStep", "0.0001"),
                     )
                     self.min_order_qty = Decimal(
-                        lot_size_filter.get("minOrderQty", "0.001")
+                        lot_size_filter.get("minOrderQty", "0.001"),
                     )
 
                     logging.info(
-                        f"Instrument Info for {self.symbol}: Price Tick Size={self.price_tick_size}, Qty Step Size={self.qty_step_size}, Min Order Qty={self.min_order_qty}"
+                        f"Instrument Info for {self.symbol}: Price Tick Size={self.price_tick_size}, Qty Step Size={self.qty_step_size}, Min Order Qty={self.min_order_qty}",
                     )
                     return True
                 logging.warning(
-                    f"Could not get instrument info. Retrying ({i + 1}/{retries})..."
+                    f"Could not get instrument info. Retrying ({i + 1}/{retries})...",
                 )
                 time.sleep(2)
         self.activate_circuit_breaker(
-            "Failed to get instrument info after multiple retries."
+            "Failed to get instrument info after multiple retries.",
         )
         return False
 
@@ -382,7 +383,7 @@ class MarketMaker:
         """
         with self.api_lock:
             response = self.session.get_positions(
-                category=self.category, symbol=self.symbol
+                category=self.category, symbol=self.symbol,
             )
             positions = self._handle_api_response(response, "Get Positions")
             if positions and positions.get("list"):
@@ -397,7 +398,7 @@ class MarketMaker:
                     else:
                         self.current_inventory = Decimal("0")
                 logging.info(
-                    f"Initial position fetched. Inventory: {self.current_inventory}"
+                    f"Initial position fetched. Inventory: {self.current_inventory}",
                 )
             else:
                 logging.warning("No initial position found or failed to fetch.")
@@ -413,7 +414,7 @@ class MarketMaker:
         for i in range(retries):
             with self.api_lock:
                 response = self.session.get_orderbook(
-                    category=self.category, symbol=self.symbol, limit=1
+                    category=self.category, symbol=self.symbol, limit=1,
                 )
                 result = self._handle_api_response(response, "Get Orderbook")
                 if result and result.get("bids") and result.get("asks"):
@@ -424,11 +425,11 @@ class MarketMaker:
                     logging.info(f"Initial mid-price fetched: {self.mid_price}")
                     return
                 logging.warning(
-                    f"Could not get initial price info. Retrying ({i + 1}/{retries})..."
+                    f"Could not get initial price info. Retrying ({i + 1}/{retries})...",
                 )
                 time.sleep(2)
         self.activate_circuit_breaker(
-            "Failed to get initial price info after multiple retries."
+            "Failed to get initial price info after multiple retries.",
         )
 
     def cancel_all_bot_orders(self):
@@ -437,10 +438,10 @@ class MarketMaker:
             try:
                 # Fetch and filter by orderLinkId prefix for precision
                 response = self.session.get_open_orders(
-                    category=self.category, symbol=self.symbol, limit=50
+                    category=self.category, symbol=self.symbol, limit=50,
                 )
                 open_orders = self._handle_api_response(
-                    response, "Get Open Orders for Cancellation"
+                    response, "Get Open Orders for Cancellation",
                 )
 
                 if open_orders and open_orders.get("list"):
@@ -448,12 +449,12 @@ class MarketMaker:
                         order
                         for order in open_orders["list"]
                         if order.get("orderLinkId", "").startswith(
-                            self.config["ORDER_ID_PREFIX"]
+                            self.config["ORDER_ID_PREFIX"],
                         )
                     ]
                     if orders_to_cancel:
                         logging.info(
-                            f"Found {len(orders_to_cancel)} bot orders to cancel."
+                            f"Found {len(orders_to_cancel)} bot orders to cancel.",
                         )
                         for order in orders_to_cancel:
                             cancel_resp = self.session.cancel_order(
@@ -462,7 +463,7 @@ class MarketMaker:
                                 orderId=order.get("orderId"),
                             )
                             self._handle_api_response(
-                                cancel_resp, f"Cancel Order {order.get('orderId')}"
+                                cancel_resp, f"Cancel Order {order.get('orderId')}",
                             )
                             time.sleep(0.05)  # Small delay
                         logging.info(f"All bot orders for {self.symbol} cancelled.")
@@ -474,11 +475,11 @@ class MarketMaker:
                 with self.data_lock:
                     self.active_orders.clear()  # Clear local tracking
             except Exception as e:
-                logging.error(f"Failed to cancel all orders: {e}")
+                logging.exception(f"Failed to cancel all orders: {e}")
                 self.activate_circuit_breaker(f"Failed to cancel orders: {e}")
 
     def _calculate_desired_orders(
-        self, mid_price: Decimal, inventory: Decimal
+        self, mid_price: Decimal, inventory: Decimal,
     ) -> list[dict]:
         """Calculates desired bid and ask orders based on mid-price, inventory skew, and order levels."""
         desired_orders = []
@@ -506,7 +507,7 @@ class MarketMaker:
             # Quantize prices and quantities using instrument info
             bid_price = bid_price.quantize(self.price_tick_size, rounding=ROUND_DOWN)
             ask_price = ask_price.quantize(
-                self.price_tick_size, rounding=ROUND_UP
+                self.price_tick_size, rounding=ROUND_UP,
             )  # ROUND_UP for asks
             bid_qty = bid_qty.quantize(self.qty_step_size, rounding=ROUND_DOWN)
             ask_qty = ask_qty.quantize(self.qty_step_size, rounding=ROUND_DOWN)
@@ -514,20 +515,20 @@ class MarketMaker:
             # Ensure quantities meet minimums
             if bid_qty < self.min_order_qty:
                 logging.warning(
-                    f"Calculated bid qty {bid_qty} is below min {self.min_order_qty}. Skipping bid level {i}."
+                    f"Calculated bid qty {bid_qty} is below min {self.min_order_qty}. Skipping bid level {i}.",
                 )
             else:
                 desired_orders.append(
-                    {"side": "Buy", "price": bid_price, "qty": bid_qty, "level": i}
+                    {"side": "Buy", "price": bid_price, "qty": bid_qty, "level": i},
                 )
 
             if ask_qty < self.min_order_qty:
                 logging.warning(
-                    f"Calculated ask qty {ask_qty} is below min {self.min_order_qty}. Skipping ask level {i}."
+                    f"Calculated ask qty {ask_qty} is below min {self.min_order_qty}. Skipping ask level {i}.",
                 )
             else:
                 desired_orders.append(
-                    {"side": "Sell", "price": ask_price, "qty": ask_qty, "level": i}
+                    {"side": "Sell", "price": ask_price, "qty": ask_qty, "level": i},
                 )
 
         return desired_orders
@@ -544,7 +545,7 @@ class MarketMaker:
             )  # Work on a copy to avoid lock contention during API calls
 
         if current_mid_price == Decimal("0.0") or self.price_tick_size == Decimal(
-            "0.0"
+            "0.0",
         ):
             logging.warning("Mid price or instrument info is 0, cannot place orders.")
             return
@@ -565,7 +566,7 @@ class MarketMaker:
 
         try:
             desired_orders = self._calculate_desired_orders(
-                current_mid_price, current_inventory
+                current_mid_price, current_inventory,
             )
 
             orders_to_cancel_ids = []  # List of orderIds to cancel
@@ -622,20 +623,20 @@ class MarketMaker:
                                 "side": side,
                                 "price": desired_price,
                                 "qty": desired_qty,
-                            }
+                            },
                         )
                         logging.info(
-                            f"Marking {side} order {existing_order['orderLinkId']} for amendment (Level {level}). Old P/Q: {existing_order['price']}/{existing_order['qty']} New P/Q: {desired_price}/{desired_qty}"
+                            f"Marking {side} order {existing_order['orderLinkId']} for amendment (Level {level}). Old P/Q: {existing_order['price']}/{existing_order['qty']} New P/Q: {desired_price}/{desired_qty}",
                         )
                     else:
                         logging.debug(
-                            f"Existing {side} order {existing_order['orderLinkId']} (Level {level}) is still optimal."
+                            f"Existing {side} order {existing_order['orderLinkId']} (Level {level}) is still optimal.",
                         )
                 else:
                     # No existing order for this side/level, place a new one
                     orders_to_place.append(desired_order)
                     logging.info(
-                        f"Marking new {side} order for placement (Level {level}). Price: {desired_price} Qty: {desired_qty}"
+                        f"Marking new {side} order for placement (Level {level}). Price: {desired_price} Qty: {desired_qty}",
                     )
 
             # Identify orders to cancel (those existing but not desired)
@@ -647,14 +648,14 @@ class MarketMaker:
                 if (order_info["side"], order_info["level"]) not in desired_order_keys:
                     orders_to_cancel_ids.append(order_info["orderId"])
                     logging.info(
-                        f"Marking stale order {olink} for cancellation (not in desired set)."
+                        f"Marking stale order {olink} for cancellation (not in desired set).",
                     )
 
             # Execute cancellations
             for order_id in orders_to_cancel_ids:
                 with self.api_lock:
                     response = self.session.cancel_order(
-                        category=self.category, symbol=self.symbol, orderId=order_id
+                        category=self.category, symbol=self.symbol, orderId=order_id,
                     )
                     self._handle_api_response(response, f"Cancel Order {order_id}")
                 time.sleep(0.05)  # Small delay between API calls
@@ -678,7 +679,7 @@ class MarketMaker:
                     )
                     if result:
                         logging.info(
-                            f"Amended {amend_data['side']} order {amend_data['orderId']}: Qty={amend_data['qty']}, Price={amend_data['price']}"
+                            f"Amended {amend_data['side']} order {amend_data['orderId']}: Qty={amend_data['qty']}, Price={amend_data['price']}",
                         )
                 time.sleep(0.05)  # Small delay between API calls
 
@@ -692,7 +693,7 @@ class MarketMaker:
                         side=order_data["side"],
                         orderType="Limit",
                         qty=str(
-                            order_data["qty"]
+                            order_data["qty"],
                         ),  # pybit expects string for qty/price
                         price=str(order_data["price"]),
                         orderLinkId=order_link_id,
@@ -707,7 +708,7 @@ class MarketMaker:
                     )
                     if result:
                         logging.info(
-                            f"Placed {order_data['side']} order (Level {order_data['level']}): Qty={order_data['qty']}, Price={order_data['price']}"
+                            f"Placed {order_data['side']} order (Level {order_data['level']}): Qty={order_data['qty']}, Price={order_data['price']}",
                         )
                         # The _on_order_update callback will add this to active_orders
                 time.sleep(0.05)  # Small delay between API calls
@@ -715,7 +716,7 @@ class MarketMaker:
             self.last_order_placement_time = current_time
 
         except Exception as e:
-            logging.error(f"Failed to manage orders: {e}")
+            logging.exception(f"Failed to manage orders: {e}")
             self.activate_circuit_breaker(f"Order management error: {e}")
 
     def activate_circuit_breaker(self, reason: str):
@@ -740,7 +741,7 @@ class MarketMaker:
                 self.deactivate_circuit_breaker()
                 return True
             logging.debug(
-                f"Circuit breaker active. Time remaining: {self.config['CIRCUIT_BREAKER_TIMEOUT_SEC'] - elapsed_time:.0f}s"
+                f"Circuit breaker active. Time remaining: {self.config['CIRCUIT_BREAKER_TIMEOUT_SEC'] - elapsed_time:.0f}s",
             )
             return False
         return True  # Not active
@@ -780,11 +781,11 @@ class MarketMaker:
             if self.circuit_breaker_active:
                 if self._check_circuit_breaker_timeout():
                     logging.info(
-                        "Circuit breaker timeout expired. Attempting to resume."
+                        "Circuit breaker timeout expired. Attempting to resume.",
                     )
                 else:
                     logging.warning(
-                        "Circuit breaker active. Waiting for timeout or manual intervention."
+                        "Circuit breaker active. Waiting for timeout or manual intervention.",
                     )
                     time.sleep(self.config["HEARTBEAT_INTERVAL_SEC"])
                     continue  # Skip trading logic if circuit breaker is active
@@ -795,10 +796,10 @@ class MarketMaker:
                 self._connect_ws()
                 if not self.ws_connected:
                     logging.error(
-                        "Failed to reconnect WebSocket. Circuit breaker might be activated."
+                        "Failed to reconnect WebSocket. Circuit breaker might be activated.",
                     )
                     time.sleep(
-                        self.config["HEARTBEAT_INTERVAL_SEC"]
+                        self.config["HEARTBEAT_INTERVAL_SEC"],
                     )  # Wait before next check
                     continue
 
@@ -817,7 +818,7 @@ if __name__ == "__main__":
     # Validate API keys
     if CONFIG["API_KEY"] == "YOUR_API_KEY" or CONFIG["API_SECRET"] == "YOUR_API_SECRET":
         logging.error(
-            "Please set your BYBIT_API_KEY and BYBIT_API_SECRET environment variables or update CONFIG."
+            "Please set your BYBIT_API_KEY and BYBIT_API_SECRET environment variables or update CONFIG.",
         )
         sys.exit(1)
 
@@ -826,7 +827,7 @@ if __name__ == "__main__":
         mm_bot.run()
     except KeyboardInterrupt:
         logging.info(
-            "Bot stopped by user (KeyboardInterrupt). Cancelling all orders..."
+            "Bot stopped by user (KeyboardInterrupt). Cancelling all orders...",
         )
         mm_bot.cancel_all_bot_orders()
         if mm_bot.ws:
@@ -834,7 +835,7 @@ if __name__ == "__main__":
         logging.info("Bot gracefully shut down.")
     except Exception as e:
         logging.critical(
-            f"An unhandled exception occurred: {e}", exc_info=True
+            f"An unhandled exception occurred: {e}", exc_info=True,
         )  # exc_info to log traceback
         mm_bot.cancel_all_bot_orders()
         if mm_bot.ws:

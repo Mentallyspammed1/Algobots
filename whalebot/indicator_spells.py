@@ -14,8 +14,8 @@
 #
 
 import logging
-import sys
 import os
+import sys
 from decimal import getcontext
 from pathlib import Path
 

@@ -5,19 +5,13 @@ import os
 import signal
 import time
 from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import ROUND_UP
-from decimal import Decimal
-from decimal import getcontext
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, getcontext
 from typing import Any
 
 import psutil  # The eye that sees the system's soul
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # Initialize Colorama for beautiful terminal output
 init(autoreset=True)
@@ -49,13 +43,13 @@ try:
         config = json.load(f)
 except FileNotFoundError:
     print(
-        f"{RED}config.json not found in the current realm. Please forge it with your trading parameters.{NC}"
+        f"{RED}config.json not found in the current realm. Please forge it with your trading parameters.{NC}",
     )
     send_termux_toast("MMXCEL Error: config.json missing!", "red", "white")
     exit()
 except json.JSONDecodeError:
     print(
-        f"{RED}A distortion detected in config.json. Please verify its crystalline structure (JSON format).{NC}"
+        f"{RED}A distortion detected in config.json. Please verify its crystalline structure (JSON format).{NC}",
     )
     send_termux_toast("MMXCEL Error: config.json corrupt!", "red", "white")
     exit()
@@ -68,7 +62,7 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(),  # Echoes to the console
         logging.handlers.RotatingFileHandler(
-            LOG_FILE, maxBytes=1024 * 1024, backupCount=3
+            LOG_FILE, maxBytes=1024 * 1024, backupCount=3,
         ),  # 1MB max, keep 3 backups
     ],
 )
@@ -86,12 +80,12 @@ REBALANCE_THRESHOLD_QTY = Decimal(str(config.get("REBALANCE_THRESHOLD_QTY", "0.0
 PROFIT_PERCENTAGE = Decimal(str(config.get("PROFIT_PERCENTAGE", "0.001")))
 STOP_LOSS_PERCENTAGE = Decimal(str(config.get("STOP_LOSS_PERCENTAGE", "0.005")))
 PRICE_THRESHOLD = Decimal(
-    str(config.get("PRICE_THRESHOLD", "0.0002"))
+    str(config.get("PRICE_THRESHOLD", "0.0002")),
 )  # 0.02% price movement to trigger re-placement
 USE_TESTNET = config.get("USE_TESTNET", True)
 POSITION_MODE = "HedgeMode"  # For linear/inverse, HedgeMode is required for separate long/short positions
 ORDER_REFRESH_INTERVAL = config.get(
-    "ORDER_REFRESH_INTERVAL", 5
+    "ORDER_REFRESH_INTERVAL", 5,
 )  # How often to check for order refreshes in seconds
 MIN_ORDER_REFRESH_INTERVAL = (
     1  # Minimum time between order refreshes to prevent API spam
@@ -100,7 +94,7 @@ MAX_ORDER_REFRESH_INTERVAL = (
     60  # Maximum time between order refreshes to prevent stale orders
 )
 MEMORY_CLEANUP_INTERVAL = config.get(
-    "MEMORY_CLEANUP_INTERVAL", 300
+    "MEMORY_CLEANUP_INTERVAL", 300,
 )  # Interval for garbage collection
 ORDERBOOK_DEPTH_LEVELS = config.get("ORDERBOOK_DEPTH_LEVELS", 50)  # Orderbook depth
 
@@ -135,7 +129,7 @@ def _check_termux_toast_available():
 
 
 def send_termux_toast(
-    message: str, background_color: str = "black", text_color: str = "white"
+    message: str, background_color: str = "black", text_color: str = "white",
 ):
     if TERMUX_TOAST_AVAILABLE:
         os.system(f"termux-toast -b '{background_color}' -c '{text_color}' '{message}'")
@@ -217,7 +211,7 @@ def format_metric(
 
 
 def format_order(
-    order: dict[str, Any], price_precision: int, qty_precision: int
+    order: dict[str, Any], price_precision: int, qty_precision: int,
 ) -> str:
     """Formats an order for display in the UI."""
     side_color = GREEN if order["side"] == "Buy" else RED
@@ -226,7 +220,7 @@ def format_order(
 
 
 def format_position(
-    position: dict[str, Any], side: str, price_precision: int, qty_precision: int
+    position: dict[str, Any], side: str, price_precision: int, qty_precision: int,
 ) -> str:
     """Formats a position for display in the UI."""
     side_color = GREEN if side == "Long" else RED
@@ -266,7 +260,7 @@ def on_public_ws_message(message: dict[str, Any]):
                 logger.debug(f"WS Orderbook: Mid Price: {ws_state['mid_price']:.4f}")
     except (KeyError, IndexError, ValueError, TypeError, json.JSONDecodeError) as e:
         logger.error(
-            f"Error processing public WS message: {type(e).__name__} - {e} | Message: {message}"
+            f"Error processing public WS message: {type(e).__name__} - {e} | Message: {message}",
         )
 
 
@@ -283,7 +277,7 @@ def on_private_ws_message(message: dict[str, Any]):
                 if order_update["orderStatus"] in ["Filled", "Canceled", "Deactivated"]:
                     if order_id in ws_state["open_orders"]:
                         logger.info(
-                            f"WS Order Update: Order {order_id} (Client ID: {order_update.get('orderLinkId')}) is {order_update['orderStatus']}."
+                            f"WS Order Update: Order {order_id} (Client ID: {order_update.get('orderLinkId')}) is {order_update['orderStatus']}.",
                         )
                         del ws_state["open_orders"][order_id]
                 else:
@@ -305,12 +299,12 @@ def on_private_ws_message(message: dict[str, Any]):
                         "size": Decimal(position_update.get("size", "0")),
                         "avg_price": Decimal(position_update.get("avgPrice", "0")),
                         "unrealisedPnl": Decimal(
-                            position_update.get("unrealisedPnl", "0")
+                            position_update.get("unrealisedPnl", "0"),
                         ),
                     }
     except (KeyError, ValueError, TypeError, json.JSONDecodeError) as e:
         logger.error(
-            f"Error processing private WS message: {type(e).__name__} - {e} | Message: {message}"
+            f"Error processing private WS message: {type(e).__name__} - {e} | Message: {message}",
         )
 
 
@@ -322,7 +316,7 @@ class BybitClient:
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool):
         self.http_session = HTTP(
-            testnet=testnet, api_key=api_key, api_secret=api_secret
+            testnet=testnet, api_key=api_key, api_secret=api_secret,
         )
         self.ws_public = WebSocket(testnet=testnet, channel_type="linear")
         self.ws_private = WebSocket(
@@ -343,7 +337,7 @@ class BybitClient:
         current_time = time.time()
         if current_time - self.last_api_call_time < self.api_call_cooldown:
             await asyncio.sleep(
-                self.api_call_cooldown - (current_time - self.last_api_call_time)
+                self.api_call_cooldown - (current_time - self.last_api_call_time),
             )
 
         self.last_api_call_time = current_time
@@ -355,10 +349,10 @@ class BybitClient:
                     return response
 
                 error_msg = response.get(
-                    "retMsg", f"Unknown error (retCode: {response.get('retCode')})"
+                    "retMsg", f"Unknown error (retCode: {response.get('retCode')})",
                 )
                 logger.warning(
-                    f"API call failed (Attempt {attempt + 1}/{self.MAX_RETRIES}): {error_msg}"
+                    f"API call failed (Attempt {attempt + 1}/{self.MAX_RETRIES}): {error_msg}",
                 )
 
                 # Specific error codes that might warrant a retry (e.g., rate limits, internal server errors)
@@ -378,7 +372,7 @@ class BybitClient:
                     return None
             except Exception as e:
                 logger.error(
-                    f"Exception during API call (Attempt {attempt + 1}/{self.MAX_RETRIES}): {type(e).__name__} - {e}"
+                    f"Exception during API call (Attempt {attempt + 1}/{self.MAX_RETRIES}): {type(e).__name__} - {e}",
                 )
                 if attempt < self.MAX_RETRIES - 1:
                     delay = self.RETRY_DELAY_SECONDS * (2**attempt)
@@ -386,7 +380,7 @@ class BybitClient:
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
-                        f"API call exception exhausted retries: {type(e).__name__} - {e}"
+                        f"API call exception exhausted retries: {type(e).__name__} - {e}",
                     )
                     return None
         return None  # Should not be reached if MAX_RETRIES > 0
@@ -394,7 +388,7 @@ class BybitClient:
     async def get_symbol_info(self) -> bool:
         """Fetches the dynamic price and quantity precision for the symbol, adapting to market nuances."""
         response = await self._make_api_call(
-            self.http_session.get_instruments_info, category=CATEGORY, symbol=SYMBOL
+            self.http_session.get_instruments_info, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             instruments = response["result"]["list"]
@@ -409,7 +403,7 @@ class BybitClient:
                     symbol_info["price_precision"] = Decimal(tick_size_str)
                 else:
                     logger.warning(
-                        f"Could not find tickSize for {SYMBOL}. Using default: {symbol_info['price_precision']}"
+                        f"Could not find tickSize for {SYMBOL}. Using default: {symbol_info['price_precision']}",
                     )
 
                 # Extract qtyStep (qty_precision)
@@ -418,11 +412,11 @@ class BybitClient:
                     symbol_info["qty_precision"] = Decimal(qty_step_str)
                 else:
                     logger.warning(
-                        f"Could not find qtyStep for {SYMBOL}. Using default: {symbol_info['qty_precision']}"
+                        f"Could not find qtyStep for {SYMBOL}. Using default: {symbol_info['qty_precision']}",
                     )
 
                 logger.info(
-                    f"Fetched symbol info for {SYMBOL}: Price Precision = {symbol_info['price_precision']}, Quantity Precision = {symbol_info['qty_precision']}"
+                    f"Fetched symbol info for {SYMBOL}: Price Precision = {symbol_info['price_precision']}, Quantity Precision = {symbol_info['qty_precision']}",
                 )
                 return True
             logger.error(f"Symbol {SYMBOL} not found in instruments info.")
@@ -441,21 +435,21 @@ class BybitClient:
             self.ws_private.order_stream(callback=on_private_ws_message)
             self.ws_private.position_stream(callback=on_private_ws_message)
             logger.info(
-                "WebSocket streams started and listening for real-time updates."
+                "WebSocket streams started and listening for real-time updates.",
             )
         except Exception as e:
             logger.error(f"Error starting WebSocket streams: {type(e).__name__} - {e}")
             send_termux_toast(
-                "MMXCEL Critical: WS streams failed to start!", "red", "white"
+                "MMXCEL Critical: WS streams failed to start!", "red", "white",
             )
             raise  # Re-raise to halt execution if core communication fails
 
     async def get_balance(
-        self, account_type: str = "UNIFIED", coin: str = "USDT"
+        self, account_type: str = "UNIFIED", coin: str = "USDT",
     ) -> Decimal:
         """Fetches available balance via REST API, discerning the available arcane energies."""
         response = await self._make_api_call(
-            self.http_session.get_wallet_balance, accountType=account_type, coin=coin
+            self.http_session.get_wallet_balance, accountType=account_type, coin=coin,
         )
         if response and response.get("retCode") == 0:
             if (
@@ -472,30 +466,30 @@ class BybitClient:
                 if available_balance_str is None or available_balance_str == "":
                     self.current_balance = Decimal("0")
                     logger.warning(
-                        f"Wallet balance for {coin} was None or empty string from API, defaulting to 0. (Raw: '{available_balance_str}')"
+                        f"Wallet balance for {coin} was None or empty string from API, defaulting to 0. (Raw: '{available_balance_str}')",
                     )
                 else:
                     try:
                         self.current_balance = Decimal(str(available_balance_str))
                     except Exception as e:
                         logger.error(
-                            f"Failed to transmute '{available_balance_str}' to Decimal: {type(e).__name__} - {e}. Defaulting to 0."
+                            f"Failed to transmute '{available_balance_str}' to Decimal: {type(e).__name__} - {e}. Defaulting to 0.",
                         )
                         self.current_balance = Decimal("0")
                 return self.current_balance
             logger.error(
-                f"Unexpected balance response structure: {response.get('retMsg', 'No error message')} | Raw: {response}"
+                f"Unexpected balance response structure: {response.get('retMsg', 'No error message')} | Raw: {response}",
             )
             return Decimal("0")
         logger.error(
-            f"Failed to get balance: {response.get('retMsg', 'No error message') if response else 'No response'}"
+            f"Failed to get balance: {response.get('retMsg', 'No error message') if response else 'No response'}",
         )
         return Decimal("0")
 
     async def get_open_orders_rest(self) -> dict[str, Any]:
         """Fetches open orders via REST API to sync state, aligning the bot's perception with reality."""
         response = await self._make_api_call(
-            self.http_session.get_open_orders, category=CATEGORY, symbol=SYMBOL
+            self.http_session.get_open_orders, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             current_open_orders = {}
@@ -512,14 +506,14 @@ class BybitClient:
             ws_state["open_orders"] = current_open_orders
             return current_open_orders
         logger.error(
-            f"Failed to get open orders via REST: {response.get('retMsg', 'No error message') if response else 'No response'}"
+            f"Failed to get open orders via REST: {response.get('retMsg', 'No error message') if response else 'No response'}",
         )
         return {}
 
     async def get_positions_rest(self) -> dict[str, Any]:
         """Fetches current positions via REST API to sync state, revealing the bot's current holdings."""
         response = await self._make_api_call(
-            self.http_session.get_positions, category=CATEGORY, symbol=SYMBOL
+            self.http_session.get_positions, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             current_positions = {}
@@ -538,7 +532,7 @@ class BybitClient:
             ws_state["positions"] = current_positions  # Update shared state
             return current_positions
         logger.error(
-            f"Failed to get positions via REST: {response.get('retMsg', 'No error message') if response else 'No response'}"
+            f"Failed to get positions via REST: {response.get('retMsg', 'No error message') if response else 'No response'}",
         )
         return {}
 
@@ -563,12 +557,12 @@ class BybitClient:
         quantized_price = None
         if price is not None:
             quantized_price = price.quantize(
-                symbol_info["price_precision"], rounding=ROUND_DOWN
+                symbol_info["price_precision"], rounding=ROUND_DOWN,
             )
 
         if quantized_qty <= 0:
             logger.error(
-                f"Attempted to place order with non-positive quantized quantity: {quantized_qty}"
+                f"Attempted to place order with non-positive quantized quantity: {quantized_qty}",
             )
             return None
 
@@ -593,7 +587,7 @@ class BybitClient:
                 )
 
             response = await self._make_api_call(
-                self.http_session.place_order, **order_payload
+                self.http_session.place_order, **order_payload,
             )
 
             if response and response.get("retCode") == 0:
@@ -607,12 +601,12 @@ class BybitClient:
                 logger.info(log_msg)
                 return order_info
             logger.error(
-                f"Failed to place {order_type} {side} order for {quantized_qty}@{quantized_price if quantized_price else 'N/A'}: {response.get('retMsg', 'No error message') if response else 'No response'}"
+                f"Failed to place {order_type} {side} order for {quantized_qty}@{quantized_price if quantized_price else 'N/A'}: {response.get('retMsg', 'No error message') if response else 'No response'}",
             )
             return None
         except Exception as e:
             logger.error(
-                f"Error placing order for {side} {quantized_qty}@{quantized_price if quantized_price else 'N/A'} (Type: {order_type}): {type(e).__name__} - {e}"
+                f"Error placing order for {side} {quantized_qty}@{quantized_price if quantized_price else 'N/A'} (Type: {order_type}): {type(e).__name__} - {e}",
             )
             return None
 
@@ -628,25 +622,25 @@ class BybitClient:
             logger.info(f"Cancelled order: {order_id}")
             return True
         logger.error(
-            f"Failed to cancel order {order_id}: {response.get('retMsg', 'No error message') if response else 'No response'}"
+            f"Failed to cancel order {order_id}: {response.get('retMsg', 'No error message') if response else 'No response'}",
         )
         return False
 
     async def cancel_all_orders(self) -> None:
         """Cancels all open orders for the symbol, sweeping the slate clean."""
         response = await self._make_api_call(
-            self.http_session.cancel_all_orders, category=CATEGORY, symbol=SYMBOL
+            self.http_session.cancel_all_orders, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             logger.info("Successfully cancelled all open orders.")
             ws_state["open_orders"].clear()
         else:
             logger.error(
-                f"Failed to cancel all orders: {response.get('retMsg', 'No error message') if response else 'No response'}"
+                f"Failed to cancel all orders: {response.get('retMsg', 'No error message') if response else 'No response'}",
             )
 
     async def place_batch_orders(
-        self, orders: list[dict[str, Any]]
+        self, orders: list[dict[str, Any]],
     ) -> dict[str, Any] | None:
         """Places multiple orders in a single batch request, a powerful conjuration."""
         if not orders:
@@ -657,18 +651,18 @@ class BybitClient:
         for order in orders:
             # Quantize price and quantity for each order in the batch
             quantized_qty = order["qty"].quantize(
-                symbol_info["qty_precision"], rounding=ROUND_DOWN
+                symbol_info["qty_precision"], rounding=ROUND_DOWN,
             )
             if quantized_qty <= 0:
                 logger.warning(
-                    f"Skipping batch order with non-positive quantized quantity: {quantized_qty}"
+                    f"Skipping batch order with non-positive quantized quantity: {quantized_qty}",
                 )
                 continue
 
             quantized_price = None
             if "price" in order and order["price"] is not None:
                 quantized_price = order["price"].quantize(
-                    symbol_info["price_precision"], rounding=ROUND_DOWN
+                    symbol_info["price_precision"], rounding=ROUND_DOWN,
                 )
 
             order_payload = {
@@ -689,28 +683,28 @@ class BybitClient:
 
         if not batch_request_payload["request"]:
             logger.warning(
-                "All orders in batch filtered out due to invalid quantities after quantization."
+                "All orders in batch filtered out due to invalid quantities after quantization.",
             )
             return None
 
         response = await self._make_api_call(
-            self.http_session.place_batch_order, **batch_request_payload
+            self.http_session.place_batch_order, **batch_request_payload,
         )
 
         if response and response.get("retCode") == 0:
             logger.info(
-                f"Successfully placed {len(batch_request_payload['request'])} batch orders."
+                f"Successfully placed {len(batch_request_payload['request'])} batch orders.",
             )
             return response["result"]
         logger.error(
-            f"Failed to place batch orders: {response.get('retMsg', 'No error message') if response else 'No response'}"
+            f"Failed to place batch orders: {response.get('retMsg', 'No error message') if response else 'No response'}",
         )
         return None
 
     async def get_orderbook_snapshot(self) -> dict[str, Any] | None:
         """Fetches a snapshot of the orderbook for more reliable market data."""
         response = await self._make_api_call(
-            self.http_session.get_orderbook, category=CATEGORY, symbol=SYMBOL
+            self.http_session.get_orderbook, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             orderbook = response["result"]
@@ -732,11 +726,11 @@ class BybitClient:
                 logger.debug(f"Orderbook snapshot: Mid Price: {mid_price:.4f}")
                 return orderbook
             logger.error(
-                f"Orderbook snapshot returned but missing bids/asks data. Raw response: {response}"
+                f"Orderbook snapshot returned but missing bids/asks data. Raw response: {response}",
             )
             return None
         logger.error(
-            f"Failed to get orderbook snapshot: {response.get('retMsg', 'No error message') if response else 'No response'}"
+            f"Failed to get orderbook snapshot: {response.get('retMsg', 'No error message') if response else 'No response'}",
         )
         return None
 
@@ -753,7 +747,7 @@ class MarketMakingStrategy:
         self.memory_cleanup_task = None
         self.exit_flag = asyncio.Event()
         self.last_mid_price = Decimal(
-            "0"
+            "0",
         )  # Track last mid-price for dynamic order replacement
         self.last_order_refresh_time = 0
         self.order_refresh_interval = ORDER_REFRESH_INTERVAL
@@ -781,10 +775,10 @@ class MarketMakingStrategy:
             if self.order_refresh_counter >= self.max_order_refresh_attempts:
                 # If we've tried to refresh multiple times without success, increase the interval
                 self.order_refresh_interval = min(
-                    self.order_refresh_interval * 2, self.max_order_refresh_interval
+                    self.order_refresh_interval * 2, self.max_order_refresh_interval,
                 )
                 logger.info(
-                    f"Increasing order refresh interval to {self.order_refresh_interval} seconds due to multiple failed attempts."
+                    f"Increasing order refresh interval to {self.order_refresh_interval} seconds due to multiple failed attempts.",
                 )
                 self.order_refresh_counter = 0
             else:
@@ -796,7 +790,7 @@ class MarketMakingStrategy:
                         self.min_order_refresh_interval,
                     )
                     logger.debug(
-                        f"Decreasing order refresh interval to {self.order_refresh_interval} seconds."
+                        f"Decreasing order refresh interval to {self.order_refresh_interval} seconds.",
                     )
 
             # Check if price has moved significantly to trigger re-placement
@@ -813,14 +807,14 @@ class MarketMakingStrategy:
 
                 if price_change_percentage >= PRICE_THRESHOLD:
                     logger.info(
-                        f"Price moved {price_change_percentage:.4%} (>= {PRICE_THRESHOLD:.4%}). Cancelling all orders to re-place."
+                        f"Price moved {price_change_percentage:.4%} (>= {PRICE_THRESHOLD:.4%}). Cancelling all orders to re-place.",
                     )
                     await self.client.cancel_all_orders()
                     # Do not reset last_mid_price yet, it will be updated after new orders are placed
                 # If price hasn't moved significantly, and we already have orders, skip placing new ones
                 elif ws_state["open_orders"]:
                     logger.debug(
-                        "No significant price change and orders exist. Skipping new order placement."
+                        "No significant price change and orders exist. Skipping new order placement.",
                     )
                     return  # Skip placing new orders if price hasn't moved and orders are already out
 
@@ -832,11 +826,11 @@ class MarketMakingStrategy:
             ]
             if orders_to_cancel_ids:
                 logger.info(
-                    f"Cancelling {len(orders_to_cancel_ids)} stale orders to keep the ledger clean."
+                    f"Cancelling {len(orders_to_cancel_ids)} stale orders to keep the ledger clean.",
                 )
                 # Use asyncio.gather for concurrent cancellation if multiple stale orders
                 await asyncio.gather(
-                    *[self.client.cancel_order(oid) for oid in orders_to_cancel_ids]
+                    *[self.client.cancel_order(oid) for oid in orders_to_cancel_ids],
                 )
 
             # Get fresh state from REST to handle any missed WS updates, ensuring perfect synchronicity
@@ -845,7 +839,7 @@ class MarketMakingStrategy:
             # Check if we have too many open orders, avoiding over-committing arcane energy
             if len(ws_state["open_orders"]) >= MAX_OPEN_ORDERS:
                 logger.info(
-                    f"Max open orders ({MAX_OPEN_ORDERS}) reached. Skipping new order placement."
+                    f"Max open orders ({MAX_OPEN_ORDERS}) reached. Skipping new order placement.",
                 )
                 return
 
@@ -860,10 +854,10 @@ class MarketMakingStrategy:
             # Adjust prices to market precision using the fetched symbol_info
             # Use ROUND_DOWN for bids, ROUND_UP for asks to be more aggressive (better chance of filling)
             bid_price = bid_price.quantize(
-                symbol_info["price_precision"], rounding=ROUND_DOWN
+                symbol_info["price_precision"], rounding=ROUND_DOWN,
             )
             ask_price = ask_price.quantize(
-                symbol_info["price_precision"], rounding=ROUND_UP
+                symbol_info["price_precision"], rounding=ROUND_UP,
             )
 
             # Ensure our bid is not higher than the best bid, and our ask is not lower than the best ask
@@ -887,7 +881,7 @@ class MarketMakingStrategy:
                         "price": bid_price,
                         "client_order_id": client_buy_id,
                         "orderType": "Limit",
-                    }
+                    },
                 )
 
             # Prepare sell order if not already present and within limits
@@ -908,7 +902,7 @@ class MarketMakingStrategy:
                         "price": ask_price,
                         "client_order_id": client_sell_id,
                         "orderType": "Limit",
-                    }
+                    },
                 )
 
             if orders_to_place:
@@ -935,7 +929,7 @@ class MarketMakingStrategy:
             psutil.Error
         ) as e:  # Catch psutil-specific errors, including PermissionError
             logger.warning(
-                f"Could not update system stats: {e}. This may be due to environment restrictions. Stats will be disabled."
+                f"Could not update system stats: {e}. This may be due to environment restrictions. Stats will be disabled.",
             )
             # Set to N/A and stop trying to update if it fails once.
             ws_state["system_stats"]["cpu_usage"] = "N/A"
@@ -953,14 +947,14 @@ class MarketMakingStrategy:
 
         if is_stale or is_zero:
             logger.warning(
-                "Market data is stale or unavailable. Attempting to fetch a new orderbook snapshot via REST."
+                "Market data is stale or unavailable. Attempting to fetch a new orderbook snapshot via REST.",
             )
             snapshot = await self.client.get_orderbook_snapshot()
             if snapshot:
                 logger.info("Successfully recovered market data using REST snapshot.")
                 return True  # Data is now available
             logger.error(
-                "Failed to recover market data using REST snapshot. Skipping operation."
+                "Failed to recover market data using REST snapshot. Skipping operation.",
             )
             return False  # Still no data
         return True
@@ -982,17 +976,17 @@ class MarketMakingStrategy:
 
             # Ensure quantity to rebalance is greater than zero after quantization
             quantized_qty_to_rebalance = qty_to_rebalance.quantize(
-                symbol_info["qty_precision"], rounding=ROUND_DOWN
+                symbol_info["qty_precision"], rounding=ROUND_DOWN,
             )
             if quantized_qty_to_rebalance <= 0:
                 logger.warning(
-                    f"Quantized rebalance quantity is zero ({quantized_qty_to_rebalance}), skipping rebalance."
+                    f"Quantized rebalance quantity is zero ({quantized_qty_to_rebalance}), skipping rebalance.",
                 )
                 return
 
             logger.warning(
                 f"{YELLOW}Inventory imbalance detected. Net position: {net_position:.{_calculate_decimal_precision(symbol_info['qty_precision'])}f}. "
-                f"Attempting to rebalance by placing a {side_to_rebalance} market order for {quantized_qty_to_rebalance}.{NC}"
+                f"Attempting to rebalance by placing a {side_to_rebalance} market order for {quantized_qty_to_rebalance}.{NC}",
             )
             send_termux_toast(
                 f"MMXCEL: Rebalancing {quantized_qty_to_rebalance:.2f} {SYMBOL}!",
@@ -1008,7 +1002,7 @@ class MarketMakingStrategy:
                     quantized_qty_to_rebalance,
                     order_type="Market",
                     client_order_id=client_rebalance_id,
-                )
+                ),
             )
 
     async def manage_stop_loss_and_profit_take(self):
@@ -1031,19 +1025,19 @@ class MarketMakingStrategy:
 
             # Quantize the size before placing a closing order
             quantized_long_size = long_size.quantize(
-                symbol_info["qty_precision"], rounding=ROUND_DOWN
+                symbol_info["qty_precision"], rounding=ROUND_DOWN,
             )
             if quantized_long_size <= 0:
                 logger.warning(
-                    f"Quantized long closing quantity is zero ({quantized_long_size}), skipping close."
+                    f"Quantized long closing quantity is zero ({quantized_long_size}), skipping close.",
                 )
             elif pnl_percentage < -STOP_LOSS_PERCENTAGE:
                 logger.critical(
                     f"{RED}Stop-loss triggered for LONG position! Unrealised PnL: {pnl_usdt:.2f} ({pnl_percentage:.2%}). "
-                    f"Placing market sell order to close {quantized_long_size}.{NC}"
+                    f"Placing market sell order to close {quantized_long_size}.{NC}",
                 )
                 send_termux_toast(
-                    f"MMXCEL: LONG SL triggered! PnL: {pnl_usdt:.2f}", "red", "white"
+                    f"MMXCEL: LONG SL triggered! PnL: {pnl_usdt:.2f}", "red", "white",
                 )
                 asyncio.create_task(
                     self.client.place_order(
@@ -1051,15 +1045,15 @@ class MarketMakingStrategy:
                         quantized_long_size,
                         order_type="Market",
                         client_order_id=f"mmxcel-sl-long-{int(time.time() * 1000)}",
-                    )
+                    ),
                 )
             elif pnl_percentage >= PROFIT_PERCENTAGE:
                 logger.info(
                     f"{GREEN}Profit-take triggered for LONG position. Unrealised PnL: {pnl_usdt:.2f} ({pnl_percentage:.2%}). "
-                    f"Placing market sell order to close {quantized_long_size}.{NC}"
+                    f"Placing market sell order to close {quantized_long_size}.{NC}",
                 )
                 send_termux_toast(
-                    f"MMXCEL: LONG TP triggered! PnL: {pnl_usdt:.2f}", "green", "black"
+                    f"MMXCEL: LONG TP triggered! PnL: {pnl_usdt:.2f}", "green", "black",
                 )
                 asyncio.create_task(
                     self.client.place_order(
@@ -1067,7 +1061,7 @@ class MarketMakingStrategy:
                         quantized_long_size,
                         order_type="Market",
                         client_order_id=f"mmxcel-tp-long-{int(time.time() * 1000)}",
-                    )
+                    ),
                 )
 
         # Check short position
@@ -1084,19 +1078,19 @@ class MarketMakingStrategy:
 
             # Quantize the size before placing a closing order
             quantized_short_size = short_size.quantize(
-                symbol_info["qty_precision"], rounding=ROUND_DOWN
+                symbol_info["qty_precision"], rounding=ROUND_DOWN,
             )
             if quantized_short_size <= 0:
                 logger.warning(
-                    f"Quantized short closing quantity is zero ({quantized_short_size}), skipping close."
+                    f"Quantized short closing quantity is zero ({quantized_short_size}), skipping close.",
                 )
             elif pnl_percentage < -STOP_LOSS_PERCENTAGE:
                 logger.critical(
                     f"{RED}Stop-loss triggered for SHORT position! Unrealised PnL: {pnl_usdt:.2f} ({pnl_percentage:.2%}). "
-                    f"Placing market buy order to close {quantized_short_size}.{NC}"
+                    f"Placing market buy order to close {quantized_short_size}.{NC}",
                 )
                 send_termux_toast(
-                    f"MMXCEL: SHORT SL triggered! PnL: {pnl_usdt:.2f}", "red", "white"
+                    f"MMXCEL: SHORT SL triggered! PnL: {pnl_usdt:.2f}", "red", "white",
                 )
                 asyncio.create_task(
                     self.client.place_order(
@@ -1104,15 +1098,15 @@ class MarketMakingStrategy:
                         quantized_short_size,
                         order_type="Market",
                         client_order_id=f"mmxcel-sl-short-{int(time.time() * 1000)}",
-                    )
+                    ),
                 )
             elif pnl_percentage >= PROFIT_PERCENTAGE:
                 logger.info(
                     f"{GREEN}Profit-take triggered for SHORT position. Unrealised PnL: {pnl_usdt:.2f} ({pnl_percentage:.2%}). "
-                    f"Placing market buy order to close {quantized_short_size}.{NC}"
+                    f"Placing market buy order to close {quantized_short_size}.{NC}",
                 )
                 send_termux_toast(
-                    f"MMXCEL: SHORT TP triggered! PnL: {pnl_usdt:.2f}", "green", "black"
+                    f"MMXCEL: SHORT TP triggered! PnL: {pnl_usdt:.2f}", "green", "black",
                 )
                 asyncio.create_task(
                     self.client.place_order(
@@ -1120,7 +1114,7 @@ class MarketMakingStrategy:
                         quantized_short_size,
                         order_type="Market",
                         client_order_id=f"mmxcel-tp-short-{int(time.time() * 1000)}",
-                    )
+                    ),
                 )
 
     async def memory_cleanup(self):
@@ -1136,7 +1130,7 @@ class MarketMakingStrategy:
             self.running = False
             logger.info("Shutdown initiated. Cancelling all open orders...")
             send_termux_toast(
-                "MMXCEL: Shutting down, cancelling orders...", "#FFA500", "white"
+                "MMXCEL: Shutting down, cancelling orders...", "#FFA500", "white",
             )
             await self.client.cancel_all_orders()
             # Stop any running tasks
@@ -1165,7 +1159,7 @@ class MarketMakingStrategy:
         # Fetch symbol information first, crucial for correct price/quantity handling
         if not await self.client.get_symbol_info():
             logger.critical(
-                "Failed to fetch symbol information. Cannot proceed without it."
+                "Failed to fetch symbol information. Cannot proceed without it.",
             )
             send_termux_toast("MMXCEL Error: Symbol info fetch failed!", "red", "white")
             return
@@ -1182,47 +1176,47 @@ class MarketMakingStrategy:
 
         # Start background tasks for rebalancing and stop-loss/profit-taking
         self.rebalance_task = asyncio.create_task(
-            self._periodic_task(self.rebalance_inventory, interval=10, name="Rebalance")
+            self._periodic_task(self.rebalance_inventory, interval=10, name="Rebalance"),
         )
         self.stop_loss_task = asyncio.create_task(
             self._periodic_task(
-                self.manage_stop_loss_and_profit_take, interval=2, name="PnL Management"
-            )
+                self.manage_stop_loss_and_profit_take, interval=2, name="PnL Management",
+            ),
         )
         self.system_stats_task = asyncio.create_task(
             self._periodic_task(
-                self.update_system_stats, interval=5, name="System Stats"
-            )
+                self.update_system_stats, interval=5, name="System Stats",
+            ),
         )
         self.memory_cleanup_task = asyncio.create_task(
             self._periodic_task(
                 self.memory_cleanup,
                 interval=MEMORY_CLEANUP_INTERVAL,
                 name="Memory Cleanup",
-            )
+            ),
         )
 
         try:
             while self.running:
                 clear_screen()
                 print_neon_header(
-                    f"MMXCEL Bybit Market Making Bot - {SYMBOL}", color=MAGENTA
+                    f"MMXCEL Bybit Market Making Bot - {SYMBOL}", color=MAGENTA,
                 )
                 print_neon_separator()
 
                 # Display initial configuration for clarity
                 print(f"{BOLD}{CYAN}--- Active Configuration ---{NC}")
                 price_disp_prec = _calculate_decimal_precision(
-                    symbol_info["price_precision"]
+                    symbol_info["price_precision"],
                 )
                 qty_disp_prec = _calculate_decimal_precision(
-                    symbol_info["qty_precision"]
+                    symbol_info["qty_precision"],
                 )
 
                 print(
                     format_metric(
-                        "Symbol", SYMBOL, YELLOW, value_color=WHITE, label_width=20
-                    )
+                        "Symbol", SYMBOL, YELLOW, value_color=WHITE, label_width=20,
+                    ),
                 )
                 print(
                     format_metric(
@@ -1231,7 +1225,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_precision=_calculate_decimal_precision(QUANTITY),
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1240,7 +1234,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1249,7 +1243,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1258,7 +1252,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1266,10 +1260,10 @@ class MarketMakingStrategy:
                         REBALANCE_THRESHOLD_QTY,
                         YELLOW,
                         value_precision=_calculate_decimal_precision(
-                            REBALANCE_THRESHOLD_QTY
+                            REBALANCE_THRESHOLD_QTY,
                         ),
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1278,7 +1272,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1287,7 +1281,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1296,7 +1290,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1305,7 +1299,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1314,7 +1308,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_precision=price_disp_prec,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1323,7 +1317,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_precision=qty_disp_prec,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1332,7 +1326,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1341,7 +1335,7 @@ class MarketMakingStrategy:
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print_neon_separator()
 
@@ -1354,7 +1348,7 @@ class MarketMakingStrategy:
                         MAGENTA,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1363,7 +1357,7 @@ class MarketMakingStrategy:
                         MAGENTA,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 sent_mb = ws_state["system_stats"]["network_io"][0] / (1024 * 1024)
                 recv_mb = ws_state["system_stats"]["network_io"][1] / (1024 * 1024)
@@ -1374,7 +1368,7 @@ class MarketMakingStrategy:
                         MAGENTA,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print_neon_separator()
 
@@ -1386,7 +1380,7 @@ class MarketMakingStrategy:
                         ws_state["mid_price"],
                         BLUE,
                         value_precision=price_disp_prec,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1394,7 +1388,7 @@ class MarketMakingStrategy:
                         ws_state["best_bid"],
                         BLUE,
                         value_precision=price_disp_prec,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -1402,10 +1396,10 @@ class MarketMakingStrategy:
                         ws_state["best_ask"],
                         BLUE,
                         value_precision=price_disp_prec,
-                    )
+                    ),
                 )
                 await self.client.get_balance(
-                    coin="USDT"
+                    coin="USDT",
                 )  # Refresh balance every loop for display
                 print(
                     format_metric(
@@ -1413,18 +1407,18 @@ class MarketMakingStrategy:
                         self.client.current_balance,
                         YELLOW,
                         value_precision=2,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
                         "Last Market Data Update",
                         datetime.fromtimestamp(ws_state["last_update_time"]).strftime(
-                            "%Y-%m-%d %H:%M:%S"
+                            "%Y-%m-%d %H:%M:%S",
                         ),
                         YELLOW,
                         value_color=WHITE,
                         label_width=20,
-                    )
+                    ),
                 )
                 print_neon_separator()
 
@@ -1449,13 +1443,13 @@ class MarketMakingStrategy:
 
                 print(format_position(long_pos, "Long", price_disp_prec, qty_disp_prec))
                 print(
-                    format_position(short_pos, "Short", price_disp_prec, qty_disp_prec)
+                    format_position(short_pos, "Short", price_disp_prec, qty_disp_prec),
                 )
                 print_neon_separator()
 
                 # Open Orders Details
                 print(
-                    f"{BOLD}{CYAN}--- Open Orders ({len(ws_state['open_orders'])}) ---{NC}"
+                    f"{BOLD}{CYAN}--- Open Orders ({len(ws_state['open_orders'])}) ---{NC}",
                 )
                 if ws_state["open_orders"]:
                     # Sort orders by timestamp for consistent display
@@ -1474,7 +1468,7 @@ class MarketMakingStrategy:
 
                 # Wait for next cycle
                 await asyncio.sleep(
-                    1
+                    1,
                 )  # Main loop delay, balances responsiveness with API usage
         except asyncio.CancelledError:
             logger.info("Main loop task cancelled.")
@@ -1484,7 +1478,7 @@ class MarketMakingStrategy:
                 exc_info=True,
             )
             send_termux_toast(
-                "MMXCEL Critical Error: Bot crashed! Check logs!", "red", "white"
+                "MMXCEL Critical Error: Bot crashed! Check logs!", "red", "white",
             )
         finally:
             await self.shutdown()
@@ -1508,41 +1502,41 @@ class MarketMakingStrategy:
         is_valid = True
         if not isinstance(QUANTITY, Decimal) or QUANTITY <= 0:
             logger.critical(
-                f"{RED}Config Error: QUANTITY must be a positive Decimal. Current: {QUANTITY}{NC}"
+                f"{RED}Config Error: QUANTITY must be a positive Decimal. Current: {QUANTITY}{NC}",
             )
             is_valid = False
         if not isinstance(SPREAD_PERCENTAGE, Decimal) or SPREAD_PERCENTAGE <= 0:
             logger.critical(
-                f"{RED}Config Error: SPREAD_PERCENTAGE must be a positive Decimal. Current: {SPREAD_PERCENTAGE}{NC}"
+                f"{RED}Config Error: SPREAD_PERCENTAGE must be a positive Decimal. Current: {SPREAD_PERCENTAGE}{NC}",
             )
             is_valid = False
         if not isinstance(PROFIT_PERCENTAGE, Decimal) or PROFIT_PERCENTAGE <= 0:
             logger.critical(
-                f"{RED}Config Error: PROFIT_PERCENTAGE must be a positive Decimal. Current: {PROFIT_PERCENTAGE}{NC}"
+                f"{RED}Config Error: PROFIT_PERCENTAGE must be a positive Decimal. Current: {PROFIT_PERCENTAGE}{NC}",
             )
             is_valid = False
         if not isinstance(STOP_LOSS_PERCENTAGE, Decimal) or STOP_LOSS_PERCENTAGE <= 0:
             logger.critical(
-                f"{RED}Config Error: STOP_LOSS_PERCENTAGE must be a positive Decimal. Current: {STOP_LOSS_PERCENTAGE}{NC}"
+                f"{RED}Config Error: STOP_LOSS_PERCENTAGE must be a positive Decimal. Current: {STOP_LOSS_PERCENTAGE}{NC}",
             )
             is_valid = False
         if (
             not isinstance(PRICE_THRESHOLD, Decimal) or PRICE_THRESHOLD < 0
         ):  # Can be zero for continuous re-placement
             logger.critical(
-                f"{RED}Config Error: PRICE_THRESHOLD must be a non-negative Decimal. Current: {PRICE_THRESHOLD}{NC}"
+                f"{RED}Config Error: PRICE_THRESHOLD must be a non-negative Decimal. Current: {PRICE_THRESHOLD}{NC}",
             )
             is_valid = False
         if MAX_OPEN_ORDERS <= 0:
             logger.critical(
-                f"{RED}Config Error: MAX_OPEN_ORDERS must be a positive integer. Current: {MAX_OPEN_ORDERS}{NC}"
+                f"{RED}Config Error: MAX_OPEN_ORDERS must be a positive integer. Current: {MAX_OPEN_ORDERS}{NC}",
             )
             is_valid = False
 
         if SPREAD_PERCENTAGE >= PRICE_THRESHOLD > 0:
             logger.warning(
                 f"{YELLOW}Warning: SPREAD_PERCENTAGE ({SPREAD_PERCENTAGE:.4%}) is greater than or equal to PRICE_THRESHOLD ({PRICE_THRESHOLD:.4%}). "
-                "This might lead to frequent order cancellations and re-placements even with small price movements or fills.{NC}"
+                "This might lead to frequent order cancellations and re-placements even with small price movements or fills.{NC}",
             )
 
         return is_valid
@@ -1572,7 +1566,7 @@ async def main():
     if not API_KEY or not API_SECRET:
         print(
             f"{RED}BYBIT_API_KEY or BYBIT_API_SECRET not found in .env file. "
-            f"Please ensure your magical credentials are in place.{NC}"
+            f"Please ensure your magical credentials are in place.{NC}",
         )
         send_termux_toast("MMXCEL Error: API credentials missing!", "red", "white")
         return
@@ -1583,7 +1577,7 @@ async def main():
     ):  # Redirect stderr to dev/null
         print(
             f"{YELLOW}Warning: 'termux-api' command not found. Toasts will be disabled. "
-            f"Please install it via 'pkg install termux-api' and the Termux:API app.{NC}"
+            f"Please install it via 'pkg install termux-api' and the Termux:API app.{NC}",
         )
     else:
         send_termux_toast("MMXCEL: Bot started successfully!", "green", "white")
@@ -1596,7 +1590,7 @@ async def main():
     # Attempt to set Hedge Mode (mode=3) for the entire USDT category at startup.
     try:
         logger.info(
-            f"Attempting to set position mode to Hedge Mode for the {CATEGORY} category (Coin: USDT)..."
+            f"Attempting to set position mode to Hedge Mode for the {CATEGORY} category (Coin: USDT)...",
         )
         response = client.http_session.switch_position_mode(
             category=CATEGORY,
@@ -1606,24 +1600,24 @@ async def main():
         # Bybit API returns retCode 0 even if the mode is already set, so we just check for success.
         if response and response.get("retCode") == 0:
             logger.info(
-                "Successfully set position mode to Hedge Mode for the USDT category."
+                "Successfully set position mode to Hedge Mode for the USDT category.",
             )
             send_termux_toast("Hedge Mode set successfully!", "green", "black")
         else:
             # This will catch API-level errors returned in a valid response (e.g., permission denied)
             error_message = response.get("retMsg", "Unknown error")
             logger.error(
-                f"Failed to set Hedge Mode: {error_message}. Please set it manually in your Bybit account settings."
+                f"Failed to set Hedge Mode: {error_message}. Please set it manually in your Bybit account settings.",
             )
             send_termux_toast("Failed to set Hedge Mode! Check logs.", "red", "white")
             return  # Exit if we can't set the required mode.
     except Exception as e:
         # This will catch client-level errors (e.g., network issues, invalid request format)
         logger.error(
-            f"An exception occurred while trying to set Hedge Mode: {type(e).__name__} - {e}"
+            f"An exception occurred while trying to set Hedge Mode: {type(e).__name__} - {e}",
         )
         logger.error(
-            "Please ensure Hedge Mode is enabled for linear perpetuals in your Bybit account settings."
+            "Please ensure Hedge Mode is enabled for linear perpetuals in your Bybit account settings.",
         )
         send_termux_toast("Error setting Hedge Mode! Check logs.", "red", "white")
         return  # Exit if we can't set the required mode.
@@ -1634,12 +1628,12 @@ async def main():
     # Handle OS signals for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)  # Interruption from keyboard (Ctrl+C)
     signal.signal(
-        signal.SIGTERM, signal_handler
+        signal.SIGTERM, signal_handler,
     )  # Termination signal (e.g., system shutdown)
 
     # Create the main strategy task and assign it a name for easier identification in signal handler
     main_strategy_task = asyncio.create_task(
-        strategy.run(), name="MarketMakingStrategy_run_task"
+        strategy.run(), name="MarketMakingStrategy_run_task",
     )
 
     try:
@@ -1653,7 +1647,7 @@ async def main():
             exc_info=True,
         )
         send_termux_toast(
-            "MMXCEL Critical Error: Bot crashed! Check logs!", "red", "white"
+            "MMXCEL Critical Error: Bot crashed! Check logs!", "red", "white",
         )
     finally:
         # Ensure shutdown is called even if an error occurs or after cancellation
@@ -1662,7 +1656,7 @@ async def main():
         if strategy.running:  # Only call if it wasn't already gracefully shut down
             await strategy.shutdown()
         logger.info(
-            "Bot execution finished. May your digital journey be ever enlightened."
+            "Bot execution finished. May your digital journey be ever enlightened.",
         )
 
 

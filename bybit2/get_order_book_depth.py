@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def get_order_book_depth(symbol: str = "XRPUSDT", limit: int = 5):
     print(
         Fore.MAGENTA
         + f"\n# Unveiling the top {limit} bids and asks for {symbol} (Linear Perpetual)...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def get_order_book_depth(symbol: str = "XRPUSDT", limit: int = 5):
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,7 +37,7 @@ def get_order_book_depth(symbol: str = "XRPUSDT", limit: int = 5):
         print(
             Fore.CYAN
             + f"  # Fetching order book for {symbol} with limit {limit}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Fetch order book data for linear perpetual futures
@@ -55,7 +53,7 @@ def get_order_book_depth(symbol: str = "XRPUSDT", limit: int = 5):
                     print(
                         Fore.GREEN
                         + f"    Price: {bid[0]}, Quantity: {bid[1]}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
 
                 print(Fore.WHITE + "  Asks (Sell Orders):" + Style.RESET_ALL)
@@ -63,17 +61,17 @@ def get_order_book_depth(symbol: str = "XRPUSDT", limit: int = 5):
                     print(
                         Fore.RED
                         + f"    Price: {ask[0]}, Quantity: {ask[1]}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
             else:
                 print(
                     Fore.YELLOW
                     + f"  # No order book data found for {symbol}."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
         else:
             print(
-                Fore.RED + "  # Failed to retrieve order book data." + Style.RESET_ALL
+                Fore.RED + "  # Failed to retrieve order book data." + Style.RESET_ALL,
             )
             print(Fore.RED + f"  # Response: {response}" + Style.RESET_ALL)
 
@@ -82,11 +80,11 @@ def get_order_book_depth(symbol: str = "XRPUSDT", limit: int = 5):
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable and API keys are valid."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
-        Fore.MAGENTA + "\n# The market's depths have been revealed!\n" + Style.RESET_ALL
+        Fore.MAGENTA + "\n# The market's depths have been revealed!\n" + Style.RESET_ALL,
     )
 
 
@@ -98,22 +96,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     get_order_book_depth("XRPUSDT", 5)

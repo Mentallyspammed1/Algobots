@@ -1,8 +1,7 @@
 import csv
 import json
 import os
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 
 # Set decimal precision
 getcontext().prec = 10
@@ -39,7 +38,7 @@ class Backtester:
                 "price": price,
                 "fee": fee,
                 "pnl": pnl,
-            }
+            },
         )
 
     def _update_position(self, side, qty, price):
@@ -108,24 +107,24 @@ class Backtester:
                 if unrealized_pnl_pct >= self.profit_take_pct:
                     side = "Sell" if self.position_size > 0 else "Buy"
                     print(
-                        f"{timestamp}: Profit-take triggered at {unrealized_pnl_pct:.2%}. Closing position."
+                        f"{timestamp}: Profit-take triggered at {unrealized_pnl_pct:.2%}. Closing position.",
                     )
                     should_close = True
                 elif unrealized_pnl_pct <= -self.stop_loss_pct:
                     side = "Sell" if self.position_size > 0 else "Buy"
                     print(
-                        f"{timestamp}: Stop-loss triggered at {unrealized_pnl_pct:.2%}. Closing position."
+                        f"{timestamp}: Stop-loss triggered at {unrealized_pnl_pct:.2%}. Closing position.",
                     )
                     should_close = True
 
                 if should_close:
                     fee = abs(self.position_size) * close_price * self.fee_rate
                     pnl = self._update_position(
-                        side, abs(self.position_size), close_price
+                        side, abs(self.position_size), close_price,
                     )
                     self.current_balance += pnl - fee
                     self._record_trade(
-                        timestamp, side, abs(self.position_size), close_price, fee, pnl
+                        timestamp, side, abs(self.position_size), close_price, fee, pnl,
                     )
                     continue  # Move to next candle after closing position
 
@@ -146,7 +145,7 @@ class Backtester:
                 if pnl:
                     self.current_balance += pnl
                 self._record_trade(
-                    timestamp, "Buy", self.quantity, buy_price, fee, pnl or Decimal("0")
+                    timestamp, "Buy", self.quantity, buy_price, fee, pnl or Decimal("0"),
                 )
 
             if sell_filled:

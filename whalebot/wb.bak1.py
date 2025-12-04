@@ -14,9 +14,7 @@ import sys
 import time
 import urllib.parse
 from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import getcontext
+from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler  # Added this line
 from pathlib import Path
 from typing import Any
@@ -25,9 +23,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry

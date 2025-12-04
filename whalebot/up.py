@@ -13,21 +13,15 @@ import os
 import sys
 import time
 import urllib.parse
-from datetime import UTC
-from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import getcontext
+from datetime import UTC, datetime
+from decimal import ROUND_DOWN, Decimal, getcontext
 from pathlib import Path
-from typing import Any
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry

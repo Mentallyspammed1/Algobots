@@ -3,8 +3,7 @@ import logging
 import time
 from typing import Any
 
-from pybit.exceptions import BybitAPIError
-from pybit.exceptions import BybitRequestError
+from pybit.exceptions import BybitAPIError, BybitRequestError
 from pybit.unified_trading import HTTP
 
 # Configure logging for the module
@@ -36,14 +35,14 @@ class BybitTradeHelper:
         self.api_secret = api_secret
         self.testnet = testnet
         self.session = HTTP(
-            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret
+            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret,
         )
         logger.info(
-            f"BybitTradeHelper initialized for {'testnet' if self.testnet else 'mainnet'}."
+            f"BybitTradeHelper initialized for {'testnet' if self.testnet else 'mainnet'}.",
         )
 
     def _make_request(
-        self, method: str, endpoint_name: str, **kwargs
+        self, method: str, endpoint_name: str, **kwargs,
     ) -> dict[str, Any] | None:
         """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
@@ -60,26 +59,26 @@ class BybitTradeHelper:
 
             if response and response.get("retCode") == 0:
                 logger.debug(
-                    f"[{endpoint_name}] Successfully called. Response: {response.get('result')}"
+                    f"[{endpoint_name}] Successfully called. Response: {response.get('result')}",
                 )
                 return response.get("result")
             ret_code = response.get("retCode", "N/A")
             error_msg = response.get("retMsg", "Unknown error")
             logger.error(
                 f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
-                f"Args: {kwargs}. Full Response: {response}"
+                f"Args: {kwargs}. Full Response: {response}",
             )
             return None
         except (BybitRequestError, BybitAPIError) as e:
             logger.exception(
                 f"[{endpoint_name}] Pybit specific error during API call. "
-                f"Args: {kwargs}. Error: {e}"
+                f"Args: {kwargs}. Error: {e}",
             )
             return None
         except Exception as e:
             logger.exception(
                 f"[{endpoint_name}] Unexpected exception during API call. "
-                f"Args: {kwargs}. Error: {e}"
+                f"Args: {kwargs}. Error: {e}",
             )
             return None
 
@@ -110,7 +109,7 @@ class BybitTradeHelper:
             for arg in [category, symbol, side, order_type, qty]
         ):
             logger.error(
-                "Invalid or empty string provided for one of the required parameters: category, symbol, side, order_type, qty."
+                "Invalid or empty string provided for one of the required parameters: category, symbol, side, order_type, qty.",
             )
             return None
         try:
@@ -119,7 +118,7 @@ class BybitTradeHelper:
                 float(price)  # Check if price is convertible to float
         except ValueError:
             logger.error(
-                f"Invalid numerical format for qty ('{qty}') or price ('{price}')."
+                f"Invalid numerical format for qty ('{qty}') or price ('{price}').",
             )
             return None
 
@@ -170,12 +169,12 @@ class BybitTradeHelper:
             return None
         if not (order_id or order_link_id):
             logger.error(
-                "Either 'order_id' or 'order_link_id' must be provided to amend an order."
+                "Either 'order_id' or 'order_link_id' must be provided to amend an order.",
             )
             return None
         if not (new_qty or new_price):
             logger.error(
-                "Either 'new_qty' or 'new_price' must be provided to amend an order."
+                "Either 'new_qty' or 'new_price' must be provided to amend an order.",
             )
             return None
 
@@ -186,7 +185,7 @@ class BybitTradeHelper:
                 float(new_price)
         except ValueError:
             logger.error(
-                f"Invalid numerical format for new_qty ('{new_qty}') or new_price ('{new_price}')."
+                f"Invalid numerical format for new_qty ('{new_qty}') or new_price ('{new_price}').",
             )
             return None
 
@@ -227,7 +226,7 @@ class BybitTradeHelper:
             return None
         if not (order_id or order_link_id):
             logger.error(
-                "Either 'order_id' or 'order_link_id' must be provided to cancel an order."
+                "Either 'order_id' or 'order_link_id' must be provided to cancel an order.",
             )
             return None
 
@@ -243,7 +242,7 @@ class BybitTradeHelper:
         return self._make_request("cancel_order", "Cancel Order", **params)
 
     def cancel_all_orders(
-        self, category: str, symbol: str | None = None, **kwargs
+        self, category: str, symbol: str | None = None, **kwargs,
     ) -> dict[str, Any] | None:
         """Cancels all active orders for a specific category and optionally a symbol.
         This is a powerful function, use with caution.
@@ -268,7 +267,7 @@ class BybitTradeHelper:
         return self._make_request("cancel_all_orders", "Cancel All Orders", **params)
 
     def get_open_orders(
-        self, category: str, symbol: str | None = None, **kwargs
+        self, category: str, symbol: str | None = None, **kwargs,
     ) -> dict[str, Any] | None:
         """Retrieves active open orders for a specific category and optional symbol.
 
@@ -292,7 +291,7 @@ class BybitTradeHelper:
         return self._make_request("get_open_orders", "Get Open Orders", **params)
 
     def get_order_history(
-        self, category: str, symbol: str | None = None, **kwargs
+        self, category: str, symbol: str | None = None, **kwargs,
     ) -> dict[str, Any] | None:
         """Retrieves historical orders for a specific category and optional symbol.
 
@@ -316,7 +315,7 @@ class BybitTradeHelper:
         return self._make_request("get_order_history", "Get Order History", **params)
 
     def get_positions(
-        self, category: str, symbol: str | None = None, **kwargs
+        self, category: str, symbol: str | None = None, **kwargs,
     ) -> dict[str, Any] | None:
         """Retrieves current positions for a specific category and optional symbol.
 
@@ -340,7 +339,7 @@ class BybitTradeHelper:
         return self._make_request("get_positions", "Get Positions", **params)
 
     def set_leverage(
-        self, category: str, symbol: str, buy_leverage: str, sell_leverage: str
+        self, category: str, symbol: str, buy_leverage: str, sell_leverage: str,
     ) -> dict[str, Any] | None:
         """Sets leverage for a specific symbol.
 
@@ -356,7 +355,7 @@ class BybitTradeHelper:
             for arg in [category, symbol, buy_leverage, sell_leverage]
         ):
             logger.error(
-                "Invalid or empty string provided for category, symbol, buy_leverage, or sell_leverage."
+                "Invalid or empty string provided for category, symbol, buy_leverage, or sell_leverage.",
             )
             return None
         try:
@@ -364,7 +363,7 @@ class BybitTradeHelper:
             float(sell_leverage)
         except ValueError:
             logger.error(
-                f"Invalid numerical format for buy_leverage ('{buy_leverage}') or sell_leverage ('{sell_leverage}')."
+                f"Invalid numerical format for buy_leverage ('{buy_leverage}') or sell_leverage ('{sell_leverage}').",
             )
             return None
 
@@ -377,7 +376,7 @@ class BybitTradeHelper:
         return self._make_request("set_leverage", "Set Leverage", **params)
 
     def set_trading_stop(
-        self, category: str, symbol: str, **kwargs
+        self, category: str, symbol: str, **kwargs,
     ) -> dict[str, Any] | None:
         """Sets or modifies take profit, stop loss, and/or trailing stop for a position.
 
@@ -414,13 +413,13 @@ class BybitTradeHelper:
             return None
         if mode not in ["0", "3"]:
             logger.error(
-                f"Invalid 'mode' for switch_position_mode. Expected '0' (One-Way) or '3' (Hedge Mode), got '{mode}'."
+                f"Invalid 'mode' for switch_position_mode. Expected '0' (One-Way) or '3' (Hedge Mode), got '{mode}'.",
             )
             return None
 
         params = {"category": category, "mode": mode}
         return self._make_request(
-            "switch_position_mode", "Switch Position Mode", **params
+            "switch_position_mode", "Switch Position Mode", **params,
         )
 
 
@@ -435,7 +434,7 @@ if __name__ == "__main__":
 
     if API_KEY == "YOUR_API_KEY" or API_SECRET == "YOUR_API_SECRET":
         logger.error(
-            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_trade_helper.py example."
+            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_trade_helper.py example.",
         )
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
@@ -451,14 +450,14 @@ if __name__ == "__main__":
     if positions and positions.get("list"):
         for pos in positions["list"]:
             print(
-                f"  Symbol: {pos.get('symbol')}, Side: {pos.get('side')}, Size: {pos.get('size')}, PnL: {pos.get('unrealisedPnl')}"
+                f"  Symbol: {pos.get('symbol')}, Side: {pos.get('side')}, Size: {pos.get('size')}, PnL: {pos.get('unrealisedPnl')}",
             )
     else:
         print(f"  No open positions for {SYMBOL} or failed to retrieve.")
 
     print(f"\n--- Setting Leverage for {SYMBOL} to 10x (Buy) and 10x (Sell) ---")
     set_leverage_response = trade_helper.set_leverage(
-        category=CATEGORY, symbol=SYMBOL, buy_leverage="10", sell_leverage="10"
+        category=CATEGORY, symbol=SYMBOL, buy_leverage="10", sell_leverage="10",
     )
     if set_leverage_response:
         print(f"  Leverage set response: {set_leverage_response}")
@@ -483,15 +482,15 @@ if __name__ == "__main__":
         print(f"\nCurrent market price for {SYMBOL}: {current_price}")
     else:
         logger.warning(
-            f"Could not fetch current market price for {SYMBOL}. Using a placeholder price."
+            f"Could not fetch current market price for {SYMBOL}. Using a placeholder price.",
         )
         current_price = 40000.0  # Fallback placeholder
 
     buy_price = str(
-        round(current_price * 0.99, 1)
+        round(current_price * 0.99, 1),
     )  # Place a buy limit order slightly below market
     sell_price = str(
-        round(current_price * 1.01, 1)
+        round(current_price * 1.01, 1),
     )  # Place a sell limit order slightly above market
 
     print(f"\n--- Placing a BUY Limit Order for {SYMBOL} at {buy_price} ---")
@@ -510,21 +509,21 @@ if __name__ == "__main__":
     if place_order_response:
         order_id = place_order_response.get("orderId")
         print(
-            f"  Order placed. Order ID: {order_id}, Client Order ID: {client_order_id}"
+            f"  Order placed. Order ID: {order_id}, Client Order ID: {client_order_id}",
         )
     else:
         print("  Failed to place order.")
 
     if order_id:
         print(
-            f"\n--- Amending the Order {order_id} to new price {float(buy_price) * 1.005!s} ---"
+            f"\n--- Amending the Order {order_id} to new price {float(buy_price) * 1.005!s} ---",
         )
         amend_order_response = trade_helper.amend_order(
             category=CATEGORY,
             symbol=SYMBOL,
             order_id=order_id,
             new_price=str(
-                round(float(buy_price) * 1.005, 1)
+                round(float(buy_price) * 1.005, 1),
             ),  # New price, adjust as needed
         )
         if amend_order_response:
@@ -534,7 +533,7 @@ if __name__ == "__main__":
 
         print(f"\n--- Cancelling the Order {order_id} ---")
         cancel_order_response = trade_helper.cancel_order(
-            category=CATEGORY, symbol=SYMBOL, order_id=order_id
+            category=CATEGORY, symbol=SYMBOL, order_id=order_id,
         )
         if cancel_order_response:
             print(f"  Order cancelled: {cancel_order_response}")
@@ -543,7 +542,7 @@ if __name__ == "__main__":
 
     # Placing another order with orderLinkId for cancellation demonstration
     print(
-        f"\n--- Placing a SELL Limit Order with Client ID for {SYMBOL} at {sell_price} ---"
+        f"\n--- Placing a SELL Limit Order with Client ID for {SYMBOL} at {sell_price} ---",
     )
     client_order_id_sell = f"test-sell-{int(time.time())}"
     place_sell_order_response = trade_helper.place_order(
@@ -558,17 +557,17 @@ if __name__ == "__main__":
     )
     if place_sell_order_response:
         print(
-            f"  Sell order placed. Order ID: {place_sell_order_response.get('orderId')}, Client Order ID: {client_order_id_sell}"
+            f"  Sell order placed. Order ID: {place_sell_order_response.get('orderId')}, Client Order ID: {client_order_id_sell}",
         )
         print(
-            f"\n--- Cancelling the Sell Order using Client Order ID {client_order_id_sell} ---"
+            f"\n--- Cancelling the Sell Order using Client Order ID {client_order_id_sell} ---",
         )
         cancel_by_client_id_response = trade_helper.cancel_order(
-            category=CATEGORY, symbol=SYMBOL, order_link_id=client_order_id_sell
+            category=CATEGORY, symbol=SYMBOL, order_link_id=client_order_id_sell,
         )
         if cancel_by_client_id_response:
             print(
-                f"  Sell order cancelled by client ID: {cancel_by_client_id_response}"
+                f"  Sell order cancelled by client ID: {cancel_by_client_id_response}",
             )
         else:
             print("  Failed to cancel sell order by client ID.")
@@ -578,19 +577,19 @@ if __name__ == "__main__":
     if open_orders and open_orders.get("list"):
         for order in open_orders["list"]:
             print(
-                f"  Order ID: {order.get('orderId')}, Side: {order.get('side')}, Price: {order.get('price')}, Qty: {order.get('qty')}, Status: {order.get('orderStatus')}"
+                f"  Order ID: {order.get('orderId')}, Side: {order.get('side')}, Price: {order.get('price')}, Qty: {order.get('qty')}, Status: {order.get('orderStatus')}",
             )
     else:
         print(f"  No open orders for {SYMBOL} or failed to retrieve.")
 
     print(f"\n--- Getting Order History for {SYMBOL} (last 2 records) ---")
     order_history = trade_helper.get_order_history(
-        category=CATEGORY, symbol=SYMBOL, limit=2
+        category=CATEGORY, symbol=SYMBOL, limit=2,
     )
     if order_history and order_history.get("list"):
         for order in order_history["list"]:
             print(
-                f"  Order ID: {order.get('orderId')}, Side: {order.get('side')}, Price: {order.get('price')}, Status: {order.get('orderStatus')}, Created: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(order.get('createdTime')) / 1000))}"
+                f"  Order ID: {order.get('orderId')}, Side: {order.get('side')}, Price: {order.get('price')}, Status: {order.get('orderStatus')}, Created: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(order.get('createdTime')) / 1000))}",
             )
     else:
         print(f"  No order history for {SYMBOL} or failed to retrieve.")
@@ -598,11 +597,11 @@ if __name__ == "__main__":
     print(f"\n--- Switching Position Mode for {CATEGORY} to One-Way ('0') ---")
     # This might fail if you already have positions in Hedge Mode or vice-versa
     switch_mode_response = trade_helper.switch_position_mode(
-        category=CATEGORY, mode="0"
+        category=CATEGORY, mode="0",
     )
     if switch_mode_response:
         print(f"  Switch position mode response: {switch_mode_response}")
     else:
         print(
-            "  Failed to switch position mode (may already be in target mode or have open positions)."
+            "  Failed to switch position mode (may already be in target mode or have open positions).",
         )

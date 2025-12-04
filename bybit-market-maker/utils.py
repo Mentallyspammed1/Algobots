@@ -6,9 +6,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import yaml
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 
 # Initialize colorama
@@ -33,7 +31,7 @@ class ColoredFormatter(logging.Formatter):
 
 
 def setup_logger(
-    name: str, log_file: str = None, level: str = "INFO"
+    name: str, log_file: str = None, level: str = "INFO",
 ) -> logging.Logger:
     """Setup logger with file and console handlers"""
     logger = logging.getLogger(name)
@@ -221,7 +219,7 @@ class PerformanceTracker:
                 "timestamp": datetime.now(),
                 "balance": balance,
                 "pnl": balance - self.start_balance,
-            }
+            },
         )
 
     def get_statistics(self) -> dict:

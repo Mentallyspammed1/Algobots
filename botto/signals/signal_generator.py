@@ -1,6 +1,5 @@
 # signals/signal_generator.py
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
@@ -54,7 +53,6 @@ class SignalGenerator(ABC):
     @abstractmethod
     def generate_signals(self, df: pd.DataFrame, symbol: str) -> list[Signal]:
         """Generate trading signals."""
-        pass
 
 
 class ChandelierEhlersSignalGenerator(SignalGenerator):

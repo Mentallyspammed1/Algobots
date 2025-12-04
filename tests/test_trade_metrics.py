@@ -26,7 +26,7 @@ def test_record_trade():
     # Losing Sell trade
     metrics.record_trade(100, 99, 1, "SELL", Decimal("0.07"), Decimal("0.07"), 12346)
     assert metrics.total_realized_pnl == Decimal("0.86") + Decimal(
-        "-1.14"
+        "-1.14",
     )  # 0.86 - 1.14 = -0.28
     assert metrics.total_trades == 2
     assert metrics.winning_trades == 1

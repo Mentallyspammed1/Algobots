@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
 import requests
-from flask import Flask
-from flask import jsonify
-from flask import send_from_directory
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -121,14 +119,14 @@ def calculate_macd(data, short_period, long_period, signal_period):
             macd_line.append(None)
 
     signal_line = calculate_ema(
-        [{"close": val} for val in macd_line if val is not None], signal_period
+        [{"close": val} for val in macd_line if val is not None], signal_period,
     )
 
     hist = []
     for i in range(len(macd_line)):
         if macd_line[i] is not None and i >= len(macd_line) - len(signal_line):
             hist.append(
-                macd_line[i] - signal_line[i - (len(macd_line) - len(signal_line))]
+                macd_line[i] - signal_line[i - (len(macd_line) - len(signal_line))],
             )
         else:
             hist.append(None)
@@ -162,7 +160,7 @@ def get_bybit_data():
                     "low": float(bar[3]),
                     "close": float(bar[4]),
                     "volume": float(bar[5]),
-                }
+                },
             )
 
         # Pine Script Parameters (match your strategy)
@@ -180,7 +178,7 @@ def get_bybit_data():
         long_ema = calculate_ema(formatted_data, long_ema_period)
         rsi = calculate_rsi(formatted_data, rsi_period)
         macd_line, signal_line, macd_hist = calculate_macd(
-            formatted_data, short_ema_period, long_ema_period, macd_signal_period
+            formatted_data, short_ema_period, long_ema_period, macd_signal_period,
         )
         atr = calculate_atr(formatted_data, atr_period)
 
@@ -237,8 +235,8 @@ def get_bybit_data():
         app.logger.error(f"Error fetching data from Bybit: {e}")
         return jsonify(
             {
-                "error": "Failed to fetch data from Bybit API. Check your internet connection or try again later."
-            }
+                "error": "Failed to fetch data from Bybit API. Check your internet connection or try again later.",
+            },
         ), 500
 
 
@@ -249,6 +247,6 @@ def serve_index():
 
 if __name__ == "__main__":
     print(
-        "Starting server. To access the app, open your web browser and go to http://127.0.0.1:5000"
+        "Starting server. To access the app, open your web browser and go to http://127.0.0.1:5000",
     )
     app.run(host="0.0.0.0", port=5000)

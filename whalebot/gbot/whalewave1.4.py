@@ -10,7 +10,7 @@ class TA:
         """Calculates the Simple Moving Average (SMA)."""
         if not values or len(values) < period:
             return TA.safeArr(len(values))
-        
+
         sma_values = TA.safeArr(len(values))
         for i in range(period - 1, len(values)):
             window = values[i - period + 1 : i + 1]
@@ -25,11 +25,11 @@ class TA:
 
         ema_values = TA.safeArr(len(values))
         multiplier = 2 / (period + 1)
-        
+
         # Calculate initial SMA for the first EMA value
         sma = sum(values[0:period]) / period
         ema_values[period - 1] = sma
-        
+
         # Calculate subsequent EMA values
         for i in range(period, len(values)):
             ema_values[i] = (values[i] - ema_values[i - 1]) * multiplier + ema_values[i - 1]
@@ -58,9 +58,9 @@ class TA:
         # Calculate subsequent ATR values using EMA formula
         for i in range(period, len(highs)):
             atr_values[i] = (tr[i] - atr_values[i - 1]) * (1 / period) + atr_values[i - 1]
-        
+
         return atr_values
-        
+
     @staticmethod
     def r2(y_slice, y_predicted_linear):
         """Calculates the R-squared (coefficient of determination)."""
@@ -76,7 +76,7 @@ class TA:
             ss_tot += (y_slice[i] - mean_y) ** 2
 
         if ss_tot == 0: return 1 # Avoid division by zero if all y values are the same
-        
+
         r2 = 1 - (ss_res / ss_tot)
         # Check if r2 is NaN. NaN is the only value not equal to itself.
         return 0 if r2 != r2 else r2
@@ -86,7 +86,7 @@ class TA:
         """Calculates the Bollinger Bands."""
         middle = TA.sma(closes, period)
         upper = TA.safeArr(len(closes))
-        lower = TA.safeArr(len(closes))                    
+        lower = TA.safeArr(len(closes))
         for i in range(period - 1, len(closes)):
             sumSqDiff = 0
             for j in range(period):
@@ -94,7 +94,7 @@ class TA:
             std = sumSqDiff ** 0.5 # Use ** 0.5 for square root
             upper[i] = middle[i] + stdDev * std
             lower[i] = middle[i] - stdDev * std
-        return {'upper': upper, 'middle': middle, 'lower': lower}
+        return {"upper": upper, "middle": middle, "lower": lower}
 
     @staticmethod
     def keltner(highs, lows, closes, period, multiplier):
@@ -108,7 +108,7 @@ class TA:
             lower_val = (middle[i] or 0) - (atr[i] or 0) * multiplier
             upper.append(upper_val)
             lower.append(lower_val)
-        return {'upper': upper, 'middle': middle, 'lower': lower}
+        return {"upper": upper, "middle": middle, "lower": lower}
 
     @staticmethod
     def superTrend(highs, lows, closes, period, factor):
@@ -119,12 +119,12 @@ class TA:
         prevTrend = 1
         prevUpperBand = 0
         prevLowerBand = 0
-                                                                        
+
         for i in range(len(closes)): # Use i for loop index
             midPoint = (highs[i] + lows[i]) / 2
             upperBand = midPoint + factor * (atr[i] or 0)
             lowerBand = midPoint - factor * (atr[i] or 0)
-                                                                            
+
             if i == 0: # Use i for index comparison
                 trend[i] = 1
                 value[i] = lowerBand
@@ -147,7 +147,7 @@ class TA:
                 value[i] = min(upperBand, prevUpperBand)
                 prevLowerBand = lowerBand
             trend[i] = currentTrend
-        return {'trend': trend, 'value': value}
+        return {"trend": trend, "value": value}
 
     @staticmethod
     def chandelierExit(highs, lows, closes, period, multiplier):
@@ -155,21 +155,21 @@ class TA:
         atr = TA.atr(highs, lows, closes, period)
         trend = TA.safeArr(len(closes))
         value = TA.safeArr(len(closes))
-        prevTrend = 1                                          
-        
+        prevTrend = 1
+
         for i in range(period - 1, len(closes)): # Use i for loop index
             highestHigh = max(highs[i - period + 1 : i + 1]) # Use slicing for subarray
             lowestLow = min(lows[i - period + 1 : i + 1]) # Use slicing for subarray
             currentATR = atr[i] or 0
-                                                                                                 
+
             longStop = highestHigh - multiplier * currentATR
-            shortStop = lowestLow + multiplier * currentATR  
-            
+            shortStop = lowestLow + multiplier * currentATR
+
             if i == 0: # Use i for index comparison
                 trend[i] = 1
                 value[i] = longStop
-                continue                        
-            
+                continue
+
             currentTrend = trend[i - 1]
             if closes[i] > value[i - 1] and currentTrend == -1:
                 currentTrend = 1
@@ -181,15 +181,15 @@ class TA:
             else:
                 value[i] = min(shortStop, value[i - 1])
             trend[i] = currentTrend
-        return {'trend': trend, 'value': value}
+        return {"trend": trend, "value": value}
 
     @staticmethod
     def findFVG(candles):
         """Finds Fair Value Gaps (FVG)."""
         fvgs = []
         # Need at least 3 candles to detect a potential FVG
-        if len(candles) < 3: return []                          
-        
+        if len(candles) < 3: return []
+
         for i in range(1, len(candles) - 1): # Use i for loop index
             prevCandle = candles[i - 1]
             currentCandle = candles[i]
@@ -197,47 +197,47 @@ class TA:
 
             # Bullish FVG conditions
             is_bullish_pattern = (
-                currentCandle['h'] > prevCandle['h'] and
-                currentCandle['h'] > nextCandle['h'] and
-                currentCandle['l'] < prevCandle['l'] and
-                currentCandle['l'] < nextCandle['l'] and
-                currentCandle['o'] < currentCandle['c'] and # Ensure middle candle is bullish
-                nextCandle['h'] > currentCandle['l'] and
-                nextCandle['l'] < currentCandle['h']
+                currentCandle["h"] > prevCandle["h"] and
+                currentCandle["h"] > nextCandle["h"] and
+                currentCandle["l"] < prevCandle["l"] and
+                currentCandle["l"] < nextCandle["l"] and
+                currentCandle["o"] < currentCandle["c"] and # Ensure middle candle is bullish
+                nextCandle["h"] > currentCandle["l"] and
+                nextCandle["l"] < currentCandle["h"]
             )
-            
+
             # Bearish FVG conditions
             is_bearish_pattern = (
-                currentCandle['l'] < prevCandle['l'] and
-                currentCandle['l'] < nextCandle['l'] and
-                currentCandle['h'] > prevCandle['h'] and
-                currentCandle['h'] > nextCandle['h'] and
-                currentCandle['o'] > currentCandle['c'] and # Ensure middle candle is bearish
-                nextCandle['l'] < currentCandle['h'] and
-                nextCandle['h'] > currentCandle['l']
+                currentCandle["l"] < prevCandle["l"] and
+                currentCandle["l"] < nextCandle["l"] and
+                currentCandle["h"] > prevCandle["h"] and
+                currentCandle["h"] > nextCandle["h"] and
+                currentCandle["o"] > currentCandle["c"] and # Ensure middle candle is bearish
+                nextCandle["l"] < currentCandle["h"] and
+                nextCandle["h"] > currentCandle["l"]
             )
 
             # Check for Bullish FVG
             if is_bullish_pattern:
                 # Ensure there's a gap between the high of the current candle and the low of the next candle
-                if currentCandle['h'] > nextCandle['l']:
+                if currentCandle["h"] > nextCandle["l"]:
                     fvgs.append({
-                        'price': (currentCandle['h'] + nextCandle['l']) / 2, # Midpoint of the gap
-                        'type': 'BULLISH',
-                        'top': currentCandle['h'], # Top of the FVG is the high of the current candle
-                        'bottom': nextCandle['l']  # Bottom of the FVG is the low of the next candle
+                        "price": (currentCandle["h"] + nextCandle["l"]) / 2, # Midpoint of the gap
+                        "type": "BULLISH",
+                        "top": currentCandle["h"], # Top of the FVG is the high of the current candle
+                        "bottom": nextCandle["l"],  # Bottom of the FVG is the low of the next candle
                     })
             # Check for Bearish FVG
             elif is_bearish_pattern:
                 # Ensure there's a gap between the low of the current candle and the high of the next candle
-                if currentCandle['l'] < nextCandle['h']:
+                if currentCandle["l"] < nextCandle["h"]:
                     fvgs.append({
-                        'price': (currentCandle['l'] + nextCandle['h']) / 2, # Midpoint of the gap
-                        'type': 'BEARISH',
-                        'top': nextCandle['h'], # Top of the FVG is the high of the next candle
-                        'bottom': currentCandle['l']  # Bottom of the FVG is the low of the current candle
+                        "price": (currentCandle["l"] + nextCandle["h"]) / 2, # Midpoint of the gap
+                        "type": "BEARISH",
+                        "top": nextCandle["h"], # Top of the FVG is the high of the next candle
+                        "bottom": currentCandle["l"],  # Bottom of the FVG is the low of the current candle
                     })
-                    
+
         # Return the most recent FVG if any exist, otherwise return an empty array
         return fvgs[-1] if fvgs else []
 
@@ -247,20 +247,20 @@ class TA:
         vwap = TA.safeArr(len(closes))
         cumulativeTPV = 0 # Cumulative Typical Price * Volume
         cumulativeV = 0 # Cumulative Volume
-        
+
         for i in range(len(closes)): # Use i for loop index
             typicalPrice = (highs[i] + lows[i] + closes[i]) / 3
             tpv = typicalPrice * volumes[i]
             cumulativeTPV += tpv
             cumulativeV += volumes[i]
-            
+
             # Calculate VWAP for the specified period
             if i >= period - 1:
                 if cumulativeV > 0:
                     vwap[i] = cumulativeTPV / cumulativeV
                 else:
                     vwap[i] = 0 # Avoid division by zero
-                
+
                 # Subtract the values of the oldest candle in the period for the next iteration
                 if i - period + 1 >= 0:
                     oldestTypicalPrice = (highs[i - period + 1] + lows[i - period + 1] + closes[i - period + 1]) / 3
@@ -278,10 +278,10 @@ class TA:
         tp = []
         for i in range(len(closes)): # Use i for loop index
             tp.append((highs[i] + lows[i] + closes[i]) / 3) # Typical Price
-        
+
         smaTp = TA.sma(tp, period)
         cci = TA.safeArr(len(closes))
-        
+
         for i in range(period - 1, len(tp)): # Use i for loop index
             meanDeviation = 0
             for j in range(period):

@@ -6,10 +6,12 @@ from unittest.mock import patch
 # Add the parent directory to the sys.path to allow importing modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backtester import DEFAULT_CONFIG
-from backtester import fetch_historical_klines
-from backtester import optimize_strategy
-from backtester import run_backtest
+from backtester import (
+    DEFAULT_CONFIG,
+    fetch_historical_klines,
+    optimize_strategy,
+    run_backtest,
+)
 
 
 class TestBacktester(unittest.TestCase):
@@ -68,7 +70,7 @@ class TestBacktester(unittest.TestCase):
                     "low": self.mock_klines[-1]["close"] - 2,
                     "close": self.mock_klines[-1]["close"] + (1 if i % 2 == 0 else -1),
                     "volume": 1000 + i * 10,
-                }
+                },
             )
 
         self.test_config = DEFAULT_CONFIG.copy()
@@ -99,7 +101,7 @@ class TestBacktester(unittest.TestCase):
                         str(k["volume"]),
                     ]
                     for k in self.mock_klines
-                ]
+                ],
             },
         }
 
@@ -133,7 +135,7 @@ class TestBacktester(unittest.TestCase):
         # Fill the rest with neutral values
         while len(mock_side_effects) < len(self.mock_klines):
             mock_side_effects.append(
-                {"supertrend": {"direction": 0}, "rsi": 50, "fisher": 0}
+                {"supertrend": {"direction": 0}, "rsi": 50, "fisher": 0},
             )
 
         mock_calculate_indicators.side_effect = mock_side_effects

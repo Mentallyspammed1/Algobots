@@ -229,7 +229,7 @@ def test_generate_signals_with_long_inventory_skew(market_scenario_factory):
     # Also, as a sanity check, assert that these prices are lower than they would be
     # in a neutral inventory scenario with the same downtrend.
     neutral_strategy = MarketMakingStrategy(
-        logger=strategy_logger, hedge_ratio=Decimal("0")
+        logger=strategy_logger, hedge_ratio=Decimal("0"),
     )
     neutral_scenario_data = {
         "df": scenario["df"],

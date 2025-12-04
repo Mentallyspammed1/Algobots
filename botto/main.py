@@ -7,7 +7,7 @@ from pybit.unified_trading import HTTP
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("ChandelierEhlersBot")
 
@@ -35,7 +35,7 @@ class ChandelierEhlersBot:
 
         # Create strategy instance
         self.strategy = StrategyFactory.create_chandelier_ehlers_strategy(
-            self.strategy_config, self.session
+            self.strategy_config, self.session,
         )
 
         logger.info("Initialized Chandelier Exit Ehlers SuperTrend trading bot")
@@ -52,12 +52,12 @@ class ChandelierEhlersBot:
             for signal in signals:
                 logger.info(
                     f"Generated signal: {signal.type} for {signal.symbol} "
-                    f"at {signal.price}"
+                    f"at {signal.price}",
                 )
                 logger.info(f"Reasons: {signal.reasons}")
                 logger.info(f"Indicators: {signal.indicators}")
                 logger.info(
-                    f"Strength: {signal.strength}, Confidence: {signal.confidence}"
+                    f"Strength: {signal.strength}, Confidence: {signal.confidence}",
                 )
 
                 # Here you would add code to execute trades based on signals

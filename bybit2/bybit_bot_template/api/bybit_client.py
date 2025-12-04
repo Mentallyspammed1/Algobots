@@ -3,9 +3,7 @@ import json
 import os
 from typing import Any
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from loguru import logger
 from pybit.unified_trading import HTTP
@@ -28,7 +26,7 @@ class BybitClient:
         self.logger.info(
             Fore.MAGENTA
             + "# Pyrmethus: Forging the Bybit API conduit... #"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # --- API Credentials and Configuration ---
@@ -41,7 +39,7 @@ class BybitClient:
             self.logger.error(
                 Fore.RED
                 + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found. Please set them in your .env file."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             raise ValueError("API Key or Secret not found. Please configure them.")
 
@@ -60,13 +58,13 @@ class BybitClient:
         self.subscribed_topics = set()
         self.websocket_connected = False
         self.websocket_reconnect_delay = int(
-            os.getenv("WEBSOCKET_RECONNECT_DELAY", 5)
+            os.getenv("WEBSOCKET_RECONNECT_DELAY", 5),
         )  # Default 5 seconds
 
     async def initialize(self):
         """Initializes HTTP and WebSocket clients."""
         self.logger.info(
-            Fore.CYAN + "  # Initializing Bybit HTTP client..." + Style.RESET_ALL
+            Fore.CYAN + "  # Initializing Bybit HTTP client..." + Style.RESET_ALL,
         )
         try:
             self.http_client = HTTP(
@@ -78,7 +76,7 @@ class BybitClient:
             self.logger.success(
                 Fore.GREEN
                 + "  # Bybit HTTP client initialized successfully."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
             # Verify connection by fetching server time
@@ -88,12 +86,12 @@ class BybitClient:
             self.logger.error(
                 Fore.RED
                 + f"  # Failed to initialize HTTP client: {e}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             raise
 
         self.logger.info(
-            Fore.CYAN + "  # Initializing Bybit WebSocket client..." + Style.RESET_ALL
+            Fore.CYAN + "  # Initializing Bybit WebSocket client..." + Style.RESET_ALL,
         )
         try:
             # The pybit WebsocketClient needs a callback function to handle messages
@@ -108,13 +106,13 @@ class BybitClient:
                 # account_type=self.account_type # Uncomment if needed
             )
             self.logger.success(
-                Fore.GREEN + "  # Bybit WebSocket client initialized." + Style.RESET_ALL
+                Fore.GREEN + "  # Bybit WebSocket client initialized." + Style.RESET_ALL,
             )
         except Exception as e:
             self.logger.error(
                 Fore.RED
                 + f"  # Failed to initialize WebSocket client: {e}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             raise
 
@@ -123,7 +121,7 @@ class BybitClient:
         self.logger.info(
             Fore.CYAN
             + "  # Verifying connection by fetching server time..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         try:
             # Use async HTTP client if available, otherwise sync
@@ -137,20 +135,20 @@ class BybitClient:
                 self.logger.success(
                     Fore.GREEN
                     + f"  # Connection verified. Server Time (ms): {time_ms}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
             else:
                 self.logger.error(
                     Fore.RED
                     + f"  # Connection verification failed. Response: {response}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 raise ConnectionError(f"Failed to verify connection: {response}")
         except Exception as e:
             self.logger.error(
                 Fore.RED
                 + f"  # Error during connection verification: {e}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             raise
 
@@ -160,24 +158,24 @@ class BybitClient:
             self.logger.error(
                 Fore.RED
                 + "  # WebSocket client not initialized. Cannot subscribe."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return
 
         if not self.websocket_connected:
             self.logger.info(
-                Fore.CYAN + "  # Starting WebSocket connection..." + Style.RESET_ALL
+                Fore.CYAN + "  # Starting WebSocket connection..." + Style.RESET_ALL,
             )
             try:
                 # pybit's connect() is synchronous, so we run it in an executor
                 await asyncio.get_event_loop().run_in_executor(
-                    None, self.ws_client.connect
+                    None, self.ws_client.connect,
                 )
                 # Give it a moment to establish connection
                 await asyncio.sleep(1)
             except Exception as e:
                 self.logger.error(
-                    Fore.RED + f"  # Failed to connect WebSocket: {e}" + Style.RESET_ALL
+                    Fore.RED + f"  # Failed to connect WebSocket: {e}" + Style.RESET_ALL,
                 )
                 # Implement reconnection logic here if needed
                 return
@@ -185,21 +183,21 @@ class BybitClient:
         self.logger.info(
             Fore.CYAN
             + f"  # Subscribing to topics: {topics} (Market Type: {market_type})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         try:
             # pybit's subscribe() is synchronous
             await asyncio.get_event_loop().run_in_executor(
-                None, self.ws_client.subscribe, topics, market_type
+                None, self.ws_client.subscribe, topics, market_type,
             )
             for topic in topics:
                 self.subscribed_topics.add(f"{topic}:{market_type}")
             self.logger.success(
-                Fore.GREEN + "  # Subscription request sent." + Style.RESET_ALL
+                Fore.GREEN + "  # Subscription request sent." + Style.RESET_ALL,
             )
         except Exception as e:
             self.logger.error(
-                Fore.RED + f"  # Failed to subscribe to topics: {e}" + Style.RESET_ALL
+                Fore.RED + f"  # Failed to subscribe to topics: {e}" + Style.RESET_ALL,
             )
 
     def handle_websocket_message(self, message: dict[str, Any]):
@@ -217,7 +215,7 @@ class BybitClient:
             self.logger.warning(
                 Fore.YELLOW
                 + f"  # Received message with missing topic or data: {message}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return
 
@@ -271,14 +269,14 @@ class BybitClient:
                 self.logger.warning(
                     Fore.YELLOW
                     + f"  # Unhandled WebSocket topic: {topic}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
         except Exception as e:
             self.logger.error(
                 Fore.RED
                 + f"  # Error processing WebSocket message for topic {topic}: {e}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
     def get_latest_kline(self, symbol: str, interval: str) -> dict[str, Any] | None:
@@ -295,12 +293,12 @@ class BybitClient:
 
     # --- HTTP Request Methods (Wrappers for pybit.HTTP) ---
     async def _make_http_request(
-        self, method_name: str, *args, **kwargs
+        self, method_name: str, *args, **kwargs,
     ) -> dict[str, Any] | None:
         """Internal helper to make HTTP requests with error handling."""
         if not self.http_client:
             self.logger.error(
-                Fore.RED + "  # HTTP client not initialized." + Style.RESET_ALL
+                Fore.RED + "  # HTTP client not initialized." + Style.RESET_ALL,
             )
             return None
 
@@ -312,7 +310,7 @@ class BybitClient:
             else:
                 # Run sync methods in an executor to avoid blocking the event loop
                 response = await asyncio.get_event_loop().run_in_executor(
-                    None, method, *args, **kwargs
+                    None, method, *args, **kwargs,
                 )
 
             # Basic check for successful response structure from pybit
@@ -321,14 +319,14 @@ class BybitClient:
             self.logger.error(
                 Fore.RED
                 + f"  # HTTP Request '{method_name}' failed. Response: {response}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return response  # Return response even on failure for inspection
         except Exception as e:
             self.logger.error(
                 Fore.RED
                 + f"  # Exception during HTTP request '{method_name}': {e}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return None
 
@@ -341,11 +339,11 @@ class BybitClient:
         return await self._make_http_request("get_account_info")
 
     async def get_wallet_balance(
-        self, account_type: str = "UNIFIED", coin: str | None = None
+        self, account_type: str = "UNIFIED", coin: str | None = None,
     ) -> dict[str, Any] | None:
         """Fetches wallet balance."""
         return await self._make_http_request(
-            "get_wallet_balance", accountType=account_type, coin=coin
+            "get_wallet_balance", accountType=account_type, coin=coin,
         )
 
     async def create_order(self, **kwargs) -> dict[str, Any] | None:
@@ -383,25 +381,25 @@ class BybitClient:
         """Callback when WebSocket connection is established."""
         self.websocket_connected = True
         self.logger.success(
-            Fore.GREEN + "  # WebSocket connection established." + Style.RESET_ALL
+            Fore.GREEN + "  # WebSocket connection established." + Style.RESET_ALL,
         )
         # Re-subscribe to topics if connection was lost and re-established
         if self.subscribed_topics:
             self.logger.info(
                 Fore.CYAN
                 + "  # Re-subscribing to topics after connection..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             # Note: pybit's subscribe is sync, needs executor
             asyncio.get_event_loop().run_in_executor(
-                None, self.ws_client.subscribe, list(self.subscribed_topics), "linear"
+                None, self.ws_client.subscribe, list(self.subscribed_topics), "linear",
             )  # Assuming linear for now
 
     def on_websocket_close(self):
         """Callback when WebSocket connection is closed."""
         self.websocket_connected = False
         self.logger.warning(
-            Fore.YELLOW + "  # WebSocket connection closed." + Style.RESET_ALL
+            Fore.YELLOW + "  # WebSocket connection closed." + Style.RESET_ALL,
         )
         # Implement reconnection logic here
         asyncio.create_task(self.reconnect_websocket())
@@ -418,7 +416,7 @@ class BybitClient:
             self.logger.info(
                 Fore.CYAN
                 + f"  # Attempting to reconnect WebSocket in {self.websocket_reconnect_delay} seconds..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             await asyncio.sleep(self.websocket_reconnect_delay)
             try:
@@ -431,7 +429,7 @@ class BybitClient:
                         self.logger.info(
                             Fore.CYAN
                             + "  # Re-subscribing to topics after reconnection..."
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                         await asyncio.get_event_loop().run_in_executor(
                             None,
@@ -443,13 +441,13 @@ class BybitClient:
                     self.logger.error(
                         Fore.RED
                         + "  # WebSocket client is no longer available. Cannot reconnect."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
             except Exception as e:
                 self.logger.error(
                     Fore.RED
                     + f"  # Failed to reconnect WebSocket: {e}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 # Schedule another reconnect attempt
                 asyncio.create_task(self.reconnect_websocket())
@@ -464,23 +462,22 @@ class BybitClient:
         """
         # In pybit, messages are handled by the `on_message` callback.
         # This method might be used for other async tasks or checks.
-        pass
 
     def close(self):
         """Closes the WebSocket connection."""
         if self.ws_client and self.websocket_connected:
             self.logger.info(
-                Fore.CYAN + "  # Closing WebSocket connection..." + Style.RESET_ALL
+                Fore.CYAN + "  # Closing WebSocket connection..." + Style.RESET_ALL,
             )
             try:
                 self.ws_client.close()
                 self.websocket_connected = False
                 self.logger.success(
-                    Fore.GREEN + "  # WebSocket connection closed." + Style.RESET_ALL
+                    Fore.GREEN + "  # WebSocket connection closed." + Style.RESET_ALL,
                 )
             except Exception as e:
                 self.logger.error(
-                    Fore.RED + f"  # Error closing WebSocket: {e}" + Style.RESET_ALL
+                    Fore.RED + f"  # Error closing WebSocket: {e}" + Style.RESET_ALL,
                 )
 
     def __del__(self):
@@ -493,7 +490,7 @@ if __name__ == "__main__":
     print(
         Fore.MAGENTA
         + "# Pyrmethus: Conjuring the Bybit API Client for testing... #"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     async def test_client():
@@ -510,17 +507,17 @@ if __name__ == "__main__":
             wallet_balance = await client.get_wallet_balance(coin="BTC")
             if wallet_balance:
                 logger.info(
-                    f"BTC Wallet Balance: {json.dumps(wallet_balance, indent=2)}"
+                    f"BTC Wallet Balance: {json.dumps(wallet_balance, indent=2)}",
                 )
 
             # Example: Subscribe to kline data
             await client.start_websocket(
-                topics=["kline.5.BTCUSDT", "position.BTCUSDT"], market_type="linear"
+                topics=["kline.5.BTCUSDT", "position.BTCUSDT"], market_type="linear",
             )
 
             # Keep the script running for a bit to receive WebSocket messages
             logger.info(
-                "Keeping client running for 10 seconds to receive WS messages..."
+                "Keeping client running for 10 seconds to receive WS messages...",
             )
             await asyncio.sleep(10)
 

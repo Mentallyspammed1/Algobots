@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def get_specific_symbol_open_orders(symbol: str = "BTCUSDT", category: str = "li
     print(
         Fore.MAGENTA
         + f"\n# Unveiling active open orders for {symbol} on Bybit v5 {category.capitalize()} Perpetual Futures...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def get_specific_symbol_open_orders(symbol: str = "BTCUSDT", category: str = "li
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,7 +37,7 @@ def get_specific_symbol_open_orders(symbol: str = "BTCUSDT", category: str = "li
         print(
             Fore.CYAN
             + f"  # Requesting open orders for {symbol} in category {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         response = session.get_open_orders(category=category, symbol=symbol)
@@ -50,7 +48,7 @@ def get_specific_symbol_open_orders(symbol: str = "BTCUSDT", category: str = "li
                 print(
                     Fore.GREEN
                     + f"  # Active Open Orders for {symbol}:"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 for order in open_orders:
                     print(
@@ -58,13 +56,13 @@ def get_specific_symbol_open_orders(symbol: str = "BTCUSDT", category: str = "li
                         + f"    Order ID: {order.get('orderId')}, Side: {order.get('side')}, "
                         f"Order Type: {order.get('orderType')}, Price: {order.get('price')}, "
                         f"Qty: {order.get('qty')}, Status: {order.get('orderStatus')}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
             else:
                 print(
                     Fore.YELLOW
                     + f"  # No active open orders found for {symbol} in category {category}."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
         else:
             print(Fore.RED + "  # Failed to retrieve open orders." + Style.RESET_ALL)
@@ -75,13 +73,13 @@ def get_specific_symbol_open_orders(symbol: str = "BTCUSDT", category: str = "li
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable and API keys are valid."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
         Fore.MAGENTA
         + "\n# The specific symbol's open orders have been revealed!\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
 
@@ -93,22 +91,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     get_specific_symbol_open_orders("BTCUSDT", "linear")

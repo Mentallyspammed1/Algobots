@@ -25,18 +25,14 @@ import os
 import smtplib
 import subprocess
 import time
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from email.mime.text import MIMEText
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import pandas_ta as ta
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from pybit.unified_trading import HTTP
 
 # Initialize Colorama for neon terminal radiance
@@ -126,7 +122,7 @@ def _load_api_creds():
             print(
                 NEON_SUCCESS
                 + "API credentials summoned from authcreds.json."
-                + NEON_RESET
+                + NEON_RESET,
             )
         except Exception as e:
             print(NEON_ERROR + f"Shadow in authcreds.json: {e}" + NEON_RESET)
@@ -139,13 +135,13 @@ def _load_api_creds():
             print(
                 NEON_SUCCESS
                 + "Credentials drawn from environmental ether."
-                + NEON_RESET
+                + NEON_RESET,
             )
         else:
             print(
                 NEON_ERROR
                 + "CRITICAL: Keys lost in the void. Forge 'authcreds.json' or set env vars."
-                + NEON_RESET
+                + NEON_RESET,
             )
             exit(1)
 
@@ -161,7 +157,7 @@ def _initialize_session(config):
         print(
             NEON_INFO
             + "Backtest mode active—forging a session for historical data."
-            + NEON_RESET
+            + NEON_RESET,
         )
         session = HTTP(testnet=config["testnet"])
         return session
@@ -181,7 +177,7 @@ def _initialize_session(config):
     try:
         # Fetch current leverage
         position_info = session.get_positions(
-            category=category, symbol=symbol
+            category=category, symbol=symbol,
         )  # Changed from get_position_info
         current_leverage = None
         if position_info and position_info.get("result", {}).get("list"):
@@ -202,7 +198,7 @@ def _initialize_session(config):
             print(
                 NEON_INFO
                 + f"No open position for {symbol}, attempting to set leverage to {desired_leverage}x."
-                + NEON_RESET
+                + NEON_RESET,
             )
             session.set_leverage(
                 category=category,
@@ -213,13 +209,13 @@ def _initialize_session(config):
             print(
                 NEON_SUCCESS
                 + f"Leverage set to {desired_leverage}x on {'Testnet' if config['testnet'] else 'Mainnet'}."
-                + NEON_RESET
+                + NEON_RESET,
             )
         elif Decimal(current_leverage) != Decimal(desired_leverage):
             print(
                 NEON_INFO
                 + f"Current leverage for {symbol} is {current_leverage}x, desired is {desired_leverage}x. Adjusting..."
-                + NEON_RESET
+                + NEON_RESET,
             )
             session.set_leverage(
                 category=category,
@@ -230,13 +226,13 @@ def _initialize_session(config):
             print(
                 NEON_SUCCESS
                 + f"Leverage adjusted to {desired_leverage}x on {'Testnet' if config['testnet'] else 'Mainnet'}."
-                + NEON_RESET
+                + NEON_RESET,
             )
         else:
             print(
                 NEON_INFO
                 + f"Leverage for {symbol} is already {current_leverage}x. No change needed."
-                + NEON_RESET
+                + NEON_RESET,
             )
 
     except Exception as e:
@@ -246,18 +242,18 @@ def _initialize_session(config):
             print(
                 NEON_WARNING
                 + "Leverage is already set correctly (ErrCode: 110043). Continuing."
-                + NEON_RESET
+                + NEON_RESET,
             )
         else:
             print(NEON_ERROR + f"Leverage rite disrupted: {e}" + NEON_RESET)
-            logging.error(f"Leverage initialization failed: {e}")
+            logging.exception(f"Leverage initialization failed: {e}")
 
     return session
 
 
 # --- Data Acquisition Function ---
 def _fetch_kline_data(
-    session, symbol, category, interval, limit=200, start_time=None, end_time=None
+    session, symbol, category, interval, limit=200, start_time=None, end_time=None,
 ):
     """Summons kline data, with time range for backtesting."""
     df_list = []
@@ -278,7 +274,7 @@ def _fetch_kline_data(
                 print(
                     NEON_INFO
                     + f"Channeling klines from {current_start}... "
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
                 response = session.get_kline(**params)
                 data = response.get("result", {}).get("list")
@@ -495,12 +491,12 @@ def _close_position(session, symbol, category, current_position, delay):
                 print(
                     NEON_WARNING
                     + f"Read timed out. Retrying close in {sleep_time} seconds... (Attempt {attempt + 1}/{max_retries})"
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
                 time.sleep(sleep_time)
             else:
                 print(NEON_ERROR + f"Close failed: {e}" + NEON_RESET)
-                logging.error(f"Close failed: {e}")
+                logging.exception(f"Close failed: {e}")
                 return None  # Return None if it fails after retries or for other errors
     return None  # Return None if loop finishes without success
 
@@ -536,7 +532,7 @@ def _calculate_quantity(balance, close_price, config):
 
 # --- Order Execution Function ---
 def _place_order_with_tpsl(
-    session, side, symbol, category, quantity, entry_price, config
+    session, side, symbol, category, quantity, entry_price, config,
 ):
     """Places order with TP/SL using Decimal precision."""
     entry_price = Decimal(entry_price)
@@ -556,7 +552,7 @@ def _place_order_with_tpsl(
             print(
                 NEON_WARNING
                 + f"Placing {side} for {quantity:.6f} {symbol}..."
-                + NEON_RESET
+                + NEON_RESET,
             )
             order_response = session.place_order(
                 category=category,
@@ -573,7 +569,7 @@ def _place_order_with_tpsl(
 
             try:
                 subprocess.run(
-                    ["termux-toast", f"{side} signal for {symbol}!"], check=False
+                    ["termux-toast", f"{side} signal for {symbol}!"], check=False,
                 )
             except:
                 pass
@@ -587,7 +583,7 @@ def _place_order_with_tpsl(
             return order_response
         except Exception as e:
             print(NEON_ERROR + f"Order failed: {e}" + NEON_RESET)
-            logging.error(f"Order failed: {e}")
+            logging.exception(f"Order failed: {e}")
             return None
 
 
@@ -602,7 +598,7 @@ def _send_email(config, subject, body):
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(config["email_sender"], config["email_password"])
             server.sendmail(
-                config["email_sender"], config["email_receiver"], msg.as_string()
+                config["email_sender"], config["email_receiver"], msg.as_string(),
             )
         print(NEON_INFO + "Email ether sent." + NEON_RESET)
     except Exception as e:
@@ -625,10 +621,10 @@ def _run_backtest(df_ind, config):
         rsi = current["rsi"]
 
         is_buy = (st_dir == 1 and last_dir == -1) and _check_rsi_filter(
-            rsi, config, "Buy"
+            rsi, config, "Buy",
         )
         is_sell = (st_dir == -1 and last_dir == 1) and _check_rsi_filter(
-            rsi, config, "Sell"
+            rsi, config, "Sell",
         )
         last_dir = st_dir
 
@@ -645,7 +641,7 @@ def _run_backtest(df_ind, config):
             )
             equity += pnl
             trades.append(
-                {"exit_time": current["startTime"], "side": pos["side"], "pnl": pnl}
+                {"exit_time": current["startTime"], "side": pos["side"], "pnl": pnl},
             )
             logging.info(f"Backtest closed {pos['side']}: PNL {pnl}")
 
@@ -653,10 +649,10 @@ def _run_backtest(df_ind, config):
             qty = _calculate_quantity(equity, close, config)
             if qty > Decimal("0"):
                 positions.append(
-                    {"side": "Buy" if is_buy else "Sell", "entry": close, "qty": qty}
+                    {"side": "Buy" if is_buy else "Sell", "entry": close, "qty": qty},
                 )
                 logging.info(
-                    f"Backtest opened {positions[-1]['side']}: {qty} at {close}"
+                    f"Backtest opened {positions[-1]['side']}: {qty} at {close}",
                 )
 
     if positions:
@@ -669,14 +665,14 @@ def _run_backtest(df_ind, config):
         )
         equity += pnl
         trades.append(
-            {"exit_time": df_ind["startTime"].iloc[-1], "side": pos["side"], "pnl": pnl}
+            {"exit_time": df_ind["startTime"].iloc[-1], "side": pos["side"], "pnl": pnl},
         )
 
     total_pnl = sum(t["pnl"] for t in trades)
     print(
         NEON_SUCCESS
         + f"Backtest PNL: {total_pnl:.4f} | Final Equity: {equity:.4f}"
-        + NEON_RESET
+        + NEON_RESET,
     )
     logging.info(f"Backtest complete: PNL {total_pnl}")
     if config["plot_enabled"] and trades:
@@ -710,13 +706,13 @@ def main():
             print(NEON_ERROR + f"State load failed: {e}" + NEON_RESET)
 
     print(
-        NEON_SUCCESS + f"Summoning ascended bot for {config['symbol']}... " + NEON_RESET
+        NEON_SUCCESS + f"Summoning ascended bot for {config['symbol']}... " + NEON_RESET,
     )
     logging.info("Bot awakened.")
 
     if config["backtest"]:
         start_ts = int(
-            datetime.fromisoformat(config["backtest_start"]).timestamp() * 1000
+            datetime.fromisoformat(config["backtest_start"]).timestamp() * 1000,
         )
         end_ts = int(datetime.fromisoformat(config["backtest_end"]).timestamp() * 1000)
         df = _fetch_kline_data(
@@ -738,7 +734,7 @@ def main():
     try:
         while True:
             df = _fetch_kline_data(
-                session, config["symbol"], config["category"], config["interval"]
+                session, config["symbol"], config["category"], config["interval"],
             )
             if df.empty:
                 print(NEON_WARNING + "Data void—retrying." + NEON_RESET)
@@ -772,7 +768,7 @@ def main():
                 f"STOCHRSIk_{config.get('stochrsi_k_period', 14)}_{config.get('stochrsi_d_period', 3)}"
             ]
             stoch_rsi_d_series = stoch_rsi_k_series.rolling(
-                window=config.get("stochrsi_d_period", 3)
+                window=config.get("stochrsi_d_period", 3),
             ).mean()
 
             # Check for Stoch RSI crossover
@@ -807,7 +803,7 @@ def main():
                 json.dump(state, f)
 
             positions_response = session.get_positions(
-                category=config["category"], symbol=config["symbol"]
+                category=config["category"], symbol=config["symbol"],
             )
             positions = positions_response.get("result", {}).get("list", [])
             current_position = (
@@ -823,17 +819,17 @@ def main():
             print(
                 NEON_INFO
                 + f"Epoch: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}"
-                + NEON_RESET
+                + NEON_RESET,
             )
             print(
                 NEON_INFO
                 + f"Close: {close_current} | Dir: {'Up' if st_dir_current == 1 else 'Down'} | RSI: {rsi_current:.2f}"
-                + NEON_RESET
+                + NEON_RESET,
             )
             print(
                 NEON_POSITION
                 + f"Balance: {balance:.2f} USDT | Position: {'Long' if has_long else 'Short' if has_short else 'None'}"
-                + NEON_RESET
+                + NEON_RESET,
             )
 
             required_balance = close_current / Decimal(config["leverage"])

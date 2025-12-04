@@ -3,16 +3,14 @@ import decimal
 import logging
 import os
 from collections.abc import Callable
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 from typing import Any
 
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # --- Logging Setup ---
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -55,7 +53,7 @@ def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trade: lis
         # Check if profit lock threshold is met
         if profit_percent >= PROFIT_LOCK_PERCENT:
             logger.info(
-                f"[{symbol}] Profit lock threshold reached ({profit_percent:.4f}%). Adjusting stop-loss."
+                f"[{symbol}] Profit lock threshold reached ({profit_percent:.4f}%). Adjusting stop-loss.",
             )
 
             new_stop_loss_price = decimal.Decimal("0")
@@ -78,7 +76,7 @@ def manage_positions(http_client: HTTP, bot_instance: Any, symbols_to_trade: lis
                     position_idx=0,
                 )
                 logger.info(
-                    f"[{symbol}] Adjusted stop-loss to {new_stop_loss_price} to lock in profit."
+                    f"[{symbol}] Adjusted stop-loss to {new_stop_loss_price} to lock in profit.",
                 )
             except Exception as e:
                 logger.error(f"Error adjusting stop-loss for {symbol}: {e}")
@@ -100,7 +98,7 @@ def market_making_strategy(
         for wallet in account_info:
             if wallet.get("coin") == "USDT":
                 available_balance_usd = decimal.Decimal(
-                    wallet.get("walletBalance", "0")
+                    wallet.get("walletBalance", "0"),
                 )
                 break
 
@@ -114,7 +112,7 @@ def market_making_strategy(
             continue
 
         orderbook_data = bot_instance.ws_manager.market_data.get(symbol, {}).get(
-            "orderbook"
+            "orderbook",
         )
         if (
             not orderbook_data
@@ -140,20 +138,20 @@ def market_making_strategy(
         capital_to_risk = available_balance_usd * RISK_PER_TRADE_PERCENT
         qty_step = bot_instance.symbol_info[symbol]["qtyStep"]
         order_quantity = (capital_to_risk / (mid_price * STOP_LOSS_PERCENT)).quantize(
-            qty_step
+            qty_step,
         )
 
         min_order_qty = bot_instance.symbol_info[symbol]["minOrderQty"]
         order_quantity = max(order_quantity, min_order_qty)
 
         logger.info(
-            f"[{symbol}] Mid: {mid_price:.4f}, Bid: {bot_bid_price:.4f}, Ask: {bot_ask_price:.4f}, Qty: {order_quantity}"
+            f"[{symbol}] Mid: {mid_price:.4f}, Bid: {bot_bid_price:.4f}, Ask: {bot_ask_price:.4f}, Qty: {order_quantity}",
         )
 
         if (
             not bot_instance.ws_manager.positions.get(symbol)
             or decimal.Decimal(
-                bot_instance.ws_manager.positions[symbol].get("size", "0")
+                bot_instance.ws_manager.positions[symbol].get("size", "0"),
             )
             == 0
         ):
@@ -176,7 +174,7 @@ def market_making_strategy(
                     stop_loss=str(stop_loss_buy_price),
                 )
                 logger.info(
-                    f"Placed BUY order for {order_quantity} {symbol} at {bot_bid_price} with SL at {stop_loss_buy_price}"
+                    f"Placed BUY order for {order_quantity} {symbol} at {bot_bid_price} with SL at {stop_loss_buy_price}",
                 )
 
                 stop_loss_sell_price = (
@@ -194,7 +192,7 @@ def market_making_strategy(
                     stop_loss=str(stop_loss_sell_price),
                 )
                 logger.info(
-                    f"Placed SELL order for {order_quantity} {symbol} at {bot_ask_price} with SL at {stop_loss_sell_price}"
+                    f"Placed SELL order for {order_quantity} {symbol} at {bot_ask_price} with SL at {stop_loss_sell_price}",
                 )
 
             except Exception as e:
@@ -264,7 +262,7 @@ class BybitWebSocketManager:
                 if order_id:
                     self.orders[order_id] = order
                     logger.info(
-                        f"Order update for {order.get('symbol')}: {order.get('orderStatus')}"
+                        f"Order update for {order.get('symbol')}: {order.get('orderStatus')}",
                     )
         except Exception as e:
             logger.error(f"Error handling order: {e}")
@@ -273,7 +271,7 @@ class BybitWebSocketManager:
         try:
             for execution in message.get("data", []):
                 logger.info(
-                    f"Execution: {execution.get('symbol')} {execution.get('execQty')} @ {execution.get('execPrice')}"
+                    f"Execution: {execution.get('symbol')} {execution.get('execQty')} @ {execution.get('execPrice')}",
                 )
         except Exception as e:
             logger.error(f"Error handling execution: {e}")
@@ -284,7 +282,7 @@ class BybitWebSocketManager:
             return
         for symbol in symbols:
             self.ws_public.orderbook_stream(
-                depth=1, symbol=symbol, callback=self.handle_orderbook
+                depth=1, symbol=symbol, callback=self.handle_orderbook,
             )
             self.ws_public.ticker_stream(symbol=symbol, callback=self.handle_ticker)
         logger.info(f"Subscribed to public channels for: {symbols}")
@@ -303,7 +301,7 @@ class BybitWebSocketManager:
 class BybitTradingBot:
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
         self.session = HTTP(
-            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000
+            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000,
         )
         self.ws_manager = BybitWebSocketManager(api_key, api_secret, testnet)
         self.strategy: Callable | None = None
@@ -315,7 +313,7 @@ class BybitTradingBot:
         for symbol in symbols:
             try:
                 response = self.session.get_instruments_info(
-                    category="linear", symbol=symbol
+                    category="linear", symbol=symbol,
                 )
                 if response and response["retCode"] == 0:
                     item = response["result"]["list"][0]
@@ -327,7 +325,7 @@ class BybitTradingBot:
                     logger.info(f"Successfully fetched instrument info for {symbol}.")
                 else:
                     logger.error(
-                        f"Failed to fetch instrument info for {symbol}: {response.get('retMsg')}"
+                        f"Failed to fetch instrument info for {symbol}: {response.get('retMsg')}",
                     )
             except Exception as e:
                 logger.error(f"Error fetching instrument info for {symbol}: {e}")
@@ -373,7 +371,7 @@ async def main():
 
     if not API_KEY or not API_SECRET:
         logger.error(
-            "BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set."
+            "BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set.",
         )
         return
 

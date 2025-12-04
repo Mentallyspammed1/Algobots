@@ -12,12 +12,9 @@ import logging
 import os
 import random
 import time
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import UTC
-from datetime import datetime
-from decimal import Decimal
-from decimal import getcontext
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from decimal import Decimal, getcontext
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -25,8 +22,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore
-from colorama import Style
+from colorama import Fore, Style
 from colorama import init as colorama_init
 from dotenv import load_dotenv
 
@@ -230,7 +226,7 @@ def load_config(fp: Path) -> BotConfig:
     defaults = _get_default_config()
     if not fp.exists():
         LOGGER.warning(
-            f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}"
+            f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}",
         )
         try:
             fp.write_text(json.dumps(defaults, indent=4))
@@ -250,7 +246,7 @@ def load_config(fp: Path) -> BotConfig:
                 merged[key] = value
     except json.JSONDecodeError as e:
         LOGGER.error(
-            f"{NEON_RED}Corrupt config file: {e}. Backing up and creating new default.{RESET}"
+            f"{NEON_RED}Corrupt config file: {e}. Backing up and creating new default.{RESET}",
         )
         backup_fp = fp.with_suffix(f".bak_{int(time.time())}")
         try:
@@ -258,14 +254,14 @@ def load_config(fp: Path) -> BotConfig:
             fp.write_text(json.dumps(defaults, indent=4))
         except OSError as backup_err:
             LOGGER.error(
-                f"{NEON_RED}Could not back up corrupt config: {backup_err}{RESET}"
+                f"{NEON_RED}Could not back up corrupt config: {backup_err}{RESET}",
             )
         merged = defaults
 
     # Final validation
     if merged["interval"] not in VALID_INTERVALS:
         LOGGER.warning(
-            f"{NEON_YELLOW}Invalid interval '{merged['interval']}' in config. Falling back to default '15'.{RESET}"
+            f"{NEON_YELLOW}Invalid interval '{merged['interval']}' in config. Falling back to default '15'.{RESET}",
         )
         merged["interval"] = "15"
 
@@ -294,7 +290,7 @@ def _send_request(
     """Generic, robust HTTP request wrapper with exponential backoff and jitter."""
     if not API_KEY or not API_SECRET:
         logger.critical(
-            f"{NEON_RED}API_KEY or API_SECRET is not set. Cannot send request.{RESET}"
+            f"{NEON_RED}API_KEY or API_SECRET is not set. Cannot send request.{RESET}",
         )
         return None
 
@@ -320,7 +316,7 @@ def _send_request(
             )
             if resp.status_code in RETRY_ERROR_CODES:
                 raise requests.HTTPError(
-                    f"Retryable HTTP Error: {resp.status_code} {resp.reason}"
+                    f"Retryable HTTP Error: {resp.status_code} {resp.reason}",
                 )
 
             resp.raise_for_status()  # Raise for other non-2xx codes
@@ -328,17 +324,17 @@ def _send_request(
 
             if data.get("retCode") != 0:
                 logger.error(
-                    f"{NEON_RED}Bybit API Error (retCode={data.get('retCode')}): {data.get('retMsg')}{RESET}"
+                    f"{NEON_RED}Bybit API Error (retCode={data.get('retCode')}): {data.get('retMsg')}{RESET}",
                 )
                 return None
             return data
 
         except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
             sleep_s = (2**attempt) + random.uniform(
-                0, 1
+                0, 1,
             )  # Exponential backoff with jitter
             logger.warning(
-                f"{NEON_YELLOW}Request failed ({e}). Retrying in {sleep_s:.2f}s... ({attempt + 1}/{retries}){RESET}"
+                f"{NEON_YELLOW}Request failed ({e}). Retrying in {sleep_s:.2f}s... ({attempt + 1}/{retries}){RESET}",
             )
             time.sleep(sleep_s)
 
@@ -401,7 +397,7 @@ def fetch_klines(
 
 
 def fetch_order_book(
-    symbol: str, depth: int, log: logging.Logger
+    symbol: str, depth: int, log: logging.Logger,
 ) -> dict[str, Any] | None:
     """Fetches the order book for a symbol."""
     params = {"symbol": symbol, "limit": depth, "category": "linear"}
@@ -425,7 +421,7 @@ class Indicators:
 
     @staticmethod
     def atr(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int,
     ) -> pd.Series:
         tr1 = high - low
         tr2 = abs(high - close.shift())
@@ -445,7 +441,7 @@ class Indicators:
 
     @staticmethod
     def macd(
-        close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
+        close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9,
     ) -> pd.DataFrame:
         ema_fast = Indicators.ema(close, span=fast)
         ema_slow = Indicators.ema(close, span=slow)
@@ -453,12 +449,12 @@ class Indicators:
         signal_line = Indicators.ema(macd_line, span=signal)
         histogram = macd_line - signal_line
         return pd.DataFrame(
-            {"macd": macd_line, "signal": signal_line, "histogram": histogram}
+            {"macd": macd_line, "signal": signal_line, "histogram": histogram},
         )
 
     @staticmethod
     def adx(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14,
     ) -> pd.DataFrame:
         plus_dm = high.diff()
         minus_dm = low.diff().mul(-1)
@@ -518,7 +514,7 @@ class TradingAnalyzer:
         if self.df.empty:
             return
         atr_series = Indicators.atr(
-            self.df.high, self.df.low, self.df.close, self.cfg["atr_period"]
+            self.df.high, self.df.low, self.df.close, self.cfg["atr_period"],
         )
         if not atr_series.empty and pd.notna(atr_series.iloc[-1]):
             self.atr_value = float(atr_series.iloc[-1])
@@ -531,7 +527,7 @@ class TradingAnalyzer:
             else "low_volatility"
         )
         self.log.info(
-            f"Market Volatility: {NEON_YELLOW}{vol_mode.replace('_', ' ').upper()}{RESET} (ATR: {self.atr_value:.5f})"
+            f"Market Volatility: {NEON_YELLOW}{vol_mode.replace('_', ' ').upper()}{RESET} (ATR: {self.atr_value:.5f})",
         )
         return self.cfg["weight_sets"][vol_mode]
 
@@ -577,7 +573,7 @@ class TradingAnalyzer:
     def analyze(self, price: Decimal, ts: str, order_book: dict[str, Any] | None):
         """Performs a full analysis and logs a detailed summary."""
         rsi_val = Indicators.rsi(
-            self.df.close, self.cfg["indicator_periods"]["rsi"]
+            self.df.close, self.cfg["indicator_periods"]["rsi"],
         ).iloc[-1]
         ema_score = self._calculate_ema_alignment()
         vol_spike = self._calculate_volume_confirmation()
@@ -614,13 +610,13 @@ class TradingAnalyzer:
             f"{'─' * 20} ANALYSIS FOR {self.symbol} ({self.interval}) {'─' * 20}\n"
             f" Timestamp: {ts} │ Current Price: {NEON_BLUE}{price:.5f}{RESET}\n"
             f" ATR({self.cfg['atr_period']}): {self.atr_value:.5f} │ ADX({self.cfg['indicator_periods']['adx']}): {adx_val:.2f} ({trend_status})\n"
-            f" RSI({self.cfg['indicator_periods']['rsi']}): {rsi_val:.2f} ({rsi_status}) │ EMA Align: {ema_score:+.1f} │ Vol Spike: {vol_spike}\n"
+            f" RSI({self.cfg['indicator_periods']['rsi']}): {rsi_val:.2f} ({rsi_status}) │ EMA Align: {ema_score:+.1f} │ Vol Spike: {vol_spike}\n",
         )
         if order_book and "bids" in order_book and "asks" in order_book:
             bid0_price, bid0_qty = order_book["bids"][0]
             ask0_price, ask0_qty = order_book["asks"][0]
             self.log.info(
-                f" Order Book: Bid {bid0_qty} @ {bid0_price} | Ask {ask0_qty} @ {ask0_price}"
+                f" Order Book: Bid {bid0_qty} @ {bid0_price} | Ask {ask0_qty} @ {ask0_price}",
             )
         self.log.info("─" * (42 + len(self.symbol) + len(self.interval)))
 
@@ -635,7 +631,7 @@ class TradingAnalyzer:
             conditions.append("RSI Oversold")
         if self.indicator_values.get("ema_alignment", 0) > 0:
             score += Decimal(str(self.weights.get("ema_alignment", 0))) * Decimal(
-                str(abs(self.indicator_values["ema_alignment"]))
+                str(abs(self.indicator_values["ema_alignment"])),
             )
             conditions.append("Bullish EMA Alignment")
         if self.indicator_values.get("volume_confirmation", False):
@@ -650,7 +646,7 @@ class TradingAnalyzer:
             bearish_conditions.append("RSI Overbought")
         if self.indicator_values.get("ema_alignment", 0) < 0:
             bearish_score += Decimal(
-                str(self.weights.get("ema_alignment", 0))
+                str(self.weights.get("ema_alignment", 0)),
             ) * Decimal(str(abs(self.indicator_values["ema_alignment"])))
             bearish_conditions.append("Bearish EMA Alignment")
 
@@ -692,7 +688,7 @@ def main() -> None:
     """Main function to initialize and run the trading bot loop."""
     if not API_KEY or not API_SECRET:
         LOGGER.critical(
-            f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in .env file.{RESET}"
+            f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in .env file.{RESET}",
         )
         return
 
@@ -701,19 +697,19 @@ def main() -> None:
     ).upper()
     interval = (
         input(
-            f"{NEON_BLUE}Enter interval {VALID_INTERVALS} (default {CFG['interval']}): {RESET}"
+            f"{NEON_BLUE}Enter interval {VALID_INTERVALS} (default {CFG['interval']}): {RESET}",
         )
         or CFG["interval"]
     )
     if interval not in VALID_INTERVALS:
         LOGGER.warning(
-            f"{NEON_YELLOW}Invalid interval. Using default: {CFG['interval']}{RESET}"
+            f"{NEON_YELLOW}Invalid interval. Using default: {CFG['interval']}{RESET}",
         )
         interval = CFG["interval"]
 
     symbol_logger = setup_logger(symbol)
     symbol_logger.info(
-        f"🚀 WhaleBot Enhanced starting for {NEON_PURPLE}{symbol}{RESET} on interval {NEON_PURPLE}{interval}{RESET}"
+        f"🚀 WhaleBot Enhanced starting for {NEON_PURPLE}{symbol}{RESET} on interval {NEON_PURPLE}{interval}{RESET}",
     )
 
     kline_cache: dict[str, tuple[datetime, pd.DataFrame]] = {}
@@ -736,7 +732,7 @@ def main() -> None:
             current_time = time.time()
             if current_time - last_ob_fetch_time >= CFG["order_book_debounce_s"]:
                 order_book = fetch_order_book(
-                    symbol, CFG["order_book_depth_to_check"], symbol_logger
+                    symbol, CFG["order_book_depth_to_check"], symbol_logger,
                 )
                 last_ob_fetch_time = current_time
 
@@ -753,27 +749,27 @@ def main() -> None:
                 symbol_logger.info(
                     f"\n{color}🔔 {'-' * 10} TRADE SIGNAL: {trade_signal.signal.upper()} {'-' * 10}{RESET}\n"
                     f"   Confidence Score: {trade_signal.confidence:.2f}\n"
-                    f"   Conditions Met: {'; '.join(trade_signal.conditions)}\n"
+                    f"   Conditions Met: {'; '.join(trade_signal.conditions)}\n",
                 )
                 if trade_signal.levels:
                     sl = trade_signal.levels["stop_loss"]
                     tp = trade_signal.levels["take_profit"]
                     symbol_logger.info(
-                        f"   Stop Loss: {sl:.5f} | Take Profit: {tp:.5f}"
+                        f"   Stop Loss: {sl:.5f} | Take Profit: {tp:.5f}",
                     )
                 symbol_logger.info(
-                    f"{NEON_YELLOW}   --- Placeholder: Order placement logic would execute here ---{RESET}\n"
+                    f"{NEON_YELLOW}   --- Placeholder: Order placement logic would execute here ---{RESET}\n",
                 )
 
             time.sleep(CFG["analysis_interval"])
 
     except KeyboardInterrupt:
         symbol_logger.info(
-            f"\n{NEON_YELLOW}User stopped analysis. Shutting down...{RESET}"
+            f"\n{NEON_YELLOW}User stopped analysis. Shutting down...{RESET}",
         )
     except Exception as e:
         symbol_logger.exception(
-            f"{NEON_RED}An unexpected critical error occurred: {e}{RESET}"
+            f"{NEON_RED}An unexpected critical error occurred: {e}{RESET}",
         )
 
 

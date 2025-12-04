@@ -317,7 +317,7 @@ class TestIndicators(unittest.TestCase):
         result = calculate_indicators(self.klines_long, self.default_config)
         self.assertIsNotNone(result)
         self.assertAlmostEqual(
-            result["rsi"], 42.08, places=2, msg="RSI value is incorrect"
+            result["rsi"], 42.08, places=2, msg="RSI value is incorrect",
         )
 
     def test_ehlers_fisher_transform_calculation(self):
@@ -339,7 +339,7 @@ class TestIndicators(unittest.TestCase):
         self.assertIsNotNone(result)
         # Expected values for the last kline (close=115) from a trusted source (TradingView)
         self.assertAlmostEqual(
-            result["macd"]["macd_line"], -1.58, places=2, msg="MACD Line is incorrect"
+            result["macd"]["macd_line"], -1.58, places=2, msg="MACD Line is incorrect",
         )
         self.assertAlmostEqual(
             result["macd"]["signal_line"],

@@ -2,14 +2,10 @@
 import datetime as dt  # Use dt alias for datetime module
 import logging
 import os
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
+from decimal import Decimal, InvalidOperation, getcontext
 from typing import Any
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 
 
 class OrderBook:
@@ -39,7 +35,7 @@ class OrderBook:
         update_seq = data.get("seq")
         if update_seq is None or update_seq <= self.last_seq:
             self.logger.debug(
-                f"Stale or out-of-order order book update (current seq: {update_seq}, last seq: {self.last_seq}). Skipping."
+                f"Stale or out-of-order order book update (current seq: {update_seq}, last seq: {self.last_seq}). Skipping.",
             )
             return
 
@@ -54,7 +50,7 @@ class OrderBook:
                     self.bids[price] = qty
             except InvalidOperation:
                 self.logger.warning(
-                    f"Invalid decimal value in bid: {price_str}, {qty_str}"
+                    f"Invalid decimal value in bid: {price_str}, {qty_str}",
                 )
 
         for price_str, qty_str in data.get("a", []):
@@ -68,7 +64,7 @@ class OrderBook:
                     self.asks[price] = qty
             except InvalidOperation:
                 self.logger.warning(
-                    f"Invalid decimal value in ask: {price_str}, {qty_str}"
+                    f"Invalid decimal value in ask: {price_str}, {qty_str}",
                 )
 
         self.last_seq = update_seq
@@ -112,7 +108,7 @@ class FallbackZoneInfo(dt.tzinfo):
         else:
             _module_logger.warning(
                 f"FallbackZoneInfo initialized with key '{key}' which is not 'UTC'. "
-                f"This fallback only supports UTC. Effective timezone will be UTC."
+                f"This fallback only supports UTC. Effective timezone will be UTC.",
             )
             self._offset = dt.timedelta(0)
             self._name = "UTC"  # Effective name is UTC
@@ -172,7 +168,7 @@ except ImportError:
     _module_logger.warning(
         "Module 'zoneinfo' not found (requires Python 3.9+ and possibly 'tzdata' package). "
         "Using a basic UTC-only fallback for timezone handling. "
-        "For full timezone support on older Python, consider installing 'pytz'."
+        "For full timezone support on older Python, consider installing 'pytz'.",
     )
     _ActualZoneInfo = FallbackZoneInfo  # FallbackZoneInfo is Type[dt.tzinfo]
 
@@ -275,7 +271,7 @@ def set_timezone(tz_str: str) -> None:
         if _ActualZoneInfo is FallbackZoneInfo and tz_str.upper() != "UTC":
             _module_logger.warning(
                 f"'zoneinfo' module is not found and timezone '{tz_str}' was requested. "
-                f"Effective timezone is UTC due to FallbackZoneInfo limitations."
+                f"Effective timezone is UTC due to FallbackZoneInfo limitations.",
             )
     except Exception as tz_err:
         # This handles errors from _ActualZoneInfo(tz_str) constructor,
@@ -319,13 +315,13 @@ def get_timezone() -> dt.tzinfo:
 
         if env_tz:
             _module_logger.info(
-                f"TIMEZONE environment variable found: '{env_tz}'. Attempting to use it."
+                f"TIMEZONE environment variable found: '{env_tz}'. Attempting to use it.",
             )
             chosen_tz_str = env_tz
         else:
             _module_logger.info(
                 f"TIMEZONE environment variable not set. "
-                f"Using default timezone: '{DEFAULT_TIMEZONE}'."
+                f"Using default timezone: '{DEFAULT_TIMEZONE}'.",
             )
             chosen_tz_str = DEFAULT_TIMEZONE
 
@@ -419,12 +415,12 @@ def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> 
         if isinstance(price_precision_value, int):
             if price_precision_value >= 0:
                 logger.debug(
-                    f"Using integer price precision for {symbol}: {price_precision_value}"
+                    f"Using integer price precision for {symbol}: {price_precision_value}",
                 )
                 return price_precision_value
             logger.warning(
                 f"Invalid negative integer price precision for {symbol}: {price_precision_value}. "
-                "Proceeding to next check."
+                "Proceeding to next check.",
             )
 
         elif isinstance(price_precision_value, (str, float)):
@@ -436,23 +432,23 @@ def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> 
                     # .normalize() removes trailing zeros, .as_tuple().exponent gives num decimal places (negative)
                     precision = abs(tick_size.normalize().as_tuple().exponent)
                     logger.debug(
-                        f"Derived price precision for {symbol} from tick size {tick_size}: {precision}"
+                        f"Derived price precision for {symbol} from tick size {tick_size}: {precision}",
                     )
                     return precision
                 # tick_size is zero or negative
                 logger.warning(
                     f"Invalid non-positive tick size '{price_precision_value}' from market_info.precision.price "
-                    f"for {symbol}. Proceeding to next check."
+                    f"for {symbol}. Proceeding to next check.",
                 )
             except (ValueError, TypeError, InvalidOperation) as e:
                 logger.warning(
                     f"Could not parse market_info.precision.price '{price_precision_value}' "
-                    f"as Decimal for {symbol}: {e}. Proceeding to next check."
+                    f"as Decimal for {symbol}: {e}. Proceeding to next check.",
                 )
         else:
             logger.warning(
                 f"Unsupported type for market_info.precision.price for {symbol}: {type(price_precision_value)}. "
-                "Proceeding to next check."
+                "Proceeding to next check.",
             )
 
     # 2. Try 'limits'.'price'.'min' as a heuristic for tick size to derive precision
@@ -468,20 +464,20 @@ def get_price_precision(market_info: dict[str, Any], logger: logging.Logger) -> 
                 precision = abs(min_price_tick.normalize().as_tuple().exponent)
                 logger.debug(
                     f"Derived price precision for {symbol} from min_price_limit {min_price_tick} "
-                    f"(parsed from '{min_price_str}'): {precision}"
+                    f"(parsed from '{min_price_str}'): {precision}",
                 )
                 return precision
             # else: min_price_tick is zero or negative, not useful for precision.
         except (ValueError, TypeError, InvalidOperation) as e:
             logger.warning(
                 f"Could not parse market_info.limits.price.min '{min_price_str}' "
-                f"as Decimal for {symbol}: {e}. Falling back to default."
+                f"as Decimal for {symbol}: {e}. Falling back to default.",
             )
 
     # 3. Default precision
     logger.warning(
         f"Could not determine price precision for {symbol} from market_info. "
-        f"Using default: {default_precision}."
+        f"Using default: {default_precision}.",
     )
     return default_precision
 
@@ -510,24 +506,24 @@ def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> De
 
     if price_precision_value is not None:
         if isinstance(
-            price_precision_value, (str, float)
+            price_precision_value, (str, float),
         ):  # Typically, this is the tick size itself
             try:
                 tick_size = Decimal(str(price_precision_value))
                 if tick_size > Decimal("0"):
                     logger.debug(
-                        f"Using tick size from precision.price for {symbol}: {tick_size}"
+                        f"Using tick size from precision.price for {symbol}: {tick_size}",
                     )
                     return tick_size
                 # tick_size is zero or negative
                 logger.warning(
                     f"Invalid non-positive value '{price_precision_value}' from market_info.precision.price "
-                    f"for {symbol}. Proceeding to next check."
+                    f"for {symbol}. Proceeding to next check.",
                 )
             except (ValueError, TypeError, InvalidOperation) as e:
                 logger.warning(
                     f"Could not parse market_info.precision.price '{price_precision_value}' "
-                    f"as Decimal for {symbol}: {e}. Proceeding to next check."
+                    f"as Decimal for {symbol}: {e}. Proceeding to next check.",
                 )
 
         elif isinstance(price_precision_value, int):  # Often number of decimal places
@@ -535,17 +531,17 @@ def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> De
                 # If 'precision'.'price' is an int, it's often number of decimal places for price
                 tick_size = Decimal("1e-" + str(price_precision_value))
                 logger.debug(
-                    f"Calculated tick size from integer precision for {symbol}: {tick_size}"
+                    f"Calculated tick size from integer precision for {symbol}: {tick_size}",
                 )
                 return tick_size
             logger.warning(
                 f"Invalid negative integer for precision.price for {symbol}: {price_precision_value}. "
-                "Proceeding to next check."
+                "Proceeding to next check.",
             )
         else:
             logger.warning(
                 f"Unsupported type for market_info.precision.price for {symbol}: {type(price_precision_value)}. "
-                "Proceeding to next check."
+                "Proceeding to next check.",
             )
 
     # 2. Try 'limits'.'price'.'min'
@@ -559,31 +555,31 @@ def get_min_tick_size(market_info: dict[str, Any], logger: logging.Logger) -> De
             # If min_price from limits is positive, it might be the tick size.
             if min_tick_from_limit > Decimal("0"):
                 logger.debug(
-                    f"Using min_price from limits ('{min_price_str}') as tick size for {symbol}: {min_tick_from_limit}"
+                    f"Using min_price from limits ('{min_price_str}') as tick size for {symbol}: {min_tick_from_limit}",
                 )
                 return min_tick_from_limit
             # else: min_tick_from_limit is zero or negative, not a valid tick size.
         except (ValueError, TypeError, InvalidOperation) as e:
             logger.warning(
                 f"Could not parse market_info.limits.price.min '{min_price_str}' "
-                f"as Decimal for {symbol}: {e}. Falling back."
+                f"as Decimal for {symbol}: {e}. Falling back.",
             )
 
     # 3. Fallback: derive tick size from calculated price precision
     # This re-uses get_price_precision, which has its own logging for defaults.
     price_prec_places = get_price_precision(
-        market_info, logger
+        market_info, logger,
     )  # This call might log a warning if it defaults
     fallback_tick_size = Decimal("1e-" + str(price_prec_places))
     logger.warning(
         f"Could not determine specific min_tick_size for {symbol} from market_info. "
-        f"Using fallback based on derived price precision ({price_prec_places} places): {fallback_tick_size}"
+        f"Using fallback based on derived price precision ({price_prec_places} places): {fallback_tick_size}",
     )
     return fallback_tick_size
 
 
 def _format_signal(
-    signal_payload: Any, *, success: bool = True, detail: str | None = None
+    signal_payload: Any, *, success: bool = True, detail: str | None = None,
 ) -> str:
     """Formats a trading signal or related message for display, potentially with color.
     This is a placeholder to resolve the import error and can be customized
@@ -675,7 +671,7 @@ def calculate_order_quantity(
     """
     if usdt_amount <= Decimal("0") or current_price <= Decimal("0"):
         logger.error(
-            f"{NEON_RED}USDT amount and current price must be positive for order calculation.{RESET_ALL_STYLE}"
+            f"{NEON_RED}USDT amount and current price must be positive for order calculation.{RESET_ALL_STYLE}",
         )
         return Decimal("0")
 
@@ -690,7 +686,7 @@ def calculate_order_quantity(
     # 3. Ensure quantity meets the minimum requirement
     if adjusted_qty < min_qty:
         logger.warning(
-            f"{NEON_YELLOW}Initial quantity {adjusted_qty:.8f} was below min_qty {min_qty}. Adjusting to min_qty.{RESET_ALL_STYLE}"
+            f"{NEON_YELLOW}Initial quantity {adjusted_qty:.8f} was below min_qty {min_qty}. Adjusting to min_qty.{RESET_ALL_STYLE}",
         )
         adjusted_qty = min_qty
 
@@ -698,7 +694,7 @@ def calculate_order_quantity(
     order_value = adjusted_qty * current_price
     if order_value < min_order_value:
         logger.warning(
-            f"{NEON_YELLOW}Order value {order_value:.4f} is below min_order_value {min_order_value}. Recalculating quantity.{RESET_ALL_STYLE}"
+            f"{NEON_YELLOW}Order value {order_value:.4f} is below min_order_value {min_order_value}. Recalculating quantity.{RESET_ALL_STYLE}",
         )
         # Recalculate quantity to meet min_order_value and re-apply step logic
         required_qty = min_order_value / current_price
@@ -709,7 +705,7 @@ def calculate_order_quantity(
             else required_qty
         )
         logger.info(
-            f"{NEON_BLUE}Quantity adjusted to {adjusted_qty:.8f} to meet minimum order value.{RESET_ALL_STYLE}"
+            f"{NEON_BLUE}Quantity adjusted to {adjusted_qty:.8f} to meet minimum order value.{RESET_ALL_STYLE}",
         )
 
     # 5. Final check to ensure it's not below min_qty after all adjustments
@@ -717,7 +713,7 @@ def calculate_order_quantity(
 
     if adjusted_qty <= Decimal("0"):
         logger.error(
-            f"{NEON_RED}Final calculated quantity is zero or negative. Aborting order calculation.{RESET_ALL_STYLE}"
+            f"{NEON_RED}Final calculated quantity is zero or negative. Aborting order calculation.{RESET_ALL_STYLE}",
         )
         return Decimal("0")
 

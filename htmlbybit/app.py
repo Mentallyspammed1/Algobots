@@ -5,9 +5,7 @@ import time
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask
-from flask import jsonify
-from flask import request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 # --- Configuration ---
@@ -18,7 +16,7 @@ CORS(app)  # Enable CORS for all routes
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 # Gemini API Configuration
@@ -36,7 +34,7 @@ try:
     model = genai.GenerativeModel(MODEL_NAME)
     logging.info(f"Successfully configured Gemini model: {MODEL_NAME}")
 except Exception as e:
-    logging.error(f"Failed to load Gemini model '{MODEL_NAME}': {e}")
+    logging.exception(f"Failed to load Gemini model '{MODEL_NAME}': {e}")
     raise
 
 # Bybit API Base URL from environment
@@ -96,7 +94,7 @@ def format_klines_for_gemini(klines_raw):
                         "low": float(kline[3]),
                         "close": float(kline[4]),
                         "volume": float(kline[5]),
-                    }
+                    },
                 )
             except (ValueError, TypeError) as e:
                 logging.warning(f"Skipping invalid kline data: {kline} - {e}")
@@ -121,7 +119,7 @@ def format_indicators_for_gemini(indicators_raw):
         if isinstance(last_value, (int, float)):
             formatted[indicator_name] = f"{last_value:.6f}"  # Use sufficient precision
         elif isinstance(
-            last_value, dict
+            last_value, dict,
         ):  # For complex objects like Ichimoku, MACD, BB, ST
             if indicator_name == "macd":
                 if (
@@ -214,7 +212,7 @@ def format_signals_for_gemini(signals_raw):
                     "type": signal.get("type", "N/A"),
                     "strength": signal.get("strength", 0),
                     "direction": signal.get("direction", "neutral"),
-                }
+                },
             )
         except Exception as e:
             logging.warning(f"Skipping invalid signal data: {signal} - {e}")
@@ -222,7 +220,7 @@ def format_signals_for_gemini(signals_raw):
 
 
 def construct_gemini_prompt(
-    symbol, interval, klines_data, indicators_data, signals_data
+    symbol, interval, klines_data, indicators_data, signals_data,
 ):
     """Constructs a detailed and structured prompt for the Gemini API."""
     # Convert klines to a more readable format for the prompt
@@ -232,7 +230,7 @@ def construct_gemini_prompt(
             readable_klines.append(
                 f"- Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(k['time'] / 1000))}, "
                 f"Open: {k['open']:.4f}, High: {k['high']:.4f}, Low: {k['low']:.4f}, "
-                f"Close: {k['close']:.4f}, Volume: {k['volume']:.0f}"
+                f"Close: {k['close']:.4f}, Volume: {k['volume']:.0f}",
             )
         except (ValueError, TypeError) as e:
             logging.warning(f"Could not format kline for prompt: {k} - {e}")
@@ -243,7 +241,7 @@ def construct_gemini_prompt(
         if isinstance(value, dict):
             # Handle nested dictionaries (e.g., MACD, Bollinger, Ichimoku)
             details = ", ".join(
-                [f"{k.replace('_', ' ').title()}: {v}" for k, v in value.items()]
+                [f"{k.replace('_', ' ').title()}: {v}" for k, v in value.items()],
             )
             readable_indicators.append(f"- {name.replace('_', ' ').title()}: {details}")
         else:
@@ -256,7 +254,7 @@ def construct_gemini_prompt(
             readable_signals.append(
                 f"- Type: {signal.get('type', 'N/A')}, "
                 f"Strength: {signal.get('strength', 'N/A')}, "
-                f"Direction: {signal.get('direction', 'N/A')}"
+                f"Direction: {signal.get('direction', 'N/A')}",
             )
     else:
         readable_signals.append("No specific trading signals detected.")
@@ -307,7 +305,7 @@ def analyze_signal_with_gemini():
         interval = data.get("interval")
         klines_raw = data.get("klines")  # Array of raw kline objects from Bybit API
         indicators_raw_from_frontend = data.get(
-            "indicators"
+            "indicators",
         )  # Last values of indicators
         signals_raw_from_frontend = data.get("signals")  # Processed signals
 
@@ -327,13 +325,13 @@ def analyze_signal_with_gemini():
             signals_raw_from_frontend = []
 
         logging.info(
-            f"Received analysis request for {symbol} ({interval}) with {len(klines_raw)} klines."
+            f"Received analysis request for {symbol} ({interval}) with {len(klines_raw)} klines.",
         )
 
         # --- Data Formatting for Gemini ---
         # Re-format indicators to ensure consistent structure and precision
         formatted_indicators = format_indicators_for_gemini(
-            indicators_raw_from_frontend
+            indicators_raw_from_frontend,
         )
         formatted_signals = format_signals_for_gemini(signals_raw_from_frontend)
 
@@ -342,15 +340,15 @@ def analyze_signal_with_gemini():
         # If klines_raw is too short, Gemini might struggle.
         if len(klines_raw) < 5:
             logging.warning(
-                f"Received only {len(klines_raw)} klines for {symbol}. Gemini analysis might be limited."
+                f"Received only {len(klines_raw)} klines for {symbol}. Gemini analysis might be limited.",
             )
 
         # --- Gemini API Call ---
         prompt = construct_gemini_prompt(
-            symbol, interval, klines_raw, formatted_indicators, formatted_signals
+            symbol, interval, klines_raw, formatted_indicators, formatted_signals,
         )
         logging.debug(
-            f"Constructed Gemini prompt:\n{prompt[:500]}..."
+            f"Constructed Gemini prompt:\n{prompt[:500]}...",
         )  # Log first 500 chars for debugging
 
         try:
@@ -358,28 +356,28 @@ def analyze_signal_with_gemini():
             analysis_text = gemini_response.text
 
             if not analysis_text or analysis_text.strip().lower().startswith(
-                "i cannot fulfill this request"
+                "i cannot fulfill this request",
             ):
                 logging.warning(
-                    f"Gemini returned an empty or refusal response for {symbol}."
+                    f"Gemini returned an empty or refusal response for {symbol}.",
                 )
                 analysis_text = "Gemini could not provide an analysis for this data. Please try again later or with different parameters."
 
         except Exception as e:
-            logging.error(f"Error calling Gemini API for {symbol}: {e}")
+            logging.exception(f"Error calling Gemini API for {symbol}: {e}")
             return jsonify(
-                {"error": f"Failed to get analysis from Gemini API: {e!s}"}
+                {"error": f"Failed to get analysis from Gemini API: {e!s}"},
             ), 500
 
         end_time = time.time()
         logging.info(
-            f"Gemini analysis for {symbol} completed in {end_time - start_time:.2f} seconds."
+            f"Gemini analysis for {symbol} completed in {end_time - start_time:.2f} seconds.",
         )
         return jsonify({"analysis": analysis_text})
 
     except Exception as e:
         logging.exception(
-            f"An unexpected error occurred in /analyze: {e}"
+            f"An unexpected error occurred in /analyze: {e}",
         )  # Log full traceback
         return jsonify({"error": f"An unexpected server error occurred: {e!s}"}), 500
 

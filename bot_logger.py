@@ -23,7 +23,7 @@ def setup_logging():  # Renamed from setup_logger to match import
 
     # Create formatters and add it to handlers
     log_format = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
     stream_handler.setFormatter(log_format)
     file_handler.setFormatter(log_format)

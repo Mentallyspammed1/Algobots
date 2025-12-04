@@ -3,9 +3,11 @@ from typing import Any
 
 import pandas as pd
 from algobots_types import OrderBlock
-from indicators import calculate_ehlers_fisher_strategy
-from indicators import calculate_sma
-from indicators import calculate_supertrend
+from indicators import (
+    calculate_ehlers_fisher_strategy,
+    calculate_sma,
+    calculate_supertrend,
+)
 
 
 class EhlersSupertrendStrategy:
@@ -35,7 +37,7 @@ class EhlersSupertrendStrategy:
         """Calculates all necessary indicators for the strategy using centralized functions."""
         df = calculate_ehlers_fisher_strategy(df, length=self.ehlers_period)
         df = calculate_supertrend(
-            df, period=self.supertrend_period, multiplier=self.supertrend_multiplier
+            df, period=self.supertrend_period, multiplier=self.supertrend_multiplier,
         )
         df["sma"] = calculate_sma(df, length=self.sma_period)
         return df
@@ -60,7 +62,7 @@ class EhlersSupertrendStrategy:
         )
         if len(df) < min_required_bars:
             self.logger.debug(
-                f"Not enough data for signals. Need {min_required_bars}, have {len(df)}."
+                f"Not enough data for signals. Need {min_required_bars}, have {len(df)}.",
             )
             return []
 
@@ -83,7 +85,7 @@ class EhlersSupertrendStrategy:
             col not in prev_bar or pd.isna(prev_bar[col]) for col in required_cols
         ):
             self.logger.debug(
-                "Missing indicator values on last or previous bar, skipping signal generation."
+                "Missing indicator values on last or previous bar, skipping signal generation.",
             )
             return []
 
@@ -109,7 +111,7 @@ class EhlersSupertrendStrategy:
             }
             self.logger.info(f"Generated BUY signal at {entry_price:.4f}")
             signals.append(
-                ("BUY", entry_price, pd.Timestamp(last_bar.name), signal_info)
+                ("BUY", entry_price, pd.Timestamp(last_bar.name), signal_info),
             )
 
         is_supertrend_bearish_turn = (
@@ -133,7 +135,7 @@ class EhlersSupertrendStrategy:
             }
             self.logger.info(f"Generated SELL signal at {entry_price:.4f}")
             signals.append(
-                ("SELL", entry_price, pd.Timestamp(last_bar.name), signal_info)
+                ("SELL", entry_price, pd.Timestamp(last_bar.name), signal_info),
             )
 
         return signals
@@ -154,7 +156,7 @@ class EhlersSupertrendStrategy:
         min_required_bars = max(self.ehlers_period, self.supertrend_period) + 2
         if len(df) < min_required_bars:
             self.logger.debug(
-                f"Not enough data for exit signals. Need {min_required_bars}, have {len(df)}."
+                f"Not enough data for exit signals. Need {min_required_bars}, have {len(df)}.",
             )
             return []
 
@@ -195,7 +197,7 @@ class EhlersSupertrendStrategy:
             if exit_reason:
                 exit_info = {"indicator": "Ehlers Supertrend", "reason": exit_reason}
                 self.logger.info(
-                    f"Generated SELL_TO_CLOSE signal at {current_price:.4f}. Reason: {exit_reason}"
+                    f"Generated SELL_TO_CLOSE signal at {current_price:.4f}. Reason: {exit_reason}",
                 )
                 exit_signals.append(
                     (
@@ -203,7 +205,7 @@ class EhlersSupertrendStrategy:
                         current_price,
                         pd.Timestamp(last_bar.name),
                         exit_info,
-                    )
+                    ),
                 )
 
         elif current_position_side == "Sell":
@@ -221,7 +223,7 @@ class EhlersSupertrendStrategy:
             if exit_reason:
                 exit_info = {"indicator": "Ehlers Supertrend", "reason": exit_reason}
                 self.logger.info(
-                    f"Generated BUY_TO_CLOSE signal at {current_price:.4f}. Reason: {exit_reason}"
+                    f"Generated BUY_TO_CLOSE signal at {current_price:.4f}. Reason: {exit_reason}",
                 )
                 exit_signals.append(
                     (
@@ -229,7 +231,7 @@ class EhlersSupertrendStrategy:
                         current_price,
                         pd.Timestamp(last_bar.name),
                         exit_info,
-                    )
+                    ),
                 )
 
         return exit_signals

@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def cancel_specific_order(order_id: str, symbol: str, category: str = "linear"):
     print(
         Fore.MAGENTA
         + f"\n# Attempting to cancel order {order_id} for {symbol} in category {category}...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def cancel_specific_order(order_id: str, symbol: str, category: str = "linear"):
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,7 +37,7 @@ def cancel_specific_order(order_id: str, symbol: str, category: str = "linear"):
         print(
             Fore.CYAN
             + f"  # Sending cancellation request for Order ID: {order_id}, Symbol: {symbol}, Category: {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Cancel a specific order
@@ -47,14 +45,14 @@ def cancel_specific_order(order_id: str, symbol: str, category: str = "linear"):
         # symbol: Trading pair
         # orderId: The ID of the order to cancel
         response = session.cancel_order(
-            category=category, symbol=symbol, orderId=order_id
+            category=category, symbol=symbol, orderId=order_id,
         )
 
         if response and response["retCode"] == 0:
             print(
                 Fore.GREEN
                 + f"  # Order {order_id} for {symbol} cancelled successfully!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(Fore.GREEN + f"    Response: {response['result']}" + Style.RESET_ALL)
         else:
@@ -64,7 +62,7 @@ def cancel_specific_order(order_id: str, symbol: str, category: str = "linear"):
                 print(
                     Fore.RED
                     + f"  # Error Message: {response['retMsg']}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     except Exception as e:
@@ -72,13 +70,13 @@ def cancel_specific_order(order_id: str, symbol: str, category: str = "linear"):
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable, API keys are valid, and the order ID/symbol/category are correct."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
         Fore.MAGENTA
         + "\n# The order cancellation incantation is complete!\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
 
@@ -90,22 +88,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     # IMPORTANT: Replace with a real order ID and symbol from your testnet account!
@@ -118,12 +116,12 @@ if __name__ == "__main__":
         print(
             Fore.YELLOW
             + "\n  # WARNING: Please replace 'YOUR_ORDER_ID_HERE' with an actual order ID from your Bybit testnet account."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # This script will not function correctly without a valid order ID."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
     else:
         cancel_specific_order(dummy_order_id, dummy_symbol, dummy_category)

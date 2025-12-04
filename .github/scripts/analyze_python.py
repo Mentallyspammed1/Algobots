@@ -63,7 +63,7 @@ def analyze_reports(pylint_report_path, flake8_report_path):
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print(
-            "Usage: python analyze_python.py <pylint_report> <flake8_report> <output_file>"
+            "Usage: python analyze_python.py <pylint_report> <flake8_report> <output_file>",
         )
         sys.exit(1)
 

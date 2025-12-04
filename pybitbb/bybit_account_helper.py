@@ -3,8 +3,10 @@ import logging
 import time  # For potential timestamp in error logging
 from typing import Any
 
-from pybit.exceptions import BybitAPIError  # Import specific Pybit exceptions
-from pybit.exceptions import BybitRequestError  # Import specific Pybit exceptions
+from pybit.exceptions import (
+    BybitAPIError,  # Import specific Pybit exceptions
+    BybitRequestError,  # Import specific Pybit exceptions
+)
 from pybit.unified_trading import HTTP
 
 # Configure logging for the module
@@ -36,14 +38,14 @@ class BybitAccountHelper:
         self.api_secret = api_secret
         self.testnet = testnet
         self.session = HTTP(
-            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret
+            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret,
         )
         logger.info(
-            f"BybitAccountHelper initialized for {'testnet' if self.testnet else 'mainnet'}."
+            f"BybitAccountHelper initialized for {'testnet' if self.testnet else 'mainnet'}.",
         )
 
     def _make_request(
-        self, method: str, endpoint_name: str, **kwargs
+        self, method: str, endpoint_name: str, **kwargs,
     ) -> dict[str, Any] | None:
         """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
@@ -61,31 +63,31 @@ class BybitAccountHelper:
 
             if response and response.get("retCode") == 0:
                 logger.debug(
-                    f"[{endpoint_name}] Successfully called. Response: {response.get('result')}"
+                    f"[{endpoint_name}] Successfully called. Response: {response.get('result')}",
                 )
                 return response.get("result")
             ret_code = response.get("retCode", "N/A")
             error_msg = response.get("retMsg", "Unknown error")
             logger.error(
                 f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
-                f"Args: {kwargs}. Full Response: {response}"
+                f"Args: {kwargs}. Full Response: {response}",
             )
             return None
         except (BybitRequestError, BybitAPIError) as e:
             logger.exception(
                 f"[{endpoint_name}] Pybit specific error during API call. "
-                f"Args: {kwargs}. Error: {e}"
+                f"Args: {kwargs}. Error: {e}",
             )
             return None
         except Exception as e:
             logger.exception(
                 f"[{endpoint_name}] Unexpected exception during API call. "
-                f"Args: {kwargs}. Error: {e}"
+                f"Args: {kwargs}. Error: {e}",
             )
             return None
 
     def get_wallet_balance(
-        self, account_type: str = "UNIFIED"
+        self, account_type: str = "UNIFIED",
     ) -> dict[str, Any] | None:
         """Retrieves comprehensive wallet balance and risk information for a specified account type.
 
@@ -98,7 +100,7 @@ class BybitAccountHelper:
             logger.error("Invalid 'account_type' provided for get_wallet_balance.")
             return None
         return self._make_request(
-            "get_wallet_balance", "Account Wallet Balance", accountType=account_type
+            "get_wallet_balance", "Account Wallet Balance", accountType=account_type,
         )
 
     def get_transferable_amount(self, coin_name: str) -> dict[str, Any] | None:
@@ -112,11 +114,11 @@ class BybitAccountHelper:
             logger.error("Invalid 'coin_name' provided for get_transferable_amount.")
             return None
         return self._make_request(
-            "get_transferable_amount", "Transferable Amount", coinName=coin_name
+            "get_transferable_amount", "Transferable Amount", coinName=coin_name,
         )
 
     def get_coins_balance(
-        self, member_id: str, account_type: str = "UNIFIED"
+        self, member_id: str, account_type: str = "UNIFIED",
     ) -> dict[str, Any] | None:
         """Retrieves all coin balances across account types for a specific member.
         Note: `member_id` is typically your Bybit UID.
@@ -139,7 +141,7 @@ class BybitAccountHelper:
         )
 
     def get_coin_balance(
-        self, member_id: str, coin: str, account_type: str = "UNIFIED"
+        self, member_id: str, coin: str, account_type: str = "UNIFIED",
     ) -> dict[str, Any] | None:
         """Queries the balance of a specific coin for a specific member and account type.
         Note: `member_id` is typically your Bybit UID.
@@ -167,7 +169,7 @@ class BybitAccountHelper:
         )
 
     def get_closed_pnl(
-        self, category: str, symbol: str | None = None, **kwargs
+        self, category: str, symbol: str | None = None, **kwargs,
     ) -> dict[str, Any] | None:
         """Queries closed profit and loss records for a given category and optional symbol.
 
@@ -190,7 +192,7 @@ class BybitAccountHelper:
         return self._make_request("get_closed_pnl", "Closed PnL Records", **params)
 
     def get_executions(
-        self, category: str, symbol: str | None = None, **kwargs
+        self, category: str, symbol: str | None = None, **kwargs,
     ) -> dict[str, Any] | None:
         """Retrieves execution history (detailed trade analysis) for a given category and optional symbol.
 
@@ -213,7 +215,7 @@ class BybitAccountHelper:
         return self._make_request("get_executions", "Execution History", **params)
 
     def get_transaction_log(
-        self, account_type: str = "UNIFIED", **kwargs
+        self, account_type: str = "UNIFIED", **kwargs,
     ) -> dict[str, Any] | None:
         """Queries transaction logs for Unified accounts.
 
@@ -230,7 +232,7 @@ class BybitAccountHelper:
         return self._make_request("get_transaction_log", "Transaction Log", **params)
 
     def get_borrow_history(
-        self, currency: str | None = None, **kwargs
+        self, currency: str | None = None, **kwargs,
     ) -> dict[str, Any] | None:
         """Retrieves interest and borrowing records.
 
@@ -249,7 +251,7 @@ class BybitAccountHelper:
         return self._make_request("get_borrow_history", "Borrow History", **params)
 
     def get_fee_rates(
-        self, category: str, symbol: str | None = None
+        self, category: str, symbol: str | None = None,
     ) -> dict[str, Any] | None:
         """Retrieves trading fee rates for derivatives (Linear, Inverse, Option).
 
@@ -288,7 +290,7 @@ if __name__ == "__main__":
 
     if API_KEY == "YOUR_API_KEY" or API_SECRET == "YOUR_API_SECRET":
         logger.error(
-            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_account_helper.py example."
+            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_account_helper.py example.",
         )
         # In a real application, you might exit or raise a more specific error.
         # For demonstration, we'll proceed but expect API calls to fail.
@@ -301,11 +303,11 @@ if __name__ == "__main__":
     if wallet_balance and wallet_balance.get("list"):
         for account in wallet_balance["list"]:
             print(
-                f"Account Type: {account.get('accountType')}, Total Equity: {account.get('totalEquity')}"
+                f"Account Type: {account.get('accountType')}, Total Equity: {account.get('totalEquity')}",
             )
             for coin_info in account.get("coin", []):
                 print(
-                    f"  Coin: {coin_info.get('coin')}, Available: {coin_info.get('availableToWithdraw')}, Wallet Balance: {coin_info.get('walletBalance')}"
+                    f"  Coin: {coin_info.get('coin')}, Available: {coin_info.get('availableToWithdraw')}, Wallet Balance: {coin_info.get('walletBalance')}",
                 )
     else:
         print("  Failed to retrieve wallet balance or no accounts found.")
@@ -335,19 +337,19 @@ if __name__ == "__main__":
     if closed_pnl and closed_pnl.get("list"):
         for record in closed_pnl["list"]:
             print(
-                f"  Symbol: {record.get('symbol')}, PnL: {record.get('closedPnl')}, Side: {record.get('side')}, Created: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(record.get('createdTime')) / 1000))}"
+                f"  Symbol: {record.get('symbol')}, PnL: {record.get('closedPnl')}, Side: {record.get('side')}, Created: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(record.get('createdTime')) / 1000))}",
             )
     else:
         print("  Failed to retrieve closed PnL records.")
 
     print("\n--- Getting Executions (Linear category, BTCUSDT, last 1 record) ---")
     executions = account_helper.get_executions(
-        category="linear", symbol="BTCUSDT", limit=1
+        category="linear", symbol="BTCUSDT", limit=1,
     )
     if executions and executions.get("list"):
         for exec_record in executions["list"]:
             print(
-                f"  Symbol: {exec_record.get('symbol')}, Price: {exec_record.get('execPrice')}, Qty: {exec_record.get('execQty')}, Side: {exec_record.get('side')}"
+                f"  Symbol: {exec_record.get('symbol')}, Price: {exec_record.get('execPrice')}, Qty: {exec_record.get('execQty')}, Side: {exec_record.get('side')}",
             )
     else:
         print("  Failed to retrieve execution records.")
@@ -357,7 +359,7 @@ if __name__ == "__main__":
     if fee_rates and fee_rates.get("list"):
         rate_info = fee_rates["list"][0]
         print(
-            f"  Symbol: {rate_info.get('symbol')}, Maker Fee: {rate_info.get('makerFeeRate')}, Taker Fee: {rate_info.get('takerFeeRate')}"
+            f"  Symbol: {rate_info.get('symbol')}, Maker Fee: {rate_info.get('makerFeeRate')}, Taker Fee: {rate_info.get('takerFeeRate')}",
         )
     else:
         print("  Failed to retrieve fee rates.")
@@ -366,7 +368,7 @@ if __name__ == "__main__":
     account_info = account_helper.get_account_info()
     if account_info:
         print(
-            f"  Unified Margin Account ID: {account_info.get('unifiedMarginAccount', {}).get('unifiedMarginAccountID')}"
+            f"  Unified Margin Account ID: {account_info.get('unifiedMarginAccount', {}).get('unifiedMarginAccountID')}",
         )
         print(f"  Margin Mode: {account_info.get('marginMode')}")
         print(f"  Spot Hedging Status: {account_info.get('spotHedgingStatus')}")
@@ -375,12 +377,12 @@ if __name__ == "__main__":
 
     print("\n--- Getting Transaction Log (Unified Account, last 1 record) ---")
     transaction_log = account_helper.get_transaction_log(
-        account_type="UNIFIED", limit=1
+        account_type="UNIFIED", limit=1,
     )
     if transaction_log and transaction_log.get("list"):
         for log_entry in transaction_log["list"]:
             print(
-                f"  Txn Type: {log_entry.get('type')}, Coin: {log_entry.get('coin')}, Amount: {log_entry.get('amount')}, Txn Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(log_entry.get('transactionTime')) / 1000))}"
+                f"  Txn Type: {log_entry.get('type')}, Coin: {log_entry.get('coin')}, Amount: {log_entry.get('amount')}, Txn Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(log_entry.get('transactionTime')) / 1000))}",
             )
     else:
         print("  Failed to retrieve transaction log.")
@@ -390,7 +392,7 @@ if __name__ == "__main__":
     if borrow_history and borrow_history.get("list"):
         for borrow_record in borrow_history["list"]:
             print(
-                f"  Coin: {borrow_record.get('currency')}, Borrow Amount: {borrow_record.get('borrowAmount')}, Interest: {borrow_record.get('interest')}"
+                f"  Coin: {borrow_record.get('currency')}, Borrow Amount: {borrow_record.get('borrowAmount')}, Interest: {borrow_record.get('interest')}",
             )
     else:
         print("  Failed to retrieve borrow history.")

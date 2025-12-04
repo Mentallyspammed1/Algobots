@@ -9,7 +9,7 @@ from pybit.unified_trading import HTTP
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 
@@ -30,7 +30,7 @@ class BybitTrendAnalyzer:
         self.client = HTTP(testnet=testnet, api_key=api_key, api_secret=api_secret)
         self.testnet = testnet
         logging.info(
-            f"BybitTrendAnalyzer initialized. Connected to {'Testnet' if testnet else 'Mainnet'}."
+            f"BybitTrendAnalyzer initialized. Connected to {'Testnet' if testnet else 'Mainnet'}.",
         )
 
     def _get_interval_ms(self, interval: str) -> int:
@@ -77,7 +77,7 @@ class BybitTrendAnalyzer:
         """
         if num_candles > 5000:  # Increased limit to 5000
             logging.warning(
-                "num_candles exceeds maximum (5000). Only fetching 5000 candles."
+                "num_candles exceeds maximum (5000). Only fetching 5000 candles.",
             )
             num_candles = 5000
 
@@ -113,25 +113,25 @@ class BybitTrendAnalyzer:
                 # Convert numeric columns
                 numeric_cols = ["open", "high", "low", "close", "volume", "turnover"]
                 df[numeric_cols] = df[numeric_cols].apply(
-                    pd.to_numeric, errors="coerce"
+                    pd.to_numeric, errors="coerce",
                 )
                 df.set_index("open_time", inplace=True)
                 df.sort_index(inplace=True)  # Ensure chronological order
 
                 logging.info(
-                    f"Successfully fetched {len(df)} {interval} candles for {symbol} ({category})."
+                    f"Successfully fetched {len(df)} {interval} candles for {symbol} ({category}).",
                 )
                 return df
             logging.error(
-                f"Failed to fetch klines for {symbol}: {response.get('retMsg', 'Unknown error')}"
+                f"Failed to fetch klines for {symbol}: {response.get('retMsg', 'Unknown error')}",
             )
             return pd.DataFrame()
         except Exception as e:
-            logging.error(f"An error occurred while fetching klines: {e}")
+            logging.exception(f"An error occurred while fetching klines: {e}")
             return pd.DataFrame()
 
     def _identify_order_blocks(
-        self, df: pd.DataFrame, ob_percentage_threshold: float = 0.01
+        self, df: pd.DataFrame, ob_percentage_threshold: float = 0.01,
     ) -> pd.DataFrame:
         """Identifies bullish and bearish order blocks in the DataFrame.
 
@@ -149,7 +149,7 @@ class BybitTrendAnalyzer:
         df["ob_low"] = np.nan
 
         for i in range(
-            1, len(df) - 1
+            1, len(df) - 1,
         ):  # Iterate from the second candle to the second to last
             prev_candle = df.iloc[i - 1]
             current_candle = df.iloc[i]
@@ -244,18 +244,18 @@ class BybitTrendAnalyzer:
 
         # Simple Moving Averages
         df[f"SMA_{sma_fast_period}"] = ta.trend.sma_indicator(
-            df["close"], window=sma_fast_period
+            df["close"], window=sma_fast_period,
         )
         df[f"SMA_{sma_slow_period}"] = ta.trend.sma_indicator(
-            df["close"], window=sma_slow_period
+            df["close"], window=sma_slow_period,
         )
 
         # Exponential Moving Averages
         df[f"EMA_{ema_fast_period}"] = ta.trend.ema_indicator(
-            df["close"], window=ema_fast_period
+            df["close"], window=ema_fast_period,
         )
         df[f"EMA_{ema_slow_period}"] = ta.trend.ema_indicator(
-            df["close"], window=ema_slow_period
+            df["close"], window=ema_slow_period,
         )
 
         # Relative Strength Index (RSI)
@@ -263,18 +263,18 @@ class BybitTrendAnalyzer:
 
         # Average Directional Index (ADX)
         df[f"ADX_{adx_period}"] = ta.trend.adx(
-            df["high"], df["low"], df["close"], window=adx_period
+            df["high"], df["low"], df["close"], window=adx_period,
         )
         df[f"ADX_POS_{adx_period}"] = ta.trend.adx_pos(
-            df["high"], df["low"], df["close"], window=adx_period
+            df["high"], df["low"], df["close"], window=adx_period,
         )
         df[f"ADX_NEG_{adx_period}"] = ta.trend.adx_neg(
-            df["high"], df["low"], df["close"], window=adx_period
+            df["high"], df["low"], df["close"], window=adx_period,
         )
 
         # Bollinger Bands
         bollinger = ta.volatility.BollingerBands(
-            df["close"], window=bb_window, window_dev=bb_std
+            df["close"], window=bb_window, window_dev=bb_std,
         )
         df["BB_upper"] = bollinger.bollinger_hband()
         df["BB_lower"] = bollinger.bollinger_lband()
@@ -306,7 +306,7 @@ class BybitTrendAnalyzer:
         df["Ichimoku_leading_span_a"] = ichimoku.ichimoku_a()
         df["Ichimoku_leading_span_b"] = ichimoku.ichimoku_b()
         df["Ichimoku_lagging_span"] = df["close"].shift(
-            -ichimoku_kijun
+            -ichimoku_kijun,
         )  # Chikou Span is current close shifted back
 
         # Ehlers Fisher Transform
@@ -334,7 +334,7 @@ class BybitTrendAnalyzer:
         else:
             df["Ehlers_Fisher_Transform"] = np.nan
             logging.warning(
-                f"Not enough data for Ehlers Fisher Transform with period {ehlers_fisher_period}."
+                f"Not enough data for Ehlers Fisher Transform with period {ehlers_fisher_period}.",
             )
 
         # Ehlers Super Smoother Filter (using pandas_ta)
@@ -343,7 +343,7 @@ class BybitTrendAnalyzer:
         else:
             df["Ehlers_SSF"] = np.nan
             logging.warning(
-                f"Not enough data for Ehlers Super Smoother Filter with period {ehlers_ssf_period}."
+                f"Not enough data for Ehlers Super Smoother Filter with period {ehlers_ssf_period}.",
             )
 
         # Identify Order Blocks
@@ -558,8 +558,8 @@ class BybitTrendAnalyzer:
                     leading_span_a,
                     leading_span_b,
                     lagging_span,
-                ]
-            )
+                ],
+            ),
         ):
             # Price vs Cloud
             if close_price > max(leading_span_a, leading_span_b):
@@ -630,7 +630,7 @@ class BybitTrendAnalyzer:
                 )
         else:
             logging.warning(
-                "Ehlers Super Smoother Filter value is NaN, skipping analysis."
+                "Ehlers Super Smoother Filter value is NaN, skipping analysis.",
             )
 
         # --- Order Block Analysis ---
@@ -823,7 +823,7 @@ class BybitTrendAnalyzer:
 
         """
         logging.info(
-            f"Starting trend analysis for {symbol} ({category}) on {interval} interval..."
+            f"Starting trend analysis for {symbol} ({category}) on {interval} interval...",
         )
         df = self.fetch_klines(category, symbol, interval, num_candles)
 
@@ -870,7 +870,7 @@ class BybitTrendAnalyzer:
         if df_cleaned.empty or len(df_cleaned) < max_lookback:
             logging.error(
                 "DataFrame is empty or has insufficient data after dropping NaN values from indicators. "
-                "Increase num_candles or reduce indicator periods."
+                "Increase num_candles or reduce indicator periods.",
             )
             return {
                 "status": "error",

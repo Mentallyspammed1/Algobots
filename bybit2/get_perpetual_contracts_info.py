@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def get_perpetual_contracts_info():
     print(
         Fore.MAGENTA
         + "\n# Unveiling the scroll of all available perpetual contracts and their trading status...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def get_perpetual_contracts_info():
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,7 +37,7 @@ def get_perpetual_contracts_info():
         print(
             Fore.CYAN
             + "  # Channeling the Bybit API for instrument information (Linear Perpetual)..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Fetch instrument information for linear perpetual contracts
@@ -52,7 +50,7 @@ def get_perpetual_contracts_info():
                 print(
                     Fore.GREEN
                     + "  # Successfully retrieved perpetual contract information:"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 for instrument in instruments:
                     symbol = instrument["symbol"]
@@ -60,19 +58,19 @@ def get_perpetual_contracts_info():
                     print(
                         Fore.WHITE
                         + f"    Symbol: {symbol}, Status: {status}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
             else:
                 print(
                     Fore.YELLOW
                     + "  # No perpetual contract information found."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
         else:
             print(
                 Fore.RED
                 + "  # Failed to retrieve instrument information."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(Fore.RED + f"  # Response: {response}" + Style.RESET_ALL)
 
@@ -81,13 +79,13 @@ def get_perpetual_contracts_info():
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable and API keys are valid."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
         Fore.MAGENTA
         + "\n# The secrets of the perpetual contracts have been unveiled!\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
 
@@ -99,22 +97,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     get_perpetual_contracts_info()

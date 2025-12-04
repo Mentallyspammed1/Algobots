@@ -9,8 +9,7 @@ import smtplib
 import sqlite3
 import uuid
 import warnings
-from dataclasses import asdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
@@ -45,12 +44,14 @@ except ImportError:
 # Import BOT_CONFIG from the new config file
 # Import necessary components from ehlerssupertrend.py
 from config import BOT_CONFIG
-from ehlerssupertrend import Bybit
-from ehlerssupertrend import ColoredFormatter
-from ehlerssupertrend import calculate_ehl_supertrend_indicators
-from ehlerssupertrend import calculate_pnl
-from ehlerssupertrend import generate_ehl_supertrend_signals
-from ehlerssupertrend import send_termux_toast
+from ehlerssupertrend import (
+    Bybit,
+    ColoredFormatter,
+    calculate_ehl_supertrend_indicators,
+    calculate_pnl,
+    generate_ehl_supertrend_signals,
+    send_termux_toast,
+)
 
 
 # --- Enhanced Logging Setup ---
@@ -63,7 +64,7 @@ class OptimizationLogger:
             console_handler = logging.StreamHandler()
             console_handler.setFormatter(ColoredFormatter())
             console_handler.setLevel(
-                getattr(logging, BOT_CONFIG.get("LOG_LEVEL", "INFO"))
+                getattr(logging, BOT_CONFIG.get("LOG_LEVEL", "INFO")),
             )
             from logging.handlers import RotatingFileHandler
 
@@ -73,7 +74,7 @@ class OptimizationLogger:
                 backupCount=5,
             )
             file_formatter = logging.Formatter(
-                "%(asctime)s - %(levelname)s - %(message)s"
+                "%(asctime)s - %(levelname)s - %(message)s",
             )
             file_handler.setFormatter(file_formatter)
             self.logger.addHandler(console_handler)
@@ -174,7 +175,7 @@ class CacheManager:
         if self.use_redis:
             try:
                 self.cache = redis.Redis(
-                    host="localhost", port=6379, db=0, decode_responses=False
+                    host="localhost", port=6379, db=0, decode_responses=False,
                 )
                 self.cache.ping()
                 opt_logger.info("Connected to Redis cache.")
@@ -205,10 +206,10 @@ class OptimizationDatabase:
     def _create_tables(self):
         with self.conn:
             self.conn.execute(
-                "CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, symbol TEXT, timeframe TEXT, start TEXT, end TEXT, params TEXT, metrics TEXT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                "CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, symbol TEXT, timeframe TEXT, start TEXT, end TEXT, params TEXT, metrics TEXT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
             )
             self.conn.execute(
-                "CREATE TABLE IF NOT EXISTS backtests (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, params TEXT, metrics TEXT, FOREIGN KEY (run_id) REFERENCES runs (id))"
+                "CREATE TABLE IF NOT EXISTS backtests (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, params TEXT, metrics TEXT, FOREIGN KEY (run_id) REFERENCES runs (id))",
             )
 
     def save_run(self, data: dict) -> str:
@@ -242,7 +243,7 @@ class AdvancedBacktester:
         self.slippage_pct = slippage_pct
 
     def calculate_metrics(
-        self, trades: list[dict], equity_curve: list[float]
+        self, trades: list[dict], equity_curve: list[float],
     ) -> PerformanceMetrics:
         if not trades:
             return PerformanceMetrics(*[0] * 25)
@@ -363,7 +364,7 @@ class AdvancedBacktester:
                         else exit_price * (1 + self.slippage_pct)
                     )
                     pnl = calculate_pnl(
-                        trade["side"], trade["entry_price"], slipped_exit, trade["qty"]
+                        trade["side"], trade["entry_price"], slipped_exit, trade["qty"],
                     )
                     commission = (
                         trade["qty"] * trade["entry_price"] * self.commission_rate
@@ -371,7 +372,7 @@ class AdvancedBacktester:
                     net_pnl = pnl - commission
                     capital += net_pnl
                     closed_trades.append(
-                        {**trade, "pnl": net_pnl, "exit_reason": exit_reason}
+                        {**trade, "pnl": net_pnl, "exit_reason": exit_reason},
                     )
                     del active_trades[trade_symbol]
             # Generate new trade signals
@@ -408,7 +409,7 @@ class AdvancedBacktester:
                 + sum(
                     calculate_pnl(t["side"], t["entry_price"], current_price, t["qty"])
                     for t in active_trades.values()
-                )
+                ),
             )
         return (
             self.calculate_metrics(closed_trades, equity_curve),
@@ -426,7 +427,7 @@ class OptimizationEngine:
         return self.backtester.run_backtest(*args)
 
     def bayesian(
-        self, df, space, symbol, pp, qp, objective="sharpe_ratio", n_trials=100
+        self, df, space, symbol, pp, qp, objective="sharpe_ratio", n_trials=100,
     ) -> tuple[dict, PerformanceMetrics, list[dict]]:
         def objective_func(trial):
             params = {
@@ -446,7 +447,7 @@ class OptimizationEngine:
         study.optimize(objective_func, n_trials=n_trials)
         best_params = study.best_params
         metrics, trades, _ = self.backtester.run_backtest(
-            df, best_params, symbol, pp, qp
+            df, best_params, symbol, pp, qp,
         )
         return best_params, metrics, trades
 
@@ -464,17 +465,17 @@ class WalkForwardAnalyzer:
             train_df = df.iloc[train_idx]
             test_df = df.iloc[test_idx]
             best_params, _, _ = self.optimizer.bayesian(
-                train_df, param_grid, symbol, pp, qp, n_trials=50
+                train_df, param_grid, symbol, pp, qp, n_trials=50,
             )
             test_metrics, test_trades, _ = self.optimizer.backtester.run_backtest(
-                test_df, best_params, symbol, pp, qp
+                test_df, best_params, symbol, pp, qp,
             )
             results.append(
                 {
                     "fold": fold,
                     "best_params": best_params,
                     "test_metrics": asdict(test_metrics),
-                }
+                },
             )
         return results
 
@@ -488,7 +489,7 @@ class NotificationManager:
             [
                 f"<tr><td style='padding: 5px; font-weight: bold;'>{k.replace('_', ' ').title()}</td><td style='padding: 5px;'>{v:.4f}</td></tr>"
                 for k, v in asdict(metrics).items()
-            ]
+            ],
         )
         params_html = (
             json.dumps(params, indent=2).replace("\n", "<br>").replace(" ", "&nbsp;")
@@ -528,11 +529,11 @@ class VisualizationSuite:
         os.makedirs(report_dir, exist_ok=True)
 
     def generate_report(
-        self, run_data: dict, equity_curve: list[float], trades: list[dict]
+        self, run_data: dict, equity_curve: list[float], trades: list[dict],
     ):
         plt.style.use("cyberpunk")
         fig, axes = plt.subplots(
-            2, 1, figsize=(15, 12), gridspec_kw={"height_ratios": [3, 1]}
+            2, 1, figsize=(15, 12), gridspec_kw={"height_ratios": [3, 1]},
         )
         # Equity Curve
         axes[0].plot(equity_curve, color="#08F7FE", lw=2)
@@ -542,11 +543,11 @@ class VisualizationSuite:
         peak = equity.expanding(min_periods=1).max()
         drawdown = (equity - peak) / peak
         axes[1].fill_between(
-            drawdown.index, drawdown * 100, 0, color="#FE53BB", alpha=0.6
+            drawdown.index, drawdown * 100, 0, color="#FE53BB", alpha=0.6,
         )
         axes[1].set_title("Drawdown (%)", fontsize=14)
         report_path = os.path.join(
-            self.report_dir, f"report_{run_data['symbol']}_{datetime.date.today()}.png"
+            self.report_dir, f"report_{run_data['symbol']}_{datetime.date.today()}.png",
         )
         plt.savefig(report_path, dpi=150, bbox_inches="tight")
         plt.close()
@@ -588,12 +589,12 @@ class MainOrchestrator:
                 n_trials=n_trials,
             )
             _, _, equity_curve = self.backtester.run_backtest(
-                self.df, best_params, self.symbol, self.price_prec, self.qty_prec
+                self.df, best_params, self.symbol, self.price_prec, self.qty_prec,
             )
         elif mode == "walk_forward":
             wf_analyzer = WalkForwardAnalyzer(self.optimizer)
             results = wf_analyzer.analyze(
-                self.df, param_space, self.symbol, self.price_prec, self.qty_prec
+                self.df, param_space, self.symbol, self.price_prec, self.qty_prec,
             )
             opt_logger.info(f"Walk-forward results:\n{json.dumps(results, indent=2)}")
             return
@@ -613,7 +614,7 @@ class MainOrchestrator:
         html_report = self.notifier.format_html_report(run_data)
         self.notifier.send_email(f"Optimization Complete: {self.symbol}", html_report)
         opt_logger.info(
-            f"Optimization finished in {datetime.datetime.now() - start_time}."
+            f"Optimization finished in {datetime.datetime.now() - start_time}.",
         )
         send_termux_toast(f"Optimization for {self.symbol} complete!")
 
@@ -637,11 +638,11 @@ if __name__ == "__main__":
     try:
         if not os.path.exists(DATA_FILE_PATH):
             raise FileNotFoundError(
-                f"Data file not found at {DATA_FILE_PATH}. Please download data first."
+                f"Data file not found at {DATA_FILE_PATH}. Please download data first.",
             )
 
         orchestrator = MainOrchestrator(
-            symbol=SYMBOL_TO_OPTIMIZE, timeframe=TIMEFRAME, data_path=DATA_FILE_PATH
+            symbol=SYMBOL_TO_OPTIMIZE, timeframe=TIMEFRAME, data_path=DATA_FILE_PATH,
         )
 
         # --- CHOOSE YOUR OPTIMIZATION MODE ---

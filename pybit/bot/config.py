@@ -14,5 +14,5 @@ BOT_CONFIG["API_SECRET"] = os.environ.get("BYBIT_API_SECRET")
 
 if not BOT_CONFIG["API_KEY"] or not BOT_CONFIG["API_SECRET"]:
     raise ValueError(
-        "BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set."
+        "BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set.",
     )

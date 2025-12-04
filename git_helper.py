@@ -53,7 +53,7 @@ if __name__ == "__main__":
     if command == "tag":
         if len(sys.argv) < 4:
             print(
-                "Usage: python git_helper.py tag <version> <message>", file=sys.stderr
+                "Usage: python git_helper.py tag <version> <message>", file=sys.stderr,
             )
             sys.exit(1)
         version = sys.argv[2]

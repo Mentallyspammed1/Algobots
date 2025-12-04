@@ -28,7 +28,7 @@ class BybitIndicators:
         :param api_secret: Optional. Your Bybit API secret.
         """
         self.market_data_helper = BybitMarketDataHelper(
-            testnet=testnet, api_key=api_key, api_secret=api_secret
+            testnet=testnet, api_key=api_key, api_secret=api_secret,
         )
         logger.info(f"BybitIndicators initialized. Testnet: {testnet}.")
 
@@ -53,7 +53,7 @@ class BybitIndicators:
                  or None on failure.
         """
         logger.debug(
-            f"Fetching kline data for {symbol}, interval {interval}, limit {limit}..."
+            f"Fetching kline data for {symbol}, interval {interval}, limit {limit}...",
         )
         kline_data = self.market_data_helper.get_kline(
             category=category,
@@ -66,7 +66,7 @@ class BybitIndicators:
 
         if not kline_data or not kline_data.get("list"):
             logger.warning(
-                f"No kline data fetched for {symbol} with interval {interval}."
+                f"No kline data fetched for {symbol} with interval {interval}.",
             )
             return None
 
@@ -116,7 +116,7 @@ class BybitIndicators:
         :return: A pandas DataFrame containing kline data and calculated indicators, or None on failure.
         """
         df = self._fetch_kline_data(
-            category, symbol, interval, limit, start_time, end_time
+            category, symbol, interval, limit, start_time, end_time,
         )
         if df is None:
             return None
@@ -126,7 +126,7 @@ class BybitIndicators:
                 isinstance(i, str) for i in indicators
             ):
                 logger.error(
-                    "Invalid 'indicators' parameter. Must be a list of strings."
+                    "Invalid 'indicators' parameter. Must be a list of strings.",
                 )
                 return None
 
@@ -148,7 +148,7 @@ class BybitIndicators:
                         logger.debug(f"Calculated {indicator_name} for {symbol}.")
                     else:
                         logger.warning(
-                            f"Indicator '{indicator_name}' not found in pandas_ta. Skipping."
+                            f"Indicator '{indicator_name}' not found in pandas_ta. Skipping.",
                         )
 
                 except Exception as e:
@@ -162,19 +162,19 @@ class BybitIndicators:
         df = df.dropna()
         if df.empty:
             logger.warning(
-                f"DataFrame became empty after dropping NaN values for {symbol}. Not enough data for indicators."
+                f"DataFrame became empty after dropping NaN values for {symbol}. Not enough data for indicators.",
             )
             return None
 
         logger.info(
-            f"Successfully calculated indicators for {symbol}, interval {interval}. DataFrame shape: {df.shape}"
+            f"Successfully calculated indicators for {symbol}, interval {interval}. DataFrame shape: {df.shape}",
         )
         return df
 
     # --- Convenience Wrapper Methods for Specific Indicators ---
     # Existing Indicators
     def get_sma(
-        self, category: str, symbol: str, interval: str, length: int = 20, **kwargs
+        self, category: str, symbol: str, interval: str, length: int = 20, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates Simple Moving Average (SMA)."""
         return self.get_historical_data_with_indicators(
@@ -186,7 +186,7 @@ class BybitIndicators:
         )
 
     def get_ema(
-        self, category: str, symbol: str, interval: str, length: int = 20, **kwargs
+        self, category: str, symbol: str, interval: str, length: int = 20, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates Exponential Moving Average (EMA)."""
         return self.get_historical_data_with_indicators(
@@ -198,7 +198,7 @@ class BybitIndicators:
         )
 
     def get_rsi(
-        self, category: str, symbol: str, interval: str, length: int = 14, **kwargs
+        self, category: str, symbol: str, interval: str, length: int = 14, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates Relative Strength Index (RSI)."""
         return self.get_historical_data_with_indicators(
@@ -226,7 +226,7 @@ class BybitIndicators:
             interval,
             indicators=["macd"],
             indicator_kwargs={
-                "macd": {"fast": fast, "slow": slow, "signal": signal, **kwargs}
+                "macd": {"fast": fast, "slow": slow, "signal": signal, **kwargs},
             },
         )
 
@@ -270,7 +270,7 @@ class BybitIndicators:
                     "k": k_length,
                     "d": d_length,
                     **kwargs,
-                }
+                },
             },
         )
 
@@ -294,12 +294,12 @@ class BybitIndicators:
             interval,
             indicators=["supertrend"],
             indicator_kwargs={
-                "supertrend": {"length": length, "multiplier": multiplier, **kwargs}
+                "supertrend": {"length": length, "multiplier": multiplier, **kwargs},
             },
         )
 
     def get_atr(
-        self, category: str, symbol: str, interval: str, length: int = 14, **kwargs
+        self, category: str, symbol: str, interval: str, length: int = 14, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates Average True Range (ATR)."""
         return self.get_historical_data_with_indicators(
@@ -311,7 +311,7 @@ class BybitIndicators:
         )
 
     def get_cci(
-        self, category: str, symbol: str, interval: str, length: int = 20, **kwargs
+        self, category: str, symbol: str, interval: str, length: int = 20, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates Commodity Channel Index (CCI)."""
         return self.get_historical_data_with_indicators(
@@ -323,7 +323,7 @@ class BybitIndicators:
         )
 
     def get_mfi(
-        self, category: str, symbol: str, interval: str, length: int = 14, **kwargs
+        self, category: str, symbol: str, interval: str, length: int = 14, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates Money Flow Index (MFI)."""
         return self.get_historical_data_with_indicators(
@@ -335,7 +335,7 @@ class BybitIndicators:
         )
 
     def get_obv(
-        self, category: str, symbol: str, interval: str, **kwargs
+        self, category: str, symbol: str, interval: str, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates On-Balance Volume (OBV)."""
         # OBV typically only needs 'close' and 'volume', no length parameter
@@ -364,7 +364,7 @@ class BybitIndicators:
             interval,
             indicators=["stoch"],
             indicator_kwargs={
-                "stoch": {"k": k_length, "d": d_length, "smooth_k": smooth_k, **kwargs}
+                "stoch": {"k": k_length, "d": d_length, "smooth_k": smooth_k, **kwargs},
             },
         )
 
@@ -403,12 +403,12 @@ class BybitIndicators:
             interval,
             indicators=["psar"],
             indicator_kwargs={
-                "psar": {"af0": af0, "af": af, "max_af": max_af, **kwargs}
+                "psar": {"af0": af0, "af": af, "max_af": max_af, **kwargs},
             },
         )
 
     def get_vwap(
-        self, category: str, symbol: str, interval: str, **kwargs
+        self, category: str, symbol: str, interval: str, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates Volume Weighted Average Price (VWAP)."""
         # VWAP typically needs 'open', 'high', 'low', 'close', 'volume'
@@ -421,7 +421,7 @@ class BybitIndicators:
         )
 
     def get_kama(
-        self, category: str, symbol: str, interval: str, length: int = 10, **kwargs
+        self, category: str, symbol: str, interval: str, length: int = 10, **kwargs,
     ) -> pd.DataFrame | None:
         """Calculates Kaufman's Adaptive Moving Average (KAMA)."""
         return self.get_historical_data_with_indicators(
@@ -442,7 +442,7 @@ if __name__ == "__main__":
     USE_TESTNET = True
 
     indicators_helper = BybitIndicators(
-        testnet=USE_TESTNET, api_key=API_KEY, api_secret=API_SECRET
+        testnet=USE_TESTNET, api_key=API_KEY, api_secret=API_SECRET,
     )
 
     SYMBOL = "BTCUSDT"
@@ -498,7 +498,7 @@ if __name__ == "__main__":
         # Example of accessing some new indicator values
         if "SUPERT_7_3.0" in df_multi_indicators.columns:
             print(
-                f"\nLast Supertrend (7,3) value: {df_multi_indicators['SUPERT_7_3.0'].iloc[-1]:.2f}"
+                f"\nLast Supertrend (7,3) value: {df_multi_indicators['SUPERT_7_3.0'].iloc[-1]:.2f}",
             )
         if "ATR_14" in df_multi_indicators.columns:
             print(f"Last ATR(14) value: {df_multi_indicators['ATR_14'].iloc[-1]:.4f}")
@@ -510,7 +510,7 @@ if __name__ == "__main__":
             print(f"Last OBV value: {df_multi_indicators['OBV'].iloc[-1]:.0f}")
         if "STOCHk_14_3_3" in df_multi_indicators.columns:
             print(
-                f"Last STOCH %K (14,3,3) value: {df_multi_indicators['STOCHk_14_3_3'].iloc[-1]:.2f}"
+                f"Last STOCH %K (14,3,3) value: {df_multi_indicators['STOCHk_14_3_3'].iloc[-1]:.2f}",
             )
         if "AO" in df_multi_indicators.columns:
             print(f"Last AO value: {df_multi_indicators['AO'].iloc[-1]:.2f}")
@@ -518,7 +518,7 @@ if __name__ == "__main__":
             "PSARl_0.02_0.2" in df_multi_indicators.columns
         ):  # PSAR can have long/short variants
             print(
-                f"Last PSAR Long value: {df_multi_indicators['PSARl_0.02_0.2'].iloc[-1]:.2f}"
+                f"Last PSAR Long value: {df_multi_indicators['PSARl_0.02_0.2'].iloc[-1]:.2f}",
             )
         if "VWAP" in df_multi_indicators.columns:
             print(f"Last VWAP value: {df_multi_indicators['VWAP'].iloc[-1]:.2f}")
@@ -547,7 +547,7 @@ if __name__ == "__main__":
                     "SUPERTl_10_3.5",
                     "SUPERTs_10_3.5",
                 ]
-            ].tail()
+            ].tail(),
         )
     else:
         print(f"Failed to get Supertrend for {SYMBOL}.")

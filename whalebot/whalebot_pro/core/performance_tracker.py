@@ -1,8 +1,7 @@
 import logging
 from decimal import Decimal
 
-from colorama import Fore
-from colorama import Style
+from colorama import Fore, Style
 
 # Color Scheme
 NEON_CYAN = Fore.CYAN

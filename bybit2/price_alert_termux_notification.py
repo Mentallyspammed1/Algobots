@@ -1,9 +1,7 @@
 import os
 import time
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -19,12 +17,12 @@ def price_alert_termux_notification(
     print(
         Fore.MAGENTA
         + f"\n# Setting up a mystical price alert for {symbol} on Bybit v5...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
     print(
         Fore.MAGENTA
         + f"# Will notify if price goes above {upper_threshold} or below {lower_threshold}.\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -36,12 +34,12 @@ def price_alert_termux_notification(
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -50,12 +48,12 @@ def price_alert_termux_notification(
         print(
             Fore.CYAN
             + "  # Bybit HTTP session initialized for price monitoring."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Ensure 'termux-api' is installed (`pkg install termux-api`) and Termux has notification permissions."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         last_alert_state = None  # To prevent repeated notifications for the same breach
@@ -65,19 +63,19 @@ def price_alert_termux_notification(
                 print(
                     Fore.CYAN
                     + f"\n  # Checking current price of {symbol}..."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 response = session.get_tickers(category="spot", symbol=symbol)
 
                 if response and response["retCode"] == 0:
                     if response["result"] and response["result"]["list"]:
                         current_price = float(
-                            response["result"]["list"][0]["lastPrice"]
+                            response["result"]["list"][0]["lastPrice"],
                         )
                         print(
                             Fore.GREEN
                             + f"    Current {symbol} Price: {current_price}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
 
                         if (
@@ -88,7 +86,7 @@ def price_alert_termux_notification(
                             print(
                                 Fore.LIGHTRED_EX
                                 + f"  # ALERT: {message}"
-                                + Style.RESET_ALL
+                                + Style.RESET_ALL,
                             )
                             os.system(f'termux-toast "{message}"')
                             last_alert_state = "above"
@@ -100,7 +98,7 @@ def price_alert_termux_notification(
                             print(
                                 Fore.LIGHTRED_EX
                                 + f"  # ALERT: {message}"
-                                + Style.RESET_ALL
+                                + Style.RESET_ALL,
                             )
                             os.system(f'termux-toast "{message}"')
                             last_alert_state = "below"
@@ -112,27 +110,27 @@ def price_alert_termux_notification(
                             print(
                                 Fore.WHITE
                                 + f"    {symbol} price is within bounds ({lower_threshold}-{upper_threshold})."
-                                + Style.RESET_ALL
+                                + Style.RESET_ALL,
                             )
                             last_alert_state = None
                         else:
                             print(
                                 Fore.WHITE
                                 + f"    {symbol} price is within bounds ({lower_threshold}-{upper_threshold})."
-                                + Style.RESET_ALL
+                                + Style.RESET_ALL,
                             )
 
                     else:
                         print(
                             Fore.YELLOW
                             + f"  # No ticker data found for {symbol}. Retrying..."
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                 else:
                     print(
                         Fore.RED
                         + "  # Failed to retrieve ticker information."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     print(Fore.RED + f"  # Response: {response}" + Style.RESET_ALL)
 
@@ -140,14 +138,14 @@ def price_alert_termux_notification(
                 print(
                     Fore.RED
                     + f"  # A temporary disturbance in the ether during price check: {e}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 print(Fore.YELLOW + "  # Retrying after delay..." + Style.RESET_ALL)
 
             print(
                 Fore.CYAN
                 + f"  # Waiting {check_interval_seconds} seconds before next price check..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             time.sleep(check_interval_seconds)
 
@@ -155,18 +153,18 @@ def price_alert_termux_notification(
         print(
             Fore.RED
             + f"  # A critical disturbance in the ether during setup: {e}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable and API keys are valid."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
         Fore.MAGENTA
         + "\n# The price alert ritual has concluded (or encountered a fatal error)."
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
 
@@ -178,22 +176,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     # You can modify these parameters as needed

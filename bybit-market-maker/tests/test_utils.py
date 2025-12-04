@@ -1,10 +1,12 @@
 import unittest
 
-from bybit_market_maker.utils import calculate_order_sizes
-from bybit_market_maker.utils import calculate_spread
-from bybit_market_maker.utils import calculate_volatility
-from bybit_market_maker.utils import format_price
-from bybit_market_maker.utils import format_quantity
+from bybit_market_maker.utils import (
+    calculate_order_sizes,
+    calculate_spread,
+    calculate_volatility,
+    format_price,
+    format_quantity,
+)
 
 
 class TestUtils(unittest.TestCase):
@@ -26,7 +28,7 @@ class TestUtils(unittest.TestCase):
                 "inventory_factor": 2.0,
                 "min_spread": 0.0005,
                 "max_spread": 0.005,
-            }
+            },
         }
         bid_spread, ask_spread = calculate_spread(0.001, 0.01, 0.5, config)
         self.assertIsInstance(bid_spread, float)

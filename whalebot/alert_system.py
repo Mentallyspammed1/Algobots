@@ -3,9 +3,7 @@
 import logging
 import subprocess
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 
 # Initialize colorama
 init(autoreset=True)

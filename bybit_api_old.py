@@ -1,8 +1,7 @@
 import logging
 import os
 from collections.abc import Callable
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -10,8 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 from utils import round_decimal
 
 # --- Initialize Logging for Bybit API ---
@@ -21,7 +19,7 @@ bybit_logger.propagate = False
 if not bybit_logger.handlers:
     file_handler = logging.FileHandler("bybit_api.log")
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
     file_handler.setFormatter(formatter)
     bybit_logger.addHandler(file_handler)
@@ -66,7 +64,7 @@ class BybitClient:
         if not self.api_key or not self.api_secret:
             raise ValueError(
                 "BYBIT_API_KEY and BYBIT_API_SECRET must be set as environment variables."
-                " Create a .env file or set them in your shell."
+                " Create a .env file or set them in your shell.",
             )
 
         # Initialize pybit HTTP client
@@ -89,15 +87,15 @@ class BybitClient:
             )
             if "on_position_update" in self.ws_callbacks:
                 self.ws_session.position_stream(
-                    callback=self.ws_callbacks["on_position_update"]
+                    callback=self.ws_callbacks["on_position_update"],
                 )
             if "on_order_update" in self.ws_callbacks:
                 self.ws_session.order_stream(
-                    callback=self.ws_callbacks["on_order_update"]
+                    callback=self.ws_callbacks["on_order_update"],
                 )
             if "on_execution_update" in self.ws_callbacks:
                 self.ws_session.execution_stream(
-                    callback=self.ws_callbacks["on_execution_update"]
+                    callback=self.ws_callbacks["on_execution_update"],
                 )
             bybit_logger.info("BybitClient initialized with pybit WebSocket session.")
 
@@ -119,7 +117,7 @@ class BybitClient:
                     interval = parts[1]
                     symbol = parts[2]
                     self.ws_session.kline_stream(
-                        symbol=symbol, interval=interval, callback=callback
+                        symbol=symbol, interval=interval, callback=callback,
                     )
                 elif topic.startswith("publicTrade"):
                     symbol = topic.split(".")[-1]
@@ -129,16 +127,16 @@ class BybitClient:
                     self.ws_session.ticker_stream(symbol=symbol, callback=callback)
                 else:
                     bybit_logger.warning(
-                        f"Unsupported WebSocket topic for direct subscription: {topic}"
+                        f"Unsupported WebSocket topic for direct subscription: {topic}",
                     )
             bybit_logger.info(f"Subscribed to WebSocket topics: {topics}")
         else:
             bybit_logger.warning(
-                "WebSocket client not initialized. Cannot subscribe to topics."
+                "WebSocket client not initialized. Cannot subscribe to topics.",
             )
 
     def fetch_klines(
-        self, symbol: str, interval: str, limit: int = 200
+        self, symbol: str, interval: str, limit: int = 200,
     ) -> pd.DataFrame:
         """Fetches historical kline data for a given symbol and interval using pybit.
 
@@ -154,7 +152,7 @@ class BybitClient:
         """
         try:
             response = self.session.get_kline(
-                category=self.category, symbol=symbol, interval=interval, limit=limit
+                category=self.category, symbol=symbol, interval=interval, limit=limit,
             )
             if (
                 response
@@ -168,22 +166,22 @@ class BybitClient:
                     data.append(
                         {
                             "timestamp": datetime.fromtimestamp(
-                                timestamp_ms / 1000, tz=UTC
+                                timestamp_ms / 1000, tz=UTC,
                             ),
                             "open": float(kline[1]),
                             "high": float(kline[2]),
                             "low": float(kline[3]),
                             "close": float(kline[4]),
                             "volume": float(kline[5]),
-                        }
+                        },
                     )
                 df = pd.DataFrame(data).set_index("timestamp").sort_index()
                 bybit_logger.info(
-                    f"Fetched {len(df)} klines for {symbol}-{interval} using pybit."
+                    f"Fetched {len(df)} klines for {symbol}-{interval} using pybit.",
                 )
                 return df
             bybit_logger.warning(
-                f"Failed to fetch klines for {symbol}-{interval} using pybit: {response}"
+                f"Failed to fetch klines for {symbol}-{interval} using pybit: {response}",
             )
             return pd.DataFrame()
         except Exception as e:
@@ -213,7 +211,7 @@ class BybitClient:
                 ]
                 if open_positions:
                     bybit_logger.info(
-                        f"Found open position for {symbol}: {open_positions[0].get('side')} {open_positions[0].get('size')} using pybit."
+                        f"Found open position for {symbol}: {open_positions[0].get('side')} {open_positions[0].get('size')} using pybit.",
                     )
                     return open_positions[0]
             bybit_logger.info(f"No open position found for {symbol} using pybit.")
@@ -223,7 +221,7 @@ class BybitClient:
             return None
 
     def get_wallet_balance(
-        self, account_type: str = "UNIFIED", coin: str | None = None
+        self, account_type: str = "UNIFIED", coin: str | None = None,
     ) -> dict[str, Any] | None:
         """Retrieves wallet balance for a given account type and optional coin using pybit.
 
@@ -247,11 +245,11 @@ class BybitClient:
                 and response["result"]["list"]
             ):
                 bybit_logger.info(
-                    f"Fetched wallet balance for {account_type} (Coin: {coin}): {response['result']['list']}"
+                    f"Fetched wallet balance for {account_type} (Coin: {coin}): {response['result']['list']}",
                 )
                 return response["result"]["list"][0]  # Assuming first item is relevant
             bybit_logger.warning(
-                f"Failed to fetch wallet balance for {account_type} (Coin: {coin}): {response}"
+                f"Failed to fetch wallet balance for {account_type} (Coin: {coin}): {response}",
             )
             return None
         except Exception as e:
@@ -277,7 +275,7 @@ class BybitClient:
             return None
 
     def get_transaction_log(
-        self, coin: str | None = None, limit: int = 50
+        self, coin: str | None = None, limit: int = 50,
     ) -> dict[str, Any] | None:
         """Queries transaction history for a Contract account using pybit.
 
@@ -296,11 +294,11 @@ class BybitClient:
             response = self.session.get_transaction_log(**params)
             if response and response["retCode"] == 0 and response["result"]:
                 bybit_logger.info(
-                    f"Fetched transaction log for {self.category} (Coin: {coin}): {len(response['result'].get('list', []))} records."
+                    f"Fetched transaction log for {self.category} (Coin: {coin}): {len(response['result'].get('list', []))} records.",
                 )
                 return response["result"]
             bybit_logger.warning(
-                f"Failed to fetch transaction log for {self.category} (Coin: {coin}): {response}"
+                f"Failed to fetch transaction log for {self.category} (Coin: {coin}): {response}",
             )
             return None
         except Exception as e:
@@ -328,7 +326,7 @@ class BybitClient:
             )
             if response and response["retCode"] == 0:
                 bybit_logger.info(
-                    f"Leverage set to Buy: {buy_leverage}, Sell: {sell_leverage} for {symbol}."
+                    f"Leverage set to Buy: {buy_leverage}, Sell: {sell_leverage} for {symbol}.",
                 )
                 return True
             bybit_logger.warning(f"Failed to set leverage for {symbol}: {response}")
@@ -338,7 +336,7 @@ class BybitClient:
             return False
 
     def cancel_order(
-        self, symbol: str, order_id: str | None = None, order_link_id: str | None = None
+        self, symbol: str, order_id: str | None = None, order_link_id: str | None = None,
     ) -> bool:
         """Cancels a specific order by order ID or orderLinkId using pybit.
 
@@ -354,7 +352,7 @@ class BybitClient:
         try:
             if not order_id and not order_link_id:
                 bybit_logger.error(
-                    "Either order_id or order_link_id must be provided to cancel an order."
+                    "Either order_id or order_link_id must be provided to cancel an order.",
                 )
                 return False
 
@@ -367,11 +365,11 @@ class BybitClient:
             response = self.session.cancel_order(**params)
             if response and response["retCode"] == 0:
                 bybit_logger.info(
-                    f"Order {order_id or order_link_id} for {symbol} canceled successfully."
+                    f"Order {order_id or order_link_id} for {symbol} canceled successfully.",
                 )
                 return True
             bybit_logger.warning(
-                f"Failed to cancel order {order_id or order_link_id} for {symbol}: {response}"
+                f"Failed to cancel order {order_id or order_link_id} for {symbol}: {response}",
             )
             return False
         except Exception as e:
@@ -379,7 +377,7 @@ class BybitClient:
             return False
 
     def cancel_all_orders(
-        self, symbol: str | None = None, settle_coin: str | None = None
+        self, symbol: str | None = None, settle_coin: str | None = None,
     ) -> bool:
         """Cancels all open orders for a specific contract type or symbol using pybit.
 
@@ -401,11 +399,11 @@ class BybitClient:
             response = self.session.cancel_all_orders(**params)
             if response and response["retCode"] == 0:
                 bybit_logger.info(
-                    f"All orders for {symbol or self.category} canceled successfully."
+                    f"All orders for {symbol or self.category} canceled successfully.",
                 )
                 return True
             bybit_logger.warning(
-                f"Failed to cancel all orders for {symbol or self.category}: {response}"
+                f"Failed to cancel all orders for {symbol or self.category}: {response}",
             )
             return False
         except Exception as e:
@@ -432,7 +430,7 @@ class BybitClient:
                 bybit_logger.info(f"Fetched tickers for {symbol or self.category}.")
                 return response["result"]
             bybit_logger.warning(
-                f"Failed to fetch tickers for {symbol or self.category}: {response}"
+                f"Failed to fetch tickers for {symbol or self.category}: {response}",
             )
             return None
         except Exception as e:
@@ -452,11 +450,11 @@ class BybitClient:
         """
         try:
             response = self.session.get_orderbook(
-                category=self.category, symbol=symbol, limit=limit
+                category=self.category, symbol=symbol, limit=limit,
             )
             if response and response["retCode"] == 0 and response["result"]:
                 bybit_logger.info(
-                    f"Fetched orderbook for {symbol} with {limit} levels."
+                    f"Fetched orderbook for {symbol} with {limit} levels.",
                 )
                 return response["result"]
             bybit_logger.warning(f"Failed to fetch orderbook for {symbol}: {response}")
@@ -483,11 +481,11 @@ class BybitClient:
             response = self.session.get_open_orders(**params)
             if response and response["retCode"] == 0 and response["result"]:
                 bybit_logger.info(
-                    f"Fetched active orders for {symbol or self.category}: {len(response['result'].get('list', []))} records."
+                    f"Fetched active orders for {symbol or self.category}: {len(response['result'].get('list', []))} records.",
                 )
                 return response["result"]
             bybit_logger.warning(
-                f"Failed to fetch active orders for {symbol or self.category}: {response}"
+                f"Failed to fetch active orders for {symbol or self.category}: {response}",
             )
             return None
         except Exception as e:
@@ -507,15 +505,15 @@ class BybitClient:
         """
         try:
             response = self.session.get_public_trading_history(
-                category=self.category, symbol=symbol, limit=limit
+                category=self.category, symbol=symbol, limit=limit,
             )
             if response and response["retCode"] == 0 and response["result"]:
                 bybit_logger.info(
-                    f"Fetched {len(response['result'].get('list', []))} recent trades for {symbol}."
+                    f"Fetched {len(response['result'].get('list', []))} recent trades for {symbol}.",
                 )
                 return response["result"]
             bybit_logger.warning(
-                f"Failed to fetch recent trades for {symbol}: {response}"
+                f"Failed to fetch recent trades for {symbol}: {response}",
             )
             return None
         except Exception as e:
@@ -536,7 +534,7 @@ class BybitClient:
             response = self.session.get_fee_rate(category=self.category, symbol=symbol)
             if response and response["retCode"] == 0 and response["result"]:
                 bybit_logger.info(
-                    f"Fetched fee rate for {symbol}: {response['result']}"
+                    f"Fetched fee rate for {symbol}: {response['result']}",
                 )
                 return response["result"]
             bybit_logger.warning(f"Failed to fetch fee rate for {symbol}: {response}")
@@ -546,7 +544,7 @@ class BybitClient:
             return None
 
     def get_transfer_query_account_coins_balance(
-        self, account_type: str, coin: str | None = None
+        self, account_type: str, coin: str | None = None,
     ) -> dict[str, Any] | None:
         """Checks coin balances across accounts using pybit.
 
@@ -566,11 +564,11 @@ class BybitClient:
             response = self.session.get_transfer_query_account_coins_balance(**params)
             if response and response["retCode"] == 0 and response["result"]:
                 bybit_logger.info(
-                    f"Fetched account coin balance for {account_type} (Coin: {coin})."
+                    f"Fetched account coin balance for {account_type} (Coin: {coin}).",
                 )
                 return response["result"]
             bybit_logger.warning(
-                f"Failed to fetch account coin balance for {account_type} (Coin: {coin}): {response}"
+                f"Failed to fetch account coin balance for {account_type} (Coin: {coin}): {response}",
             )
             return None
         except Exception as e:
@@ -581,7 +579,7 @@ class BybitClient:
         """Fetches instrument information for a given symbol."""
         try:
             response = self.session.get_instruments_info(
-                category=self.category, symbol=symbol
+                category=self.category, symbol=symbol,
             )
             if (
                 response
@@ -592,7 +590,7 @@ class BybitClient:
                 if response["result"]["list"]:
                     return response["result"]["list"][0]
             bybit_logger.warning(
-                f"Could not fetch instrument info for {symbol}: {response}"
+                f"Could not fetch instrument info for {symbol}: {response}",
             )
             return None
         except Exception as e:
@@ -629,12 +627,12 @@ class BybitClient:
             instrument_info = self.get_instrument_info(symbol)
             if not instrument_info:
                 bybit_logger.error(
-                    f"Could not fetch instrument info for {symbol}. Cannot place order."
+                    f"Could not fetch instrument info for {symbol}. Cannot place order.",
                 )
                 return False
 
             min_qty = float(
-                instrument_info.get("lotSizeFilter", {}).get("minOrderQty", 0)
+                instrument_info.get("lotSizeFilter", {}).get("minOrderQty", 0),
             )
             qty_step = float(instrument_info.get("lotSizeFilter", {}).get("qtyStep", 0))
 
@@ -642,18 +640,18 @@ class BybitClient:
             klines_df = self.fetch_klines(symbol, "1", limit=1)
             if klines_df.empty:
                 bybit_logger.error(
-                    f"Could not fetch current price for {symbol} to calculate quantity."
+                    f"Could not fetch current price for {symbol} to calculate quantity.",
                 )
                 return False
             current_price_for_qty = klines_df["close"].iloc[-1]
 
             # Calculate order quantity using the new utility function
             calculated_quantity = calculate_order_quantity(
-                usdt_amount, current_price_for_qty, min_qty, qty_step
+                usdt_amount, current_price_for_qty, min_qty, qty_step,
             )
             if calculated_quantity <= 0:
                 bybit_logger.error(
-                    f"Calculated quantity is zero or negative: {calculated_quantity}. Cannot place order."
+                    f"Calculated quantity is zero or negative: {calculated_quantity}. Cannot place order.",
                 )
                 return False
 
@@ -685,7 +683,7 @@ class BybitClient:
                     klines_df = self.fetch_klines(symbol, "1", limit=1)
                     if klines_df.empty:
                         bybit_logger.error(
-                            f"Could not fetch current price for {symbol} to calculate SL/TP."
+                            f"Could not fetch current price for {symbol} to calculate SL/TP.",
                         )
                         return False
                     current_price_for_sl_tp = klines_df["close"].iloc[-1]
@@ -715,21 +713,21 @@ class BybitClient:
 
             if calculated_stop_loss_price is not None:
                 order_params["stopLoss"] = str(
-                    round_decimal(calculated_stop_loss_price, sl_tp_precision)
+                    round_decimal(calculated_stop_loss_price, sl_tp_precision),
                 )
             if calculated_take_profit_price is not None:
                 order_params["takeProfit"] = str(
-                    round_decimal(calculated_take_profit_price, sl_tp_precision)
+                    round_decimal(calculated_take_profit_price, sl_tp_precision),
                 )
 
             bybit_logger.info(
-                f"Attempting to place {order_type} {side.upper()} order for {calculated_quantity} {symbol} (USDT: {usdt_amount}) with params: {order_params}"
+                f"Attempting to place {order_type} {side.upper()} order for {calculated_quantity} {symbol} (USDT: {usdt_amount}) with params: {order_params}",
             )
             response = self.session.place_order(**order_params)
 
             if response and response.get("retCode") == 0:
                 bybit_logger.info(
-                    f"Order placed successfully: {response.get('result')} using pybit."
+                    f"Order placed successfully: {response.get('result')} using pybit.",
                 )
                 return True
             bybit_logger.error(f"Failed to place order using pybit: {response}")

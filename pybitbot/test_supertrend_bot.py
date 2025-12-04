@@ -5,19 +5,20 @@ import os
 import sys
 import unittest
 from decimal import Decimal
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from supertrend_bot import BybitTradingBot
-from supertrend_bot import Config
-from supertrend_bot import Position
-from supertrend_bot import StrategySignal
-from supertrend_bot import SupertrendStrategy
+from supertrend_bot import (
+    BybitTradingBot,
+    Config,
+    Position,
+    StrategySignal,
+    SupertrendStrategy,
+)
 
 # --- Test Data Fixtures ---
 
@@ -42,7 +43,7 @@ def create_test_dataframe(rows=50):
 class TestSupertrendStrategy(unittest.TestCase):
     def setUp(self):
         self.config = Config(
-            strategy_params={"supertrend_period": 10, "supertrend_multiplier": 3.0}
+            strategy_params={"supertrend_period": 10, "supertrend_multiplier": 3.0},
         )
         self.strategy = SupertrendStrategy(symbol="BTCUSDT", config=self.config)
         self.test_data = create_test_dataframe()
@@ -123,7 +124,7 @@ class TestBybitTradingBot(unittest.TestCase):
         """Set up a mock environment for the bot."""
         self.config = Config(testnet=True, symbol="BTCUSDT")
         self.strategy = SupertrendStrategy(
-            symbol=self.config.symbol, config=self.config
+            symbol=self.config.symbol, config=self.config,
         )
 
         # Mock pybit clients
@@ -139,8 +140,8 @@ class TestBybitTradingBot(unittest.TestCase):
                         "symbol": "BTCUSDT",
                         "priceFilter": {"tickSize": "0.1"},
                         "lotSizeFilter": {"qtyStep": "0.001"},
-                    }
-                ]
+                    },
+                ],
             },
         }
         self.mock_session.get_kline.return_value = {
@@ -155,9 +156,9 @@ class TestBybitTradingBot(unittest.TestCase):
                         30500,
                         100,
                         3000000,
-                    ]
+                    ],
                 ]
-                * 50
+                * 50,
             },
         }
         self.mock_session.get_wallet_balance.return_value = {
@@ -169,7 +170,7 @@ class TestBybitTradingBot(unittest.TestCase):
             "result": {"list": [{"symbol": "BTCUSDT", "size": "0"}]},
         }
         self.mock_session.place_order = MagicMock(
-            return_value={"retCode": 0, "result": {"orderId": "test-order-id-123"}}
+            return_value={"retCode": 0, "result": {"orderId": "test-order-id-123"}},
         )
 
         self.bot = BybitTradingBot(
@@ -258,7 +259,7 @@ class TestBybitTradingBot(unittest.TestCase):
             second_call_args = self.mock_session.place_order.call_args_list[1].kwargs
             self.assertEqual(second_call_args["side"], "Buy")
             self.assertNotEqual(
-                second_call_args["qty"], "0.100"
+                second_call_args["qty"], "0.100",
             )  # Should be a newly calculated size
 
         asyncio.run(run_test())

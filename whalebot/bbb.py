@@ -6,10 +6,11 @@ This ultimate incantation perfects the Supertrend strategy for Bybit V5 API, ens
 
 """
 
-import ccxt
+import logging
 import os
 import time
-import logging
+
+import ccxt
 
 # Configure logging
 logging.basicConfig(
@@ -30,7 +31,7 @@ def _load_config():
 
     if not api_key or not api_secret:
         raise ValueError(
-            "BYBIT_API_KEY and BYBIT_API_SECRET must be set as environment variables."
+            "BYBIT_API_KEY and BYBIT_API_SECRET must be set as environment variables.",
         )
 
     return {
@@ -45,7 +46,7 @@ def _load_config():
 
 def _initialize_exchange(config):
     """Initializes the CCXT exchange object for Bybit."""
-    exchange_class = getattr(ccxt, "bybit")
+    exchange_class = ccxt.bybit
     exchange = exchange_class(config)
     # Load markets to ensure symbol information is available
     exchange.load_markets()
@@ -119,11 +120,11 @@ def _get_supertrend(symbol, timeframe, limit, exchange):
         return latest_close, latest_supertrend, latest_trend_direction, df
 
     except ccxt.NetworkError as e:
-        logging.error(f"Network error occurred: {e}")
+        logging.exception(f"Network error occurred: {e}")
     except ccxt.ExchangeError as e:
-        logging.error(f"Exchange error occurred: {e}")
+        logging.exception(f"Exchange error occurred: {e}")
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
+        logging.exception(f"An unexpected error occurred: {e}")
 
     return None, None, None, None
 
@@ -169,13 +170,13 @@ def main():
             time.sleep(exchange.parse_timeframe(timeframe)) # Wait for the duration of the timeframe
 
     except ValueError as e:
-        logging.error(f"Configuration error: {e}")
+        logging.exception(f"Configuration error: {e}")
     except ccxt.AuthenticationError as e:
-        logging.error(f"Authentication error: {e}. Check your API keys and network.")
+        logging.exception(f"Authentication error: {e}. Check your API keys and network.")
     except ccxt.NetworkError as e:
-        logging.error(f"Network error during initialization: {e}")
+        logging.exception(f"Network error during initialization: {e}")
     except Exception as e:
-        logging.error(f"An unexpected error occurred during initialization: {e}")
+        logging.exception(f"An unexpected error occurred during initialization: {e}")
 
 if __name__ == "__main__":
     # Import pandas here to avoid issues if it's not installed when just importing the script

@@ -1,7 +1,6 @@
 # tests/test_chandelier_ehlers_strategy.py
 import unittest
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pandas as pd
 from indicators.chandelier_exit import ChandelierExit
@@ -16,7 +15,7 @@ class TestChandelierEhlersStrategy(unittest.TestCase):
         """Set up test data."""
         # Create sample OHLCV data
         dates = pd.date_range(
-            start=datetime.now() - timedelta(days=30), periods=100, freq="H"
+            start=datetime.now() - timedelta(days=30), periods=100, freq="H",
         )
         prices = [100 + i * 0.1 + (i % 5) for i in range(100)]
 
@@ -29,7 +28,7 @@ class TestChandelierEhlersStrategy(unittest.TestCase):
                 "close": prices,
                 "volume": [1000 for _ in range(100)],
                 "turnover": [100000 for _ in range(100)],
-            }
+            },
         )
 
     def test_chandelier_exit_calculation(self):

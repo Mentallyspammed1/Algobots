@@ -3,9 +3,7 @@ import sys
 import time
 import unittest
 from decimal import Decimal
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 
@@ -23,7 +21,7 @@ def create_sample_df(rows=100):
     start_time = now_ms - (rows * 1000)
 
     timestamps = pd.to_datetime(
-        range(start_time, start_time + rows * 1000, 1000), unit="ms"
+        range(start_time, start_time + rows * 1000, 1000), unit="ms",
     )
     timestamps = timestamps.tz_localize("UTC")
 
@@ -44,10 +42,10 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
     def setUpClass(cls):
         # Apply patches at the class level and store the mock objects
         cls.mock_setup_logging = patch(
-            "PSG.setup_logging", return_value=MagicMock()
+            "PSG.setup_logging", return_value=MagicMock(),
         ).start()
         cls.mock_TradeMetrics = patch(
-            "PSG.TradeMetrics", return_value=MagicMock()
+            "PSG.TradeMetrics", return_value=MagicMock(),
         ).start()
         cls.MockBybitAPIClass = patch("PSG.BybitContractAPI").start()
         # No need to patch importlib.import_module anymore as strategy is directly imported
@@ -136,7 +134,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
                     "size": "1.5",
                     "avgPrice": "50000",
                     "unrealisedPnl": "10.5",
-                }
+                },
             ],
         }
         self.bot.trade_metrics.calculate_fee = MagicMock(return_value=Decimal("1.2"))
@@ -162,7 +160,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
                 {
                     "symbol": "TESTUSDT",
                     "size": "0",
-                }
+                },
             ],
         }
 
@@ -192,7 +190,7 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
     async def test_initial_kline_fetch_api_failure(self):
         """Test the retry logic on a failed initial kline fetch."""
         self.mock_bybit_client.get_kline_rest_fallback.side_effect = Exception(
-            "API is down"
+            "API is down",
         )
 
         result = await self.bot._initial_kline_fetch()
@@ -214,14 +212,14 @@ class TestPyrmethusBot(unittest.IsolatedAsyncioTestCase):
         mock_handle_ws_data.return_value = mock_df
 
         with patch.object(
-            self.bot, "_identify_and_manage_order_blocks"
+            self.bot, "_identify_and_manage_order_blocks",
         ) as mock_manage_ob:
             # Act
             await self.bot._handle_kline_update(kline_message)
 
             # Assert
             mock_handle_ws_data.assert_called_once_with(
-                self.bot.klines_df, kline_message
+                self.bot.klines_df, kline_message,
             )
             self.assertIsNotNone(self.bot.klines_df)
             self.assertEqual(self.bot.cached_atr, Decimal("1.2"))

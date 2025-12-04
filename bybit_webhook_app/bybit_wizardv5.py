@@ -11,17 +11,14 @@ import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import contextmanager
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 import requests
 import websocket
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 
 # Initialize Colorama for vibrant terminal output
 init()
@@ -31,7 +28,7 @@ error_log_path = os.path.expanduser("~/.bybit_errors.log")
 
 # Create formatters
 detailed_formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+    "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s",
 )
 simple_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
@@ -253,7 +250,7 @@ class BybitV5Wizard:
 
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
-            pool_connections=10, pool_maxsize=20, max_retries=3
+            pool_connections=10, pool_maxsize=20, max_retries=3,
         )
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
@@ -287,7 +284,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Bybit V5 Wizard awakened with enhanced ethereal power..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Setup signal handlers for graceful shutdown
@@ -348,18 +345,18 @@ class BybitV5Wizard:
         sorted_params = json.dumps(params, separators=(",", ":"), sort_keys=True)
         param_str = timestamp + self.api_key + "5000" + sorted_params
         return hmac.new(
-            self.api_secret.encode("utf-8"), param_str.encode("utf-8"), hashlib.sha256
+            self.api_secret.encode("utf-8"), param_str.encode("utf-8"), hashlib.sha256,
         ).hexdigest()
 
     def _generate_signature_get(self, query_string: str, timestamp: str) -> str:
         """Forge an HMAC SHA256 signature for GET requests."""
         param_str = timestamp + self.api_key + "5000" + query_string
         return hmac.new(
-            self.api_secret.encode("utf-8"), param_str.encode("utf-8"), hashlib.sha256
+            self.api_secret.encode("utf-8"), param_str.encode("utf-8"), hashlib.sha256,
         ).hexdigest()
 
     def _send_request(
-        self, method: str, endpoint: str, params: dict = None, retries: int = None
+        self, method: str, endpoint: str, params: dict = None, retries: int = None,
     ) -> dict:
         """Cast an HTTP spell to commune with Bybit's API with enhanced error handling and monitoring.
 
@@ -385,16 +382,16 @@ class BybitV5Wizard:
 
         with self._timing_context(f"api_request_{endpoint}"):
             return self._execute_request_with_circuit_breaker(
-                method, endpoint, params, retries
+                method, endpoint, params, retries,
             )
 
     def _execute_request_with_circuit_breaker(
-        self, method: str, endpoint: str, params: dict, retries: int
+        self, method: str, endpoint: str, params: dict, retries: int,
     ) -> dict:
         """Execute request with circuit breaker protection."""
         try:
             return self.circuit_breaker.call(
-                self._execute_request, method, endpoint, params, retries
+                self._execute_request, method, endpoint, params, retries,
             )
         except Exception as e:
             logger.error(f"Circuit breaker prevented request to {endpoint}: {e!s}")
@@ -402,7 +399,7 @@ class BybitV5Wizard:
             return {}
 
     def _execute_request(
-        self, method: str, endpoint: str, params: dict, retries: int
+        self, method: str, endpoint: str, params: dict, retries: int,
     ) -> dict:
         """Execute the actual HTTP request with retry logic."""
         last_exception = None
@@ -423,7 +420,7 @@ class BybitV5Wizard:
                     headers["X-BAPI-SIGN"] = signature
                 elif method == "GET":
                     sorted_params = "&".join(
-                        [f"{k}={v}" for k, v in sorted(params.items())]
+                        [f"{k}={v}" for k, v in sorted(params.items())],
                     )
                     signature = self._generate_signature_get(sorted_params, timestamp)
                     headers["X-BAPI-SIGN"] = signature
@@ -434,11 +431,11 @@ class BybitV5Wizard:
 
                 if method == "GET":
                     response = self.session.get(
-                        url, headers=headers, params=params, timeout=30
+                        url, headers=headers, params=params, timeout=30,
                     )
                 elif method == "POST":
                     response = self.session.post(
-                        url, headers=headers, json=params, timeout=30
+                        url, headers=headers, json=params, timeout=30,
                     )
 
                 response.raise_for_status()
@@ -455,7 +452,7 @@ class BybitV5Wizard:
                     print(
                         Fore.GREEN
                         + f"# Spell cast successfully: {endpoint}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     return result.get("result", {})
                 error_msg = result.get("retMsg", "Unknown API error")
@@ -467,14 +464,14 @@ class BybitV5Wizard:
             except requests.exceptions.Timeout as e:
                 last_exception = e
                 logger.warning(
-                    f"Request timeout for {endpoint} (attempt {attempt + 1}/{retries})"
+                    f"Request timeout for {endpoint} (attempt {attempt + 1}/{retries})",
                 )
                 self.metrics.record_error("request_timeout")
 
             except requests.exceptions.ConnectionError as e:
                 last_exception = e
                 logger.warning(
-                    f"Connection error for {endpoint} (attempt {attempt + 1}/{retries})"
+                    f"Connection error for {endpoint} (attempt {attempt + 1}/{retries})",
                 )
                 self.metrics.record_error("connection_error")
                 self.connection_health["api"] = False
@@ -482,7 +479,7 @@ class BybitV5Wizard:
             except requests.exceptions.HTTPError as e:
                 last_exception = e
                 logger.warning(
-                    f"HTTP error {e.response.status_code} for {endpoint} (attempt {attempt + 1}/{retries})"
+                    f"HTTP error {e.response.status_code} for {endpoint} (attempt {attempt + 1}/{retries})",
                 )
                 self.metrics.record_error(f"http_error_{e.response.status_code}")
 
@@ -502,7 +499,7 @@ class BybitV5Wizard:
 
         # All retries exhausted
         logger.error(
-            f"All retry attempts exhausted for {endpoint}. Last error: {last_exception!s}"
+            f"All retry attempts exhausted for {endpoint}. Last error: {last_exception!s}",
         )
         self.metrics.record_error("all_retries_exhausted")
         return {}
@@ -538,7 +535,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Conjuring kline data for {symbol} ({interval})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -569,7 +566,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching mark price kline for {symbol} ({interval})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -600,7 +597,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching index price kline for {symbol} ({interval})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -631,7 +628,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching premium index price kline for {symbol} ({interval})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -657,7 +654,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching instruments info for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -770,7 +767,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching historical volatility for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -816,7 +813,7 @@ class BybitV5Wizard:
         if base_coin:
             params["baseCoin"] = base_coin
         print(
-            Fore.CYAN + f"# Fetching delivery price for {category}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Fetching delivery price for {category}..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -830,7 +827,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, {})
 
     def get_long_short_ratio(
-        self, category: str, symbol: str, period: str, limit: int = 50
+        self, category: str, symbol: str, period: str, limit: int = 50,
     ) -> dict:
         """Retrieve long-short ratio data.
 
@@ -846,12 +843,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching long-short ratio for {symbol} ({period})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_top_long_short_account_ratio(
-        self, category: str, symbol: str, period: str, limit: int = 50
+        self, category: str, symbol: str, period: str, limit: int = 50,
     ) -> dict:
         """Retrieve top long-short account ratio data.
 
@@ -867,12 +864,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching top long-short account ratio for {symbol} ({period})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_top_long_short_position_ratio(
-        self, category: str, symbol: str, period: str, limit: int = 50
+        self, category: str, symbol: str, period: str, limit: int = 50,
     ) -> dict:
         """Retrieve top long-short position ratio data.
 
@@ -888,12 +885,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching top long-short position ratio for {symbol} ({period})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_taker_buy_sell_ratio(
-        self, category: str, symbol: str, period: str, limit: int = 50
+        self, category: str, symbol: str, period: str, limit: int = 50,
     ) -> dict:
         """Retrieve taker buy-sell ratio data.
 
@@ -909,7 +906,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching taker buy-sell ratio for {symbol} ({period})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -943,7 +940,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Casting market order for {symbol} ({side})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         result = self._send_request("POST", endpoint, params)
@@ -994,7 +991,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Forging limit order for {symbol} at {price}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         result = self._send_request("POST", endpoint, params)
         if result and (break_even or tsl or profit_target):
@@ -1038,7 +1035,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Summoning conditional order for {symbol} at trigger {trigger_price}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1068,7 +1065,7 @@ class BybitV5Wizard:
         if stop_loss:
             params["stopLoss"] = str(stop_loss)
         print(
-            Fore.CYAN + f"# Enchanting {symbol} order with TP/SL..." + Style.RESET_ALL
+            Fore.CYAN + f"# Enchanting {symbol} order with TP/SL..." + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1104,7 +1101,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Casting {len(orders)} batch orders for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1168,7 +1165,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Amending {len(orders)} batch orders for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1193,7 +1190,7 @@ class BybitV5Wizard:
         return self._send_request("POST", endpoint, params)
 
     def cancel_all_orders(
-        self, category: str = "linear", symbol: str | None = None
+        self, category: str = "linear", symbol: str | None = None,
     ) -> dict:
         """Obliterate all orders in a cataclysmic sweep.
 
@@ -1237,12 +1234,12 @@ class BybitV5Wizard:
         if price and order_type == "Limit":
             params["price"] = str(price)
         print(
-            Fore.CYAN + f"# Closing position for {symbol} ({side})..." + Style.RESET_ALL
+            Fore.CYAN + f"# Closing position for {symbol} ({side})..." + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def get_open_orders(
-        self, category: str = "linear", symbol: str | None = None
+        self, category: str = "linear", symbol: str | None = None,
     ) -> dict:
         """Reveal the active orders lingering in the ether.
 
@@ -1256,7 +1253,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, params)
 
     def get_order_history(
-        self, category: str = "linear", symbol: str | None = None, limit: int = 50
+        self, category: str = "linear", symbol: str | None = None, limit: int = 50,
     ) -> dict:
         """Seek the chronicles of past trades.
 
@@ -1267,12 +1264,12 @@ class BybitV5Wizard:
         if symbol:
             params["symbol"] = symbol
         print(
-            Fore.CYAN + f"# Seeking order history for {category}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Seeking order history for {category}..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_transaction_log(
-        self, category: str = "linear", symbol: str | None = None
+        self, category: str = "linear", symbol: str | None = None,
     ) -> dict:
         """Retrieve transaction logs.
 
@@ -1285,14 +1282,14 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving transaction logs for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     # --- Position Endpoints ---
 
     def get_positions(
-        self, category: str = "linear", symbol: str | None = None
+        self, category: str = "linear", symbol: str | None = None,
     ) -> dict:
         """Summon the spirits of your active positions.
 
@@ -1326,7 +1323,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Bending leverage for {symbol} to {buy_leverage}x..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1357,7 +1354,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Enchanting {symbol} with TP/SL/TSL wards..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1381,7 +1378,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Switching position mode for {symbol} to {mode}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1395,7 +1392,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Setting TP/SL mode for {symbol} to {tpsl_mode}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1413,12 +1410,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# {'Enabling' if is_auto else 'Disabling'} auto add margin for {symbol}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def get_closed_pnl(
-        self, category: str, symbol: str | None = None, limit: int = 50
+        self, category: str, symbol: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve closed PNL records.
 
@@ -1429,12 +1426,12 @@ class BybitV5Wizard:
         if symbol:
             params["symbol"] = symbol
         print(
-            Fore.CYAN + f"# Retrieving closed PNL for {category}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Retrieving closed PNL for {category}..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def add_margin(
-        self, category: str, symbol: str, margin: float, position_idx: int | None = None
+        self, category: str, symbol: str, margin: float, position_idx: int | None = None,
     ) -> dict:
         """Add margin to a position.
 
@@ -1450,7 +1447,7 @@ class BybitV5Wizard:
     # --- Account Endpoints ---
 
     def get_wallet_balance(
-        self, account_type: str = "UNIFIED", coin: str | None = None
+        self, account_type: str = "UNIFIED", coin: str | None = None,
     ) -> dict:
         """Retrieve account wallet balance with enhanced caching.
 
@@ -1465,7 +1462,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Unveiling wallet balance for {account_type} account..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1529,12 +1526,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving account transaction logs for {account_type}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_borrow_history(
-        self, category: str, coin: str | None = None, limit: int = 50
+        self, category: str, coin: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve borrow history.
 
@@ -1547,7 +1544,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving borrow history for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1571,7 +1568,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Setting margin mode for {symbol} to {margin_mode}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1622,7 +1619,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving margin mode info for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1665,7 +1662,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, params)
 
     def get_asset_transfer_records(
-        self, transfer_id: str | None = None, limit: int = 50
+        self, transfer_id: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve asset transfer records.
 
@@ -1701,12 +1698,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Transferring {amount} {coin} from {from_account_type} to {to_account_type}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def withdrawal(
-        self, coin: str, chain: str, address: str, amount: float, tag: str | None = None
+        self, coin: str, chain: str, address: str, amount: float, tag: str | None = None,
     ) -> dict:
         """Withdraw an asset.
 
@@ -1724,12 +1721,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Initiating withdrawal of {amount} {coin} to {address}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def get_internal_deposit_records(
-        self, coin: str | None = None, limit: int = 50
+        self, coin: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve internal deposit records.
 
@@ -1743,7 +1740,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, params)
 
     def get_sub_member_deposit_records(
-        self, coin: str | None = None, limit: int = 50
+        self, coin: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve sub-member deposit records.
 
@@ -1754,7 +1751,7 @@ class BybitV5Wizard:
         if coin:
             params["coin"] = coin
         print(
-            Fore.CYAN + "# Retrieving sub-member deposit records..." + Style.RESET_ALL
+            Fore.CYAN + "# Retrieving sub-member deposit records..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1768,12 +1765,12 @@ class BybitV5Wizard:
         if chain:
             params["chain"] = chain
         print(
-            Fore.CYAN + f"# Retrieving deposit address for {coin}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Retrieving deposit address for {coin}..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_universal_transfer_list(
-        self, transfer_id: str | None = None, limit: int = 50
+        self, transfer_id: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve universal transfer records.
 
@@ -1784,12 +1781,12 @@ class BybitV5Wizard:
         if transfer_id:
             params["transferId"] = transfer_id
         print(
-            Fore.CYAN + "# Retrieving universal transfer records..." + Style.RESET_ALL
+            Fore.CYAN + "# Retrieving universal transfer records..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_account_coins_balance(
-        self, account_type: str, coin: str | None = None
+        self, account_type: str, coin: str | None = None,
     ) -> dict:
         """Retrieve account coins balance.
 
@@ -1802,7 +1799,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving account coins balance for {account_type}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1833,7 +1830,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Performing universal transfer of {amount} {coin}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1849,7 +1846,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving asset info for {account_type}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1885,7 +1882,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving withdrawable amount for {coin}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1931,7 +1928,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Toggling loan union interest repay to {status}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1944,7 +1941,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Retrieving loan union interest repay status..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, {})
 
@@ -1988,7 +1985,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# {'Freezing' if frozen else 'Unfreezing'} sub-member {member_id}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -2046,7 +2043,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Setting trading permission for sub-member {member_id}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -2065,7 +2062,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, params)
 
     def get_spot_leveraged_token_order_record(
-        self, lt_coin: str | None = None, order_id: str | None = None, limit: int = 50
+        self, lt_coin: str | None = None, order_id: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve Spot Leveraged Token order records.
 
@@ -2080,12 +2077,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Retrieving Spot Leveraged Token order records..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def purchase_spot_leveraged_token(
-        self, lt_coin: str, amount: float, serial_no: str | None = None
+        self, lt_coin: str, amount: float, serial_no: str | None = None,
     ) -> dict:
         """Purchase Spot Leveraged Token.
 
@@ -2099,7 +2096,7 @@ class BybitV5Wizard:
         return self._send_request("POST", endpoint, params)
 
     def redeem_spot_leveraged_token(
-        self, lt_coin: str, amount: float, serial_no: str | None = None
+        self, lt_coin: str, amount: float, serial_no: str | None = None,
     ) -> dict:
         """Redeem Spot Leveraged Token.
 
@@ -2136,7 +2133,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Setting Spot Margin leverage for {symbol} to {leverage}x..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -2150,7 +2147,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Toggling Spot Margin Trade mode to {spot_margin_mode}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -2164,7 +2161,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Borrowing {amount} {coin} for Spot Margin Trade..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -2178,7 +2175,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Repaying {amount} {coin} for Spot Margin Trade..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -2195,7 +2192,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, params)
 
     def get_spot_margin_repay_history(
-        self, coin: str | None = None, limit: int = 50
+        self, coin: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve Spot Margin Repay history.
 
@@ -2209,7 +2206,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, params)
 
     def get_spot_margin_borrow_history(
-        self, coin: str | None = None, limit: int = 50
+        self, coin: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve Spot Margin Borrow history.
 
@@ -2220,12 +2217,12 @@ class BybitV5Wizard:
         if coin:
             params["coin"] = coin
         print(
-            Fore.CYAN + "# Retrieving Spot Margin Borrow history..." + Style.RESET_ALL
+            Fore.CYAN + "# Retrieving Spot Margin Borrow history..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_spot_margin_interest_history(
-        self, coin: str | None = None, limit: int = 50
+        self, coin: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve Spot Margin Interest history.
 
@@ -2236,14 +2233,14 @@ class BybitV5Wizard:
         if coin:
             params["coin"] = coin
         print(
-            Fore.CYAN + "# Retrieving Spot Margin Interest history..." + Style.RESET_ALL
+            Fore.CYAN + "# Retrieving Spot Margin Interest history..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     # --- Copy Trading Endpoints ---
 
     def get_copy_trading_order_list(
-        self, category: str, symbol: str | None = None, limit: int = 50
+        self, category: str, symbol: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve copy trading order list.
 
@@ -2256,12 +2253,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving copy trading order list for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_copy_trading_order_history(
-        self, category: str, symbol: str | None = None, limit: int = 50
+        self, category: str, symbol: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve copy trading order history.
 
@@ -2274,12 +2271,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving copy trading order history for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_copy_trading_position_list(
-        self, category: str, symbol: str | None = None
+        self, category: str, symbol: str | None = None,
     ) -> dict:
         """Retrieve copy trading position list.
 
@@ -2292,12 +2289,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving copy trading position list for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_copy_trading_closed_pnl(
-        self, category: str, symbol: str | None = None, limit: int = 50
+        self, category: str, symbol: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve copy trading closed PNL.
 
@@ -2310,7 +2307,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Retrieving copy trading closed PNL for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -2332,7 +2329,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Closing copy trading position for {symbol}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -2356,7 +2353,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Cancelling copy trading order for {symbol}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -2388,7 +2385,7 @@ class BybitV5Wizard:
             print(
                 Fore.RED
                 + "# Risk percentage must be between 0 and 100!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return 0.0
 
@@ -2397,7 +2394,7 @@ class BybitV5Wizard:
             print(
                 Fore.RED
                 + "# Stop-loss distance cannot be zero or negative for position sizing!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return 0.0
 
@@ -2418,12 +2415,12 @@ class BybitV5Wizard:
             position_size = (risk_amount * leverage) / stop_loss_distance
 
             logger.info(
-                f"Position size calculated for {symbol}: {position_size} units (Risk: {risk_percentage}%, SL Distance: {stop_loss_distance})"
+                f"Position size calculated for {symbol}: {position_size} units (Risk: {risk_percentage}%, SL Distance: {stop_loss_distance})",
             )
             print(
                 Fore.CYAN
                 + f"# Calculated position size for {symbol}: {position_size} units"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
             return position_size
@@ -2431,7 +2428,7 @@ class BybitV5Wizard:
         except (KeyError, ValueError, TypeError) as e:
             logger.error(f"Error calculating position size: {e!s}")
             print(
-                Fore.RED + f"# Error calculating position size: {e!s}" + Style.RESET_ALL
+                Fore.RED + f"# Error calculating position size: {e!s}" + Style.RESET_ALL,
             )
             return 0.0
 
@@ -2458,13 +2455,13 @@ class BybitV5Wizard:
             print(
                 Fore.CYAN
                 + f"# Monitoring {symbol} for {profit_target}% profit with action {action}..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(
                 Fore.RED
                 + f"# No position found for {symbol} to monitor profit!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
     # --- Break-Even and Trailing Stop-Loss Logic ---
@@ -2476,13 +2473,13 @@ class BybitV5Wizard:
             print(
                 Fore.CYAN
                 + f"# Break-even {'enabled' if enable else 'disabled'} for {symbol}..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(Fore.RED + f"# No position found for {symbol}!" + Style.RESET_ALL)
 
     def enable_trailing_stop(
-        self, symbol: str, enable: bool = True, distance: float | None = None
+        self, symbol: str, enable: bool = True, distance: float | None = None,
     ):
         """Enable or disable trailing stop-loss enchantment for a position."""
         if symbol in self.positions:
@@ -2492,7 +2489,7 @@ class BybitV5Wizard:
             print(
                 Fore.CYAN
                 + f"# Trailing stop {'enabled' if enable else 'disabled'} for {symbol}..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(Fore.RED + f"# No position found for {symbol}!" + Style.RESET_ALL)
@@ -2583,7 +2580,7 @@ class BybitV5Wizard:
         delay = min(2**self.ws_reconnect_attempts, 60)  # Max 60 seconds
 
         logger.info(
-            f"Reconnecting {ws_type} WebSocket in {delay} seconds (attempt {self.ws_reconnect_attempts})"
+            f"Reconnecting {ws_type} WebSocket in {delay} seconds (attempt {self.ws_reconnect_attempts})",
         )
         time.sleep(delay)
 
@@ -2710,7 +2707,7 @@ class BybitV5Wizard:
         print(
             Fore.GREEN
             + "# Private WebSocket portal opened and authenticated!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         # Subscribe to essential private topics upon connection
         self.subscribe_private_ws(["position", "order", "wallet"])
@@ -2738,7 +2735,7 @@ class BybitV5Wizard:
                     position.last_update = datetime.now()
 
                     logger.info(
-                        f"Position updated for {symbol}: PnL={position.unrealized_pnl}"
+                        f"Position updated for {symbol}: PnL={position.unrealized_pnl}",
                     )
 
                     # Check for profit targets and other conditions
@@ -2873,7 +2870,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Performing an enhanced ethereal health check..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         health_status = self.get_system_status()
@@ -2898,7 +2895,7 @@ class BybitV5Wizard:
         print(
             Fore.GREEN
             + f"# Enhanced Health Report:\n{json.dumps(health_status, indent=2)}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         if all_healthy:
@@ -2916,7 +2913,7 @@ if __name__ == "__main__":
     print(
         Fore.MAGENTA
         + "### Enhanced mystical ritual to test the Bybit V5 Wizard ###"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     config_path = os.path.expanduser("~/.bybit_config")
@@ -2924,12 +2921,12 @@ if __name__ == "__main__":
         print(
             Fore.RED
             + "Error: ~/.bybit_config not found. Please create it with your API credentials."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + 'Example: echo \'{"api_key": "YOUR_API_KEY", "api_secret": "YOUR_API_SECRET", "testnet": true}\' > ~/.bybit_config'
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         exit()
 
@@ -2951,7 +2948,7 @@ if __name__ == "__main__":
         print(
             Fore.CYAN
             + f"\n# System Status:\n{json.dumps(status, indent=2)}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # --- existing demo code ---
@@ -2964,17 +2961,17 @@ if __name__ == "__main__":
         print(f"BTCUSDT Ticker: {tickers}")
 
         kline_data = bybit_wizard.get_kline(
-            category="linear", symbol="BTCUSDT", interval="1"
+            category="linear", symbol="BTCUSDT", interval="1",
         )
         print(
-            f"BTCUSDT 1-min Kline (first entry): {kline_data.get('list', [])[0] if kline_data.get('list') else 'N/A'}"
+            f"BTCUSDT 1-min Kline (first entry): {kline_data.get('list', [])[0] if kline_data.get('list') else 'N/A'}",
         )
 
         print(
-            Fore.CYAN + "\n--- Enhanced Account Management Spells ---" + Style.RESET_ALL
+            Fore.CYAN + "\n--- Enhanced Account Management Spells ---" + Style.RESET_ALL,
         )
         account_balance = bybit_wizard.get_wallet_balance(
-            account_type="UNIFIED", coin="USDT"
+            account_type="UNIFIED", coin="USDT",
         )
         print(f"USDT Balance: {account_balance}")
 
@@ -2985,7 +2982,7 @@ if __name__ == "__main__":
         print(f"BTCUSDT Fee Rate: {fee_rate}")
 
         print(
-            Fore.CYAN + "\n--- Enhanced Position & Trade Spells ---" + Style.RESET_ALL
+            Fore.CYAN + "\n--- Enhanced Position & Trade Spells ---" + Style.RESET_ALL,
         )
         symbol_to_trade = "BTCUSDT"
 
@@ -3014,7 +3011,7 @@ if __name__ == "__main__":
         print(
             Fore.CYAN
             + "\n# Enhanced wizard is now watching the market with mystical algorithms. Press Ctrl+C to stop."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Enhanced monitoring loop
@@ -3038,7 +3035,7 @@ if __name__ == "__main__":
         print(
             Fore.RED
             + "\n# The enhanced wizard's journey ends. Script terminated by user."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
     except Exception as e:
         logger.error(f"Unexpected error: {e!s}")
@@ -3046,7 +3043,7 @@ if __name__ == "__main__":
         print(
             Fore.RED
             + f"\n# An unexpected error befell the enhanced wizard: {e!s}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
     finally:
         if "bybit_wizard" in locals():
@@ -3055,5 +3052,5 @@ if __name__ == "__main__":
             print(
                 Fore.CYAN
                 + f"\n# Final System Status:\n{json.dumps(final_status, indent=2)}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )

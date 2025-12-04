@@ -10,7 +10,7 @@ class StrategyFactory:
 
     @staticmethod
     def create_chandelier_ehlers_strategy(
-        config: dict[str, Any], session
+        config: dict[str, Any], session,
     ) -> ChandelierEhlersSuperTrendStrategy:
         """Create a Chandelier Exit Ehlers SuperTrend strategy instance.
 

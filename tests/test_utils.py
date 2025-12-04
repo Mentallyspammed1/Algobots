@@ -2,25 +2,25 @@ import logging
 import os  # Import os module
 import sys
 import unittest
-from decimal import Decimal
-from decimal import getcontext
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from decimal import Decimal, getcontext
+from unittest.mock import MagicMock, patch
 
 # Ensure the root directory is in the Python path for imports
 sys.path.insert(0, "/data/data/com.termux/files/home/Algobots")
 
 # Mock setup_logging to prevent actual log file creation during tests
 with patch("bot_logger.setup_logging"):
-    from utils import FallbackZoneInfo  # Import TIMEZONE  # Import color constants
-    from utils import OrderBook  # Import color constants
+    from utils import (
+        FallbackZoneInfo,  # Import TIMEZONE  # Import color constants
+        OrderBook,  # Import color constants
+        calculate_order_quantity,  # Import color constants
+        get_min_tick_size,  # Import color constants
+        get_price_precision,  # Import color constants
+        get_timezone,  # Import color constants
+        round_decimal,  # Import color constants
+        set_timezone,  # Import color constants
+    )
     from utils import _module_logger as utils_logger  # Access the module-level logger
-    from utils import calculate_order_quantity  # Import color constants
-    from utils import get_min_tick_size  # Import color constants
-    from utils import get_price_precision  # Import color constants
-    from utils import get_timezone  # Import color constants
-    from utils import round_decimal  # Import color constants
-    from utils import set_timezone  # Import color constants
 
 # Set Decimal precision for tests
 getcontext().prec = 38
@@ -102,7 +102,7 @@ class TestOrderBook(unittest.TestCase):
         self.order_book.apply_delta(delta_data)
         self.assertEqual(self.order_book.last_seq, 100)  # Should not update
         self.mock_logger.debug.assert_called_with(
-            "Stale or out-of-order order book update (current seq: 99, last seq: 100). Skipping."
+            "Stale or out-of-order order book update (current seq: 99, last seq: 100). Skipping.",
         )
 
     def test_get_imbalance(self):
@@ -160,12 +160,12 @@ class TestCalculateOrderQuantity(unittest.TestCase):
         )
         self.assertEqual(qty, self.min_qty)  # Should adjust to min_qty
         self.mock_logger.warning.assert_called_with(
-            f"{utils_logger.NEON_YELLOW}Initial quantity {Decimal('0.0000002'):.8f} was below min_qty {self.min_qty}. Adjusting to min_qty.{utils_logger.RESET_ALL_STYLE}"
+            f"{utils_logger.NEON_YELLOW}Initial quantity {Decimal('0.0000002'):.8f} was below min_qty {self.min_qty}. Adjusting to min_qty.{utils_logger.RESET_ALL_STYLE}",
         )
 
     def test_below_min_order_value_adjust_up(self):
         usdt_amount = Decimal(
-            "5"
+            "5",
         )  # Results in 0.0001 BTC, value 5, below min_order_value 10
         qty = calculate_order_quantity(
             usdt_amount,
@@ -179,10 +179,10 @@ class TestCalculateOrderQuantity(unittest.TestCase):
         # Adjusted to step: (0.0002 // 0.0001) * 0.0001 = 0.0002
         self.assertEqual(qty, Decimal("0.0002"))
         self.mock_logger.warning.assert_called_with(
-            f"{utils_logger.NEON_YELLOW}Order value {Decimal('5.0000'):.4f} is below min_order_value {self.min_order_value}. Recalculating quantity.{utils_logger.RESET_ALL_STYLE}"
+            f"{utils_logger.NEON_YELLOW}Order value {Decimal('5.0000'):.4f} is below min_order_value {self.min_order_value}. Recalculating quantity.{utils_logger.RESET_ALL_STYLE}",
         )
         self.mock_logger.info.assert_called_with(
-            f"{utils_logger.NEON_BLUE}Quantity adjusted to {Decimal('0.0002'):.8f} to meet minimum order value.{utils_logger.RESET_ALL_STYLE}"
+            f"{utils_logger.NEON_BLUE}Quantity adjusted to {Decimal('0.0002'):.8f} to meet minimum order value.{utils_logger.RESET_ALL_STYLE}",
         )
 
     def test_zero_usdt_amount(self):
@@ -196,7 +196,7 @@ class TestCalculateOrderQuantity(unittest.TestCase):
         )
         self.assertEqual(qty, Decimal("0"))
         self.mock_logger.error.assert_called_with(
-            f"{utils_logger.NEON_RED}USDT amount and current price must be positive for order calculation.{utils_logger.RESET_ALL_STYLE}"
+            f"{utils_logger.NEON_RED}USDT amount and current price must be positive for order calculation.{utils_logger.RESET_ALL_STYLE}",
         )
 
     def test_zero_current_price(self):
@@ -210,7 +210,7 @@ class TestCalculateOrderQuantity(unittest.TestCase):
         )
         self.assertEqual(qty, Decimal("0"))
         self.mock_logger.error.assert_called_with(
-            f"{utils_logger.NEON_RED}USDT amount and current price must be positive for order calculation.{utils_logger.RESET_ALL_STYLE}"
+            f"{utils_logger.NEON_RED}USDT amount and current price must be positive for order calculation.{utils_logger.RESET_ALL_STYLE}",
         )
 
     def test_final_qty_zero_after_adjustments(self):
@@ -225,7 +225,7 @@ class TestCalculateOrderQuantity(unittest.TestCase):
         )
         self.assertEqual(qty, Decimal("0"))
         self.mock_logger.error.assert_called_with(
-            f"{utils_logger.NEON_RED}Final calculated quantity is zero or negative. Aborting order calculation.{utils_logger.RESET_ALL_STYLE}"
+            f"{utils_logger.NEON_RED}Final calculated quantity is zero or negative. Aborting order calculation.{utils_logger.RESET_ALL_STYLE}",
         )
 
 
@@ -278,34 +278,34 @@ class TestPrecisionFunctions(unittest.TestCase):
         market_info = {"symbol": "UNKNOWN"}
         self.assertEqual(get_price_precision(market_info, self.mock_logger), 4)
         self.mock_logger.warning.assert_called_with(
-            "Could not determine price precision for UNKNOWN from market_info. Using default: 4."
+            "Could not determine price precision for UNKNOWN from market_info. Using default: 4.",
         )
 
     def test_get_min_tick_size_from_precision_float(self):
         market_info = {"precision": {"price": 0.0001}, "symbol": "BTCUSDT"}
         self.assertEqual(
-            get_min_tick_size(market_info, self.mock_logger), Decimal("0.0001")
+            get_min_tick_size(market_info, self.mock_logger), Decimal("0.0001"),
         )
 
     def test_get_min_tick_size_from_precision_int(self):
         market_info = {"precision": {"price": 3}, "symbol": "ETHUSDT"}
         self.assertEqual(
-            get_min_tick_size(market_info, self.mock_logger), Decimal("0.001")
+            get_min_tick_size(market_info, self.mock_logger), Decimal("0.001"),
         )
 
     def test_get_min_tick_size_from_limits_min(self):
         market_info = {"limits": {"price": {"min": "0.005"}}, "symbol": "XRPUSDT"}
         self.assertEqual(
-            get_min_tick_size(market_info, self.mock_logger), Decimal("0.005")
+            get_min_tick_size(market_info, self.mock_logger), Decimal("0.005"),
         )
 
     def test_get_min_tick_size_default_fallback(self):
         market_info = {"symbol": "UNKNOWN"}
         self.assertEqual(
-            get_min_tick_size(market_info, self.mock_logger), Decimal("0.0001")
+            get_min_tick_size(market_info, self.mock_logger), Decimal("0.0001"),
         )
         self.mock_logger.warning.assert_called_with(
-            "Could not determine specific min_tick_size for UNKNOWN from market_info. Using fallback based on derived price precision (4 places): 0.0001"
+            "Could not determine specific min_tick_size for UNKNOWN from market_info. Using fallback based on derived price precision (4 places): 0.0001",
         )
 
 
@@ -347,11 +347,11 @@ class TestTimezoneFunctions(unittest.TestCase):
         self.mock_logger.warning.assert_any_call(
             "Module 'zoneinfo' not found (requires Python 3.9+ and possibly 'tzdata' package). "
             "Using a basic UTC-only fallback for timezone handling. "
-            "For full timezone support on older Python, consider installing 'pytz'."
+            "For full timezone support on older Python, consider installing 'pytz'.",
         )
         self.mock_logger.warning.assert_any_call(
             "FallbackZoneInfo initialized with key 'America/New_York' which is not 'UTC'. "
-            "This fallback only supports UTC. Effective timezone will be UTC."
+            "This fallback only supports UTC. Effective timezone will be UTC.",
         )
 
     def test_get_timezone_from_env(self):
@@ -370,7 +370,7 @@ class TestTimezoneFunctions(unittest.TestCase):
                 self.assertIsNotNone(tz)
                 self.assertEqual(str(tz), "Europe/London")
                 self.mock_logger.info.assert_any_call(
-                    "TIMEZONE environment variable found: 'Europe/London'. Attempting to use it."
+                    "TIMEZONE environment variable found: 'Europe/London'. Attempting to use it.",
                 )
                 MockZoneInfo.assert_called_with("Europe/London")
 
@@ -390,7 +390,7 @@ class TestTimezoneFunctions(unittest.TestCase):
                 self.assertIsNotNone(tz)
                 self.assertEqual(str(tz), "America/Chicago")
                 self.mock_logger.info.assert_any_call(
-                    "TIMEZONE environment variable not set. Using default timezone: 'America/Chicago'."
+                    "TIMEZONE environment variable not set. Using default timezone: 'America/Chicago'.",
                 )
                 MockZoneInfo.assert_called_with("America/Chicago")
 

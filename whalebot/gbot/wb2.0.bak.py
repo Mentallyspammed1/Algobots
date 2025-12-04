@@ -2,32 +2,31 @@
 # Enhanced WhaleBot AI Trader (v5.0 - Optimized & Refactored)
 
 import asyncio
-import aiohttp
 import json
 import logging
 import re
-import time
 import signal
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal, getcontext
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
+import aiohttp
+import google.generativeai as genai
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
-import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
-from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.live import Live
-from rich.layout import Layout
 from rich import box
-from decimal import Decimal, ROUND_HALF_UP, getcontext
-from pathlib import Path
-from logging.handlers import RotatingFileHandler
-from concurrent.futures import ThreadPoolExecutor
+from rich.console import Console
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
 
 # --- Global Setup & Constants ---
 getcontext().prec = 28
@@ -62,16 +61,16 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(..., alias="GEMINI_API_KEY")
     bybit_base_url: str = "https://api.bybit.com"
     gemini_model_name: str = "gemini-2.0-flash" # Updated to latest efficient model
-    
-    symbols: List[str] = [
-        "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", 
-        "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT"
+
+    symbols: list[str] = [
+        "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
+        "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT",
     ]
-    interval: str = "15" 
+    interval: str = "15"
     category: str = "linear"
     kline_limit: int = 300
     refresh_rate: int = 30
-    
+
     indicators: IndicatorSettings = IndicatorSettings()
     trader: TraderSettings = TraderSettings()
     logging_level: str = "INFO"
@@ -84,7 +83,7 @@ def setup_logger():
     logger.setLevel(getattr(logging, settings.logging_level))
     logger.propagate = False
     if not logger.handlers:
-        fmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
+        fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S")
         ch = logging.StreamHandler(sys.stdout)
         ch.setFormatter(fmt)
         logger.addHandler(ch)
@@ -111,7 +110,7 @@ class IndicatorData(BaseModel):
     vwap: float = 0.0
     ob_imbalance: float = 0.0
 
-    @field_validator('*', mode='before')
+    @field_validator("*", mode="before")
     def clean_floats(cls, v):
         return float(v) if isinstance(v, (float, int, np.floating)) and np.isfinite(v) else 0.0
 
@@ -124,11 +123,11 @@ class SignalAnalysis(BaseModel):
     stop_loss: Decimal = Decimal(0)
     take_profit: Decimal = Decimal(0)
 
-    @field_validator('signal', mode='before')
+    @field_validator("signal", mode="before")
     def normalize_signal(cls, v):
         return v.upper().strip()
 
-    @field_validator('entry_price', 'stop_loss', 'take_profit', mode='before')
+    @field_validator("entry_price", "stop_loss", "take_profit", mode="before")
     def convert_decimal(cls, v):
         if v is None: return Decimal(0)
         try:
@@ -141,8 +140,8 @@ class MarketSnapshot(BaseModel):
     price: Decimal = Decimal(0)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     indicators: IndicatorData = Field(default_factory=IndicatorData)
-    analysis: Optional[SignalAnalysis] = None
-    error: Optional[str] = None
+    analysis: SignalAnalysis | None = None
+    error: str | None = None
     last_updated: float = 0.0
     latency_ms: float = 0.0
 
@@ -150,7 +149,7 @@ class MarketSnapshot(BaseModel):
 
 class BybitPublicClient:
     def __init__(self):
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self.timeout = aiohttp.ClientTimeout(total=10)
 
     async def __aenter__(self):
@@ -162,10 +161,10 @@ class BybitPublicClient:
         if self.session:
             await self.session.close()
 
-    async def fetch_data(self, symbol: str) -> tuple[pd.DataFrame, Dict, Dict, float]:
+    async def fetch_data(self, symbol: str) -> tuple[pd.DataFrame, dict, dict, float]:
         t0 = time.perf_counter()
         base = settings.bybit_base_url
-        
+
         try:
             # Construct URLs
             u_k = f"{base}/v5/market/kline?category={settings.category}&symbol={symbol}&interval={settings.interval}&limit={settings.kline_limit}"
@@ -179,7 +178,7 @@ class BybitPublicClient:
 
             r_k, r_o, r_t = t_k.result(), t_o.result(), t_t.result()
             d_k, d_o, d_t = await r_k.json(), await r_o.json(), await r_t.json()
-            
+
             latency = (time.perf_counter() - t0) * 1000
 
             if d_k.get("retCode") != 0:
@@ -188,7 +187,7 @@ class BybitPublicClient:
             # Process Kline
             raw_list = d_k["result"]["list"]
             if not raw_list: return pd.DataFrame(), {}, {}, latency
-            
+
             df = pd.DataFrame(raw_list, columns=["startTime", "open", "high", "low", "close", "volume", "turnover"])
             df = df.astype(float)
             df["startTime"] = pd.to_datetime(df["startTime"], unit="ms")
@@ -207,7 +206,7 @@ class BybitPublicClient:
 
 class TechnicalAnalyzer:
     @staticmethod
-    def calculate(df: pd.DataFrame, orderbook: Dict) -> IndicatorData:
+    def calculate(df: pd.DataFrame, orderbook: dict) -> IndicatorData:
         s = settings.indicators
         if len(df) < s.ema_slow + 5:
             return IndicatorData()
@@ -222,15 +221,15 @@ class TechnicalAnalyzer:
         df.ta.bbands(length=s.bb_period, std=s.bb_std, append=True)
         df.ta.atr(length=s.atr_period, append=True)
         df.ta.vwap(append=True)
-        
+
         # Ichimoku (custom extraction)
-        ichimoku = ta.ichimoku(df['high'], df['low'], df['close'])
+        ichimoku = ta.ichimoku(df["high"], df["low"], df["close"])
         if ichimoku is not None:
             df = pd.concat([df, ichimoku[0]], axis=1)
 
         last = df.iloc[-1]
         ind = IndicatorData()
-        
+
         # Extract Values safely
         ind.ema_20 = last.get(f"EMA_{s.ema_fast}", 0)
         ind.ema_200 = last.get(f"EMA_{s.ema_slow}", 0)
@@ -245,7 +244,7 @@ class TechnicalAnalyzer:
         # Ichimoku Logic
         span_a = last.get("ISA_9_26_52", 0)
         span_b = last.get("ISB_9_26_52", 0)
-        close = last['close']
+        close = last["close"]
         if close > max(span_a, span_b): ind.ichimoku_status = "ABOVE CLOUD"
         elif close < min(span_a, span_b): ind.ichimoku_status = "BELOW CLOUD"
         else: ind.ichimoku_status = "IN CLOUD"
@@ -262,8 +261,8 @@ class TechnicalAnalyzer:
 
         # Orderbook Imbalance
         if orderbook:
-            bids = np.array(orderbook.get('b', []), dtype=float)
-            asks = np.array(orderbook.get('a', []), dtype=float)
+            bids = np.array(orderbook.get("b", []), dtype=float)
+            asks = np.array(orderbook.get("a", []), dtype=float)
             if len(bids) > 0 and len(asks) > 0:
                 bv, av = np.sum(bids[:, 1]), np.sum(asks[:, 1])
                 ind.ob_imbalance = (bv - av) / (bv + av) if (bv + av) > 0 else 0
@@ -299,20 +298,20 @@ class GeminiAnalyzer:
         Schema:
         {{ "trend": "str", "signal": "str", "confidence": float, "explanation": "max 10 words", "entry_price": float, "stop_loss": float, "take_profit": float }}
         """
-        
+
         async with SIGNAL_SEMAPHORE:
             try:
                 resp = await asyncio.to_thread(
-                    self.model.generate_content, 
-                    prompt, 
-                    generation_config={"temperature": 0.1, "response_mime_type": "application/json"}
+                    self.model.generate_content,
+                    prompt,
+                    generation_config={"temperature": 0.1, "response_mime_type": "application/json"},
                 )
-                
+
                 json_str = self._clean_json(resp.text)
                 if not json_str: raise ValueError("No JSON found")
-                
+
                 an = SignalAnalysis.model_validate_json(json_str)
-                
+
                 # Logic Validation
                 if an.signal == "HOLD" or an.confidence < self.min_conf:
                     return SignalAnalysis(trend=an.trend, signal="HOLD", confidence=an.confidence, explanation=an.explanation)
@@ -334,24 +333,24 @@ class GeminiAnalyzer:
 class PaperTrader:
     def __init__(self):
         self.balance: Decimal = settings.trader.initial_balance
-        self.positions: Dict[str, Dict] = {}
-        self.history: List[Dict] = []
+        self.positions: dict[str, dict] = {}
+        self.history: list[dict] = []
         self.executor = ThreadPoolExecutor(max_workers=1)
         self._load_state()
 
     def _load_state(self):
         if STATE_FILE.exists():
             try:
-                with open(STATE_FILE, 'r') as f:
+                with open(STATE_FILE) as f:
                     data = json.load(f)
-                    self.balance = Decimal(data['balance'])
-                    self.history = data.get('history', [])
-                    for sym, pos in data.get('positions', {}).items():
-                        pos['entry_price'] = Decimal(pos['entry_price'])
-                        pos['stop_loss'] = Decimal(pos['stop_loss'])
-                        pos['take_profit'] = Decimal(pos['take_profit'])
-                        pos['qty'] = Decimal(pos['qty'])
-                        pos['entry_time'] = datetime.fromisoformat(pos['entry_time'])
+                    self.balance = Decimal(data["balance"])
+                    self.history = data.get("history", [])
+                    for sym, pos in data.get("positions", {}).items():
+                        pos["entry_price"] = Decimal(pos["entry_price"])
+                        pos["stop_loss"] = Decimal(pos["stop_loss"])
+                        pos["take_profit"] = Decimal(pos["take_profit"])
+                        pos["qty"] = Decimal(pos["qty"])
+                        pos["entry_time"] = datetime.fromisoformat(pos["entry_time"])
                         self.positions[sym] = pos
             except Exception as e:
                 logger.error(f"State load error: {e}")
@@ -366,12 +365,12 @@ class PaperTrader:
                     key: str(val) if isinstance(val, Decimal) else val.isoformat() if isinstance(val, datetime) else val
                     for key, val in v.items()
                 } for k, v in self.positions.items()
-            }
+            },
         }
         self.executor.submit(self._write_file, data)
 
     def _write_file(self, data):
-        with open(STATE_FILE, 'w') as f:
+        with open(STATE_FILE, "w") as f:
             json.dump(data, f, indent=2)
 
     def execute(self, snap: MarketSnapshot):
@@ -387,22 +386,22 @@ class PaperTrader:
         risk_amt = self.balance * settings.trader.risk_per_trade
         dist = abs(an.entry_price - an.stop_loss)
         if dist == 0: return
-        
+
         qty = (risk_amt / dist).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         cost = qty * an.entry_price
-        
+
         if cost > self.balance or cost < 10: return # Min trade $10
 
         # Apply Slippage
         slip = settings.trader.slippage
         entry = an.entry_price * (1 + slip) if an.signal == "BUY" else an.entry_price * (1 - slip)
-        
+
         self.balance -= (entry * qty * settings.trader.trading_fee)
-        
+
         self.positions[snap.symbol] = {
             "symbol": snap.symbol, "side": an.signal, "qty": qty,
             "entry_price": entry, "stop_loss": an.stop_loss, "take_profit": an.take_profit,
-            "entry_time": datetime.now(timezone.utc)
+            "entry_time": datetime.now(timezone.utc),
         }
         self.save_state()
         logger.info(f"OPEN {an.signal} {snap.symbol} x{qty} @ {entry:.4f}")
@@ -411,30 +410,29 @@ class PaperTrader:
         pos = self.positions[snap.symbol]
         price = snap.price
         reason = None
-        
-        if pos['side'] == "BUY":
-            if price <= pos['stop_loss']: reason = "SL"
-            elif price >= pos['take_profit']: reason = "TP"
-        else:
-            if price >= pos['stop_loss']: reason = "SL"
-            elif price <= pos['take_profit']: reason = "TP"
+
+        if pos["side"] == "BUY":
+            if price <= pos["stop_loss"]: reason = "SL"
+            elif price >= pos["take_profit"]: reason = "TP"
+        elif price >= pos["stop_loss"]: reason = "SL"
+        elif price <= pos["take_profit"]: reason = "TP"
 
         if reason:
             slip = settings.trader.slippage
-            exit_p = price * (1 - slip) if pos['side'] == "BUY" else price * (1 + slip)
-            
-            pnl = (exit_p - pos['entry_price']) * pos['qty']
-            if pos['side'] == "SELL": pnl = -pnl
-            
-            fee = exit_p * pos['qty'] * settings.trader.trading_fee
+            exit_p = price * (1 - slip) if pos["side"] == "BUY" else price * (1 + slip)
+
+            pnl = (exit_p - pos["entry_price"]) * pos["qty"]
+            if pos["side"] == "SELL": pnl = -pnl
+
+            fee = exit_p * pos["qty"] * settings.trader.trading_fee
             net_pnl = pnl - fee
-            
+
             self.balance += net_pnl
             del self.positions[snap.symbol]
-            
+
             self.history.insert(0, {
                 "time": datetime.now().isoformat(), "symbol": snap.symbol,
-                "side": pos['side'], "pnl": str(net_pnl), "reason": reason
+                "side": pos["side"], "pnl": str(net_pnl), "reason": reason,
             })
             self.history = self.history[:20]
             self.save_state()
@@ -459,13 +457,13 @@ class WhaleBot:
     def render_ui(self) -> Layout:
         layout = Layout()
         layout.split_column(Layout(name="header", size=3), Layout(name="body"), Layout(name="footer", size=10))
-        
+
         # Header
         latencies = [s.latency_ms for s in self.snapshots.values() if s.latency_ms > 0]
         avg_lat = sum(latencies)/len(latencies) if latencies else 0
         layout["header"].update(Panel(
             f"[bold white]WhaleBot AI v5.0[/] | [cyan]Bal: ${self.trader.balance:,.2f}[/] | [magenta]Lat: {avg_lat:.0f}ms[/]",
-            style="on blue"
+            style="on blue",
         ))
 
         # Body: Market Table
@@ -486,10 +484,10 @@ class WhaleBot:
             # Color logic
             pos = self.trader.positions.get(s.symbol)
             price_str = f"${s.price:.4f}"
-            
+
             if pos:
-                pnl = (s.price - pos['entry_price']) * pos['qty']
-                if pos['side'] == "SELL": pnl = -pnl
+                pnl = (s.price - pos["entry_price"]) * pos["qty"]
+                if pos["side"] == "SELL": pnl = -pnl
                 c = "green" if pnl >= 0 else "red"
                 price_str += f"\n[{c}]${pnl:.2f}[/]"
                 sig_str = f"[bold {c}]OPEN {pos['side']}[/]"
@@ -505,24 +503,24 @@ class WhaleBot:
 
             trend_icon = "↗" if s.indicators.super_trend == "BULLISH" else "↘"
             age = time.time() - s.last_updated
-            
+
             table.add_row(
-                f"[bold]{s.symbol}[/]", price_str, sig_str, conf_str, 
-                f"{trend_icon} {s.indicators.ema_20:.2f}", plan_str, f"{age:.0f}s"
+                f"[bold]{s.symbol}[/]", price_str, sig_str, conf_str,
+                f"{trend_icon} {s.indicators.ema_20:.2f}", plan_str, f"{age:.0f}s",
             )
-        
+
         layout["body"].update(table)
 
         # Footer: History
         hist_table = Table(show_header=False, box=None, padding=(0, 2))
         for t in self.trader.history[:3]:
-            c = "green" if Decimal(t['pnl']) >= 0 else "red"
+            c = "green" if Decimal(t["pnl"]) >= 0 else "red"
             hist_table.add_row(
-                f"{t['time'][11:16]}", t['symbol'], t['side'], 
-                f"[{c}]${Decimal(t['pnl']):.2f}[/]", t['reason']
+                f"{t['time'][11:16]}", t["symbol"], t["side"],
+                f"[{c}]${Decimal(t['pnl']):.2f}[/]", t["reason"],
             )
         layout["footer"].update(Panel(hist_table, title="Recent Trades", border_style="dim"))
-        
+
         return layout
 
     async def run(self):
@@ -534,7 +532,7 @@ class WhaleBot:
                     for sym in settings.symbols:
                         tasks.append(self.process_symbol(sym))
                     await asyncio.gather(*tasks)
-                    
+
                     # UI Update Loop (wait for next refresh cycle)
                     end_time = time.time() + settings.refresh_rate
                     while time.time() < end_time and self.running:
@@ -545,7 +543,7 @@ class WhaleBot:
         try:
             df, ob, tick, lat = await self.client.fetch_data(symbol)
             snap = self.snapshots[symbol]
-            
+
             if df.empty:
                 snap.error = "No Data"
                 return
@@ -553,15 +551,15 @@ class WhaleBot:
             price = Decimal(str(tick.get("lastPrice", 0)))
             snap.price = price
             snap.latency_ms = lat
-            
+
             # TA & AI
             snap.indicators = TechnicalAnalyzer.calculate(df, ob)
             snap.analysis = await self.analyzer.analyze(symbol, price, snap.indicators)
             snap.last_updated = time.time()
-            
+
             # Trade
             self.trader.execute(snap)
-            
+
         except Exception as e:
             logger.error(f"Process error {symbol}: {e}")
 

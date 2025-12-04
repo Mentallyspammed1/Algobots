@@ -1,12 +1,13 @@
 # strategies/chandelier_ehlers_strategy.py
 from typing import Any
 
-from data.data_manager import BybitDataProvider  # Import DataManager
-from data.data_manager import DataManager  # Import DataManager
+from data.data_manager import (
+    BybitDataProvider,  # Import DataManager
+    DataManager,  # Import DataManager
+)
 from indicators.chandelier_exit import ChandelierExit
 from indicators.ehlers_supertrend import EhlersSuperTrend
-from signals.signal_generator import ChandelierEhlersSignalGenerator
-from signals.signal_generator import Signal
+from signals.signal_generator import ChandelierEhlersSignalGenerator, Signal
 
 
 class ChandelierEhlersSuperTrendStrategy:
@@ -69,7 +70,7 @@ class ChandelierEhlersSuperTrendStrategy:
                 if "USDT" in account_info["result"]:
                     return float(account_info["result"]["USDT"].get("equity", 0.0))
                 if "list" in account_info["result"] and isinstance(
-                    account_info["result"]["list"], list
+                    account_info["result"]["list"], list,
                 ):
                     for balance_entry in account_info["result"]["list"]:
                         if balance_entry.get("coin") == "USDT":
@@ -77,20 +78,20 @@ class ChandelierEhlersSuperTrendStrategy:
 
                 print(
                     "Warning: Could not find USDT balance in account info. "
-                    "Returning 0.0."
+                    "Returning 0.0.",
                 )
                 return 0.0
 
             print(
                 f"Error fetching account balance: "
-                f"{account_info.get('retMsg', 'Unknown error')}"
+                f"{account_info.get('retMsg', 'Unknown error')}",
             )
             return 0.0
 
         except AttributeError:
             print(
                 "Error: 'session' object does not have the expected method "
-                "for fetching account balance (e.g., get_account_info)."
+                "for fetching account balance (e.g., get_account_info).",
             )
             return 0.0
         except Exception as e:
@@ -110,11 +111,11 @@ class ChandelierEhlersSuperTrendStrategy:
         """
         # Get historical performance data
         if not hasattr(self, "db_manager") or not hasattr(
-            self.db_manager, "get_trades"
+            self.db_manager, "get_trades",
         ):
             print(
                 "Error: db_manager or its get_trades method not available. "
-                "Returning default size."
+                "Returning default size.",
             )
             return self.config.get("DEFAULT_POSITION_SIZE", 0.001)  # Use config value
 
@@ -162,10 +163,10 @@ class ChandelierEhlersSuperTrendStrategy:
         if not hasattr(self, "current_prices") or symbol not in self.current_prices:
             print(
                 f"Warning: Could not get valid current price for {symbol}. "
-                "Using fallback price from config."
+                "Using fallback price from config.",
             )
             current_price = self.config.get(
-                "fallback_price", 50000
+                "fallback_price", 50000,
             )  # Use config value for fallback price
         else:
             current_price = self.current_prices[symbol]
@@ -173,10 +174,10 @@ class ChandelierEhlersSuperTrendStrategy:
         if current_price <= 0:
             print(
                 f"Warning: Current price for {symbol} is zero or negative ({current_price}). "
-                "Using fallback price from config."
+                "Using fallback price from config.",
             )
             current_price = self.config.get(
-                "fallback_price", 50000
+                "fallback_price", 50000,
             )  # Use config value for fallback price
 
         # Calculate position size in terms of quantity
@@ -184,7 +185,7 @@ class ChandelierEhlersSuperTrendStrategy:
 
         # Ensure position size is not negative or zero, and respects minimums from config
         position_size = max(
-            position_size, self.config.get("MIN_POSITION_SIZE", 0.0001)
+            position_size, self.config.get("MIN_POSITION_SIZE", 0.0001),
         )  # Use config value
 
         return position_size

@@ -37,20 +37,14 @@ import random  # For random jitter in delays
 import smtplib
 import subprocess
 import time
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
-from decimal import ROUND_DOWN
-from decimal import ROUND_HALF_UP
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from email.mime.text import MIMEText
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import pandas_ta as ta
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from pybit.unified_trading import HTTP
 
 # Initialize Colorama for neon terminal radiance
@@ -85,7 +79,7 @@ MIN_PLOT_CANDLES = 50  # Minimum candles required to attempt plotting
 SYMBOL_INFO = {
     "BTCUSDT": {
         "min_qty": Decimal(
-            "0.00001"
+            "0.00001",
         ),  # Minimum order quantity in base currency (e.g., BTC)
         "qty_step": Decimal("0.00001"),  # Minimum step for quantity changes
         "price_precision": 2,  # Decimal places for price (e.g., 45678.90) - Not directly used here but good info
@@ -114,11 +108,11 @@ def to_decimal(value, precision=8, rounding=ROUND_HALF_UP):
     try:
         # Use ROUND_DOWN for quantities sent to exchange if needed, ROUND_HALF_UP for general calc
         return Decimal(str(value)).quantize(
-            Decimal("1e-" + str(precision)), rounding=rounding
+            Decimal("1e-" + str(precision)), rounding=rounding,
         )
     except Exception as e:
         logging.warning(
-            f"Could not convert value '{value}' to Decimal with precision {precision}: {e}"
+            f"Could not convert value '{value}' to Decimal with precision {precision}: {e}",
         )
         return Decimal("0")
 
@@ -131,13 +125,13 @@ def get_symbol_info(symbol, key, default=None):
 def format_quantity(qty, symbol):
     """Formats quantity according to symbol's step size rules."""
     qty_decimal = to_decimal(
-        qty, precision=10, rounding=ROUND_DOWN
+        qty, precision=10, rounding=ROUND_DOWN,
     )  # Use high precision internally before stepping
     step = get_symbol_info(
-        symbol, "qty_step", Decimal("0.00001")
+        symbol, "qty_step", Decimal("0.00001"),
     )  # Default step if not found
     min_qty = get_symbol_info(
-        symbol, "min_qty", Decimal("0.00001")
+        symbol, "min_qty", Decimal("0.00001"),
     )  # Default min_qty if not found
 
     # Ensure step and min_qty are valid Decimals
@@ -149,7 +143,7 @@ def format_quantity(qty, symbol):
         print(
             NEON_WARNING
             + f"Quantity {qty_decimal:.10f} is below minimum {min_qty:.10f} for {symbol}. Cannot place order."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return "0.00000000"  # Return string '0' with standard precision
 
@@ -168,7 +162,7 @@ def format_quantity(qty, symbol):
 
     # Final check against min_qty after stepping
     adjusted_qty = max(
-        adjusted_qty, min_qty
+        adjusted_qty, min_qty,
     )  # Ensure we are at least at the minimum quantity
 
     # Return formatted string with high precision (e.g., 8 decimal places)
@@ -204,13 +198,13 @@ def _load_config():
         "stochrsi_d_period": 3,  # Smoothing period for Stoch RSI
         # Sizing and Risk Management
         "risk_pct": Decimal(
-            "0.01"
+            "0.01",
         ),  # Percentage of equity to risk per trade (e.g., 1%)
         "stop_loss_pct": Decimal(
-            "0.02"
+            "0.02",
         ),  # Fallback initial stop loss percentage if CE fails or is disabled
         "max_position_size": Decimal(
-            "0.01"
+            "0.01",
         ),  # Maximum position size in base currency (e.g., 0.01 BTC)
         # Mode and Output
         "testnet": False,  # Use Bybit testnet (True) or mainnet (False)
@@ -232,7 +226,7 @@ def _load_config():
                 config = json.load(f)
             # Load and convert Decimal values correctly from JSON strings
             config["risk_pct"] = to_decimal(
-                config.get("risk_pct", defaults["risk_pct"]), rounding=ROUND_HALF_UP
+                config.get("risk_pct", defaults["risk_pct"]), rounding=ROUND_HALF_UP,
             )
             config["stop_loss_pct"] = to_decimal(
                 config.get("stop_loss_pct", defaults["stop_loss_pct"]),
@@ -244,13 +238,13 @@ def _load_config():
             )
             config["super_trend_multiplier"] = to_decimal(
                 config.get(
-                    "super_trend_multiplier", defaults["super_trend_multiplier"]
+                    "super_trend_multiplier", defaults["super_trend_multiplier"],
                 ),
                 rounding=ROUND_HALF_UP,
             )
             config["chandelier_atr_multiplier"] = to_decimal(
                 config.get(
-                    "chandelier_atr_multiplier", defaults["chandelier_atr_multiplier"]
+                    "chandelier_atr_multiplier", defaults["chandelier_atr_multiplier"],
                 ),
                 rounding=ROUND_HALF_UP,
             )
@@ -260,23 +254,23 @@ def _load_config():
             print(
                 NEON_ERROR
                 + f"Shadow in config file {CONFIG_FILE}: {e}. Using defaults."
-                + NEON_RESET
+                + NEON_RESET,
             )
-            logging.error(f"Failed to load config from {CONFIG_FILE}: {e}")
+            logging.exception(f"Failed to load config from {CONFIG_FILE}: {e}")
     else:
         # Ensure default Decimal values are correctly typed before saving
         defaults["risk_pct"] = to_decimal(defaults["risk_pct"], rounding=ROUND_HALF_UP)
         defaults["stop_loss_pct"] = to_decimal(
-            defaults["stop_loss_pct"], rounding=ROUND_HALF_UP
+            defaults["stop_loss_pct"], rounding=ROUND_HALF_UP,
         )
         defaults["max_position_size"] = to_decimal(
-            defaults["max_position_size"], rounding=ROUND_HALF_UP
+            defaults["max_position_size"], rounding=ROUND_HALF_UP,
         )
         defaults["super_trend_multiplier"] = to_decimal(
-            defaults["super_trend_multiplier"], rounding=ROUND_HALF_UP
+            defaults["super_trend_multiplier"], rounding=ROUND_HALF_UP,
         )
         defaults["chandelier_atr_multiplier"] = to_decimal(
-            defaults["chandelier_atr_multiplier"], rounding=ROUND_HALF_UP
+            defaults["chandelier_atr_multiplier"], rounding=ROUND_HALF_UP,
         )
         try:
             # Convert Decimals to strings for JSON serialization
@@ -284,13 +278,13 @@ def _load_config():
             config_to_save["risk_pct"] = str(config_to_save["risk_pct"])
             config_to_save["stop_loss_pct"] = str(config_to_save["stop_loss_pct"])
             config_to_save["max_position_size"] = str(
-                config_to_save["max_position_size"]
+                config_to_save["max_position_size"],
             )
             config_to_save["super_trend_multiplier"] = str(
-                config_to_save["super_trend_multiplier"]
+                config_to_save["super_trend_multiplier"],
             )
             config_to_save["chandelier_atr_multiplier"] = str(
-                config_to_save["chandelier_atr_multiplier"]
+                config_to_save["chandelier_atr_multiplier"],
             )
 
             with open(CONFIG_FILE, "w") as f:
@@ -300,61 +294,61 @@ def _load_config():
             print(
                 NEON_ERROR
                 + f"Failed to create default config file {CONFIG_FILE}: {e}"
-                + NEON_RESET
+                + NEON_RESET,
             )
-            logging.error(f"Failed to create default config file {CONFIG_FILE}: {e}")
+            logging.exception(f"Failed to create default config file {CONFIG_FILE}: {e}")
 
     # Perform basic validation on critical parameters after loading/defaults
     if defaults["interval"] <= 0:
         print(
             NEON_ERROR
-            + "Configuration Error: 'interval' must be a positive number. Defaulting to 60 minutes."
+            + "Configuration Error: 'interval' must be a positive number. Defaulting to 60 minutes.",
         )
         defaults["interval"] = 60
     if defaults["leverage"] <= 0:
         print(
             NEON_ERROR
-            + "Configuration Error: 'leverage' must be positive. Defaulting to 10x."
+            + "Configuration Error: 'leverage' must be positive. Defaulting to 10x.",
         )
         defaults["leverage"] = 10
     if defaults["risk_pct"] <= Decimal("0") or defaults["risk_pct"] > Decimal("1"):
         print(
             NEON_ERROR
-            + f"Configuration Error: 'risk_pct' ({defaults['risk_pct']}) out of range (0 < risk < 1). Defaulting to 1%."
+            + f"Configuration Error: 'risk_pct' ({defaults['risk_pct']}) out of range (0 < risk < 1). Defaulting to 1%.",
         )
         defaults["risk_pct"] = Decimal("0.01")
     if defaults["max_position_size"] <= Decimal("0"):
         print(
             NEON_ERROR
-            + f"Configuration Error: 'max_position_size' ({defaults['max_position_size']}) must be positive. Defaulting to 0.01."
+            + f"Configuration Error: 'max_position_size' ({defaults['max_position_size']}) must be positive. Defaulting to 0.01.",
         )
         defaults["max_position_size"] = Decimal("0.01")
     if defaults["super_trend_length"] <= 0:
         print(
             NEON_ERROR
-            + f"Configuration Error: 'super_trend_length' ({defaults['super_trend_length']}) must be positive. Defaulting to 10."
+            + f"Configuration Error: 'super_trend_length' ({defaults['super_trend_length']}) must be positive. Defaulting to 10.",
         )
         defaults["super_trend_length"] = 10
     if defaults["super_trend_multiplier"] <= 0:
         print(
             NEON_ERROR
-            + f"Configuration Error: 'super_trend_multiplier' ({defaults['super_trend_multiplier']}) must be positive. Defaulting to 3.0."
+            + f"Configuration Error: 'super_trend_multiplier' ({defaults['super_trend_multiplier']}) must be positive. Defaulting to 3.0.",
         )
         defaults["super_trend_multiplier"] = Decimal("3.0")
 
     # Final check/conversion for critical Decimal values after validation
     defaults["risk_pct"] = to_decimal(defaults["risk_pct"], rounding=ROUND_HALF_UP)
     defaults["stop_loss_pct"] = to_decimal(
-        defaults["stop_loss_pct"], rounding=ROUND_HALF_UP
+        defaults["stop_loss_pct"], rounding=ROUND_HALF_UP,
     )
     defaults["max_position_size"] = to_decimal(
-        defaults["max_position_size"], rounding=ROUND_HALF_UP
+        defaults["max_position_size"], rounding=ROUND_HALF_UP,
     )
     defaults["super_trend_multiplier"] = to_decimal(
-        defaults["super_trend_multiplier"], rounding=ROUND_HALF_UP
+        defaults["super_trend_multiplier"], rounding=ROUND_HALF_UP,
     )
     defaults["chandelier_atr_multiplier"] = to_decimal(
-        defaults["chandelier_atr_multiplier"], rounding=ROUND_HALF_UP
+        defaults["chandelier_atr_multiplier"], rounding=ROUND_HALF_UP,
     )
 
     return defaults
@@ -376,13 +370,13 @@ def _load_api_creds():
                 print(
                     NEON_SUCCESS
                     + "API credentials summoned from authcreds.json."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
             else:
                 print(
                     NEON_WARNING
                     + "authcreds.json found but incomplete. Seeking environment variables..."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
         except Exception as e:
             print(NEON_ERROR + f"Shadow in authcreds.json: {e}" + NEON_RESET)
@@ -395,13 +389,13 @@ def _load_api_creds():
             print(
                 NEON_SUCCESS
                 + "Credentials drawn from environmental ether."
-                + NEON_RESET
+                + NEON_RESET,
             )
         else:
             print(
                 NEON_ERROR
                 + "CRITICAL: API keys lost in the void. Forge 'authcreds.json' or set env vars (BYBIT_API_KEY, BYBIT_API_SECRET)."
-                + NEON_RESET
+                + NEON_RESET,
             )
             logging.critical("API credentials missing.")
             exit(1)
@@ -416,7 +410,7 @@ def _initialize_session(config):
         print(
             NEON_INFO
             + "Backtest mode active—session forged for historical data simulation."
-            + NEON_RESET
+            + NEON_RESET,
         )
         # Use a dummy session for backtesting; actual data fetching is handled differently
         session = HTTP(testnet=config["testnet"])
@@ -450,7 +444,7 @@ def _initialize_session(config):
             print(
                 NEON_INFO
                 + f"No open position for {symbol}. Attempting to set leverage to {desired_leverage}x."
-                + NEON_RESET
+                + NEON_RESET,
             )
             session.set_leverage(
                 category=category,
@@ -461,13 +455,13 @@ def _initialize_session(config):
             print(
                 NEON_SUCCESS
                 + f"Leverage set to {desired_leverage}x on {'Testnet' if config['testnet'] else 'Mainnet'}."
-                + NEON_RESET
+                + NEON_RESET,
             )
         elif Decimal(current_leverage) != Decimal(desired_leverage):
             print(
                 NEON_INFO
                 + f"Current leverage {current_leverage}x differs from desired {desired_leverage}x. Adjusting..."
-                + NEON_RESET
+                + NEON_RESET,
             )
             session.set_leverage(
                 category=category,
@@ -478,13 +472,13 @@ def _initialize_session(config):
             print(
                 NEON_SUCCESS
                 + f"Leverage adjusted to {desired_leverage}x on {'Testnet' if config['testnet'] else 'Mainnet'}."
-                + NEON_RESET
+                + NEON_RESET,
             )
         else:
             print(
                 NEON_INFO
                 + f"Leverage for {symbol} is already {current_leverage}x. No change needed."
-                + NEON_RESET
+                + NEON_RESET,
             )
 
     except Exception as e:
@@ -493,7 +487,7 @@ def _initialize_session(config):
             print(
                 NEON_WARNING
                 + "Leverage setting redundant or already correct (Error Code: 110043). Continuing."
-                + NEON_RESET
+                + NEON_RESET,
             )
         else:
             print(NEON_ERROR + f"Leverage initialization failed: {e}" + NEON_RESET)
@@ -506,7 +500,7 @@ def _initialize_session(config):
 
 # --- Data Acquisition Function ---
 def _fetch_kline_data(
-    session, symbol, category, interval, limit=1000, start_time=None, end_time=None
+    session, symbol, category, interval, limit=1000, start_time=None, end_time=None,
 ):
     """Fetches kline data, handling time ranges, retries, and data validation."""
     all_data = []
@@ -519,14 +513,14 @@ def _fetch_kline_data(
     print(
         NEON_INFO
         + f"Fetching klines for {symbol} ({interval}m interval)..."
-        + NEON_RESET
+        + NEON_RESET,
     )
 
     while True:
         # Adjust fetch end time to avoid requesting data for the current incomplete candle
         # Add a buffer (e.g., 5 minutes worth of candles) if fetching live data
         fetch_buffer_ms = max(
-            int(interval) * 60 * 1000, 300000
+            int(interval) * 60 * 1000, 300000,
         )  # Ensure at least 5 minutes buffer
         effective_end_time = (
             min(fetch_end_time, int(time.time() * 1000) - fetch_buffer_ms)
@@ -559,7 +553,7 @@ def _fetch_kline_data(
                     NEON_INFO
                     + f"Requesting klines: Start={datetime.fromtimestamp(params['start'] / 1000).strftime('%Y-%m-%d %H:%M')} "
                     f"End={datetime.fromtimestamp(params['end'] / 1000).strftime('%Y-%m-%d %H:%M')} Limit={params['limit']}..."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
 
                 response = session.get_kline(**params)
@@ -571,12 +565,12 @@ def _fetch_kline_data(
                         print(
                             NEON_WARNING
                             + "No kline data found for the specified period or symbol."
-                            + NEON_RESET
+                            + NEON_RESET,
                         )
                         return pd.DataFrame()  # Return empty if no data at all
                     # Handle other missing data scenarios
                     raise ValueError(
-                        f"Kline data missing or invalid format. Response: {response.get('retMsg', 'Unknown error')}"
+                        f"Kline data missing or invalid format. Response: {response.get('retMsg', 'Unknown error')}",
                     )
 
                 if (
@@ -585,7 +579,7 @@ def _fetch_kline_data(
                     print(
                         NEON_INFO
                         + "Received empty data list, assuming end of available data or no new data."
-                        + NEON_RESET
+                        + NEON_RESET,
                     )
                     break  # Exit retry loop and outer fetch loop
 
@@ -605,19 +599,19 @@ def _fetch_kline_data(
                 # Convert startTime from ms timestamp to datetime object, handling potential warnings
                 try:
                     df_chunk["startTime"] = pd.to_datetime(
-                        df_chunk["startTime"], unit="ms", utc=True
+                        df_chunk["startTime"], unit="ms", utc=True,
                     )
                 except Exception:
                     # Try converting to numeric first if the direct conversion fails (addresses FutureWarning)
                     try:
                         df_chunk["startTime"] = pd.to_datetime(
-                            pd.to_numeric(df_chunk["startTime"]), unit="ms", utc=True
+                            pd.to_numeric(df_chunk["startTime"]), unit="ms", utc=True,
                         )
                     except Exception as e:
                         print(
                             NEON_ERROR
                             + f"Failed to convert startTime to datetime: {e}. Skipping chunk."
-                            + NEON_RESET
+                            + NEON_RESET,
                         )
                         logging.error(
                             f"Failed to convert startTime to datetime: {e}",
@@ -649,14 +643,14 @@ def _fetch_kline_data(
                     print(
                         NEON_INFO
                         + "Fetched fewer candles than limit, assuming end of available data."
-                        + NEON_RESET
+                        + NEON_RESET,
                     )
                     break  # Exit retry loop and outer fetch loop
 
                 # If backtesting, check if the next fetch start time exceeds the specified end time
                 if start_time and end_time and current_fetch_start > end_time:
                     print(
-                        NEON_INFO + "Reached backtest end time boundary." + NEON_RESET
+                        NEON_INFO + "Reached backtest end time boundary." + NEON_RESET,
                     )
                     break  # Exit outer fetch loop
 
@@ -666,27 +660,27 @@ def _fetch_kline_data(
                 print(
                     NEON_ERROR
                     + f"Kline fetch attempt {attempt + 1}/{MAX_API_RETRIES} failed: {e}"
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
                 logging.error(
-                    f"Kline fetch error: {e}", exc_info=True
+                    f"Kline fetch error: {e}", exc_info=True,
                 )  # Log traceback for debugging
                 if attempt < MAX_API_RETRIES - 1:
                     # Exponential backoff for retries with jitter
                     delay = INITIAL_RETRY_DELAY * (2**attempt) + random.uniform(
-                        0, 2
+                        0, 2,
                     )  # Add random jitter
                     print(
                         NEON_WARNING
                         + f"Retrying in {delay:.2f} seconds..."
-                        + NEON_RESET
+                        + NEON_RESET,
                     )
                     time.sleep(delay)
                 else:
                     print(
                         NEON_ERROR
                         + "Max retries reached. Failed to fetch klines for this cycle."
-                        + NEON_RESET
+                        + NEON_RESET,
                     )
                     # Return empty DataFrame to signal failure for this fetch cycle
                     return pd.DataFrame()
@@ -702,7 +696,7 @@ def _fetch_kline_data(
     # Concatenate all fetched data chunks if any were collected
     if not all_data:
         print(
-            NEON_WARNING + "No kline data collected during fetch sequence." + NEON_RESET
+            NEON_WARNING + "No kline data collected during fetch sequence." + NEON_RESET,
         )
         return pd.DataFrame()
 
@@ -722,7 +716,7 @@ def _calculate_indicators(df, config):
         print(
             NEON_WARNING
             + "Input DataFrame for indicator calculation is empty."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return pd.DataFrame()
 
@@ -735,7 +729,7 @@ def _calculate_indicators(df, config):
         print(
             NEON_ERROR
             + "DataFrame became empty after ensuring numeric OHLC data."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return pd.DataFrame()
 
@@ -751,7 +745,7 @@ def _calculate_indicators(df, config):
         print(
             NEON_DEBUG
             + f"Calculating Supertrend with length={st_length}, multiplier={st_multiplier}..."
-            + NEON_RESET
+            + NEON_RESET,
         )
         df.ta.supertrend(length=st_length, multiplier=st_multiplier, append=True)
 
@@ -764,7 +758,7 @@ def _calculate_indicators(df, config):
         if st_col not in df.columns or st_dir_col not in df.columns:
             # Raise a more informative error if columns are missing
             raise ValueError(
-                f"Supertrend columns '{st_col}' or '{st_dir_col}' not generated. Available columns: {df.columns.tolist()}"
+                f"Supertrend columns '{st_col}' or '{st_dir_col}' not generated. Available columns: {df.columns.tolist()}",
             )
     except Exception as e:
         print(NEON_ERROR + f"Supertrend calculation failed: {e}" + NEON_RESET)
@@ -780,7 +774,7 @@ def _calculate_indicators(df, config):
         print(
             NEON_WARNING
             + f"RSI calculation failed: {e}. RSI signals will be unavailable."
-            + NEON_RESET
+            + NEON_RESET,
         )
         logging.warning(f"RSI calculation failed: {e}", exc_info=True)
         # Continue without RSI if it fails, but log the issue
@@ -810,10 +804,10 @@ def _calculate_indicators(df, config):
             # Calculate Chandelier Exit Levels using Decimal arithmetic
             # Use ROUND_DOWN for long stop (must be below price), ROUND_UP for short stop (must be above price)
             df[ce_long_col] = (highest_high - atr_values * atr_multiplier).apply(
-                lambda x: to_decimal(x, rounding=ROUND_DOWN)
+                lambda x: to_decimal(x, rounding=ROUND_DOWN),
             )
             df[ce_short_col] = (lowest_low + atr_values * atr_multiplier).apply(
-                lambda x: to_decimal(x, rounding=ROUND_UP)
+                lambda x: to_decimal(x, rounding=ROUND_UP),
             )
 
             # Ensure columns exist even if calculation resulted in NaNs initially
@@ -826,7 +820,7 @@ def _calculate_indicators(df, config):
             print(
                 NEON_ERROR
                 + f"Chandelier Exit calculation failed: {e}. Disabling Chandelier Exit feature."
-                + NEON_RESET
+                + NEON_RESET,
             )
             logging.error(f"Chandelier Exit calculation failed: {e}", exc_info=True)
             config["use_chandelier_exit"] = (
@@ -844,7 +838,7 @@ def _calculate_indicators(df, config):
         try:
             # Calculate Stochastic RSI using pandas_ta
             stoch_rsi_data = ta.stochrsi(
-                df["close"], length=stoch_k_len, smooth_k=stoch_d_len, append=False
+                df["close"], length=stoch_k_len, smooth_k=stoch_d_len, append=False,
             )
             if not stoch_rsi_data.empty and len(stoch_rsi_data.columns) >= 2:
                 # Assign calculated columns to DataFrame
@@ -852,13 +846,13 @@ def _calculate_indicators(df, config):
                 df[stoch_rsi_d_name] = stoch_rsi_data.iloc[:, 1]  # D value
             else:
                 raise ValueError(
-                    "Stoch RSI data calculation returned empty or insufficient columns."
+                    "Stoch RSI data calculation returned empty or insufficient columns.",
                 )
         except Exception as e:
             print(
                 NEON_ERROR
                 + f"Stoch RSI calculation failed: {e}. Disabling Stoch RSI filter."
-                + NEON_RESET
+                + NEON_RESET,
             )
             logging.error(f"Stoch RSI calculation failed: {e}", exc_info=True)
             config["use_stochrsi_crossover"] = (
@@ -894,7 +888,7 @@ def _plot_supertrend(df, config):
         print(
             NEON_WARNING
             + f"Not enough data ({len(df)} candles) to generate plot. Need at least {MIN_PLOT_CANDLES}."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return
 
@@ -907,7 +901,7 @@ def _plot_supertrend(df, config):
 
         plt.style.use("dark_background")  # Use a dark theme for better visibility
         fig, (ax1, ax2) = plt.subplots(
-            2, 1, figsize=(14, 9), sharex=True
+            2, 1, figsize=(14, 9), sharex=True,
         )  # Create 2 subplots sharing X-axis
 
         # --- Plot 1: Price Action, Supertrend, and Chandelier Exit ---
@@ -1004,7 +998,7 @@ def _plot_supertrend(df, config):
         ax1.set_ylabel("Price", color="cyan")
         ax1.grid(True, linestyle="--", alpha=0.6)  # Add subtle grid lines
         ax1.legend(
-            loc="upper left", facecolor="black"
+            loc="upper left", facecolor="black",
         )  # Place legend in upper left corner
 
         # --- Plot 2: RSI Indicator ---
@@ -1073,7 +1067,7 @@ def _get_balance(session, config):
             print(
                 NEON_WARNING
                 + "Could not retrieve wallet balance list from API."
-                + NEON_RESET
+                + NEON_RESET,
             )
             return to_decimal(0)
 
@@ -1092,7 +1086,7 @@ def _get_balance(session, config):
         print(
             NEON_WARNING
             + "USDT balance not found in wallet. Assuming 0 USDT."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return to_decimal(0)
     except Exception as e:
@@ -1139,26 +1133,26 @@ def _execute_trade(
             "Sell" if current_position["side"] == "Buy" else "Buy"
         )  # Opposite side for closing
         order_qty_decimal = to_decimal(
-            current_position["size"]
+            current_position["size"],
         )  # Use the full size of the open position
         is_close_order = True
         log_suffix = f"Closing {current_position['side']} position"
         print(
             NEON_POSITION
             + f"Attempting to close {current_position['side']} position, Size: {order_qty_decimal:.10f}..."
-            + NEON_RESET
+            + NEON_RESET,
         )
     else:
         # Placing an entry order
         order_qty_decimal = to_decimal(
-            quantity, rounding=ROUND_DOWN
+            quantity, rounding=ROUND_DOWN,
         )  # Use ROUND_DOWN for calculations before final formatting
         is_close_order = False
         log_suffix = f"Opening {side} position"
         print(
             NEON_SIGNAL
             + f"Attempting to open {side} position, Calculated Size: {order_qty_decimal:.10f}..."
-            + NEON_RESET
+            + NEON_RESET,
         )
 
     # --- Quantity Validation and Formatting ---
@@ -1166,7 +1160,7 @@ def _execute_trade(
         print(
             NEON_WARNING
             + f"{log_suffix} failed: Quantity is zero or negative ({order_qty_decimal})."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return False
 
@@ -1178,7 +1172,7 @@ def _execute_trade(
         print(
             NEON_WARNING
             + f"{log_suffix} failed: Formatted quantity is zero after applying {symbol} rules."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return False
 
@@ -1191,7 +1185,7 @@ def _execute_trade(
             print(
                 NEON_WARNING
                 + f"Entry position size {formatted_qty_str} exceeds configured max {max_size:.8f}. Clamping to max size."
-                + NEON_RESET
+                + NEON_RESET,
             )
             # Reformat the clamped quantity
             formatted_qty_str = format_quantity(max_size, symbol)
@@ -1200,7 +1194,7 @@ def _execute_trade(
                 print(
                     NEON_ERROR
                     + "Max position size is invalid after formatting. Cannot proceed."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
                 return False
 
@@ -1227,7 +1221,7 @@ def _execute_trade(
             print(
                 NEON_SUCCESS
                 + f"Market order placed successfully. Order ID: {order_id}"
-                + NEON_RESET
+                + NEON_RESET,
             )
             logging.info(f"Market order success: {response}")
 
@@ -1235,7 +1229,7 @@ def _execute_trade(
             try:  # Termux toast notification
                 termux_msg = f"{signal_type} executed on {symbol}!"
                 subprocess.run(
-                    ["termux-toast", termux_msg], check=False
+                    ["termux-toast", termux_msg], check=False,
                 )  # Non-blocking call
             except Exception:
                 pass  # Ignore errors if termux-toast is not available
@@ -1245,14 +1239,14 @@ def _execute_trade(
                 _send_email(config, subject, body)
 
             time.sleep(
-                config["close_delay"]
+                config["close_delay"],
             )  # Add delay after successful order confirmation
             return True  # Trade executed successfully
         # Order placement failed or response format unexpected
         print(
             NEON_ERROR
             + f"Order placement failed, no Order ID received. Response: {response}"
-            + NEON_RESET
+            + NEON_RESET,
         )
         logging.error(f"Order placement failed, no Order ID. Response: {response}")
         return False
@@ -1263,7 +1257,7 @@ def _execute_trade(
         print(
             NEON_ERROR
             + f"Trade execution failed during API call: {error_msg}"
-            + NEON_RESET
+            + NEON_RESET,
         )
         logging.error(
             f"Trade execution failed: {error_msg}. Details: side={order_side}, qty={formatted_qty_str}, price={current_price}, signal={signal_type}",
@@ -1275,7 +1269,7 @@ def _execute_trade(
             print(
                 NEON_ERROR
                 + " -> Insufficient margin. Consider reducing position size, leverage, or checking available balance."
-                + NEON_RESET
+                + NEON_RESET,
             )
         elif (
             "Invalid quantity" in error_msg
@@ -1285,19 +1279,19 @@ def _execute_trade(
             print(
                 NEON_ERROR
                 + f" -> Invalid quantity ({formatted_qty_str}). Check minimum quantity, step size, and max position size rules for {symbol} in config."
-                + NEON_RESET
+                + NEON_RESET,
             )
         elif "symbol does not exist" in error_msg or "invalid symbol" in error_msg:
             print(
                 NEON_ERROR
                 + f" -> Invalid symbol '{symbol}'. Check the 'symbol' configuration and ensure it matches Bybit's format."
-                + NEON_RESET
+                + NEON_RESET,
             )
         elif "connection timed out" in error_msg or "Read timed out" in error_msg:
             print(
                 NEON_ERROR
                 + " -> API connection timed out. Check network or increase API timeout in config."
-                + NEON_RESET
+                + NEON_RESET,
             )
         # Add more specific error handling as needed based on Bybit API error codes/messages
         return False  # Indicate trade execution failure
@@ -1315,7 +1309,7 @@ def _send_email(config, subject, body):
         print(
             NEON_WARNING
             + "Email configuration incomplete (sender, password, receiver). Skipping notification."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return
 
@@ -1340,9 +1334,9 @@ def _send_email(config, subject, body):
         print(
             NEON_ERROR
             + "Email authentication failed. Check sender email/password or ensure 'less secure app access'/'App Password' is enabled in your email account settings."
-            + NEON_RESET
+            + NEON_RESET,
         )
-        logging.error("Email authentication failed.")
+        logging.exception("Email authentication failed.")
     except Exception as e:
         print(NEON_ERROR + f"Email dispatch process disrupted: {e}" + NEON_RESET)
         logging.error(f"Email dispatch failed: {e}", exc_info=True)
@@ -1354,7 +1348,7 @@ def _calculate_quantity(balance, entry_price, stop_distance_in_usdt, config, sym
     balance = to_decimal(balance)
     entry_price = to_decimal(entry_price)
     stop_distance_in_usdt = to_decimal(
-        stop_distance_in_usdt
+        stop_distance_in_usdt,
     )  # Ensure stop distance is Decimal
     risk_pct = config["risk_pct"]
     max_pos_size = config["max_position_size"]
@@ -1366,12 +1360,12 @@ def _calculate_quantity(balance, entry_price, stop_distance_in_usdt, config, sym
             entry_price > Decimal("0"),
             stop_distance_in_usdt > Decimal("0"),
             risk_pct > Decimal("0"),
-        ]
+        ],
     ):
         print(
             NEON_WARNING
             + f"Invalid input for quantity calculation: Balance={balance}, Entry={entry_price}, StopDist={stop_distance_in_usdt}, Risk%={risk_pct}. Returning 0 quantity."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return Decimal("0")
 
@@ -1390,21 +1384,21 @@ def _calculate_quantity(balance, entry_price, stop_distance_in_usdt, config, sym
     # 2. Ensure quantity adheres to symbol-specific rules (min_qty, step size) using format_quantity helper
     formatted_qty_str = format_quantity(quantity, symbol)
     final_quantity = to_decimal(
-        formatted_qty_str
+        formatted_qty_str,
     )  # Convert back to Decimal after formatting
 
     if final_quantity <= Decimal("0"):
         print(
             NEON_WARNING
             + "Calculated quantity became zero after applying symbol rules. No trade possible."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return Decimal("0")
 
     print(
         NEON_DEBUG
         + f"Calculated Quantity: {final_quantity:.8f} (Input Balance={balance:.4f}, Entry={entry_price}, StopDist={stop_distance_in_usdt}, Risk%={risk_pct:.2%}, MaxSize={max_pos_size:.8f}, SymbolRules applied)"
-        + NEON_RESET
+        + NEON_RESET,
     )
     return final_quantity
 
@@ -1506,7 +1500,7 @@ def _run_backtest(df_ind, config):
         if positions:
             pos = positions[-1]  # Assume only one position is open at a time
             current_stop_level = pos.get(
-                "stop_level"
+                "stop_level",
             )  # Get the active stop level if set
 
             # 1. Chandelier Exit Condition: Price crosses below Long CE (for Long pos) or above Short CE (for Short pos)
@@ -1589,10 +1583,10 @@ def _run_backtest(df_ind, config):
                         "exit": close,
                         "pnl": pnl,
                         "reason": exit_reason,
-                    }
+                    },
                 )
                 logging.info(
-                    f"Backtest Closed {pos['side']} ({exit_reason}): Qty={qty:.8f}, Entry={entry_price}, Exit={close}, PNL={pnl:.4f}, Equity={equity:.4f}"
+                    f"Backtest Closed {pos['side']} ({exit_reason}): Qty={qty:.8f}, Entry={entry_price}, Exit={close}, PNL={pnl:.4f}, Equity={equity:.4f}",
                 )
                 positions.pop()  # Remove the closed position from the open list
 
@@ -1635,16 +1629,16 @@ def _run_backtest(df_ind, config):
             if stop_distance_usdt > Decimal("0"):
                 # Use current equity for risk calculation in backtest
                 qty = _calculate_quantity(
-                    equity, close, stop_distance_usdt, config, config["symbol"]
+                    equity, close, stop_distance_usdt, config, config["symbol"],
                 )
 
                 if qty > Decimal("0"):  # Proceed only if calculated quantity is valid
                     # Check full entry conditions: Supertrend flip + RSI filter + (optional) Stoch RSI + (optional) Chandelier confirmation
                     buy_entry_condition = st_flip_up and _check_rsi_filter(
-                        rsi, config, "Buy"
+                        rsi, config, "Buy",
                     )
                     sell_entry_condition = st_flip_down and _check_rsi_filter(
-                        rsi, config, "Sell"
+                        rsi, config, "Sell",
                     )
 
                     # Incorporate Stoch RSI crossover if enabled
@@ -1696,10 +1690,10 @@ def _run_backtest(df_ind, config):
                                 "entry_price": close,
                                 "entry_time": st_time,
                                 "stop_level": stop_level,
-                            }
+                            },
                         )
                         logging.info(
-                            f"Backtest Opened LONG: Qty={qty:.8f}, Entry={close}, Stop={stop_level}, Equity={equity:.4f}"
+                            f"Backtest Opened LONG: Qty={qty:.8f}, Entry={close}, Stop={stop_level}, Equity={equity:.4f}",
                         )
 
                     elif sell_entry_condition:
@@ -1716,23 +1710,23 @@ def _run_backtest(df_ind, config):
                                 "entry_price": close,
                                 "entry_time": st_time,
                                 "stop_level": stop_level,
-                            }
+                            },
                         )
                         logging.info(
-                            f"Backtest Opened SHORT: Qty={qty:.8f}, Entry={close}, Stop={stop_level}, Equity={equity:.4f}"
+                            f"Backtest Opened SHORT: Qty={qty:.8f}, Entry={close}, Stop={stop_level}, Equity={equity:.4f}",
                         )
 
                 else:  # Quantity calculated was zero after applying rules
                     print(
                         NEON_INFO
                         + "Calculated quantity is zero after applying symbol rules. No entry signal triggered."
-                        + NEON_RESET
+                        + NEON_RESET,
                     )
             else:  # Stop distance was invalid or zero
                 print(
                     NEON_INFO
                     + "Invalid stop distance calculated. Cannot determine entry quantity. Observing..."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
 
         # --- Update State for Next Iteration ---
@@ -1745,7 +1739,7 @@ def _run_backtest(df_ind, config):
     if positions:
         pos = positions.pop()  # Get the last open position
         exit_price = to_decimal(
-            df_ind["close"].iloc[-1]
+            df_ind["close"].iloc[-1],
         )  # Use the last closing price as exit
         exit_time = df_ind["startTime"].iloc[-1]
         pnl = Decimal("0")
@@ -1766,17 +1760,17 @@ def _run_backtest(df_ind, config):
                 "exit": exit_price,
                 "pnl": pnl,
                 "reason": "End of Backtest",
-            }
+            },
         )
         logging.info(
-            f"Backtest Closed remaining {pos['side']} (End of Backtest): Qty={pos['qty']:.8f}, Entry={pos['entry_price']}, Exit={exit_price}, PNL={pnl:.4f}, Equity={equity:.4f}"
+            f"Backtest Closed remaining {pos['side']} (End of Backtest): Qty={pos['qty']:.8f}, Entry={pos['entry_price']}, Exit={exit_price}, PNL={pnl:.4f}, Equity={equity:.4f}",
         )
 
     # --- Report Backtest Results ---
     total_pnl = equity - initial_equity  # Calculate total profit/loss
     print(NEON_SUCCESS + "\n--- Backtest Complete ---")
     print(
-        f"Initial Equity: {initial_equity:.4f} | Final Equity: {equity:.4f} | Total PNL: {total_pnl:.4f}"
+        f"Initial Equity: {initial_equity:.4f} | Final Equity: {equity:.4f} | Total PNL: {total_pnl:.4f}",
     )
     print(f"Total Trades Executed: {len(trades)}")
     # Calculate win rate, handle division by zero if no trades occurred
@@ -1786,7 +1780,7 @@ def _run_backtest(df_ind, config):
     print(f"Win Rate: {win_rate:.2f}%")
     print("-------------------------" + NEON_RESET)
     logging.info(
-        f"Backtest complete: Final Equity={equity:.4f}, Total PNL={total_pnl:.4f}, Trades={len(trades)}, Win Rate={win_rate:.2f}%"
+        f"Backtest complete: Final Equity={equity:.4f}, Total PNL={total_pnl:.4f}, Trades={len(trades)}, Win Rate={win_rate:.2f}%",
     )
 
     # Generate Equity Curve Plot if enabled and data available
@@ -1794,14 +1788,14 @@ def _run_backtest(df_ind, config):
         try:
             # Prepare data points for the equity curve plot
             equity_curve_points = [
-                (df_ind["startTime"].iloc[0], initial_equity)
+                (df_ind["startTime"].iloc[0], initial_equity),
             ]  # Start point
             cumulative_pnl = Decimal("0")
             for t in trades:
                 cumulative_pnl += t["pnl"]  # Accumulate PNL from each trade
                 # Add equity point at the time of trade exit
                 equity_curve_points.append(
-                    (t["exit_time"], initial_equity + cumulative_pnl)
+                    (t["exit_time"], initial_equity + cumulative_pnl),
                 )
 
             # Convert timestamps to Python datetime objects for plotting
@@ -1815,7 +1809,7 @@ def _run_backtest(df_ind, config):
 
             plt.figure(figsize=(14, 7))  # Set figure size
             plt.plot(
-                plot_times, plot_equities, color="cyan", marker=".", linestyle="-"
+                plot_times, plot_equities, color="cyan", marker=".", linestyle="-",
             )  # Plot the curve
             plt.title("Backtest Equity Curve", color="cyan")
             plt.xlabel("Time", color="cyan")
@@ -1853,14 +1847,14 @@ def main():
             print(
                 NEON_ERROR
                 + f"State restoration failed: {e}. Starting with fresh state."
-                + NEON_RESET
+                + NEON_RESET,
             )
             logging.warning(f"Failed to load state file: {e}", exc_info=True)
 
     print(
         NEON_SUCCESS
         + f"\nAscended Neon Bot activated for {config['symbol']} on {'Testnet' if config['testnet'] else 'Mainnet'}!"
-        + NEON_RESET
+        + NEON_RESET,
     )
     logging.info("Bot application started.")
 
@@ -1870,11 +1864,11 @@ def main():
         try:
             # Parse backtest start and end dates into UTC timestamps
             start_dt = datetime.strptime(config["backtest_start"], "%Y-%m-%d").replace(
-                tzinfo=UTC
+                tzinfo=UTC,
             )
             # Add 1 day to end date to ensure the entire end day is included
             end_dt = datetime.strptime(config["backtest_end"], "%Y-%m-%d").replace(
-                tzinfo=UTC
+                tzinfo=UTC,
             ) + timedelta(days=1)
             start_ts = int(start_dt.timestamp() * 1000)
             end_ts = int(end_dt.timestamp() * 1000)
@@ -1882,7 +1876,7 @@ def main():
             print(
                 NEON_ERROR
                 + f"Invalid backtest date format: {e}. Please use YYYY-MM-DD."
-                + NEON_RESET
+                + NEON_RESET,
             )
             return  # Exit if dates are invalid
 
@@ -1899,19 +1893,19 @@ def main():
             print(
                 NEON_ERROR
                 + "Failed to fetch historical data for backtesting. Exiting."
-                + NEON_RESET
+                + NEON_RESET,
             )
             return
 
         # Calculate indicators on the historical data
         df_ind = _calculate_indicators(
-            df_hist.copy(), config
+            df_hist.copy(), config,
         )  # Use copy to avoid modifying original fetched data
         if df_ind.empty:
             print(
                 NEON_ERROR
                 + "Indicator calculation failed during backtest setup. Exiting."
-                + NEON_RESET
+                + NEON_RESET,
             )
             return
 
@@ -1920,7 +1914,7 @@ def main():
         print(
             NEON_SUCCESS
             + "Backtest simulation finished. Results logged and plots saved (if enabled)."
-            + NEON_RESET
+            + NEON_RESET,
         )
         return  # Exit the script after backtesting
 
@@ -1934,7 +1928,7 @@ def main():
         while True:  # Infinite loop for continuous operation
             current_utc_time = datetime.now(UTC)
             print(
-                f"\n--- Cycle Start: {current_utc_time.strftime('%Y-%m-%d %H:%M:%S %Z')} ---"
+                f"\n--- Cycle Start: {current_utc_time.strftime('%Y-%m-%d %H:%M:%S %Z')} ---",
             )
 
             # --- Fetch Data & Calculate Indicators ---
@@ -1964,22 +1958,22 @@ def main():
                 print(
                     NEON_WARNING
                     + f"Insufficient data fetched ({len(df)} rows, need >{indicator_lookback}). Waiting for next interval..."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
                 time.sleep(
-                    DEFAULT_SLEEP_DURATION
+                    DEFAULT_SLEEP_DURATION,
                 )  # Wait default duration before retrying
                 continue
 
             # Calculate indicators on the fetched data
             df_ind = _calculate_indicators(
-                df.copy(), config
+                df.copy(), config,
             )  # Use copy to avoid modifying original fetched data
             if df_ind.empty:
                 print(
                     NEON_WARNING
                     + "Indicator calculation failed. Waiting for next interval..."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
                 time.sleep(DEFAULT_SLEEP_DURATION)
                 continue
@@ -1993,7 +1987,7 @@ def main():
 
             # Safely extract indicator values as Decimals
             st_dir_current = current_data.get(
-                f"SUPERTd_{config['super_trend_length']}_{config['super_trend_multiplier']}"
+                f"SUPERTd_{config['super_trend_length']}_{config['super_trend_multiplier']}",
             )
             close_current = to_decimal(current_data.get("close"))
             rsi_current = to_decimal(current_data.get("rsi"))
@@ -2052,14 +2046,14 @@ def main():
             # --- Position Management ---
             # Fetch current open position details from Bybit API
             positions_response = session.get_positions(
-                category=config["category"], symbol=config["symbol"]
+                category=config["category"], symbol=config["symbol"],
             )
             positions = positions_response.get("result", {}).get("list", [])
             current_position = None
             if positions and to_decimal(positions[0].get("size", "0")) > Decimal("0"):
                 current_position = positions[0]
                 current_position["size"] = to_decimal(
-                    current_position["size"]
+                    current_position["size"],
                 )  # Ensure size is Decimal
                 # Note: Stop level tracking for live trading is complex across restarts.
                 # Current logic relies on recalculating exits based on current indicators.
@@ -2068,7 +2062,7 @@ def main():
             short_pos_active = current_position and current_position["side"] == "Sell"
 
             balance = _get_balance(
-                session, config
+                session, config,
             )  # Fetch current USDT balance for sizing calculations
 
             # Check for potential margin issues before placing trades
@@ -2082,14 +2076,14 @@ def main():
                     print(
                         NEON_WARNING
                         + f"Low balance detected ({balance:.4f} USDT). Estimated margin for max trade ({required_margin_estimate:.4f} USDT) might be insufficient. Consider reducing risk or leverage."
-                        + NEON_RESET
+                        + NEON_RESET,
                     )
 
             # Display current status
             print(
                 NEON_POSITION
                 + f"Balance: {balance:.4f} USDT | Current Position: {'Long' if long_pos_active else 'Short' if short_pos_active else 'None'}"
-                + NEON_RESET
+                + NEON_RESET,
             )
             print(
                 f"Indicators: ST Dir={st_dir_current}, Close={close_current}, RSI={rsi_current:.2f}"
@@ -2097,7 +2091,7 @@ def main():
                     f", CE Long={ce_long_current:.4f}, CE Short={ce_short_current:.4f}"
                     if config.get("use_chandelier_exit")
                     else ""
-                )
+                ),
             )
 
             # --- Exit Logic: Check if an open position needs closing ---
@@ -2116,10 +2110,10 @@ def main():
                 )
                 # Reversal Signal Condition: ST flips down + RSI filter met (and optionally Stoch RSI confirmation)
                 close_long_reversal = st_flip_down and _check_rsi_filter(
-                    rsi_current, config, "Sell"
+                    rsi_current, config, "Sell",
                 )
                 if config.get(
-                    "use_stochrsi_crossover", False
+                    "use_stochrsi_crossover", False,
                 ):  # Add Stoch RSI confirmation if enabled
                     stoch_rsi_cross_down = (
                         stoch_k_prev is not None
@@ -2169,10 +2163,10 @@ def main():
                 )
                 # Reversal Signal Condition: ST flips up + RSI filter met (and optionally Stoch RSI confirmation)
                 close_short_reversal = st_flip_up and _check_rsi_filter(
-                    rsi_current, config, "Buy"
+                    rsi_current, config, "Buy",
                 )
                 if config.get(
-                    "use_stochrsi_crossover", False
+                    "use_stochrsi_crossover", False,
                 ):  # Add Stoch RSI confirmation if enabled
                     stoch_rsi_cross_up = (
                         stoch_k_prev is not None
@@ -2217,7 +2211,7 @@ def main():
                 print(
                     NEON_INFO
                     + "Exit trade executed. Waiting for next cycle..."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
             else:
                 # --- Entry Logic: Check if a new position can be opened ---
@@ -2281,14 +2275,14 @@ def main():
                         )
 
                         if qty > Decimal(
-                            "0"
+                            "0",
                         ):  # Proceed only if calculated quantity is valid
                             # Verify full entry conditions including optional filters
                             buy_entry_condition = st_flip_up and _check_rsi_filter(
-                                rsi_current, config, "Buy"
+                                rsi_current, config, "Buy",
                             )
                             sell_entry_condition = st_flip_down and _check_rsi_filter(
-                                rsi_current, config, "Sell"
+                                rsi_current, config, "Sell",
                             )
 
                             # Incorporate Stoch RSI crossover if enabled
@@ -2344,10 +2338,10 @@ def main():
                                         "entry_price": close_current,
                                         "entry_time": st_time,
                                         "stop_level": stop_level,
-                                    }
+                                    },
                                 )
                                 logging.info(
-                                    f"Backtest Opened LONG: Qty={qty:.8f}, Entry={close_current}, Stop={stop_level}, Equity={equity:.4f}"
+                                    f"Backtest Opened LONG: Qty={qty:.8f}, Entry={close_current}, Stop={stop_level}, Equity={equity:.4f}",
                                 )
 
                             elif sell_entry_condition:
@@ -2364,23 +2358,23 @@ def main():
                                         "entry_price": close_current,
                                         "entry_time": st_time,
                                         "stop_level": stop_level,
-                                    }
+                                    },
                                 )
                                 logging.info(
-                                    f"Backtest Opened SHORT: Qty={qty:.8f}, Entry={close_current}, Stop={stop_level}, Equity={equity:.4f}"
+                                    f"Backtest Opened SHORT: Qty={qty:.8f}, Entry={close_current}, Stop={stop_level}, Equity={equity:.4f}",
                                 )
 
                         else:  # Quantity calculated was zero after applying rules
                             print(
                                 NEON_INFO
                                 + "Calculated quantity is zero after applying symbol rules. No entry signal triggered."
-                                + NEON_RESET
+                                + NEON_RESET,
                             )
                     else:  # Stop distance was invalid or zero
                         print(
                             NEON_INFO
                             + "Invalid stop distance calculated. Cannot determine entry quantity. Observing..."
-                            + NEON_RESET
+                            + NEON_RESET,
                         )
 
                 # Log if no trade occurred (either exit happened, or no entry conditions met)
@@ -2388,7 +2382,7 @@ def main():
                     print(
                         NEON_INFO
                         + "No trade signals met. Observing market..."
-                        + NEON_RESET
+                        + NEON_RESET,
                     )
 
             # --- Wait for Next Candle Cycle ---
@@ -2399,13 +2393,13 @@ def main():
                 last_candle_start_time = df["startTime"].iloc[-1]
                 # Calculate the expected start time of the next candle
                 next_candle_expected_start = last_candle_start_time + timedelta(
-                    seconds=interval_seconds
+                    seconds=interval_seconds,
                 )
                 now_utc = datetime.now(UTC)  # Current time
 
                 # Calculate sleep duration until the next candle + buffer
                 if next_candle_expected_start > now_utc + timedelta(
-                    seconds=10
+                    seconds=10,
                 ):  # If next candle is sufficiently in the future
                     sleep_duration = (
                         next_candle_expected_start - now_utc
@@ -2414,20 +2408,20 @@ def main():
                     print(
                         NEON_WARNING
                         + "Potential timing drift detected. Increasing wait time to ensure next cycle starts correctly."
-                        + NEON_RESET
+                        + NEON_RESET,
                     )
                     sleep_duration = (
                         interval_seconds + 45
                     )  # Longer wait (interval + buffer)
 
                 sleep_duration = max(
-                    sleep_duration, 30
+                    sleep_duration, 30,
                 )  # Ensure a minimum sleep duration (e.g., 30 seconds)
 
                 print(
                     NEON_INFO
                     + f"Sleeping for {int(sleep_duration)} seconds until next cycle..."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
                 time.sleep(sleep_duration)
 
@@ -2435,7 +2429,7 @@ def main():
                 print(
                     NEON_ERROR
                     + f"Error calculating sleep duration: {e}. Defaulting to {DEFAULT_SLEEP_DURATION}s sleep."
-                    + NEON_RESET
+                    + NEON_RESET,
                 )
                 logging.error(f"Sleep duration calculation error: {e}", exc_info=True)
                 time.sleep(DEFAULT_SLEEP_DURATION)
@@ -2444,13 +2438,13 @@ def main():
         print(
             NEON_INFO
             + "\nShutdown sequence initiated by user. Releasing ethereal bindings..."
-            + NEON_RESET
+            + NEON_RESET,
         )
         logging.info("Bot shut down by user.")
     except Exception as e:  # Catch any unexpected errors during live trading
         print(NEON_ERROR + f"\nCataclysmic failure in the main loop: {e}" + NEON_RESET)
         logging.critical(
-            f"Main loop error encountered: {e}", exc_info=True
+            f"Main loop error encountered: {e}", exc_info=True,
         )  # Log full traceback for critical errors
     finally:
         # Ensure final state is saved before exiting

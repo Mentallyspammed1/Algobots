@@ -3,16 +3,10 @@ import logging
 import os
 import pickle
 import sys
-from abc import ABC
-from abc import abstractmethod
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import Context
-from decimal import Decimal
-from decimal import getcontext
+from decimal import ROUND_DOWN, Context, Decimal, getcontext
 from enum import Enum
 from logging.handlers import RotatingFileHandler
 from typing import Any
@@ -20,12 +14,13 @@ from typing import Any
 import colorama  # Import colorama
 import numpy as np
 import pandas as pd
-from colorama import Fore  # Import Fore and Style for convenience
-from colorama import Style  # Import Fore and Style for convenience
+from colorama import (
+    Fore,  # Import Fore and Style for convenience
+    Style,  # Import Fore and Style for convenience
+)
 from dotenv import load_dotenv
 from pybit.exceptions import FailedRequestError
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # --- INITIAL SETUP ---
 
@@ -131,7 +126,7 @@ def setup_logging():
 
     # Formatters
     detailed_formatter = logging.Formatter(  # For file logs (no colors)
-        "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+        "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s",
     )
     neon_formatter = NeonFormatter()  # For console logs (with colors)
 
@@ -142,7 +137,7 @@ def setup_logging():
 
     # File Handler (for all logs, no colors)
     file_handler = RotatingFileHandler(
-        "supertrend_bot.log", maxBytes=10 * 1024 * 1024, backupCount=5
+        "supertrend_bot.log", maxBytes=10 * 1024 * 1024, backupCount=5,
     )
     file_handler.setLevel(logging.DEBUG)  # Log all levels to file
     file_handler.setFormatter(detailed_formatter)
@@ -236,7 +231,7 @@ class Config:
 
     # Trading Parameters (Multi-symbol support)
     symbols: list[str] = field(
-        default_factory=lambda: ["XLMUSDT", "LINKUSDT"]
+        default_factory=lambda: ["XLMUSDT", "LINKUSDT"],
     )  # List of symbols to trade
     category: str = (
         "linear"  # "linear" for USDT Perpetuals, "inverse" for Inverse Perpetuals, etc.
@@ -279,7 +274,7 @@ class Config:
             "trailing_stop_loss_atr_multiplier": 0.6,  # Tighter trailing stops
             "trailing_stop_loss_activation_atr_multiplier": 0.3,  # Activate trailing SL very quickly
             "break_even_profit_atr_multiplier": 0.2,  # Move to break-even almost immediately (within this ATR range)
-        }
+        },
     )
 
 
@@ -321,7 +316,7 @@ class BaseStrategy(ABC):
         Returns True if confirmed, False otherwise.
         """
         confirmation_candles_needed = self.config.strategy_params.get(
-            "signal_confirmation_candles", 1
+            "signal_confirmation_candles", 1,
         )
         if confirmation_candles_needed == 0:  # No confirmation needed, immediate action
             self.signal_confirmed = True
@@ -331,7 +326,7 @@ class BaseStrategy(ABC):
             df = self.indicators.get(self.primary_timeframe)
             if df is None or df.empty or self.signal_candle_time not in df.index:
                 logger.debug(
-                    f"[{self.symbol}] DataFrame for {self.primary_timeframe} is empty or signal_candle_time {self.signal_candle_time} not in index for confirmation."
+                    f"[{self.symbol}] DataFrame for {self.primary_timeframe} is empty or signal_candle_time {self.signal_candle_time} not in index for confirmation.",
                 )
                 return False
 
@@ -343,14 +338,14 @@ class BaseStrategy(ABC):
                 current_idx = df.index.get_loc(current_candle_time, method="bfill")
             except KeyError:
                 logger.warning(
-                    f"[{self.symbol}] Could not find signal_candle_time {self.signal_candle_time} or current_candle_time {current_candle_time} in DataFrame index for signal confirmation."
+                    f"[{self.symbol}] Could not find signal_candle_time {self.signal_candle_time} or current_candle_time {current_candle_time} in DataFrame index for signal confirmation.",
                 )
                 return False
 
             if current_idx - signal_idx >= confirmation_candles_needed:
                 self.signal_confirmed = True
                 logger.info(
-                    f"[{self.symbol}] Signal for {self.last_signal.action} confirmed after {confirmation_candles_needed} candles."
+                    f"[{self.symbol}] Signal for {self.last_signal.action} confirmed after {confirmation_candles_needed} candles.",
                 )
                 return True
         return False  # Still waiting for confirmation or conditions not met
@@ -362,22 +357,22 @@ class SupertrendStrategy(BaseStrategy):
     def __init__(self, symbol: str, config: Config):
         super().__init__(symbol, config)
         self.supertrend_period = self.config.strategy_params.get(
-            "supertrend_period", 10
+            "supertrend_period", 10,
         )
         self.supertrend_multiplier = self.config.strategy_params.get(
-            "supertrend_multiplier", 3.0
+            "supertrend_multiplier", 3.0,
         )
         # atr_period is inherited from BaseStrategy
 
     async def calculate_indicators(self, data: dict[str, pd.DataFrame]):
         """Calculates ATR and Supertrend. Updates self.indicators."""
         df = data.get(
-            self.primary_timeframe
+            self.primary_timeframe,
         )  # Get raw market data for this strategy's symbol and timeframe
         min_data_needed = max(self.supertrend_period, self.atr_period)
         if df is None or df.empty or len(df) < min_data_needed:
             logger.debug(
-                f"[{self.symbol}] Insufficient data for Supertrend calculation ({len(df) if df is not None else 0} < {min_data_needed} candles)."
+                f"[{self.symbol}] Insufficient data for Supertrend calculation ({len(df) if df is not None else 0} < {min_data_needed} candles).",
             )
             return
 
@@ -415,7 +410,7 @@ class SupertrendStrategy(BaseStrategy):
             else:
                 # Maintain previous trend if no crossover
                 df_copy.loc[df_copy.index[current], "in_uptrend"] = df_copy.loc[
-                    df_copy.index[previous], "in_uptrend"
+                    df_copy.index[previous], "in_uptrend",
                 ]
 
             # Set the Supertrend line, ensuring it trails and respects trend direction
@@ -425,7 +420,7 @@ class SupertrendStrategy(BaseStrategy):
                 # If in uptrend, Supertrend is the greater of the current lowerband or the previous Supertrend line
                 # (but only if previous was also uptrend, otherwise it sets to current lowerband)
                 prev_supertrend_val = df_copy.loc[
-                    df_copy.index[previous], "supertrend_line"
+                    df_copy.index[previous], "supertrend_line",
                 ]
                 if (
                     np.isnan(prev_supertrend_val)
@@ -443,7 +438,7 @@ class SupertrendStrategy(BaseStrategy):
                 # If in downtrend, Supertrend is the lesser of the current upperband or the previous Supertrend line
                 # (but only if previous was also downtrend, otherwise it sets to current upperband)
                 prev_supertrend_val = df_copy.loc[
-                    df_copy.index[previous], "supertrend_line"
+                    df_copy.index[previous], "supertrend_line",
                 ]
                 if (
                     np.isnan(prev_supertrend_val)
@@ -468,16 +463,16 @@ class SupertrendStrategy(BaseStrategy):
         df_indicators = self.indicators.get(self.primary_timeframe)
         if df_indicators is None or df_indicators.empty or len(df_indicators) < 2:
             logger.debug(
-                f"[{self.symbol}] Insufficient indicator data for signal generation."
+                f"[{self.symbol}] Insufficient indicator data for signal generation.",
             )
             return None
 
         df_cleaned = df_indicators.dropna(
-            subset=["supertrend", "atr", "in_uptrend"]
+            subset=["supertrend", "atr", "in_uptrend"],
         ).copy()  # Include 'in_uptrend'
         if df_cleaned.empty or len(df_cleaned) < 2:
             logger.debug(
-                f"[{self.symbol}] DataFrame too small after dropping NaNs for signal generation from indicators."
+                f"[{self.symbol}] DataFrame too small after dropping NaNs for signal generation from indicators.",
             )
             return None
 
@@ -489,7 +484,7 @@ class SupertrendStrategy(BaseStrategy):
                 self.last_signal.action == "SELL" and current["in_uptrend"]
             ):
                 logger.info(
-                    f"[{self.symbol}] Trend changed opposite to pending signal ({self.last_signal.action}), resetting pending signal."
+                    f"[{self.symbol}] Trend changed opposite to pending signal ({self.last_signal.action}), resetting pending signal.",
                 )
                 self.last_signal = None
                 self.signal_confirmed = False
@@ -499,7 +494,7 @@ class SupertrendStrategy(BaseStrategy):
             if not self.signal_confirmed:
                 if await self._confirm_signal(current.name):
                     logger.info(
-                        f"[{self.symbol}] Confirmed PENDING TRADE SIGNAL: {self.last_signal.action} for {self.symbol}."
+                        f"[{self.symbol}] Confirmed PENDING TRADE SIGNAL: {self.last_signal.action} for {self.symbol}.",
                     )
                     temp_signal = self.last_signal
                     self.last_signal = None
@@ -516,7 +511,7 @@ class SupertrendStrategy(BaseStrategy):
                 symbol=self.symbol,
                 strength=1.0,
                 stop_loss=float(
-                    current["supertrend"]
+                    current["supertrend"],
                 ),  # Current supertrend is the new SL
                 signal_price=float(current["close"]),
                 metadata={"reason": "Supertrend flipped to UP"},
@@ -527,7 +522,7 @@ class SupertrendStrategy(BaseStrategy):
                 symbol=self.symbol,
                 strength=1.0,
                 stop_loss=float(
-                    current["supertrend"]
+                    current["supertrend"],
                 ),  # Current supertrend is the new SL
                 signal_price=float(current["close"]),
                 metadata={"reason": "Supertrend flipped to DOWN"},
@@ -537,7 +532,7 @@ class SupertrendStrategy(BaseStrategy):
             self.last_signal = signal_to_generate
             self.signal_candle_time = current.name
             logger.info(
-                f"[{self.symbol}] PENDING TRADE SIGNAL: {signal_to_generate.action} for {self.symbol}. Reason: {signal_to_generate.metadata['reason']}. SL: {signal_to_generate.stop_loss:.5f}. Waiting for confirmation (0 for immediate)."
+                f"[{self.symbol}] PENDING TRADE SIGNAL: {signal_to_generate.action} for {self.symbol}. Reason: {signal_to_generate.metadata['reason']}. SL: {signal_to_generate.stop_loss:.5f}. Waiting for confirmation (0 for immediate).",
             )
             return None
 
@@ -553,16 +548,16 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
     def __init__(self, symbol: str, config: Config):
         super().__init__(symbol, config)
         self.fast_st_period = self.config.strategy_params.get(
-            "ehlers_fast_supertrend_period", 5
+            "ehlers_fast_supertrend_period", 5,
         )
         self.fast_st_multiplier = self.config.strategy_params.get(
-            "ehlers_fast_supertrend_multiplier", 1.5
+            "ehlers_fast_supertrend_multiplier", 1.5,
         )
         self.slow_st_period = self.config.strategy_params.get(
-            "ehlers_slow_supertrend_period", 10
+            "ehlers_slow_supertrend_period", 10,
         )
         self.slow_st_multiplier = self.config.strategy_params.get(
-            "ehlers_slow_supertrend_multiplier", 2.5
+            "ehlers_slow_supertrend_multiplier", 2.5,
         )
         self.filter_alpha = self.config.strategy_params.get("ehlers_filter_alpha", 0.35)
         self.filter_poles = self.config.strategy_params.get("ehlers_filter_poles", 1)
@@ -582,7 +577,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
         for _ in range(self.filter_poles):
             # The adjust=False parameter makes it a true recursive EMA
             filtered_data = filtered_data.ewm(
-                alpha=self.filter_alpha, adjust=False
+                alpha=self.filter_alpha, adjust=False,
             ).mean()
 
         return filtered_data
@@ -590,7 +585,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
     async def calculate_indicators(self, data: dict[str, pd.DataFrame]):
         """Calculates ATR and Ehlers Supertrend for fast and slow periods using recursive filter. Updates self.indicators."""
         df = data.get(
-            self.primary_timeframe
+            self.primary_timeframe,
         )  # Get raw market data for this strategy's symbol and timeframe
         # Determine minimum data needed based on all relevant periods and filter requirements
         min_data_needed = max(
@@ -601,7 +596,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
         )
         if df is None or df.empty or len(df) < min_data_needed:
             logger.debug(
-                f"[{self.symbol}] Insufficient data for Ehlers Supertrend calculation ({len(df) if df is not None else 0} < {min_data_needed} candles)."
+                f"[{self.symbol}] Insufficient data for Ehlers Supertrend calculation ({len(df) if df is not None else 0} < {min_data_needed} candles).",
             )
             return
 
@@ -610,41 +605,41 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
             df.copy()
         )  # Work on a copy to avoid modifying original df directly
         df_filtered["filtered_close"] = self._recursive_low_pass_filter(
-            df_filtered["close"]
+            df_filtered["close"],
         )
         df_filtered["filtered_high"] = self._recursive_low_pass_filter(
-            df_filtered["high"]
+            df_filtered["high"],
         )
         df_filtered["filtered_low"] = self._recursive_low_pass_filter(
-            df_filtered["low"]
+            df_filtered["low"],
         )
 
         # Drop NaNs introduced by filtering (especially at the beginning of the series)
         df_filtered.dropna(
-            subset=["filtered_close", "filtered_high", "filtered_low"], inplace=True
+            subset=["filtered_close", "filtered_high", "filtered_low"], inplace=True,
         )
 
         if (
             df_filtered.empty or len(df_filtered) < self.atr_period
         ):  # Ensure enough data for ATR after filtering
             logger.debug(
-                f"[{self.symbol}] DataFrame too small after filtering for Ehlers Supertrend calculation ({len(df_filtered)} < {self.atr_period} candles)."
+                f"[{self.symbol}] DataFrame too small after filtering for Ehlers Supertrend calculation ({len(df_filtered)} < {self.atr_period} candles).",
             )
             return
 
         # Calculate ATR on filtered prices
         high_low_filtered = df_filtered["filtered_high"] - df_filtered["filtered_low"]
         high_close_filtered = np.abs(
-            df_filtered["filtered_high"] - df_filtered["filtered_close"].shift()
+            df_filtered["filtered_high"] - df_filtered["filtered_close"].shift(),
         )
         low_close_filtered = np.abs(
-            df_filtered["low"] - df_filtered["filtered_close"].shift()
+            df_filtered["low"] - df_filtered["filtered_close"].shift(),
         )  # Corrected here: should be filtered_close
         tr_filtered = pd.concat(
-            [high_low_filtered, high_close_filtered, low_close_filtered], axis=1
+            [high_low_filtered, high_close_filtered, low_close_filtered], axis=1,
         ).max(axis=1)
         df_filtered["atr_filtered"] = tr_filtered.ewm(
-            span=self.atr_period, adjust=False
+            span=self.atr_period, adjust=False,
         ).mean()
 
         # Ensure 'atr_filtered' has enough non-NaN values for Supertrend calculation
@@ -653,7 +648,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
             and df_filtered["atr_filtered"].iloc[-1] == 0
         ):
             logger.debug(
-                f"[{self.symbol}] ATR filtered values are all NaN or last ATR is zero, cannot calculate Supertrend."
+                f"[{self.symbol}] ATR filtered values are all NaN or last ATR is zero, cannot calculate Supertrend.",
             )
             return
 
@@ -692,8 +687,8 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
                     df_filtered.loc[df_filtered.index[previous], "supertrend_fast_line"]
                     if not np.isnan(
                         df_filtered.loc[
-                            df_filtered.index[previous], "supertrend_fast_line"
-                        ]
+                            df_filtered.index[previous], "supertrend_fast_line",
+                        ],
                     )
                     else df_filtered.loc[df_filtered.index[current], "lowerband_fast"]
                 )
@@ -708,8 +703,8 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
                     df_filtered.loc[df_filtered.index[previous], "supertrend_fast_line"]
                     if not np.isnan(
                         df_filtered.loc[
-                            df_filtered.index[previous], "supertrend_fast_line"
-                        ]
+                            df_filtered.index[previous], "supertrend_fast_line",
+                        ],
                     )
                     else df_filtered.loc[df_filtered.index[current], "upperband_fast"]
                 )
@@ -757,8 +752,8 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
                     df_filtered.loc[df_filtered.index[previous], "supertrend_slow_line"]
                     if not np.isnan(
                         df_filtered.loc[
-                            df_filtered.index[previous], "supertrend_slow_line"
-                        ]
+                            df_filtered.index[previous], "supertrend_slow_line",
+                        ],
                     )
                     else df_filtered.loc[df_filtered.index[current], "lowerband_slow"]
                 )
@@ -773,8 +768,8 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
                     df_filtered.loc[df_filtered.index[previous], "supertrend_slow_line"]
                     if not np.isnan(
                         df_filtered.loc[
-                            df_filtered.index[previous], "supertrend_slow_line"
-                        ]
+                            df_filtered.index[previous], "supertrend_slow_line",
+                        ],
                     )
                     else df_filtered.loc[df_filtered.index[current], "upperband_slow"]
                 )
@@ -794,7 +789,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
         df_indicators = self.indicators.get(self.primary_timeframe)
         if df_indicators is None or df_indicators.empty or len(df_indicators) < 2:
             logger.debug(
-                f"[{self.symbol}] Insufficient indicator data for Ehlers Supertrend Cross signal generation."
+                f"[{self.symbol}] Insufficient indicator data for Ehlers Supertrend Cross signal generation.",
             )
             return None
 
@@ -806,11 +801,11 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
                 "atr_filtered",
                 "filtered_close",
                 "in_uptrend_slow",
-            ]
+            ],
         ).copy()
         if df_cleaned.empty or len(df_cleaned) < 2:
             logger.debug(
-                f"[{self.symbol}] DataFrame too small after dropping NaNs for Ehlers Supertrend Cross signal generation from indicators."
+                f"[{self.symbol}] DataFrame too small after dropping NaNs for Ehlers Supertrend Cross signal generation from indicators.",
             )
             return None
 
@@ -825,7 +820,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
                 self.last_signal.action == "SELL" and in_uptrend_overall
             ):
                 logger.info(
-                    f"[{self.symbol}] Overall trend based on slow ST changed opposite to pending signal ({self.last_signal.action}), resetting pending signal."
+                    f"[{self.symbol}] Overall trend based on slow ST changed opposite to pending signal ({self.last_signal.action}), resetting pending signal.",
                 )
                 self.last_signal = None
                 self.signal_confirmed = False
@@ -835,7 +830,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
             if not self.signal_confirmed:
                 if await self._confirm_signal(current.name):
                     logger.info(
-                        f"[{self.symbol}] Confirmed PENDING TRADE SIGNAL: {self.last_signal.action} for {self.symbol}."
+                        f"[{self.symbol}] Confirmed PENDING TRADE SIGNAL: {self.last_signal.action} for {self.symbol}.",
                     )
                     temp_signal = self.last_signal
                     self.last_signal = None
@@ -848,7 +843,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
         signal_to_generate = None
         current_atr = float(current.get("atr_filtered", 0.0))
         take_profit_multiplier = self.config.strategy_params.get(
-            "take_profit_atr_multiplier", 1.0
+            "take_profit_atr_multiplier", 1.0,
         )  # Scalping tuned
 
         # Buy signal: Fast ST crosses above Slow ST and overall trend is up
@@ -868,7 +863,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
                 symbol=self.symbol,
                 strength=1.0,
                 stop_loss=float(
-                    current["supertrend_slow"]
+                    current["supertrend_slow"],
                 ),  # Use slow ST for initial SL
                 take_profit=take_profit_val,
                 signal_price=float(current["close"]),
@@ -892,7 +887,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
                 symbol=self.symbol,
                 strength=1.0,
                 stop_loss=float(
-                    current["supertrend_slow"]
+                    current["supertrend_slow"],
                 ),  # Use slow ST for initial SL
                 take_profit=take_profit_val,
                 signal_price=float(current["close"]),
@@ -903,7 +898,7 @@ class EhlersSupertrendCrossStrategy(BaseStrategy):
             self.last_signal = signal_to_generate
             self.signal_candle_time = current.name
             logger.info(
-                f"[{self.symbol}] PENDING TRADE SIGNAL: {signal_to_generate.action} for {self.symbol}. Reason: {signal_to_generate.metadata['reason']}. SL: {signal_to_generate.stop_loss:.5f}, TP: {signal_to_generate.take_profit if signal_to_generate.take_profit else 'N/A':.5f}. Waiting for confirmation (0 for immediate)."
+                f"[{self.symbol}] PENDING TRADE SIGNAL: {signal_to_generate.action} for {self.symbol}. Reason: {signal_to_generate.metadata['reason']}. SL: {signal_to_generate.stop_loss:.5f}, TP: {signal_to_generate.take_profit if signal_to_generate.take_profit else 'N/A':.5f}. Waiting for confirmation (0 for immediate).",
             )
             return None
 
@@ -928,7 +923,7 @@ class BybitTradingBot:
         self.strategies = strategies  # Now a dictionary of strategies, one per symbol
 
         self.session = session or HTTP(
-            testnet=config.testnet, api_key=config.api_key, api_secret=config.api_secret
+            testnet=config.testnet, api_key=config.api_key, api_secret=config.api_secret,
         )
         # Public WebSocket for kline data (can subscribe to multiple symbols)
         self.public_ws = WebSocket(
@@ -950,18 +945,18 @@ class BybitTradingBot:
             symbol: {} for symbol in config.symbols
         }  # Raw kline data per symbol and timeframe
         self.positions: dict[str, Position | None] = dict.fromkeys(
-            config.symbols
+            config.symbols,
         )  # Position per symbol
         self.balance: Decimal = to_decimal(
-            "0"
+            "0",
         )  # Initialize balance with Decimal context
         self.is_running = False
         self.loop: asyncio.AbstractEventLoop | None = None
         self.last_processed_candle_time: dict[str, datetime | None] = dict.fromkeys(
-            config.symbols
+            config.symbols,
         )  # Last candle time per symbol
         self.order_tasks: dict[
-            str, asyncio.Task
+            str, asyncio.Task,
         ] = {}  # To track open order tasks (not fully implemented for robustness)
 
         self._load_state()  # Load state at initialization
@@ -973,7 +968,7 @@ class BybitTradingBot:
             logger.info(f"Initializing for symbol: {symbol}")
             await self._load_market_info(symbol)
             await self._load_historical_data(
-                symbol
+                symbol,
             )  # Load historical for primary timeframe for each symbol
 
         await self.update_account_balance()
@@ -984,7 +979,7 @@ class BybitTradingBot:
         """Load and store market information for a specific symbol."""
         try:
             response = self.session.get_instruments_info(
-                category=self.config.category, symbol=symbol
+                category=self.config.category, symbol=symbol,
             )
             if response and response["retCode"] == 0:
                 instrument = response["result"]["list"][0]
@@ -994,22 +989,22 @@ class BybitTradingBot:
                     lot_size=to_decimal(instrument["lotSizeFilter"]["qtyStep"]),
                 )
                 logger.info(
-                    f"[{symbol}] Market info loaded: Tick Size {self.market_info[symbol].tick_size}, Lot Size {self.market_info[symbol].lot_size}"
+                    f"[{symbol}] Market info loaded: Tick Size {self.market_info[symbol].tick_size}, Lot Size {self.market_info[symbol].lot_size}",
                 )
             else:
                 raise Exception(
-                    f"Failed to get instrument info for {symbol}: {response.get('retMsg', 'Unknown error')}"
+                    f"Failed to get instrument info for {symbol}: {response.get('retMsg', 'Unknown error')}",
                 )
         except Exception as e:
             logger.critical(
-                f"[{symbol}] Critical Error loading market info: {e}", exc_info=True
+                f"[{symbol}] Critical Error loading market info: {e}", exc_info=True,
             )
             sys.exit(1)  # Exit if critical info cannot be loaded
 
     async def _load_historical_data(self, symbol: str):
         """Load historical kline data to warm up the strategy for a specific symbol."""
         logger.info(
-            f"[{symbol}] Loading historical data for {self.config.timeframe} timeframe..."
+            f"[{symbol}] Loading historical data for {self.config.timeframe} timeframe...",
         )
         try:
             response = self.session.get_kline(
@@ -1033,7 +1028,7 @@ class BybitTradingBot:
                     ],
                 )
                 df["time"] = pd.to_datetime(
-                    df["time"].astype(int), unit="ms", utc=True
+                    df["time"].astype(int), unit="ms", utc=True,
                 )  # Ensure 'time' is int before unit='ms'
                 df.set_index("time", inplace=True)
                 df = df.astype(float)
@@ -1049,15 +1044,15 @@ class BybitTradingBot:
                 if not df.empty:
                     self.last_processed_candle_time[symbol] = df.index[-1]
                 logger.info(
-                    f"[{symbol}] Loaded {len(df)} historical candles. Last candle: {self.last_processed_candle_time.get(symbol)}"
+                    f"[{symbol}] Loaded {len(df)} historical candles. Last candle: {self.last_processed_candle_time.get(symbol)}",
                 )
             else:
                 raise Exception(
-                    f"Failed to get kline data for {symbol}: {response.get('retMsg', 'Unknown error')}"
+                    f"Failed to get kline data for {symbol}: {response.get('retMsg', 'Unknown error')}",
                 )
         except Exception as e:
             logger.critical(
-                f"[{symbol}] Critical Error loading historical data: {e}", exc_info=True
+                f"[{symbol}] Critical Error loading historical data: {e}", exc_info=True,
             )
             sys.exit(1)  # Exit if critical data cannot be loaded
 
@@ -1084,10 +1079,10 @@ class BybitTradingBot:
 
         formatted_qty = market_info.format_quantity(quantity)
         if float(formatted_qty) <= float(
-            market_info.lot_size
+            market_info.lot_size,
         ):  # Ensure quantity is not zero or too small after precision formatting
             logger.warning(
-                f"[{symbol}] Formatted quantity for order is too small ({formatted_qty}), skipping. Original: {quantity}. Minimum lot size: {market_info.lot_size}"
+                f"[{symbol}] Formatted quantity for order is too small ({formatted_qty}), skipping. Original: {quantity}. Minimum lot size: {market_info.lot_size}",
             )
             return None
 
@@ -1103,7 +1098,7 @@ class BybitTradingBot:
 
         if order_type == OrderType.LIMIT and price is not None:
             params["price"] = market_info.format_price(
-                price
+                price,
             )  # Use specific market_info for formatting
 
         if stop_loss is not None:
@@ -1122,14 +1117,14 @@ class BybitTradingBot:
         for i in range(retries):
             try:
                 logger.debug(
-                    f"[{symbol}] Attempting to place order (attempt {i + 1}/{retries}) with params: {params}"
+                    f"[{symbol}] Attempting to place order (attempt {i + 1}/{retries}) with params: {params}",
                 )
                 response = self.session.place_order(**params)
 
                 if response and response["retCode"] == 0:
                     order_id = response["result"]["orderId"]
                     logger.info(
-                        f"[{symbol}] TRADE: Order placed successfully: ID {order_id}, Side {side.value}, Qty {formatted_qty}, SL: {stop_loss}, TP: {take_profit}"
+                        f"[{symbol}] TRADE: Order placed successfully: ID {order_id}, Side {side.value}, Qty {formatted_qty}, SL: {stop_loss}, TP: {take_profit}",
                     )
                     return order_id
                 error_msg = (
@@ -1141,7 +1136,7 @@ class BybitTradingBot:
                 # Bybit's specific rate limit error code is 10006.
                 if ret_code == 10006 or "rate limit" in error_msg:
                     logger.warning(
-                        f"[{symbol}] Rate limit hit on attempt {i + 1}/{retries}: {error_msg}. Retrying in {delay}s."
+                        f"[{symbol}] Rate limit hit on attempt {i + 1}/{retries}: {error_msg}. Retrying in {delay}s.",
                     )
                     if i < retries - 1:
                         await asyncio.sleep(delay)
@@ -1149,7 +1144,7 @@ class BybitTradingBot:
                         continue
 
                 logger.error(
-                    f"[{symbol}] Failed to place order with non-retriable error: {error_msg} (Code: {ret_code})"
+                    f"[{symbol}] Failed to place order with non-retriable error: {error_msg} (Code: {ret_code})",
                 )
                 return None
 
@@ -1158,7 +1153,7 @@ class BybitTradingBot:
                 if "rate limit" in str(e) or "403" in str(e):
                     if i < retries - 1:
                         logger.warning(
-                            f"[{symbol}] Rate limit HTTP error on attempt {i + 1}/{retries}: {e}. Retrying in {delay}s. If this persists, your IP may be blocked (e.g., from USA)."
+                            f"[{symbol}] Rate limit HTTP error on attempt {i + 1}/{retries}: {e}. Retrying in {delay}s. If this persists, your IP may be blocked (e.g., from USA).",
                         )
                         await asyncio.sleep(delay)
                         delay *= 2
@@ -1233,7 +1228,7 @@ class BybitTradingBot:
         current_position = self.positions.get(symbol)
         if current_position is None or current_position.side != position_side:
             logger.warning(
-                f"[{symbol}] No active {position_side} position found for SL/TP update. Current position: {current_position}"
+                f"[{symbol}] No active {position_side} position found for SL/TP update. Current position: {current_position}",
             )
             return
 
@@ -1258,7 +1253,7 @@ class BybitTradingBot:
                 params["stopLoss"] = market_info.format_price(float(new_stop_loss))
                 params["slTriggerBy"] = "MarkPrice"
                 logger.info(
-                    f"[{symbol}] Updating stop loss for {current_position.side} position from {current_position.trailing_stop_loss:.5f if current_position.trailing_stop_loss else 'N/A'} to {new_stop_loss:.5f}"
+                    f"[{symbol}] Updating stop loss for {current_position.side} position from {current_position.trailing_stop_loss:.5f if current_position.trailing_stop_loss else 'N/A'} to {new_stop_loss:.5f}",
                 )
                 current_position.trailing_stop_loss = (
                     new_stop_loss  # Update internal state immediately
@@ -1266,7 +1261,7 @@ class BybitTradingBot:
                 updated_any = True
             else:
                 logger.debug(
-                    f"[{symbol}] New stop loss {new_stop_loss:.5f} is same as current {current_position.trailing_stop_loss:.5f}, skipping SL update."
+                    f"[{symbol}] New stop loss {new_stop_loss:.5f} is same as current {current_position.trailing_stop_loss:.5f}, skipping SL update.",
                 )
 
         # Check and update Take Profit
@@ -1279,7 +1274,7 @@ class BybitTradingBot:
                 params["takeProfit"] = market_info.format_price(float(new_take_profit))
                 params["tpTriggerBy"] = "MarkPrice"
                 logger.info(
-                    f"[{symbol}] Updating take profit for {current_position.side} position from {current_position.take_profit:.5f if current_position.take_profit else 'N/A'} to {new_take_profit:.5f}"
+                    f"[{symbol}] Updating take profit for {current_position.side} position from {current_position.take_profit:.5f if current_position.take_profit else 'N/A'} to {new_take_profit:.5f}",
                 )
                 current_position.take_profit = (
                     new_take_profit  # Update internal state immediately
@@ -1287,12 +1282,12 @@ class BybitTradingBot:
                 updated_any = True
             else:
                 logger.debug(
-                    f"[{symbol}] New take profit {new_take_profit:.5f} is same as current {current_position.take_profit:.5f}, skipping TP update."
+                    f"[{symbol}] New take profit {new_take_profit:.5f} is same as current {current_position.take_profit:.5f}, skipping TP update.",
                 )
 
         if not updated_any:
             logger.debug(
-                f"[{symbol}] No changes in stop loss or take profit requested, skipping API call."
+                f"[{symbol}] No changes in stop loss or take profit requested, skipping API call.",
             )
             return
 
@@ -1300,7 +1295,7 @@ class BybitTradingBot:
             response = self.session.set_trading_stop(**params)
             if response and response["retCode"] == 0:
                 logger.info(
-                    f"[{symbol}] Successfully sent SL/TP update request for {current_position.symbol} {current_position.side} position."
+                    f"[{symbol}] Successfully sent SL/TP update request for {current_position.symbol} {current_position.side} position.",
                 )
             else:
                 error_msg = (
@@ -1309,7 +1304,7 @@ class BybitTradingBot:
                     else "No response from API"
                 )
                 logger.error(
-                    f"[{symbol}] Failed to update SL/TP: {error_msg} (Code: {response.get('retCode', 'N/A')})"
+                    f"[{symbol}] Failed to update SL/TP: {error_msg} (Code: {response.get('retCode', 'N/A')})",
                 )
         except Exception as e:
             logger.error(f"[{symbol}] Error updating SL/TP: {e}", exc_info=True)
@@ -1333,7 +1328,7 @@ class BybitTradingBot:
 
                     if symbol not in self.config.symbols:
                         logger.warning(
-                            f"[{symbol}] Found open position for {symbol} which is not in configured symbols. Ignoring."
+                            f"[{symbol}] Found open position for {symbol} which is not in configured symbols. Ignoring.",
                         )
                         continue  # Skip positions for unconfigured symbols
 
@@ -1403,14 +1398,14 @@ class BybitTradingBot:
                             take_profit=final_take_profit,
                         )
                         logger.debug(
-                            f"[{symbol}] Position updated from API: {self.positions[symbol]}"
+                            f"[{symbol}] Position updated from API: {self.positions[symbol]}",
                         )
                     else:
                         self.positions[symbol] = (
                             None  # No open position for this symbol from API
                         )
                         logger.debug(
-                            f"[{symbol}] No active position found for {symbol} via API response (size zero)."
+                            f"[{symbol}] No active position found for {symbol} via API response (size zero).",
                         )
 
                 # For any configured symbols that were NOT in the API response, ensure they are set to None
@@ -1420,17 +1415,17 @@ class BybitTradingBot:
                         and self.positions.get(symbol_in_config) is not None
                     ):
                         logger.info(
-                            f"[{symbol_in_config}] Position closed on exchange, updating internal state to None."
+                            f"[{symbol_in_config}] Position closed on exchange, updating internal state to None.",
                         )
                         self.positions[symbol_in_config] = None
 
             else:
                 # If API returns no list or an error, assume no positions for any configured symbols
                 logger.info(
-                    "No active positions reported by API for any symbols, resetting all internal states to None."
+                    "No active positions reported by API for any symbols, resetting all internal states to None.",
                 )
                 self.positions = dict.fromkeys(
-                    self.config.symbols
+                    self.config.symbols,
                 )  # Reset all positions
             self._save_state()  # Save state after updating all positions
         except Exception as e:
@@ -1446,7 +1441,7 @@ class BybitTradingBot:
                 logger.info(f"Account balance updated: {self.balance:.2f} USDT")
             else:
                 logger.error(
-                    f"Failed to update balance: {response.get('retMsg', 'Unknown error')}"
+                    f"Failed to update balance: {response.get('retMsg', 'Unknown error')}",
                 )
         except Exception as e:
             logger.error(f"Error updating balance: {e}", exc_info=True)
@@ -1458,13 +1453,13 @@ class BybitTradingBot:
         symbol = signal.symbol
         if signal.stop_loss is None or signal.signal_price is None:
             logger.error(
-                f"[{symbol}] Cannot calculate position size without a valid stop-loss and signal price from the strategy."
+                f"[{symbol}] Cannot calculate position size without a valid stop-loss and signal price from the strategy.",
             )
             return 0.0
 
         if symbol not in self.market_info:
             logger.error(
-                f"[{symbol}] Market info not loaded for {symbol}, cannot calculate position size."
+                f"[{symbol}] Market info not loaded for {symbol}, cannot calculate position size.",
             )
             return 0.0
 
@@ -1488,7 +1483,7 @@ class BybitTradingBot:
             or stop_loss_distance_raw < market_info.tick_size
         ):
             logger.warning(
-                f"[{symbol}] Stop loss distance is non-positive or too small ({stop_loss_distance_raw:.5f} < {market_info.tick_size}), cannot calculate position size safely. Returning 0.0."
+                f"[{symbol}] Stop loss distance is non-positive or too small ({stop_loss_distance_raw:.5f} < {market_info.tick_size}), cannot calculate position size safely. Returning 0.0.",
             )
             return 0.0
 
@@ -1497,12 +1492,12 @@ class BybitTradingBot:
 
         # Apply configured leverage
         leveraged_position_size_asset = position_size_asset_unleveraged * to_decimal(
-            self.config.leverage
+            self.config.leverage,
         )
 
         # Format to market's lot size precision
         formatted_position_size = to_decimal(
-            market_info.format_quantity(float(leveraged_position_size_asset))
+            market_info.format_quantity(float(leveraged_position_size_asset)),
         )
 
         # Calculate order value in USDT to check against minimum
@@ -1510,14 +1505,14 @@ class BybitTradingBot:
 
         if order_value_usdt < to_decimal(self.config.min_order_value_usdt):
             logger.warning(
-                f"[{symbol}] Calculated order value ({order_value_usdt:.2f} USDT) is below minimum required ({self.config.min_order_value_usdt} USDT). Skipping trade."
+                f"[{symbol}] Calculated order value ({order_value_usdt:.2f} USDT) is below minimum required ({self.config.min_order_value_usdt} USDT). Skipping trade.",
             )
             return 0.0
 
         logger.info(
             f"[{symbol}] Risk Amount: {risk_amount_usdt:.2f} USDT, SL Distance: {stop_loss_distance_raw:.5f} USDT, "
             f"Calculated Position Size (Leveraged & Formatted): {formatted_position_size:.5f} {symbol}, "
-            f"Order Value: {order_value_usdt:.2f} USDT"
+            f"Order Value: {order_value_usdt:.2f} USDT",
         )
 
         return float(formatted_position_size)
@@ -1526,43 +1521,43 @@ class BybitTradingBot:
         """Processes a trading signal from the strategy, managing orders and positions for the specific symbol."""
         symbol = signal.symbol
         logger.info(
-            f"[{symbol}] Processing signal: {signal.action} {symbol} (Reason: {signal.metadata.get('reason', 'N/A')})"
+            f"[{symbol}] Processing signal: {signal.action} {symbol} (Reason: {signal.metadata.get('reason', 'N/A')})",
         )
 
         # Access market data for the specific symbol and timeframe
         symbol_market_data_for_timeframe = self.market_data.get(symbol, {}).get(
-            self.config.timeframe
+            self.config.timeframe,
         )
         if (
             symbol_market_data_for_timeframe is None
             or symbol_market_data_for_timeframe.empty
         ):
             logger.warning(
-                f"[{symbol}] No market data available for signal processing, skipping."
+                f"[{symbol}] No market data available for signal processing, skipping.",
             )
             return
 
         current_close_price = symbol_market_data_for_timeframe.iloc[-1]["close"]
         current_position = self.positions.get(symbol)
         current_strategy = self.strategies.get(
-            symbol
+            symbol,
         )  # Ensure current_strategy is fetched for this symbol
 
         if current_strategy is None:
             logger.error(
-                f"[{symbol}] No strategy instance found for this symbol, cannot process signal."
+                f"[{symbol}] No strategy instance found for this symbol, cannot process signal.",
             )
             return
 
         # Dynamically set/refine Take Profit if not provided by strategy or if ATR changes
         df_indicators = current_strategy.indicators.get(
-            self.config.timeframe
+            self.config.timeframe,
         )  # Get indicators for THIS symbol's strategy
         current_atr = (
             float(
                 df_indicators.iloc[-1].get(
-                    "atr_filtered", df_indicators.iloc[-1].get("atr", 0.0)
-                )
+                    "atr_filtered", df_indicators.iloc[-1].get("atr", 0.0),
+                ),
             )
             if df_indicators is not None and not df_indicators.empty
             else 0.0
@@ -1574,27 +1569,27 @@ class BybitTradingBot:
             and current_atr > 0
         ):
             tp_multiplier = to_decimal(
-                self.config.strategy_params.get("take_profit_atr_multiplier", 1.0)
+                self.config.strategy_params.get("take_profit_atr_multiplier", 1.0),
             )  # Scalping tuned default
             signal_price_dec = to_decimal(signal.signal_price)
             current_atr_dec = to_decimal(current_atr)
 
             if signal.action == "BUY":
                 signal.take_profit = float(
-                    signal_price_dec + current_atr_dec * tp_multiplier
+                    signal_price_dec + current_atr_dec * tp_multiplier,
                 )
             elif signal.action == "SELL":
                 signal.take_profit = float(
-                    signal_price_dec - current_atr_dec * tp_multiplier
+                    signal_price_dec - current_atr_dec * tp_multiplier,
                 )
             logger.info(
-                f"[{symbol}] Dynamically calculated Take Profit: {signal.take_profit:.5f}"
+                f"[{symbol}] Dynamically calculated Take Profit: {signal.take_profit:.5f}",
             )
 
         position_size = self._calculate_position_size(signal)
         if position_size <= 0:
             logger.warning(
-                f"[{symbol}] Calculated position size is zero or too small, aborting trade."
+                f"[{symbol}] Calculated position size is zero or too small, aborting trade.",
             )
             return
 
@@ -1605,7 +1600,7 @@ class BybitTradingBot:
                 signal.action == "SELL" and current_position.side == "Buy"
             ):
                 logger.info(
-                    f"[{symbol}] Reversing position: Closing existing {current_position.side} ({current_position.size:.5f}) to open {signal.action} ({position_size:.5f})."
+                    f"[{symbol}] Reversing position: Closing existing {current_position.side} ({current_position.size:.5f}) to open {signal.action} ({position_size:.5f}).",
                 )
 
                 # Close existing position first
@@ -1620,7 +1615,7 @@ class BybitTradingBot:
 
                 if close_order_id:
                     logger.info(
-                        f"[{symbol}] Close order {close_order_id} placed. Waiting for position to settle before opening new one..."
+                        f"[{symbol}] Close order {close_order_id} placed. Waiting for position to settle before opening new one...",
                     )
                     await asyncio.sleep(5)  # Give exchange time to process closure
                     await self.get_positions()  # Update all positions state
@@ -1630,7 +1625,7 @@ class BybitTradingBot:
                         self.positions.get(symbol) is None
                     ):  # Successfully closed, now open new one
                         logger.info(
-                            f"[{symbol}] Existing position successfully closed. Proceeding to open new one."
+                            f"[{symbol}] Existing position successfully closed. Proceeding to open new one.",
                         )
                         new_order_id = await self.place_market_order(
                             symbol=symbol,
@@ -1667,15 +1662,15 @@ class BybitTradingBot:
                             self._save_state()
                         else:
                             logger.error(
-                                f"[{symbol}] Failed to open new position after closing existing one. Check logs for details."
+                                f"[{symbol}] Failed to open new position after closing existing one. Check logs for details.",
                             )
                     else:
                         logger.error(
-                            f"[{symbol}] Failed to confirm closure of existing position. Aborting new trade to prevent conflicting positions."
+                            f"[{symbol}] Failed to confirm closure of existing position. Aborting new trade to prevent conflicting positions.",
                         )
                 else:
                     logger.error(
-                        f"[{symbol}] Failed to place order to close existing position. Aborting new trade."
+                        f"[{symbol}] Failed to place order to close existing position. Aborting new trade.",
                     )
                 return  # Handled reversing position
 
@@ -1684,7 +1679,7 @@ class BybitTradingBot:
                 signal.action == "SELL" and current_position.side == "Sell"
             ):
                 logger.info(
-                    f"[{symbol}] Signal to {signal.action} received, but already in a {current_position.side} position. Considering updating SL/TP."
+                    f"[{symbol}] Signal to {signal.action} received, but already in a {current_position.side} position. Considering updating SL/TP.",
                 )
 
                 new_sl_to_set: Decimal | None = None
@@ -1713,7 +1708,7 @@ class BybitTradingBot:
                     if should_update_initial_sl:
                         current_position.initial_stop_loss = new_signal_sl
                         logger.info(
-                            f"[{symbol}] Internal initial stop loss updated to new strategy SL: {new_signal_sl:.5f}"
+                            f"[{symbol}] Internal initial stop loss updated to new strategy SL: {new_signal_sl:.5f}",
                         )
 
                         # Also check if the new initial SL is tighter than the current trailing SL.
@@ -1731,7 +1726,7 @@ class BybitTradingBot:
                         ):
                             new_sl_to_set = new_signal_sl
                             logger.info(
-                                f"[{symbol}] Trailing stop loss on exchange will be set to new initial SL: {new_sl_to_set:.5f}"
+                                f"[{symbol}] Trailing stop loss on exchange will be set to new initial SL: {new_sl_to_set:.5f}",
                             )
 
                 # Update take_profit if new signal suggests a better TP
@@ -1757,23 +1752,23 @@ class BybitTradingBot:
                     if should_update_tp:
                         new_tp_to_set = new_signal_tp
                         logger.info(
-                            f"[{symbol}] Take profit updated to a more favorable level: {new_tp_to_set:.5f}"
+                            f"[{symbol}] Take profit updated to a more favorable level: {new_tp_to_set:.5f}",
                         )
 
                 if new_sl_to_set or new_tp_to_set:
                     await self.update_stop_loss_and_take_profit(
-                        symbol, current_position.side, new_sl_to_set, new_tp_to_set
+                        symbol, current_position.side, new_sl_to_set, new_tp_to_set,
                     )
                 else:
                     logger.debug(
-                        f"[{symbol}] No beneficial SL/TP updates from current signal, skipping API call."
+                        f"[{symbol}] No beneficial SL/TP updates from current signal, skipping API call.",
                     )
                 return  # Handled adjusting position
 
         # Scenario 3: No current position, open a new one
         if not current_position:
             logger.info(
-                f"[{symbol}] Opening new {signal.action} position with size {position_size:.5f}."
+                f"[{symbol}] Opening new {signal.action} position with size {position_size:.5f}.",
             )
             order_id = await self.place_market_order(
                 symbol=symbol,
@@ -1808,7 +1803,7 @@ class BybitTradingBot:
                 self._save_state()
             else:
                 logger.error(
-                    f"[{symbol}] Failed to open new position. Check logs for details."
+                    f"[{symbol}] Failed to open new position. Check logs for details.",
                 )
             return  # Handled opening new position
 
@@ -1830,7 +1825,7 @@ class BybitTradingBot:
             or current_strategy.indicators[self.config.timeframe].empty
         ):
             logger.debug(
-                f"[{symbol}] Cannot update trailing stop: no position, no entry price/initial SL, or no indicators."
+                f"[{symbol}] Cannot update trailing stop: no position, no entry price/initial SL, or no indicators.",
             )
             return
 
@@ -1839,25 +1834,25 @@ class BybitTradingBot:
 
         current_atr = to_decimal(
             current_df_indicators.iloc[-1].get(
-                "atr_filtered", current_df_indicators.iloc[-1].get("atr", 0.0)
-            )
+                "atr_filtered", current_df_indicators.iloc[-1].get("atr", 0.0),
+            ),
         )
         if current_atr <= to_decimal(0):
             logger.warning(
-                f"[{symbol}] ATR not available or non-positive for trailing stop calculation ({current_atr})."
+                f"[{symbol}] ATR not available or non-positive for trailing stop calculation ({current_atr}).",
             )
             return
 
         activation_multiplier = to_decimal(
             self.config.strategy_params.get(
-                "trailing_stop_loss_activation_atr_multiplier", 0.5
-            )
+                "trailing_stop_loss_activation_atr_multiplier", 0.5,
+            ),
         )  # Scalping tuned
         trailing_multiplier = to_decimal(
-            self.config.strategy_params.get("trailing_stop_loss_atr_multiplier", 0.75)
+            self.config.strategy_params.get("trailing_stop_loss_atr_multiplier", 0.75),
         )  # Scalping tuned
         break_even_profit_multiplier = to_decimal(
-            self.config.strategy_params.get("break_even_profit_atr_multiplier", 0.2)
+            self.config.strategy_params.get("break_even_profit_atr_multiplier", 0.2),
         )  # Scalping tuned
 
         # Calculate current profit in USD and ATR units
@@ -1963,7 +1958,7 @@ class BybitTradingBot:
             if should_update_exchange:
                 # Call update_stop_loss_and_take_profit, which will also update self.positions[symbol].trailing_stop_loss and save state
                 logger.info(
-                    f"[{symbol}] Trailing SL update triggered for {current_position.side} position. Old: {current_trailing_sl:.5f if current_trailing_sl else 'N/A'}, New: {potential_new_stop_price:.5f}"
+                    f"[{symbol}] Trailing SL update triggered for {current_position.side} position. Old: {current_trailing_sl:.5f if current_trailing_sl else 'N/A'}, New: {potential_new_stop_price:.5f}",
                 )
                 await self.update_stop_loss_and_take_profit(
                     symbol,
@@ -1972,11 +1967,11 @@ class BybitTradingBot:
                 )
             else:
                 logger.debug(
-                    f"[{symbol}] Calculated trailing stop {potential_new_stop_price:.5f} is not better than current {current_trailing_sl:.5f if current_trailing_sl else 'N/A'}, skipping update."
+                    f"[{symbol}] Calculated trailing stop {potential_new_stop_price:.5f} is not better than current {current_trailing_sl:.5f if current_trailing_sl else 'N/A'}, skipping update.",
                 )
         else:
             logger.debug(
-                f"[{symbol}] Profit {profit_in_atr:.2f} ATR. Trailing stop conditions not met yet or no beneficial move calculated."
+                f"[{symbol}] Profit {profit_in_atr:.2f} ATR. Trailing stop conditions not met yet or no beneficial move calculated.",
             )
 
     def _handle_kline_message(self, message):
@@ -1992,7 +1987,7 @@ class BybitTradingBot:
             symbol = parts[2]
             if symbol not in self.config.symbols:
                 logger.debug(
-                    f"Received kline for unconfigured symbol {symbol}. Ignoring."
+                    f"Received kline for unconfigured symbol {symbol}. Ignoring.",
                 )
                 return
 
@@ -2008,7 +2003,7 @@ class BybitTradingBot:
             if self.config.timeframe not in self.market_data[symbol]:
                 # As a fallback if historical load somehow missed it or happened out of order
                 logger.warning(
-                    f"[{symbol}] Market data DataFrame for timeframe {self.config.timeframe} not found. Initializing empty DataFrame for WS. Indicators might produce NaNs initially."
+                    f"[{symbol}] Market data DataFrame for timeframe {self.config.timeframe} not found. Initializing empty DataFrame for WS. Indicators might produce NaNs initially.",
                 )
                 self.market_data[symbol][self.config.timeframe] = pd.DataFrame(
                     columns=["open", "high", "low", "close", "volume", "turnover"],
@@ -2023,7 +2018,7 @@ class BybitTradingBot:
                 and current_candle_time < self.last_processed_candle_time[symbol]
             ):
                 logger.debug(
-                    f"[{symbol}] Skipping older/already processed kline message for {current_candle_time} (last processed: {self.last_processed_candle_time[symbol]})"
+                    f"[{symbol}] Skipping older/already processed kline message for {current_candle_time} (last processed: {self.last_processed_candle_time[symbol]})",
                 )
                 return
 
@@ -2042,7 +2037,7 @@ class BybitTradingBot:
                 # Update existing row if it's the current (unclosed) candle
                 df.loc[current_candle_time, new_candle.columns] = new_candle.iloc[0]
                 logger.debug(
-                    f"[{symbol}] Updated existing candle data for {current_candle_time}."
+                    f"[{symbol}] Updated existing candle data for {current_candle_time}.",
                 )
             else:
                 # Append new row (newly closed candle)
@@ -2056,10 +2051,10 @@ class BybitTradingBot:
                         self.config.lookback_periods,
                         current_strategy.atr_period,  # Ensure ATR period is covered
                         getattr(
-                            current_strategy, "fast_st_period", 0
+                            current_strategy, "fast_st_period", 0,
                         ),  # Safe access for Ehlers
                         getattr(
-                            current_strategy, "slow_st_period", 0
+                            current_strategy, "slow_st_period", 0,
                         ),  # Safe access for Ehlers
                         (
                             getattr(current_strategy, "filter_poles", 0) * 2
@@ -2067,7 +2062,7 @@ class BybitTradingBot:
                     )
                 else:
                     logger.warning(
-                        f"[{symbol}] Strategy not found for dynamic lookback calculation, using default config lookback."
+                        f"[{symbol}] Strategy not found for dynamic lookback calculation, using default config lookback.",
                     )
 
                 df = df.iloc[-required_lookback:].copy()
@@ -2075,19 +2070,19 @@ class BybitTradingBot:
                     current_candle_time  # Update last processed time for new candles
                 )
                 logger.debug(
-                    f"[{symbol}] Appended new candle: {current_candle_time}. DataFrame size: {len(df)}"
+                    f"[{symbol}] Appended new candle: {current_candle_time}. DataFrame size: {len(df)}",
                 )
 
             self.market_data[symbol][self.config.timeframe] = df
 
             # Schedule strategy cycle and trailing stop update for THIS symbol as a task thread-safely
             self.loop.call_soon_threadsafe(
-                asyncio.create_task, self._async_kline_processing(symbol)
+                asyncio.create_task, self._async_kline_processing(symbol),
             )
 
         except Exception as e:
             logger.error(
-                f"Error handling kline message for {symbol}: {e}", exc_info=True
+                f"Error handling kline message for {symbol}: {e}", exc_info=True,
             )
 
     async def _async_kline_processing(self, symbol: str):
@@ -2095,7 +2090,7 @@ class BybitTradingBot:
         current_strategy = self.strategies.get(symbol)
         # Ensure strategy and market data are available for this symbol before processing
         symbol_market_data_for_timeframe = self.market_data.get(symbol, {}).get(
-            self.config.timeframe
+            self.config.timeframe,
         )
 
         if (
@@ -2112,7 +2107,7 @@ class BybitTradingBot:
                 await self.process_signal(signal)
             else:
                 logger.debug(
-                    f"[{symbol}] No actionable signal generated or signal to HOLD."
+                    f"[{symbol}] No actionable signal generated or signal to HOLD.",
                 )
 
             # 3. Update trailing stop for this symbol if a position is open
@@ -2128,7 +2123,7 @@ class BybitTradingBot:
                 if current_strategy.__class__.__name__ == "SupertrendStrategy":
                     supertrend_value = df_indicators.iloc[-1].get("supertrend", np.nan)
                     logger.info(
-                        f"[{symbol}] Current Price: {current_close:.5f}, Supertrend: {supertrend_value:.5f}"
+                        f"[{symbol}] Current Price: {current_close:.5f}, Supertrend: {supertrend_value:.5f}",
                     )
                 elif (
                     current_strategy.__class__.__name__
@@ -2137,15 +2132,15 @@ class BybitTradingBot:
                     fast_st = df_indicators.iloc[-1].get("supertrend_fast", np.nan)
                     slow_st = df_indicators.iloc[-1].get("supertrend_slow", np.nan)
                     logger.info(
-                        f"[{symbol}] Current Price: {current_close:.5f}, Fast ST: {fast_st:.5f}, Slow ST: {slow_st:.5f}"
+                        f"[{symbol}] Current Price: {current_close:.5f}, Fast ST: {fast_st:.5f}, Slow ST: {slow_st:.5f}",
                     )
             else:
                 logger.debug(
-                    f"[{symbol}] No indicators available yet for {self.config.timeframe} after calculation. Raw data size: {len(self.market_data[symbol].get(self.config.timeframe, {}).get(self.config.timeframe, []))}"
+                    f"[{symbol}] No indicators available yet for {self.config.timeframe} after calculation. Raw data size: {len(self.market_data[symbol].get(self.config.timeframe, {}).get(self.config.timeframe, []))}",
                 )
         else:
             logger.debug(
-                f"[{symbol}] Skipping _async_kline_processing: strategy or sufficient market data not available."
+                f"[{symbol}] Skipping _async_kline_processing: strategy or sufficient market data not available.",
             )
 
     def _handle_private_message(self, message):
@@ -2156,7 +2151,7 @@ class BybitTradingBot:
             if topic == "position":
                 # Position updates may be for one or all symbols. Best to refresh all positions for accuracy.
                 self.loop.call_soon_threadsafe(
-                    asyncio.create_task, self.get_positions()
+                    asyncio.create_task, self.get_positions(),
                 )
             elif topic == "order":
                 # Order updates usually include symbol, but refreshing all positions and potentially balance covers fills.
@@ -2164,7 +2159,7 @@ class BybitTradingBot:
                 # For advanced order book integration, this would parse order IDs and update local order status.
             elif topic == "wallet":
                 self.loop.call_soon_threadsafe(
-                    asyncio.create_task, self.update_account_balance()
+                    asyncio.create_task, self.update_account_balance(),
                 )
         except Exception as e:
             logger.error(f"Error handling private message: {e}", exc_info=True)
@@ -2174,7 +2169,7 @@ class BybitTradingBot:
         Kept for structural compatibility but no longer actively used in the main loop.
         """
         logger.debug(
-            "`run_strategies_cycle` called. This method is deprecated; kline messages directly trigger strategy processing."
+            "`run_strategies_cycle` called. This method is deprecated; kline messages directly trigger strategy processing.",
         )
         # Previously, this would iterate through strategies and call _run_single_strategy_cycle.
         # Now, _async_kline_processing (triggered by WS) takes over this role per symbol.
@@ -2219,10 +2214,10 @@ class BybitTradingBot:
                     # Load positions
                     loaded_positions = state.get("positions", {})
                     if not isinstance(
-                        loaded_positions, dict
+                        loaded_positions, dict,
                     ):  # Defensive check for malformed state
                         logger.warning(
-                            f"Unexpected type for 'positions' in state file: {type(loaded_positions)}. Resetting."
+                            f"Unexpected type for 'positions' in state file: {type(loaded_positions)}. Resetting.",
                         )
                         loaded_positions = {}
 
@@ -2239,22 +2234,22 @@ class BybitTradingBot:
                                     size=to_decimal(pos_data["size"]),
                                     avg_price=to_decimal(pos_data["avg_price"]),
                                     unrealized_pnl=to_decimal(
-                                        pos_data["unrealized_pnl"]
+                                        pos_data["unrealized_pnl"],
                                     ),
                                     mark_price=to_decimal(pos_data["mark_price"]),
                                     leverage=pos_data["leverage"],
                                     entry_signal_price=to_decimal(
-                                        pos_data["entry_signal_price"]
+                                        pos_data["entry_signal_price"],
                                     )
                                     if pos_data.get("entry_signal_price")
                                     else None,
                                     initial_stop_loss=to_decimal(
-                                        pos_data["initial_stop_loss"]
+                                        pos_data["initial_stop_loss"],
                                     )
                                     if pos_data.get("initial_stop_loss")
                                     else None,
                                     trailing_stop_loss=to_decimal(
-                                        pos_data["trailing_stop_loss"]
+                                        pos_data["trailing_stop_loss"],
                                     )
                                     if pos_data.get("trailing_stop_loss")
                                     else None,
@@ -2277,7 +2272,7 @@ class BybitTradingBot:
                     loaded_strategies_state = state.get("strategies_state", {})
                     if not isinstance(loaded_strategies_state, dict):  # Defensive check
                         logger.warning(
-                            f"Unexpected type for 'strategies_state' in state file: {type(loaded_strategies_state)}. Resetting."
+                            f"Unexpected type for 'strategies_state' in state file: {type(loaded_strategies_state)}. Resetting.",
                         )
                         loaded_strategies_state = {}
 
@@ -2290,15 +2285,15 @@ class BybitTradingBot:
                                 strategy_instance = self.strategies[symbol]
                                 if strat_state.get("last_signal"):
                                     strategy_instance.last_signal = StrategySignal(
-                                        **strat_state["last_signal"]
+                                        **strat_state["last_signal"],
                                     )
                                 strategy_instance.signal_confirmed = strat_state.get(
-                                    "signal_confirmed", False
+                                    "signal_confirmed", False,
                                 )
                                 if strat_state.get("signal_candle_time"):
                                     strategy_instance.signal_candle_time = (
                                         datetime.fromisoformat(
-                                            strat_state["signal_candle_time"]
+                                            strat_state["signal_candle_time"],
                                         )
                                     )
                             except Exception as e:
@@ -2311,12 +2306,12 @@ class BybitTradingBot:
                                 strategy_instance.signal_candle_time = None
                         else:
                             logger.warning(
-                                f"Strategy state for unconfigured symbol {symbol} found in state file. Skipping."
+                                f"Strategy state for unconfigured symbol {symbol} found in state file. Skipping.",
                             )
 
                     # Load last processed candle times
                     loaded_last_processed_times = state.get(
-                        "last_processed_candle_time", {}
+                        "last_processed_candle_time", {},
                     )
                     # Ensure loaded_last_processed_times is a dict, not a string (Fix for AttributeError)
                     if isinstance(loaded_last_processed_times, dict):
@@ -2341,10 +2336,10 @@ class BybitTradingBot:
                                 )
                     else:
                         logger.warning(
-                            f"Unexpected type for last_processed_candle_time in state file: {type(loaded_last_processed_times)}. Resetting to fresh."
+                            f"Unexpected type for last_processed_candle_time in state file: {type(loaded_last_processed_times)}. Resetting to fresh.",
                         )
                         self.last_processed_candle_time = dict.fromkeys(
-                            self.config.symbols
+                            self.config.symbols,
                         )
 
                     logger.info("Bot state loaded successfully.")
@@ -2378,7 +2373,7 @@ class BybitTradingBot:
                 interval=self.config.timeframe,
             )
             logger.info(
-                f"Subscribed to kline stream for {symbol} on {self.config.timeframe}."
+                f"Subscribed to kline stream for {symbol} on {self.config.timeframe}.",
             )
 
         # Private streams (position, order, wallet) are typically global for the account
@@ -2388,13 +2383,13 @@ class BybitTradingBot:
         logger.info("Subscribed to private streams (position, order, wallet).")
 
         logger.info(
-            "Trading bot started successfully. Waiting for market data and signals (driven by kline updates)..."
+            "Trading bot started successfully. Waiting for market data and signals (driven by kline updates)...",
         )
 
         # Keep the main task alive. Core logic is now event-driven by WebSocket kline messages.
         while self.is_running:
             await asyncio.sleep(
-                1
+                1,
             )  # Sleep to prevent busy-waiting, can add other high-level checks here
 
     async def stop(self):
@@ -2420,7 +2415,7 @@ class BybitTradingBot:
 if __name__ == "__main__":
     if not os.getenv("BYBIT_API_KEY") or not os.getenv("BYBIT_API_SECRET"):
         logger.critical(
-            "API keys are not set. Please create a .env file with BYBIT_API_KEY and BYBIT_API_SECRET."
+            "API keys are not set. Please create a .env file with BYBIT_API_KEY and BYBIT_API_SECRET.",
         )
         sys.exit(1)
 
@@ -2431,20 +2426,20 @@ if __name__ == "__main__":
     for symbol in bot_config.symbols:
         if bot_config.strategy_name == "Supertrend":
             all_strategies[symbol] = SupertrendStrategy(
-                symbol=symbol, config=bot_config
+                symbol=symbol, config=bot_config,
             )
         elif bot_config.strategy_name == "EhlersSupertrendCross":
             all_strategies[symbol] = EhlersSupertrendCrossStrategy(
-                symbol=symbol, config=bot_config
+                symbol=symbol, config=bot_config,
             )
         else:
             logger.critical(
-                f"Unknown strategy specified in config: {bot_config.strategy_name}. Exiting."
+                f"Unknown strategy specified in config: {bot_config.strategy_name}. Exiting.",
             )
             sys.exit(1)
 
     bot = BybitTradingBot(
-        config=bot_config, strategies=all_strategies
+        config=bot_config, strategies=all_strategies,
     )  # Pass the dictionary of strategies
 
     try:
@@ -2459,5 +2454,5 @@ if __name__ == "__main__":
             asyncio.run(bot.stop())
         else:
             logger.info(
-                "Bot was not actively running when finally block executed, skipping explicit stop."
+                "Bot was not actively running when finally block executed, skipping explicit stop.",
             )

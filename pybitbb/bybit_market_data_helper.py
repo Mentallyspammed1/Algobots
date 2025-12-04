@@ -3,8 +3,7 @@ import logging
 import time
 from typing import Any
 
-from pybit.exceptions import BybitAPIError
-from pybit.exceptions import BybitRequestError
+from pybit.exceptions import BybitAPIError, BybitRequestError
 from pybit.unified_trading import HTTP
 
 # Configure logging for the module
@@ -34,14 +33,14 @@ class BybitMarketDataHelper:
         self.testnet = testnet
         # API key/secret are optional for most public market data, but passed for consistency
         self.session = HTTP(
-            testnet=self.testnet, api_key=api_key, api_secret=api_secret
+            testnet=self.testnet, api_key=api_key, api_secret=api_secret,
         )
         logger.info(
-            f"BybitMarketDataHelper initialized for {'testnet' if self.testnet else 'mainnet'}."
+            f"BybitMarketDataHelper initialized for {'testnet' if self.testnet else 'mainnet'}.",
         )
 
     def _make_request(
-        self, method: str, endpoint_name: str, **kwargs
+        self, method: str, endpoint_name: str, **kwargs,
     ) -> dict[str, Any] | None:
         """Internal method to make an HTTP request to the Bybit API and handle responses.
         It centralizes error handling and logging for API calls.
@@ -58,26 +57,26 @@ class BybitMarketDataHelper:
 
             if response and response.get("retCode") == 0:
                 logger.debug(
-                    f"[{endpoint_name}] Successfully called. Response: {response.get('result')}"
+                    f"[{endpoint_name}] Successfully called. Response: {response.get('result')}",
                 )
                 return response.get("result")
             ret_code = response.get("retCode", "N/A")
             error_msg = response.get("retMsg", "Unknown error")
             logger.error(
                 f"[{endpoint_name}] API call failed. Code: {ret_code}, Message: {error_msg}. "
-                f"Args: {kwargs}. Full Response: {response}"
+                f"Args: {kwargs}. Full Response: {response}",
             )
             return None
         except (BybitRequestError, BybitAPIError) as e:
             logger.exception(
                 f"[{endpoint_name}] Pybit specific error during API call. "
-                f"Args: {kwargs}. Error: {e}"
+                f"Args: {kwargs}. Error: {e}",
             )
             return None
         except Exception as e:
             logger.exception(
                 f"[{endpoint_name}] Unexpected exception during API call. "
-                f"Args: {kwargs}. Error: {e}"
+                f"Args: {kwargs}. Error: {e}",
             )
             return None
 
@@ -90,7 +89,7 @@ class BybitMarketDataHelper:
         return self._make_request("get_server_time", "Server Time")
 
     def get_tickers(
-        self, category: str, symbol: str | None = None
+        self, category: str, symbol: str | None = None,
     ) -> dict[str, Any] | None:
         """Retrieves 24-hour price statistics and current prices for instruments
         within a specified category, optionally for a specific symbol.
@@ -103,7 +102,7 @@ class BybitMarketDataHelper:
         # Input validation
         if not isinstance(category, str) or not category:
             logger.error(
-                "Invalid or empty string provided for 'category' for get_tickers."
+                "Invalid or empty string provided for 'category' for get_tickers.",
             )
             return None
         if symbol is not None and (not isinstance(symbol, str) or not symbol):
@@ -142,7 +141,7 @@ class BybitMarketDataHelper:
             isinstance(arg, str) and arg for arg in [category, symbol, interval]
         ):
             logger.error(
-                "Invalid or empty string provided for category, symbol, or interval for get_kline."
+                "Invalid or empty string provided for category, symbol, or interval for get_kline.",
             )
             return None
 
@@ -164,28 +163,28 @@ class BybitMarketDataHelper:
         ]
         if interval not in allowed_intervals:
             logger.warning(
-                f"Provided interval '{interval}' might not be supported. Allowed: {allowed_intervals}"
+                f"Provided interval '{interval}' might not be supported. Allowed: {allowed_intervals}",
             )
 
         params = {"category": category, "symbol": symbol, "interval": interval}
         if start_time is not None:
             if not isinstance(start_time, int) or start_time < 0:
                 logger.error(
-                    "Invalid 'start_time' provided for get_kline. Must be a positive integer (ms)."
+                    "Invalid 'start_time' provided for get_kline. Must be a positive integer (ms).",
                 )
                 return None
             params["start"] = start_time
         if end_time is not None:
             if not isinstance(end_time, int) or end_time < 0:
                 logger.error(
-                    "Invalid 'end_time' provided for get_kline. Must be a positive integer (ms)."
+                    "Invalid 'end_time' provided for get_kline. Must be a positive integer (ms).",
                 )
                 return None
             params["end"] = end_time
         if limit is not None:
             if not isinstance(limit, int) or not (1 <= limit <= 1000):
                 logger.error(
-                    "Invalid 'limit' provided for get_kline. Must be an integer between 1 and 1000."
+                    "Invalid 'limit' provided for get_kline. Must be an integer between 1 and 1000.",
                 )
                 return None
             params["limit"] = limit
@@ -193,7 +192,7 @@ class BybitMarketDataHelper:
         return self._make_request("get_kline", "Kline Data", **params)
 
     def get_instruments_info(
-        self, category: str, symbol: str | None = None
+        self, category: str, symbol: str | None = None,
     ) -> dict[str, Any] | None:
         """Retrieves trading pair specifications and rules (e.g., min order size, tick size)
         for a given category, optionally for a specific symbol.
@@ -205,7 +204,7 @@ class BybitMarketDataHelper:
         # Input validation
         if not isinstance(category, str) or not category:
             logger.error(
-                "Invalid or empty string provided for 'category' for get_instruments_info."
+                "Invalid or empty string provided for 'category' for get_instruments_info.",
             )
             return None
         if symbol is not None and (not isinstance(symbol, str) or not symbol):
@@ -218,7 +217,7 @@ class BybitMarketDataHelper:
         return self._make_request("get_instruments_info", "Instruments Info", **params)
 
     def get_public_trade_history(
-        self, category: str, symbol: str, **kwargs
+        self, category: str, symbol: str, **kwargs,
     ) -> dict[str, Any] | None:
         """Retrieves recent public trades for a specified symbol.
 
@@ -230,18 +229,18 @@ class BybitMarketDataHelper:
         # Input validation
         if not all(isinstance(arg, str) and arg for arg in [category, symbol]):
             logger.error(
-                "Invalid or empty string provided for category or symbol for get_public_trade_history."
+                "Invalid or empty string provided for category or symbol for get_public_trade_history.",
             )
             return None
 
         params = {"category": category, "symbol": symbol}
         params.update(kwargs)
         return self._make_request(
-            "get_public_trade_history", "Public Trade History", **params
+            "get_public_trade_history", "Public Trade History", **params,
         )
 
     def get_funding_rate_history(
-        self, category: str, symbol: str, **kwargs
+        self, category: str, symbol: str, **kwargs,
     ) -> dict[str, Any] | None:
         """Retrieves historical funding rates for derivatives.
 
@@ -253,18 +252,18 @@ class BybitMarketDataHelper:
         # Input validation
         if not all(isinstance(arg, str) and arg for arg in [category, symbol]):
             logger.error(
-                "Invalid or empty string provided for category or symbol for get_funding_rate_history."
+                "Invalid or empty string provided for category or symbol for get_funding_rate_history.",
             )
             return None
 
         params = {"category": category, "symbol": symbol}
         params.update(kwargs)
         return self._make_request(
-            "get_funding_rate_history", "Funding Rate History", **params
+            "get_funding_rate_history", "Funding Rate History", **params,
         )
 
     def get_long_short_ratio(
-        self, category: str, symbol: str, interval_time: str, **kwargs
+        self, category: str, symbol: str, interval_time: str, **kwargs,
     ) -> dict[str, Any] | None:
         """Retrieves long/short ratio data for a specific symbol and interval.
 
@@ -279,14 +278,14 @@ class BybitMarketDataHelper:
             isinstance(arg, str) and arg for arg in [category, symbol, interval_time]
         ):
             logger.error(
-                "Invalid or empty string provided for category, symbol, or interval_time for get_long_short_ratio."
+                "Invalid or empty string provided for category, symbol, or interval_time for get_long_short_ratio.",
             )
             return None
 
         allowed_interval_times = ["5min", "15min", "30min", "1h", "4h", "12h", "1d"]
         if interval_time not in allowed_interval_times:
             logger.error(
-                f"Invalid 'interval_time' provided for get_long_short_ratio. Allowed: {allowed_interval_times}, got '{interval_time}'."
+                f"Invalid 'interval_time' provided for get_long_short_ratio. Allowed: {allowed_interval_times}, got '{interval_time}'.",
             )
             return None
 
@@ -304,7 +303,7 @@ if __name__ == "__main__":
     USE_TESTNET = True
 
     market_data_helper = BybitMarketDataHelper(
-        testnet=USE_TESTNET, api_key=API_KEY, api_secret=API_SECRET
+        testnet=USE_TESTNET, api_key=API_KEY, api_secret=API_SECRET,
     )
 
     SYMBOL = "BTCUSDT"
@@ -317,7 +316,7 @@ if __name__ == "__main__":
         print(f"  Bybit Server Time (Nano): {server_time.get('timeNano')}")
         print(f"  Bybit Server Time (Seconds): {server_time.get('timeSecond')}")
         print(
-            f"  Local Time (from server seconds): {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(server_time.get('timeSecond', 0))))}"
+            f"  Local Time (from server seconds): {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(server_time.get('timeSecond', 0))))}",
         )
     else:
         print("  Failed to retrieve server time.")
@@ -327,7 +326,7 @@ if __name__ == "__main__":
     if tickers and tickers.get("list"):
         ticker = tickers["list"][0]
         print(
-            f"  Symbol: {ticker.get('symbol')}, Last Price: {ticker.get('lastPrice')}, 24h Change: {ticker.get('price24hPcnt')}, Volume: {ticker.get('volume24h')}"
+            f"  Symbol: {ticker.get('symbol')}, Last Price: {ticker.get('lastPrice')}, 24h Change: {ticker.get('price24hPcnt')}, Volume: {ticker.get('volume24h')}",
         )
     else:
         print(f"  Failed to retrieve tickers for {SYMBOL}.")
@@ -349,67 +348,67 @@ if __name__ == "__main__":
             # Convert timestamp from string to int for readable format
             ts = int(bar[0]) / 1000
             print(
-                f"  Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))}, Open: {bar[1]}, High: {bar[2]}, Low: {bar[3]}, Close: {bar[4]}, Volume: {bar[5]}"
+                f"  Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))}, Open: {bar[1]}, High: {bar[2]}, Low: {bar[3]}, Close: {bar[4]}, Volume: {bar[5]}",
             )
     else:
         print(f"  Failed to retrieve kline data for {SYMBOL}.")
 
     print(f"\n--- Getting Instruments Info for {SYMBOL} ({CATEGORY}) ---")
     instrument_info = market_data_helper.get_instruments_info(
-        category=CATEGORY, symbol=SYMBOL
+        category=CATEGORY, symbol=SYMBOL,
     )
     if instrument_info and instrument_info.get("list"):
         info = instrument_info["list"][0]
         print(
-            f"  Symbol: {info.get('symbol')}, Base Coin: {info.get('baseCoin')}, Quote Coin: {info.get('quoteCoin')}"
+            f"  Symbol: {info.get('symbol')}, Base Coin: {info.get('baseCoin')}, Quote Coin: {info.get('quoteCoin')}",
         )
         print(
-            f"  Price Filter (tickSize): {info.get('priceFilter', {}).get('tickSize')}"
+            f"  Price Filter (tickSize): {info.get('priceFilter', {}).get('tickSize')}",
         )
         print(
-            f"  Lot Size Filter (minOrderQty): {info.get('lotSizeFilter', {}).get('minOrderQty')}"
+            f"  Lot Size Filter (minOrderQty): {info.get('lotSizeFilter', {}).get('minOrderQty')}",
         )
     else:
         print(f"  Failed to retrieve instrument info for {SYMBOL}.")
 
     print(f"\n--- Getting Public Trade History for {SYMBOL} (last 3 records) ---")
     public_trades = market_data_helper.get_public_trade_history(
-        category=CATEGORY, symbol=SYMBOL, limit=3
+        category=CATEGORY, symbol=SYMBOL, limit=3,
     )
     if public_trades and public_trades.get("list"):
         for trade in public_trades["list"]:
             # Convert timestamp from string to int for readable format
             ts = int(trade.get("time")) / 1000
             print(
-                f"  Price: {trade.get('price')}, Qty: {trade.get('qty')}, Side: {trade.get('side')}, Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))}"
+                f"  Price: {trade.get('price')}, Qty: {trade.get('qty')}, Side: {trade.get('side')}, Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))}",
             )
     else:
         print(f"  Failed to retrieve public trade history for {SYMBOL}.")
 
     print(f"\n--- Getting Funding Rate History for {SYMBOL} (last 1 record) ---")
     funding_rate_history = market_data_helper.get_funding_rate_history(
-        category=CATEGORY, symbol=SYMBOL, limit=1
+        category=CATEGORY, symbol=SYMBOL, limit=1,
     )
     if funding_rate_history and funding_rate_history.get("list"):
         rate_record = funding_rate_history["list"][0]
         # Convert timestamp from string to int for readable format
         ts = int(rate_record.get("fundingRateTimestamp")) / 1000
         print(
-            f"  Funding Rate: {rate_record.get('fundingRate')}, Funding Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))}"
+            f"  Funding Rate: {rate_record.get('fundingRate')}, Funding Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))}",
         )
     else:
         print(f"  Failed to retrieve funding rate history for {SYMBOL}.")
 
     print(
-        f"\n--- Getting Long/Short Ratio for {SYMBOL} (1-hour interval, last 1 record) ---"
+        f"\n--- Getting Long/Short Ratio for {SYMBOL} (1-hour interval, last 1 record) ---",
     )
     long_short_ratio = market_data_helper.get_long_short_ratio(
-        category=CATEGORY, symbol=SYMBOL, interval_time="1h", limit=1
+        category=CATEGORY, symbol=SYMBOL, interval_time="1h", limit=1,
     )
     if long_short_ratio and long_short_ratio.get("list"):
         ratio_record = long_short_ratio["list"][0]
         print(
-            f"  Buy Ratio: {ratio_record.get('buyRatio')}, Sell Ratio: {ratio_record.get('sellRatio')}, Timestamp: {ratio_record.get('timestamp')}"
+            f"  Buy Ratio: {ratio_record.get('buyRatio')}, Sell Ratio: {ratio_record.get('sellRatio')}, Timestamp: {ratio_record.get('timestamp')}",
         )
     else:
         print(f"  Failed to retrieve long/short ratio for {SYMBOL}.")

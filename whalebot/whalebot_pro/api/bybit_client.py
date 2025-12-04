@@ -6,18 +6,18 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from colorama import Fore
-from colorama import Style
+from colorama import Fore, Style
 from dotenv import load_dotenv
 
 # Import pybit clients
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # Import local modules
 from whalebot_pro.core.precision_manager import PrecisionManager
-from whalebot_pro.orderbook.advanced_orderbook_manager import AdvancedOrderbookManager
-from whalebot_pro.orderbook.advanced_orderbook_manager import PriceLevel
+from whalebot_pro.orderbook.advanced_orderbook_manager import (
+    AdvancedOrderbookManager,
+    PriceLevel,
+)
 
 load_dotenv()
 

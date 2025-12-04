@@ -14,7 +14,7 @@ class ScalpingEngine:
                 "secret": config["api_secret"],
                 "enableRateLimit": True,
                 "options": {"defaultType": "spot"},
-            }
+            },
         )
         self.position = None
         self.ob_analysis = OrderBookAnalyzer()
@@ -23,10 +23,10 @@ class ScalpingEngine:
     def get_market_data(self) -> pd.DataFrame:
         """Fetch high-frequency tick data"""
         data = self.exchange.fetch_ohlcv(
-            self.config["symbol"], timeframe="1m", limit=100
+            self.config["symbol"], timeframe="1m", limit=100,
         )
         return pd.DataFrame(
-            data, columns=["timestamp", "open", "high", "low", "close", "volume"]
+            data, columns=["timestamp", "open", "high", "low", "close", "volume"],
         )
 
     def calculate_scalping_indicators(self, df: pd.DataFrame) -> dict:
@@ -39,7 +39,7 @@ class ScalpingEngine:
 
         # Volume-weighted Price
         df["vwap"] = ta.volume.volume_weighted_average_price(
-            df["high"], df["low"], df["close"], df["volume"], window=5
+            df["high"], df["low"], df["close"], df["volume"], window=5,
         )
 
         # Order Flow Analysis

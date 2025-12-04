@@ -44,13 +44,9 @@ import threading  # Added for locks in performance monitor
 import time
 import urllib.parse
 import uuid  # Added for client_order_id generation
-from collections import defaultdict
-from collections import deque
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import UTC
-from datetime import datetime
+from collections import defaultdict, deque
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 # --- Third-Party Library Imports ---
@@ -85,9 +81,7 @@ except ImportError:
     PYBIT_AVAILABLE = False
 
 try:
-    from colorama import Fore
-    from colorama import Style
-    from colorama import init
+    from colorama import Fore, Style, init
 
     init(autoreset=True)
 except ImportError:
@@ -100,11 +94,7 @@ except ImportError:
     Style = DummyColor()
 
 # --- Decimal Configuration ---
-from decimal import ROUND_DOWN
-from decimal import ROUND_HALF_UP
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal, InvalidOperation, getcontext
 
 getcontext().prec = 30
 getcontext().rounding = ROUND_HALF_UP
@@ -153,7 +143,7 @@ def setup_logging():
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     if PYBIT_AVAILABLE and not isinstance(
-        Fore, DummyColor
+        Fore, DummyColor,
     ):  # Check if colorama is working
         try:
             import structlog
@@ -188,7 +178,7 @@ def setup_logging():
             logger.info("Using structlog for colored console logging.")
         except ImportError:
             logger.warning(
-                "structlog not found for colored logging. Falling back to basic formatter."
+                "structlog not found for colored logging. Falling back to basic formatter.",
             )
             basic_formatter = logging.Formatter(
                 f"%(asctime)s - {Fore.CYAN}%(levelname)s{Style.RESET_ALL} - %(name)s - %(message)s",
@@ -206,13 +196,13 @@ def setup_logging():
         log_handlers.append(console_handler)
         if isinstance(Fore, DummyColor):
             logger.warning(
-                "Colorama not found. Terminal output will not be colored. Install with: pip install colorama"
+                "Colorama not found. Terminal output will not be colored. Install with: pip install colorama",
             )
 
     # File Handler (Main Bot Log - JSON format)
     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_handler = logging.FileHandler(
-        os.path.join(LOG_DIR, f"bot_{timestamp_str}.log"), mode="w", encoding="utf-8"
+        os.path.join(LOG_DIR, f"bot_{timestamp_str}.log"), mode="w", encoding="utf-8",
     )
     file_handler.setLevel(log_level)
     try:
@@ -238,7 +228,7 @@ def setup_logging():
         logger.info("Using structlog for JSON file logging.")
     except ImportError:
         logger.warning(
-            "structlog not found for JSON logging. Using basic formatter for file logs."
+            "structlog not found for JSON logging. Using basic formatter for file logs.",
         )
         basic_file_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -249,16 +239,16 @@ def setup_logging():
 
     # Trade Logger (CSV Format)
     trade_file_handler = logging.FileHandler(
-        os.path.join(LOG_DIR, f"trades_{timestamp_str}.csv"), mode="w", encoding="utf-8"
+        os.path.join(LOG_DIR, f"trades_{timestamp_str}.csv"), mode="w", encoding="utf-8",
     )
     trade_file_handler.setLevel(logging.INFO)
     trade_formatter = logging.Formatter(
-        "%(asctime)s,%(levelname)s,%(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        "%(asctime)s,%(levelname)s,%(message)s", datefmt="%Y-%m-%d %H:%M:%S",
     )
     trade_file_handler.setFormatter(trade_formatter)
     try:
         trade_file_handler.write(
-            "timestamp,symbol,side,quantity,price,realized_pnl,fee,order_id,trade_type\n"
+            "timestamp,symbol,side,quantity,price,realized_pnl,fee,order_id,trade_type\n",
         )
     except Exception as e:
         logger.error(f"Failed to write CSV header: {e}")
@@ -282,19 +272,19 @@ def setup_logging():
     # Add checks for optional dependencies
     if not PYBIT_AVAILABLE:
         logger.warning(
-            "pybit library not found. Falling back to manual API calls and WebSocket connections."
+            "pybit library not found. Falling back to manual API calls and WebSocket connections.",
         )
     if not PSUTIL_AVAILABLE:
         logger.warning(
-            "psutil not found. CPU/Memory monitoring will be limited. Install with: pip install psutil --no-cache-dir"
+            "psutil not found. CPU/Memory monitoring will be limited. Install with: pip install psutil --no-cache-dir",
         )
     if not NUMPY_AVAILABLE or not PANDAS_AVAILABLE:
         logger.warning(
-            "numpy or pandas not found. Some performance ratio calculations may be unavailable."
+            "numpy or pandas not found. Some performance ratio calculations may be unavailable.",
         )
 
     logger.info(
-        f"Logging setup complete. Level: {logging.getLevelName(log_level)}. Console logs enabled. File logs saved to: {LOG_DIR}"
+        f"Logging setup complete. Level: {logging.getLevelName(log_level)}. Console logs enabled. File logs saved to: {LOG_DIR}",
     )
 
 
@@ -303,7 +293,7 @@ class BybitAPIError(Exception):
     """Custom exception for Bybit API errors."""
 
     def __init__(
-        self, message: str, code: str | None = None, response: dict | None = None
+        self, message: str, code: str | None = None, response: dict | None = None,
     ):
         super().__init__(message)
         self.code = code
@@ -383,7 +373,7 @@ class OrderData:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     order_pnl: Decimal = Decimal(
-        "0"
+        "0",
     )  # PnL directly attributed to this order's fills (can be complex)
     retry_count: int = 0
     last_error: str | None = None
@@ -436,13 +426,13 @@ class OrderData:
 
             return cls(
                 order_id=str(
-                    api_data.get("orderId", api_data.get("order_id", str(uuid.uuid4())))
+                    api_data.get("orderId", api_data.get("order_id", str(uuid.uuid4()))),
                 ),
                 symbol=api_data.get("symbol", ""),
                 side=side,
                 price=Decimal(api_data.get("price", api_data.get("avgPrice", "0"))),
                 quantity=Decimal(
-                    api_data.get("qty", api_data.get("cumExecQty", "0"))
+                    api_data.get("qty", api_data.get("cumExecQty", "0")),
                 ),  # Use qty or cumExecQty based on context
                 status=status,
                 timestamp=created_time_ms / 1000,
@@ -453,7 +443,7 @@ class OrderData:
                 reduce_only=api_data.get("reduceOnly", False),
                 post_only=api_data.get("postOnly", False),
                 client_order_id=api_data.get(
-                    "orderLinkId", api_data.get("orderLinkId", "")
+                    "orderLinkId", api_data.get("orderLinkId", ""),
                 ),
                 created_at=datetime.fromtimestamp(created_time_ms / 1000, tz=UTC)
                 if created_time_ms > 0
@@ -462,7 +452,7 @@ class OrderData:
                 if updated_time_ms > 0
                 else None,
                 order_pnl=Decimal(
-                    api_data.get("orderPnl", "0")
+                    api_data.get("orderPnl", "0"),
                 ),  # PnL might be specific to the trade/fill, not the whole order
             )
         except (ValueError, KeyError, TypeError, InvalidOperation) as e:
@@ -495,7 +485,7 @@ class MarketData:
 
     # For volatility tracking
     last_price_history: deque = field(
-        default_factory=lambda: deque(maxlen=100)
+        default_factory=lambda: deque(maxlen=100),
     )  # Store recent last prices
 
     def __post_init__(self):
@@ -526,32 +516,32 @@ class MarketData:
     def update_from_tick(self, tick_data: dict[str, Any]):
         """Update market data from a ticker stream or API response"""
         self.best_bid = safe_decimal(
-            tick_data.get("bid1Price", str(self.best_bid or "0"))
+            tick_data.get("bid1Price", str(self.best_bid or "0")),
         )
         self.best_ask = safe_decimal(
-            tick_data.get("ask1Price", str(self.best_ask or "0"))
+            tick_data.get("ask1Price", str(self.best_ask or "0")),
         )
         self.bid_size = safe_decimal(
-            tick_data.get("bid1Size", str(self.bid_size or "0"))
+            tick_data.get("bid1Size", str(self.bid_size or "0")),
         )
         self.ask_size = safe_decimal(
-            tick_data.get("ask1Size", str(self.ask_size or "0"))
+            tick_data.get("ask1Size", str(self.ask_size or "0")),
         )
         self.last_price = safe_decimal(
-            tick_data.get("lastPrice", str(self.last_price or "0"))
+            tick_data.get("lastPrice", str(self.last_price or "0")),
         )
         self.volume_24h = safe_decimal(
-            tick_data.get("volume24h", str(self.volume_24h or "0"))
+            tick_data.get("volume24h", str(self.volume_24h or "0")),
         )
         self.mark_price = safe_decimal(
-            tick_data.get("markPrice", str(self.mark_price or "0"))
+            tick_data.get("markPrice", str(self.mark_price or "0")),
         )
         self.index_price = safe_decimal(
-            tick_data.get("indexPrice", str(self.index_price or "0"))
+            tick_data.get("indexPrice", str(self.index_price or "0")),
         )
 
         ts = float(
-            tick_data.get("ts", tick_data.get("updatedTime", time.time() * 1000))
+            tick_data.get("ts", tick_data.get("updatedTime", time.time() * 1000)),
         )  # Handle timestamp variations
         self.timestamp = (
             ts / 1000 if ts > 1_000_000_000_000 else ts
@@ -595,7 +585,7 @@ class RiskMetrics:
     realized_pnl: Decimal = Decimal("0")
     unrealized_pnl: Decimal = Decimal("0")
     current_position_base: Decimal = Decimal(
-        "0"
+        "0",
     )  # Current inventory in base asset (e.g., BTC)
     max_position_base: Decimal = Decimal("0")  # Max allowed position size in base asset
     trade_count: int = 0
@@ -608,14 +598,14 @@ class RiskMetrics:
     # Daily metrics
     last_daily_pnl_reset: datetime = field(
         default_factory=lambda: datetime.now(UTC).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+            hour=0, minute=0, second=0, microsecond=0,
+        ),
     )
     daily_pnl: Decimal = Decimal(
-        "0"
+        "0",
     )  # PnL accumulated since the start of the current day
     max_daily_loss_pct: Decimal = Decimal(
-        "0.05"
+        "0.05",
     )  # Max loss allowed per day in percentage of initial equity
 
     # Consecutive loss tracking
@@ -624,22 +614,22 @@ class RiskMetrics:
 
     # History tracking for performance metrics
     hourly_pnl_history: deque = field(
-        default_factory=lambda: deque(maxlen=24)
+        default_factory=lambda: deque(maxlen=24),
     )  # Stores equity at start of each hour
     trade_pnl_history: deque = field(
-        default_factory=lambda: deque(maxlen=100)
+        default_factory=lambda: deque(maxlen=100),
     )  # Stores individual trade PnLs
 
     # Volatility tracking history
     volatility_history: dict[str, deque] = field(
-        default_factory=lambda: defaultdict(lambda: deque(maxlen=100))
+        default_factory=lambda: defaultdict(lambda: deque(maxlen=100)),
     )
 
     def __post_init__(self):
         # Ensure initial equity is set if provided, otherwise default to 0 and log warning
         if self.initial_equity == 0:
             logger.warning(
-                "Initial equity not set. Risk calculations like drawdown and daily limits may be inaccurate. Consider setting 'initial_equity' in SymbolConfig risk_params."
+                "Initial equity not set. Risk calculations like drawdown and daily limits may be inaccurate. Consider setting 'initial_equity' in SymbolConfig risk_params.",
             )
         self.peak_equity = (
             self.initial_equity if self.initial_equity > 0 else Decimal("0")
@@ -648,7 +638,7 @@ class RiskMetrics:
             self.initial_equity if self.initial_equity > 0 else Decimal("0")
         )
         self.last_daily_pnl_reset = datetime.now(UTC).replace(
-            hour=0, minute=0, second=0, microsecond=0
+            hour=0, minute=0, second=0, microsecond=0,
         )  # Ensure it's set correctly initially
 
     def update_trade_stats(self, pnl: Decimal):
@@ -666,7 +656,7 @@ class RiskMetrics:
             self.total_losing_pnl += abs(pnl)
             self.consecutive_losses += 1
             self.max_consecutive_losses = max(
-                self.max_consecutive_losses, self.consecutive_losses
+                self.max_consecutive_losses, self.consecutive_losses,
             )
 
         # Update Win Rate and Profit Factor
@@ -679,7 +669,7 @@ class RiskMetrics:
             self.profit_factor = float(self.total_winning_pnl / self.total_losing_pnl)
         elif self.total_winning_pnl > 0:
             self.profit_factor = float(
-                "inf"
+                "inf",
             )  # Infinite profit factor if no losing trades
         else:
             self.profit_factor = 0.0  # No profit or loss yet
@@ -715,7 +705,7 @@ class RiskMetrics:
             self.hourly_pnl_history
             and current_hour_start
             > self.hourly_pnl_history[-1].__getattribute__("replace")(
-                minute=0, second=0, microsecond=0
+                minute=0, second=0, microsecond=0,
             )
         ):
             # Correct way to get the hour start from datetime object if stored
@@ -727,12 +717,12 @@ class RiskMetrics:
                 self.current_equity - self.peak_equity
             )  # PnL for the just-finished day
             logger.info(
-                f"Daily PnL reset. Previous day's PnL: {self.daily_pnl:.4f}. Resetting for new day."
+                f"Daily PnL reset. Previous day's PnL: {self.daily_pnl:.4f}. Resetting for new day.",
             )
 
             # Reset for the new day
             self.last_daily_pnl_reset = now_utc.replace(
-                hour=0, minute=0, second=0, microsecond=0
+                hour=0, minute=0, second=0, microsecond=0,
             )
             self.peak_equity = (
                 self.current_equity
@@ -746,10 +736,10 @@ class RiskMetrics:
         """Checks risk limits and returns True if trading should be halted/reduced."""
         # 1. Max Drawdown Check
         if self.max_drawdown_pct > self.max_daily_loss_pct * Decimal(
-            "100"
+            "100",
         ):  # Use daily loss pct as proxy for overall drawdown limit if needed
             logger.critical(
-                f"CRITICAL RISK: Max drawdown breached! ({self.max_drawdown_pct:.2f}% > {self.max_daily_loss_pct * 100:.2f}%)"
+                f"CRITICAL RISK: Max drawdown breached! ({self.max_drawdown_pct:.2f}% > {self.max_daily_loss_pct * 100:.2f}%)",
             )
             return True
 
@@ -759,18 +749,18 @@ class RiskMetrics:
             self.initial_equity * self.max_daily_loss_pct
         ):
             logger.critical(
-                f"CRITICAL RISK: Daily loss limit breached! Current daily PnL: {self.daily_pnl:.4f} (limit: -{self.initial_equity * self.max_daily_loss_pct:.4f})"
+                f"CRITICAL RISK: Daily loss limit breached! Current daily PnL: {self.daily_pnl:.4f} (limit: -{self.initial_equity * self.max_daily_loss_pct:.4f})",
             )
             return True
 
         # 3. Consecutive Losses Check
         if self.consecutive_losses >= 5:
             logger.warning(
-                f"ELEVATED RISK: {self.consecutive_losses} consecutive losses detected."
+                f"ELEVATED RISK: {self.consecutive_losses} consecutive losses detected.",
             )
             if self.consecutive_losses >= 10:
                 logger.critical(
-                    f"CRITICAL RISK: {self.consecutive_losses} consecutive losses! Halting trading."
+                    f"CRITICAL RISK: {self.consecutive_losses} consecutive losses! Halting trading.",
                 )
                 return True
 
@@ -780,7 +770,7 @@ class RiskMetrics:
             and abs(self.current_position_base) > self.max_position_base
         ):
             logger.warning(
-                f"ELEVATED RISK: Max position limit ({self.max_position_base}) exceeded! Current: {self.current_position_base}. Consider reducing position."
+                f"ELEVATED RISK: Max position limit ({self.max_position_base}) exceeded! Current: {self.current_position_base}. Consider reducing position.",
             )
             # Decide if this should return True to halt, or just warn. For MM, often adjust sizing instead of halting.
             return False  # Allow continuing, but strategy should adjust sizing
@@ -791,7 +781,7 @@ class RiskMetrics:
         """Calculate enhanced performance ratios including Sortino. Requires numpy."""
         if not NUMPY_AVAILABLE:
             logger.warning(
-                "Skipping performance ratio calculation: numpy not available."
+                "Skipping performance ratio calculation: numpy not available.",
             )
             return
 
@@ -837,13 +827,13 @@ class RiskMetrics:
 
             except Exception as e:
                 logger.error(
-                    f"Error calculating performance ratios: {e}", exc_info=True
+                    f"Error calculating performance ratios: {e}", exc_info=True,
                 )
                 self.sharpe_ratio = 0.0
                 self.sortino_ratio = 0.0
         else:
             logger.debug(
-                "Not enough trade history (>1 trade) to calculate performance ratios."
+                "Not enough trade history (>1 trade) to calculate performance ratios.",
             )
 
         # Calmar Ratio calculation
@@ -982,7 +972,7 @@ class EnhancedPerformanceMonitor:
         self.last_gc_collection = time.time()
         if current_memory is not None:
             logger.debug(
-                f"GC triggered: {collected} objects collected, Memory: {current_memory:.1f}MB (Peak: {peak_memory:.1f}MB)"
+                f"GC triggered: {collected} objects collected, Memory: {current_memory:.1f}MB (Peak: {peak_memory:.1f}MB)",
             )
         else:
             logger.debug(f"GC triggered: {collected} objects collected.")
@@ -1038,7 +1028,7 @@ class EnhancedPerformanceMonitor:
                             ["ms"] * 4,
                             strict=False,
                         )
-                    }
+                    },
                 )
             else:
                 stats.update(
@@ -1047,7 +1037,7 @@ class EnhancedPerformanceMonitor:
                         "p95_order_latency_ms": 0,
                         "p99_order_latency_ms": 0,
                         "max_order_latency_ms": 0,
-                    }
+                    },
                 )
 
             if self.ws_latencies:
@@ -1068,7 +1058,7 @@ class EnhancedPerformanceMonitor:
                             ["ms"] * 3,
                             strict=False,
                         )
-                    }
+                    },
                 )
             else:
                 stats.update(
@@ -1076,7 +1066,7 @@ class EnhancedPerformanceMonitor:
                         "avg_ws_latency_ms": 0,
                         "p95_ws_latency_ms": 0,
                         "p99_ws_latency_ms": 0,
-                    }
+                    },
                 )
         else:  # Fallback if numpy is missing
             stats.update(
@@ -1088,7 +1078,7 @@ class EnhancedPerformanceMonitor:
                     "avg_ws_latency_ms": "N/A",
                     "p95_ws_latency_ms": "N/A",
                     "p99_ws_latency_ms": "N/A",
-                }
+                },
             )
 
         stats["api_call_counts"] = dict(self.api_call_counts)
@@ -1128,14 +1118,14 @@ class EnhancedCircuitBreaker:
                     self.state = "HALF-OPEN"
                     self.recovery_attempts += 1
                     logger.warning(
-                        f"Circuit Breaker: Recovery timeout elapsed. Moving to HALF-OPEN (attempt {self.recovery_attempts})"
+                        f"Circuit Breaker: Recovery timeout elapsed. Moving to HALF-OPEN (attempt {self.recovery_attempts})",
                     )
                 else:
                     remaining_time = current_timeout - (
                         time.time() - self.last_failure_time
                     )
                     raise CircuitBreakerOpenError(
-                        f"Circuit breaker is OPEN. Try again in {remaining_time:.2f}s"
+                        f"Circuit breaker is OPEN. Try again in {remaining_time:.2f}s",
                     )
         return self
 
@@ -1150,16 +1140,16 @@ class EnhancedCircuitBreaker:
                 if self.state == "HALF-OPEN":
                     self.state = "OPEN"  # Re-open if HALF-OPEN failed
                     logger.error(
-                        f"Circuit Breaker: HALF-OPEN request failed ({exc_val}). Re-opening circuit."
+                        f"Circuit Breaker: HALF-OPEN request failed ({exc_val}). Re-opening circuit.",
                     )
                 elif self.failure_count >= self.failure_threshold:
                     self.state = "OPEN"  # Trip the breaker if threshold reached
                     logger.critical(
-                        f"Circuit Breaker: Failure threshold ({self.failure_threshold}) reached. Opening circuit."
+                        f"Circuit Breaker: Failure threshold ({self.failure_threshold}) reached. Opening circuit.",
                     )
                 else:
                     logger.warning(
-                        f"Circuit Breaker: Failure detected ({exc_val}). Count: {self.failure_count}/{self.failure_threshold}."
+                        f"Circuit Breaker: Failure detected ({exc_val}). Count: {self.failure_count}/{self.failure_threshold}.",
                     )
 
             elif self.state == "HALF-OPEN":
@@ -1172,11 +1162,11 @@ class EnhancedCircuitBreaker:
                     self.failure_count = 0  # Reset failure state
                     self.recovery_attempts = 0
                     logger.info(
-                        "Circuit Breaker: Multiple HALF-OPEN requests succeeded. Closing circuit."
+                        "Circuit Breaker: Multiple HALF-OPEN requests succeeded. Closing circuit.",
                     )
                 else:
                     logger.debug(
-                        f"Circuit Breaker: HALF-OPEN request succeeded ({self.success_count_since_failure}/3 needed)."
+                        f"Circuit Breaker: HALF-OPEN request succeeded ({self.success_count_since_failure}/3 needed).",
                     )
             elif self.state == "CLOSED" and self.failure_count > 0:
                 # Track successes in CLOSED state to reset failure count if healthy
@@ -1187,7 +1177,7 @@ class EnhancedCircuitBreaker:
                     self.failure_count = 0
                     self.success_count_since_failure = 0
                     logger.debug(
-                        "Circuit Breaker: Multiple successful requests. Resetting failure count."
+                        "Circuit Breaker: Multiple successful requests. Resetting failure count.",
                     )
 
 
@@ -1206,7 +1196,7 @@ class EnhancedRateLimiter:
         self.burst_allowance_factor = burst_allowance_factor
         self.adaptive = adaptive
         self.requests = defaultdict(
-            lambda: deque()
+            lambda: deque(),
         )  # Stores timestamps {endpoint: deque([ts1, ts2, ...])}
         self.lock = asyncio.Lock()
         self.adaptive_factors = defaultdict(lambda: 1.0)  # {endpoint: factor}
@@ -1221,7 +1211,7 @@ class EnhancedRateLimiter:
                 int(
                     max_requests
                     * (1 + self.burst_allowance_factor)
-                    * self.adaptive_factors[endpoint]
+                    * self.adaptive_factors[endpoint],
                 ),
             )
 
@@ -1238,7 +1228,7 @@ class EnhancedRateLimiter:
                     self.adaptive and self.adaptive_factors[endpoint] > 0.5
                 ):  # Only reduce if factor is not already low
                     self._adjust_adaptive_factor(
-                        endpoint, False
+                        endpoint, False,
                     )  # Reduce factor on hit
 
                 time_to_wait = (
@@ -1248,13 +1238,13 @@ class EnhancedRateLimiter:
                 )
                 if time_to_wait > 0:
                     logger.warning(
-                        f"Rate limit hit for {endpoint}. Effective limit {effective_max_requests}/{window_seconds}s. Waiting {time_to_wait:.2f}s"
+                        f"Rate limit hit for {endpoint}. Effective limit {effective_max_requests}/{window_seconds}s. Waiting {time_to_wait:.2f}s",
                     )
                     self.record_rate_limit_hit()  # Record the hit
                     await asyncio.sleep(time_to_wait)  # Wait
                     return await self.acquire(endpoint, priority)  # Retry after waiting
                 logger.warning(
-                    f"Rate limit condition for {endpoint}, but wait time <= 0. Proceeding."
+                    f"Rate limit condition for {endpoint}, but wait time <= 0. Proceeding.",
                 )
 
             # Add current request timestamp
@@ -1278,14 +1268,14 @@ class EnhancedRateLimiter:
         """Adjust adaptive factor based on success/failure."""
         if success:
             self.adaptive_factors[endpoint] = min(
-                self.adaptive_factors[endpoint] * 1.02, 1.5
+                self.adaptive_factors[endpoint] * 1.02, 1.5,
             )  # Increase factor, capped
         else:
             self.adaptive_factors[endpoint] = max(
-                self.adaptive_factors[endpoint] * 0.95, 0.5
+                self.adaptive_factors[endpoint] * 0.95, 0.5,
             )  # Decrease factor, capped
         logger.debug(
-            f"Adaptive factor for {endpoint} adjusted to {self.adaptive_factors[endpoint]:.2f}"
+            f"Adaptive factor for {endpoint} adjusted to {self.adaptive_factors[endpoint]:.2f}",
         )
 
 
@@ -1303,7 +1293,7 @@ class SymbolConfig:
             "max_drawdown_pct": Decimal("10.0"),
             "initial_equity": Decimal("10000"),
             "max_daily_loss_pct": Decimal("0.05"),
-        }
+        },
     )
     min_spread_bps: Decimal = Decimal("0.01")
     max_spread_bps: Decimal = Decimal("0.20")
@@ -1331,7 +1321,7 @@ class BotConfig:
     state_save_interval: int = 300
     polling_interval_sec: float = 5.0  # Main loop polling interval
     order_cancellation_deviation_bps: Decimal = Decimal(
-        "2"
+        "2",
     )  # Cancel order if market moves N bps past it
 
     # API Client settings
@@ -1357,7 +1347,7 @@ class BotConfig:
             "/v5/market/orderbook": (120, 60),
             "/v5/market/instruments-info": (10, 60),
             "/v5/asset": (60, 60),
-        }
+        },
     )
 
     # WebSocket settings
@@ -1382,7 +1372,7 @@ def safe_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
         return Decimal(str(value)) if value is not None else default
     except (InvalidOperation, ValueError, TypeError):
         logger.warning(
-            f"Could not convert '{value}' to Decimal. Using default {default}."
+            f"Could not convert '{value}' to Decimal. Using default {default}.",
         )
         return default
 
@@ -1400,7 +1390,7 @@ class BybitV5APIClient:
         self.recv_window = "5000"
 
         self.rate_limiter = EnhancedRateLimiter(
-            limits=config.rate_limits, default_limit=(100, 60), adaptive=True
+            limits=config.rate_limits, default_limit=(100, 60), adaptive=True,
         )
         self.circuit_breaker = EnhancedCircuitBreaker(
             failure_threshold=config.circuit_breaker_failure_threshold,
@@ -1428,7 +1418,7 @@ class BybitV5APIClient:
                 logger.info("Official pybit client initialized successfully.")
             except Exception as e:
                 logger.warning(
-                    f"Failed to initialize pybit client: {e}. Falling back to manual HTTP requests."
+                    f"Failed to initialize pybit client: {e}. Falling back to manual HTTP requests.",
                 )
                 self.pybit_client = None
         else:
@@ -1466,12 +1456,12 @@ class BybitV5APIClient:
             logger.info("aiohttp ClientSession closed.")
 
     def _generate_signature(
-        self, timestamp: str, method: str, path: str, params_or_body: str = ""
+        self, timestamp: str, method: str, path: str, params_or_body: str = "",
     ) -> str:
         """Generate HMAC-SHA256 signature for Bybit v5 API requests."""
         param_str = f"{timestamp}{self.api_key}{self.recv_window}{params_or_body}"
         return hmac.new(
-            self.api_secret.encode("utf-8"), param_str.encode("utf-8"), hashlib.sha256
+            self.api_secret.encode("utf-8"), param_str.encode("utf-8"), hashlib.sha256,
         ).hexdigest()
 
     def _build_headers(self, timestamp: str, signature: str) -> dict[str, str]:
@@ -1503,12 +1493,12 @@ class BybitV5APIClient:
         request_body = json.dumps(data, separators=(",", ":")) if data else ""
         signature_payload = query_string if method == "GET" else request_body
         signature = self._generate_signature(
-            timestamp, method, f"/v5/{endpoint}", signature_payload
+            timestamp, method, f"/v5/{endpoint}", signature_payload,
         )
         headers = self._build_headers(timestamp, signature)
 
         await self.rate_limiter.acquire(
-            f"/v5/{endpoint}"
+            f"/v5/{endpoint}",
         )  # Acquire permit before request
 
         async with self.circuit_breaker:  # Use circuit breaker context
@@ -1524,19 +1514,19 @@ class BybitV5APIClient:
                     ) as response:
                         response_data = await response.json()
                         self.rate_limiter.record_api_call(
-                            f"/v5/{endpoint}"
+                            f"/v5/{endpoint}",
                         )  # Record successful call attempt
 
                         if response_data.get("retCode") != 0:
                             error_msg = response_data.get("retMsg", "Unknown error")
                             error_code = response_data.get("retCode")
                             self.perf_monitor.record_api_call(
-                                f"/v5/{endpoint}", success=False
+                                f"/v5/{endpoint}", success=False,
                             )
 
                             if error_code == 10006:
                                 raise RateLimitExceededError(
-                                    f"Rate limit exceeded: {error_msg}"
+                                    f"Rate limit exceeded: {error_msg}",
                                 )
                             if error_code in [10001, 10003]:
                                 raise BybitAPIError(
@@ -1545,7 +1535,7 @@ class BybitV5APIClient:
                                 )
                             if error_code in [110001, 110003, 110004]:
                                 raise InvalidOrderParameterError(
-                                    f"Invalid order param: {error_msg}", str(error_code)
+                                    f"Invalid order param: {error_msg}", str(error_code),
                                 )
                             raise BybitAPIError(
                                 f"API error ({error_code}): {error_msg}",
@@ -1572,22 +1562,22 @@ class BybitV5APIClient:
                     else:
                         raise  # Re-raise after last attempt fails
             raise BybitAPIError(
-                f"Failed request after {retries} attempts: {method} {endpoint}"
+                f"Failed request after {retries} attempts: {method} {endpoint}",
             )
 
     # --- Public API Methods ---
     async def get_orderbook(
-        self, symbol: str, category: str = "linear", limit: int = 200
+        self, symbol: str, category: str = "linear", limit: int = 200,
     ) -> dict[str, Any]:
         """Get orderbook data using v5 API."""
         if self.pybit_client:
             try:
                 return self.pybit_client.get_orderbook(
-                    category=category, symbol=symbol, limit=limit
+                    category=category, symbol=symbol, limit=limit,
                 )
             except Exception as e:
                 logger.warning(
-                    f"Pybit orderbook failed for {symbol}, falling back: {e}"
+                    f"Pybit orderbook failed for {symbol}, falling back: {e}",
                 )
         return await self._make_request(
             "GET",
@@ -1598,14 +1588,14 @@ class BybitV5APIClient:
     async def get_ticker(self, symbol: str, category: str = "linear") -> dict[str, Any]:
         """Get ticker information using v5 API."""
         response = await self._make_request(
-            "GET", "market/tickers", {"category": category, "symbol": symbol}
+            "GET", "market/tickers", {"category": category, "symbol": symbol},
         )
         return response.get("result", {}).get("list", [{}])[
             0
         ]  # Return first ticker or empty dict
 
     async def get_recent_trades(
-        self, symbol: str, category: str = "linear", limit: int = 60
+        self, symbol: str, category: str = "linear", limit: int = 60,
     ) -> dict[str, Any]:
         """Get recent trades using v5 API."""
         return await self._make_request(
@@ -1615,7 +1605,7 @@ class BybitV5APIClient:
         )
 
     async def get_exchange_info(
-        self, symbol: str | None = None, category: str = "linear"
+        self, symbol: str | None = None, category: str = "linear",
     ) -> dict[str, Any]:
         """Fetches exchange instrument information."""
         params = {"category": category}
@@ -1633,7 +1623,7 @@ class BybitV5APIClient:
 
     # --- Account & Order Methods ---
     async def get_wallet_balance(
-        self, account_type: str = "UNIFIED", coin: str | None = None
+        self, account_type: str = "UNIFIED", coin: str | None = None,
     ) -> dict[str, Any]:
         """Get wallet balance using v5 API."""
         params = {"accountType": account_type}
@@ -1642,7 +1632,7 @@ class BybitV5APIClient:
         return await self._make_request("GET", "account/wallet-balance", params)
 
     async def get_positions(
-        self, category: str = "linear", symbol: str | None = None
+        self, category: str = "linear", symbol: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get user's current positions."""
         params = {"category": category}
@@ -1702,7 +1692,7 @@ class BybitV5APIClient:
                 return response
             except Exception as e:
                 logger.warning(
-                    f"Pybit order placement failed, falling back to manual request: {e}"
+                    f"Pybit order placement failed, falling back to manual request: {e}",
                 )
 
         return await self._make_request("POST", "order/create", data=order_params)
@@ -1731,13 +1721,13 @@ class BybitV5APIClient:
                 return response
             except Exception as e:
                 logger.warning(
-                    f"Pybit order cancellation failed, falling back to manual request: {e}"
+                    f"Pybit order cancellation failed, falling back to manual request: {e}",
                 )
 
         return await self._make_request("POST", "order/cancel", data=cancel_params)
 
     async def get_open_orders(
-        self, symbol: str | None = None, category: str = "linear"
+        self, symbol: str | None = None, category: str = "linear",
     ) -> list[dict[str, Any]]:
         """Get currently open orders (New, PartiallyFilled) via REST API."""
         params = {"category": category}
@@ -1760,7 +1750,7 @@ def atomic_write_json(filepath: str, data: Any):
         logger.error(f"Failed to write state file {filepath}: {e}")
     except Exception as e:
         logger.error(
-            f"Unexpected error during atomic write to {filepath}: {e}", exc_info=True
+            f"Unexpected error during atomic write to {filepath}: {e}", exc_info=True,
         )
     finally:
         if os.path.exists(tmp_path):  # Clean up temp file if it exists
@@ -1785,7 +1775,7 @@ def atomic_load_json(filepath: str, default_data: Any | None = None) -> Any:
             if os.path.getmtime(tmp_path) > os.path.getmtime(filepath):
                 current_file_path = tmp_path
                 logger.warning(
-                    f"Found newer temporary state file {tmp_path}, attempting load."
+                    f"Found newer temporary state file {tmp_path}, attempting load.",
                 )
         except FileNotFoundError:
             pass  # Ignore if file disappears concurrently
@@ -1801,7 +1791,7 @@ def atomic_load_json(filepath: str, default_data: Any | None = None) -> Any:
             ):  # Finalize by renaming temp file to final path
                 os.replace(tmp_path, filepath)
                 logger.debug(
-                    f"Finalized state file by renaming {tmp_path} to {filepath}"
+                    f"Finalized state file by renaming {tmp_path} to {filepath}",
                 )
             return data
     except (OSError, json.JSONDecodeError) as e:
@@ -1856,13 +1846,13 @@ class MarketMakerBot:
         primary_symbol_cfg = config.symbols[0]
         self.risk_metrics = RiskMetrics(
             initial_equity=primary_symbol_cfg.risk_params.get(
-                "initial_equity", Decimal("0")
+                "initial_equity", Decimal("0"),
             ),
             max_position_base=primary_symbol_cfg.risk_params.get(
-                "max_position_base", Decimal("0")
+                "max_position_base", Decimal("0"),
             ),
             max_daily_loss_pct=primary_symbol_cfg.risk_params.get(
-                "max_daily_loss_pct", Decimal("0.05")
+                "max_daily_loss_pct", Decimal("0.05"),
             ),
         )
 
@@ -1877,7 +1867,7 @@ class MarketMakerBot:
             "ws_private_state": ConnectionState.DISCONNECTED,
         }
         self.state_file_path = os.path.join(
-            self.config.state_directory, "bot_state.json"
+            self.config.state_directory, "bot_state.json",
         )
 
         self._running = False
@@ -1909,11 +1899,11 @@ class MarketMakerBot:
                 data_dict["status"] = OrderStatus(data_dict.get("status", "New"))
                 if data_dict.get("created_at"):
                     data_dict["created_at"] = datetime.fromisoformat(
-                        data_dict["created_at"]
+                        data_dict["created_at"],
                     )
                 if data_dict.get("updated_at"):
                     data_dict["updated_at"] = datetime.fromisoformat(
-                        data_dict["updated_at"]
+                        data_dict["updated_at"],
                     )
                 self.state["orders"][oid] = OrderData(**data_dict)
 
@@ -1961,12 +1951,12 @@ class MarketMakerBot:
 
             self.state["last_state_save"] = loaded_state.get("last_state_save", 0.0)
             logger.info(
-                f"Loaded state: {len(self.state['orders'])} orders, {len(self.state['market_data'])} market data, {len(self.state['current_inventory'])} inventory positions."
+                f"Loaded state: {len(self.state['orders'])} orders, {len(self.state['market_data'])} market data, {len(self.state['current_inventory'])} inventory positions.",
             )
 
         except Exception as e:
             logger.error(
-                f"Error deserializing state data: {e}. Resetting state.", exc_info=True
+                f"Error deserializing state data: {e}. Resetting state.", exc_info=True,
             )
             # Reset to default state if deserialization fails
             self.state = {
@@ -2015,7 +2005,7 @@ class MarketMakerBot:
             tick_size = Decimal(tick_size_str)
             return price.quantize(tick_size, rounding=ROUND_DOWN)
         logger.warning(
-            f"Price tick size not found for {symbol}. Using default quantization."
+            f"Price tick size not found for {symbol}. Using default quantization.",
         )
         return price.quantize(Decimal("0.01"), rounding=ROUND_DOWN)
 
@@ -2030,14 +2020,14 @@ class MarketMakerBot:
             qty_step = Decimal(qty_step_str)
 
             quantized_qty = (qty / qty_step).quantize(
-                Decimal("1"), rounding=ROUND_DOWN
+                Decimal("1"), rounding=ROUND_DOWN,
             ) * qty_step
             return max(min_qty, quantized_qty)  # Ensure min order quantity is met
         logger.warning(
-            f"Quantity precision/step/min not found for {symbol}. Using defaults."
+            f"Quantity precision/step/min not found for {symbol}. Using defaults.",
         )
         return max(
-            Decimal("0.001"), qty.quantize(Decimal("0.001"), rounding=ROUND_DOWN)
+            Decimal("0.001"), qty.quantize(Decimal("0.001"), rounding=ROUND_DOWN),
         )  # Default
 
     def _calculate_fill_pnl(
@@ -2081,7 +2071,7 @@ class MarketMakerBot:
                 market_data.update_from_tick(ticker_data)
                 self.state["market_data"][symbol] = market_data
                 logger.debug(
-                    f"Updated market data for {symbol}: Mid={market_data.mid_price:.4f}, Spread={market_data.spread:.4f} ({market_data.spread_bps:.2f} bps)"
+                    f"Updated market data for {symbol}: Mid={market_data.mid_price:.4f}, Spread={market_data.spread:.4f} ({market_data.spread_bps:.2f} bps)",
                 )
                 self.perf_monitor.record_metric("market_data_updates")
             else:
@@ -2089,14 +2079,14 @@ class MarketMakerBot:
         except Exception as e:
             logger.error(f"Error updating market data for {symbol}: {e}", exc_info=True)
             self.perf_monitor.record_api_call(
-                endpoint=f"/v5/market/tickers/{symbol}", success=False
+                endpoint=f"/v5/market/tickers/{symbol}", success=False,
             )
 
     async def fetch_exchange_info(self, symbol: str | None = None):
         """Fetches and caches exchange instrument information for precision and limits."""
         try:
             info_data = await self.api_client.get_exchange_info(
-                symbol=symbol, category="linear"
+                symbol=symbol, category="linear",
             )
             if info_data:
                 updated_symbols = set()
@@ -2119,18 +2109,18 @@ class MarketMakerBot:
                                 default=Decimal("0.001"),
                             )
                             logger.debug(
-                                f"Updated exchange info for {sym}: PricePrec={cfg_symbol.price_precision}, QtyPrec={cfg_symbol.qty_precision}, MinQty={cfg_symbol.min_order_qty}"
+                                f"Updated exchange info for {sym}: PricePrec={cfg_symbol.price_precision}, QtyPrec={cfg_symbol.qty_precision}, MinQty={cfg_symbol.min_order_qty}",
                             )
                 self.perf_monitor.record_metric("exchange_info_updates")
                 if symbol:
                     logger.info(f"Fetched exchange info for {symbol}.")
                 elif updated_symbols:
                     logger.info(
-                        f"Fetched exchange info for {len(updated_symbols)} symbols."
+                        f"Fetched exchange info for {len(updated_symbols)} symbols.",
                     )
             else:
                 logger.warning(
-                    f"Received empty exchange info for {symbol or 'all symbols'}."
+                    f"Received empty exchange info for {symbol or 'all symbols'}.",
                 )
         except Exception as e:
             logger.error(
@@ -2138,7 +2128,7 @@ class MarketMakerBot:
                 exc_info=True,
             )
             self.perf_monitor.record_api_call(
-                endpoint="/v5/market/instruments-info", success=False
+                endpoint="/v5/market/instruments-info", success=False,
             )
 
     async def update_positions_and_pnl(self):
@@ -2164,7 +2154,7 @@ class MarketMakerBot:
                 # Aggregate unrealized PnL (consider USD value for multi-symbol)
                 total_unrealized_pnl += unrealized_pnl
                 logger.debug(
-                    f"Position Update ({symbol}): {side} {size}, Unrealized PnL: {unrealized_pnl:.4f}"
+                    f"Position Update ({symbol}): {side} {size}, Unrealized PnL: {unrealized_pnl:.4f}",
                 )
 
             self.risk_metrics.unrealized_pnl = total_unrealized_pnl
@@ -2179,16 +2169,16 @@ class MarketMakerBot:
 
             self.risk_metrics.update_equity_and_drawdown()  # Recalculate equity/drawdown
             logger.debug(
-                f"Updated total unrealized PnL: {self.risk_metrics.unrealized_pnl:.4f}. Current equity: {self.risk_metrics.current_equity:.4f}"
+                f"Updated total unrealized PnL: {self.risk_metrics.unrealized_pnl:.4f}. Current equity: {self.risk_metrics.current_equity:.4f}",
             )
             self.perf_monitor.record_metric("position_updates")
 
         except Exception as e:
             logger.error(
-                f"Error updating positions or unrealized PnL: {e}", exc_info=True
+                f"Error updating positions or unrealized PnL: {e}", exc_info=True,
             )
             self.perf_monitor.record_api_call(
-                endpoint="/v5/position/list", success=False
+                endpoint="/v5/position/list", success=False,
             )
 
     # --- Strategy Logic ---
@@ -2200,14 +2190,14 @@ class MarketMakerBot:
 
         if not market_data or not exchange_info:
             logger.warning(
-                f"Missing market data or exchange info for {symbol}. Skipping strategy."
+                f"Missing market data or exchange info for {symbol}. Skipping strategy.",
             )
             return
 
         mid_price = market_data.mid_price
         if mid_price <= 0:
             logger.warning(
-                f"Invalid mid price ({mid_price}) for {symbol}. Skipping strategy."
+                f"Invalid mid price ({mid_price}) for {symbol}. Skipping strategy.",
             )
             return
 
@@ -2223,24 +2213,24 @@ class MarketMakerBot:
         )
 
         bid_price = self._quantize_price(
-            mid_price - spread_amount / Decimal("2") + skew_adjust_val, symbol
+            mid_price - spread_amount / Decimal("2") + skew_adjust_val, symbol,
         )
         ask_price = self._quantize_price(
-            mid_price + spread_amount / Decimal("2") + skew_adjust_val, symbol
+            mid_price + spread_amount / Decimal("2") + skew_adjust_val, symbol,
         )
 
         # Volatility adjustment for quantity
         volatility_factor = Decimal("1.0")
         if NUMPY_AVAILABLE:
             volatility = market_data.calculate_volatility(
-                symbol
+                symbol,
             )  # Use the method in MarketData
             # Example: Increase quantity if volatile, decrease if calm
             volatility_factor = max(
-                0.5, min(2.0, 1.0 + volatility * 2)
+                0.5, min(2.0, 1.0 + volatility * 2),
             )  # Simple scaling
             logger.debug(
-                f"Volatility for {symbol}: {volatility:.4f}. Volatility factor: {volatility_factor:.2f}"
+                f"Volatility for {symbol}: {volatility:.4f}. Volatility factor: {volatility_factor:.2f}",
             )
 
         order_qty = self._quantize_qty(
@@ -2250,12 +2240,12 @@ class MarketMakerBot:
             symbol,
         )  # Adjust qty based on inventory too
         order_qty = max(
-            order_qty, symbol_config.min_order_qty
+            order_qty, symbol_config.min_order_qty,
         )  # Ensure minimum quantity
 
         if order_qty < symbol_config.min_order_qty:
             logger.warning(
-                f"Calculated order quantity {order_qty} is below minimum {symbol_config.min_order_qty} for {symbol}. Skipping."
+                f"Calculated order quantity {order_qty} is below minimum {symbol_config.min_order_qty} for {symbol}. Skipping.",
             )
             return
 
@@ -2268,7 +2258,7 @@ class MarketMakerBot:
 
         # Manage existing orders: Cancel stale ones, place new ones
         await self.manage_orders_for_symbol(
-            symbol, symbol_config, bid_price, ask_price, order_qty
+            symbol, symbol_config, bid_price, ask_price, order_qty,
         )
 
     async def manage_orders_for_symbol(
@@ -2288,20 +2278,20 @@ class MarketMakerBot:
         }
 
         existing_bid = next(
-            (o for o in current_open_orders.values() if o.side == TradeSide.BUY), None
+            (o for o in current_open_orders.values() if o.side == TradeSide.BUY), None,
         )
         existing_ask = next(
-            (o for o in current_open_orders.values() if o.side == TradeSide.SELL), None
+            (o for o in current_open_orders.values() if o.side == TradeSide.SELL), None,
         )
 
         # Use market_data from the bot's state for cancellation threshold calculation
         market_data = self.state["market_data"].get(symbol)
         if not market_data:
             logger.warning(
-                f"Cannot calculate cancellation threshold for {symbol}: Market data missing."
+                f"Cannot calculate cancellation threshold for {symbol}: Market data missing.",
             )
             cancellation_threshold_abs = Decimal(
-                "0"
+                "0",
             )  # Default to no cancellation if market data is unavailable
         else:
             cancellation_threshold_abs = market_data.mid_price * (
@@ -2315,7 +2305,7 @@ class MarketMakerBot:
                 or not safe_decimal(existing_bid.quantity) == target_qty
             ):
                 logger.info(
-                    f"Cancelling stale BID order {existing_bid.order_id} for {symbol} (Price deviation or Qty mismatch). Target Bid: {target_bid_price:.4f}, Current: {existing_bid.price:.4f}"
+                    f"Cancelling stale BID order {existing_bid.order_id} for {symbol} (Price deviation or Qty mismatch). Target Bid: {target_bid_price:.4f}, Current: {existing_bid.price:.4f}",
                 )
                 await self.cancel_order_and_update_state(existing_bid)
                 existing_bid = None  # Clear reference
@@ -2337,7 +2327,7 @@ class MarketMakerBot:
                 or not safe_decimal(existing_ask.quantity) == target_qty
             ):
                 logger.info(
-                    f"Cancelling stale ASK order {existing_ask.order_id} for {symbol} (Price deviation or Qty mismatch). Target Ask: {target_ask_price:.4f}, Current: {existing_ask.price:.4f}"
+                    f"Cancelling stale ASK order {existing_ask.order_id} for {symbol} (Price deviation or Qty mismatch). Target Ask: {target_ask_price:.4f}, Current: {existing_ask.price:.4f}",
                 )
                 await self.cancel_order_and_update_state(existing_ask)
                 existing_ask = None
@@ -2362,7 +2352,7 @@ class MarketMakerBot:
             )
             if cancel_resp and cancel_resp.get("retCode") == 0:
                 logger.info(
-                    f"Successfully requested cancellation for order {order_data.order_id}."
+                    f"Successfully requested cancellation for order {order_data.order_id}.",
                 )
                 # Update state locally immediately, relying on WS/polling to confirm final status
                 order_data.status = OrderStatus.CANCELLED
@@ -2372,7 +2362,7 @@ class MarketMakerBot:
                 self.perf_monitor.record_metric("orders_cancelled")
             else:
                 logger.error(
-                    f"Failed to cancel order {order_data.order_id}: {cancel_resp}"
+                    f"Failed to cancel order {order_data.order_id}: {cancel_resp}",
                 )
                 self.perf_monitor.record_metric("orders_rejected")
         except BybitAPIError as e:
@@ -2384,7 +2374,7 @@ class MarketMakerBot:
             )
 
     async def place_order_and_update_state(
-        self, symbol, side, order_type, qty, price, post_only=False, category="linear"
+        self, symbol, side, order_type, qty, price, post_only=False, category="linear",
     ):
         """Helper to place an order and update state with the new order."""
         try:
@@ -2404,15 +2394,15 @@ class MarketMakerBot:
                     self.state["orders"][order_obj.order_id] = order_obj
                     self.perf_monitor.record_metric("orders_placed")
                     logger.info(
-                        f"Placed {order_obj.side.value} order {order_obj.order_id} for {symbol} @ {order_obj.price:.4f} Qty: {order_obj.quantity:.4f}"
+                        f"Placed {order_obj.side.value} order {order_obj.order_id} for {symbol} @ {order_obj.price:.4f} Qty: {order_obj.quantity:.4f}",
                     )
                     return order_obj
                 logger.warning(
-                    f"Order placement successful but no order info returned: {place_resp}"
+                    f"Order placement successful but no order info returned: {place_resp}",
                 )
             else:
                 logger.error(
-                    f"Failed to place {side.value} order for {symbol}: {place_resp}"
+                    f"Failed to place {side.value} order for {symbol}: {place_resp}",
                 )
                 self.perf_monitor.record_metric("orders_rejected")
         except (BybitAPIError, InvalidOrderParameterError) as e:
@@ -2438,7 +2428,7 @@ class MarketMakerBot:
         for symbol, order_ids_for_symbol in orders_by_symbol.items():
             try:
                 open_orders_api = await self.api_client.get_open_orders(
-                    symbol=symbol, category="linear"
+                    symbol=symbol, category="linear",
                 )
                 api_orders_map = {str(o.get("orderId")): o for o in open_orders_api}
 
@@ -2457,7 +2447,7 @@ class MarketMakerBot:
                             or tracked_order.filled_qty != updated_order.filled_qty
                         ):
                             logger.info(
-                                f"Order {order_id} ({symbol}) status update: {tracked_order.status.value} -> {updated_order.status.value}. Filled: {updated_order.filled_qty:.4f}"
+                                f"Order {order_id} ({symbol}) status update: {tracked_order.status.value} -> {updated_order.status.value}. Filled: {updated_order.filled_qty:.4f}",
                             )
 
                             # Handle PnL and inventory updates on fill events
@@ -2475,23 +2465,23 @@ class MarketMakerBot:
                                     # Get fee for this specific fill if available, otherwise use order fee estimate
                                     exec_fee = safe_decimal(
                                         api_order_info.get(
-                                            "fee", api_order_info.get("execFee", "0")
-                                        )
+                                            "fee", api_order_info.get("execFee", "0"),
+                                        ),
                                     )
 
                                     pnl = self._calculate_fill_pnl(
-                                        tracked_order, fill_qty, fill_price, exec_fee
+                                        tracked_order, fill_qty, fill_price, exec_fee,
                                     )
                                     self.risk_metrics.update_trade_stats(pnl)
                                     self.update_inventory(
-                                        symbol, updated_order.side, fill_qty
+                                        symbol, updated_order.side, fill_qty,
                                     )  # Update inventory state
 
                                     trade_logger.info(
-                                        f"{datetime.now(UTC).isoformat()},{symbol},{updated_order.side.value},{fill_qty},{fill_price},{pnl},{exec_fee},{order_id},POLLING_FILL"
+                                        f"{datetime.now(UTC).isoformat()},{symbol},{updated_order.side.value},{fill_qty},{fill_price},{pnl},{exec_fee},{order_id},POLLING_FILL",
                                     )
                                     self.perf_monitor.record_metric(
-                                        "orders_filled"
+                                        "orders_filled",
                                     )  # Count as filled/partially filled
 
                             self.state["orders"][order_id] = (
@@ -2504,7 +2494,7 @@ class MarketMakerBot:
                         OrderStatus.EXPIRED,
                     ]:
                         logger.info(
-                            f"Order {order_id} ({symbol}) not found in active list. Marking as CANCELLED."
+                            f"Order {order_id} ({symbol}) not found in active list. Marking as CANCELLED.",
                         )
                         tracked_order.status = OrderStatus.CANCELLED
                         self.state["orders"][order_id] = tracked_order  # Update state
@@ -2512,10 +2502,10 @@ class MarketMakerBot:
 
             except Exception as e:
                 logger.error(
-                    f"Error syncing order status for {symbol}: {e}", exc_info=True
+                    f"Error syncing order status for {symbol}: {e}", exc_info=True,
                 )
                 self.perf_monitor.record_api_call(
-                    endpoint="/v5/order/active", success=False
+                    endpoint="/v5/order/active", success=False,
                 )
 
         # Cleanup: Remove fully processed orders from state
@@ -2550,7 +2540,7 @@ class MarketMakerBot:
             return False
         except Exception as e:
             logger.error(
-                f"Error during private WebSocket authentication: {e}", exc_info=True
+                f"Error during private WebSocket authentication: {e}", exc_info=True,
             )
             return False
 
@@ -2577,7 +2567,7 @@ class MarketMakerBot:
                     old_filled_qty = tracked_order.filled_qty
 
                     updated_order = OrderData.from_api(
-                        order_info
+                        order_info,
                     )  # Create new OrderData object from WS payload
                     self.state["orders"][order_id] = updated_order  # Update state
 
@@ -2588,21 +2578,21 @@ class MarketMakerBot:
                         fill_qty = updated_order.filled_qty - old_filled_qty
                         fill_price = updated_order.avg_price
                         exec_fee = safe_decimal(
-                            order_info.get("execFee", "0")
+                            order_info.get("execFee", "0"),
                         )  # Fee for this specific fill
 
                         pnl = self._calculate_fill_pnl(
-                            tracked_order, fill_qty, fill_price, exec_fee
+                            tracked_order, fill_qty, fill_price, exec_fee,
                         )
                         self.risk_metrics.update_trade_stats(pnl)
                         self.update_inventory(symbol, updated_order.side, fill_qty)
 
                         trade_logger.info(
-                            f"{datetime.now(UTC).isoformat()},{symbol},{updated_order.side.value},{fill_qty},{fill_price},{pnl},{exec_fee},{order_id},FILL_WS"
+                            f"{datetime.now(UTC).isoformat()},{symbol},{updated_order.side.value},{fill_qty},{fill_price},{pnl},{exec_fee},{order_id},FILL_WS",
                         )
                         self.perf_monitor.record_metric("orders_filled")
                         logger.info(
-                            f"Trade fill via WS (Order {order_id}): {updated_order.side.value} {fill_qty:.4f} @ {fill_price:.4f}. PnL: {pnl:.4f}, Fee: {exec_fee:.6f}"
+                            f"Trade fill via WS (Order {order_id}): {updated_order.side.value} {fill_qty:.4f} @ {fill_price:.4f}. PnL: {pnl:.4f}, Fee: {exec_fee:.6f}",
                         )
 
                     # Handle final status updates
@@ -2611,14 +2601,14 @@ class MarketMakerBot:
                         and old_status != OrderStatus.FILLED
                     ):
                         logger.info(
-                            f"Order {order_id} ({symbol}) fully filled via WebSocket."
+                            f"Order {order_id} ({symbol}) fully filled via WebSocket.",
                         )
                     elif (
                         updated_order.status == OrderStatus.CANCELLED
                         and old_status != OrderStatus.CANCELLED
                     ):
                         logger.info(
-                            f"Order {order_id} ({symbol}) cancelled via WebSocket."
+                            f"Order {order_id} ({symbol}) cancelled via WebSocket.",
                         )
                         self.perf_monitor.record_metric("orders_cancelled")
                     elif (
@@ -2626,13 +2616,13 @@ class MarketMakerBot:
                         and old_status != OrderStatus.REJECTED
                     ):
                         logger.error(
-                            f"Order {order_id} ({symbol}) rejected via WebSocket: {order_info.get('rejectReason')}"
+                            f"Order {order_id} ({symbol}) rejected via WebSocket: {order_info.get('rejectReason')}",
                         )
                         self.perf_monitor.record_metric("orders_rejected")
 
                 else:  # Order appeared on WS but not tracked locally - potentially add it?
                     logger.warning(
-                        f"New order {order_id} ({symbol}) appeared on WS not in tracked state. Adding."
+                        f"New order {order_id} ({symbol}) appeared on WS not in tracked state. Adding.",
                     )
                     self.state["orders"][order_id] = OrderData.from_api(order_info)
 
@@ -2658,7 +2648,7 @@ class MarketMakerBot:
                 ].get(symbol, Decimal("0"))
                 self.risk_metrics.update_equity_and_drawdown()
                 logger.debug(
-                    f"WS Position Update ({symbol}): {side} {size}, Unrealized PnL: {unrealized_pnl:.4f}"
+                    f"WS Position Update ({symbol}): {side} {size}, Unrealized PnL: {unrealized_pnl:.4f}",
                 )
 
         elif topic == "wallet":  # Wallet balance updates
@@ -2683,22 +2673,22 @@ class MarketMakerBot:
                     )
                     client.order_stream(
                         callback=lambda msg: asyncio.create_task(
-                            self._handle_private_ws_message(msg)
-                        )
+                            self._handle_private_ws_message(msg),
+                        ),
                     )
                     client.position_stream(
                         callback=lambda msg: asyncio.create_task(
-                            self._handle_private_ws_message(msg)
-                        )
+                            self._handle_private_ws_message(msg),
+                        ),
                     )
                     client.wallet_stream(
                         callback=lambda msg: asyncio.create_task(
-                            self._handle_private_ws_message(msg)
-                        )
+                            self._handle_private_ws_message(msg),
+                        ),
                     )
 
                     logger.info(
-                        "Subscribed to private WS streams (order, position, wallet) via pybit."
+                        "Subscribed to private WS streams (order, position, wallet) via pybit.",
                     )
                     self.state["ws_private_state"] = ConnectionState.AUTHENTICATED
                     self._ws_reconnect_attempts = 0
@@ -2712,7 +2702,7 @@ class MarketMakerBot:
                     ):
                         await asyncio.sleep(1)
                     logger.warning(
-                        "Pybit private WebSocket connection closed unexpectedly. Attempting reconnect."
+                        "Pybit private WebSocket connection closed unexpectedly. Attempting reconnect.",
                     )
 
                 else:  # Manual WebSocket if pybit is not available
@@ -2745,7 +2735,7 @@ class MarketMakerBot:
                                 )
                                 data = json.loads(message)
                                 asyncio.create_task(
-                                    self._handle_private_ws_message(data)
+                                    self._handle_private_ws_message(data),
                                 )  # Process message in background task
                             except TimeoutError:
                                 await websocket.ping()  # Send ping if idle
@@ -2754,7 +2744,7 @@ class MarketMakerBot:
                                 websockets.exceptions.ConnectionClosedError,
                             ) as e:
                                 logger.warning(
-                                    f"Private WebSocket connection closed: {e}. Reconnecting..."
+                                    f"Private WebSocket connection closed: {e}. Reconnecting...",
                                 )
                                 break  # Exit loop to trigger reconnect
                             except Exception as e:
@@ -2782,7 +2772,7 @@ class MarketMakerBot:
                 self.config.ws_max_reconnect_delay,
             )
             logger.info(
-                f"Attempting private WebSocket reconnect in {reconnect_delay:.2f}s (attempt {self._ws_reconnect_attempts})..."
+                f"Attempting private WebSocket reconnect in {reconnect_delay:.2f}s (attempt {self._ws_reconnect_attempts})...",
             )
             await asyncio.sleep(reconnect_delay)
         logger.info("Private WebSocket listener stopped.")
@@ -2792,7 +2782,7 @@ class MarketMakerBot:
         while self._running and not shutdown_event.is_set():
             topics = [f"tickers.{cfg.symbol}" for cfg in self.config.symbols]
             topics.extend(
-                [f"orderbook.1.{cfg.symbol}" for cfg in self.config.symbols]
+                [f"orderbook.1.{cfg.symbol}" for cfg in self.config.symbols],
             )  # Depth 1 orderbook
 
             try:
@@ -2830,7 +2820,7 @@ class MarketMakerBot:
                                 continue
 
                             await self._handle_public_ws_message(
-                                data
+                                data,
                             )  # Process message in background task
 
                         except TimeoutError:
@@ -2840,7 +2830,7 @@ class MarketMakerBot:
                             websockets.exceptions.ConnectionClosedError,
                         ) as e:
                             logger.warning(
-                                f"Public WebSocket connection closed: {e}. Reconnecting..."
+                                f"Public WebSocket connection closed: {e}. Reconnecting...",
                             )
                             break
                         except Exception as e:
@@ -2866,7 +2856,7 @@ class MarketMakerBot:
                 self.config.ws_max_reconnect_delay,
             )
             logger.info(
-                f"Attempting public WebSocket reconnect in {reconnect_delay:.2f}s (attempt {self._ws_reconnect_attempts})..."
+                f"Attempting public WebSocket reconnect in {reconnect_delay:.2f}s (attempt {self._ws_reconnect_attempts})...",
             )
             await asyncio.sleep(reconnect_delay)
         logger.info("Public WebSocket listener stopped.")
@@ -2889,7 +2879,7 @@ class MarketMakerBot:
                     market_data.update_from_tick(data_list[0])  # Update market data
                     self.perf_monitor.record_metric("market_data_updates")
                     logger.debug(
-                        f"WS Ticker Update ({symbol}): Mid={market_data.mid_price:.4f}"
+                        f"WS Ticker Update ({symbol}): Mid={market_data.mid_price:.4f}",
                     )
             else:
                 logger.warning(f"Received ticker update for untracked symbol: {symbol}")
@@ -2915,7 +2905,7 @@ class MarketMakerBot:
 
                     market_data.timestamp = (
                         float(
-                            safe_decimal(orderbook_data.get("ts", time.time() * 1000))
+                            safe_decimal(orderbook_data.get("ts", time.time() * 1000)),
                         )
                         / 1000
                     )
@@ -2929,12 +2919,12 @@ class MarketMakerBot:
 
                     self.state["market_data"].update({symbol: market_data})
                     logger.info(
-                        f"WS Orderbook Update ({symbol}): Bid={market_data.best_bid:.4f}, Ask={market_data.best_ask:.4f}"
+                        f"WS Orderbook Update ({symbol}): Bid={market_data.best_bid:.4f}, Ask={market_data.best_ask:.4f}",
                     )
                     self.perf_monitor.record_metric("market_data_updates")
             else:
                 logger.warning(
-                    f"Received orderbook update for untracked symbol: {symbol}"
+                    f"Received orderbook update for untracked symbol: {symbol}",
                 )
 
     # --- Main Bot Loops ---
@@ -2956,7 +2946,7 @@ class MarketMakerBot:
                             or config.symbol not in self.state["exchange_info"]
                         ):
                             logger.error(
-                                f"Failed to get essential data for {config.symbol}. Skipping strategy for this cycle."
+                                f"Failed to get essential data for {config.symbol}. Skipping strategy for this cycle.",
                             )
                             continue  # Skip this symbol if data is still missing
 
@@ -2985,11 +2975,11 @@ class MarketMakerBot:
                 break
             except Exception as e:
                 logger.error(
-                    f"Critical error in main strategy loop: {e}", exc_info=True
+                    f"Critical error in main strategy loop: {e}", exc_info=True,
                 )
                 self.perf_monitor.record_metric("critical_errors", 1)
                 await asyncio.sleep(
-                    self.config.polling_interval_sec * 2
+                    self.config.polling_interval_sec * 2,
                 )  # Backoff before retry
 
     async def _state_saving_loop(self):
@@ -3010,7 +3000,7 @@ class MarketMakerBot:
 
             stats = self.perf_monitor.get_stats()
             logger.info(
-                f"Performance Stats: Uptime={stats['uptime_hours']}h, Orders={stats['total_orders_placed']}/{stats['total_orders_filled']}/{stats['total_orders_cancelled']}, WSRecon={stats['ws_reconnections']}, Mem={stats['memory_usage_mb']}MB"
+                f"Performance Stats: Uptime={stats['uptime_hours']}h, Orders={stats['total_orders_placed']}/{stats['total_orders_filled']}/{stats['total_orders_cancelled']}, WSRecon={stats['ws_reconnections']}, Mem={stats['memory_usage_mb']}MB",
             )
             self.perf_monitor._last_perf_log_time = time.time()
 
@@ -3018,7 +3008,7 @@ class MarketMakerBot:
         """Starts the bot's main components."""
         if not API_KEY or not API_SECRET:
             logger.critical(
-                "API Key or Secret not found. Please set BYBIT_API_KEY and BYBIT_API_SECRET environment variables."
+                "API Key or Secret not found. Please set BYBIT_API_KEY and BYBIT_API_SECRET environment variables.",
             )
             print(TERMUX_INSTALL_INSTRUCTIONS)  # Print instructions if keys are missing
             return
@@ -3078,7 +3068,7 @@ def load_config() -> BotConfig | None:
 
         if not api_key or not api_secret:
             logger.error(
-                "BYBIT_API_KEY or BYBIT_API_SECRET environment variables not set."
+                "BYBIT_API_KEY or BYBIT_API_SECRET environment variables not set.",
             )
             return None
 
@@ -3089,7 +3079,7 @@ def load_config() -> BotConfig | None:
                 config_data = json.load(f)
         else:
             logger.warning(
-                f"Config file not found at {config_path}. Using defaults and environment variables."
+                f"Config file not found at {config_path}. Using defaults and environment variables.",
             )
             config_data = {}
 
@@ -3103,18 +3093,18 @@ def load_config() -> BotConfig | None:
                     order_levels=sym_cfg.get("order_levels", 5),
                     spread_bps=safe_decimal(sym_cfg.get("spread_bps", "0.05")),
                     inventory_target_base=safe_decimal(
-                        sym_cfg.get("inventory_target_base", "0")
+                        sym_cfg.get("inventory_target_base", "0"),
                     ),
                     risk_params=sym_cfg.get("risk_params", {}),
                     min_spread_bps=safe_decimal(sym_cfg.get("min_spread_bps", "0.01")),
                     max_spread_bps=safe_decimal(sym_cfg.get("max_spread_bps", "0.20")),
                     volatility_adjustment_factor=safe_decimal(
-                        sym_cfg.get("volatility_adjustment_factor", "1.0")
+                        sym_cfg.get("volatility_adjustment_factor", "1.0"),
                     ),
                     inventory_skew_factor=safe_decimal(
-                        sym_cfg.get("inventory_skew_factor", "0.1")
+                        sym_cfg.get("inventory_skew_factor", "0.1"),
                     ),
-                )
+                ),
             )
 
         # Create BotConfig object
@@ -3126,19 +3116,19 @@ def load_config() -> BotConfig | None:
             log_level=config_data.get("log_level", "INFO"),
             debug_mode=config_data.get("debug_mode", False),
             performance_monitoring_interval=config_data.get(
-                "performance_monitoring_interval", 60
+                "performance_monitoring_interval", 60,
             ),
             state_save_interval=config_data.get("state_save_interval", 300),
             polling_interval_sec=config_data.get("polling_interval_sec", 5.0),
             order_cancellation_deviation_bps=safe_decimal(
-                config_data.get("order_cancellation_deviation_bps", "2")
+                config_data.get("order_cancellation_deviation_bps", "2"),
             ),
             api_timeout_total=config_data.get("api_timeout_total", 45),
             api_timeout_connect=config_data.get("api_timeout_connect", 10),
             api_timeout_sock_read=config_data.get("api_timeout_sock_read", 20),
             api_connection_limit=config_data.get("api_connection_limit", 150),
             api_connection_limit_per_host=config_data.get(
-                "api_connection_limit_per_host", 50
+                "api_connection_limit_per_host", 50,
             ),
             api_keepalive_timeout=config_data.get("api_keepalive_timeout", 60),
             api_retry_attempts=config_data.get("api_retry_attempts", 3),
@@ -3152,20 +3142,20 @@ def load_config() -> BotConfig | None:
             ws_reconnect_delay=config_data.get("ws_reconnect_delay", 5.0),
             ws_max_reconnect_delay=config_data.get("ws_max_reconnect_delay", 300.0),
             circuit_breaker_failure_threshold=config_data.get(
-                "circuit_breaker_failure_threshold", 5
+                "circuit_breaker_failure_threshold", 5,
             ),
             circuit_breaker_recovery_timeout=config_data.get(
-                "circuit_breaker_recovery_timeout", 60.0
+                "circuit_breaker_recovery_timeout", 60.0,
             ),
             circuit_breaker_max_recovery_timeout=config_data.get(
-                "circuit_breaker_max_recovery_timeout", 300.0
+                "circuit_breaker_max_recovery_timeout", 300.0,
             ),
         )
 
         # Validate symbols
         if not symbols_config:
             logger.error(
-                "No symbols configured in config.json or via environment variables. Bot cannot run."
+                "No symbols configured in config.json or via environment variables. Bot cannot run.",
             )
             return None
 
@@ -3173,12 +3163,12 @@ def load_config() -> BotConfig | None:
 
     except FileNotFoundError:
         logger.error(
-            f"Configuration file not found at {config_path}. Please create it."
+            f"Configuration file not found at {config_path}. Please create it.",
         )
         return None
     except json.JSONDecodeError:
         logger.error(
-            f"Error decoding JSON from config file {config_path}. Please check its format."
+            f"Error decoding JSON from config file {config_path}. Please check its format.",
         )
         return None
     except Exception as e:

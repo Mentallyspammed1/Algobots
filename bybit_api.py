@@ -6,8 +6,7 @@ import logging
 import os
 import time
 import urllib.parse
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 
 import config
 import httpx
@@ -109,7 +108,7 @@ class BybitContractAPI:
         api_secret = os.getenv("BYBIT_API_SECRET")
         if not api_key or not api_secret:
             raise ValueError(
-                "Missing BYBIT_API_KEY or BYBIT_API_SECRET environment variables."
+                "Missing BYBIT_API_KEY or BYBIT_API_SECRET environment variables.",
             )
         self.api_key = api_key.strip()
         self.api_secret = api_secret.strip().encode("utf-8")
@@ -126,7 +125,7 @@ class BybitContractAPI:
 
         self.client = httpx.AsyncClient(base_url=self.base_rest_url, timeout=30.0)
         self.rate_limiter = RateLimiter(
-            config.API_RATE_LIMIT_CALLS, config.API_RATE_LIMIT_PERIOD
+            config.API_RATE_LIMIT_CALLS, config.API_RATE_LIMIT_PERIOD,
         )
 
         self.private_ws = ConnectionState()
@@ -151,7 +150,7 @@ class BybitContractAPI:
     def _generate_signature(self, timestamp, payload):
         param_str = f"{timestamp}{self.api_key}{DEFAULT_RECV_WINDOW}{payload}"
         return hmac.new(
-            self.api_secret, param_str.encode("utf-8"), hashlib.sha256
+            self.api_secret, param_str.encode("utf-8"), hashlib.sha256,
         ).hexdigest()
 
     async def _make_request(self, method, endpoint, params=None, signed=True):
@@ -178,7 +177,7 @@ class BybitContractAPI:
             try:
                 if method == "GET":
                     response = await self.client.get(
-                        url, params=params, headers=headers
+                        url, params=params, headers=headers,
                     )
                 elif method == "POST":
                     response = await self.client.post(url, json=params, headers=headers)
@@ -194,12 +193,12 @@ class BybitContractAPI:
                 if retries < config.API_REQUEST_RETRIES:
                     backoff_delay = config.API_BACKOFF_FACTOR * (2 ** (retries - 1))
                     logger.warning(
-                        f"HTTP request failed: {e}. Retrying in {backoff_delay:.2f}s (Attempt {retries}/{config.API_REQUEST_RETRIES})"
+                        f"HTTP request failed: {e}. Retrying in {backoff_delay:.2f}s (Attempt {retries}/{config.API_REQUEST_RETRIES})",
                     )
                     await asyncio.sleep(backoff_delay)
                 else:
                     logger.error(
-                        f"HTTP request failed after {config.API_REQUEST_RETRIES} retries: {e}"
+                        f"HTTP request failed after {config.API_REQUEST_RETRIES} retries: {e}",
                     )
                     raise
 
@@ -214,17 +213,17 @@ class BybitContractAPI:
 
     async def get_symbol_ticker(self, **kwargs):
         return await self._make_request(
-            "GET", "/v5/market/tickers", kwargs, signed=False
+            "GET", "/v5/market/tickers", kwargs, signed=False,
         )
 
     async def _websocket_handler(
-        self, url, ws_state, subscriptions, callback, is_private
+        self, url, ws_state, subscriptions, callback, is_private,
     ):
         backoff = ExponentialBackoff()
         while ws_state.is_active:
             try:
                 async with websockets.connect(
-                    url, ping_interval=WS_PING_INTERVAL, ping_timeout=WS_PING_TIMEOUT
+                    url, ping_interval=WS_PING_INTERVAL, ping_timeout=WS_PING_TIMEOUT,
                 ) as ws:
                     ws_state.websocket_instance = ws
                     ws_state.is_connected = True
@@ -243,13 +242,13 @@ class BybitContractAPI:
                                 {
                                     "op": "auth",
                                     "args": [self.api_key, expires, signature],
-                                }
-                            )
+                                },
+                            ),
                         )
 
                     if subscriptions:
                         await ws.send(
-                            json.dumps({"op": "subscribe", "args": list(subscriptions)})
+                            json.dumps({"op": "subscribe", "args": list(subscriptions)}),
                         )
 
                     async for message in ws:
@@ -277,11 +276,11 @@ class BybitContractAPI:
                     await asyncio.sleep(delay)
 
     def start_websocket_listener(
-        self, url, ws_state, subscriptions, callback, is_private
+        self, url, ws_state, subscriptions, callback, is_private,
     ) -> asyncio.Task:
         ws_state.is_active = True
         ws_state.listener_task = asyncio.create_task(
-            self._websocket_handler(url, ws_state, subscriptions, callback, is_private)
+            self._websocket_handler(url, ws_state, subscriptions, callback, is_private),
         )
         return ws_state.listener_task
 
@@ -307,12 +306,12 @@ class BybitContractAPI:
         self._private_subscriptions.add(topic)
         if self.private_ws.is_connected and self.private_ws.is_authenticated:
             await self.private_ws.websocket_instance.send(
-                json.dumps({"op": "subscribe", "args": [topic]})
+                json.dumps({"op": "subscribe", "args": [topic]}),
             )
 
     async def subscribe_ws_public_topic(self, topic):
         self._public_subscriptions.add(topic)
         if self.public_ws.is_connected:
             await self.public_ws.websocket_instance.send(
-                json.dumps({"op": "subscribe", "args": [topic]})
+                json.dumps({"op": "subscribe", "args": [topic]}),
             )

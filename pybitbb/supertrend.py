@@ -2,8 +2,7 @@
 import logging
 import threading
 import time
-from typing import Any
-from typing import Literal
+from typing import Any, Literal
 
 # Import the configuration
 import config
@@ -17,7 +16,7 @@ from indicators import BybitIndicators
 # Configure logging for the bot
 logging.basicConfig(
     level=getattr(
-        logging, config.LOG_LEVEL.upper(), logging.INFO
+        logging, config.LOG_LEVEL.upper(), logging.INFO,
     ),  # Set log level from config
     format="%(asctime)s - %(levelname)s - %(filename)s - %(message)s",
 )
@@ -44,16 +43,16 @@ class SupertrendCrossBot:
             or self.api_secret == "YOUR_API_SECRET_HERE"
         ):
             logger.critical(
-                "API Key and Secret are not set in config.py. Please update them."
+                "API Key and Secret are not set in config.py. Please update them.",
             )
             raise ValueError("API Key and Secret must be provided in config.py.")
 
         # Initialize helpers with config values
         self.account_helper = BybitAccountHelper(
-            self.api_key, self.api_secret, self.testnet
+            self.api_key, self.api_secret, self.testnet,
         )
         self.sizing_helper = BybitSizingHelper(
-            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret
+            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret,
         )
         self.order_manager = BybitUnifiedOrderManager(
             api_key=self.api_key,
@@ -63,7 +62,7 @@ class SupertrendCrossBot:
             ws_recv_window=config.WS_RECV_WINDOW,
         )
         self.indicators_helper = BybitIndicators(
-            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret
+            testnet=self.testnet, api_key=self.api_key, api_secret=self.api_secret,
         )
 
         self._running = threading.Event()  # Event to control the main bot loop
@@ -75,18 +74,18 @@ class SupertrendCrossBot:
     def _load_sizing_info(self):
         """Loads instrument sizing information and validates it."""
         logger.info(
-            f"Loading sizing information for {config.SYMBOL} ({config.CATEGORY})..."
+            f"Loading sizing information for {config.SYMBOL} ({config.CATEGORY})...",
         )
         self.sizing_helper._get_instrument_info(
-            config.CATEGORY, config.SYMBOL, force_update=True
+            config.CATEGORY, config.SYMBOL, force_update=True,
         )
         if not self.sizing_helper.get_qty_step(config.CATEGORY, config.SYMBOL):
             logger.critical(
-                "Sizing helper failed to retrieve instrument info. Cannot proceed."
+                "Sizing helper failed to retrieve instrument info. Cannot proceed.",
             )
             raise RuntimeError("Failed to load instrument sizing information.")
         logger.info(
-            f"Sizing info loaded. Qty step: {self.sizing_helper.get_qty_step(config.CATEGORY, config.SYMBOL)}, Price tick: {self.sizing_helper.get_price_tick_size(config.CATEGORY, config.SYMBOL)}"
+            f"Sizing info loaded. Qty step: {self.sizing_helper.get_qty_step(config.CATEGORY, config.SYMBOL)}, Price tick: {self.sizing_helper.get_price_tick_size(config.CATEGORY, config.SYMBOL)}",
         )
 
     def _get_current_bybit_position(self) -> tuple[PositionSide, float]:
@@ -94,7 +93,7 @@ class SupertrendCrossBot:
         :return: A tuple of (position_side, position_size).
         """
         positions = self.account_helper.get_positions(
-            category=config.CATEGORY, symbol=config.SYMBOL
+            category=config.CATEGORY, symbol=config.SYMBOL,
         )
         if positions and positions.get("list"):
             for pos in positions["list"]:
@@ -109,31 +108,31 @@ class SupertrendCrossBot:
         """Calculates order quantity based on desired USDT value and current price."""
         if current_price <= 0:
             logger.error(
-                "Current price is zero or negative, cannot calculate order quantity."
+                "Current price is zero or negative, cannot calculate order quantity.",
             )
             return "0"
 
         raw_qty = config.ORDER_QTY_USDT_VALUE / current_price
         rounded_qty = self.sizing_helper.round_qty(
-            config.CATEGORY, config.SYMBOL, raw_qty
+            config.CATEGORY, config.SYMBOL, raw_qty,
         )
 
         if not self.sizing_helper.is_valid_qty(
-            config.CATEGORY, config.SYMBOL, rounded_qty
+            config.CATEGORY, config.SYMBOL, rounded_qty,
         ):
             logger.error(
-                f"Calculated quantity {rounded_qty} is not valid for {config.SYMBOL}. Raw: {raw_qty}"
+                f"Calculated quantity {rounded_qty} is not valid for {config.SYMBOL}. Raw: {raw_qty}",
             )
             return "0"
 
         return str(rounded_qty)
 
     def _place_market_order(
-        self, side: Literal["Buy", "Sell"], qty: str
+        self, side: Literal["Buy", "Sell"], qty: str,
     ) -> dict[str, Any] | None:
         """Places a market order and updates internal position."""
         logger.info(
-            f"Attempting to place MARKET {side} order for {qty} {config.SYMBOL}..."
+            f"Attempting to place MARKET {side} order for {qty} {config.SYMBOL}...",
         )
         response = self.order_manager.place_order(
             category=config.CATEGORY,
@@ -157,11 +156,11 @@ class SupertrendCrossBot:
 
         opposite_side = "Sell" if current_side == "long" else "Buy"
         qty_to_close = self.sizing_helper.round_qty(
-            config.CATEGORY, config.SYMBOL, current_size
+            config.CATEGORY, config.SYMBOL, current_size,
         )
 
         logger.info(
-            f"Attempting to close {current_side} position of {qty_to_close} {config.SYMBOL} with a market {opposite_side} order."
+            f"Attempting to close {current_side} position of {qty_to_close} {config.SYMBOL} with a market {opposite_side} order.",
         )
         response = self.order_manager.place_order(
             category=config.CATEGORY,
@@ -173,7 +172,7 @@ class SupertrendCrossBot:
         )
         if response and response.get("orderId"):
             logger.info(
-                f"Position close order placed (ID: {response['orderId']}). Waiting for fill..."
+                f"Position close order placed (ID: {response['orderId']}). Waiting for fill...",
             )
             time.sleep(2)  # Give time for close order to process
             return True
@@ -201,7 +200,7 @@ class SupertrendCrossBot:
 
                 if df is None or df.empty:
                     logger.warning(
-                        f"No sufficient data to calculate Supertrend for {config.SYMBOL}. Retrying in 10 seconds."
+                        f"No sufficient data to calculate Supertrend for {config.SYMBOL}. Retrying in 10 seconds.",
                     )
                     time.sleep(10)
                     continue
@@ -212,7 +211,7 @@ class SupertrendCrossBot:
                 )  # Convert to ms
                 if latest_kline_timestamp <= last_processed_kline_timestamp:
                     logger.debug(
-                        f"No new closed kline to process. Last processed: {last_processed_kline_timestamp}"
+                        f"No new closed kline to process. Last processed: {last_processed_kline_timestamp}",
                     )
                     time.sleep(5)  # Check more frequently for new kline
                     continue
@@ -232,7 +231,7 @@ class SupertrendCrossBot:
                     or supertrend_direction_column not in df.columns
                 ):
                     logger.error(
-                        f"Supertrend columns '{supertrend_column}' or '{supertrend_direction_column}' not found in DataFrame. Check pandas_ta version or indicator calculation."
+                        f"Supertrend columns '{supertrend_column}' or '{supertrend_direction_column}' not found in DataFrame. Check pandas_ta version or indicator calculation.",
                     )
                     time.sleep(10)
                     continue
@@ -244,7 +243,7 @@ class SupertrendCrossBot:
                 ]  # 1 for uptrend, -1 for downtrend
 
                 logger.info(
-                    f"[{config.SYMBOL}] Latest Close: {latest_close:.2f}, Supertrend: {latest_supertrend:.2f}, Direction: {latest_supertrend_direction}"
+                    f"[{config.SYMBOL}] Latest Close: {latest_close:.2f}, Supertrend: {latest_supertrend:.2f}, Direction: {latest_supertrend_direction}",
                 )
 
                 # 2. Generate Signals
@@ -267,7 +266,7 @@ class SupertrendCrossBot:
 
                 if signal == last_supertrend_signal:
                     logger.debug(
-                        f"Signal is '{signal}', same as last signal. No new action."
+                        f"Signal is '{signal}', same as last signal. No new action.",
                     )
                     time.sleep(5)
                     continue
@@ -280,14 +279,14 @@ class SupertrendCrossBot:
                     self._get_current_bybit_position()
                 )
                 logger.info(
-                    f"Current Bybit position: {bybit_position_side.upper()} {bybit_position_size:.4f} {config.SYMBOL}"
+                    f"Current Bybit position: {bybit_position_side.upper()} {bybit_position_size:.4f} {config.SYMBOL}",
                 )
 
                 # Calculate order quantity
                 order_qty_str = self._calculate_order_quantity(latest_close)
                 if order_qty_str == "0":
                     logger.error(
-                        "Calculated order quantity is 0 or invalid. Skipping trade action."
+                        "Calculated order quantity is 0 or invalid. Skipping trade action.",
                     )
                     time.sleep(10)
                     continue
@@ -343,12 +342,12 @@ class SupertrendCrossBot:
         bybit_pos_side, bybit_pos_size = self._get_current_bybit_position()
         current_bot_position = bybit_pos_side
         logger.info(
-            f"Bot starting with current Bybit position: {bybit_pos_side.upper()} {bybit_pos_size:.4f} {config.SYMBOL}"
+            f"Bot starting with current Bybit position: {bybit_pos_side.upper()} {bybit_pos_size:.4f} {config.SYMBOL}",
         )
 
         self._running.set()
         self._main_loop_thread = threading.Thread(
-            target=self._main_bot_loop, daemon=True
+            target=self._main_bot_loop, daemon=True,
         )
         self._main_loop_thread.start()
         logger.info("Supertrend Cross Bot started successfully.")
@@ -366,7 +365,7 @@ class SupertrendCrossBot:
         # Ensure all pending orders are cancelled (if any)
         logger.info("Cancelling any remaining open orders...")
         self.order_manager.cancel_all_orders(
-            category=config.CATEGORY, symbol=config.SYMBOL
+            category=config.CATEGORY, symbol=config.SYMBOL,
         )
 
         # Stop Unified Order Manager

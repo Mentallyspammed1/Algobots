@@ -5,8 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 import requests
-from colorama import Fore
-from colorama import Style
+from colorama import Fore, Style
 
 NEON_RED = Fore.LIGHTRED_EX
 NEON_YELLOW = Fore.YELLOW

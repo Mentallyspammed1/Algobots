@@ -2,10 +2,12 @@ import time
 from unittest.mock import MagicMock
 
 import pytest
-from whalebot_pro.orderbook.advanced_orderbook_manager import AdvancedOrderbookManager
-from whalebot_pro.orderbook.advanced_orderbook_manager import EnhancedHeap
-from whalebot_pro.orderbook.advanced_orderbook_manager import OptimizedSkipList
-from whalebot_pro.orderbook.advanced_orderbook_manager import PriceLevel
+from whalebot_pro.orderbook.advanced_orderbook_manager import (
+    AdvancedOrderbookManager,
+    EnhancedHeap,
+    OptimizedSkipList,
+    PriceLevel,
+)
 
 
 @pytest.fixture

@@ -12,15 +12,16 @@ import time
 
 import pandas as pd
 from bot_logger import logger
-from config import API_KEY
-from config import API_SECRET
-from config import CATEGORY
-from config import SYMBOL
-from config import TESTNET
-from config import TRADE_QTY_USD
-from config import WS_HEARTBEAT
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from config import (
+    API_KEY,
+    API_SECRET,
+    CATEGORY,
+    SYMBOL,
+    TESTNET,
+    TRADE_QTY_USD,
+    WS_HEARTBEAT,
+)
+from pybit.unified_trading import HTTP, WebSocket
 from strategies.base_strategy import BaseStrategy
 
 
@@ -40,7 +41,7 @@ class BybitTrader:
         )
 
         self.kline_data = pd.DataFrame(
-            columns=["open", "high", "low", "close", "volume", "turnover"]
+            columns=["open", "high", "low", "close", "volume", "turnover"],
         )
         self.is_long = False
         self.is_short = False
@@ -95,7 +96,7 @@ class BybitTrader:
         """Fetches historical kline data to bootstrap the bot."""
         try:
             response = self.session.get_kline(
-                category=CATEGORY, symbol=symbol, interval=interval, limit=200
+                category=CATEGORY, symbol=symbol, interval=interval, limit=200,
             )
             if response["retCode"] == 0:
                 klines = response["result"]["list"]
@@ -111,7 +112,7 @@ class BybitTrader:
                     }
                 self.kline_data.sort_index(inplace=True)
                 logger.info(
-                    f"Successfully fetched {len(self.kline_data)} historical klines for {symbol}."
+                    f"Successfully fetched {len(self.kline_data)} historical klines for {symbol}.",
                 )
             else:
                 logger.error(f"Error fetching klines: {response['retMsg']}")
@@ -186,7 +187,7 @@ class BybitTrader:
 
         # Subscribe to kline stream
         self.ws.kline_stream(
-            symbol=SYMBOL, interval=1, callback=self._handle_kline_message
+            symbol=SYMBOL, interval=1, callback=self._handle_kline_message,
         )
 
         while True:

@@ -51,7 +51,7 @@ class WebSocketManager:
     def _on_close(self, ws, close_status_code, close_msg):
         """Handle WebSocket connection close."""
         self.logger.warning(
-            f"WebSocket connection closed with status {close_status_code}: {close_msg}"
+            f"WebSocket connection closed with status {close_status_code}: {close_msg}",
         )
         self.is_connected = False
 
@@ -70,8 +70,8 @@ class WebSocketManager:
                 {
                     "op": "auth",
                     "args": [self.api_key, expires, signature],
-                }
-            )
+                },
+            ),
         )
         time.sleep(1)  # Allow time for authentication
 
@@ -85,8 +85,8 @@ class WebSocketManager:
                         "position",
                         "tickers.BTCUSDT",
                     ],
-                }
-            )
+                },
+            ),
         )
 
     def _generate_signature(self, data: str) -> str:
@@ -95,7 +95,7 @@ class WebSocketManager:
         import hmac
 
         return hmac.new(
-            self.api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256
+            self.api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256,
         ).hexdigest()
 
     def disconnect(self):

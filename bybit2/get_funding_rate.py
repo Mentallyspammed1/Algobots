@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -15,7 +13,7 @@ def get_funding_rate(symbol: str = "BTCUSDT"):
         + "\n# Divining the current funding rate for "
         + symbol
         + " (Linear Perpetual)...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -27,19 +25,19 @@ def get_funding_rate(symbol: str = "BTCUSDT"):
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
     try:
         session = HTTP(testnet=testnet_mode, api_key=api_key, api_secret=api_secret)
         print(
-            Fore.CYAN + f"  # Fetching funding rate for {symbol}..." + Style.RESET_ALL
+            Fore.CYAN + f"  # Fetching funding rate for {symbol}..." + Style.RESET_ALL,
         )
 
         # Fetch funding rate for linear perpetual futures
@@ -54,18 +52,18 @@ def get_funding_rate(symbol: str = "BTCUSDT"):
                 print(
                     Fore.GREEN
                     + f"  # Current Funding Rate for {symbol}: {funding_rate}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 print(
                     Fore.GREEN
                     + f"  # Next Funding Time: {next_funding_time}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
             else:
                 print(
                     Fore.YELLOW
                     + f"  # No funding rate data found for {symbol}."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
         else:
             print(Fore.RED + "  # Failed to retrieve funding rate." + Style.RESET_ALL)
@@ -76,7 +74,7 @@ def get_funding_rate(symbol: str = "BTCUSDT"):
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable and API keys are valid."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(Fore.MAGENTA + "\n# The funding rate has been revealed!\n" + Style.RESET_ALL)
@@ -90,22 +88,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     get_funding_rate("BTCUSDT")

@@ -48,7 +48,7 @@ class BybitWsTradeHelper:
         self.ws_trading_client: WebSocketTrading | None = None
         self._connection_lock = threading.Lock()  # To manage connection state safely
         logger.info(
-            f"BybitWsTradeHelper initialized for {'testnet' if self.testnet else 'mainnet'}."
+            f"BybitWsTradeHelper initialized for {'testnet' if self.testnet else 'mainnet'}.",
         )
 
     def connect(self) -> bool:
@@ -75,7 +75,7 @@ class BybitWsTradeHelper:
                 # We can't directly get a sync 'connected' status here without waiting for a callback.
                 # For simplicity, we assume initialization is successful.
                 logger.info(
-                    "WebSocket Trading client initiated. Connection status will be reflected in response callbacks."
+                    "WebSocket Trading client initiated. Connection status will be reflected in response callbacks.",
                 )
                 return True
             except Exception as e:
@@ -120,7 +120,7 @@ class BybitWsTradeHelper:
             for arg in [category, symbol, side, order_type, qty]
         ):
             logger.error(
-                f"Invalid or empty string provided for required order parameters. Category: '{category}', Symbol: '{symbol}', Side: '{side}', OrderType: '{order_type}', Qty: '{qty}'"
+                f"Invalid or empty string provided for required order parameters. Category: '{category}', Symbol: '{symbol}', Side: '{side}', OrderType: '{order_type}', Qty: '{qty}'",
             )
             return False
 
@@ -130,7 +130,7 @@ class BybitWsTradeHelper:
                 float(price)
         except ValueError:
             logger.error(
-                f"Invalid numerical format for qty ('{qty}') or price ('{price}')."
+                f"Invalid numerical format for qty ('{qty}') or price ('{price}').",
             )
             return False
 
@@ -167,11 +167,11 @@ class BybitWsTradeHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot place WS order: WebSocket Trading client is not connected."
+                "Cannot place WS order: WebSocket Trading client is not connected.",
             )
             return
         if not self._validate_order_params(
-            category, symbol, side, order_type, qty, price
+            category, symbol, side, order_type, qty, price,
         ):
             logger.error(f"Invalid parameters for placing WS order for {symbol}.")
             return
@@ -190,7 +190,7 @@ class BybitWsTradeHelper:
         logger.debug(f"Placing WS order for {symbol}: {request_params}")
         try:
             self.ws_trading_client.place_order(
-                callback=callback, request=request_params
+                callback=callback, request=request_params,
             )
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error placing order for {symbol}: {e}")
@@ -222,7 +222,7 @@ class BybitWsTradeHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot amend WS order: WebSocket Trading client is not connected."
+                "Cannot amend WS order: WebSocket Trading client is not connected.",
             )
             return
         if not all(isinstance(arg, str) and arg for arg in [category, symbol]):
@@ -230,12 +230,12 @@ class BybitWsTradeHelper:
             return
         if not (order_id or order_link_id):
             logger.error(
-                "Either 'order_id' or 'order_link_id' must be provided to amend an order."
+                "Either 'order_id' or 'order_link_id' must be provided to amend an order.",
             )
             return
         if not (new_qty or new_price):
             logger.error(
-                "Either 'new_qty' or 'new_price' must be provided to amend an order."
+                "Either 'new_qty' or 'new_price' must be provided to amend an order.",
             )
             return
         try:
@@ -245,7 +245,7 @@ class BybitWsTradeHelper:
                 float(new_price)
         except ValueError:
             logger.error(
-                f"Invalid numerical format for new_qty ('{new_qty}') or new_price ('{new_price}')."
+                f"Invalid numerical format for new_qty ('{new_qty}') or new_price ('{new_price}').",
             )
             return
 
@@ -266,7 +266,7 @@ class BybitWsTradeHelper:
         logger.debug(f"Amending WS order for {symbol}: {request_params}")
         try:
             self.ws_trading_client.amend_order(
-                callback=callback, request=request_params
+                callback=callback, request=request_params,
             )
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error amending order for {symbol}: {e}")
@@ -292,7 +292,7 @@ class BybitWsTradeHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot cancel WS order: WebSocket Trading client is not connected."
+                "Cannot cancel WS order: WebSocket Trading client is not connected.",
             )
             return
         if not all(isinstance(arg, str) and arg for arg in [category, symbol]):
@@ -300,7 +300,7 @@ class BybitWsTradeHelper:
             return
         if not (order_id or order_link_id):
             logger.error(
-                "Either 'order_id' or 'order_link_id' must be provided to cancel an order."
+                "Either 'order_id' or 'order_link_id' must be provided to cancel an order.",
             )
             return
 
@@ -316,7 +316,7 @@ class BybitWsTradeHelper:
         logger.debug(f"Cancelling WS order for {symbol}: {request_params}")
         try:
             self.ws_trading_client.cancel_order(
-                callback=callback, request=request_params
+                callback=callback, request=request_params,
             )
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error cancelling order for {symbol}: {e}")
@@ -340,17 +340,17 @@ class BybitWsTradeHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot place WS batch orders: WebSocket Trading client is not connected."
+                "Cannot place WS batch orders: WebSocket Trading client is not connected.",
             )
             return
         if not isinstance(category, str) or not category:
             logger.error(
-                "Invalid or empty string provided for category for batch order."
+                "Invalid or empty string provided for category for batch order.",
             )
             return
         if not isinstance(requests, list) or not requests:
             logger.error(
-                "Requests must be a non-empty list of dictionaries for batch order."
+                "Requests must be a non-empty list of dictionaries for batch order.",
             )
             return
         # Basic validation for each request in the batch
@@ -364,14 +364,14 @@ class BybitWsTradeHelper:
                 req.get("price"),
             ):
                 logger.error(
-                    f"Invalid order parameters found in batch request: {req}. Aborting batch."
+                    f"Invalid order parameters found in batch request: {req}. Aborting batch.",
                 )
                 return
 
         logger.debug(f"Placing WS batch orders ({len(requests)}): {requests}")
         try:
             self.ws_trading_client.place_batch_order(
-                callback=callback, category=category, request=requests
+                callback=callback, category=category, request=requests,
             )
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error placing batch orders: {e}")
@@ -396,29 +396,29 @@ class BybitWsTradeHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot amend WS batch orders: WebSocket Trading client is not connected."
+                "Cannot amend WS batch orders: WebSocket Trading client is not connected.",
             )
             return
         if not isinstance(category, str) or not category:
             logger.error(
-                "Invalid or empty string provided for category for batch amendment."
+                "Invalid or empty string provided for category for batch amendment.",
             )
             return
         if not isinstance(requests, list) or not requests:
             logger.error(
-                "Requests must be a non-empty list of dictionaries for batch amendment."
+                "Requests must be a non-empty list of dictionaries for batch amendment.",
             )
             return
         # Basic validation for each request in the batch
         for req in requests:
             if not (req.get("orderId") or req.get("orderLinkId")):
                 logger.error(
-                    f"Batch amend request missing 'orderId' or 'orderLinkId': {req}. Aborting batch."
+                    f"Batch amend request missing 'orderId' or 'orderLinkId': {req}. Aborting batch.",
                 )
                 return
             if not (req.get("qty") or req.get("price")):
                 logger.error(
-                    f"Batch amend request missing 'qty' or 'price': {req}. Aborting batch."
+                    f"Batch amend request missing 'qty' or 'price': {req}. Aborting batch.",
                 )
                 return
             try:
@@ -428,14 +428,14 @@ class BybitWsTradeHelper:
                     float(req["price"])
             except ValueError:
                 logger.error(
-                    f"Invalid numerical format in batch amend request: {req}. Aborting batch."
+                    f"Invalid numerical format in batch amend request: {req}. Aborting batch.",
                 )
                 return
 
         logger.debug(f"Amending WS batch orders ({len(requests)}): {requests}")
         try:
             self.ws_trading_client.amend_batch_order(
-                callback=callback, category=category, request=requests
+                callback=callback, category=category, request=requests,
             )
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error amending batch orders: {e}")
@@ -459,36 +459,36 @@ class BybitWsTradeHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot cancel WS batch orders: WebSocket Trading client is not connected."
+                "Cannot cancel WS batch orders: WebSocket Trading client is not connected.",
             )
             return
         if not isinstance(category, str) or not category:
             logger.error(
-                "Invalid or empty string provided for category for batch cancellation."
+                "Invalid or empty string provided for category for batch cancellation.",
             )
             return
         if not isinstance(requests, list) or not requests:
             logger.error(
-                "Requests must be a non-empty list of dictionaries for batch cancellation."
+                "Requests must be a non-empty list of dictionaries for batch cancellation.",
             )
             return
         # Basic validation for each request in the batch
         for req in requests:
             if not (req.get("orderId") or req.get("orderLinkId")):
                 logger.error(
-                    f"Batch cancel request missing 'orderId' or 'orderLinkId': {req}. Aborting batch."
+                    f"Batch cancel request missing 'orderId' or 'orderLinkId': {req}. Aborting batch.",
                 )
                 return
             if not isinstance(req.get("symbol"), str) or not req.get("symbol"):
                 logger.error(
-                    f"Batch cancel request missing 'symbol' or invalid type: {req}. Aborting batch."
+                    f"Batch cancel request missing 'symbol' or invalid type: {req}. Aborting batch.",
                 )
                 return
 
         logger.debug(f"Cancelling WS batch orders ({len(requests)}): {requests}")
         try:
             self.ws_trading_client.cancel_batch_order(
-                callback=callback, category=category, request=requests
+                callback=callback, category=category, request=requests,
             )
         except BybitWebsocketError as e:
             logger.exception(f"WebSocket error cancelling batch orders: {e}")
@@ -507,7 +507,7 @@ if __name__ == "__main__":
 
     if API_KEY == "YOUR_API_KEY" or API_SECRET == "YOUR_API_SECRET":
         logger.error(
-            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_ws_trade_helper.py example."
+            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_ws_trade_helper.py example.",
         )
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
@@ -528,16 +528,16 @@ if __name__ == "__main__":
             logger.info(f"WS Trading Response - {op} SUCCESS: {ret_msg}. Data: {data}")
         else:
             logger.error(
-                f"WS Trading Response - {op} FAILED: {ret_msg}. Code: {ret_code}. Data: {data}"
+                f"WS Trading Response - {op} FAILED: {ret_msg}. Code: {ret_code}. Data: {data}",
             )
 
     try:
         if ws_trade_helper.connect():
             logger.info(
-                "WebSocket Trading client connected successfully. Waiting for operations..."
+                "WebSocket Trading client connected successfully. Waiting for operations...",
             )
             time.sleep(
-                2
+                2,
             )  # Give some time for the WebSocket connection to establish fully
 
             # --- Place a single order via WebSocket ---
@@ -579,7 +579,7 @@ if __name__ == "__main__":
                 },
             ]
             ws_trade_helper.place_batch_ws_order(
-                callback=handle_ws_response, category=CATEGORY, requests=batch_requests
+                callback=handle_ws_response, category=CATEGORY, requests=batch_requests,
             )
             time.sleep(2)  # Allow time for responses
 

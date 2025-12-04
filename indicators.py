@@ -1,15 +1,11 @@
 import logging
 import math
-from decimal import ROUND_HALF_UP
-from decimal import Decimal
-from decimal import getcontext
+from decimal import ROUND_HALF_UP, Decimal, getcontext
 from typing import Any
 
 import pandas as pd
 from bot_logger import setup_logging
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 
 # Initialize colorama for vibrant terminal output
 init()
@@ -30,7 +26,7 @@ def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
         indicators_logger.error(
             Fore.RED
             + "DataFrame must contain 'high', 'low', 'close' columns for ATR."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return pd.Series(dtype="object")
 
@@ -54,7 +50,7 @@ def calculate_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
         .apply(Decimal)
     )
     indicators_logger.debug(
-        Fore.CYAN + f"ATR calculated with length={length}." + Style.RESET_ALL
+        Fore.CYAN + f"ATR calculated with length={length}." + Style.RESET_ALL,
     )
     return atr
 
@@ -71,7 +67,7 @@ def calculate_fibonacci_pivot_points(
         indicators_logger.error(
             Fore.RED
             + "DataFrame index must be a DatetimeIndex for pivot calculation."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return [], []
     resistance_levels = []
@@ -83,7 +79,7 @@ def calculate_fibonacci_pivot_points(
         indicators_logger.error(
             Fore.RED
             + f"DataFrame missing required columns: {', '.join(required_columns)}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return resistance_levels, support_levels
 
@@ -91,7 +87,7 @@ def calculate_fibonacci_pivot_points(
         indicators_logger.warning(
             Fore.YELLOW
             + "DataFrame is empty or insufficient for Fibonacci pivot calculation."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return resistance_levels, support_levels
 
@@ -104,7 +100,7 @@ def calculate_fibonacci_pivot_points(
     indicators_logger.debug(
         Fore.BLUE
         + f"Summoning Fibonacci inputs: High={high:.8f}, Low={low:.8f}, Close={close:.8f}"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     # Calculate Pivot Point (PP)
@@ -120,7 +116,7 @@ def calculate_fibonacci_pivot_points(
     indicators_logger.debug(
         Fore.CYAN
         + f"Pivot Point: {pp:.8f}, Range: {price_range:.8f}, ATR Adjustment: {volatility_adjustment:.8f}"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     # Calculate and store levels
@@ -130,7 +126,7 @@ def calculate_fibonacci_pivot_points(
         r_unrounded = pp + (price_range * fib_ratio) + volatility_adjustment
         r = r_unrounded.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         resistance_levels.append(
-            {"price": r, "type": f"R{i}", "ratio": float(fib_ratio)}
+            {"price": r, "type": f"R{i}", "ratio": float(fib_ratio)},
         )
 
         # Support level with volatility adjustment
@@ -141,7 +137,7 @@ def calculate_fibonacci_pivot_points(
         indicators_logger.debug(
             Fore.YELLOW
             + f"Level R{i}: {r:.2f}, S{i}: {s:.2f} (Ratio: {fib_ratio})"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     # Include Pivot Point in the output for reference
@@ -150,10 +146,10 @@ def calculate_fibonacci_pivot_points(
             "price": pp.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
             "type": "PP",
             "ratio": 0.0,
-        }
+        },
     )
     indicators_logger.info(
-        Fore.GREEN + f"Fibonacci Pivot Points conjured: PP={pp:.2f}" + Style.RESET_ALL
+        Fore.GREEN + f"Fibonacci Pivot Points conjured: PP={pp:.2f}" + Style.RESET_ALL,
     )
     return resistance_levels, support_levels
 
@@ -169,20 +165,20 @@ def calculate_stochrsi(
         indicators_logger.error(
             Fore.RED
             + "DataFrame must contain a 'close' column for StochRSI calculation."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         df_copy = df.copy()
         df_copy["rsi"] = pd.Series(
-            [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object
+            [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object,
         )
         df_copy["stoch_rsi"] = pd.Series(
-            [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object
+            [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object,
         )
         df_copy["stoch_k"] = pd.Series(
-            [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object
+            [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object,
         )
         df_copy["stoch_d"] = pd.Series(
-            [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object
+            [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object,
         )
         return df_copy
 
@@ -200,7 +196,7 @@ def calculate_stochrsi(
     # Ensure avg_loss does not contain zero before division
     rs = avg_gain / avg_loss.replace(Decimal("0"), Decimal("1e-38"))
     df["rsi"] = rs.apply(
-        lambda x: Decimal("100") - (Decimal("100") / (Decimal("1") + Decimal(str(x))))
+        lambda x: Decimal("100") - (Decimal("100") / (Decimal("1") + Decimal(str(x)))),
     )
 
     # Calculate StochRSI
@@ -210,7 +206,7 @@ def calculate_stochrsi(
 
     # Ensure rsi_range does not contain zero before division
     stoch_rsi_val = (df["rsi"] - lowest_rsi) / rsi_range.replace(
-        Decimal("0"), Decimal("1e-38")
+        Decimal("0"), Decimal("1e-38"),
     )
     df["stoch_rsi"] = stoch_rsi_val.apply(lambda x: Decimal("100") * Decimal(str(x)))
     df["stoch_rsi"] = df["stoch_rsi"].fillna(Decimal("0"))
@@ -226,7 +222,7 @@ def calculate_stochrsi(
     indicators_logger.debug(
         Fore.CYAN
         + f"StochRSI calculated with rsi_period={rsi_period}, stoch_k_period={stoch_k_period}, stoch_d_period={stoch_d_period}."
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
     return df
 
@@ -237,7 +233,7 @@ def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
         indicators_logger.error(
             Fore.RED
             + "DataFrame must contain a 'close' column for SMA calculation."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return pd.Series(dtype="object")
 
@@ -245,20 +241,20 @@ def calculate_sma(df: pd.DataFrame, length: int) -> pd.Series:
     close_prices = df["close"].apply(Decimal)
     sma = close_prices.rolling(window=length).mean().apply(Decimal)
     indicators_logger.debug(
-        Fore.CYAN + f"SMA calculated with length={length}." + Style.RESET_ALL
+        Fore.CYAN + f"SMA calculated with length={length}." + Style.RESET_ALL,
     )
     return sma
 
 
 def calculate_ehlers_fisher_transform(
-    df: pd.DataFrame, length: int = 9, signal_length: int = 1
+    df: pd.DataFrame, length: int = 9, signal_length: int = 1,
 ) -> tuple[pd.Series, pd.Series]:
     """Calculates the Ehlers Fisher Transform and its signal line using Decimal precision."""
     if "high" not in df.columns or "low" not in df.columns:
         indicators_logger.error(
             Fore.RED
             + "DataFrame must contain 'high' and 'low' columns for Fisher Transform."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return pd.Series(dtype="object"), pd.Series(dtype="object")
 
@@ -280,7 +276,7 @@ def calculate_ehlers_fisher_transform(
     x = x.apply(
         lambda val: Decimal("2") * (val - Decimal("0.5"))
         if pd.notna(val)
-        else Decimal("NaN")
+        else Decimal("NaN"),
     )
 
     # Ensure x is within (-1, 1) to avoid issues with ln()
@@ -295,14 +291,14 @@ def calculate_ehlers_fisher_transform(
                 if val <= Decimal("-1")
                 else val
             )
-        )
+        ),
     )
 
     # Fisher Transform formula using Decimal's ln()
     fisher_transform = x.apply(
         lambda val: Decimal("NaN")
         if pd.isna(val)
-        else Decimal("0.5") * ((Decimal("1") + val) / (Decimal("1") - val)).ln()
+        else Decimal("0.5") * ((Decimal("1") + val) / (Decimal("1") - val)).ln(),
     )
 
     # Calculate Fisher Signal
@@ -311,7 +307,7 @@ def calculate_ehlers_fisher_transform(
     indicators_logger.debug(
         Fore.CYAN
         + f"Fisher Transform calculated with length={length}, signal_length={signal_length}."
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
     return fisher_transform, fisher_signal
 
@@ -322,7 +318,7 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
         indicators_logger.error(
             Fore.RED
             + "DataFrame must contain a 'close' column for Super Smoother."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return pd.Series(dtype="object")
 
@@ -334,7 +330,7 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
     # Calculate coefficients
     a1 = Decimal(str(math.exp(-math.sqrt(2) * math.pi / float_length)))
     b1 = Decimal(
-        str(2 * a1 * Decimal(str(math.cos(math.sqrt(2) * math.pi / float_length))))
+        str(2 * a1 * Decimal(str(math.cos(math.sqrt(2) * math.pi / float_length)))),
     )
     c2 = b1
     c3 = -a1 * a1
@@ -364,20 +360,20 @@ def calculate_ehlers_super_smoother(df: pd.DataFrame, length: int = 10) -> pd.Se
             filtered_values.iloc[i] = filt
 
     indicators_logger.debug(
-        Fore.CYAN + f"Super Smoother calculated with length={length}." + Style.RESET_ALL
+        Fore.CYAN + f"Super Smoother calculated with length={length}." + Style.RESET_ALL,
     )
     return filtered_values
 
 
 def find_pivots(
-    df: pd.DataFrame, left: int, right: int, use_wicks: bool
+    df: pd.DataFrame, left: int, right: int, use_wicks: bool,
 ) -> tuple[pd.Series, pd.Series]:
     """Identifies Pivot Highs and Lows based on lookback periods."""
     if not isinstance(df.index, pd.DatetimeIndex):
         indicators_logger.error(
             Fore.RED
             + "DataFrame index must be a DatetimeIndex for pivot calculation."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return pd.Series(dtype="bool"), pd.Series(dtype="bool")
 
@@ -385,7 +381,7 @@ def find_pivots(
         indicators_logger.error(
             Fore.RED
             + "DataFrame must contain 'high' and 'low' columns for pivot identification."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return pd.Series(dtype="bool"), pd.Series(dtype="bool")
 
@@ -427,13 +423,13 @@ def find_pivots(
     indicators_logger.debug(
         Fore.CYAN
         + f"Pivots identified with left={left}, right={right}, use_wicks={use_wicks}."
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
     return pivot_highs, pivot_lows
 
 
 def handle_websocket_kline_data(
-    df: pd.DataFrame, message: dict[str, Any]
+    df: pd.DataFrame, message: dict[str, Any],
 ) -> pd.DataFrame:
     """Processes one or more kline data messages from a WebSocket stream, ensuring robustness."""
     dtype_mapping = {
@@ -452,7 +448,7 @@ def handle_websocket_kline_data(
         indicators_logger.error(
             Fore.RED
             + f"Invalid or empty kline WebSocket message received: {message}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return df
 
@@ -461,7 +457,7 @@ def handle_websocket_kline_data(
         indicators_logger.error(
             Fore.RED
             + "DataFrame index must be a DatetimeIndex for kline handling."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return df
     if not df.empty and df.index.tz is None:
@@ -484,13 +480,13 @@ def handle_websocket_kline_data(
                 for key in required_kline_keys
             ):
                 indicators_logger.warning(
-                    f"Kline data missing required keys or has unexpected types: {kline_data}"
+                    f"Kline data missing required keys or has unexpected types: {kline_data}",
                 )
                 continue
 
             new_kline = {
                 "timestamp": pd.to_datetime(
-                    int(kline_data[ts_key]), unit="ms", utc=True
+                    int(kline_data[ts_key]), unit="ms", utc=True,
                 ),
                 "open": Decimal(str(kline_data["open"])),
                 "high": Decimal(str(kline_data["high"])),
@@ -515,7 +511,7 @@ def handle_websocket_kline_data(
         len(new_klines_df.columns) != 5
     ):  # 5 expected columns: open, high, low, close, volume
         indicators_logger.error(
-            f"Malformed new_klines_df: Expected 5 columns, got {len(new_klines_df.columns)}. Returning original df."
+            f"Malformed new_klines_df: Expected 5 columns, got {len(new_klines_df.columns)}. Returning original df.",
         )
         return df
 
@@ -529,7 +525,7 @@ def handle_websocket_kline_data(
     combined_df.sort_index(inplace=True)
 
     indicators_logger.debug(
-        Fore.CYAN + f"Processed {len(all_new_klines)} kline updates." + Style.RESET_ALL
+        Fore.CYAN + f"Processed {len(all_new_klines)} kline updates." + Style.RESET_ALL,
     )
     return combined_df
 
@@ -538,7 +534,7 @@ def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     """Calculates the Volume Weighted Average Price (VWAP)."""
     if not all(col in df.columns for col in ["high", "low", "close", "volume"]):
         indicators_logger.error(
-            "DataFrame must contain 'high', 'low', 'close', and 'volume' columns for VWAP."
+            "DataFrame must contain 'high', 'low', 'close', and 'volume' columns for VWAP.",
         )
         return pd.Series(dtype="object")
 
@@ -586,7 +582,7 @@ def calculate_order_book_imbalance(
 
 
 def calculate_ehlers_fisher_strategy(
-    df: pd.DataFrame, length: int = 10
+    df: pd.DataFrame, length: int = 10,
 ) -> pd.DataFrame:
     """Calculates the Ehlers Fisher Transform as per the strategy's logic, ensuring Decimal precision."""
     # Ensure all input columns are of type Decimal
@@ -596,7 +592,7 @@ def calculate_ehlers_fisher_strategy(
             indicators_logger.error(
                 Fore.RED
                 + f"DataFrame missing required column: '{col}' for Ehlers Fisher calculation."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return df.copy()  # Return a copy to prevent modifying the original DataFrame if columns are missing
         df[col] = df[col].apply(lambda x: Decimal(str(x)))
@@ -658,13 +654,13 @@ def calculate_ehlers_fisher_strategy(
     indicators_logger.debug(
         Fore.CYAN
         + f"Ehlers Fisher Strategy calculated with length={length}."
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
     return df
 
 
 def calculate_supertrend(
-    df: pd.DataFrame, period: int = 10, multiplier: float = 3.0
+    df: pd.DataFrame, period: int = 10, multiplier: float = 3.0,
 ) -> pd.DataFrame:
     """Calculates Supertrend indicator."""
     required_cols = ["high", "low", "close"]
@@ -673,14 +669,14 @@ def calculate_supertrend(
             indicators_logger.error(
                 Fore.RED
                 + f"DataFrame missing required column: '{col}' for Supertrend calculation."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             df_copy = df.copy()
             df_copy["supertrend"] = pd.Series(
-                [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object
+                [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object,
             )
             df_copy["supertrend_direction"] = pd.Series(
-                [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object
+                [Decimal("NaN")] * len(df_copy), index=df_copy.index, dtype=object,
             )
             return df_copy
 
@@ -887,7 +883,7 @@ def interpret_indicator(
         return f"{Fore.YELLOW}{indicator_name.upper()}:{Style.RESET_ALL} No specific interpretation available."
     except (TypeError, IndexError, KeyError, ValueError, InvalidOperation) as e:
         logger.error(
-            f"{Fore.RED}Error interpreting {indicator_name}: {e}. Values: {values}{Style.RESET_ALL}"
+            f"{Fore.RED}Error interpreting {indicator_name}: {e}. Values: {values}{Style.RESET_ALL}",
         )
         return f"{Fore.RED}{indicator_name.upper()}:{Style.RESET_ALL} Interpretation error."
 
@@ -921,7 +917,7 @@ if __name__ == "__main__":
                 "2023-01-01 00:18:00",
                 "2023-01-01 00:19:00",
                 "2023-01-01 00:20:00",
-            ]
+            ],
         ).tz_localize("UTC"),
         "open": [
             Decimal(str(x))

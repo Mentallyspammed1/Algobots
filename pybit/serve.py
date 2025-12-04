@@ -3,9 +3,7 @@
 import logging  # Import logging module
 
 import requests
-from flask import Flask
-from flask import jsonify
-from flask import send_from_directory
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -13,7 +11,7 @@ CORS(app)  # Enable CORS for the frontend
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 # --- Bybit API Configuration ---
@@ -74,7 +72,7 @@ def calculate_ema(data, period):
             ema_values.append(current_ema)
         except (KeyError, TypeError):  # Handle missing 'close' or non-numeric values
             logging.warning(
-                f"Skipping EMA calculation for index {i} due to data error."
+                f"Skipping EMA calculation for index {i} due to data error.",
             )
             ema_values.append(None)
 
@@ -97,7 +95,7 @@ def calculate_rsi(data, period):
                 losses[i] = abs(change)
         except (KeyError, TypeError):  # Handle missing 'close' or non-numeric values
             logging.warning(
-                f"Skipping RSI gain/loss calculation for index {i} due to data error."
+                f"Skipping RSI gain/loss calculation for index {i} due to data error.",
             )
             # Keep gains/losses as 0 for this iteration if error occurs
 
@@ -170,7 +168,7 @@ def calculate_atr(data, period):
             tr_values.append(tr)
         except (KeyError, TypeError):
             logging.warning(
-                f"Skipping ATR calculation for index {i} due to data error."
+                f"Skipping ATR calculation for index {i} due to data error.",
             )
             tr_values.append(None)  # Append None if data is bad
 
@@ -255,7 +253,7 @@ def calculate_adx(highs, lows, closes, period):
                 minus_dm[i] = down_move
         except (KeyError, TypeError):
             logging.warning(
-                f"Skipping ADX DM calculation for index {i} due to data error."
+                f"Skipping ADX DM calculation for index {i} due to data error.",
             )
             plus_dm[i] = 0.0  # Default to 0 if error
             minus_dm[i] = 0.0
@@ -265,12 +263,12 @@ def calculate_adx(highs, lows, closes, period):
     for i in range(len(closes)):
         try:
             atr_data_for_calc.append(
-                {"high": highs[i], "low": lows[i], "close": closes[i]}
+                {"high": highs[i], "low": lows[i], "close": closes[i]},
             )
         except (KeyError, TypeError):
             logging.warning(f"Skipping ATR data prep for index {i} in ADX calc.")
             atr_data_for_calc.append(
-                {"high": None, "low": None, "close": None}
+                {"high": None, "low": None, "close": None},
             )  # Placeholder
 
     atr_values = calculate_atr(atr_data_for_calc, period)
@@ -336,7 +334,7 @@ def calculate_vwap(data):
 
             if volume is None or close_price is None:
                 vwap_values.append(
-                    None
+                    None,
                 )  # Cannot calculate if volume or price is missing
                 continue
 
@@ -375,8 +373,8 @@ def get_bybit_data():
             logging.warning("No data received from Bybit API.")
             return jsonify(
                 {
-                    "error": "No data received from Bybit API for the specified symbol and interval."
-                }
+                    "error": "No data received from Bybit API for the specified symbol and interval.",
+                },
             ), 404
 
         # Format and reverse the data to have the oldest first
@@ -393,7 +391,7 @@ def get_bybit_data():
                         "low": float(bar[3]),
                         "close": float(bar[4]),
                         "volume": float(bar[5]),
-                    }
+                    },
                 )
             except (IndexError, ValueError, TypeError) as e:
                 logging.warning(f"Skipping malformed bar data: {bar} - Error: {e}")
@@ -402,7 +400,7 @@ def get_bybit_data():
         if not formatted_data:
             logging.error("All bars processed resulted in malformed data.")
             return jsonify(
-                {"error": "Failed to parse any valid bar data from API response."}
+                {"error": "Failed to parse any valid bar data from API response."},
             ), 500
 
         # Extract OHLCV data for calculations
@@ -417,7 +415,7 @@ def get_bybit_data():
         long_ema = calculate_ema(formatted_data, LONG_EMA_PERIOD)
         rsi = calculate_rsi(formatted_data, RSI_PERIOD)
         macd_line, signal_line, macd_hist = calculate_macd(
-            formatted_data, SHORT_EMA_PERIOD, LONG_EMA_PERIOD, MACD_SIGNAL_PERIOD
+            formatted_data, SHORT_EMA_PERIOD, LONG_EMA_PERIOD, MACD_SIGNAL_PERIOD,
         )
         adx, plus_di, minus_di = calculate_adx(highs, lows, closes, ADX_PERIOD)
         atr = calculate_atr(formatted_data, ATR_PERIOD)
@@ -549,41 +547,41 @@ def get_bybit_data():
         }
 
         logging.info(
-            f"Successfully processed data. {len(formatted_data)} candles, signal: {current_signal}"
+            f"Successfully processed data. {len(formatted_data)} candles, signal: {current_signal}",
         )
         return jsonify(response_data)
 
     except requests.exceptions.HTTPError as e:
-        logging.error(
-            f"HTTP error fetching data from Bybit: {e.response.status_code} - {e.response.text}"
+        logging.exception(
+            f"HTTP error fetching data from Bybit: {e.response.status_code} - {e.response.text}",
         )
         return jsonify(
             {
-                "error": f"HTTP error from Bybit API: {e.response.status_code}. Please check SYMBOL, INTERVAL, and API limits."
-            }
+                "error": f"HTTP error from Bybit API: {e.response.status_code}. Please check SYMBOL, INTERVAL, and API limits.",
+            },
         ), 500
     except requests.exceptions.ConnectionError as e:
-        logging.error(f"Connection error fetching data from Bybit: {e}")
+        logging.exception(f"Connection error fetching data from Bybit: {e}")
         return jsonify(
             {
-                "error": "Could not connect to Bybit API. Check your internet connection or Bybit server status."
-            }
+                "error": "Could not connect to Bybit API. Check your internet connection or Bybit server status.",
+            },
         ), 500
     except requests.exceptions.Timeout as e:
-        logging.error(f"Timeout error fetching data from Bybit: {e}")
+        logging.exception(f"Timeout error fetching data from Bybit: {e}")
         return jsonify(
-            {"error": "Request to Bybit API timed out. Try again later."}
+            {"error": "Request to Bybit API timed out. Try again later."},
         ), 500
     except requests.exceptions.RequestException as e:
-        logging.error(f"An unexpected error occurred during Bybit API request: {e}")
+        logging.exception(f"An unexpected error occurred during Bybit API request: {e}")
         return jsonify(
-            {"error": "An unexpected error occurred while fetching data from Bybit."}
+            {"error": "An unexpected error occurred while fetching data from Bybit."},
         ), 500
     except Exception:
         # Catch-all for unexpected errors during data processing
         logging.exception("An unexpected error occurred during data processing.")
         return jsonify(
-            {"error": "An internal error occurred while processing data."}
+            {"error": "An internal error occurred while processing data."},
         ), 500
 
 
@@ -593,7 +591,7 @@ def serve_index():
     try:
         return send_from_directory(".", "index.html")
     except FileNotFoundError:
-        logging.error("index.html not found in the current directory.")
+        logging.exception("index.html not found in the current directory.")
         return "Error: index.html not found.", 404
 
 
@@ -602,6 +600,6 @@ if __name__ == "__main__":
     # app.run(host='0.0.0.0', port=5000, debug=True)
     logging.info("Starting Flask server on http://0.0.0.0:5000")
     print(
-        "Starting server. To access the app, open your web browser and go to http://127.0.0.1:5000"
+        "Starting server. To access the app, open your web browser and go to http://127.0.0.1:5000",
     )
     app.run(host="0.0.0.0", port=5000)

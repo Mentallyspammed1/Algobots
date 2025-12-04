@@ -8,7 +8,7 @@ def calculate_atr(high, low, close, period=14):
             "tr1": high - low,
             "tr2": abs(high - close.shift()),
             "tr3": abs(low - close.shift()),
-        }
+        },
     ).max(axis=1)
     atr = tr.ewm(span=period, adjust=False).mean()
     return atr
@@ -33,14 +33,14 @@ def calculate_supertrend(df, period=10, multiplier=3):
     for i in range(1, len(df)):
         if df["close"].iloc[i] > final_upper_band.iloc[i - 1]:
             final_upper_band.iloc[i] = max(
-                basic_upper_band.iloc[i], final_upper_band.iloc[i - 1]
+                basic_upper_band.iloc[i], final_upper_band.iloc[i - 1],
             )
         else:
             final_upper_band.iloc[i] = basic_upper_band.iloc[i]
 
         if df["close"].iloc[i] < final_lower_band.iloc[i - 1]:
             final_lower_band.iloc[i] = min(
-                basic_lower_band.iloc[i], final_lower_band.iloc[i - 1]
+                basic_lower_band.iloc[i], final_lower_band.iloc[i - 1],
             )
         else:
             final_lower_band.iloc[i] = basic_lower_band.iloc[i]

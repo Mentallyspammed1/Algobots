@@ -17,18 +17,12 @@ import signal
 import sys
 import time
 import uuid
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import DecimalException
-from decimal import getcontext
+from decimal import ROUND_DOWN, Decimal, DecimalException, getcontext
 from typing import Any
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # Initialize colorama for cross-platform color support
 init(autoreset=True)
@@ -84,7 +78,7 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(),
         logging.handlers.RotatingFileHandler(
-            LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=5
+            LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=5,
         ),
     ],
 )
@@ -107,14 +101,14 @@ ORDER_REFRESH_INTERVAL = int(config.get("ORDER_REFRESH_INTERVAL", 5))
 # New configurable parameters
 BALANCE_REFRESH_INTERVAL = int(config.get("BALANCE_REFRESH_INTERVAL", 30))
 CAPITAL_ALLOCATION_PERCENTAGE = Decimal(
-    str(config.get("CAPITAL_ALLOCATION_PERCENTAGE", "0.05"))
+    str(config.get("CAPITAL_ALLOCATION_PERCENTAGE", "0.05")),
 )
 ABNORMAL_SPREAD_THRESHOLD = Decimal(
-    str(config.get("ABNORMAL_SPREAD_THRESHOLD", "0.015"))
+    str(config.get("ABNORMAL_SPREAD_THRESHOLD", "0.015")),
 )
 REBALANCE_ORDER_TYPE = str(config.get("REBALANCE_ORDER_TYPE", "Market"))
 REBALANCE_PRICE_OFFSET_PERCENTAGE = Decimal(
-    str(config.get("REBALANCE_PRICE_OFFSET_PERCENTAGE", "0"))
+    str(config.get("REBALANCE_PRICE_OFFSET_PERCENTAGE", "0")),
 )
 
 # Constants for data freshness and retry delays
@@ -297,15 +291,15 @@ def on_public_ws_message(msg: dict[str, Any]) -> None:
 
                 ws_state["last_update_time"] = time.time()
                 logger.debug(
-                    f"WS Orderbook: Bid={ws_state['best_bid']:.4f}, Ask={ws_state['best_ask']:.4f}, Mid={ws_state['mid_price']:.4f}"
+                    f"WS Orderbook: Bid={ws_state['best_bid']:.4f}, Ask={ws_state['best_ask']:.4f}, Mid={ws_state['mid_price']:.4f}",
                 )
     except (KeyError, IndexError, ValueError, TypeError, DecimalException) as e:
         logger.error(
-            f"Error processing public WS message: {type(e).__name__} - {e} | Message: {msg}"
+            f"Error processing public WS message: {type(e).__name__} - {e} | Message: {msg}",
         )
     except Exception as e:
         logger.error(
-            f"Unexpected error in public WS handler: {type(e).__name__} - {e} | Message: {msg}"
+            f"Unexpected error in public WS handler: {type(e).__name__} - {e} | Message: {msg}",
         )
 
 
@@ -325,16 +319,16 @@ def on_private_ws_message(msg: dict[str, Any]) -> None:
                         if order_details and o["orderStatus"] == "Filled":
                             session_stats["orders_filled"] += 1
                             filled_price = Decimal(
-                                o.get("avgPrice", o.get("price", "0"))
+                                o.get("avgPrice", o.get("price", "0")),
                             )
                             filled_qty = Decimal(o.get("qty", "0"))
                             side = o.get("side", "N/A")
                             filled_value = filled_price * filled_qty
                             logger.info(
-                                f"Order filled: {side} {filled_qty} @ {filled_price:.4f} (Value: {filled_value:.2f})"
+                                f"Order filled: {side} {filled_qty} @ {filled_price:.4f} (Value: {filled_value:.2f})",
                             )
                             send_toast(
-                                f"Order filled: {side} {filled_qty}", "green", "white"
+                                f"Order filled: {side} {filled_qty}", "green", "white",
                             )
 
                             # Simple PnL tracking for filled orders (can be enhanced)
@@ -359,7 +353,7 @@ def on_private_ws_message(msg: dict[str, Any]) -> None:
                                     session_stats["total_pnl"] += pnl
 
                     logger.debug(
-                        f"WS Order Closed: ID {oid}, Status {o['orderStatus']}"
+                        f"WS Order Closed: ID {oid}, Status {o['orderStatus']}",
                     )
                 else:
                     ws_state["open_orders"][oid] = {
@@ -385,27 +379,27 @@ def on_private_ws_message(msg: dict[str, Any]) -> None:
                         "liq_price": Decimal(p.get("liqPrice", "0")),
                     }
                     logger.debug(
-                        f"WS Position Update: {side} Size={p.get('size')}, PnL={current_unrealised_pnl}"
+                        f"WS Position Update: {side} Size={p.get('size')}, PnL={current_unrealised_pnl}",
                     )
         elif topic == "wallet":
             for w in msg["data"]:
                 # Assuming single currency for now, e.g., USDT
                 if w.get("coin") == "USDT":
                     ws_state["available_balance"] = Decimal(
-                        w.get("availableBalance", "0")
+                        w.get("availableBalance", "0"),
                     )
                     ws_state["last_balance_update"] = time.time()
                     logger.debug(
-                        f"WS Wallet Update: Available Balance={ws_state['available_balance']:.2f}"
+                        f"WS Wallet Update: Available Balance={ws_state['available_balance']:.2f}",
                     )
 
     except (KeyError, ValueError, TypeError, DecimalException) as e:
         logger.error(
-            f"Error processing private WS message: {type(e).__name__} - {e} | Message: {msg}"
+            f"Error processing private WS message: {type(e).__name__} - {e} | Message: {msg}",
         )
     except Exception as e:
         logger.error(
-            f"Unexpected error in private WS handler: {type(e).__name__} - {e} | Message: {msg}"
+            f"Unexpected error in private WS handler: {type(e).__name__} - {e} | Message: {msg}",
         )
 
 
@@ -460,7 +454,7 @@ class BybitClient:
         """Start public and private WebSocket streams."""
         logger.info(f"{Fore.CYAN}Starting public orderbook stream for {SYMBOL}...{NC}")
         self.ws_public.orderbook_stream(
-            symbol=SYMBOL, depth=1, callback=on_public_ws_message
+            symbol=SYMBOL, depth=1, callback=on_public_ws_message,
         )
         logger.info(f"{Fore.CYAN}Starting private order and position streams...{NC}")
         self.ws_private.position_stream(on_private_ws_message)
@@ -473,12 +467,12 @@ class BybitClient:
         if ws_type == "public":
             self.is_public_ws_connected = False
             logger.warning(
-                f"{Fore.YELLOW}Public WebSocket connection closed. Pybit will attempt reconnect.{NC}"
+                f"{Fore.YELLOW}Public WebSocket connection closed. Pybit will attempt reconnect.{NC}",
             )
         elif ws_type == "private":
             self.is_private_ws_connected = False
             logger.warning(
-                f"{Fore.YELLOW}Private WebSocket connection closed. Pybit will attempt reconnect.{NC}"
+                f"{Fore.YELLOW}Private WebSocket connection closed. Pybit will attempt reconnect.{NC}",
             )
 
     def _on_ws_error(self, ws_type: str, error: Exception):
@@ -490,13 +484,13 @@ class BybitClient:
         while strategy_instance.running and not _SHUTDOWN_REQUESTED:
             if not self.is_public_ws_connected:
                 logger.warning(
-                    f"{Fore.YELLOW}Public WS connection currently disconnected. Awaiting pybit reconnect.{NC}"
+                    f"{Fore.YELLOW}Public WS connection currently disconnected. Awaiting pybit reconnect.{NC}",
                 )
                 send_toast("WS Public disconnected", "#FFA500", "white")
 
             if not self.is_private_ws_connected:
                 logger.warning(
-                    f"{Fore.YELLOW}Private WS connection currently disconnected. Awaiting pybit reconnect.{NC}"
+                    f"{Fore.YELLOW}Private WS connection currently disconnected. Awaiting pybit reconnect.{NC}",
                 )
                 send_toast("WS Private disconnected", "#FFA500", "white")
 
@@ -534,17 +528,17 @@ class BybitClient:
                         await asyncio.sleep(delay)
                     else:
                         logger.error(
-                            f"{Fore.RED}API retries exhausted for {api_method.__name__}. Last error: {ret_msg}{NC}"
+                            f"{Fore.RED}API retries exhausted for {api_method.__name__}. Last error: {ret_msg}{NC}",
                         )
                         return None
                 elif ret_code in [10007, 10002]:
                     logger.error(
-                        f"{Fore.RED}Non-retryable API error: {ret_msg}. Action required.{NC}"
+                        f"{Fore.RED}Non-retryable API error: {ret_msg}. Action required.{NC}",
                     )
                     return None
                 else:
                     logger.error(
-                        f"{Fore.RED}Unhandled API error code {ret_code}: {ret_msg}. Stopping retries for this specific error.{NC}"
+                        f"{Fore.RED}Unhandled API error code {ret_code}: {ret_msg}. Stopping retries for this specific error.{NC}",
                     )
                     return None
             except Exception as e:
@@ -556,7 +550,7 @@ class BybitClient:
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
-                        f"{Fore.RED}API call failed after all retries: {type(e).__name__} - {e}{NC}"
+                        f"{Fore.RED}API call failed after all retries: {type(e).__name__} - {e}{NC}",
                     )
                     return None
         return None
@@ -564,7 +558,7 @@ class BybitClient:
     async def get_symbol_info(self) -> bool:
         """Fetch symbol precision details, including min order value and quantity."""
         response = await self._api(
-            self.http.get_instruments_info, category=CATEGORY, symbol=SYMBOL
+            self.http.get_instruments_info, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             instruments = response.get("result", {}).get("list")
@@ -573,18 +567,18 @@ class BybitClient:
                 price_filter = instrument_info.get("priceFilter", {})
                 lot_size_filter = instrument_info.get("lotSizeFilter", {})
                 symbol_info["price_precision"] = Decimal(
-                    price_filter.get("tickSize", "0.0001")
+                    price_filter.get("tickSize", "0.0001"),
                 )
                 symbol_info["qty_precision"] = Decimal(
-                    lot_size_filter.get("qtyStep", "0.001")
+                    lot_size_filter.get("qtyStep", "0.001"),
                 )
                 symbol_info["min_price"] = Decimal(price_filter.get("minPrice", "0"))
                 symbol_info["min_qty"] = Decimal(lot_size_filter.get("minQty", "0"))
                 symbol_info["min_order_value"] = Decimal(
-                    lot_size_filter.get("minOrderAmt", "10.0")
+                    lot_size_filter.get("minOrderAmt", "10.0"),
                 )
                 logger.info(
-                    f"{Fore.CYAN}Symbol Info: {SYMBOL} | Price Precision: {symbol_info['price_precision']} | Qty Precision: {symbol_info['qty_precision']}{NC}"
+                    f"{Fore.CYAN}Symbol Info: {SYMBOL} | Price Precision: {symbol_info['price_precision']} | Qty Precision: {symbol_info['qty_precision']}{NC}",
                 )
                 return True
         logger.error(f"{Fore.RED}Failed to fetch symbol info for {SYMBOL}.{NC}")
@@ -597,11 +591,11 @@ class BybitClient:
             for balance in response.get("result", {}).get("list", []):
                 if balance.get("coin") == "USDT":
                     ws_state["available_balance"] = Decimal(
-                        balance.get("availableToWithdraw", "0")
+                        balance.get("availableToWithdraw", "0"),
                     )
                     ws_state["last_balance_update"] = time.time()
                     logger.info(
-                        f"{Fore.CYAN}Updated wallet balance: {ws_state['available_balance']:.2f} USDT{NC}"
+                        f"{Fore.CYAN}Updated wallet balance: {ws_state['available_balance']:.2f} USDT{NC}",
                     )
                     return True
         logger.error(f"{Fore.RED}Failed to fetch wallet balance.{NC}")
@@ -610,7 +604,7 @@ class BybitClient:
     async def get_open_orders(self):
         """Fetches open orders from REST API."""
         response = await self._api(
-            self.http.get_open_orders, category=CATEGORY, symbol=SYMBOL, limit=50
+            self.http.get_open_orders, category=CATEGORY, symbol=SYMBOL, limit=50,
         )
         if response and response.get("retCode") == 0:
             open_orders_list = response.get("result", {}).get("list", [])
@@ -633,7 +627,7 @@ class BybitClient:
     async def get_my_positions(self):
         """Fetches positions from REST API."""
         response = await self._api(
-            self.http.get_positions, category=CATEGORY, symbol=SYMBOL
+            self.http.get_positions, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             positions_list = response.get("result", {}).get("list", [])
@@ -653,7 +647,7 @@ class BybitClient:
         return False
 
     async def place_order(
-        self, side: str, order_type: str, qty: Decimal, price: Decimal | None = None
+        self, side: str, order_type: str, qty: Decimal, price: Decimal | None = None,
     ):
         """Places a new order."""
         client_order_id = f"mmxcel-{uuid.uuid4()}"
@@ -675,7 +669,7 @@ class BybitClient:
             order_value = qty * price
             if order_value < symbol_info["min_order_value"]:
                 logger.warning(
-                    f"{Fore.YELLOW}Skipping order due to minimum value constraint. Value: {order_value:.2f}, Min: {symbol_info['min_order_value']}{NC}"
+                    f"{Fore.YELLOW}Skipping order due to minimum value constraint. Value: {order_value:.2f}, Min: {symbol_info['min_order_value']}{NC}",
                 )
                 return None
 
@@ -683,7 +677,7 @@ class BybitClient:
         if response and response.get("retCode") == 0:
             session_stats["orders_placed"] += 1
             logger.info(
-                f"{Fore.GREEN}Placed {order_type} {side} order: {qty} @ {price}{NC}"
+                f"{Fore.GREEN}Placed {order_type} {side} order: {qty} @ {price}{NC}",
             )
             return response.get("result", {})
         return None
@@ -691,7 +685,7 @@ class BybitClient:
     async def cancel_order(self, order_id: str):
         """Cancels a specific order."""
         response = await self._api(
-            self.http.cancel_order, category=CATEGORY, symbol=SYMBOL, orderId=order_id
+            self.http.cancel_order, category=CATEGORY, symbol=SYMBOL, orderId=order_id,
         )
         if response and response.get("retCode") == 0:
             logger.info(f"{Fore.GREEN}Canceled order {order_id}{NC}")
@@ -701,7 +695,7 @@ class BybitClient:
     async def cancel_all_orders(self):
         """Cancels all open orders for the symbol."""
         response = await self._api(
-            self.http.cancel_all_orders, category=CATEGORY, symbol=SYMBOL
+            self.http.cancel_all_orders, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             logger.info(f"{Fore.GREEN}Canceled all open orders.{NC}")
@@ -721,7 +715,7 @@ class BybitClient:
             logger.info(f"{Fore.GREEN}Leverage set to {leverage}x for {SYMBOL}.{NC}")
             return True
         logger.error(
-            f"{Fore.RED}Failed to set leverage. Error: {response.get('retMsg') if response else 'Unknown'}{NC}"
+            f"{Fore.RED}Failed to set leverage. Error: {response.get('retMsg') if response else 'Unknown'}{NC}",
         )
         return False
 
@@ -745,7 +739,7 @@ class MakiwiStrategy:
         logger.info(f"{Fore.MAGENTA}Starting MMXCEL Bot v3.0...{NC}")
         if not API_KEY or not API_SECRET:
             logger.error(
-                f"{RED}API_KEY or API_SECRET not found in .env file. Exiting.{NC}"
+                f"{RED}API_KEY or API_SECRET not found in .env file. Exiting.{NC}",
             )
             sys.exit(1)
 
@@ -762,11 +756,11 @@ class MakiwiStrategy:
             await asyncio.sleep(0.5)
             if time.time() - start_time > 20:  # 20-second timeout
                 logger.error(
-                    f"{RED}WebSocket connection timeout or no market data received. Public: {self.client.is_public_ws_connected}, Private: {self.client.is_private_ws_connected}, Mid Price: {ws_state['mid_price']}. Exiting.{NC}"
+                    f"{RED}WebSocket connection timeout or no market data received. Public: {self.client.is_public_ws_connected}, Private: {self.client.is_private_ws_connected}, Mid Price: {ws_state['mid_price']}. Exiting.{NC}",
                 )
                 sys.exit(1)
         logger.info(
-            f"{Fore.GREEN}WebSockets connected and market data received successfully.{NC}"
+            f"{Fore.GREEN}WebSockets connected and market data received successfully.{NC}",
         )
 
         # Fetch initial market data and wallet balance
@@ -786,7 +780,7 @@ class MakiwiStrategy:
         # Final checks
         if not ws_state["available_balance"]:
             logger.error(
-                f"{RED}Available balance is zero. Cannot start trading. Exiting.{NC}"
+                f"{RED}Available balance is zero. Cannot start trading. Exiting.{NC}",
             )
             sys.exit(1)
         if not ws_state["mid_price"]:
@@ -803,7 +797,7 @@ class MakiwiStrategy:
             if time.time() - self.last_dashboard_update > DASHBOARD_REFRESH_INTERVAL:
                 clear_screen()
                 print_neon_header(
-                    "MMXCEL Bybit Market-Maker Dashboard", color=UNDERLINE
+                    "MMXCEL Bybit Market-Maker Dashboard", color=UNDERLINE,
                 )
                 print_neon_separator()
                 print(
@@ -812,10 +806,10 @@ class MakiwiStrategy:
                         BOT_STATE,
                         label_color=WHITE,
                         value_color=GREEN if BOT_STATE == "RUNNING" else YELLOW,
-                    )
+                    ),
                 )
                 print(
-                    format_metric("Symbol", SYMBOL, label_color=WHITE, value_color=CYAN)
+                    format_metric("Symbol", SYMBOL, label_color=WHITE, value_color=CYAN),
                 )
                 print(
                     format_metric(
@@ -823,9 +817,9 @@ class MakiwiStrategy:
                         ws_state["mid_price"],
                         label_color=WHITE,
                         value_precision=_calculate_decimal_precision(
-                            symbol_info["price_precision"]
+                            symbol_info["price_precision"],
                         ),
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -833,9 +827,9 @@ class MakiwiStrategy:
                         ws_state["best_bid"],
                         label_color=WHITE,
                         value_precision=_calculate_decimal_precision(
-                            symbol_info["price_precision"]
+                            symbol_info["price_precision"],
                         ),
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -843,9 +837,9 @@ class MakiwiStrategy:
                         ws_state["best_ask"],
                         label_color=WHITE,
                         value_precision=_calculate_decimal_precision(
-                            symbol_info["price_precision"]
+                            symbol_info["price_precision"],
                         ),
-                    )
+                    ),
                 )
                 print_neon_separator()
                 print(
@@ -854,14 +848,14 @@ class MakiwiStrategy:
                         len(ws_state["open_orders"]),
                         label_color=WHITE,
                         value_color=CYAN,
-                    )
+                    ),
                 )
 
                 long_pos = ws_state["positions"].get(
-                    "Long", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")}
+                    "Long", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")},
                 )
                 short_pos = ws_state["positions"].get(
-                    "Short", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")}
+                    "Short", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")},
                 )
 
                 print(
@@ -871,9 +865,9 @@ class MakiwiStrategy:
                         label_color=WHITE,
                         unit=f" {SYMBOL.split('USDT')[0]}",
                         value_precision=_calculate_decimal_precision(
-                            symbol_info["qty_precision"]
+                            symbol_info["qty_precision"],
                         ),
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -882,9 +876,9 @@ class MakiwiStrategy:
                         label_color=WHITE,
                         unit=f" {SYMBOL.split('USDT')[0]}",
                         value_precision=_calculate_decimal_precision(
-                            symbol_info["qty_precision"]
+                            symbol_info["qty_precision"],
                         ),
-                    )
+                    ),
                 )
 
                 total_unrealized_pnl = (
@@ -897,7 +891,7 @@ class MakiwiStrategy:
                         label_color=WHITE,
                         value_precision=2,
                         is_pnl=True,
-                    )
+                    ),
                 )
                 print_neon_separator()
 
@@ -908,7 +902,7 @@ class MakiwiStrategy:
                         age = time.time() - order["timestamp"]
                         age_color = RED if age > ORDER_LIFESPAN_SECONDS else GREEN
                         print(
-                            f"{Fore.WHITE}  - {order['side']:<5} {order['qty']:.{_calculate_decimal_precision(symbol_info['qty_precision'])}f} @ {order['price']:.{_calculate_decimal_precision(symbol_info['price_precision'])}f} {age_color}({age:.1f}s ago){NC}"
+                            f"{Fore.WHITE}  - {order['side']:<5} {order['qty']:.{_calculate_decimal_precision(symbol_info['qty_precision'])}f} @ {order['price']:.{_calculate_decimal_precision(symbol_info['price_precision'])}f} {age_color}({age:.1f}s ago){NC}",
                         )
                     print_neon_separator()
 
@@ -920,7 +914,7 @@ class MakiwiStrategy:
                         f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m {int(uptime % 60)}s",
                         label_color=WHITE,
                         value_color=CYAN,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -928,7 +922,7 @@ class MakiwiStrategy:
                         session_stats["orders_placed"],
                         label_color=WHITE,
                         value_color=CYAN,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -936,7 +930,7 @@ class MakiwiStrategy:
                         session_stats["orders_filled"],
                         label_color=WHITE,
                         value_color=CYAN,
-                    )
+                    ),
                 )
                 print(
                     format_metric(
@@ -945,7 +939,7 @@ class MakiwiStrategy:
                         label_color=WHITE,
                         value_precision=2,
                         is_pnl=True,
-                    )
+                    ),
                 )
                 print_neon_separator(char="═")
 
@@ -962,7 +956,7 @@ class MakiwiStrategy:
                 if time.time() - ws_state["last_update_time"] > MAX_DATA_AGE_SECONDS:
                     set_bot_state("STALE DATA")
                     logger.warning(
-                        f"{Fore.YELLOW}Market data is stale! Age: {time.time() - ws_state['last_update_time']:.1f}s. Cancelling all orders.{NC}"
+                        f"{Fore.YELLOW}Market data is stale! Age: {time.time() - ws_state['last_update_time']:.1f}s. Cancelling all orders.{NC}",
                     )
                     await self.client.cancel_all_orders()
                     await asyncio.sleep(1)  # Wait a bit for WS to catch up
@@ -972,7 +966,7 @@ class MakiwiStrategy:
                 mid_price = ws_state["mid_price"]
                 if mid_price == Decimal("0"):
                     logger.warning(
-                        f"{Fore.YELLOW}Mid price is zero, waiting for WebSocket data.{NC}"
+                        f"{Fore.YELLOW}Mid price is zero, waiting for WebSocket data.{NC}",
                     )
                     await asyncio.sleep(1)
                     continue
@@ -993,7 +987,7 @@ class MakiwiStrategy:
                     self.is_rebalancing = True
                     set_bot_state("REBALANCING")
                     logger.warning(
-                        f"{Fore.MAGENTA}Position imbalance detected ({position_imbalance}). Initiating rebalance.{NC}"
+                        f"{Fore.MAGENTA}Position imbalance detected ({position_imbalance}). Initiating rebalance.{NC}",
                     )
                     session_stats["rebalances_count"] += 1
 
@@ -1018,11 +1012,11 @@ class MakiwiStrategy:
                             )
                         )
                         await self.client.place_order(
-                            imbalance_side, "Limit", qty_to_rebalance, rebalance_price
+                            imbalance_side, "Limit", qty_to_rebalance, rebalance_price,
                         )
                     else:  # Market order
                         await self.client.place_order(
-                            imbalance_side, "Market", qty_to_rebalance
+                            imbalance_side, "Market", qty_to_rebalance,
                         )
 
                     # Wait for a few seconds for the rebalance order to process
@@ -1041,7 +1035,7 @@ class MakiwiStrategy:
                 ]
                 if orders_to_cancel:
                     logger.info(
-                        f"{Fore.YELLOW}Cancelling {len(orders_to_cancel)} stale orders.{NC}"
+                        f"{Fore.YELLOW}Cancelling {len(orders_to_cancel)} stale orders.{NC}",
                     )
                     for oid in orders_to_cancel:
                         await self.client.cancel_order(oid)
@@ -1058,12 +1052,12 @@ class MakiwiStrategy:
 
                         if "Buy" not in [o["side"] for o in open_orders.values()]:
                             await self.client.place_order(
-                                "Buy", "Limit", QUANTITY, buy_price
+                                "Buy", "Limit", QUANTITY, buy_price,
                             )
 
                         if "Sell" not in [o["side"] for o in open_orders.values()]:
                             await self.client.place_order(
-                                "Sell", "Limit", QUANTITY, sell_price
+                                "Sell", "Limit", QUANTITY, sell_price,
                             )
 
                     # Wait for orders to be processed
@@ -1137,7 +1131,7 @@ if __name__ == "__main__":
                 client._monitor_websockets(strategy),
                 strategy.dashboard_updater(),
                 strategy.main_loop(),
-            )
+            ),
         )
     except (KeyboardInterrupt, SystemExit):
         print("\nKeyboard interrupt received, initiating shutdown...")

@@ -8,8 +8,7 @@ from config import Config
 from logger_setup import setup_logger
 from pybit.unified_trading import HTTP
 from strategy_interface import BaseStrategy
-from utilities import InMemoryCache
-from utilities import KlineDataFetcher
+from utilities import InMemoryCache, KlineDataFetcher
 
 
 class BybitTradingBot:

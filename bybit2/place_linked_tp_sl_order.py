@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -19,7 +17,7 @@ def place_linked_tp_sl_order(
     print(
         Fore.MAGENTA
         + f"\n# Weaving a linked Take-Profit ({take_profit_price}) and Stop-Loss ({stop_loss_price}) order for {symbol}...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -31,19 +29,19 @@ def place_linked_tp_sl_order(
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
     try:
         session = HTTP(testnet=testnet_mode, api_key=api_key, api_secret=api_secret)
         print(
-            Fore.CYAN + f"  # Attempting to set TP/SL for {symbol}..." + Style.RESET_ALL
+            Fore.CYAN + f"  # Attempting to set TP/SL for {symbol}..." + Style.RESET_ALL,
         )
 
         # Place a linked Take-Profit and Stop-Loss order
@@ -67,19 +65,19 @@ def place_linked_tp_sl_order(
             print(
                 Fore.GREEN
                 + "  # Linked Take-Profit and Stop-Loss orders placed successfully!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(Fore.GREEN + f"    Response: {response['result']}" + Style.RESET_ALL)
         else:
             print(
-                Fore.RED + "  # Failed to place linked TP/SL orders." + Style.RESET_ALL
+                Fore.RED + "  # Failed to place linked TP/SL orders." + Style.RESET_ALL,
             )
             print(Fore.RED + f"  # Response: {response}" + Style.RESET_ALL)
             if response and "retMsg" in response:
                 print(
                     Fore.RED
                     + f"  # Error Message: {response['retMsg']}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     except Exception as e:
@@ -87,7 +85,7 @@ def place_linked_tp_sl_order(
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable, API keys are valid, and you have an existing position."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(Fore.MAGENTA + "\n# The TP/SL incantation is complete!\n" + Style.RESET_ALL)
@@ -101,22 +99,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     # IMPORTANT: Ensure you have an open ETHUSDT linear perpetual position on testnet before running this!

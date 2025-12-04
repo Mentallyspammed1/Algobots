@@ -5,10 +5,7 @@ import sys
 import pytest
 
 sys.path.insert(0, "/data/data/com.termux/files/home/Algobots")
-from bot_logger import log_exception
-from bot_logger import log_metrics
-from bot_logger import log_trade
-from bot_logger import setup_logging
+from bot_logger import log_exception, log_metrics, log_trade, setup_logging
 
 
 @pytest.fixture

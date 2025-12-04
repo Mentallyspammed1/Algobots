@@ -2,9 +2,7 @@ import argparse
 import json
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from pybit.unified_trading import HTTP
 
 # Initialize Colorama
@@ -16,7 +14,7 @@ def main():
     # An incantation to reveal the current pulse of the market.
     """
     parser = argparse.ArgumentParser(
-        description=Fore.CYAN + "Fetch Bybit V5 Tickers." + Style.RESET_ALL
+        description=Fore.CYAN + "Fetch Bybit V5 Tickers." + Style.RESET_ALL,
     )
     parser.add_argument(
         "--category",
@@ -33,7 +31,7 @@ def main():
     if not api_key or not api_secret:
         print(
             Fore.RED
-            + "Error: BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set."
+            + "Error: BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set.",
         )
         return
 
@@ -46,7 +44,7 @@ def main():
     try:
         print(
             Fore.MAGENTA
-            + f"# Summoning ticker data for {args.category.upper()}::{args.symbol or 'All Symbols'}..."
+            + f"# Summoning ticker data for {args.category.upper()}::{args.symbol or 'All Symbols'}...",
         )
 
         params = {"category": args.category}

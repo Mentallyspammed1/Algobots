@@ -1,6 +1,5 @@
 import logging
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any
 
@@ -29,7 +28,6 @@ class BaseStrategy(ABC):
     @abstractmethod
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculates and adds indicators to the DataFrame."""
-        pass
 
     @abstractmethod
     def generate_signal(
@@ -39,7 +37,6 @@ class BaseStrategy(ABC):
         orderbook_data: dict[str, Any],
     ) -> Signal:
         """Generates a trading signal based on indicators and market data."""
-        pass
 
     def __str__(self) -> str:
         return self.strategy_name

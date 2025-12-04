@@ -1,7 +1,6 @@
 import logging
 from decimal import Decimal
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pandas as pd
@@ -9,8 +8,10 @@ import pytest
 from whalebot_pro.analysis.indicators import IndicatorCalculator
 from whalebot_pro.analysis.trading_analyzer import TradingAnalyzer
 from whalebot_pro.config import Config
-from whalebot_pro.orderbook.advanced_orderbook_manager import AdvancedOrderbookManager
-from whalebot_pro.orderbook.advanced_orderbook_manager import PriceLevel
+from whalebot_pro.orderbook.advanced_orderbook_manager import (
+    AdvancedOrderbookManager,
+    PriceLevel,
+)
 
 
 @pytest.fixture

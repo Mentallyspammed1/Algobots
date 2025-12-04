@@ -3,9 +3,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import getcontext
+from decimal import ROUND_DOWN, Decimal, getcontext
 
 from pybit.unified_trading import HTTP
 

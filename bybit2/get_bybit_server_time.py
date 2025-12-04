@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def get_bybit_server_time():
     print(
         Fore.MAGENTA
         + "\n# Consulting the Chronomancer to retrieve Bybit server time...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -29,7 +27,7 @@ def get_bybit_server_time():
         print(
             Fore.CYAN
             + "  # Requesting the current server time from Bybit..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         response = session.get_server_time()
@@ -41,17 +39,17 @@ def get_bybit_server_time():
             print(
                 Fore.GREEN
                 + f"  # Current Bybit Server Time (milliseconds): {time_ms}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(
                 Fore.GREEN
                 + f"  # Current Bybit Server Time (nanoseconds): {time_nano}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(
                 Fore.WHITE
                 + "  # You can compare this with your local system time to check for synchronization issues."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(Fore.RED + "  # Failed to retrieve server time." + Style.RESET_ALL)
@@ -62,7 +60,7 @@ def get_bybit_server_time():
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(Fore.MAGENTA + "\n# The server time has been revealed!\n" + Style.RESET_ALL)
@@ -76,22 +74,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     get_bybit_server_time()

@@ -1,8 +1,7 @@
 # strategy_interface.py
 
 import logging
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Any
 
 import pandas as pd
@@ -44,7 +43,6 @@ class BaseStrategy(ABC):
     @abstractmethod
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate and add all necessary technical indicators to the DataFrame."""
-        pass
 
     @abstractmethod
     def generate_signal(
@@ -54,9 +52,7 @@ class BaseStrategy(ABC):
         market_conditions: dict[str, Any],
     ) -> Signal:
         """Generate a trading signal based on the provided data."""
-        pass
 
     @abstractmethod
     def get_indicator_values(self, df: pd.DataFrame) -> dict[str, float]:
         """Extract the latest values of key indicators after calculation."""
-        pass

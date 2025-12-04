@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def get_klines_data(symbol: str = "SOLUSDT", interval: str = "60", limit: int = 
     print(
         Fore.MAGENTA
         + f"\n# Conjuring the last {limit} {interval}-minute Klines for {symbol} (Linear Perpetual)...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def get_klines_data(symbol: str = "SOLUSDT", interval: str = "60", limit: int = 
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,14 +37,14 @@ def get_klines_data(symbol: str = "SOLUSDT", interval: str = "60", limit: int = 
         print(
             Fore.CYAN
             + f"  # Fetching Klines for {symbol} with interval {interval} and limit {limit}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Fetch klines data for linear perpetual futures
         # category: 'linear' for linear perpetual, 'spot' for spot, etc.
         # interval: '1', '3', '5', '15', '30', '60', '120', '240', '360', '720', 'D', 'W', 'M'
         response = session.get_kline(
-            category="linear", symbol=symbol, interval=interval, limit=limit
+            category="linear", symbol=symbol, interval=interval, limit=limit,
         )
 
         if response and response["retCode"] == 0:
@@ -55,7 +53,7 @@ def get_klines_data(symbol: str = "SOLUSDT", interval: str = "60", limit: int = 
                 print(
                     Fore.GREEN
                     + f"  # Successfully retrieved {len(klines)} Klines for {symbol}:"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 # Klines are returned in reverse chronological order (newest first)
                 # Each kline is [timestamp, open, high, low, close, volume, turnover]
@@ -63,13 +61,13 @@ def get_klines_data(symbol: str = "SOLUSDT", interval: str = "60", limit: int = 
                     print(
                         Fore.WHITE
                         + f"    Timestamp: {kline[0]}, Open: {kline[1]}, High: {kline[2]}, Low: {kline[3]}, Close: {kline[4]}, Volume: {kline[5]}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
             else:
                 print(
                     Fore.YELLOW
                     + f"  # No Klines data found for {symbol} with interval {interval}."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
         else:
             print(Fore.RED + "  # Failed to retrieve Klines data." + Style.RESET_ALL)
@@ -80,11 +78,11 @@ def get_klines_data(symbol: str = "SOLUSDT", interval: str = "60", limit: int = 
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable and API keys are valid."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
-        Fore.MAGENTA + "\n# The Klines have revealed their secrets!\n" + Style.RESET_ALL
+        Fore.MAGENTA + "\n# The Klines have revealed their secrets!\n" + Style.RESET_ALL,
     )
 
 
@@ -96,22 +94,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     get_klines_data("SOLUSDT", "60", 100)

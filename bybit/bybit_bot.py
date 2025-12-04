@@ -3,16 +3,14 @@ import decimal
 import logging
 import os
 from collections.abc import Callable
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 from typing import Any
 
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # --- Logging Setup ---
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -27,7 +25,7 @@ TRAILING_STOP_PERCENT = decimal.Decimal("0.005")  # Trail the stop by 0.5%
 
 
 async def manage_positions(
-    http_client: HTTP, bot_instance: Any, symbols_to_trade: list[str]
+    http_client: HTTP, bot_instance: Any, symbols_to_trade: list[str],
 ):
     """Manages existing positions to lock in profits and trail stop losses."""
     for symbol in symbols_to_trade:
@@ -56,7 +54,7 @@ async def manage_positions(
         # Check if profit lock threshold is met
         if profit_percent >= PROFIT_LOCK_PERCENT:
             logger.info(
-                f"[{symbol}] Profit lock threshold reached ({profit_percent:.4f}%). Adjusting stop-loss."
+                f"[{symbol}] Profit lock threshold reached ({profit_percent:.4f}%). Adjusting stop-loss.",
             )
 
             new_stop_loss_price = decimal.Decimal("0")
@@ -83,7 +81,7 @@ async def manage_positions(
                     position_idx=0,
                 )
                 logger.info(
-                    f"[{symbol}] Adjusted stop-loss to {new_stop_loss_price} to lock in profit."
+                    f"[{symbol}] Adjusted stop-loss to {new_stop_loss_price} to lock in profit.",
                 )
             except Exception as e:
                 logger.error(f"Error adjusting stop-loss for {symbol}: {e}")
@@ -105,7 +103,7 @@ async def market_making_strategy(
         for wallet in account_info:
             if wallet.get("coin") == "USDT":
                 available_balance_usd = decimal.Decimal(
-                    wallet.get("walletBalance", "0")
+                    wallet.get("walletBalance", "0"),
                 )
                 break
 
@@ -118,7 +116,7 @@ async def market_making_strategy(
 
         # --- 2. Get Market Data ---
         orderbook_data = bot_instance.ws_manager.market_data.get(symbol, {}).get(
-            "orderbook"
+            "orderbook",
         )
         if (
             not orderbook_data
@@ -140,7 +138,7 @@ async def market_making_strategy(
         desired_spread = mid_price * desired_spread_percentage
 
         logger.info(
-            f"[{symbol}] Live Spread: {live_spread_percent:.4f}%, Desired Spread: {desired_spread_percentage:.4f}%"
+            f"[{symbol}] Live Spread: {live_spread_percent:.4f}%, Desired Spread: {desired_spread_percentage:.4f}%",
         )
 
         # --- 4. Determine Prices ---
@@ -153,18 +151,18 @@ async def market_making_strategy(
         # The quantity is determined by how much we can buy/sell so that a STOP_LOSS_PERCENT move equals our capital_to_risk
         qty_step = bot_instance.symbol_info[symbol]["qtyStep"]
         order_quantity = (capital_to_risk / (mid_price * STOP_LOSS_PERCENT)).quantize(
-            qty_step
+            qty_step,
         )
 
         min_order_qty = bot_instance.symbol_info[symbol]["minOrderQty"]
         if order_quantity < min_order_qty:
             order_quantity = min_order_qty
             logger.warning(
-                f"[{symbol}] Calculated quantity too small. Using minimum: {order_quantity}"
+                f"[{symbol}] Calculated quantity too small. Using minimum: {order_quantity}",
             )
 
         logger.info(
-            f"[{symbol}] Mid: {mid_price:.4f}, Bid: {bot_bid_price:.4f}, Ask: {bot_ask_price:.4f}, Qty: {order_quantity}"
+            f"[{symbol}] Mid: {mid_price:.4f}, Bid: {bot_bid_price:.4f}, Ask: {bot_ask_price:.4f}, Qty: {order_quantity}",
         )
 
         # --- 6. Order Management ---
@@ -172,14 +170,14 @@ async def market_making_strategy(
         if (
             not bot_instance.ws_manager.positions.get(symbol)
             or decimal.Decimal(
-                bot_instance.ws_manager.positions[symbol].get("size", "0")
+                bot_instance.ws_manager.positions[symbol].get("size", "0"),
             )
             == 0
         ):
             try:
                 await http_client.cancel_all_orders(category="linear", symbol=symbol)
                 logger.info(
-                    f"[{symbol}] No position found. Placing new buy and sell limit orders."
+                    f"[{symbol}] No position found. Placing new buy and sell limit orders.",
                 )
 
                 # Place Buy Order with Stop-Loss
@@ -198,7 +196,7 @@ async def market_making_strategy(
                     stop_loss=str(stop_loss_buy_price),
                 )
                 logger.info(
-                    f"Placed BUY order for {order_quantity} {symbol} at {bot_bid_price} with SL at {stop_loss_buy_price}"
+                    f"Placed BUY order for {order_quantity} {symbol} at {bot_bid_price} with SL at {stop_loss_buy_price}",
                 )
 
                 # Place Sell Order with Stop-Loss
@@ -217,14 +215,14 @@ async def market_making_strategy(
                     stop_loss=str(stop_loss_sell_price),
                 )
                 logger.info(
-                    f"Placed SELL order for {order_quantity} {symbol} at {bot_ask_price} with SL at {stop_loss_sell_price}"
+                    f"Placed SELL order for {order_quantity} {symbol} at {bot_ask_price} with SL at {stop_loss_sell_price}",
                 )
 
             except Exception as e:
                 logger.error(f"Error during initial order placement for {symbol}: {e}")
         else:
             logger.info(
-                f"[{symbol}] Position already exists. Skipping new order placement."
+                f"[{symbol}] Position already exists. Skipping new order placement.",
             )
 
     # --- 7. Manage Existing Positions (Profit Locking & Trailing Stop) ---
@@ -296,7 +294,7 @@ class BybitWebSocketManager:
             return
         for symbol in symbols:
             self.ws_public.orderbook_stream(
-                depth=1, symbol=symbol, callback=self.handle_orderbook
+                depth=1, symbol=symbol, callback=self.handle_orderbook,
             )
             self.ws_public.ticker_stream(symbol=symbol, callback=self.handle_ticker)
         logger.info(f"Subscribed to public channels for: {symbols}")
@@ -313,7 +311,7 @@ class BybitWebSocketManager:
 class BybitTradingBot:
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
         self.session = HTTP(
-            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000
+            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000,
         )
         self.ws_manager = BybitWebSocketManager(api_key, api_secret, testnet)
         self.strategy: Callable | None = None
@@ -325,7 +323,7 @@ class BybitTradingBot:
         logger.info(f"Fetching instrument info for symbols: {symbols}")
         try:
             response = self.session.get_instruments_info(
-                category="linear", symbol=",".join(symbols)
+                category="linear", symbol=",".join(symbols),
             )
             if response and response["retCode"] == 0:
                 for item in response.get("result", {}).get("list", []):
@@ -338,7 +336,7 @@ class BybitTradingBot:
                     logger.info(f"Successfully fetched instrument info for {symbol}.")
             else:
                 logger.error(
-                    f"Failed to fetch instrument info: {response.get('retMsg')}"
+                    f"Failed to fetch instrument info: {response.get('retMsg')}",
                 )
         except Exception as e:
             logger.error(f"Error fetching instrument info: {e}")
@@ -360,7 +358,7 @@ class BybitTradingBot:
         while True:
             try:
                 account_info = await self.session.get_wallet_balance(
-                    accountType="UNIFIED"
+                    accountType="UNIFIED",
                 )
                 if not account_info or account_info.get("retCode") != 0:
                     logger.warning("Skipping strategy due to missing account data.")
@@ -368,7 +366,7 @@ class BybitTradingBot:
                     continue
 
                 await self.strategy(
-                    account_info["result"]["list"], self.session, self, symbols
+                    account_info["result"]["list"], self.session, self, symbols,
                 )
 
             except KeyboardInterrupt:
@@ -388,7 +386,7 @@ async def main():
 
     if not API_KEY or not API_SECRET:
         logger.error(
-            "BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set."
+            "BYBIT_API_KEY and BYBIT_API_SECRET environment variables must be set.",
         )
         return
 

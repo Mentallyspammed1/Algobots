@@ -2,8 +2,7 @@ import json
 import os
 import unittest
 from decimal import Decimal
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -62,7 +61,7 @@ class TestConfigLoading(unittest.TestCase):
         self.assertFalse(config["indicators"]["rsi"])
         self.assertTrue(config["indicators"]["ehlers_fisher_transform"])
         self.assertTrue(
-            config["indicators"]["macd"]
+            config["indicators"]["macd"],
         )  # A default that wasn't in user config
 
     def test_handle_invalid_json(self):
@@ -105,7 +104,7 @@ class TestTradingAnalyzer(unittest.TestCase):
             os.remove("default_config_for_test.json")
 
         self.analyzer = tt.TradingAnalyzer(
-            self.df, self.config, self.mock_logger, "BTCUSDT", "15"
+            self.df, self.config, self.mock_logger, "BTCUSDT", "15",
         )
 
     def test_calculate_rsi(self):
@@ -143,7 +142,7 @@ class TestTradingAnalyzer(unittest.TestCase):
         self.assertTrue(all(0 <= x <= 1 for x in laguerre_series))
         # In a strong uptrend, it should be in the overbought area
         self.assertTrue(
-            laguerre_series.iloc[-1] > self.config["laguerre_rsi_overbought"]
+            laguerre_series.iloc[-1] > self.config["laguerre_rsi_overbought"],
         )
 
     def test_generate_buy_signal(self):
@@ -171,7 +170,7 @@ class TestTradingAnalyzer(unittest.TestCase):
         buy_data["close"] = pd.Series(close_prices * num_repeats).head(len(self.df))
 
         buy_analyzer = tt.TradingAnalyzer(
-            buy_data, self.config, self.mock_logger, "BTCUSDT", "15"
+            buy_data, self.config, self.mock_logger, "BTCUSDT", "15",
         )
 
         buy_analyzer._calculate_all_indicators()
@@ -183,7 +182,7 @@ class TestTradingAnalyzer(unittest.TestCase):
         buy_analyzer.indicator_values["stoch_rsi_vals"] = stoch_rsi_vals
 
         signal, score, conditions, _ = buy_analyzer.generate_trading_signal(
-            Decimal("82.0")
+            Decimal("82.0"),
         )
 
         self.assertEqual(signal, "buy")
@@ -195,10 +194,10 @@ class TestTradingAnalyzer(unittest.TestCase):
         # Create a scenario for a sell signal (e.g., overbought RSI)
         sell_data = self.df.copy()
         sell_data["close"] = pd.Series(
-            np.linspace(100, 200, 50)
+            np.linspace(100, 200, 50),
         )  # Strong uptrend to create overbought
         sell_analyzer = tt.TradingAnalyzer(
-            sell_data, self.config, self.mock_logger, "BTCUSDT", "15"
+            sell_data, self.config, self.mock_logger, "BTCUSDT", "15",
         )
 
         sell_analyzer._calculate_all_indicators()
@@ -210,7 +209,7 @@ class TestTradingAnalyzer(unittest.TestCase):
         sell_analyzer.indicator_values["stoch_rsi_vals"] = stoch_rsi_vals
 
         signal, score, conditions, _ = sell_analyzer.generate_trading_signal(
-            Decimal("200.0")
+            Decimal("200.0"),
         )
 
         self.assertEqual(signal, "sell")
@@ -222,15 +221,15 @@ class TestTradingAnalyzer(unittest.TestCase):
         # Sideways market data
         sideways_data = self.df.copy()
         sideways_data["close"] = pd.Series(
-            100 + np.sin(np.linspace(0, 5 * np.pi, 50)) * 2
+            100 + np.sin(np.linspace(0, 5 * np.pi, 50)) * 2,
         )
         sideways_analyzer = tt.TradingAnalyzer(
-            sideways_data, self.config, self.mock_logger, "BTCUSDT", "15"
+            sideways_data, self.config, self.mock_logger, "BTCUSDT", "15",
         )
 
         sideways_analyzer._calculate_all_indicators()
         signal, score, _, _ = sideways_analyzer.generate_trading_signal(
-            Decimal("100.0")
+            Decimal("100.0"),
         )
 
         self.assertIsNone(signal)

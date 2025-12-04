@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def place_spot_market_buy(symbol: str = "BTCUSDT", qty: str = "0.0001"):
     print(
         Fore.MAGENTA
         + f"\n# Initiating a market buy order for {qty} {symbol} on Bybit v5 Spot...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def place_spot_market_buy(symbol: str = "BTCUSDT", qty: str = "0.0001"):
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,7 +37,7 @@ def place_spot_market_buy(symbol: str = "BTCUSDT", qty: str = "0.0001"):
         print(
             Fore.CYAN
             + f"  # Attempting to place a market buy order for {qty} {symbol}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Place a market order
@@ -49,7 +47,7 @@ def place_spot_market_buy(symbol: str = "BTCUSDT", qty: str = "0.0001"):
         # orderType: 'Market' or 'Limit'
         # qty: Quantity to buy/sell
         response = session.place_order(
-            category="spot", symbol=symbol, side="Buy", orderType="Market", qty=qty
+            category="spot", symbol=symbol, side="Buy", orderType="Market", qty=qty,
         )
 
         if response and response["retCode"] == 0:
@@ -57,17 +55,17 @@ def place_spot_market_buy(symbol: str = "BTCUSDT", qty: str = "0.0001"):
             print(
                 Fore.GREEN
                 + "  # Market buy order placed successfully!"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(
                 Fore.GREEN
                 + f"    Order ID: {order_info.get('orderId')}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             print(
                 Fore.GREEN
                 + f"    Order Link ID: {order_info.get('orderLinkId')}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(Fore.RED + "  # Failed to place market buy order." + Style.RESET_ALL)
@@ -76,7 +74,7 @@ def place_spot_market_buy(symbol: str = "BTCUSDT", qty: str = "0.0001"):
                 print(
                     Fore.RED
                     + f"  # Error Message: {response['retMsg']}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     except Exception as e:
@@ -84,11 +82,11 @@ def place_spot_market_buy(symbol: str = "BTCUSDT", qty: str = "0.0001"):
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable, API keys are valid, and you have sufficient balance."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
-        Fore.MAGENTA + "\n# The market buy incantation is complete!\n" + Style.RESET_ALL
+        Fore.MAGENTA + "\n# The market buy incantation is complete!\n" + Style.RESET_ALL,
     )
 
 
@@ -100,22 +98,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     place_spot_market_buy("BTCUSDT", "0.0001")

@@ -1,16 +1,11 @@
 
 import json
-import hmac
-import hashlib
-import urllib.parse
-import time
 import logging
 import os
 import sys
-from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
-from typing import Dict, Optional, Tuple, List, Any, Literal
-from decimal import Decimal, ROUND_DOWN
+
 from colorama import Fore, Style
 
 # Constants for colors
@@ -60,7 +55,7 @@ class Config:
         self.trade_management = TradeManagement(**kwargs.get("trade_management", {}))
         self.mtf_analysis = MTFAnalysis(**kwargs.get("mtf_analysis", {}))
         self.indicator_settings = IndicatorSettings(**kwargs.get("indicator_settings", {}))
-        self.indicators: Dict[str, bool] = kwargs.get("indicators", {})
+        self.indicators: dict[str, bool] = kwargs.get("indicators", {})
         self.weight_sets = WeightSets(**kwargs.get("weight_sets", {}))
 
 class TradeManagement:
@@ -76,8 +71,8 @@ class TradeManagement:
 class MTFAnalysis:
     def __init__(self, **kwargs):
         self.enabled: bool = kwargs.get("enabled", False)
-        self.higher_timeframes: List[str] = kwargs.get("higher_timeframes", ["60", "240"])
-        self.trend_indicators: List[str] = kwargs.get("trend_indicators", ["ema", "sma"])
+        self.higher_timeframes: list[str] = kwargs.get("higher_timeframes", ["60", "240"])
+        self.trend_indicators: list[str] = kwargs.get("trend_indicators", ["ema", "sma"])
         self.trend_period: int = kwargs.get("trend_period", 14)
         self.trend_confluence_weight: float = kwargs.get("trend_confluence_weight", 0.5)
 
@@ -159,9 +154,9 @@ class WeightSets:
         # Add other weight sets if needed, e.g., trend_following, mean_reversion
 
 # --- Logger Setup ---
-def setup_logger(name: str, log_file: str = 'agent_log.log', level: int = logging.INFO) -> logging.Logger:
+def setup_logger(name: str, log_file: str = "agent_log.log", level: int = logging.INFO) -> logging.Logger:
     """Function to setup as many loggers as you want"""
-    formatter = logging.Formatter(f'%(asctime)s - {NEON_BLUE}%(name)s{RESET} - {NEON_GREEN}%(levelname)s{RESET} - %(message)s')
+    formatter = logging.Formatter(f"%(asctime)s - {NEON_BLUE}%(name)s{RESET} - {NEON_GREEN}%(levelname)s{RESET} - %(message)s")
 
     # File handler
     try:
@@ -210,10 +205,9 @@ class PositionManager:
         self.symbol = symbol
         self.logger.info(f"PositionManager initialized for {symbol}")
 
-    def manage_position(self, signal: str, price: Decimal, analyzer: 'TradingAnalyzer'):
+    def manage_position(self, signal: str, price: Decimal, analyzer: "TradingAnalyzer"):
         # Placeholder for actual position management logic (entry, exit, stop loss, etc.)
         self.logger.debug(f"Managing position for signal: {signal} at price {price}")
-        pass
 
 class PerformanceTracker:
     def __init__(self, logger: logging.Logger, config: Config):
@@ -222,14 +216,13 @@ class PerformanceTracker:
         self.trades = []
         self.logger.info("PerformanceTracker initialized")
 
-    def record_trade(self, trade_data: Dict):
+    def record_trade(self, trade_data: dict):
         self.trades.append(trade_data)
         self.logger.debug(f"Recorded trade: {trade_data}")
 
     def display_performance(self):
         # Placeholder for displaying performance metrics
         self.logger.info("Displaying performance metrics (placeholder)")
-        pass
 
 # --- Indicator Calculations (within TradingAnalyzer) ---
 # (These will be defined later in the TradingAnalyzer class)
@@ -243,7 +236,7 @@ def load_config(filepath: str, logger: logging.Logger) -> Config:
     config_path = Path(filepath)
     if not config_path.exists():
         logger.warning(
-            f"{NEON_YELLOW}Configuration file not found. Creating default config at {filepath}.{RESET}"
+            f"{NEON_YELLOW}Configuration file not found. Creating default config at {filepath}.{RESET}",
         )
         default_cfg = Config()
         try:
@@ -278,12 +271,12 @@ def load_config(filepath: str, logger: logging.Logger) -> Config:
         return cfg
     except json.JSONDecodeError:
         logger.error(
-            f"{NEON_RED}Failed to decode JSON from {filepath}. File might be corrupted. Using defaults.{RESET}"
+            f"{NEON_RED}Failed to decode JSON from {filepath}. File might be corrupted. Using defaults.{RESET}",
         )
         return Config() # Return default config on decode error
     except Exception as exc:
         logger.error(
-            f"{NEON_RED}Failed to load config from {filepath}: {exc}. Using defaults.{RESET}"
+            f"{NEON_RED}Failed to load config from {filepath}: {exc}. Using defaults.{RESET}",
         )
         return Config() # Return default config on other errors
 

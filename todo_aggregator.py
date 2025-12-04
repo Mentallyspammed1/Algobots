@@ -128,7 +128,7 @@ def main():
     newly_added_count = update_todo_file(TODO_FILE, all_found_todos, existing_todos)
 
     print(
-        f"Process complete. {newly_added_count} unique TODOs were added to {TODO_FILE}."
+        f"Process complete. {newly_added_count} unique TODOs were added to {TODO_FILE}.",
     )
 
 

@@ -7,8 +7,7 @@ import time
 from asyncio import Queue
 from collections import deque
 from collections.abc import Callable
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 from functools import lru_cache
 from typing import Any
 
@@ -34,7 +33,7 @@ class StateManager:
             return {}
         except json.JSONDecodeError:
             logging.warning(
-                f"Corrupted state file: {self.file_path}. Starting with empty state."
+                f"Corrupted state file: {self.file_path}. Starting with empty state.",
             )
             return {}
 
@@ -97,22 +96,21 @@ def is_fresh(df: pd.DataFrame) -> bool:
         age = (current_time - latest_ts).total_seconds()
         return age < MAX_STALENESS_SECONDS
     except Exception as e:
-        logging.error(f"Error checking data freshness: {e}")
+        logging.exception(f"Error checking data freshness: {e}")
         return False
 
 
 # --- Import Configuration and Indicator Logic ---
 import config as cfg  # Import config as cfg
-from bot_logger import log_exception
-from bot_logger import log_metrics
-from bot_logger import setup_logging
+from bot_logger import log_exception, log_metrics, setup_logging
 from bot_ui import display_market_info
-from bybit_api import BybitAPIError
-from bybit_api import BybitContractAPI
-from indicators import calculate_atr
-from indicators import calculate_fibonacci_pivot_points
-from indicators import find_pivots
-from indicators import handle_websocket_kline_data
+from bybit_api import BybitAPIError, BybitContractAPI
+from indicators import (
+    calculate_atr,
+    calculate_fibonacci_pivot_points,
+    find_pivots,
+    handle_websocket_kline_data,
+)
 from order_manager import OrderManager
 from trade_metrics import TradeMetrics
 from utils import OrderBook
@@ -125,11 +123,11 @@ try:
     StrategyClass = getattr(strategy_module, cfg.STRATEGY_NAME)
 except ImportError:
     raise ImportError(
-        f"Could not import strategy '{cfg.STRATEGY_NAME}'. Make sure the file 'strategies/{cfg.STRATEGY_NAME.lower()}.py' exists and contains a class named '{cfg.STRATEGY_NAME}'."
+        f"Could not import strategy '{cfg.STRATEGY_NAME}'. Make sure the file 'strategies/{cfg.STRATEGY_NAME.lower()}.py' exists and contains a class named '{cfg.STRATEGY_NAME}'.",
     )
 except AttributeError:
     raise AttributeError(
-        f"Strategy module 'strategies.{cfg.STRATEGY_NAME.lower()}' found, but no class named '{cfg.STRATEGY_NAME}' within it."
+        f"Strategy module 'strategies.{cfg.STRATEGY_NAME.lower()}' found, but no class named '{cfg.STRATEGY_NAME}' within it.",
     )
 
 
@@ -140,7 +138,7 @@ def websocket_message_handler(func: Callable):
         self.performance_metrics["ws_messages_received"] += 1
         if not message.get("data"):
             self.bot_logger.debug(
-                f"Received empty update for topic {message.get('topic')}: {message}"
+                f"Received empty update for topic {message.get('topic')}: {message}",
             )
             return
         try:
@@ -150,7 +148,7 @@ def websocket_message_handler(func: Callable):
             self.performance_metrics["ws_errors"] += 1
             self.consecutive_errors += 1
             log_exception(
-                self.bot_logger, f"Error handling WS message in {func.__name__}: {e}", e
+                self.bot_logger, f"Error handling WS message in {func.__name__}: {e}", e,
             )
             if self.consecutive_errors > MAX_CONSECUTIVE_ERRORS:
                 asyncio.create_task(self._handle_restart())
@@ -178,7 +176,7 @@ class PyrmethusBot:
                 strategy_params[param.name] = getattr(cfg, config_param_name)
 
         self.bot_logger.info(
-            f"Initializing strategy '{cfg.STRATEGY_NAME}' with parameters: {strategy_params}"
+            f"Initializing strategy '{cfg.STRATEGY_NAME}' with parameters: {strategy_params}",
         )
         self.strategy = StrategyClass(self.bot_logger, **strategy_params)
 
@@ -187,20 +185,20 @@ class PyrmethusBot:
 
         # --- Bot State Variables (using Decimal for precision) ---
         self.inventory: Decimal = Decimal(
-            self.state_manager.state.get("inventory", "0")
+            self.state_manager.state.get("inventory", "0"),
         )
         self.entry_price: Decimal = Decimal(
-            self.state_manager.state.get("entry_price", "0")
+            self.state_manager.state.get("entry_price", "0"),
         )
         self.unrealized_pnl: Decimal = Decimal(
-            self.state_manager.state.get("unrealized_pnl", "0")
+            self.state_manager.state.get("unrealized_pnl", "0"),
         )
 
         self.entry_price_for_trade_metrics: Decimal = Decimal(
-            self.state_manager.state.get("entry_price_for_trade_metrics", "0")
+            self.state_manager.state.get("entry_price_for_trade_metrics", "0"),
         )
         self.entry_fee_for_trade_metrics: Decimal = Decimal(
-            self.state_manager.state.get("entry_fee_for_trade_metrics", "0")
+            self.state_manager.state.get("entry_fee_for_trade_metrics", "0"),
         )
 
         self.current_price: Decimal = Decimal("0")
@@ -210,10 +208,10 @@ class PyrmethusBot:
 
         # --- Order Block & Pivot Point Tracking ---
         self.active_bull_obs: list[OrderBlock] = self.state_manager.state.get(
-            "active_bull_obs", []
+            "active_bull_obs", [],
         )
         self.active_bear_obs: list[OrderBlock] = self.state_manager.state.get(
-            "active_bear_obs", []
+            "active_bear_obs", [],
         )
         self.last_pivot_calc_timestamp: pd.Timestamp | None = None
         self.pivot_support_levels: dict[str, Decimal] = {}
@@ -221,10 +219,10 @@ class PyrmethusBot:
 
         # --- Additional State Variables ---
         self.trailing_stop_active: bool = self.state_manager.state.get(
-            "trailing_stop_active", False
+            "trailing_stop_active", False,
         )
         self.trailing_stop_distance: Decimal = Decimal(
-            self.state_manager.state.get("trailing_stop_distance", "0")
+            self.state_manager.state.get("trailing_stop_distance", "0"),
         )
         self.last_signal_timestamp: pd.Timestamp | None = None
         self.last_signal_time = time.time()
@@ -241,7 +239,7 @@ class PyrmethusBot:
 
         # --- Data Management ---
         self.price_history = deque(
-            self.state_manager.state.get("price_history", []), maxlen=100
+            self.state_manager.state.get("price_history", []), maxlen=100,
         )  # Keep last 100 prices for analysis
         self.signal_queue = Queue(maxsize=10)  # Queue for signal processing
         self.is_running = True
@@ -290,16 +288,16 @@ class PyrmethusBot:
         self.state_manager.update_state("entry_price", str(self.entry_price))
         self.state_manager.update_state("unrealized_pnl", str(self.unrealized_pnl))
         self.state_manager.update_state(
-            "entry_price_for_trade_metrics", str(self.entry_price_for_trade_metrics)
+            "entry_price_for_trade_metrics", str(self.entry_price_for_trade_metrics),
         )
         self.state_manager.update_state(
-            "entry_fee_for_trade_metrics", str(self.entry_fee_for_trade_metrics)
+            "entry_fee_for_trade_metrics", str(self.entry_fee_for_trade_metrics),
         )
         self.state_manager.update_state(
-            "trailing_stop_active", self.trailing_stop_active
+            "trailing_stop_active", self.trailing_stop_active,
         )
         self.state_manager.update_state(
-            "trailing_stop_distance", str(self.trailing_stop_distance)
+            "trailing_stop_distance", str(self.trailing_stop_distance),
         )
 
     def _manage_dataframe_size(self):
@@ -311,7 +309,7 @@ class PyrmethusBot:
     async def _handle_api_error(self, e: BybitAPIError, context: str = "API call"):
         """Centralized API error handling."""
         self.bot_logger.error(
-            f"{COLOR_RED}API Error during {context}: {e.ret_code} - {e.ret_msg}{COLOR_RESET}"
+            f"{COLOR_RED}API Error during {context}: {e.ret_code} - {e.ret_msg}{COLOR_RESET}",
         )
         # Specific error codes that might warrant a restart or special handling
         if e.ret_code in [
@@ -320,15 +318,15 @@ class PyrmethusBot:
             30035,
         ]:  # Examples: Invalid API Key, Insufficient Balance, Order Not Found
             self.bot_logger.critical(
-                f"{COLOR_RED}Critical API error {e.ret_code}. Triggering restart.{COLOR_RESET}"
+                f"{COLOR_RED}Critical API error {e.ret_code}. Triggering restart.{COLOR_RESET}",
             )
             asyncio.create_task(self._handle_restart())
         elif e.ret_code in [10006]:  # API rate limit exceeded
             self.bot_logger.warning(
-                f"{COLOR_YELLOW}API rate limit exceeded. Backing off...{COLOR_RESET}"
+                f"{COLOR_YELLOW}API rate limit exceeded. Backing off...{COLOR_RESET}",
             )
             await asyncio.sleep(
-                cfg.API_BACKOFF_FACTOR * 5
+                cfg.API_BACKOFF_FACTOR * 5,
             )  # Longer backoff for rate limits
         # Add more specific error handling as needed
 
@@ -349,13 +347,13 @@ class PyrmethusBot:
             window_size = cfg.PIVOT_LEFT_BARS + cfg.PIVOT_RIGHT_BARS + 1
             if len(self.klines_df) < window_size:
                 self.bot_logger.debug(
-                    f"Not enough data ({len(self.klines_df)} candles) for pivot calculation. Need at least {window_size}."
+                    f"Not enough data ({len(self.klines_df)} candles) for pivot calculation. Need at least {window_size}.",
                 )
                 return
 
             recent_data = self.klines_df.iloc[-window_size:]
             pivot_highs, pivot_lows = find_pivots(
-                recent_data, cfg.PIVOT_LEFT_BARS, cfg.PIVOT_RIGHT_BARS, use_wicks=True
+                recent_data, cfg.PIVOT_LEFT_BARS, cfg.PIVOT_RIGHT_BARS, use_wicks=True,
             )
 
             avg_volume = (
@@ -397,7 +395,7 @@ class PyrmethusBot:
                         }
                         self.active_bear_obs.append(new_ob)
                         self.bot_logger.info(
-                            f"{COLOR_MAGENTA}New Bearish OB identified: {new_ob['id']} at {ob_top:.4f}-{ob_bottom:.4f}, Volume: {volume:.2f}{COLOR_RESET}"
+                            f"{COLOR_MAGENTA}New Bearish OB identified: {new_ob['id']} at {ob_top:.4f}-{ob_bottom:.4f}, Volume: {volume:.2f}{COLOR_RESET}",
                         )
 
             # Process pivot lows for bullish order blocks
@@ -428,7 +426,7 @@ class PyrmethusBot:
                         }
                         self.active_bull_obs.append(new_ob)
                         self.bot_logger.info(
-                            f"{COLOR_MAGENTA}New Bullish OB identified: {new_ob['id']} at {ob_top:.4f}-{ob_bottom:.4f}, Volume: {volume:.2f}{COLOR_RESET}"
+                            f"{COLOR_MAGENTA}New Bullish OB identified: {new_ob['id']} at {ob_top:.4f}-{ob_bottom:.4f}, Volume: {volume:.2f}{COLOR_RESET}",
                         )
 
             # Manage existing order blocks
@@ -443,7 +441,7 @@ class PyrmethusBot:
                     ob["violated"] = True
                     ob["violation_ts"] = self.klines_df.index[-1]
                     self.bot_logger.info(
-                        f"{COLOR_RED}Bullish OB {ob['id']} violated by price {current_price:.4f}{COLOR_RESET}"
+                        f"{COLOR_RED}Bullish OB {ob['id']} violated by price {current_price:.4f}{COLOR_RESET}",
                     )
                 else:
                     ob["extended_to_ts"] = self.klines_df.index[-1]
@@ -454,21 +452,21 @@ class PyrmethusBot:
                     ob["violated"] = True
                     ob["violation_ts"] = self.klines_df.index[-1]
                     self.bot_logger.info(
-                        f"{COLOR_RED}Bearish OB {ob['id']} violated by price {current_price:.4f}{COLOR_RESET}"
+                        f"{COLOR_RED}Bearish OB {ob['id']} violated by price {current_price:.4f}{COLOR_RESET}",
                     )
                 else:
                     ob["extended_to_ts"] = self.klines_df.index[-1]
 
             # Keep only the most recent active order blocks
             self.active_bull_obs = sorted(
-                self.active_bull_obs, key=lambda x: x["timestamp"], reverse=True
+                self.active_bull_obs, key=lambda x: x["timestamp"], reverse=True,
             )[: cfg.MAX_ACTIVE_OBS]
             self.active_bear_obs = sorted(
-                self.active_bear_obs, key=lambda x: x["timestamp"], reverse=True
+                self.active_bear_obs, key=lambda x: x["timestamp"], reverse=True,
             )[: cfg.MAX_ACTIVE_OBS]
 
             self.bot_logger.debug(
-                f"Active OBs after management: Bull={len(self.active_bull_obs)}, Bear={len(self.active_bear_obs)}"
+                f"Active OBs after management: Bull={len(self.active_bull_obs)}, Bear={len(self.active_bear_obs)}",
             )
 
         except Exception as e:
@@ -495,7 +493,7 @@ class PyrmethusBot:
         """Enhanced position update handler with better validation and error handling."""
         if message.get("topic") != "position" or not message.get("data"):
             self.bot_logger.debug(
-                f"Received non-position or empty WS update: {message}"
+                f"Received non-position or empty WS update: {message}",
             )
             return
 
@@ -505,11 +503,11 @@ class PyrmethusBot:
         if not pos or Decimal(str(pos.get("size", "0"))) == Decimal("0"):
             if self.has_open_position:
                 self.bot_logger.info(
-                    f"{PYRMETHUS_GREEN}🎉 Position for {cfg.SYMBOL} closed successfully!{COLOR_RESET}"
+                    f"{PYRMETHUS_GREEN}🎉 Position for {cfg.SYMBOL} closed successfully!{COLOR_RESET}",
                 )
                 exit_price = self.current_price
                 exit_fee = self.trade_metrics.calculate_fee(
-                    abs(self.inventory), exit_price, is_maker=False
+                    abs(self.inventory), exit_price, is_maker=False,
                 )
                 self.trade_metrics.record_trade(
                     self.entry_price_for_trade_metrics,
@@ -527,7 +525,7 @@ class PyrmethusBot:
                 )
             self._reset_position_state()
             self.bot_logger.info(
-                f"{PYRMETHUS_GREY}✅ No open position for {cfg.SYMBOL}. Seeking new opportunities...{COLOR_RESET}"
+                f"{PYRMETHUS_GREY}✅ No open position for {cfg.SYMBOL}. Seeking new opportunities...{COLOR_RESET}",
             )
             return
 
@@ -548,15 +546,15 @@ class PyrmethusBot:
 
         if not self.has_open_position and size > 0:
             self.bot_logger.info(
-                f"{PYRMETHUS_GREEN}🎉 New position detected for {symbol}.{COLOR_RESET}"
+                f"{PYRMETHUS_GREEN}🎉 New position detected for {symbol}.{COLOR_RESET}",
             )
             self.entry_price_for_trade_metrics = avg_price
             self.entry_fee_for_trade_metrics = self.trade_metrics.calculate_fee(
-                size, avg_price, is_maker=False
+                size, avg_price, is_maker=False,
             )
         elif self.has_open_position and (position_size_changed or entry_price_changed):
             self.bot_logger.info(
-                f"{PYRMETHUS_BLUE}💼 Position updated for {symbol}.{COLOR_RESET}"
+                f"{PYRMETHUS_BLUE}💼 Position updated for {symbol}.{COLOR_RESET}",
             )
 
         self.inventory = signed_inventory
@@ -566,7 +564,7 @@ class PyrmethusBot:
         if self.has_open_position:
             self.bot_logger.info(
                 f"{PYRMETHUS_BLUE}💼 Position: {self.current_position_side} {abs(self.inventory):.4f} {symbol} "
-                f"@ {self.entry_price:.4f} | PnL: {self.unrealized_pnl:.4f}{COLOR_RESET}"
+                f"@ {self.entry_price:.4f} | PnL: {self.unrealized_pnl:.4f}{COLOR_RESET}",
             )
             if position_size_changed or entry_price_changed:
                 await self._update_take_profit_stop_loss()
@@ -589,7 +587,7 @@ class PyrmethusBot:
                 self.trailing_stop_active = True
                 self.trailing_stop_distance = atr_sl_value
                 self.bot_logger.info(
-                    f"{PYRMETHUS_BLUE}Trailing stop activated. Distance: {self.trailing_stop_distance:.4f}{COLOR_RESET}"
+                    f"{PYRMETHUS_BLUE}Trailing stop activated. Distance: {self.trailing_stop_distance:.4f}{COLOR_RESET}",
                 )
 
         elif self.inventory < 0:  # Short position
@@ -603,11 +601,11 @@ class PyrmethusBot:
                 self.trailing_stop_active = True
                 self.trailing_stop_distance = atr_sl_value
                 self.bot_logger.info(
-                    f"{PYRMETHUS_BLUE}Trailing stop activated. Distance: {self.trailing_stop_distance:.4f}{COLOR_RESET}"
+                    f"{PYRMETHUS_BLUE}Trailing stop activated. Distance: {self.trailing_stop_distance:.4f}{COLOR_RESET}",
                 )
 
         self.bot_logger.info(
-            f"{PYRMETHUS_ORANGE}Dynamic TP/SL: TP={take_profit_price:.4f}, SL={stop_loss_price:.4f}{COLOR_RESET}"
+            f"{PYRMETHUS_ORANGE}Dynamic TP/SL: TP={take_profit_price:.4f}, SL={stop_loss_price:.4f}{COLOR_RESET}",
         )
         return take_profit_price, stop_loss_price
 
@@ -636,12 +634,12 @@ class PyrmethusBot:
 
         if take_profit_price or stop_loss_price:
             self.bot_logger.info(
-                f"{PYRMETHUS_ORANGE}Static TP/SL: TP={take_profit_price:.4f if take_profit_price else 'None'}, SL={stop_loss_price:.4f if stop_loss_price else 'None'}{COLOR_RESET}"
+                f"{PYRMETHUS_ORANGE}Static TP/SL: TP={take_profit_price:.4f if take_profit_price else 'None'}, SL={stop_loss_price:.4f if stop_loss_price else 'None'}{COLOR_RESET}",
             )
         return take_profit_price, stop_loss_price
 
     async def _execute_tp_sl_orders(
-        self, take_profit_price: Decimal | None, stop_loss_price: Decimal | None
+        self, take_profit_price: Decimal | None, stop_loss_price: Decimal | None,
     ):
         """Validates and places the TP/SL orders via the API."""
         if not (take_profit_price or stop_loss_price):
@@ -650,7 +648,7 @@ class PyrmethusBot:
         try:
             # Validate prices against last market price
             ticker_info = await self.bybit_client.get_symbol_ticker(
-                category=cfg.BYBIT_CATEGORY, symbol=cfg.SYMBOL
+                category=cfg.BYBIT_CATEGORY, symbol=cfg.SYMBOL,
             )
             if (
                 ticker_info
@@ -666,7 +664,7 @@ class PyrmethusBot:
                 ):
                     stop_loss_price = last_price * Decimal("0.995")
                     self.bot_logger.warning(
-                        f"{PYRMETHUS_YELLOW}Adjusted SL to {stop_loss_price:.4f} to avoid immediate trigger.{COLOR_RESET}"
+                        f"{PYRMETHUS_YELLOW}Adjusted SL to {stop_loss_price:.4f} to avoid immediate trigger.{COLOR_RESET}",
                     )
                 elif (
                     self.inventory < 0
@@ -675,7 +673,7 @@ class PyrmethusBot:
                 ):
                     stop_loss_price = last_price * Decimal("1.005")
                     self.bot_logger.warning(
-                        f"{PYRMETHUS_YELLOW}Adjusted SL to {stop_loss_price:.4f} to avoid immediate trigger.{COLOR_RESET}"
+                        f"{PYRMETHUS_YELLOW}Adjusted SL to {stop_loss_price:.4f} to avoid immediate trigger.{COLOR_RESET}",
                     )
 
             tp_sl_kwargs = {
@@ -695,7 +693,7 @@ class PyrmethusBot:
             if tp_sl_kwargs["take_profit"] or tp_sl_kwargs["stop_loss"]:
                 await self.bybit_client.trading_stop(**tp_sl_kwargs)
                 self.bot_logger.info(
-                    f"{PYRMETHUS_GREEN}TP/SL set successfully: TP={tp_sl_kwargs['take_profit']}, SL={tp_sl_kwargs['stop_loss']}{COLOR_RESET}"
+                    f"{PYRMETHUS_GREEN}TP/SL set successfully: TP={tp_sl_kwargs['take_profit']}, SL={tp_sl_kwargs['stop_loss']}{COLOR_RESET}",
                 )
 
         except BybitAPIError as e:
@@ -762,14 +760,14 @@ class PyrmethusBot:
             # If timestamp is a column, convert it to index
             elif "timestamp" in updated_df.columns:
                 updated_df["timestamp"] = pd.to_datetime(
-                    updated_df["timestamp"], unit="ms"
+                    updated_df["timestamp"], unit="ms",
                 )
                 updated_df.set_index("timestamp", inplace=True)
                 updated_df.sort_index(inplace=True)
                 self.klines_df = updated_df
             else:
                 self.bot_logger.error(
-                    "Updated DataFrame has neither timestamp index nor column"
+                    "Updated DataFrame has neither timestamp index nor column",
                 )
                 return
 
@@ -785,17 +783,17 @@ class PyrmethusBot:
             if len(self.klines_df) >= min_data_needed:
                 # Calculate ATR and other indicators
                 self.klines_df["atr"] = calculate_atr(
-                    self.klines_df, length=cfg.ATR_PERIOD
+                    self.klines_df, length=cfg.ATR_PERIOD,
                 )
 
                 # Update ATR cache
                 if not self.klines_df["atr"].empty and not pd.isna(
-                    self.klines_df["atr"].iloc[-1]
+                    self.klines_df["atr"].iloc[-1],
                 ):
                     self.cached_atr = Decimal(str(self.klines_df["atr"].iloc[-1]))
                 else:
                     self.bot_logger.warning(
-                        f"{COLOR_YELLOW}ATR is NaN or empty after calculation. Setting to 0.{COLOR_RESET}"
+                        f"{COLOR_YELLOW}ATR is NaN or empty after calculation. Setting to 0.{COLOR_RESET}",
                     )
                     self.cached_atr = Decimal("0")
 
@@ -812,14 +810,14 @@ class PyrmethusBot:
 
                 self.last_kline_update = time.time()
                 self.bot_logger.info(
-                    f"{COLOR_CYAN}Kline updated. Price: {self.current_price:.4f}, ATR: {self.cached_atr:.4f}{COLOR_RESET}"
+                    f"{COLOR_CYAN}Kline updated. Price: {self.current_price:.4f}, ATR: {self.cached_atr:.4f}{COLOR_RESET}",
                 )
             elif (
                 "close" in self.klines_df.columns and not self.klines_df["close"].empty
             ):
                 self.current_price = Decimal(str(self.klines_df["close"].iloc[-1]))
                 self.bot_logger.debug(
-                    f"Insufficient data for indicators. Price: {self.current_price:.4f}"
+                    f"Insufficient data for indicators. Price: {self.current_price:.4f}",
                 )
 
     async def _initial_kline_fetch(self) -> bool:
@@ -827,7 +825,7 @@ class PyrmethusBot:
         for attempt in range(cfg.API_REQUEST_RETRIES + 1):
             try:
                 self.bot_logger.info(
-                    f"{PYRMETHUS_ORANGE}Fetching initial kline data (Attempt {attempt + 1}/{cfg.API_REQUEST_RETRIES + 1})...{COLOR_RESET}"
+                    f"{PYRMETHUS_ORANGE}Fetching initial kline data (Attempt {attempt + 1}/{cfg.API_REQUEST_RETRIES + 1})...{COLOR_RESET}",
                 )
                 klines_response = await self.bybit_client.get_kline_rest_fallback(
                     category=cfg.BYBIT_CATEGORY,
@@ -868,11 +866,11 @@ class PyrmethusBot:
                 )
                 if len(self.klines_df) < min_data_needed:
                     self.bot_logger.warning(
-                        f"{COLOR_YELLOW}Insufficient data fetched ({len(self.klines_df)} candles, {min_data_needed} needed).{COLOR_RESET}"
+                        f"{COLOR_YELLOW}Insufficient data fetched ({len(self.klines_df)} candles, {min_data_needed} needed).{COLOR_RESET}",
                     )
 
                 if "atr" in self.klines_df.columns and not pd.isna(
-                    self.klines_df["atr"].iloc[-1]
+                    self.klines_df["atr"].iloc[-1],
                 ):
                     self.cached_atr = Decimal(str(self.klines_df["atr"].iloc[-1]))
                 else:
@@ -885,18 +883,18 @@ class PyrmethusBot:
                     self.current_price = Decimal(str(self.klines_df["close"].iloc[-1]))
 
                 self.bot_logger.info(
-                    f"{PYRMETHUS_GREEN}Initial kline data fetched successfully. Current price: {self.current_price:.4f}, ATR: {self.cached_atr:.4f}{COLOR_RESET}"
+                    f"{PYRMETHUS_GREEN}Initial kline data fetched successfully. Current price: {self.current_price:.4f}, ATR: {self.cached_atr:.4f}{COLOR_RESET}",
                 )
                 return True
             except BybitAPIError as e:
                 await self._handle_api_error(
-                    e, f"fetching initial klines (Attempt {attempt + 1})"
+                    e, f"fetching initial klines (Attempt {attempt + 1})",
                 )
                 if attempt < cfg.API_REQUEST_RETRIES:
                     await asyncio.sleep(cfg.API_BACKOFF_FACTOR * (2**attempt))
                 else:
                     self.bot_logger.error(
-                        f"{COLOR_RED}Failed to fetch initial kline data after multiple retries.{COLOR_RESET}"
+                        f"{COLOR_RED}Failed to fetch initial kline data after multiple retries.{COLOR_RESET}",
                     )
                     return False
             except Exception as e:
@@ -909,7 +907,7 @@ class PyrmethusBot:
                     await asyncio.sleep(cfg.API_BACKOFF_FACTOR * (2**attempt))
                 else:
                     self.bot_logger.error(
-                        f"{COLOR_RED}Failed to fetch initial kline data after multiple retries.{COLOR_RESET}"
+                        f"{COLOR_RED}Failed to fetch initial kline data after multiple retries.{COLOR_RESET}",
                     )
                     return False
 
@@ -940,7 +938,7 @@ class PyrmethusBot:
             # The second to last candle is the most recently closed one
             last_closed_pivot_candle_data = pivot_ohlcv_response["result"]["list"][-2]
             candle_timestamp = pd.to_datetime(
-                int(last_closed_pivot_candle_data[0]), unit="ms", utc=True
+                int(last_closed_pivot_candle_data[0]), unit="ms", utc=True,
             )
 
             # If we haven't calculated pivots before, or if a new candle has appeared
@@ -949,7 +947,7 @@ class PyrmethusBot:
                 or candle_timestamp > self.last_pivot_calc_timestamp
             ):
                 self.bot_logger.info(
-                    f"{PYRMETHUS_BLUE}New {cfg.PIVOT_TIMEFRAME} candle detected. Recalculating Fibonacci pivot points...{COLOR_RESET}"
+                    f"{PYRMETHUS_BLUE}New {cfg.PIVOT_TIMEFRAME} candle detected. Recalculating Fibonacci pivot points...{COLOR_RESET}",
                 )
 
                 # Create a temporary DataFrame for the calculation
@@ -962,8 +960,8 @@ class PyrmethusBot:
                             "low": Decimal(last_closed_pivot_candle_data[3]),
                             "close": Decimal(last_closed_pivot_candle_data[4]),
                             "volume": Decimal(str(last_closed_pivot_candle_data[5])),
-                        }
-                    ]
+                        },
+                    ],
                 ).set_index("timestamp")
 
                 fib_resistance, fib_support = calculate_fibonacci_pivot_points(temp_df)
@@ -976,18 +974,18 @@ class PyrmethusBot:
                 self.last_pivot_calc_timestamp = candle_timestamp
 
                 self.bot_logger.info(
-                    f"Pivot Points Updated: R={self.pivot_resistance_levels}, S={self.pivot_support_levels}"
+                    f"Pivot Points Updated: R={self.pivot_resistance_levels}, S={self.pivot_support_levels}",
                 )
 
         except Exception as e:
             log_exception(
-                self.bot_logger, f"Error updating Fibonacci Pivot Points: {e}", e
+                self.bot_logger, f"Error updating Fibonacci Pivot Points: {e}", e,
             )
 
     async def _handle_restart(self):
         """Handles bot restart by stopping and starting the main loop."""
         self.bot_logger.info(
-            f"{PYRMETHUS_YELLOW}Initiating bot restart...{COLOR_RESET}"
+            f"{PYRMETHUS_YELLOW}Initiating bot restart...{COLOR_RESET}",
         )
         await self.shutdown()
         await asyncio.sleep(10)  # Give some time before restarting
@@ -1009,7 +1007,7 @@ class PyrmethusBot:
             await asyncio.sleep(STATE_SAVE_INTERVAL)
             self.state_manager.save_state()
             self.bot_logger.info(
-                f"{PYRMETHUS_GREY}Periodic state save complete.{COLOR_RESET}"
+                f"{PYRMETHUS_GREY}Periodic state save complete.{COLOR_RESET}",
             )
 
     async def _perform_health_check(self):
@@ -1019,12 +1017,12 @@ class PyrmethusBot:
             healthy = True
             if not self.bybit_client.private_ws.is_connected:
                 self.bot_logger.warning(
-                    "Health Check: Private WebSocket is not connected."
+                    "Health Check: Private WebSocket is not connected.",
                 )
                 healthy = False
             if not self.bybit_client.public_ws.is_connected:
                 self.bot_logger.warning(
-                    "Health Check: Public WebSocket is not connected."
+                    "Health Check: Public WebSocket is not connected.",
                 )
                 healthy = False
             if not is_fresh(self.klines_df):
@@ -1035,17 +1033,17 @@ class PyrmethusBot:
                 self.health_check_failures += 1
                 if self.health_check_failures >= MAX_HEALTH_CHECK_FAILURES:
                     self.bot_logger.critical(
-                        f"{COLOR_RED}Health checks failed {self.health_check_failures} times. Triggering restart.{COLOR_RESET}"
+                        f"{COLOR_RED}Health checks failed {self.health_check_failures} times. Triggering restart.{COLOR_RESET}",
                     )
                     asyncio.create_task(self._handle_restart())
                 else:
                     self.bot_logger.warning(
-                        f"Health check failed ({self.health_check_failures}/{MAX_HEALTH_CHECK_FAILURES})."
+                        f"Health check failed ({self.health_check_failures}/{MAX_HEALTH_CHECK_FAILURES}).",
                     )
             else:
                 self.health_check_failures = 0  # Reset on successful check
                 self.bot_logger.info(
-                    f"{PYRMETHUS_GREEN}Health check passed.{COLOR_RESET}"
+                    f"{PYRMETHUS_GREEN}Health check passed.{COLOR_RESET}",
                 )
 
     async def _signal_processor(self):
@@ -1054,7 +1052,7 @@ class PyrmethusBot:
             signal = await self.signal_queue.get()
             signal_type, signal_price, signal_timestamp, signal_info = signal
             await self.order_manager.execute_entry(
-                signal_type, signal_price, signal_timestamp, signal_info
+                signal_type, signal_price, signal_timestamp, signal_info,
             )
             self.signal_queue.task_done()
 
@@ -1063,29 +1061,29 @@ class PyrmethusBot:
         self.bot_logger.info("Starting Pyrmethus's Ultra Scalper Bot.")
 
         print(
-            f"{PYRMETHUS_PURPLE}{COLOR_BOLD}\n🚀 Pyrmethus's Ultra Scalper Bot - Awakened{COLOR_RESET}"
+            f"{PYRMETHUS_PURPLE}{COLOR_BOLD}\n🚀 Pyrmethus's Ultra Scalper Bot - Awakened{COLOR_RESET}",
         )
         print(
-            f"{PYRMETHUS_PURPLE}{COLOR_BOLD}=========================================={COLOR_RESET}"
+            f"{PYRMETHUS_PURPLE}{COLOR_BOLD}=========================================={COLOR_RESET}",
         )
         print(f"{PYRMETHUS_ORANGE}\n⚡ Initializing scalping engine...{COLOR_RESET}")
 
         self.bybit_client = BybitContractAPI(
-            testnet="testnet" in cfg.BYBIT_API_ENDPOINT
+            testnet="testnet" in cfg.BYBIT_API_ENDPOINT,
         )
         self.order_manager = OrderManager(self.bybit_client, self)
         self.bot_logger.info("BybitContractAPI and OrderManager initialized.")
 
         private_listener_task = self.bybit_client.start_private_websocket_listener(
-            self._handle_position_update
+            self._handle_position_update,
         )
         await self.bybit_client.subscribe_ws_private_topic("position")
 
         public_listener_task = self.bybit_client.start_public_websocket_listener(
-            self._handle_public_ws_update
+            self._handle_public_ws_update,
         )
         await self.bybit_client.subscribe_ws_public_topic(
-            f"kline.{cfg.INTERVAL}.{cfg.SYMBOL}"
+            f"kline.{cfg.INTERVAL}.{cfg.SYMBOL}",
         )
         await self.bybit_client.subscribe_ws_public_topic(f"orderbook.50.{cfg.SYMBOL}")
 
@@ -1103,14 +1101,14 @@ class PyrmethusBot:
 
         if not await self._initial_kline_fetch():
             self.bot_logger.critical(
-                f"{COLOR_RED}Failed to fetch initial kline data. Bot cannot start.{COLOR_RESET}"
+                f"{COLOR_RED}Failed to fetch initial kline data. Bot cannot start.{COLOR_RESET}",
             )
             await self.shutdown()
             return
 
         try:
             initial_pos_response = await self.bybit_client.get_positions(
-                category=cfg.BYBIT_CATEGORY, symbol=cfg.SYMBOL
+                category=cfg.BYBIT_CATEGORY, symbol=cfg.SYMBOL,
             )
             if (
                 initial_pos_response
@@ -1121,7 +1119,7 @@ class PyrmethusBot:
                     {
                         "topic": "position",
                         "data": initial_pos_response["result"]["list"],
-                    }
+                    },
                 )
             else:
                 await self._handle_position_update({"topic": "position", "data": []})
@@ -1146,11 +1144,11 @@ class PyrmethusBot:
                     if self.klines_df is None or len(self.klines_df) < min_data_needed:
                         if self.klines_df is not None:
                             self.bot_logger.warning(
-                                f"{COLOR_YELLOW}Warming up... Need {min_data_needed} candles, have {len(self.klines_df)}. Waiting for more data...{COLOR_RESET}"
+                                f"{COLOR_YELLOW}Warming up... Need {min_data_needed} candles, have {len(self.klines_df)}. Waiting for more data...{COLOR_RESET}",
                             )
                         else:
                             self.bot_logger.warning(
-                                f"{COLOR_YELLOW}Kline data not yet available. Waiting...{COLOR_RESET}"
+                                f"{COLOR_YELLOW}Kline data not yet available. Waiting...{COLOR_RESET}",
                             )
                         await asyncio.sleep(cfg.POLLING_INTERVAL_SECONDS)
                         continue
@@ -1158,7 +1156,7 @@ class PyrmethusBot:
                     # --- Data Freshness Check ---
                     if not is_fresh(self.klines_df):
                         self.bot_logger.warning(
-                            f"{PYRMETHUS_YELLOW}Stale kline data detected. Skipping this cycle.{COLOR_RESET}"
+                            f"{PYRMETHUS_YELLOW}Stale kline data detected. Skipping this cycle.{COLOR_RESET}",
                         )
                         await asyncio.sleep(cfg.POLLING_INTERVAL_SECONDS)
                         continue
@@ -1168,7 +1166,7 @@ class PyrmethusBot:
                         "close": self.klines_df.get("close"),
                         "atr": self.klines_df.get("atr"),
                         "ehlers_supersmoother": self.klines_df.get(
-                            "ehlers_supersmoother"
+                            "ehlers_supersmoother",
                         ),
                     }
 
@@ -1176,7 +1174,7 @@ class PyrmethusBot:
                     for name, series in critical_indicators.items():
                         if series is None or series.empty or pd.isna(series.iloc[-1]):
                             self.bot_logger.warning(
-                                f"{COLOR_YELLOW}Latest '{name}' value is missing or NaN. Waiting for valid data...{COLOR_RESET}"
+                                f"{COLOR_YELLOW}Latest '{name}' value is missing or NaN. Waiting for valid data...{COLOR_RESET}",
                             )
                             indicators_valid = False
                             break
@@ -1232,7 +1230,7 @@ class PyrmethusBot:
 
             except KeyboardInterrupt:
                 self.bot_logger.info(
-                    f"{COLOR_YELLOW}Bot execution interrupted by user (Ctrl+C).{COLOR_RESET}"
+                    f"{COLOR_YELLOW}Bot execution interrupted by user (Ctrl+C).{COLOR_RESET}",
                 )
             except Exception as e:
                 log_exception(
@@ -1256,10 +1254,10 @@ async def main():
         await bot.run()
     except Exception as e:
         setup_logging().critical(
-            f"Critical error in main execution: {e}", exc_info=True
+            f"Critical error in main execution: {e}", exc_info=True,
         )
         print(
-            f"{COLOR_RED}Critical error encountered. Please check the logs for details.{COLOR_RESET}"
+            f"{COLOR_RED}Critical error encountered. Please check the logs for details.{COLOR_RESET}",
         )
 
 

@@ -15,7 +15,7 @@ class TestRiskManager(unittest.TestCase):
                 "take_profit": 0.03,
                 "max_leverage": 5,
                 "risk_per_trade": 0.02,
-            }
+            },
         }
         self.logger = MagicMock()
         self.risk_manager = RiskManager(self.config, self.logger)

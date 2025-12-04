@@ -1,7 +1,6 @@
 # trade_metrics.py
 import logging
-from decimal import ROUND_HALF_UP
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 # Initialize logging for trade_metrics
@@ -26,11 +25,11 @@ class TradeMetrics:
         self.losing_trades = 0
         self.trade_history = []  # Stores details of each closed trade
         trade_metrics_logger.info(
-            f"TradeMetrics initialized with Maker Fee: {self.maker_fee}, Taker Fee: {self.taker_fee}"
+            f"TradeMetrics initialized with Maker Fee: {self.maker_fee}, Taker Fee: {self.taker_fee}",
         )
 
     def calculate_fee(
-        self, quantity: Decimal, price: Decimal, is_maker: bool
+        self, quantity: Decimal, price: Decimal, is_maker: bool,
     ) -> Decimal:
         """Calculates the trading fee for a given trade.
 
@@ -47,7 +46,7 @@ class TradeMetrics:
         fee_rate = self.maker_fee if is_maker else self.taker_fee
         fee = trade_value * fee_rate
         trade_metrics_logger.debug(
-            f"Calculated fee: {fee} for trade value {trade_value} (Maker: {is_maker})"
+            f"Calculated fee: {fee} for trade value {trade_value} (Maker: {is_maker})",
         )
         return fee.quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
 
@@ -101,7 +100,7 @@ class TradeMetrics:
         }
         self.trade_history.append(trade_details)
         trade_metrics_logger.info(
-            f"Trade recorded: Side={side}, Gross PnL={pnl:.8f}, Net PnL={net_pnl:.8f}"
+            f"Trade recorded: Side={side}, Gross PnL={pnl:.8f}, Net PnL={net_pnl:.8f}",
         )
 
     def get_win_rate(self) -> Decimal:
@@ -109,7 +108,7 @@ class TradeMetrics:
         if self.total_trades == 0:
             return Decimal("0.0")
         return (Decimal(self.winning_trades) / Decimal(self.total_trades)) * Decimal(
-            "100"
+            "100",
         )
 
     def get_total_realized_pnl(self) -> Decimal:
@@ -120,7 +119,7 @@ class TradeMetrics:
         """Returns a dictionary of overall trade statistics."""
         return {
             "total_realized_pnl": self.total_realized_pnl.quantize(
-                Decimal("0.00000001"), rounding=ROUND_HALF_UP
+                Decimal("0.00000001"), rounding=ROUND_HALF_UP,
             ),
             "total_trades": self.total_trades,
             "winning_trades": self.winning_trades,

@@ -7,27 +7,19 @@ import sys
 import threading
 import time
 from collections import defaultdict
-from datetime import UTC
-from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import getcontext
+from datetime import UTC, datetime
+from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any
-from typing import ClassVar
-from typing import Literal
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
 from alert_system import AlertSystem
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from performance_tracker import PerformanceTracker
-from pybit.exceptions import FailedRequestError
-from pybit.exceptions import InvalidRequestError
+from pybit.exceptions import FailedRequestError, InvalidRequestError
 from pybit.unified_trading import HTTP
 from pybit.unified_trading import WebSocket as UnifiedWebSocket
 

@@ -9,14 +9,12 @@ import sys
 import time
 import traceback
 from collections.abc import Callable
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 from email.mime.text import MIMEText
 from typing import Any
 
 import yaml
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # Set decimal precision for financial calculations
 getcontext().prec = 28
@@ -31,7 +29,7 @@ def load_config():
         logging.warning("bot_config.yaml not found. Relying on environment variables.")
         return {}
     except Exception as e:
-        logging.error(f"Error loading bot_config.yaml: {e}")
+        logging.exception(f"Error loading bot_config.yaml: {e}")
         return {}
 
 
@@ -73,7 +71,7 @@ def send_email_alert(subject: str, body: str):
                 EMAIL_SERVER.get("port"),
                 EMAIL_SERVER.get("user"),
                 EMAIL_SERVER.get("pass"),
-            ]
+            ],
         ):
             logger.error("Email server configuration is incomplete. Cannot send alert.")
             return
@@ -175,7 +173,7 @@ class BybitWebSocketManager:
             order_id = execution.get("orderId")
             if order_id:
                 logger.info(
-                    f"Execution for {order_id}: Price: {execution.get('execPrice')}, Qty: {execution.get('execQty')}, Side: {execution.get('side')}"
+                    f"Execution for {order_id}: Price: {execution.get('execPrice')}, Qty: {execution.get('execQty')}, Side: {execution.get('side')}",
                 )
 
     def handle_wallet(self, message: dict):
@@ -184,7 +182,7 @@ class BybitWebSocketManager:
             coin = wallet_data.get("coin")
             if coin:
                 logger.info(
-                    f"Wallet update for {coin}: Available: {wallet_data.get('availableToWithdraw')}, Total: {wallet_data.get('walletBalance')}"
+                    f"Wallet update for {coin}: Available: {wallet_data.get('availableToWithdraw')}, Total: {wallet_data.get('walletBalance')}",
                 )
 
     def handle_kline(self, message: dict):
@@ -234,7 +232,7 @@ class BybitWebSocketManager:
             sys.exit(1)
         backoff = min(2**self.reconnect_attempts + random.uniform(0, 1), 60)
         logger.warning(
-            f"Reconnecting WebSocket after {backoff:.2f} seconds (Attempt {self.reconnect_attempts}/{MAX_RETRIES})"
+            f"Reconnecting WebSocket after {backoff:.2f} seconds (Attempt {self.reconnect_attempts}/{MAX_RETRIES})",
         )
         await asyncio.sleep(backoff)
         try:
@@ -244,7 +242,7 @@ class BybitWebSocketManager:
         except Exception as e:
             logger.error(f"Error during WebSocket reconnection: {e}", exc_info=True)
             send_email_alert(
-                "WS Reconnect Error", f"Error during reconnection attempt: {e}"
+                "WS Reconnect Error", f"Error during reconnection attempt: {e}",
             )
 
 
@@ -252,11 +250,11 @@ class BybitWebSocketManager:
 class BybitTradingBot:
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
         self.session = HTTP(
-            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000
+            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000,
         )
         self.category: str = config.get("CATEGORY", "linear")
         self.ws_manager = BybitWebSocketManager(
-            api_key, api_secret, testnet, category=self.category
+            api_key, api_secret, testnet, category=self.category,
         )
         self.strategy: Callable[[dict, dict, HTTP, Any, list[str]], None] | None = None
         self.symbol_info: dict[str, Any] = {}
@@ -264,7 +262,7 @@ class BybitTradingBot:
         self.base_currency: str = config.get("BASE_CURRENCY", "USDT")
 
         logger.info(
-            f"Bybit Trading Bot initialized. Testnet: {testnet}, Category: {self.category}, Base Currency: {self.base_currency}"
+            f"Bybit Trading Bot initialized. Testnet: {testnet}, Category: {self.category}, Base Currency: {self.base_currency}",
         )
 
     async def fetch_symbol_info(self, symbols: list[str]):
@@ -286,46 +284,46 @@ class BybitTradingBot:
                                     self.symbol_info[symbol] = {
                                         "minOrderQty": Decimal(
                                             item.get("lotSizeFilter", {}).get(
-                                                "minOrderQty", "0"
-                                            )
+                                                "minOrderQty", "0",
+                                            ),
                                         ),
                                         "qtyStep": Decimal(
                                             item.get("lotSizeFilter", {}).get(
-                                                "qtyStep", "1"
-                                            )
+                                                "qtyStep", "1",
+                                            ),
                                         ),
                                         "tickSize": Decimal(
                                             item.get("priceFilter", {}).get(
-                                                "tickSize", "0.000001"
-                                            )
+                                                "tickSize", "0.000001",
+                                            ),
                                         ),
                                         "minPrice": Decimal(
                                             item.get("priceFilter", {}).get(
-                                                "minPrice", "0"
-                                            )
+                                                "minPrice", "0",
+                                            ),
                                         ),
                                         "maxPrice": Decimal(
                                             item.get("priceFilter", {}).get(
-                                                "maxPrice", "1000000"
-                                            )
+                                                "maxPrice", "1000000",
+                                            ),
                                         ),
                                         "leverageFilter": item.get(
-                                            "leverageFilter", {}
+                                            "leverageFilter", {},
                                         ),
                                         "riskLimit": item.get("riskLimit", {}),
                                     }
                                     logger.info(
-                                        f"Successfully fetched instrument info for {symbol}."
+                                        f"Successfully fetched instrument info for {symbol}.",
                                     )
                                     found = True
                                     break
                             if not found:
                                 logger.warning(
-                                    f"Symbol {symbol} not found in instruments list response."
+                                    f"Symbol {symbol} not found in instruments list response.",
                                 )
                             break
                         logger.warning(
-                            f"Attempt {attempt + 1}/{MAX_RETRIES} for {symbol}: API returned error code {response.get('retCode')}: {response.get('retMsg')}"
+                            f"Attempt {attempt + 1}/{MAX_RETRIES} for {symbol}: API returned error code {response.get('retCode')}: {response.get('retMsg')}",
                         )
                         await asyncio.sleep(2**attempt)
                     except (
@@ -336,12 +334,12 @@ class BybitTradingBot:
                         socket.gaierror,
                     ) as e:
                         logger.warning(
-                            f"Attempt {attempt + 1}/{MAX_RETRIES} for {symbol}: Network/Connection error occurred: {e}"
+                            f"Attempt {attempt + 1}/{MAX_RETRIES} for {symbol}: Network/Connection error occurred: {e}",
                         )
                         await asyncio.sleep(2**attempt)
                 else:
                     logger.error(
-                        f"Failed to fetch instrument info for {symbol} after {MAX_RETRIES} retries."
+                        f"Failed to fetch instrument info for {symbol} after {MAX_RETRIES} retries.",
                     )
                     send_email_alert(
                         "Symbol Info Failure",
@@ -354,7 +352,7 @@ class BybitTradingBot:
             )
 
     def set_strategy(
-        self, strategy_func: Callable[[dict, dict, HTTP, Any, list[str]], None]
+        self, strategy_func: Callable[[dict, dict, HTTP, Any, list[str]], None],
     ):
         self.strategy = strategy_func
         logger.info("Trading strategy set.")
@@ -362,7 +360,7 @@ class BybitTradingBot:
     def _round_to_qty_step(self, symbol: str, quantity: Decimal) -> Decimal:
         if symbol not in self.symbol_info:
             logger.warning(
-                f"Symbol info not available for {symbol}. Cannot round quantity."
+                f"Symbol info not available for {symbol}. Cannot round quantity.",
             )
             return quantity
         qty_step = self.symbol_info[symbol]["qtyStep"]
@@ -371,7 +369,7 @@ class BybitTradingBot:
     def _round_to_tick_size(self, symbol: str, price: Decimal) -> Decimal:
         if symbol not in self.symbol_info:
             logger.warning(
-                f"Symbol info not available for {symbol}. Cannot round price."
+                f"Symbol info not available for {symbol}. Cannot round price.",
             )
             return price
         tick_size = self.symbol_info[symbol]["tickSize"]
@@ -387,14 +385,14 @@ class BybitTradingBot:
         ):
             return ws_data
         logger.debug(
-            f"WebSocket data for {symbol} not fresh or complete. Falling back to REST API."
+            f"WebSocket data for {symbol} not fresh or complete. Falling back to REST API.",
         )
         try:
             orderbook_resp = await asyncio.to_thread(
-                self.session.get_orderbook, category=self.category, symbol=symbol
+                self.session.get_orderbook, category=self.category, symbol=symbol,
             )
             ticker_resp = await asyncio.to_thread(
-                self.session.get_tickers, category=self.category, symbol=symbol
+                self.session.get_tickers, category=self.category, symbol=symbol,
             )
             if orderbook_resp.get("retCode") == 0 and ticker_resp.get("retCode") == 0:
                 ticker_list = ticker_resp.get("result", {}).get("list", [])
@@ -406,7 +404,7 @@ class BybitTradingBot:
                     "timestamp": time.time() * 1000,
                 }
             logger.warning(
-                f"Failed to get market data for {symbol} via REST. Orderbook: {orderbook_resp.get('retMsg')}, Ticker: {ticker_resp.get('retMsg')}"
+                f"Failed to get market data for {symbol} via REST. Orderbook: {orderbook_resp.get('retMsg')}, Ticker: {ticker_resp.get('retMsg')}",
             )
             return None
         except (
@@ -417,19 +415,19 @@ class BybitTradingBot:
             socket.gaierror,
         ) as e:
             logger.error(
-                f"Error fetching market data for {symbol} via REST: {e}", exc_info=True
+                f"Error fetching market data for {symbol} via REST: {e}", exc_info=True,
             )
             return None
 
     async def get_account_info(self, account_type: str = "UNIFIED") -> dict | None:
         try:
             balance_response = await asyncio.to_thread(
-                self.session.get_wallet_balance, accountType=account_type
+                self.session.get_wallet_balance, accountType=account_type,
             )
             if balance_response.get("retCode") == 0:
                 return balance_response.get("result", {})
             logger.warning(
-                f"Failed to get account balance. API Response: {balance_response.get('retMsg')}"
+                f"Failed to get account balance. API Response: {balance_response.get('retMsg')}",
             )
             return None
         except Exception as e:
@@ -437,11 +435,11 @@ class BybitTradingBot:
             return None
 
     async def calculate_position_size(
-        self, symbol: str, capital_percentage: float, price: Decimal, account_info: dict
+        self, symbol: str, capital_percentage: float, price: Decimal, account_info: dict,
     ) -> Decimal:
         if symbol not in self.symbol_info:
             logger.warning(
-                f"Symbol info not available for {symbol}. Cannot calculate position size."
+                f"Symbol info not available for {symbol}. Cannot calculate position size.",
             )
             return Decimal(0)
         try:
@@ -451,7 +449,7 @@ class BybitTradingBot:
                     if coin_info.get("coin") == self.base_currency:
                         try:
                             available_balance = Decimal(
-                                str(coin_info.get("availableToWithdraw", "0"))
+                                str(coin_info.get("availableToWithdraw", "0")),
                             )
                         except decimal.InvalidOperation:
                             available_balance = Decimal("0")
@@ -460,12 +458,12 @@ class BybitTradingBot:
                     break
             if available_balance <= 0:
                 logger.warning(
-                    f"No available balance for {self.base_currency} to calculate position size."
+                    f"No available balance for {self.base_currency} to calculate position size.",
                 )
                 return Decimal(0)
             if price <= 0:
                 logger.warning(
-                    f"Invalid price ({price}) for {symbol}. Cannot calculate position size."
+                    f"Invalid price ({price}) for {symbol}. Cannot calculate position size.",
                 )
                 return Decimal(0)
             target_capital = available_balance * Decimal(str(capital_percentage))
@@ -474,18 +472,18 @@ class BybitTradingBot:
             min_order_qty = self.symbol_info[symbol]["minOrderQty"]
             if rounded_qty < min_order_qty:
                 logger.info(
-                    f"Calculated quantity {rounded_qty} for {symbol} is below minimum order quantity {min_order_qty}. Skipping."
+                    f"Calculated quantity {rounded_qty} for {symbol} is below minimum order quantity {min_order_qty}. Skipping.",
                 )
                 return Decimal(0)
             return rounded_qty
         except Exception as e:
             logger.error(
-                f"Error calculating position size for {symbol}: {e}", exc_info=True
+                f"Error calculating position size for {symbol}: {e}", exc_info=True,
             )
             return Decimal(0)
 
     async def get_historical_klines(
-        self, symbol: str, interval: str, limit: int = 200
+        self, symbol: str, interval: str, limit: int = 200,
     ) -> dict | None:
         try:
             klines_response = await asyncio.to_thread(
@@ -498,12 +496,12 @@ class BybitTradingBot:
             if klines_response.get("retCode") == 0:
                 return klines_response
             logger.warning(
-                f"Failed to get historical klines for {symbol}. API Response: {klines_response.get('retMsg')}"
+                f"Failed to get historical klines for {symbol}. API Response: {klines_response.get('retMsg')}",
             )
             return None
         except Exception as e:
             logger.error(
-                f"Error fetching historical klines for {symbol}: {e}", exc_info=True
+                f"Error fetching historical klines for {symbol}: {e}", exc_info=True,
             )
             return None
 
@@ -525,24 +523,24 @@ class BybitTradingBot:
     ) -> dict | None:
         if qty <= 0:
             logger.warning(
-                f"Order quantity for {symbol} is zero or negative. Skipping order placement."
+                f"Order quantity for {symbol} is zero or negative. Skipping order placement.",
             )
             return None
         if order_type == "Limit" and (price is None or price <= 0):
             logger.warning(
-                f"Limit order for {symbol} requires a valid price. Skipping order placement."
+                f"Limit order for {symbol} requires a valid price. Skipping order placement.",
             )
             return None
         if self.get_open_positions_count() >= self.max_open_positions:
             logger.warning(
-                f"Max open positions ({self.max_open_positions}) reached. Cannot place new order for {symbol}."
+                f"Max open positions ({self.max_open_positions}) reached. Cannot place new order for {symbol}.",
             )
             return None
 
         qty = self._round_to_qty_step(symbol, qty)
         if qty <= 0:
             logger.warning(
-                f"Rounded quantity for {symbol} is zero. Skipping order placement."
+                f"Rounded quantity for {symbol} is zero. Skipping order placement.",
             )
             return None
         if price:
@@ -565,7 +563,7 @@ class BybitTradingBot:
             if order_response.get("retCode") == 0:
                 order_result = order_response.get("result", {})
                 logger.info(
-                    f"Order placed successfully for {symbol}: OrderID={order_result.get('orderId')}"
+                    f"Order placed successfully for {symbol}: OrderID={order_result.get('orderId')}",
                 )
                 return order_result
             error_msg = order_response.get("retMsg", "Unknown error")
@@ -585,7 +583,7 @@ class BybitTradingBot:
     async def cancel_all_orders(self, symbol: str) -> bool:
         try:
             response = await asyncio.to_thread(
-                self.session.cancel_all_orders, category=self.category, symbol=symbol
+                self.session.cancel_all_orders, category=self.category, symbol=symbol,
             )
             if response.get("retCode") == 0:
                 logger.info(f"All open orders cancelled for {symbol}.")
@@ -651,7 +649,7 @@ class BybitTradingBot:
             logger.info("Bot stopped by user.")
         except Exception as e:
             logger.critical(
-                f"Unhandled critical error in main loop: {e}", exc_info=True
+                f"Unhandled critical error in main loop: {e}", exc_info=True,
             )
             send_email_alert(
                 "Critical Bot Error",

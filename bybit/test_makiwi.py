@@ -30,10 +30,10 @@ class TestHelperFunctions(unittest.TestCase):
         for value, expected_precision in test_values.items():
             calculated_precision = makiwi._calculate_decimal_precision(value)
             self.assertEqual(
-                calculated_precision, expected_precision, f"Failed for value {value}"
+                calculated_precision, expected_precision, f"Failed for value {value}",
             )
         self.assertEqual(
-            makiwi._calculate_decimal_precision(123), 0
+            makiwi._calculate_decimal_precision(123), 0,
         )  # Non-Decimal input
 
     # def test_is_valid_price(self):
@@ -60,7 +60,7 @@ class TestHelperFunctions(unittest.TestCase):
         makiwi.set_bot_state("ACTIVE")
         self.assertEqual(makiwi.BOT_STATE, "ACTIVE")
         mock_logger.info.assert_called_with(
-            f"{makiwi.Fore.CYAN}Bot State Change: INITIALIZING -> ACTIVE{makiwi.NC}"
+            f"{makiwi.Fore.CYAN}Bot State Change: INITIALIZING -> ACTIVE{makiwi.NC}",
         )
 
         # Test no state change if already in target state
@@ -74,7 +74,7 @@ class TestHelperFunctions(unittest.TestCase):
         makiwi.set_bot_state("SHUTTING_DOWN")
         self.assertEqual(makiwi.BOT_STATE, "SHUTTING_DOWN")
         mock_logger.info.assert_called_with(
-            f"{makiwi.Fore.CYAN}Bot State Change: ACTIVE -> SHUTTING_DOWN{makiwi.NC}"
+            f"{makiwi.Fore.CYAN}Bot State Change: ACTIVE -> SHUTTING_DOWN{makiwi.NC}",
         )
 
         makiwi.BOT_STATE = original_bot_state  # Restore original state

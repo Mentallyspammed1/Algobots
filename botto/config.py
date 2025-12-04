@@ -11,7 +11,7 @@ logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.StreamHandler()  # Output to console
+        logging.StreamHandler(),  # Output to console
         # Consider adding logging.FileHandler(LOG_FILE) for file logging
     ],
 )
@@ -26,7 +26,7 @@ def safe_get_int(key: str, default: int) -> int:
         return int(value)
     except ValueError:
         logger.warning(
-            f"Invalid integer value for '{key}': '{value}'. Using default: {default}"
+            f"Invalid integer value for '{key}': '{value}'. Using default: {default}",
         )
         return default
 
@@ -38,7 +38,7 @@ def safe_get_float(key: str, default: float) -> float:
         return float(value)
     except ValueError:
         logger.warning(
-            f"Invalid float value for '{key}': '{value}'. Using default: {default}"
+            f"Invalid float value for '{key}': '{value}'. Using default: {default}",
         )
         return default
 
@@ -51,7 +51,7 @@ def safe_get_bool(key: str, default: bool) -> bool:
     if value in ["false", "0", "no"]:
         return False
     logger.warning(
-        f"Invalid boolean value for '{key}': '{value}'. Using default: {default}"
+        f"Invalid boolean value for '{key}': '{value}'. Using default: {default}",
     )
     return default
 
@@ -97,7 +97,7 @@ EH_FISHER_TRIGGER_SELL = safe_get_float("EH_FISHER_TRIGGER_SELL", -0.5)
 
 # --- Risk Management ---
 MAX_POSITION_SIZE = safe_get_float(
-    "MAX_POSITION_SIZE", 0.005
+    "MAX_POSITION_SIZE", 0.005,
 )  # Max position size in base currency
 STOP_LOSS_PERCENT = safe_get_float("STOP_LOSS_PERCENT", 0.005)  # 0.5%
 TAKE_PROFIT_PERCENT = safe_get_float("TAKE_PROFIT_PERCENT", 0.01)  # 1%
@@ -105,13 +105,13 @@ TAKE_PROFIT_PERCENT = safe_get_float("TAKE_PROFIT_PERCENT", 0.01)  # 1%
 
 # --- Dynamic Position Sizing Parameters ---
 DEFAULT_POSITION_SIZE = safe_get_float(
-    "DEFAULT_POSITION_SIZE", 0.001
+    "DEFAULT_POSITION_SIZE", 0.001,
 )  # Default size if no trade history
 KELLY_RISK_PER_TRADE_MULTIPLIER = safe_get_float(
-    "KELLY_RISK_PER_TRADE_MULTIPLIER", 0.02
+    "KELLY_RISK_PER_TRADE_MULTIPLIER", 0.02,
 )  # Multiplier for Kelly fraction in risk calculation
 MIN_POSITION_SIZE = safe_get_float(
-    "MIN_POSITION_SIZE", 0.0001
+    "MIN_POSITION_SIZE", 0.0001,
 )  # Minimum trade quantity
 
 
@@ -120,7 +120,7 @@ ORDER_TIMEOUT_SECONDS = safe_get_int("ORDER_TIMEOUT_SECONDS", 30)
 RECONNECT_TIMEOUT_SECONDS = safe_get_int("RECONNECT_TIMEOUT_SECONDS", 10)
 PING_INTERVAL = safe_get_int("PING_INTERVAL", 20)  # Send ping every X seconds
 PING_TIMEOUT = safe_get_int(
-    "PING_TIMEOUT", 10
+    "PING_TIMEOUT", 10,
 )  # Disconnect if no pong received within X seconds
 
 
@@ -146,21 +146,21 @@ def validate_config():
     if not API_KEY or not API_SECRET:
         logger.error(
             "API Key and Secret are missing. "
-            "Please set BYBIT_API_KEY and BYBIT_API_SECRET in your .env file."
+            "Please set BYBIT_API_KEY and BYBIT_API_SECRET in your .env file.",
         )
         raise ValueError("API credentials not set.")
 
     if not (0 < STOP_LOSS_PERCENT <= 1):
         logger.warning(
             f"STOP_LOSS_PERCENT ({STOP_LOSS_PERCENT}) is outside the typical range (0, 1]. "
-            "Adjusting to nearest valid value."
+            "Adjusting to nearest valid value.",
         )
         # Optionally clamp or raise error
 
     if not (0 < TAKE_PROFIT_PERCENT <= 1):
         logger.warning(
             f"TAKE_PROFIT_PERCENT ({TAKE_PROFIT_PERCENT}) is outside the typical range (0, 1]. "
-            "Adjusting to nearest valid value."
+            "Adjusting to nearest valid value.",
         )
         # Optionally clamp or raise error
 

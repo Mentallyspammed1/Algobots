@@ -13,12 +13,8 @@ import sys
 import time
 import traceback
 from collections import deque
-from datetime import UTC
-from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
+from datetime import UTC, datetime
+from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
 from enum import Enum
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -28,9 +24,7 @@ import pandas as pd
 
 # Third-party imports with error handling
 try:
-    from colorama import Fore
-    from colorama import Style
-    from colorama import init
+    from colorama import Fore, Style, init
 
     init(autoreset=True)
     COLORAMA_AVAILABLE = True

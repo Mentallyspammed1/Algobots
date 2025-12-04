@@ -2,6 +2,7 @@
 # Make sure to install pybit: pip install pybit
 from pybit.unified_trading import HTTP
 
+
 class BybitApiClient:
     """A real Bybit API client using pybit."""
     def __init__(self, api_key: str, api_secret: str, testnet: bool):
@@ -17,7 +18,7 @@ class BybitApiClient:
         """Returns the current server time in milliseconds."""
         try:
             response = self.session.get_time()
-            return int(response['time']) # pybit returns time in seconds, convert to ms
+            return int(response["time"]) # pybit returns time in seconds, convert to ms
         except Exception as e:
             logger.error(f"Error getting server time: {e}", exc_info=True)
             raise
@@ -39,8 +40,8 @@ class BybitApiClient:
             # Example format: {'list': [['1678886400000', '20000.0', '20500.0', '19800.0', '20200.0', '1000.0', '100000.0']]}
             # We need: [timestamp, open, high, low, close, volume]
             candlesticks = []
-            if 'list' in response:
-                for candle in response['list']:
+            if "list" in response:
+                for candle in response["list"]:
                     # Convert prices and volume to float, timestamp is already ms
                     candlesticks.append([
                         int(candle[0]), # timestamp (ms)
@@ -48,7 +49,7 @@ class BybitApiClient:
                         float(candle[2]), # high
                         float(candle[3]), # low
                         float(candle[4]), # close
-                        float(candle[5])  # volume
+                        float(candle[5]),  # volume
                     ])
             return candlesticks
         except Exception as e:
@@ -67,10 +68,10 @@ class BybitApiClient:
                 accountType="UNIFIED", # Or "CONTRACT" depending on your account type
             )
             # Example response: {'list': [{'side': 'Buy', 'size': '0.001', ...}]}
-            positions = response.get('list', [])
+            positions = response.get("list", [])
             for pos in positions:
-                if pos.get('symbol') == symbol and float(pos.get('size', 0.0)) > 0:
-                    return {"side": pos.get('side'), "size": float(pos.get('size'))}
+                if pos.get("symbol") == symbol and float(pos.get("size", 0.0)) > 0:
+                    return {"side": pos.get("side"), "size": float(pos.get("size"))}
             return {"side": None, "size": 0.0} # No open position for this symbol
         except Exception as e:
             logger.error(f"Error fetching position info for {symbol}: {e}", exc_info=True)
@@ -95,20 +96,19 @@ class BybitApiClient:
             response = self.session.place_order(**order_params)
 
             # Check response for success and return relevant info
-            if response and response.get('retMsg') == 'OK':
-                order_info = response.get('result', {})
+            if response and response.get("retMsg") == "OK":
+                order_info = response.get("result", {})
                 return {
-                    "orderId": order_info.get('orderId'),
+                    "orderId": order_info.get("orderId"),
                     "symbol": symbol,
                     "side": side,
                     "type": order_type,
                     "qty": qty,
                     "price": price,
-                    "status": "Filled" if order_type == "Market" else order_info.get('orderStatus') # Simplified status
+                    "status": "Filled" if order_type == "Market" else order_info.get("orderStatus"), # Simplified status
                 }
-            else:
-                logger.error(f"Order placement failed: {response}")
-                return {"status": "Failed", "message": response.get('retMsg')}
+            logger.error(f"Order placement failed: {response}")
+            return {"status": "Failed", "message": response.get("retMsg")}
 
         except Exception as e:
             logger.error(f"Error placing order for {symbol}: {e}", exc_info=True)
@@ -130,12 +130,11 @@ class BybitApiClient:
                 qty=str(qty),
                 timeInForce="GTC", # Or "PostOnly" if preferred
             )
-            if response and response.get('retMsg') == 'OK':
-                 order_info = response.get('result', {})
-                 return {"orderId": order_info.get('orderId'), "status": "Filled"}
-            else:
-                 logger.error(f"Close position failed: {response}")
-                 return {"status": "Failed", "message": response.get('retMsg')}
+            if response and response.get("retMsg") == "OK":
+                 order_info = response.get("result", {})
+                 return {"orderId": order_info.get("orderId"), "status": "Filled"}
+            logger.error(f"Close position failed: {response}")
+            return {"status": "Failed", "message": response.get("retMsg")}
         except Exception as e:
             logger.error(f"Error closing position for {symbol}: {e}", exc_info=True)
             raise

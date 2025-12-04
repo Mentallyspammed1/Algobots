@@ -3,9 +3,7 @@ import itertools
 from decimal import Decimal
 
 # Import the necessary components from our backtester script
-from backtester import Backtester
-from backtester import load_config
-from backtester import load_historical_data
+from backtester import Backtester, load_config, load_historical_data
 
 
 def run_optimizer():
@@ -78,7 +76,7 @@ def run_optimizer():
     else:
         print("\n--- Optimization Complete ---")
         print(
-            "Could not determine a best parameter set. All runs may have resulted in a loss."
+            "Could not determine a best parameter set. All runs may have resulted in a loss.",
         )
 
 

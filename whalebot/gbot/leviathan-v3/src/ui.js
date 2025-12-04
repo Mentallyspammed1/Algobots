@@ -13,6 +13,7 @@ export const COLOR = {
     CYAN: chalk.hex('#00FFFF'),   // Aqua/Cyan
     GRAY: chalk.hex('#8E8E93'),   // A slightly lighter gray for readability
     ORANGE: chalk.hex('#FF9F00'), // Bright Orange
+    MAGENTA: chalk.hex('#FF00FF'), // Magenta
     BOLD: chalk.bold,
     bg: (text) => chalk.bgHex('#1C1C1E')(text), // A darker background for contrast
 };

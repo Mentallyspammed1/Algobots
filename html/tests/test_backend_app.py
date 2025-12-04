@@ -254,7 +254,7 @@ def test_post_indicators_invalid_kline_data():
                 "low": 98.0,
                 "close": 102.0,
                 "volume": "invalid",
-            }  # Invalid volume type
+            },  # Invalid volume type
         ],
         "ema_period": 3,
     }

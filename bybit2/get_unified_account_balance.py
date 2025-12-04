@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def get_unified_account_balance(coin: str = "USDT"):
     print(
         Fore.MAGENTA
         + "\n# Scrying the depths of your Bybit v5 Unified Account for {coin} balance...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def get_unified_account_balance(coin: str = "USDT"):
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,7 +37,7 @@ def get_unified_account_balance(coin: str = "USDT"):
         print(
             Fore.CYAN
             + f"  # Requesting account information for {coin}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Fetch wallet balance for Unified Account
@@ -63,29 +61,29 @@ def get_unified_account_balance(coin: str = "USDT"):
                     print(
                         Fore.GREEN
                         + f"  # {coin} Balance in Unified Account:"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     print(
                         Fore.GREEN
                         + f"    Available: {available_balance}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     print(Fore.GREEN + f"    Total: {total_balance}" + Style.RESET_ALL)
                 else:
                     print(
                         Fore.YELLOW
                         + f"  # {coin} balance information not found in Unified Account."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
             else:
                 print(
                     Fore.YELLOW
                     + "  # No account information found for Unified Account."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
         else:
             print(
-                Fore.RED + "  # Failed to retrieve account balance." + Style.RESET_ALL
+                Fore.RED + "  # Failed to retrieve account balance." + Style.RESET_ALL,
             )
             print(Fore.RED + f"  # Response: {response}" + Style.RESET_ALL)
 
@@ -94,13 +92,13 @@ def get_unified_account_balance(coin: str = "USDT"):
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable and API keys are valid."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
         Fore.MAGENTA
         + "\n# Your Unified Account balance has been revealed!\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
 
@@ -112,22 +110,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     get_unified_account_balance("USDT")

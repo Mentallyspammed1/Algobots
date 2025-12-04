@@ -15,17 +15,19 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__name__), "."))
 # For BotConfig tests, we don't need to mock these as BotConfig is self-contained.
 # For other tests, we might need to mock or reset these.
 # For now, let's ensure they are accessible for tests that need them.
-from mmx import AdaptiveRateLimiter
-from mmx import BotConfig
-from mmx import BotHealth
-from mmx import MarketState
-from mmx import SessionStats
-from mmx import SymbolInfo
-from mmx import calculate_decimal_precision
-from mmx import market_state
-from mmx import session_stats
-from mmx import set_bot_state
-from mmx import symbol_info
+from mmx import (
+    AdaptiveRateLimiter,
+    BotConfig,
+    BotHealth,
+    MarketState,
+    SessionStats,
+    SymbolInfo,
+    calculate_decimal_precision,
+    market_state,
+    session_stats,
+    set_bot_state,
+    symbol_info,
+)
 
 
 # Reset global state for each test to ensure isolation
@@ -100,29 +102,29 @@ class TestBotConfig:
 
     def test_invalid_capital_allocation_percentage(self):
         with pytest.raises(
-            ValueError, match="CAPITAL_ALLOCATION_PERCENTAGE must be between 0 and 1"
+            ValueError, match="CAPITAL_ALLOCATION_PERCENTAGE must be between 0 and 1",
         ):
             BotConfig(CAPITAL_ALLOCATION_PERCENTAGE=Decimal("0"))
         with pytest.raises(
-            ValueError, match="CAPITAL_ALLOCATION_PERCENTAGE must be between 0 and 1"
+            ValueError, match="CAPITAL_ALLOCATION_PERCENTAGE must be between 0 and 1",
         ):
             BotConfig(CAPITAL_ALLOCATION_PERCENTAGE=Decimal("1.1"))
         with pytest.raises(
-            ValueError, match="CAPITAL_ALLOCATION_PERCENTAGE must be between 0 and 1"
+            ValueError, match="CAPITAL_ALLOCATION_PERCENTAGE must be between 0 and 1",
         ):
             BotConfig(CAPITAL_ALLOCATION_PERCENTAGE=Decimal("-0.1"))
 
     def test_invalid_max_position_size(self):
         with pytest.raises(
-            ValueError, match="MAX_POSITION_SIZE must be between 0 and 1"
+            ValueError, match="MAX_POSITION_SIZE must be between 0 and 1",
         ):
             BotConfig(MAX_POSITION_SIZE=Decimal("0"))
         with pytest.raises(
-            ValueError, match="MAX_POSITION_SIZE must be between 0 and 1"
+            ValueError, match="MAX_POSITION_SIZE must be between 0 and 1",
         ):
             BotConfig(MAX_POSITION_SIZE=Decimal("1.1"))
         with pytest.raises(
-            ValueError, match="MAX_POSITION_SIZE must be between 0 and 1"
+            ValueError, match="MAX_POSITION_SIZE must be between 0 and 1",
         ):
             BotConfig(MAX_POSITION_SIZE=Decimal("-0.1"))
 
@@ -159,7 +161,7 @@ class TestBotConfig:
     def test_invalid_rebalance_threshold_qty(self):
         # REBALANCE_THRESHOLD_QTY can be 0, so only test negative
         with pytest.raises(
-            ValueError, match="REBALANCE_THRESHOLD_QTY must be non-negative"
+            ValueError, match="REBALANCE_THRESHOLD_QTY must be non-negative",
         ):
             BotConfig(REBALANCE_THRESHOLD_QTY=Decimal("-0.001"))
 
@@ -182,28 +184,28 @@ class TestBotConfig:
 
     def test_invalid_abnormal_spread_threshold(self):
         with pytest.raises(
-            ValueError, match="ABNORMAL_SPREAD_THRESHOLD must be positive"
+            ValueError, match="ABNORMAL_SPREAD_THRESHOLD must be positive",
         ):
             BotConfig(ABNORMAL_SPREAD_THRESHOLD=Decimal("0"))
         with pytest.raises(
-            ValueError, match="ABNORMAL_SPREAD_THRESHOLD must be positive"
+            ValueError, match="ABNORMAL_SPREAD_THRESHOLD must be positive",
         ):
             BotConfig(ABNORMAL_SPREAD_THRESHOLD=Decimal("-0.001"))
 
     def test_invalid_max_slippage_percentage(self):
         # MAX_SLIPPAGE_PERCENTAGE can be 0, so only test negative
         with pytest.raises(
-            ValueError, match="MAX_SLIPPAGE_PERCENTAGE must be non-negative"
+            ValueError, match="MAX_SLIPPAGE_PERCENTAGE must be non-negative",
         ):
             BotConfig(MAX_SLIPPAGE_PERCENTAGE=Decimal("-0.001"))
 
     def test_invalid_performance_log_interval(self):
         with pytest.raises(
-            ValueError, match="PERFORMANCE_LOG_INTERVAL must be positive"
+            ValueError, match="PERFORMANCE_LOG_INTERVAL must be positive",
         ):
             BotConfig(PERFORMANCE_LOG_INTERVAL=0)
         with pytest.raises(
-            ValueError, match="PERFORMANCE_LOG_INTERVAL must be positive"
+            ValueError, match="PERFORMANCE_LOG_INTERVAL must be positive",
         ):
             BotConfig(PERFORMANCE_LOG_INTERVAL=-1)
 
@@ -215,11 +217,11 @@ class TestBotConfig:
 
     def test_invalid_memory_cleanup_interval(self):
         with pytest.raises(
-            ValueError, match="MEMORY_CLEANUP_INTERVAL must be positive"
+            ValueError, match="MEMORY_CLEANUP_INTERVAL must be positive",
         ):
             BotConfig(MEMORY_CLEANUP_INTERVAL=0)
         with pytest.raises(
-            ValueError, match="MEMORY_CLEANUP_INTERVAL must be positive"
+            ValueError, match="MEMORY_CLEANUP_INTERVAL must be positive",
         ):
             BotConfig(MEMORY_CLEANUP_INTERVAL=-1)
 
@@ -380,7 +382,7 @@ class TestBotConfig:
         mock_time.return_value = 250
         # Trigger recalculation by updating a component or calling _calculate_overall_score directly
         health.update_component(
-            "dummy", 1.0
+            "dummy", 1.0,
         )  # This will update dummy and trigger recalculation
         # Only "another_active_comp" and "dummy" should be active.
         # Expected score: (0.5 * 1.0 + 1.0 * 1.0) / (1.0 + 1.0) = 0.75
@@ -473,7 +475,7 @@ class TestAdaptiveRateLimiter:
 
         # Check if rate decreased and backoff increased
         assert limiter.current_rate < Decimal(
-            str(config.RATE_LIMIT_REQUESTS_PER_SECOND)
+            str(config.RATE_LIMIT_REQUESTS_PER_SECOND),
         )
         assert limiter.backoff_factor > Decimal("1.0")
 
@@ -526,10 +528,10 @@ class TestSymbolInfo:
         asks = [["101", "15"], ["102", "25"]]
         info.update_orderbook_depth(bids, asks)
         assert info.get_market_depth_ratio(levels=1) == pytest.approx(
-            Decimal("10") / Decimal("15")
+            Decimal("10") / Decimal("15"),
         )
         assert info.get_market_depth_ratio(levels=2) == pytest.approx(
-            Decimal("30") / Decimal("40")
+            Decimal("30") / Decimal("40"),
         )
 
         # Test edge cases
@@ -565,7 +567,7 @@ class TestSymbolInfo:
             Decimal("101.2857142857142857") - Decimal("101")
         ) / Decimal("101")
         assert slippage.quantize(Decimal("0.0001")) == expected_slippage.quantize(
-            Decimal("0.0001")
+            Decimal("0.0001"),
         )
 
     def test_estimate_slippage_sell(self):
@@ -585,10 +587,10 @@ class TestSymbolInfo:
         # (5*100 + 2*99) / 7 = (500 + 198) / 7 = 698 / 7 = 99.7142...
         # (100 - 99.7142) / 100 = 0.002857...
         expected_slippage = (Decimal("100") - Decimal("99.7142857142857142")) / Decimal(
-            "100"
+            "100",
         )
         assert slippage.quantize(Decimal("0.0001")) == expected_slippage.quantize(
-            Decimal("0.0001")
+            Decimal("0.0001"),
         )
 
     def test_estimate_slippage_no_liquidity(self):
@@ -622,7 +624,7 @@ class TestMarketState:
 
     @patch("mmx.time.time")
     @patch(
-        "mmx.bot_health"
+        "mmx.bot_health",
     )  # Mock bot_health to prevent its __init__ from consuming mock_time values
     def test_is_data_fresh(self, mock_bot_health, mock_time):
         state = MarketState()
@@ -646,7 +648,7 @@ class TestMarketState:
         # The data_quality_score is updated by bot_health.update_component, which is mocked.
         # So, we need to mock update_component to set data_quality_score.
         mock_bot_health.update_component.assert_called_with(
-            "market_data_freshness", pytest.approx(0.5), "Market data age: 5.0s"
+            "market_data_freshness", pytest.approx(0.5), "Market data age: 5.0s",
         )
         assert state.data_quality_score == pytest.approx(0.5)
 
@@ -654,7 +656,7 @@ class TestMarketState:
         state.last_update_time = mock_time()  # 115
         assert state.is_data_fresh(10) == False  # 125 - 115 = 10s, stale
         mock_bot_health.update_component.assert_called_with(
-            "market_data_freshness", 0.0, "Market data stale: 11.0s"
+            "market_data_freshness", 0.0, "Market data stale: 11.0s",
         )
         assert state.data_quality_score == 0.0
 
@@ -662,7 +664,7 @@ class TestMarketState:
         state.mid_price = Decimal("0")
         assert state.is_data_fresh(10) == False
         mock_bot_health.update_component.assert_called_with(
-            "market_data_freshness", 0.0, "Market data invalid (zero prices)"
+            "market_data_freshness", 0.0, "Market data invalid (zero prices)",
         )
         assert state.data_quality_score == 0.0
 
@@ -692,7 +694,7 @@ class TestMarketState:
                 "price": Decimal("101"),
                 "quantity": Decimal("0.2"),
                 "timestamp": time.time(),
-            }
+            },
         )
         assert len(state.trade_history) == 2
 
@@ -739,7 +741,7 @@ class TestSessionStats:
             assert stats.peak_pnl == Decimal("100")
             assert stats.max_drawdown == Decimal("0")
             mock_bot_health.update_component.assert_called_with(
-                "strategy_pnl", 1.0, "PnL: 100.00, Drawdown: 0.00%"
+                "strategy_pnl", 1.0, "PnL: 100.00, Drawdown: 0.00%",
             )
             mock_bot_health.update_component.reset_mock()
 
@@ -749,7 +751,7 @@ class TestSessionStats:
             assert stats.max_drawdown == Decimal("0.5")  # (100 - 50) / 100
             # PnL is positive, so score is 1.0
             mock_bot_health.update_component.assert_called_with(
-                "strategy_pnl", 1.0, "PnL: 50.00, Drawdown: 50.00%"
+                "strategy_pnl", 1.0, "PnL: 50.00, Drawdown: 50.00%",
             )
             mock_bot_health.update_component.reset_mock()
 
@@ -760,7 +762,7 @@ class TestSessionStats:
             # PnL is -5, available balance 1000, CB_PNL_STOP_LOSS_PCT 0.01
             # abs(-5)/1000 = 0.005. Score = 1.0 - (0.005 / 0.01) = 1.0 - 0.5 = 0.5
             mock_bot_health.update_component.assert_called_with(
-                "strategy_pnl", Decimal("0.5"), "PnL: -5.00, Drawdown: 105.00%"
+                "strategy_pnl", Decimal("0.5"), "PnL: -5.00, Drawdown: 105.00%",
             )
             mock_bot_health.update_component.reset_mock()
 
@@ -768,10 +770,10 @@ class TestSessionStats:
             assert stats.profit_history[-1][1] == Decimal("120")
             assert stats.peak_pnl == Decimal("120")
             assert stats.max_drawdown == Decimal(
-                "1.05"
+                "1.05",
             )  # Max drawdown should not reset
             mock_bot_health.update_component.assert_called_with(
-                "strategy_pnl", 1.0, "PnL: 120.00, Drawdown: 105.00%"
+                "strategy_pnl", 1.0, "PnL: 120.00, Drawdown: 105.00%",
             )  # Updated drawdown percentage
             mock_bot_health.update_component.reset_mock()
 
@@ -779,10 +781,10 @@ class TestSessionStats:
             assert stats.profit_history[-1][1] == Decimal("60")
             assert stats.peak_pnl == Decimal("120")
             assert stats.max_drawdown == Decimal(
-                "1.05"
+                "1.05",
             )  # (120 - 60) / 120 = 0.5, but max_drawdown is 1.05
             mock_bot_health.update_component.assert_called_with(
-                "strategy_pnl", 1.0, "PnL: 60.00, Drawdown: 105.00%"
+                "strategy_pnl", 1.0, "PnL: 60.00, Drawdown: 105.00%",
             )
             mock_bot_health.update_component.reset_mock()  # Updated drawdown percentage
 
@@ -821,7 +823,7 @@ class TestGlobalStateFunctions:
             # Test initial state change
             set_bot_state("RUNNING")
             mock_log_info.assert_called_with(
-                "Bot state transition: INITIALIZING -> RUNNING"
+                "Bot state transition: INITIALIZING -> RUNNING",
             )
             mock_update_component.assert_called_with("bot_state", 1.0, "State: RUNNING")
 
@@ -831,58 +833,58 @@ class TestGlobalStateFunctions:
             set_bot_state("RUNNING")
             mock_log_info.assert_not_called()
             mock_update_component.assert_called_with(
-                "bot_state", 1.0, "State: RUNNING"
+                "bot_state", 1.0, "State: RUNNING",
             )  # Still updates health even if state is same
 
             # Test health component update for different states
             set_bot_state("🚨 CRITICAL_SHUTDOWN")
             mock_update_component.assert_called_with(
-                "bot_state", 0.0, "State: 🚨 CRITICAL_SHUTDOWN"
+                "bot_state", 0.0, "State: 🚨 CRITICAL_SHUTDOWN",
             )
             set_bot_state("🚨 MAJOR_CANCEL")
             mock_update_component.assert_called_with(
-                "bot_state", 0.2, "State: 🚨 MAJOR_CANCEL"
+                "bot_state", 0.2, "State: 🚨 MAJOR_CANCEL",
             )
             set_bot_state("🚨 MINOR_PAUSE")
             mock_update_component.assert_called_with(
-                "bot_state", 0.5, "State: 🚨 MINOR_PAUSE"
+                "bot_state", 0.5, "State: 🚨 MINOR_PAUSE",
             )
             set_bot_state("⏳ WAITING")
             mock_update_component.assert_called_with(
-                "bot_state", 0.8, "State: ⏳ WAITING"
+                "bot_state", 0.8, "State: ⏳ WAITING",
             )
             set_bot_state("INITIALIZING")  # Should be 1.0 for normal states
             mock_update_component.assert_called_with(
-                "bot_state", 1.0, "State: INITIALIZING"
+                "bot_state", 1.0, "State: INITIALIZING",
             )
             mock_log_info.reset_mock()
             mock_update_component.reset_mock()
             set_bot_state("RUNNING")
             mock_log_info.assert_not_called()
             mock_update_component.assert_called_with(
-                "bot_state", 1.0, "State: RUNNING"
+                "bot_state", 1.0, "State: RUNNING",
             )  # Still updates health even if state is same
 
             # Test health component update for different states
             set_bot_state("🚨 CRITICAL_SHUTDOWN")
             mock_update_component.assert_called_with(
-                "bot_state", 0.0, "State: 🚨 CRITICAL_SHUTDOWN"
+                "bot_state", 0.0, "State: 🚨 CRITICAL_SHUTDOWN",
             )
             set_bot_state("🚨 MAJOR_CANCEL")
             mock_update_component.assert_called_with(
-                "bot_state", 0.2, "State: 🚨 MAJOR_CANCEL"
+                "bot_state", 0.2, "State: 🚨 MAJOR_CANCEL",
             )
             set_bot_state("🚨 MINOR_PAUSE")
             mock_update_component.assert_called_with(
-                "bot_state", 0.5, "State: 🚨 MINOR_PAUSE"
+                "bot_state", 0.5, "State: 🚨 MINOR_PAUSE",
             )
             set_bot_state("⏳ WAITING")
             mock_update_component.assert_called_with(
-                "bot_state", 0.8, "State: ⏳ WAITING"
+                "bot_state", 0.8, "State: ⏳ WAITING",
             )
             set_bot_state("INITIALIZING")  # Should be 1.0 for normal states
             mock_update_component.assert_called_with(
-                "bot_state", 1.0, "State: INITIALIZING"
+                "bot_state", 1.0, "State: INITIALIZING",
             )
 
 

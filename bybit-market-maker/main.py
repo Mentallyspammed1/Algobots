@@ -9,9 +9,7 @@ import sys
 from datetime import datetime
 
 from market_maker import MarketMaker
-from utils import load_config
-from utils import load_env_variables
-from utils import setup_logger
+from utils import load_config, load_env_variables, setup_logger
 
 
 def signal_handler(signum, frame):
@@ -53,7 +51,7 @@ def main():
     """Main function"""
     parser = argparse.ArgumentParser(description="Bybit Market Maker Bot")
     parser.add_argument(
-        "--config", type=str, default="config.yaml", help="Path to configuration file"
+        "--config", type=str, default="config.yaml", help="Path to configuration file",
     )
     parser.add_argument(
         "--dry-run",

@@ -12,21 +12,21 @@ if package_parent_dir not in sys.path:
 
 # Import local modules
 # Color Scheme
-from colorama import Fore
-from colorama import Style
+from colorama import Fore, Style
 
 from whalebot_pro.analysis.indicators import IndicatorCalculator
-from whalebot_pro.analysis.trading_analyzer import TradingAnalyzer
-from whalebot_pro.analysis.trading_analyzer import display_indicator_values_and_price
-from whalebot_pro.analysis.trading_analyzer import fetch_latest_sentiment
+from whalebot_pro.analysis.trading_analyzer import (
+    TradingAnalyzer,
+    display_indicator_values_and_price,
+    fetch_latest_sentiment,
+)
 from whalebot_pro.api.bybit_client import BybitClient
 from whalebot_pro.config import Config
 from whalebot_pro.core.performance_tracker import PerformanceTracker
 from whalebot_pro.core.position_manager import PositionManager
 from whalebot_pro.utils.alert_system import AlertSystem
 from whalebot_pro.utils.logger_setup import setup_logging
-from whalebot_pro.utils.utilities import InMemoryCache
-from whalebot_pro.utils.utilities import KlineDataFetcher
+from whalebot_pro.utils.utilities import InMemoryCache, KlineDataFetcher
 
 NEON_GREEN = Fore.LIGHTGREEN_EX
 NEON_BLUE = Fore.CYAN

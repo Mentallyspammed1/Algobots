@@ -43,11 +43,11 @@ class BybitWsPrivateHelper:
         )  # Event to signal connection status
         # Stores {topic: (callback, kwargs)} for re-subscription on reconnect
         self._subscriptions: dict[
-            str, tuple[Callable[[dict[str, Any]], None], dict[str, Any]]
+            str, tuple[Callable[[dict[str, Any]], None], dict[str, Any]],
         ] = {}
 
         logger.info(
-            f"BybitWsPrivateHelper initialized for {'testnet' if self.testnet else 'mainnet'}."
+            f"BybitWsPrivateHelper initialized for {'testnet' if self.testnet else 'mainnet'}.",
         )
 
     def _on_message(self, message: dict[str, Any]) -> None:
@@ -76,11 +76,11 @@ class BybitWsPrivateHelper:
                 matched_callback(message)
             except Exception as e:
                 logger.exception(
-                    f"Error in user-defined callback for topic {topic}: {e}"
+                    f"Error in user-defined callback for topic {topic}: {e}",
                 )
         else:
             logger.debug(
-                f"No registered callback for topic: {topic}. Message: {message}"
+                f"No registered callback for topic: {topic}. Message: {message}",
             )
 
     def _on_connect(self) -> None:
@@ -104,10 +104,10 @@ class BybitWsPrivateHelper:
         """Re-subscribes to all active topics after a reconnection."""
         if self.websocket_client and self.websocket_client.is_connected():
             logger.info(
-                f"Re-subscribing to {len(self._subscriptions)} private topics after reconnection."
+                f"Re-subscribing to {len(self._subscriptions)} private topics after reconnection.",
             )
             for topic, (callback, kwargs) in list(
-                self._subscriptions.items()
+                self._subscriptions.items(),
             ):  # Iterate over a copy
                 # Pybit's WebSocket client handles the actual subscription logic based on topic names
                 # We need to re-call the appropriate subscription method.
@@ -124,23 +124,23 @@ class BybitWsPrivateHelper:
                         self.websocket_client.order_stream(callback=self._on_message)
                     elif topic == "execution":
                         self.websocket_client.execution_stream(
-                            callback=self._on_message
+                            callback=self._on_message,
                         )
                     elif topic == "greeks":
                         self.websocket_client.greek_stream(callback=self._on_message)
                     elif topic.startswith(
-                        "fast_execution."
+                        "fast_execution.",
                     ):  # e.g., fast_execution.linear
                         # pybit's fast_execution_stream takes 'categorised_topic'
                         cat_topic = topic.split(".", 1)[
                             1
                         ]  # 'linear' from 'fast_execution.linear'
                         self.websocket_client.fast_execution_stream(
-                            callback=self._on_message, categorised_topic=cat_topic
+                            callback=self._on_message, categorised_topic=cat_topic,
                         )
                     else:
                         logger.warning(
-                            f"Attempted to re-subscribe to unknown private topic: {topic}. Skipping."
+                            f"Attempted to re-subscribe to unknown private topic: {topic}. Skipping.",
                         )
                 except Exception as e:
                     logger.error(
@@ -178,7 +178,7 @@ class BybitWsPrivateHelper:
                 if wait_for_connection:
                     if not self._is_connected_event.wait(timeout=timeout):
                         logger.error(
-                            "Timeout waiting for private WebSocket connection."
+                            "Timeout waiting for private WebSocket connection.",
                         )
                         self.websocket_client.close()  # Attempt to close if timeout
                         self.websocket_client = None
@@ -208,7 +208,7 @@ class BybitWsPrivateHelper:
         return self._is_connected_event.is_set()
 
     def subscribe_to_wallet_stream(
-        self, callback: Callable[[dict[str, Any]], None]
+        self, callback: Callable[[dict[str, Any]], None],
     ) -> bool:
         """Subscribes to the real-time wallet balance update stream.
 
@@ -236,7 +236,7 @@ class BybitWsPrivateHelper:
             return False
 
     def subscribe_to_position_stream(
-        self, callback: Callable[[dict[str, Any]], None]
+        self, callback: Callable[[dict[str, Any]], None],
     ) -> bool:
         """Subscribes to the real-time position update stream.
         This stream provides updates for all categories (linear, inverse, spot, option).
@@ -246,7 +246,7 @@ class BybitWsPrivateHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot subscribe to position stream: WebSocket not connected."
+                "Cannot subscribe to position stream: WebSocket not connected.",
             )
             return False
         topic = "position"
@@ -267,7 +267,7 @@ class BybitWsPrivateHelper:
             return False
 
     def subscribe_to_order_stream(
-        self, callback: Callable[[dict[str, Any]], None]
+        self, callback: Callable[[dict[str, Any]], None],
     ) -> bool:
         """Subscribes to the real-time order update stream.
         This stream provides updates for all categories (linear, inverse, spot, option).
@@ -296,7 +296,7 @@ class BybitWsPrivateHelper:
             return False
 
     def subscribe_to_execution_stream(
-        self, callback: Callable[[dict[str, Any]], None]
+        self, callback: Callable[[dict[str, Any]], None],
     ) -> bool:
         """Subscribes to the real-time execution update stream.
         This stream provides updates for all categories (linear, inverse, spot, option).
@@ -306,7 +306,7 @@ class BybitWsPrivateHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot subscribe to execution stream: WebSocket not connected."
+                "Cannot subscribe to execution stream: WebSocket not connected.",
             )
             return False
         topic = "execution"
@@ -327,7 +327,7 @@ class BybitWsPrivateHelper:
             return False
 
     def subscribe_to_fast_execution_stream(
-        self, callback: Callable[[dict[str, Any]], None], categorised_topic: str
+        self, callback: Callable[[dict[str, Any]], None], categorised_topic: str,
     ) -> bool:
         """Subscribes to the real-time fast execution update stream for a specific category.
         This stream offers lower latency but with limited data fields.
@@ -338,19 +338,19 @@ class BybitWsPrivateHelper:
         """
         if not self.is_connected():
             logger.error(
-                "Cannot subscribe to fast execution stream: WebSocket not connected."
+                "Cannot subscribe to fast execution stream: WebSocket not connected.",
             )
             return False
         if not isinstance(categorised_topic, str) or not categorised_topic:
             logger.error(
-                "Invalid 'categorised_topic' provided for fast execution stream."
+                "Invalid 'categorised_topic' provided for fast execution stream.",
             )
             return False
 
         topic = f"fast_execution.{categorised_topic}"
         if topic in self._subscriptions:
             logger.warning(
-                f"Already subscribed to fast execution stream for {categorised_topic}. Updating callback."
+                f"Already subscribed to fast execution stream for {categorised_topic}. Updating callback.",
             )
         self._subscriptions[topic] = (
             callback,
@@ -358,27 +358,27 @@ class BybitWsPrivateHelper:
         )
         try:
             self.websocket_client.fast_execution_stream(
-                callback=self._on_message, categorised_topic=categorised_topic
+                callback=self._on_message, categorised_topic=categorised_topic,
             )
             logger.info(
-                f"Successfully initiated subscription to fast execution stream for {categorised_topic}."
+                f"Successfully initiated subscription to fast execution stream for {categorised_topic}.",
             )
             return True
         except BybitWebsocketError as e:
             logger.exception(
-                f"WebSocket error subscribing to fast execution stream for {categorised_topic}: {e}"
+                f"WebSocket error subscribing to fast execution stream for {categorised_topic}: {e}",
             )
             del self._subscriptions[topic]
             return False
         except Exception as e:
             logger.exception(
-                f"Unexpected error subscribing to fast execution stream for {categorised_topic}: {e}"
+                f"Unexpected error subscribing to fast execution stream for {categorised_topic}: {e}",
             )
             del self._subscriptions[topic]
             return False
 
     def subscribe_to_greek_stream(
-        self, callback: Callable[[dict[str, Any]], None]
+        self, callback: Callable[[dict[str, Any]], None],
     ) -> bool:
         """Subscribes to the real-time options Greeks data stream (Delta, Gamma, Theta, Vega).
 
@@ -419,7 +419,7 @@ class BybitWsPrivateHelper:
             categorised_topic = kwargs.get("categorised_topic")
             if not isinstance(categorised_topic, str) or not categorised_topic:
                 logger.error(
-                    "Invalid 'categorised_topic' for unsubscribing from fast execution stream."
+                    "Invalid 'categorised_topic' for unsubscribing from fast execution stream.",
                 )
                 return False
             topic = f"fast_execution.{categorised_topic}"
@@ -431,7 +431,7 @@ class BybitWsPrivateHelper:
         try:
             del self._subscriptions[topic]
             logger.info(
-                f"Removed internal subscription for {topic}. Note: Pybit's client does not expose direct unsubscribe per topic over network."
+                f"Removed internal subscription for {topic}. Note: Pybit's client does not expose direct unsubscribe per topic over network.",
             )
             return True
         except Exception as e:
@@ -450,7 +450,7 @@ if __name__ == "__main__":
 
     if API_KEY == "YOUR_API_KEY" or API_SECRET == "YOUR_API_SECRET":
         logger.error(
-            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_ws_private_helper.py example."
+            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_ws_private_helper.py example.",
         )
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
@@ -463,7 +463,7 @@ if __name__ == "__main__":
         if data:
             for wallet_info in data:
                 logger.info(
-                    f"Wallet Update: Account={wallet_info.get('accountType')}, Equity={wallet_info.get('totalEquity')}, Coin='{wallet_info.get('coin', [{}])[0].get('coin')}', Available={wallet_info.get('coin', [{}])[0].get('availableToWithdraw')}"
+                    f"Wallet Update: Account={wallet_info.get('accountType')}, Equity={wallet_info.get('totalEquity')}, Coin='{wallet_info.get('coin', [{}])[0].get('coin')}', Available={wallet_info.get('coin', [{}])[0].get('availableToWithdraw')}",
                 )
 
     def handle_position_update(message: dict[str, Any]) -> None:
@@ -471,7 +471,7 @@ if __name__ == "__main__":
         if data:
             for position in data:
                 logger.info(
-                    f"Position Update: Symbol={position.get('symbol')}, Side={position.get('side')}, Size={position.get('size')}, PnL={position.get('unrealisedPnl')}"
+                    f"Position Update: Symbol={position.get('symbol')}, Side={position.get('side')}, Size={position.get('size')}, PnL={position.get('unrealisedPnl')}",
                 )
 
     def handle_order_update(message: dict[str, Any]) -> None:
@@ -479,7 +479,7 @@ if __name__ == "__main__":
         if data:
             for order in data:
                 logger.info(
-                    f"Order Update: Symbol={order.get('symbol')}, Side={order.get('side')}, Type={order.get('orderType')}, Status={order.get('orderStatus')}, Price={order.get('price')}, Qty={order.get('qty')}"
+                    f"Order Update: Symbol={order.get('symbol')}, Side={order.get('side')}, Type={order.get('orderType')}, Status={order.get('orderStatus')}, Price={order.get('price')}, Qty={order.get('qty')}",
                 )
 
     def handle_execution_update(message: dict[str, Any]) -> None:
@@ -487,7 +487,7 @@ if __name__ == "__main__":
         if data:
             for execution in data:
                 logger.info(
-                    f"Execution Update: Symbol={execution.get('symbol')}, Price={execution.get('execPrice')}, Qty={execution.get('execQty')}, Side={execution.get('side')}, Fee={execution.get('execFee')}"
+                    f"Execution Update: Symbol={execution.get('symbol')}, Price={execution.get('execPrice')}, Qty={execution.get('execQty')}, Side={execution.get('side')}, Fee={execution.get('execFee')}",
                 )
 
     def handle_fast_execution_update(message: dict[str, Any]) -> None:
@@ -495,7 +495,7 @@ if __name__ == "__main__":
         if data:
             for execution in data:
                 logger.debug(
-                    f"Fast Execution Update: Symbol={execution.get('s')}, Price={execution.get('p')}, Qty={execution.get('q')}"
+                    f"Fast Execution Update: Symbol={execution.get('s')}, Price={execution.get('p')}, Qty={execution.get('q')}",
                 )
 
     def handle_greeks_update(message: dict[str, Any]) -> None:
@@ -503,7 +503,7 @@ if __name__ == "__main__":
         if data:
             for greeks in data:
                 logger.info(
-                    f"Greeks Update: Symbol={greeks.get('symbol')}, Delta={greeks.get('delta')}, Gamma={greeks.get('gamma')}"
+                    f"Greeks Update: Symbol={greeks.get('symbol')}, Delta={greeks.get('delta')}, Gamma={greeks.get('gamma')}",
                 )
 
     try:
@@ -529,7 +529,7 @@ if __name__ == "__main__":
             # Subscribe to Fast Execution stream for 'linear' category
             # Note: Fast execution stream is usually for derivatives.
             private_ws_helper.subscribe_to_fast_execution_stream(
-                handle_fast_execution_update, categorised_topic="linear"
+                handle_fast_execution_update, categorised_topic="linear",
             )
             time.sleep(1)
 
@@ -547,7 +547,7 @@ if __name__ == "__main__":
 
         else:
             logger.error(
-                "Failed to connect to Private WebSocket. Skipping subscriptions."
+                "Failed to connect to Private WebSocket. Skipping subscriptions.",
             )
 
     except Exception:

@@ -4,7 +4,7 @@ import ta
 
 
 def calculate_ema(
-    df: pd.DataFrame, period: int = 14, column: str = "close"
+    df: pd.DataFrame, period: int = 14, column: str = "close",
 ) -> pd.DataFrame:
     """Calculates the Exponential Moving Average (EMA) for a given DataFrame.
 
@@ -24,13 +24,13 @@ def calculate_ema(
         df[f"ema_{period}"] = np.nan
         return df
     df[f"ema_{period}"] = ta.trend.ema_indicator(
-        df[column], window=period, fillna=False
+        df[column], window=period, fillna=False,
     )
     return df
 
 
 def calculate_rsi(
-    df: pd.DataFrame, period: int = 14, column: str = "close"
+    df: pd.DataFrame, period: int = 14, column: str = "close",
 ) -> pd.DataFrame:
     """Calculates the Relative Strength Index (RSI) for a given DataFrame.
 
@@ -82,7 +82,7 @@ def calculate_macd(
         return df
 
     df[f"macd_{window_fast}_{window_slow}"] = ta.trend.macd(
-        df[column], window_fast=window_fast, window_slow=window_slow, fillna=False
+        df[column], window_fast=window_fast, window_slow=window_slow, fillna=False,
     )
     df[f"macd_signal_{window_fast}_{window_slow}_{window_sign}"] = ta.trend.macd_signal(
         df[column],
@@ -102,7 +102,7 @@ def calculate_macd(
 
 
 def calculate_ehlers_fisher_transform(
-    df: pd.DataFrame, period: int = 9, column: str = "close"
+    df: pd.DataFrame, period: int = 9, column: str = "close",
 ) -> pd.DataFrame:
     """Calculates the Ehlers Fisher Transform for a given DataFrame.
 
@@ -139,7 +139,7 @@ def calculate_ehlers_fisher_transform(
     raw_fisher = np.clip(raw_fisher, -0.999, 0.999)
     fisher = 0.5 * np.log((1 + raw_fisher) / (1 - raw_fisher))
     fisher = fisher.ewm(
-        span=3, adjust=False
+        span=3, adjust=False,
     ).mean()  # Apply EMA smoothing as often seen
 
     # Calculate Fisher Signal
@@ -151,7 +151,7 @@ def calculate_ehlers_fisher_transform(
 
 
 def calculate_supertrend(
-    df: pd.DataFrame, period: int = 10, multiplier: float = 3.0
+    df: pd.DataFrame, period: int = 10, multiplier: float = 3.0,
 ) -> pd.DataFrame:
     """Calculates the Supertrend indicator for a given DataFrame.
 
@@ -166,7 +166,7 @@ def calculate_supertrend(
     """
     if not all(col in df.columns for col in ["high", "low", "close"]):
         raise ValueError(
-            "DataFrame must contain 'high', 'low', and 'close' columns for Supertrend calculation."
+            "DataFrame must contain 'high', 'low', and 'close' columns for Supertrend calculation.",
         )
 
     # Ensure enough data for ATR calculation

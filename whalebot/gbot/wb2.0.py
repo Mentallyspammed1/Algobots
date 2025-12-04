@@ -1,29 +1,24 @@
 #!/usr/bin/env python3
 import asyncio
-import aiohttp
 import json
 import logging
-import math
-import os
 import re
 import sys
 import time
 import warnings
-from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP, getcontext
+from decimal import ROUND_HALF_UP, Decimal, getcontext
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple, Any
+from typing import Literal
 
+import aiohttp
 import google.generativeai as genai
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
-from colorama import Fore, Style, init
+from colorama import init
 from dotenv import load_dotenv
-from google.api_core import exceptions as google_exceptions
-from pydantic import BaseModel, Field, field_validator, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich import box
 from rich.console import Console
@@ -32,7 +27,12 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 # --- Global Setup ---
 load_dotenv()
@@ -50,9 +50,9 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler(LOG_DIR / "whalebot.log", mode='a', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)  # Log to stdout for Docker/Systemd compatibility
-    ]
+        logging.FileHandler(LOG_DIR / "whalebot.log", mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),  # Log to stdout for Docker/Systemd compatibility
+    ],
 )
 # Silence noisy libraries
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -86,17 +86,17 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = Field(..., alias="GEMINI_API_KEY")
     bybit_base_url: str = "https://api.bybit.com"
-    gemini_model_name: str = "gemini-2.5-flash-lite" 
+    gemini_model_name: str = "gemini-2.5-flash-lite"
 
-    symbols: List[str] = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT"]
+    symbols: list[str] = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT"]
     interval: str = "15"  # 15m timeframe
     category: str = "linear"
     kline_limit: int = 200
     refresh_rate: int = 10  # UI Refresh rate (data fetch is decoupled)
-    
+
     trader: TraderSettings = TraderSettings()
     tech: TechnicalSettings = TechnicalSettings()
-    
+
     # AI Rate Limiting
     ai_cooldown_seconds: int = 15
 
@@ -130,7 +130,7 @@ class SignalAnalysis(BaseModel):
     take_profit: Decimal
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    @field_validator('entry_price', 'stop_loss', 'take_profit', mode='before')
+    @field_validator("entry_price", "stop_loss", "take_profit", mode="before")
     def float_to_decimal(cls, v):
         return Decimal(str(v)) if isinstance(v, (float, int, str)) else v
 
@@ -148,9 +148,9 @@ class MarketSnapshot(BaseModel):
     symbol: str
     price: Decimal = Decimal(0)
     indicators: IndicatorData = Field(default_factory=IndicatorData)
-    analysis: Optional[SignalAnalysis] = None
+    analysis: SignalAnalysis | None = None
     last_updated: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
     latency_ms: float = 0.0
     last_ai_trigger: float = 0.0
 
@@ -169,7 +169,7 @@ class TokenBucket:
         delta = now - self.last_time
         self._tokens = min(self.capacity, self._tokens + delta * self.fill_rate)
         self.last_time = now
-        
+
         if self._tokens >= 1:
             self._tokens -= 1
             return True
@@ -182,7 +182,7 @@ ai_limiter = TokenBucket(capacity=2, fill_rate=15.0/60.0)
 
 class BybitClient:
     def __init__(self):
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
     async def start(self):
         if not self.session:
@@ -200,10 +200,10 @@ class BybitClient:
             resp.raise_for_status()
             return await resp.json()
 
-    async def get_market_data(self, symbol: str) -> Tuple[pd.DataFrame, dict, dict, float]:
+    async def get_market_data(self, symbol: str) -> tuple[pd.DataFrame, dict, dict, float]:
         """Fetches Kline, Ticker, and Orderbook data concurrently."""
         t0 = time.perf_counter()
-        
+
         kline_params = {"category": settings.category, "symbol": symbol, "interval": settings.interval, "limit": settings.kline_limit}
         ob_params = {"category": settings.category, "symbol": symbol, "limit": 50}
         tick_params = {"category": settings.category, "symbol": symbol}
@@ -217,7 +217,7 @@ class BybitClient:
             kline_data = await kline_task
             ob_data = await ob_task
             tick_data = await tick_task
-            
+
             latency = (time.perf_counter() - t0) * 1000
 
             # Process Klines
@@ -233,7 +233,7 @@ class BybitClient:
 
 class TechnicalAnalyzer:
     """Runs strictly in a ThreadPool to avoid blocking the async loop."""
-    
+
     @staticmethod
     def compute(df: pd.DataFrame, ob: dict) -> IndicatorData:
         if df.empty or len(df) < 50:
@@ -251,12 +251,12 @@ class TechnicalAnalyzer:
         df.ta.atr(length=settings.tech.atr_period, append=True)
 
         last = df.iloc[-1]
-        
+
         # Trend Logic
         ema_f = last.get(f"EMA_{settings.tech.ema_fast}")
         ema_s = last.get(f"EMA_{settings.tech.ema_slow}")
         trend = "BULL" if ema_f > ema_s else "BEAR"
-        
+
         # Orderbook Imbalance
         imbalance = 0.0
         if ob and "b" in ob and "a" in ob:
@@ -270,8 +270,8 @@ class TechnicalAnalyzer:
                     imbalance = (bid_vol - ask_vol) / total
 
         # Support/Resistance (Simple swing detection on last 20 candles)
-        recent_high = df['high'].tail(20).max()
-        recent_low = df['low'].tail(20).min()
+        recent_high = df["high"].tail(20).max()
+        recent_low = df["low"].tail(20).min()
 
         return IndicatorData(
             rsi=last.get(f"RSI_{settings.tech.rsi_period}", 50),
@@ -281,7 +281,7 @@ class TechnicalAnalyzer:
             ob_imbalance=imbalance,
             nearest_resistance=recent_high,
             nearest_support=recent_low,
-            price=Decimal(str(last['close']))
+            price=Decimal(str(last["close"])),
         )
 
 class GeminiAnalyst:
@@ -289,7 +289,7 @@ class GeminiAnalyst:
         genai.configure(api_key=settings.gemini_api_key)
         self.model = genai.GenerativeModel(
             settings.gemini_model_name,
-            generation_config={"response_mime_type": "application/json"}
+            generation_config={"response_mime_type": "application/json"},
         )
 
     async def analyze(self, symbol: str, data: IndicatorData) -> SignalAnalysis:
@@ -329,13 +329,13 @@ class GeminiAnalyst:
             # Offload blocking network call
             loop = asyncio.get_running_loop()
             response = await loop.run_in_executor(None, lambda: self.model.generate_content(prompt))
-            
+
             clean_text = clean_json_response(response.text)
             signal_dict = json.loads(clean_text)
-            
+
             # Validation
             signal = SignalAnalysis(**signal_dict)
-            
+
             # Logic Check (AI sometimes hallucinates prices)
             if signal.action == "BUY" and signal.stop_loss >= signal.entry_price:
                 return self._fallback(data, "Invalid AI SL")
@@ -354,7 +354,7 @@ class GeminiAnalyst:
         """Deterministic logic when AI is throttled or fails."""
         action = "HOLD"
         conf = 0.0
-        
+
         # Simple Strategy
         if data.trend == "BULL" and data.rsi < 40 and data.macd_hist > 0:
             action = "BUY"
@@ -362,10 +362,10 @@ class GeminiAnalyst:
         elif data.trend == "BEAR" and data.rsi > 60 and data.macd_hist < 0:
             action = "SELL"
             conf = 0.65
-            
+
         sl_dist = Decimal(str(data.atr)) * Decimal("1.5")
         tp_dist = Decimal(str(data.atr)) * Decimal("2.5")
-        
+
         entry = data.price
         if action == "BUY":
             sl = entry - sl_dist
@@ -373,10 +373,10 @@ class GeminiAnalyst:
         else:
             sl = entry + sl_dist
             tp = entry - tp_dist
-            
+
         return SignalAnalysis(
             action=action, confidence=conf, reason=reason,
-            entry_price=entry, stop_loss=sl, take_profit=tp
+            entry_price=entry, stop_loss=sl, take_profit=tp,
         )
 
 class StateManager:
@@ -405,7 +405,7 @@ class StateManager:
         if not STATE_FILE.exists():
             return {}
         try:
-            with open(STATE_FILE, "r") as f:
+            with open(STATE_FILE) as f:
                 return json.load(f)
         except Exception:
             return {}
@@ -414,8 +414,8 @@ class PaperTrader:
     def __init__(self, state_manager: StateManager):
         self.state_mgr = state_manager
         self.balance = settings.trader.initial_balance
-        self.positions: Dict[str, dict] = {}
-        self.history: List[dict] = []
+        self.positions: dict[str, dict] = {}
+        self.history: list[dict] = []
         self._load()
 
     def _load(self):
@@ -435,7 +435,7 @@ class PaperTrader:
         data = {
             "balance": self.balance,
             "positions": self.positions,
-            "history": self.history[-50:]  # Keep last 50
+            "history": self.history[-50:],  # Keep last 50
         }
         await self.state_mgr.save(data)
 
@@ -459,12 +459,12 @@ class PaperTrader:
         risk_amt = self.balance * settings.trader.risk_per_trade
         dist = abs(signal.entry_price - signal.stop_loss)
         if dist == 0: return
-        
+
         qty = risk_amt / dist
         # Leverage cap
         max_qty = (self.balance * settings.trader.leverage) / price
         qty = min(qty, max_qty).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-        
+
         if qty * price < 10: return # Minimum trade size
 
         # Fee Deduction
@@ -479,7 +479,7 @@ class PaperTrader:
             "stop_loss": signal.stop_loss,
             "take_profit": signal.take_profit,
             "highest_price": price, # For trailing stop
-            "entry_time": datetime.now().isoformat()
+            "entry_time": datetime.now().isoformat(),
         }
         logger.info(f"OPEN {signal.action} {symbol} @ {price:.2f}")
 
@@ -497,14 +497,12 @@ class PaperTrader:
                     pos["highest_price"] = price
                     # Move SL up if trail allows
                     new_sl = price * (1 - settings.trader.trailing_callback)
-                    if new_sl > pos["stop_loss"]:
-                        pos["stop_loss"] = new_sl
+                    pos["stop_loss"] = max(pos["stop_loss"], new_sl)
             elif side == "SELL":
                 if price < pos["highest_price"]:
                     pos["highest_price"] = price
                     new_sl = price * (1 + settings.trader.trailing_callback)
-                    if new_sl < pos["stop_loss"]:
-                        pos["stop_loss"] = new_sl
+                    pos["stop_loss"] = min(pos["stop_loss"], new_sl)
 
         # Check Exit
         if side == "BUY":
@@ -524,12 +522,12 @@ class PaperTrader:
             pnl = diff * pos["qty"]
             fee = price * pos["qty"] * settings.trader.trading_fee
             net_pnl = pnl - fee
-            
+
             self.balance += net_pnl
-            
+
             self.history.append({
                 "symbol": symbol, "side": side, "pnl": net_pnl, "reason": reason,
-                "time": datetime.now().strftime("%H:%M")
+                "time": datetime.now().strftime("%H:%M"),
             })
             del self.positions[symbol]
             await self.save()
@@ -545,7 +543,7 @@ class WhaleBotPro:
         self.state_mgr = StateManager()
         self.trader = PaperTrader(self.state_mgr)
         self.console = Console()
-        self.snapshots: Dict[str, MarketSnapshot] = {
+        self.snapshots: dict[str, MarketSnapshot] = {
             s: MarketSnapshot(symbol=s) for s in settings.symbols
         }
 
@@ -554,7 +552,7 @@ class WhaleBotPro:
         layout.split_column(
             Layout(name="header", size=3),
             Layout(name="body", ratio=2),
-            Layout(name="footer", size=10)
+            Layout(name="footer", size=10),
         )
 
         # Header
@@ -579,7 +577,7 @@ class WhaleBotPro:
 
             ind = snap.indicators
             trend_c = "green" if ind.trend == "BULL" else "red" if ind.trend == "BEAR" else "yellow"
-            
+
             sig_str = "-"
             if snap.analysis and snap.analysis.action != "HOLD":
                 ac_color = "green" if snap.analysis.action == "BUY" else "red"
@@ -591,7 +589,7 @@ class WhaleBotPro:
                 f"[{trend_c}]{ind.trend}[/]",
                 f"{ind.rsi:.0f} / {ind.ob_imbalance:+.2f}",
                 sig_str,
-                f"{snap.latency_ms:.0f}ms"
+                f"{snap.latency_ms:.0f}ms",
             )
         layout["body"].update(Panel(table, title="Market Watch"))
 
@@ -610,14 +608,14 @@ class WhaleBotPro:
                     c = "green" if upnl >= 0 else "red"
                     pos_text.append(f"{s} {p['side']} | PnL: ")
                     pos_text.append(f"${upnl:.2f}\n", style=c)
-        
+
         layout["footer"].update(Panel(pos_text, title="Portfolio"))
         return layout
 
     async def cycle(self):
         """Main data processing cycle."""
         await self.client.start()
-        
+
         while True:
             try:
                 # 1. Fetch Data (Concurrent)
@@ -633,7 +631,7 @@ class WhaleBotPro:
                     # 2. Technical Analysis (Offloaded)
                     # We use run_in_executor to prevent Pandas TA from blocking the async loop
                     indicators = await loop.run_in_executor(self.ta_pool, TechnicalAnalyzer.compute, df, ob)
-                    
+
                     snap = self.snapshots[symbol]
                     snap.price = Decimal(str(tick.get("lastPrice", 0)))
                     snap.indicators = indicators
@@ -644,11 +642,11 @@ class WhaleBotPro:
                     # Trigger AI if technicals look interesting or enough time passed
                     is_interesting = (indicators.rsi < 30 or indicators.rsi > 70) and abs(indicators.ob_imbalance) > 0.15
                     time_passed = (time.time() - snap.last_ai_trigger) > settings.ai_cooldown_seconds
-                    
+
                     if is_interesting and time_passed:
                         snap.analysis = await self.analyst.analyze(symbol, indicators)
                         snap.last_ai_trigger = time.time()
-                    
+
                     # 4. Trading Logic
                     await self.trader.process_signal(snap)
 
@@ -667,13 +665,13 @@ class WhaleBotPro:
 
     async def run(self):
         console.clear()
-        
+
         # Create the Live context
         with Live(self.render(), refresh_per_second=4, screen=True) as live:
             # Run logic and UI concurrently
             await asyncio.gather(
                 self.cycle(),
-                self.ui_loop(live)
+                self.ui_loop(live),
             )
 
     async def shutdown(self):

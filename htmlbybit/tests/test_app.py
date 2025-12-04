@@ -10,13 +10,13 @@ def app():
     flask_app.config.update(
         {
             "TESTING": True,
-        }
+        },
     )
 
     # Other setup can go here.
     # For example, setting up a test database.
 
-    yield flask_app  # provide the app instance
+    return flask_app  # provide the app instance
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ def test_analyze_success(client):
                 "direction": "buy",
                 "price": 25200.00,
                 "time": 1678886400000,
-            }
+            },
         ],
     }
     response = client.post("/analyze", json=sample_data)
@@ -93,7 +93,7 @@ def test_analyze_missing_symbol(client):
 def test_analyze_invalid_json(client):
     """Test /analyze endpoint with invalid JSON payload."""
     response = client.post(
-        "/analyze", data="This is not JSON"
+        "/analyze", data="This is not JSON",
     )  # Sending raw string instead of JSON
     assert response.status_code == 400  # Flask typically returns 400 for invalid JSON
     data = response.get_json()

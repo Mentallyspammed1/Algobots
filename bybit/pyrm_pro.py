@@ -12,15 +12,11 @@ import os
 import threading
 import time
 from collections.abc import Callable
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
+from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
 from typing import Any
 
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # Load environment variables from .env file
 load_dotenv()
@@ -105,7 +101,7 @@ class BybitWebSocketManager:
         self.market_data: dict[str, Any] = {}
         self.positions: dict[str, Any] = {}
         self.price_history: dict[
-            str, list[tuple[float, Decimal]]
+            str, list[tuple[float, Decimal]],
         ] = {}  # {symbol: [(timestamp, mid_price), ...]}
         self._lock = threading.Lock()
 
@@ -169,7 +165,7 @@ class BybitWebSocketManager:
         await asyncio.sleep(0.5)
         for symbol in symbols:
             self.ws_public.orderbook_stream(
-                depth=1, symbol=symbol, callback=self.handle_orderbook
+                depth=1, symbol=symbol, callback=self.handle_orderbook,
             )
             logger.info(f"Subscribed to orderbook.1.{symbol}")
 
@@ -218,13 +214,13 @@ class BybitTradingBot:
         for attempt in range(3):
             try:
                 return await asyncio.wait_for(
-                    asyncio.to_thread(method, **kwargs), timeout=self.api_timeout_s
+                    asyncio.to_thread(method, **kwargs), timeout=self.api_timeout_s,
                 )
             except TimeoutError:
                 logger.warning(f"HTTP call {method.__name__} timed out.")
             except Exception as e:
                 logger.error(
-                    f"HTTP call {method.__name__} failed (attempt {attempt + 1}): {e}"
+                    f"HTTP call {method.__name__} failed (attempt {attempt + 1}): {e}",
                 )
             await asyncio.sleep(1 * (2**attempt))
         return None
@@ -233,7 +229,7 @@ class BybitTradingBot:
         logger.info(f"Fetching instrument info for: {symbols}")
         for symbol in symbols:
             response = await self._http_call(
-                self.session.get_instruments_info, category=self.category, symbol=symbol
+                self.session.get_instruments_info, category=self.category, symbol=symbol,
             )
             if response and response.get("retCode") == 0:
                 item = response["result"]["list"][0]
@@ -253,7 +249,7 @@ class BybitTradingBot:
         if not info or info["qtyStep"] <= 0:
             return quantity
         return (quantity / info["qtyStep"]).to_integral_value(
-            rounding=ROUND_DOWN
+            rounding=ROUND_DOWN,
         ) * info["qtyStep"]
 
     def _round_price(self, symbol: str, price: Decimal) -> Decimal:
@@ -263,7 +259,7 @@ class BybitTradingBot:
         return price.quantize(info["tickSize"], rounding=ROUND_DOWN)
 
     async def calculate_position_size(
-        self, symbol: str, capital_percentage: float, price: Decimal, account_info: dict
+        self, symbol: str, capital_percentage: float, price: Decimal, account_info: dict,
     ) -> Decimal:
         available_balance = to_decimal(
             next(
@@ -274,7 +270,7 @@ class BybitTradingBot:
                     if c.get("coin") == "USDT"
                 ),
                 "0",
-            )
+            ),
         )
         if available_balance <= 0 or price <= 0:
             return Decimal("0")
@@ -297,7 +293,7 @@ class BybitTradingBot:
             return mock_response
 
         order_response = await self._http_call(
-            self.session.place_order, category=self.category, **kwargs
+            self.session.place_order, category=self.category, **kwargs,
         )
         if order_response and order_response.get("retCode") == 0:
             result = order_response["result"]
@@ -305,7 +301,7 @@ class BybitTradingBot:
             self.order_manager.add({**result, "symbol": kwargs.get("symbol")})
             return result
         logger.error(
-            f"Failed to place order: {order_response.get('retMsg') if order_response else 'No response'}"
+            f"Failed to place order: {order_response.get('retMsg') if order_response else 'No response'}",
         )
         return None
 
@@ -327,7 +323,7 @@ class BybitTradingBot:
             self.order_manager.remove(order_link_id)
             return True
         logger.error(
-            f"Failed to cancel order {order_link_id}: {response.get('retMsg') if response else 'No response'}"
+            f"Failed to cancel order {order_link_id}: {response.get('retMsg') if response else 'No response'}",
         )
         return False
 
@@ -365,7 +361,7 @@ class BybitTradingBot:
                 }
 
                 account_info = await self._http_call(
-                    self.session.get_wallet_balance, accountType="UNIFIED"
+                    self.session.get_wallet_balance, accountType="UNIFIED",
                 )
 
                 if self.strategy and all_market_data and account_info:
@@ -379,7 +375,7 @@ class BybitTradingBot:
                 if loop_count % 10 == 0:
                     avg_time = total_loop_time / loop_count
                     logger.info(
-                        f"Heartbeat | Loop: {loop_count} | Last Duration: {elapsed:.2f}s | Avg Duration: {avg_time:.2f}s"
+                        f"Heartbeat | Loop: {loop_count} | Last Duration: {elapsed:.2f}s | Avg Duration: {avg_time:.2f}s",
                     )
 
                 await asyncio.sleep(max(0, interval - elapsed))
@@ -400,7 +396,7 @@ class BybitTradingBot:
 
         # Fallback to REST
         response = await self._http_call(
-            self.session.get_orderbook, category=self.category, symbol=symbol, limit=1
+            self.session.get_orderbook, category=self.category, symbol=symbol, limit=1,
         )
         if response and response.get("retCode") == 0:
             ob = response["result"]["list"][0]
@@ -410,7 +406,7 @@ class BybitTradingBot:
                     "b": ob.get("b", []),
                     "a": ob.get("a", []),
                     "ts": ob.get("ts", now_ms),
-                }
+                },
             }
         return None
 
@@ -432,35 +428,35 @@ async def market_making_strategy(
 
     # Inventory Management parameters
     target_inventory_pct = to_decimal(
-        os.getenv("STRATEGY_TARGET_INVENTORY_PCT", "0.5")
+        os.getenv("STRATEGY_TARGET_INVENTORY_PCT", "0.5"),
     )  # 0.5 for neutral
     inventory_price_bias_factor = to_decimal(
-        os.getenv("STRATEGY_INVENTORY_PRICE_BIAS_FACTOR", "0.0001")
+        os.getenv("STRATEGY_INVENTORY_PRICE_BIAS_FACTOR", "0.0001"),
     )  # 0.01% per % deviation
 
     # Dynamic Spread parameters
     base_spread_pct = to_decimal(
-        os.getenv("STRATEGY_BASE_SPREAD_PERCENT", "0.001")
+        os.getenv("STRATEGY_BASE_SPREAD_PERCENT", "0.001"),
     )  # Base spread
     volatility_lookback_s = int(
-        os.getenv("STRATEGY_VOLATILITY_LOOKBACK_S", "60")
+        os.getenv("STRATEGY_VOLATILITY_LOOKBACK_S", "60"),
     )  # Lookback for volatility in seconds
     volatility_multiplier = to_decimal(
-        os.getenv("STRATEGY_VOLATILITY_MULTIPLIER", "1.0")
+        os.getenv("STRATEGY_VOLATILITY_MULTIPLIER", "1.0"),
     )  # How much volatility affects spread
     min_spread_pct = to_decimal(
-        os.getenv("STRATEGY_MIN_SPREAD_PERCENT", "0.0005")
+        os.getenv("STRATEGY_MIN_SPREAD_PERCENT", "0.0005"),
     )  # Minimum spread (0.05%)
     max_spread_pct = to_decimal(
-        os.getenv("STRATEGY_MAX_SPREAD_PERCENT", "0.005")
+        os.getenv("STRATEGY_MAX_SPREAD_PERCENT", "0.005"),
     )  # Maximum spread (0.5%)
 
     # Stop-Loss/Take-Profit parameters
     stop_loss_pct = to_decimal(
-        os.getenv("STRATEGY_STOP_LOSS_PCT", "0.0")
+        os.getenv("STRATEGY_STOP_LOSS_PCT", "0.0"),
     )  # 0.0 to disable
     take_profit_pct = to_decimal(
-        os.getenv("STRATEGY_TAKE_PROFIT_PCT", "0.0")
+        os.getenv("STRATEGY_TAKE_PROFIT_PCT", "0.0"),
     )  # 0.0 to disable
 
     for symbol in symbols:
@@ -468,7 +464,7 @@ async def market_making_strategy(
         orders_to_cancel = bot.order_manager.get_orders_for_symbol(symbol)
         if orders_to_cancel:
             logger.info(
-                f"Found {len(orders_to_cancel)} old orders for {symbol}. Cancelling them."
+                f"Found {len(orders_to_cancel)} old orders for {symbol}. Cancelling them.",
             )
             cancel_tasks = [
                 bot.cancel_order(o["symbol"], o["orderLinkId"])
@@ -499,7 +495,7 @@ async def market_making_strategy(
                 if position_size > 0:  # Long position
                     if take_profit_pct > 0 and pnl_pct >= take_profit_pct:
                         logger.info(
-                            f"[TP] {symbol}: Long position PnL {pnl_pct:.4f} >= {take_profit_pct:.4f}. Closing position."
+                            f"[TP] {symbol}: Long position PnL {pnl_pct:.4f} >= {take_profit_pct:.4f}. Closing position.",
                         )
                         await bot.place_order(
                             symbol=symbol,
@@ -511,7 +507,7 @@ async def market_making_strategy(
                         continue  # Skip further order placement for this symbol
                     if stop_loss_pct > 0 and pnl_pct <= -stop_loss_pct:
                         logger.info(
-                            f"[SL] {symbol}: Long position PnL {pnl_pct:.4f} <= {-stop_loss_pct:.4f}. Closing position."
+                            f"[SL] {symbol}: Long position PnL {pnl_pct:.4f} <= {-stop_loss_pct:.4f}. Closing position.",
                         )
                         await bot.place_order(
                             symbol=symbol,
@@ -526,7 +522,7 @@ async def market_making_strategy(
                         take_profit_pct > 0 and pnl_pct <= -take_profit_pct
                     ):  # For short, profit is negative PnL
                         logger.info(
-                            f"[TP] {symbol}: Short position PnL {pnl_pct:.4f} <= {-take_profit_pct:.4f}. Closing position."
+                            f"[TP] {symbol}: Short position PnL {pnl_pct:.4f} <= {-take_profit_pct:.4f}. Closing position.",
                         )
                         await bot.place_order(
                             symbol=symbol,
@@ -540,7 +536,7 @@ async def market_making_strategy(
                         stop_loss_pct > 0 and pnl_pct >= stop_loss_pct
                     ):  # For short, loss is positive PnL
                         logger.info(
-                            f"[SL] {symbol}: Short position PnL {pnl_pct:.4f} >= {stop_loss_pct:.4f}. Closing position."
+                            f"[SL] {symbol}: Short position PnL {pnl_pct:.4f} >= {stop_loss_pct:.4f}. Closing position.",
                         )
                         await bot.place_order(
                             symbol=symbol,
@@ -553,7 +549,7 @@ async def market_making_strategy(
 
         # Calculate total account value for inventory percentage
         total_equity = to_decimal(
-            account_info.get("result", {}).get("list", [{}])[0].get("totalEquity", "0")
+            account_info.get("result", {}).get("list", [{}])[0].get("totalEquity", "0"),
         )
 
         current_inventory_pct = Decimal("0")
@@ -584,7 +580,7 @@ async def market_making_strategy(
             for i in range(1, len(recent_prices)):
                 if recent_prices[i - 1] != 0:
                     price_changes.append(
-                        (recent_prices[i] - recent_prices[i - 1]) / recent_prices[i - 1]
+                        (recent_prices[i] - recent_prices[i - 1]) / recent_prices[i - 1],
                     )
 
         volatility = Decimal("0")
@@ -592,7 +588,7 @@ async def market_making_strategy(
             # Calculate standard deviation of price changes
             mean_change = sum(price_changes) / len(price_changes)
             variance = sum([(x - mean_change) ** 2 for x in price_changes]) / len(
-                price_changes
+                price_changes,
             )
             volatility = to_decimal(str(math.sqrt(float(variance))))
 
@@ -607,7 +603,7 @@ async def market_making_strategy(
         )
         if open_positions >= bot.max_open_positions:
             logger.warning(
-                f"Max open positions ({bot.max_open_positions}) reached. Halting new entries."
+                f"Max open positions ({bot.max_open_positions}) reached. Halting new entries.",
             )
             continue
 
@@ -616,17 +612,17 @@ async def market_making_strategy(
         best_ask = to_decimal(md["orderbook"]["a"][0][0])
 
         buy_qty = await bot.calculate_position_size(
-            symbol, capital_pct, best_bid, account_info
+            symbol, capital_pct, best_bid, account_info,
         )
         sell_qty = await bot.calculate_position_size(
-            symbol, capital_pct, best_ask, account_info
+            symbol, capital_pct, best_ask, account_info,
         )
 
         place_tasks = []
         if buy_qty > 0:
             # Adjust buy price: lower if too much inventory, higher if too little
             limit_buy_price = bot._round_price(
-                symbol, best_bid * (Decimal("1") - dynamic_spread - price_bias)
+                symbol, best_bid * (Decimal("1") - dynamic_spread - price_bias),
             )
             place_tasks.append(
                 bot.place_order(
@@ -637,13 +633,13 @@ async def market_making_strategy(
                     price=str(limit_buy_price),
                     timeInForce=tif,
                     orderLinkId=f"mm_buy_{symbol}_{int(time.time() * 1000)}",
-                )
+                ),
             )
 
         if sell_qty > 0:
             # Adjust sell price: lower if too much inventory, higher if too little
             limit_sell_price = bot._round_price(
-                symbol, best_ask * (Decimal("1") + dynamic_spread - price_bias)
+                symbol, best_ask * (Decimal("1") + dynamic_spread - price_bias),
             )
             place_tasks.append(
                 bot.place_order(
@@ -654,7 +650,7 @@ async def market_making_strategy(
                     price=str(limit_sell_price),
                     timeInForce=tif,
                     orderLinkId=f"mm_sell_{symbol}_{int(time.time() * 1000)}",
-                )
+                ),
             )
 
         if place_tasks:
@@ -672,7 +668,7 @@ async def main():
         help="List of symbols to trade.",
     )
     parser.add_argument(
-        "--interval", type=int, default=10, help="Bot execution interval in seconds."
+        "--interval", type=int, default=10, help="Bot execution interval in seconds.",
     )
     parser.add_argument(
         "--dry-run",
@@ -683,7 +679,7 @@ async def main():
 
     if not API_KEY or not API_SECRET:
         logger.critical(
-            "BYBIT_API_KEY and BYBIT_API_SECRET must be set in your .env file."
+            "BYBIT_API_KEY and BYBIT_API_SECRET must be set in your .env file.",
         )
         return
 
@@ -707,7 +703,7 @@ if __name__ == "__main__":
         print("---")
         print("WARNING: You are about to run a LIVE TRADING BOT.")
         print(
-            "Confirm that your .env file has LIVE API keys and you understand the risks."
+            "Confirm that your .env file has LIVE API keys and you understand the risks.",
         )
         confirm = input("Type 'live' to confirm and start the bot: ")
         if confirm == "live":

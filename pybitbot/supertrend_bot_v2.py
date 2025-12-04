@@ -31,18 +31,14 @@ import asyncio
 import logging
 import os
 import sys
-from dataclasses import dataclass
-from dataclasses import field
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import getcontext
+from dataclasses import dataclass, field
+from decimal import ROUND_DOWN, Decimal, getcontext
 from enum import Enum
 
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # --- INITIAL SETUP ---
 getcontext().prec = 28
@@ -85,7 +81,7 @@ class SupertrendBot:
     def __init__(self, config: Config):
         self.config = config
         self.session = HTTP(
-            testnet=config.testnet, api_key=config.api_key, api_secret=config.api_secret
+            testnet=config.testnet, api_key=config.api_key, api_secret=config.api_secret,
         )
         self.ws = WebSocket(
             testnet=config.testnet,
@@ -114,7 +110,7 @@ class SupertrendBot:
         """Load and store market information for the symbol."""
         try:
             resp = self.session.get_instruments_info(
-                category=self.config.category, symbol=self.config.symbol
+                category=self.config.category, symbol=self.config.symbol,
             )
             if resp["retCode"] == 0:
                 instrument = resp["result"]["list"][0]
@@ -123,7 +119,7 @@ class SupertrendBot:
                     "lot_size": Decimal(instrument["lotSizeFilter"]["qtyStep"]),
                 }
                 logger.info(
-                    f"Market info loaded for {self.config.symbol}: {self.market_info}"
+                    f"Market info loaded for {self.config.symbol}: {self.market_info}",
                 )
             else:
                 raise Exception(f"Failed to get instrument info: {resp['retMsg']}")
@@ -211,14 +207,14 @@ class SupertrendBot:
         df["supertrend"] = np.where(df["in_uptrend"], df["lowerband"], df["upperband"])
 
     async def place_order(
-        self, side: OrderSide, quantity: float, stop_loss: float | None = None
+        self, side: OrderSide, quantity: float, stop_loss: float | None = None,
     ):
         """Places a market order."""
         try:
             qty_str = str(
                 Decimal(str(quantity)).quantize(
-                    self.market_info["lot_size"], rounding=ROUND_DOWN
-                )
+                    self.market_info["lot_size"], rounding=ROUND_DOWN,
+                ),
             )
             params = {
                 "category": self.config.category,
@@ -230,8 +226,8 @@ class SupertrendBot:
             if stop_loss:
                 params["stopLoss"] = str(
                     Decimal(str(stop_loss)).quantize(
-                        self.market_info["tick_size"], rounding=ROUND_DOWN
-                    )
+                        self.market_info["tick_size"], rounding=ROUND_DOWN,
+                    ),
                 )
                 params["slTriggerBy"] = "LastPrice"
 
@@ -239,7 +235,7 @@ class SupertrendBot:
             resp = self.session.place_order(**params)
             if resp["retCode"] == 0:
                 logger.info(
-                    f"TRADE: Order placed successfully: {resp['result']['orderId']}"
+                    f"TRADE: Order placed successfully: {resp['result']['orderId']}",
                 )
             else:
                 logger.error(f"Failed to place order: {resp['retMsg']}")
@@ -250,7 +246,7 @@ class SupertrendBot:
         """Get current position for the symbol."""
         try:
             resp = self.session.get_positions(
-                category=self.config.category, symbol=self.config.symbol
+                category=self.config.category, symbol=self.config.symbol,
             )
             if resp["retCode"] == 0 and resp["result"]["list"]:
                 pos_data = resp["result"]["list"][0]
@@ -318,7 +314,7 @@ class SupertrendBot:
                         and self.position["side"] == "Buy"
                     ):
                         logger.info(
-                            f"Closing existing {self.position['side']} position."
+                            f"Closing existing {self.position['side']} position.",
                         )
                         close_side = (
                             OrderSide.BUY
@@ -336,11 +332,11 @@ class SupertrendBot:
                     and (not self.position or self.position["side"] != "Sell")
                 ):
                     await self.place_order(
-                        signal_action, position_size, stop_loss=stop_loss
+                        signal_action, position_size, stop_loss=stop_loss,
                     )
                 else:
                     logger.info(
-                        f"Signal to {signal_action.value} ignored, already in a position on that side."
+                        f"Signal to {signal_action.value} ignored, already in a position on that side.",
                     )
         finally:
             self.is_processing_signal = False
@@ -358,8 +354,8 @@ class SupertrendBot:
                         "close": float(data["close"]),
                         "volume": float(data["volume"]),
                         "turnover": float(data["turnover"]),
-                    }
-                ]
+                    },
+                ],
             ).set_index("time")
 
             if new_candle.index[0] in self.market_data.index:

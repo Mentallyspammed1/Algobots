@@ -8,20 +8,22 @@ import pandas as pd
 # Assuming color_codex.py provides these constants.
 # If not, define them here or ensure the file is accessible.
 try:
-    from color_codex import COLOR_BLUE
-    from color_codex import COLOR_BOLD
-    from color_codex import COLOR_CYAN
-    from color_codex import COLOR_DIM
-    from color_codex import COLOR_GREEN
-    from color_codex import COLOR_MAGENTA
-    from color_codex import COLOR_RED
-    from color_codex import COLOR_RESET
-    from color_codex import COLOR_YELLOW
-    from color_codex import PYRMETHUS_BLUE
-    from color_codex import PYRMETHUS_GREEN
-    from color_codex import PYRMETHUS_GREY
-    from color_codex import PYRMETHUS_ORANGE
-    from color_codex import PYRMETHUS_PURPLE
+    from color_codex import (
+        COLOR_BLUE,
+        COLOR_BOLD,
+        COLOR_CYAN,
+        COLOR_DIM,
+        COLOR_GREEN,
+        COLOR_MAGENTA,
+        COLOR_RED,
+        COLOR_RESET,
+        COLOR_YELLOW,
+        PYRMETHUS_BLUE,
+        PYRMETHUS_GREEN,
+        PYRMETHUS_GREY,
+        PYRMETHUS_ORANGE,
+        PYRMETHUS_PURPLE,
+    )
 except ImportError:
     # Define fallback colors if color_codex is not available
     COLOR_RESET = "\033[0m"
@@ -84,11 +86,11 @@ def display_market_info(
         # Initial check for klines_df validity
         if klines_df is None or len(klines_df) < 2:
             bot_logger.warning(
-                "No klines_df available or not enough data to display full market info."
+                "No klines_df available or not enough data to display full market info.",
             )
             if current_price > Decimal("0"):
                 lines.append(
-                    f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {COLOR_CYAN}{current_price:.4f}{COLOR_RESET}"
+                    f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {COLOR_CYAN}{current_price:.4f}{COLOR_RESET}",
                 )
             print("\n".join(lines))
             return
@@ -105,7 +107,7 @@ def display_market_info(
         except IndexError:
             price_color = COLOR_CYAN
             bot_logger.debug(
-                "Could not compare current price to previous close due to insufficient data."
+                "Could not compare current price to previous close due to insufficient data.",
             )
 
         # Get the latest timestamp, ensuring it's available
@@ -117,7 +119,7 @@ def display_market_info(
 
         # header
         lines.append(
-            f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {price_color}{current_price:.4f}{COLOR_RESET} @ {timestamp_str}"
+            f"\n{PYRMETHUS_BLUE}📊 Current Price ({symbol}): {price_color}{current_price:.4f}{COLOR_RESET} @ {timestamp_str}",
         )
 
         # indicators
@@ -170,18 +172,18 @@ def display_market_info(
                 PYRMETHUS_GREEN if "BUY" in signal_type.upper() else COLOR_RED
             )
             lines.append(
-                f"{signal_color}💡 {signal_type.upper()} @ {signal_price}{COLOR_RESET}"
+                f"{signal_color}💡 {signal_type.upper()} @ {signal_price}{COLOR_RESET}",
             )
             for key, value in signal_info.items():
                 if key not in ["stop_loss_percentage", "take_profit_percentage"]:
                     lines.append(
-                        f"  {PYRMETHUS_GREY}{key.replace('_', ' ').title()}: {value}{COLOR_RESET}"
+                        f"  {PYRMETHUS_GREY}{key.replace('_', ' ').title()}: {value}{COLOR_RESET}",
                     )
 
     except Exception as e:
         bot_logger.error(f"Error displaying market info: {e}")
         lines.append(
-            f"{COLOR_RED}Error displaying market info. Check logs for details.{COLOR_RESET}"
+            f"{COLOR_RED}Error displaying market info. Check logs for details.{COLOR_RESET}",
         )
     finally:
         print("\n".join(lines))

@@ -5,8 +5,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 from typing import Any
 
 # --- END CORRECTED IMPORT ---
@@ -17,9 +16,7 @@ import pandas as pd
 import requests
 
 # --- CORRECTED IMPORT ---
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from logger_config import setup_custom_logger
 
@@ -207,7 +204,7 @@ def load_config(filepath: str) -> dict:
             # Basic validation for interval and analysis_interval
             if merged_config.get("interval") not in VALID_INTERVALS:
                 logger.warning(
-                    f"{NEON_YELLOW}Invalid 'interval' in config, using default: {default_config['interval']}{RESET}"
+                    f"{NEON_YELLOW}Invalid 'interval' in config, using default: {default_config['interval']}{RESET}",
                 )
                 merged_config["interval"] = default_config["interval"]
             if (
@@ -215,14 +212,14 @@ def load_config(filepath: str) -> dict:
                 or merged_config.get("analysis_interval") <= 0
             ):
                 logger.warning(
-                    f"{NEON_YELLOW}Invalid 'analysis_interval' in config, using default: {default_config['analysis_interval']}{RESET}"
+                    f"{NEON_YELLOW}Invalid 'analysis_interval' in config, using default: {default_config['analysis_interval']}{RESET}",
                 )
                 merged_config["analysis_interval"] = default_config["analysis_interval"]
 
             return merged_config
     except FileNotFoundError:
         logger.warning(
-            f"{NEON_YELLOW}Config file not found, loading defaults and creating {filepath}{RESET}"
+            f"{NEON_YELLOW}Config file not found, loading defaults and creating {filepath}{RESET}",
         )
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(default_config, f, indent=4)
@@ -233,7 +230,7 @@ def load_config(filepath: str) -> dict:
         try:
             os.rename(filepath, f"{filepath}.bak_{int(time.time())}")
             logger.info(
-                f"{NEON_YELLOW}Backed up corrupt config file to {filepath}.bak_{int(time.time())}{RESET}"
+                f"{NEON_YELLOW}Backed up corrupt config file to {filepath}.bak_{int(time.time())}{RESET}",
             )
         except OSError as e:
             logger.error(f"{NEON_RED}Failed to backup corrupt config file: {e}{RESET}")
@@ -256,7 +253,7 @@ def generate_signature(api_secret: str, params: dict) -> str:
 def handle_api_error(response: requests.Response, logger: logging.Logger) -> None:
     """Logs detailed API error responses."""
     logger.error(
-        f"{NEON_RED}API request failed with status code: {response.status_code}{RESET}"
+        f"{NEON_RED}API request failed with status code: {response.status_code}{RESET}",
     )
     try:
         error_json = response.json()
@@ -289,7 +286,7 @@ def bybit_request(
     """
     params = params or {}
     params["timestamp"] = str(
-        int(time.time() * 1000)
+        int(time.time() * 1000),
     )  # Current timestamp in milliseconds
     signature = generate_signature(api_secret, params)
     headers = {
@@ -318,7 +315,7 @@ def bybit_request(
             if e.response.status_code in RETRY_ERROR_CODES:
                 if logger:
                     logger.warning(
-                        f"{NEON_YELLOW}API Error {e.response.status_code} ({e.response.reason}), retrying {retry + 1}/{MAX_API_RETRIES}...{RESET}"
+                        f"{NEON_YELLOW}API Error {e.response.status_code} ({e.response.reason}), retrying {retry + 1}/{MAX_API_RETRIES}...{RESET}",
                     )
                 time.sleep(RETRY_DELAY_SECONDS * (2**retry))  # Exponential backoff
             else:
@@ -328,7 +325,7 @@ def bybit_request(
         except requests.exceptions.RequestException as e:
             if logger:
                 logger.error(
-                    f"{NEON_RED}Request exception: {e}, retrying {retry + 1}/{MAX_API_RETRIES}...{RESET}"
+                    f"{NEON_RED}Request exception: {e}, retrying {retry + 1}/{MAX_API_RETRIES}...{RESET}",
                 )
             time.sleep(RETRY_DELAY_SECONDS * (2**retry))
 
@@ -338,7 +335,7 @@ def bybit_request(
 
 
 def fetch_current_price(
-    symbol: str, api_key: str, api_secret: str, logger: logging.Logger
+    symbol: str, api_key: str, api_secret: str, logger: logging.Logger,
 ) -> Decimal | None:
     """Fetches the current last traded price for a given symbol."""
     endpoint = "/v5/market/tickers"
@@ -356,7 +353,7 @@ def fetch_current_price(
                     last_price = ticker.get("lastPrice")
                     return Decimal(last_price) if last_price else None
     logger.error(
-        f"{NEON_RED}Could not fetch current price for {symbol}. Response: {response_data}{RESET}"
+        f"{NEON_RED}Could not fetch current price for {symbol}. Response: {response_data}{RESET}",
     )
     return None
 
@@ -395,16 +392,16 @@ def fetch_klines(
         # Drop any rows that resulted in all NaNs after conversion (shouldn't happen with valid data)
         df.dropna(subset=df.columns[1:], inplace=True)
         return df.sort_values(by="start_time", ascending=True).reset_index(
-            drop=True
+            drop=True,
         )  # Ensure chronological order
     logger.error(
-        f"{NEON_RED}Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}"
+        f"{NEON_RED}Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}",
     )
     return pd.DataFrame()
 
 
 def fetch_order_book(
-    symbol: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 50
+    symbol: str, api_key: str, api_secret: str, logger: logging.Logger, limit: int = 50,
 ) -> dict | None:
     """Fetches the order book (bids and asks) for a given symbol."""
     endpoint = "/v5/market/orderbook"
@@ -417,7 +414,7 @@ def fetch_order_book(
     ):
         return response_data["result"]
     logger.warning(
-        f"{NEON_YELLOW}Could not fetch order book for {symbol}. Response: {response_data}{RESET}"
+        f"{NEON_YELLOW}Could not fetch order book for {symbol}. Response: {response_data}{RESET}",
     )
     return None
 
@@ -439,7 +436,7 @@ class TradingAnalyzer:
         self.symbol = symbol
         self.interval = interval
         self.levels: dict[
-            str, Any
+            str, Any,
         ] = {}  # Stores support/resistance levels (fib, pivot)
         self.fib_levels: dict[str, float] = {}  # Stores calculated Fibonacci levels
         self.weight_sets = config["weight_sets"]
@@ -479,18 +476,18 @@ class TradingAnalyzer:
         # Use the atr_value that was pre-calculated in _pre_calculate_indicators
         if self.atr_value > self.config["atr_change_threshold"]:
             self.logger.info(
-                f"{NEON_YELLOW}Market detected as HIGH VOLATILITY (ATR: {self.atr_value:.4f}). Using 'high_volatility' weights.{RESET}"
+                f"{NEON_YELLOW}Market detected as HIGH VOLATILITY (ATR: {self.atr_value:.4f}). Using 'high_volatility' weights.{RESET}",
             )
             return self.weight_sets.get(
-                "high_volatility", self.weight_sets["low_volatility"]
+                "high_volatility", self.weight_sets["low_volatility"],
             )
         self.logger.info(
-            f"{NEON_BLUE}Market detected as LOW VOLATILITY (ATR: {self.atr_value:.4f}). Using 'low_volatility' weights.{RESET}"
+            f"{NEON_BLUE}Market detected as LOW VOLATILITY (ATR: {self.atr_value:.4f}). Using 'low_volatility' weights.{RESET}",
         )
         return self.weight_sets["low_volatility"]
 
     def _safe_series_operation(
-        self, column: str, operation: str, window: int = None, series: pd.Series = None
+        self, column: str, operation: str, window: int = None, series: pd.Series = None,
     ) -> pd.Series:
         """Helper to safely perform operations on DataFrame columns or provided series."""
         if series is not None:
@@ -499,7 +496,7 @@ class TradingAnalyzer:
             data_series = self.df[column]
         else:
             self.logger.error(
-                f"{NEON_RED}Missing '{column}' column for {operation} calculation.{RESET}"
+                f"{NEON_RED}Missing '{column}' column for {operation} calculation.{RESET}",
             )
             return pd.Series(dtype=float)
 
@@ -519,17 +516,17 @@ class TradingAnalyzer:
                 return data_series.diff(window)
             if operation == "abs_diff_mean":
                 return data_series.rolling(window=window).apply(
-                    lambda x: np.abs(x - x.mean()).mean(), raw=True
+                    lambda x: np.abs(x - x.mean()).mean(), raw=True,
                 )
             if operation == "cumsum":
                 return data_series.cumsum()
             self.logger.error(
-                f"{NEON_RED}Unsupported series operation: {operation}{RESET}"
+                f"{NEON_RED}Unsupported series operation: {operation}{RESET}",
             )
             return pd.Series(dtype=float)
         except Exception as e:
             self.logger.error(
-                f"{NEON_RED}Error during {operation} calculation on {column}: {e}{RESET}"
+                f"{NEON_RED}Error during {operation} calculation on {column}: {e}{RESET}",
             )
             return pd.Series(dtype=float)
 
@@ -606,15 +603,15 @@ class TradingAnalyzer:
         required_columns = ["high", "low", "close"]
         if not all(col in self.df.columns for col in required_columns):
             self.logger.error(
-                f"{NEON_RED}Missing required columns for CCI calculation.{RESET}"
+                f"{NEON_RED}Missing required columns for CCI calculation.{RESET}",
             )
             return pd.Series(dtype=float)
         typical_price = (self.df["high"] + self.df["low"] + self.df["close"]) / 3
         sma_typical_price = self._safe_series_operation(
-            None, "sma", window, typical_price
+            None, "sma", window, typical_price,
         )
         mean_deviation = self._safe_series_operation(
-            None, "abs_diff_mean", window, typical_price
+            None, "abs_diff_mean", window, typical_price,
         )
         # Avoid division by zero
         cci = (typical_price - sma_typical_price) / (constant * mean_deviation)
@@ -625,7 +622,7 @@ class TradingAnalyzer:
         required_columns = ["high", "low", "close"]
         if not all(col in self.df.columns for col in required_columns):
             self.logger.error(
-                f"{NEON_RED}Missing required columns for Williams %R calculation.{RESET}"
+                f"{NEON_RED}Missing required columns for Williams %R calculation.{RESET}",
             )
             return pd.Series(dtype=float)
         highest_high = self._safe_series_operation("high", "max", window)
@@ -640,7 +637,7 @@ class TradingAnalyzer:
         required_columns = ["high", "low", "close", "volume"]
         if not all(col in self.df.columns for col in required_columns):
             self.logger.error(
-                f"{NEON_RED}Missing required columns for MFI calculation.{RESET}"
+                f"{NEON_RED}Missing required columns for MFI calculation.{RESET}",
             )
             return pd.Series(dtype=float)
 
@@ -662,21 +659,21 @@ class TradingAnalyzer:
 
         # Avoid division by zero
         money_ratio = positive_mf / negative_mf.replace(
-            0, np.nan
+            0, np.nan,
         )  # Replace 0 with NaN to handle division by zero
         mfi = 100 - (100 / (1 + money_ratio))
         return mfi.replace([np.inf, -np.inf], np.nan).fillna(
-            0
+            0,
         )  # Fill NaN from division by zero with 0 or a sensible value
 
     def calculate_fibonacci_retracement(
-        self, high: Decimal, low: Decimal, current_price: Decimal
+        self, high: Decimal, low: Decimal, current_price: Decimal,
     ) -> dict[str, Decimal]:
         """Calculates Fibonacci retracement levels based on a given high and low."""
         diff = high - low
         if diff <= 0:  # Handle cases where high <= low
             self.logger.warning(
-                f"{NEON_YELLOW}Cannot calculate Fibonacci retracement: High ({high}) <= Low ({low}).{RESET}"
+                f"{NEON_YELLOW}Cannot calculate Fibonacci retracement: High ({high}) <= Low ({low}).{RESET}",
             )
             self.fib_levels = {}
             self.levels = {"Support": {}, "Resistance": {}}
@@ -699,7 +696,7 @@ class TradingAnalyzer:
         for label, ratio in fib_ratios.items():
             level = high - (diff * ratio)
             fib_levels_calculated[f"Fib {label}"] = level.quantize(
-                Decimal("0.00001")
+                Decimal("0.00001"),
             )  # Quantize for consistent precision
 
         self.fib_levels = fib_levels_calculated
@@ -735,11 +732,11 @@ class TradingAnalyzer:
                 "S2": s2.quantize(precision),
                 "R3": r3.quantize(precision),
                 "S3": s3.quantize(precision),
-            }
+            },
         )
 
     def find_nearest_levels(
-        self, current_price: Decimal, num_levels: int = 5
+        self, current_price: Decimal, num_levels: int = 5,
     ) -> tuple[list[tuple[str, Decimal]], list[tuple[str, Decimal]]]:
         """Finds the nearest support and resistance levels from calculated Fibonacci and Pivot Points."""
         all_support_levels: list[tuple[str, Decimal]] = []
@@ -754,7 +751,7 @@ class TradingAnalyzer:
         # Process all levels stored in self.levels (from Fibonacci and Pivot)
         for label, value in self.levels.items():
             if isinstance(
-                value, dict
+                value, dict,
             ):  # For nested levels like "Support": {"Fib 23.6%": ...}
                 for sub_label, sub_value in value.items():
                     if isinstance(sub_value, Decimal):
@@ -764,10 +761,10 @@ class TradingAnalyzer:
 
         # Sort by distance to current price and select the 'num_levels' closest
         nearest_supports = sorted(
-            all_support_levels, key=lambda x: current_price - x[1]
+            all_support_levels, key=lambda x: current_price - x[1],
         )[:num_levels]
         nearest_resistances = sorted(
-            all_resistance_levels, key=lambda x: x[1] - current_price
+            all_resistance_levels, key=lambda x: x[1] - current_price,
         )[:num_levels]
 
         return nearest_supports, nearest_resistances
@@ -777,7 +774,7 @@ class TradingAnalyzer:
         required_columns = ["high", "low", "close"]
         if not all(col in self.df.columns for col in required_columns):
             self.logger.error(
-                f"{NEON_RED}Missing required columns for ATR calculation.{RESET}"
+                f"{NEON_RED}Missing required columns for ATR calculation.{RESET}",
             )
             return pd.Series(dtype=float)
 
@@ -788,14 +785,14 @@ class TradingAnalyzer:
         # True Range is the maximum of the three
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         return self._safe_series_operation(
-            None, "ema", window, tr
+            None, "ema", window, tr,
         )  # Use EMA for ATR for smoothing
 
     def _calculate_rsi(self, window: int = 14) -> pd.Series:
         """Calculates the Relative Strength Index (RSI)."""
         if "close" not in self.df.columns:
             self.logger.error(
-                f"{NEON_RED}Missing 'close' column for RSI calculation.{RESET}"
+                f"{NEON_RED}Missing 'close' column for RSI calculation.{RESET}",
             )
             return pd.Series(dtype=float)
 
@@ -810,7 +807,7 @@ class TradingAnalyzer:
         rs = avg_gain / avg_loss.replace(0, np.nan)
         rsi = 100 - (100 / (1 + rs))
         return rsi.replace([np.inf, -np.inf], np.nan).fillna(
-            0
+            0,
         )  # Fill NaN from division by zero with 0
 
     def _calculate_stoch_rsi(
@@ -840,39 +837,39 @@ class TradingAnalyzer:
             self._safe_series_operation(None, "sma", k_window, stoch_rsi) * 100
         )  # Scale to 0-100
         d_line = self._safe_series_operation(
-            None, "sma", d_window, k_line
+            None, "sma", d_window, k_line,
         )  # Signal line for %K
 
         return pd.DataFrame(
-            {"stoch_rsi": stoch_rsi * 100, "k": k_line, "d": d_line}
+            {"stoch_rsi": stoch_rsi * 100, "k": k_line, "d": d_line},
         )  # Return StochRSI also scaled
 
     def _calculate_momentum_ma(self) -> None:
         """Calculates momentum and its moving averages, and volume moving average."""
         if "close" not in self.df.columns or "volume" not in self.df.columns:
             self.logger.error(
-                f"{NEON_RED}Missing 'close' or 'volume' column for Momentum MA calculation.{RESET}"
+                f"{NEON_RED}Missing 'close' or 'volume' column for Momentum MA calculation.{RESET}",
             )
             return
 
         self.df["momentum"] = self._safe_series_operation(
-            "close", "diff", self.config["momentum_period"]
+            "close", "diff", self.config["momentum_period"],
         )
         self.df["momentum_ma_short"] = self._safe_series_operation(
-            None, "sma", self.config["momentum_ma_short"], self.df["momentum"]
+            None, "sma", self.config["momentum_ma_short"], self.df["momentum"],
         )
         self.df["momentum_ma_long"] = self._safe_series_operation(
-            None, "sma", self.config["momentum_ma_long"], self.df["momentum"]
+            None, "sma", self.config["momentum_ma_long"], self.df["momentum"],
         )
         self.df["volume_ma"] = self._safe_series_operation(
-            "volume", "sma", self.config["volume_ma_period"]
+            "volume", "sma", self.config["volume_ma_period"],
         )
 
     def _calculate_macd(self) -> pd.DataFrame:
         """Calculates Moving Average Convergence Divergence (MACD)."""
         if "close" not in self.df.columns:
             self.logger.error(
-                f"{NEON_RED}Missing 'close' column for MACD calculation.{RESET}"
+                f"{NEON_RED}Missing 'close' column for MACD calculation.{RESET}",
             )
             return pd.DataFrame()
 
@@ -912,7 +909,7 @@ class TradingAnalyzer:
     def determine_trend_momentum(self) -> dict[str, str | float]:
         """Determines the current trend and its strength based on momentum MAs and ATR."""
         if self.df.empty or len(self.df) < max(
-            self.config["momentum_ma_long"], self.config["atr_period"]
+            self.config["momentum_ma_long"], self.config["atr_period"],
         ):
             return {"trend": "Insufficient Data", "strength": 0.0}
 
@@ -923,7 +920,7 @@ class TradingAnalyzer:
             or self.atr_value == 0
         ):
             self.logger.warning(
-                f"{NEON_YELLOW}Momentum MAs or ATR not available for trend calculation.{RESET}"
+                f"{NEON_YELLOW}Momentum MAs or ATR not available for trend calculation.{RESET}",
             )
             return {"trend": "Neutral", "strength": 0.0}
 
@@ -946,7 +943,7 @@ class TradingAnalyzer:
         required_columns = ["high", "low", "close"]
         if not all(col in df_adx.columns for col in required_columns):
             self.logger.error(
-                f"{NEON_RED}Missing required columns for ADX calculation.{RESET}"
+                f"{NEON_RED}Missing required columns for ADX calculation.{RESET}",
             )
             return 0.0
 
@@ -976,13 +973,13 @@ class TradingAnalyzer:
 
         # Smoothed True Range and Directional Movement (using EMA)
         df_adx["TR_ema"] = self._safe_series_operation(
-            None, "ema", window, df_adx["TR"]
+            None, "ema", window, df_adx["TR"],
         )
         df_adx["+DM_ema"] = self._safe_series_operation(
-            None, "ema", window, df_adx["+DM"]
+            None, "ema", window, df_adx["+DM"],
         )
         df_adx["-DM_ema"] = self._safe_series_operation(
-            None, "ema", window, df_adx["-DM"]
+            None, "ema", window, df_adx["-DM"],
         )
 
         # Directional Indicators
@@ -1006,7 +1003,7 @@ class TradingAnalyzer:
         """Calculates On-Balance Volume (OBV)."""
         if "close" not in self.df.columns or "volume" not in self.df.columns:
             self.logger.error(
-                f"{NEON_RED}Missing 'close' or 'volume' column for OBV calculation.{RESET}"
+                f"{NEON_RED}Missing 'close' or 'volume' column for OBV calculation.{RESET}",
             )
             return pd.Series(dtype=float)
 
@@ -1028,7 +1025,7 @@ class TradingAnalyzer:
         required_columns = ["high", "low", "close", "volume"]
         if not all(col in self.df.columns for col in required_columns):
             self.logger.error(
-                f"{NEON_RED}Missing required columns for ADI calculation.{RESET}"
+                f"{NEON_RED}Missing required columns for ADI calculation.{RESET}",
             )
             return pd.Series(dtype=float)
 
@@ -1046,7 +1043,7 @@ class TradingAnalyzer:
         return self._safe_series_operation(None, "cumsum", series=money_flow_volume)
 
     def _calculate_psar(
-        self, acceleration: float = 0.02, max_acceleration: float = 0.2
+        self, acceleration: float = 0.02, max_acceleration: float = 0.2,
     ) -> pd.Series:
         """Calculates Parabolic SAR (PSAR)."""
         psar = pd.Series(index=self.df.index, dtype="float64")
@@ -1109,7 +1106,7 @@ class TradingAnalyzer:
         """
         if "close" not in self.df.columns or "volume" not in self.df.columns:
             self.logger.error(
-                f"{NEON_RED}Missing 'close' or 'volume' column for FVE calculation.{RESET}"
+                f"{NEON_RED}Missing 'close' or 'volume' column for FVE calculation.{RESET}",
             )
             return pd.Series(dtype=float)
 
@@ -1123,7 +1120,7 @@ class TradingAnalyzer:
             min_data_points = max(20, self.config["atr_period"])
             if len(self.df) < min_data_points:
                 self.logger.warning(
-                    f"{NEON_YELLOW}Insufficient data for FVE calculation. Need at least {min_data_points} bars.{RESET}"
+                    f"{NEON_YELLOW}Insufficient data for FVE calculation. Need at least {min_data_points} bars.{RESET}",
                 )
                 return pd.Series([np.nan] * len(self.df))
 
@@ -1160,7 +1157,7 @@ class TradingAnalyzer:
         """
         if "volume" not in self.df.columns or "volume_ma" not in self.df.columns:
             self.logger.error(
-                f"{NEON_RED}Missing 'volume' or 'volume_ma' column for Volume Confirmation.{RESET}"
+                f"{NEON_RED}Missing 'volume' or 'volume_ma' column for Volume Confirmation.{RESET}",
             )
             return False
         if self.df["volume"].empty or self.df["volume_ma"].empty:
@@ -1178,7 +1175,7 @@ class TradingAnalyzer:
         )
 
     def analyze_order_book_walls(
-        self, order_book: dict[str, Any]
+        self, order_book: dict[str, Any],
     ) -> tuple[bool, bool, dict[str, Decimal], dict[str, Decimal]]:
         """Analyzes order book for significant bid (support) and ask (resistance) walls.
         Returns whether bullish/bearish walls are found and the wall details.
@@ -1193,7 +1190,7 @@ class TradingAnalyzer:
 
         if not order_book or not order_book.get("bids") or not order_book.get("asks"):
             self.logger.warning(
-                f"{NEON_YELLOW}Order book data incomplete for wall analysis.{RESET}"
+                f"{NEON_YELLOW}Order book data incomplete for wall analysis.{RESET}",
             )
             return False, False, {}, {}
 
@@ -1216,10 +1213,10 @@ class TradingAnalyzer:
             return False, False, {}, {}
 
         avg_qty = Decimal(
-            str(np.mean([float(q) for q in all_quantities]))
+            str(np.mean([float(q) for q in all_quantities])),
         )  # Convert to float for numpy, then back to Decimal
         wall_threshold = avg_qty * Decimal(
-            str(self.config["order_book_analysis"]["wall_threshold_multiplier"])
+            str(self.config["order_book_analysis"]["wall_threshold_multiplier"]),
         )
 
         # Check for bullish walls (large bids below current price)
@@ -1229,7 +1226,7 @@ class TradingAnalyzer:
                 has_bullish_wall = True
                 bullish_wall_details[f"Bid@{bid_price}"] = bid_qty
                 self.logger.info(
-                    f"{NEON_GREEN}Detected Bullish Order Book Wall: Bid {bid_qty:.2f} at {bid_price:.2f}{RESET}"
+                    f"{NEON_GREEN}Detected Bullish Order Book Wall: Bid {bid_qty:.2f} at {bid_price:.2f}{RESET}",
                 )
                 break  # Only need to find one significant wall
 
@@ -1239,7 +1236,7 @@ class TradingAnalyzer:
                 has_bearish_wall = True
                 bearish_wall_details[f"Ask@{ask_price}"] = ask_qty
                 self.logger.info(
-                    f"{NEON_RED}Detected Bearish Order Book Wall: Ask {ask_qty:.2f} at {ask_price:.2f}{RESET}"
+                    f"{NEON_RED}Detected Bearish Order Book Wall: Ask {ask_qty:.2f} at {ask_price:.2f}{RESET}",
                 )
                 break  # Only need to find one significant wall
 
@@ -1251,7 +1248,7 @@ class TradingAnalyzer:
         )
 
     def analyze(
-        self, current_price: Decimal, timestamp: str, order_book: dict[str, Any]
+        self, current_price: Decimal, timestamp: str, order_book: dict[str, Any],
     ):
         """Performs comprehensive analysis, calculates indicators, and logs the findings.
         This method populates `self.indicator_values` and generates the output string.
@@ -1267,7 +1264,7 @@ class TradingAnalyzer:
         self.calculate_fibonacci_retracement(high_dec, low_dec, current_price_dec)
         self.calculate_pivot_points(high_dec, low_dec, close_dec)
         nearest_supports, nearest_resistances = self.find_nearest_levels(
-            current_price_dec
+            current_price_dec,
         )
 
         # Calculate and store indicator values based on config
@@ -1278,35 +1275,35 @@ class TradingAnalyzer:
             )
         if self.config["indicators"].get("rsi"):
             rsi_series = self._calculate_rsi(
-                window=self.config["indicator_periods"]["rsi"]
+                window=self.config["indicator_periods"]["rsi"],
             )
             self.indicator_values["rsi"] = (
                 rsi_series.iloc[-3:].tolist() if not rsi_series.empty else []
             )
         if self.config["indicators"].get("mfi"):
             mfi_series = self._calculate_mfi(
-                window=self.config["indicator_periods"]["mfi"]
+                window=self.config["indicator_periods"]["mfi"],
             )
             self.indicator_values["mfi"] = (
                 mfi_series.iloc[-3:].tolist() if not mfi_series.empty else []
             )
         if self.config["indicators"].get("cci"):
             cci_series = self._calculate_cci(
-                window=self.config["indicator_periods"]["cci"]
+                window=self.config["indicator_periods"]["cci"],
             )
             self.indicator_values["cci"] = (
                 cci_series.iloc[-3:].tolist() if not cci_series.empty else []
             )
         if self.config["indicators"].get("wr"):
             wr_series = self._calculate_williams_r(
-                window=self.config["indicator_periods"]["williams_r"]
+                window=self.config["indicator_periods"]["williams_r"],
             )
             self.indicator_values["wr"] = (
                 wr_series.iloc[-3:].tolist() if not wr_series.empty else []
             )
         if self.config["indicators"].get("adx"):
             adx_value = self._calculate_adx(
-                window=self.config["indicator_periods"]["adx"]
+                window=self.config["indicator_periods"]["adx"],
             )
             self.indicator_values["adx"] = [adx_value]  # ADX is a single value
         if self.config["indicators"].get("adi"):
@@ -1425,7 +1422,7 @@ class TradingAnalyzer:
         self.logger.info(output)
 
     def generate_trading_signal(
-        self, current_price: Decimal
+        self, current_price: Decimal,
     ) -> tuple[str | None, float, list[str], dict[str, Decimal]]:
         """Generates a trading signal (buy/sell) based on indicator values and configuration.
         Returns the signal, its confidence score, conditions met, and suggested SL/TP levels.
@@ -1442,10 +1439,10 @@ class TradingAnalyzer:
             and not self.indicator_values["stoch_rsi_vals"].empty
         ):
             stoch_rsi_k = Decimal(
-                str(self.indicator_values["stoch_rsi_vals"]["k"].iloc[-1])
+                str(self.indicator_values["stoch_rsi_vals"]["k"].iloc[-1]),
             )
             stoch_rsi_d = Decimal(
-                str(self.indicator_values["stoch_rsi_vals"]["d"].iloc[-1])
+                str(self.indicator_values["stoch_rsi_vals"]["d"].iloc[-1]),
             )
             if (
                 stoch_rsi_k < self.config["stoch_rsi_oversold_threshold"]
@@ -1475,9 +1472,9 @@ class TradingAnalyzer:
             and self.indicator_values.get("ema_alignment", 0.0) > 0
         ):
             signal_score += Decimal(
-                str(self.user_defined_weights["ema_alignment"])
+                str(self.user_defined_weights["ema_alignment"]),
             ) * Decimal(
-                str(abs(self.indicator_values["ema_alignment"]))
+                str(abs(self.indicator_values["ema_alignment"])),
             )  # Scale by score
             conditions_met.append("Bullish EMA Alignment")
 
@@ -1486,7 +1483,7 @@ class TradingAnalyzer:
             and self._calculate_volume_confirmation()
         ):
             signal_score += Decimal(
-                str(self.user_defined_weights["volume_confirmation"])
+                str(self.user_defined_weights["volume_confirmation"]),
             )
             conditions_met.append("Volume Confirmation")
 
@@ -1499,7 +1496,7 @@ class TradingAnalyzer:
 
         if self.indicator_values["order_book_walls"].get("bullish"):
             signal_score += Decimal(
-                str(self.config["order_book_support_confidence_boost"] / 10.0)
+                str(self.config["order_book_support_confidence_boost"] / 10.0),
             )  # Boost score for order book wall
             conditions_met.append("Bullish Order Book Wall")
 
@@ -1528,10 +1525,10 @@ class TradingAnalyzer:
             and not self.indicator_values["stoch_rsi_vals"].empty
         ):
             stoch_rsi_k = Decimal(
-                str(self.indicator_values["stoch_rsi_vals"]["k"].iloc[-1])
+                str(self.indicator_values["stoch_rsi_vals"]["k"].iloc[-1]),
             )
             stoch_rsi_d = Decimal(
-                str(self.indicator_values["stoch_rsi_vals"]["d"].iloc[-1])
+                str(self.indicator_values["stoch_rsi_vals"]["d"].iloc[-1]),
             )
             if (
                 stoch_rsi_k > self.config["stoch_rsi_overbought_threshold"]
@@ -1561,7 +1558,7 @@ class TradingAnalyzer:
             and self.indicator_values.get("ema_alignment", 0.0) < 0
         ):
             bearish_score += Decimal(
-                str(self.user_defined_weights["ema_alignment"])
+                str(self.user_defined_weights["ema_alignment"]),
             ) * Decimal(str(abs(self.indicator_values["ema_alignment"])))
             bearish_conditions.append("Bearish EMA Alignment")
 
@@ -1574,13 +1571,13 @@ class TradingAnalyzer:
 
         if self.indicator_values["order_book_walls"].get("bearish"):
             bearish_score += Decimal(
-                str(self.config["order_book_resistance_confidence_boost"] / 10.0)
+                str(self.config["order_book_resistance_confidence_boost"] / 10.0),
             )
             bearish_conditions.append("Bearish Order Book Wall")
 
         # Final check for Bearish signal (only if no bullish signal already)
         if signal is None and bearish_score >= Decimal(
-            str(self.config["signal_score_threshold"])
+            str(self.config["signal_score_threshold"]),
         ):
             signal = "sell"
             signal_score = bearish_score  # Use bearish score if it's the chosen signal
@@ -1624,7 +1621,7 @@ def interpret_indicator(
                 return f"{NEON_PURPLE}Momentum Trend:{RESET} {trend} (Strength: {strength:.2f})"
             return f"{NEON_YELLOW}{indicator_name.upper()}:{RESET} Dictionary format not specifically interpreted."
         elif isinstance(
-            values, pd.DataFrame
+            values, pd.DataFrame,
         ):  # For stoch_rsi_vals which is a DataFrame
             if indicator_name == "stoch_rsi_vals":
                 # Stoch RSI interpretation is handled directly in analyze function
@@ -1695,7 +1692,7 @@ def interpret_indicator(
         return f"{NEON_YELLOW}{indicator_name.upper()}:{RESET} No specific interpretation available."
     except (TypeError, IndexError, KeyError, ValueError) as e:
         logger.error(
-            f"{NEON_RED}Error interpreting {indicator_name}: {e}. Values: {values}{RESET}"
+            f"{NEON_RED}Error interpreting {indicator_name}: {e}. Values: {values}{RESET}",
         )
         return f"{NEON_RED}{indicator_name.upper()}:{RESET} Interpretation error."
 
@@ -1706,7 +1703,7 @@ def main():
     """
     if not API_KEY or not API_SECRET:
         logger.error(
-            f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in your .env file.{RESET}"
+            f"{NEON_RED}BYBIT_API_KEY and BYBIT_API_SECRET must be set in your .env file.{RESET}",
         )
         return
 
@@ -1718,7 +1715,7 @@ def main():
     symbol = symbol_input if symbol_input else "BTCUSDT"
 
     interval_input = input(
-        f"{NEON_BLUE}Enter timeframe (e.g., {', '.join(VALID_INTERVALS)} or press Enter for default {CONFIG['interval']}): {RESET}"
+        f"{NEON_BLUE}Enter timeframe (e.g., {', '.join(VALID_INTERVALS)} or press Enter for default {CONFIG['interval']}): {RESET}",
     ).strip()
     interval = (
         interval_input
@@ -1729,7 +1726,7 @@ def main():
     # Setup a dedicated logger for this symbol's activities
     symbol_logger = setup_custom_logger(symbol)
     symbol_logger.info(
-        f"{NEON_BLUE}Starting analysis for {symbol} with interval {interval}{RESET}"
+        f"{NEON_BLUE}Starting analysis for {symbol} with interval {interval}{RESET}",
     )
 
     last_signal_time = 0.0  # Tracks the last time a signal was triggered for cooldown
@@ -1738,21 +1735,21 @@ def main():
     while True:
         try:
             current_price = fetch_current_price(
-                symbol, API_KEY, API_SECRET, symbol_logger
+                symbol, API_KEY, API_SECRET, symbol_logger,
             )
             if current_price is None:
                 symbol_logger.error(
-                    f"{NEON_RED}Failed to fetch current price for {symbol}. Skipping cycle.{RESET}"
+                    f"{NEON_RED}Failed to fetch current price for {symbol}. Skipping cycle.{RESET}",
                 )
                 time.sleep(CONFIG["retry_delay"])
                 continue
 
             df = fetch_klines(
-                symbol, interval, API_KEY, API_SECRET, symbol_logger, limit=200
+                symbol, interval, API_KEY, API_SECRET, symbol_logger, limit=200,
             )
             if df.empty:
                 symbol_logger.error(
-                    f"{NEON_RED}Failed to fetch Kline data for {symbol}. Skipping cycle.{RESET}"
+                    f"{NEON_RED}Failed to fetch Kline data for {symbol}. Skipping cycle.{RESET}",
                 )
                 time.sleep(CONFIG["retry_delay"])
                 continue
@@ -1773,7 +1770,7 @@ def main():
                 last_order_book_fetch_time = time.time()
             else:
                 symbol_logger.debug(
-                    f"{NEON_YELLOW}Order book fetch debounced. Next fetch in {CONFIG['order_book_debounce_s'] - (time.time() - last_order_book_fetch_time):.1f}s{RESET}"
+                    f"{NEON_YELLOW}Order book fetch debounced. Next fetch in {CONFIG['order_book_debounce_s'] - (time.time() - last_order_book_fetch_time):.1f}s{RESET}",
                 )
 
             analyzer = TradingAnalyzer(df, CONFIG, symbol_logger, symbol, interval)
@@ -1792,23 +1789,23 @@ def main():
                 current_time_seconds - last_signal_time >= CONFIG["signal_cooldown_s"]
             ):
                 symbol_logger.info(
-                    f"\n{NEON_PURPLE}--- TRADING SIGNAL TRIGGERED ---{RESET}"
+                    f"\n{NEON_PURPLE}--- TRADING SIGNAL TRIGGERED ---{RESET}",
                 )
                 symbol_logger.info(
-                    f"{NEON_BLUE}Signal:{RESET} {signal.upper()} (Confidence: {confidence:.2f})"
+                    f"{NEON_BLUE}Signal:{RESET} {signal.upper()} (Confidence: {confidence:.2f})",
                 )
                 symbol_logger.info(
-                    f"{NEON_BLUE}Conditions Met:{RESET} {', '.join(conditions_met) if conditions_met else 'None'}"
+                    f"{NEON_BLUE}Conditions Met:{RESET} {', '.join(conditions_met) if conditions_met else 'None'}",
                 )
                 if trade_levels:
                     symbol_logger.info(
-                        f"{NEON_GREEN}Suggested Stop Loss:{RESET} {trade_levels.get('stop_loss'):.5f}"
+                        f"{NEON_GREEN}Suggested Stop Loss:{RESET} {trade_levels.get('stop_loss'):.5f}",
                     )
                     symbol_logger.info(
-                        f"{NEON_GREEN}Suggested Take Profit:{RESET} {trade_levels.get('take_profit'):.5f}"
+                        f"{NEON_GREEN}Suggested Take Profit:{RESET} {trade_levels.get('take_profit'):.5f}",
                     )
                 symbol_logger.info(
-                    f"{NEON_YELLOW}--- Placeholder: Order placement logic would be here for {signal.upper()} signal ---{RESET}"
+                    f"{NEON_YELLOW}--- Placeholder: Order placement logic would be here for {signal.upper()} signal ---{RESET}",
                 )
                 last_signal_time = current_time_seconds  # Update last signal time
 
@@ -1816,7 +1813,7 @@ def main():
 
         except requests.exceptions.RequestException as e:
             symbol_logger.error(
-                f"{NEON_RED}Network or API communication error: {e}. Retrying in {CONFIG['retry_delay']} seconds...{RESET}"
+                f"{NEON_RED}Network or API communication error: {e}. Retrying in {CONFIG['retry_delay']} seconds...{RESET}",
             )
             time.sleep(CONFIG["retry_delay"])
         except KeyboardInterrupt:
@@ -1824,7 +1821,7 @@ def main():
             break
         except Exception as e:
             symbol_logger.exception(
-                f"{NEON_RED}An unexpected error occurred: {e}. Retrying in {CONFIG['retry_delay']} seconds...{RESET}"
+                f"{NEON_RED}An unexpected error occurred: {e}. Retrying in {CONFIG['retry_delay']} seconds...{RESET}",
             )
             time.sleep(CONFIG["retry_delay"])
 

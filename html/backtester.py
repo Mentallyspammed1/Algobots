@@ -6,8 +6,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 from itertools import product
 from typing import Any
 
@@ -46,7 +45,7 @@ BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -117,7 +116,7 @@ class HistoricalDataFetcher:
         self.session = HTTP(testnet=False, api_key=api_key, api_secret=api_secret)
 
     def fetch_historical_klines(
-        self, symbol: str, interval: str, start_time: datetime, end_time: datetime
+        self, symbol: str, interval: str, start_time: datetime, end_time: datetime,
     ) -> pd.DataFrame:
         """Fetch historical klines from Bybit
 
@@ -140,7 +139,7 @@ class HistoricalDataFetcher:
         while current_end > start_time:
             # Bybit returns max 1000 klines per request
             current_start = max(
-                start_time, current_end - timedelta(minutes=interval_minutes * 1000)
+                start_time, current_end - timedelta(minutes=interval_minutes * 1000),
             )
 
             # Convert to milliseconds timestamp
@@ -172,7 +171,7 @@ class HistoricalDataFetcher:
                                 "low": float(k[3]),
                                 "close": float(k[4]),
                                 "volume": float(k[5]),
-                            }
+                            },
                         )
 
                     # Update current_end for next iteration
@@ -246,7 +245,7 @@ class Backtester:
         self.last_supertrend = {"direction": 0, "value": 0}
 
     def run_backtest(
-        self, df: pd.DataFrame, config: dict[str, Any], progress_callback=None
+        self, df: pd.DataFrame, config: dict[str, Any], progress_callback=None,
     ) -> BacktestResult:
         """Run backtest on historical data
 
@@ -335,7 +334,7 @@ class Backtester:
         return 0
 
     def _execute_trade(
-        self, signal: int, candle: pd.Series, config: dict, indicators: dict
+        self, signal: int, candle: pd.Series, config: dict, indicators: dict,
     ):
         """Execute a trade based on signal"""
         # Close opposite position if exists
@@ -447,7 +446,7 @@ class Backtester:
                     self._close_position(candle, "Trailing Stop", trade.stop_loss)
 
     def _close_position(
-        self, candle: pd.Series, reason: str, exit_price: float | None = None
+        self, candle: pd.Series, reason: str, exit_price: float | None = None,
     ):
         """Close current position"""
         if not self.current_position:
@@ -789,12 +788,12 @@ class StrategyOptimizer:
         return result
 
     def get_best_config(
-        self, metric: str = "sharpe_ratio"
+        self, metric: str = "sharpe_ratio",
     ) -> tuple[dict, BacktestResult]:
         """Get the best configuration based on metric"""
         if not self.results:
             raise ValueError(
-                "No optimization results available. Run optimization first."
+                "No optimization results available. Run optimization first.",
             )
 
         best = max(self.results, key=lambda x: getattr(x[1], metric))
@@ -815,7 +814,7 @@ class StrategyOptimizer:
                         "max_drawdown_pct": result.max_drawdown_pct,
                         "total_trades": result.total_trades,
                     },
-                }
+                },
             )
 
         with open(filepath, "w") as f:
@@ -931,7 +930,7 @@ class BacktestVisualizer:
 
         # Create pivot table
         df = pd.DataFrame(
-            {param1: param1_values, param2: param2_values, metric: metric_values}
+            {param1: param1_values, param2: param2_values, metric: metric_values},
         )
 
         pivot = df.pivot_table(values=metric, index=param2, columns=param1)
@@ -939,7 +938,7 @@ class BacktestVisualizer:
         # Plot heatmap
         plt.figure(figsize=(10, 8))
         sns.heatmap(
-            pivot, annot=True, fmt=".2f", cmap="YlOrRd", cbar_kws={"label": metric}
+            pivot, annot=True, fmt=".2f", cmap="YlOrRd", cbar_kws={"label": metric},
         )
         plt.title(f"Optimization Results: {metric}")
         plt.xlabel(param1)
@@ -996,7 +995,7 @@ def main():
         return
 
     logger.info(
-        f"Fetched {len(df)} candles from {df['datetime'].min()} to {df['datetime'].max()}"
+        f"Fetched {len(df)} candles from {df['datetime'].min()} to {df['datetime'].max()}",
     )
 
     # Run single backtest
@@ -1066,7 +1065,7 @@ def main():
 
     # Plot optimization heatmap
     visualizer.plot_optimization_results(
-        optimizer, "stopLossPct", "takeProfitPct", metric="sharpe_ratio"
+        optimizer, "stopLossPct", "takeProfitPct", metric="sharpe_ratio",
     )
 
 

@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 async def my_custom_strategy(
-    market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any
+    market_data: dict, account_info: dict, http_client: HTTP, bot_instance: Any,
 ):
     """This is a template for a custom trading strategy.
 
@@ -78,7 +78,7 @@ async def my_custom_strategy(
     )
     if klines_response and klines_response["retCode"] == 0:
         logger.info(
-            f"Fetched {len(klines_response['result']['list'])} klines for BTCUSDT."
+            f"Fetched {len(klines_response['result']['list'])} klines for BTCUSDT.",
         )
         # Process klines here (e.g., calculate indicators)
     else:
@@ -96,7 +96,7 @@ async def my_custom_strategy(
     # Example: Place a dummy buy order if conditions are met
     if current_btc_price < 50000 and usdt_balance > 100:  # Dummy condition
         logger.info(
-            f"Condition met: Attempting to place a BUY order for BTCUSDT at {current_btc_price}"
+            f"Condition met: Attempting to place a BUY order for BTCUSDT at {current_btc_price}",
         )
         order_result = await http_client.place_order(
             category="linear",

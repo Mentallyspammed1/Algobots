@@ -12,8 +12,8 @@ from bybit_orderbook_helper import BybitOrderbookHelper  # PriceLevel for type h
 from bybit_sizing_helper import BybitSizingHelper
 from bybit_unified_order_manager import (  # Using unified manager for orders
     BybitUnifiedOrderManager,
+    TradingMode,  # Using unified manager for orders
 )
-from bybit_unified_order_manager import TradingMode  # Using unified manager for orders
 
 # Configure logging for the main script
 logging.basicConfig(
@@ -65,7 +65,7 @@ class MarketMakerBot:
             orderbook_stream_depth=25,  # Using a reasonable depth
         )
         self.sizing_helper = BybitSizingHelper(
-            testnet=testnet, api_key=api_key, api_secret=api_secret
+            testnet=testnet, api_key=api_key, api_secret=api_secret,
         )
 
         # Unified Order Manager handles actual order placement and WS private streams for tracking
@@ -107,7 +107,7 @@ class MarketMakerBot:
                     "Rejected",
                 ]:
                     logger.info(
-                        f"Order {order_id} already in final state: {order_details.get('orderStatus')}. Removing from active tracking."
+                        f"Order {order_id} already in final state: {order_details.get('orderStatus')}. Removing from active tracking.",
                     )
                     orders_to_remove.append(order_id)
                     continue
@@ -119,14 +119,14 @@ class MarketMakerBot:
                 ):
                     logger.info(f"Order {order_id} timed out. Attempting to cancel.")
                     cancel_response = self.order_manager.cancel_order(
-                        category=CATEGORY, symbol=SYMBOL, order_id=order_id
+                        category=CATEGORY, symbol=SYMBOL, order_id=order_id,
                     )
                     if cancel_response:
                         logger.info(f"Cancelled timed-out order {order_id}.")
                         orders_to_remove.append(order_id)
                     else:
                         logger.error(
-                            f"Failed to cancel timed-out order {order_id}. Will retry on next loop."
+                            f"Failed to cancel timed-out order {order_id}. Will retry on next loop.",
                         )
                     continue
 
@@ -148,10 +148,10 @@ class MarketMakerBot:
 
         # Round prices to exchange's tick size
         target_bid_price = self.sizing_helper.round_price(
-            CATEGORY, SYMBOL, target_bid_price
+            CATEGORY, SYMBOL, target_bid_price,
         )
         target_ask_price = self.sizing_helper.round_price(
-            CATEGORY, SYMBOL, target_ask_price
+            CATEGORY, SYMBOL, target_ask_price,
         )
 
         # Ensure our bid is below current best bid and ask is above current best ask
@@ -163,21 +163,21 @@ class MarketMakerBot:
                 1 - self.sizing_helper.get_price_tick_size(CATEGORY, SYMBOL)
             )
             target_bid_price = self.sizing_helper.round_price(
-                CATEGORY, SYMBOL, target_bid_price
+                CATEGORY, SYMBOL, target_bid_price,
             )
         if target_ask_price <= best_ask_level.price:
             target_ask_price = best_ask_level.price * (
                 1 + self.sizing_helper.get_price_tick_size(CATEGORY, SYMBOL)
             )
             target_ask_price = self.sizing_helper.round_price(
-                CATEGORY, SYMBOL, target_ask_price
+                CATEGORY, SYMBOL, target_ask_price,
             )
 
         # Round quantity
         order_qty = self.sizing_helper.round_qty(CATEGORY, SYMBOL, ORDER_QTY_BASE)
         if not self.sizing_helper.is_valid_qty(CATEGORY, SYMBOL, order_qty):
             logger.error(
-                f"Calculated order quantity {order_qty} is invalid. Aborting order placement."
+                f"Calculated order quantity {order_qty} is invalid. Aborting order placement.",
             )
             return
 
@@ -189,7 +189,7 @@ class MarketMakerBot:
         # If we are too long, avoid placing more buy orders
         if current_position >= MAX_POSITION_SIZE:
             logger.warning(
-                f"Position ({current_position:.4f}) is at or above MAX_POSITION_SIZE. Skipping bid order."
+                f"Position ({current_position:.4f}) is at or above MAX_POSITION_SIZE. Skipping bid order.",
             )
             place_bid = False
 
@@ -210,10 +210,10 @@ class MarketMakerBot:
             if existing_bid_order:
                 # Check if price needs amendment
                 if abs(
-                    float(existing_bid_order["price"]) - target_bid_price
+                    float(existing_bid_order["price"]) - target_bid_price,
                 ) > self.sizing_helper.get_price_tick_size(CATEGORY, SYMBOL):
                     logger.info(
-                        f"Amending existing bid order {existing_bid_order['orderId']} to new price {target_bid_price}."
+                        f"Amending existing bid order {existing_bid_order['orderId']} to new price {target_bid_price}.",
                     )
                     self.order_manager.amend_order(
                         category=CATEGORY,
@@ -223,7 +223,7 @@ class MarketMakerBot:
                     )
             else:
                 logger.info(
-                    f"Placing new BID order: {order_qty} {SYMBOL} @ {target_bid_price}"
+                    f"Placing new BID order: {order_qty} {SYMBOL} @ {target_bid_price}",
                 )
                 bid_response = self.order_manager.place_order(
                     category=CATEGORY,
@@ -239,7 +239,7 @@ class MarketMakerBot:
                     with active_orders_lock:
                         active_market_maker_orders[bid_response["orderId"]] = (
                             self.order_manager.get_tracked_order(
-                                bid_response["orderId"]
+                                bid_response["orderId"],
                             )
                         )
                 else:
@@ -250,7 +250,7 @@ class MarketMakerBot:
         # If we are too short, avoid placing more sell orders
         if current_position <= -MAX_POSITION_SIZE:
             logger.warning(
-                f"Position ({current_position:.4f}) is at or below -MAX_POSITION_SIZE. Skipping ask order."
+                f"Position ({current_position:.4f}) is at or below -MAX_POSITION_SIZE. Skipping ask order.",
             )
             place_ask = False
 
@@ -271,10 +271,10 @@ class MarketMakerBot:
             if existing_ask_order:
                 # Check if price needs amendment
                 if abs(
-                    float(existing_ask_order["price"]) - target_ask_price
+                    float(existing_ask_order["price"]) - target_ask_price,
                 ) > self.sizing_helper.get_price_tick_size(CATEGORY, SYMBOL):
                     logger.info(
-                        f"Amending existing ask order {existing_ask_order['orderId']} to new price {target_ask_price}."
+                        f"Amending existing ask order {existing_ask_order['orderId']} to new price {target_ask_price}.",
                     )
                     self.order_manager.amend_order(
                         category=CATEGORY,
@@ -284,7 +284,7 @@ class MarketMakerBot:
                     )
             else:
                 logger.info(
-                    f"Placing new ASK order: {order_qty} {SYMBOL} @ {target_ask_price}"
+                    f"Placing new ASK order: {order_qty} {SYMBOL} @ {target_ask_price}",
                 )
                 ask_response = self.order_manager.place_order(
                     category=CATEGORY,
@@ -300,7 +300,7 @@ class MarketMakerBot:
                     with active_orders_lock:
                         active_market_maker_orders[ask_response["orderId"]] = (
                             self.order_manager.get_tracked_order(
-                                ask_response["orderId"]
+                                ask_response["orderId"],
                             )
                         )
                 else:
@@ -340,13 +340,13 @@ class MarketMakerBot:
         self.sizing_helper._get_instrument_info(CATEGORY, SYMBOL, force_update=True)
         if not self.sizing_helper.get_qty_step(CATEGORY, SYMBOL):
             logger.critical(
-                "Sizing helper failed to retrieve instrument info. Aborting bot start."
+                "Sizing helper failed to retrieve instrument info. Aborting bot start.",
             )
             return
 
         self._running.set()
         self._main_loop_thread = threading.Thread(
-            target=self._market_maker_loop, daemon=True
+            target=self._market_maker_loop, daemon=True,
         )
         self._main_loop_thread.start()
         logger.info("Market Maker Bot started successfully.")
@@ -360,7 +360,7 @@ class MarketMakerBot:
             self._main_loop_thread.join(timeout=10)
             if self._main_loop_thread.is_alive():
                 logger.warning(
-                    "Main market maker loop thread did not terminate gracefully."
+                    "Main market maker loop thread did not terminate gracefully.",
                 )
 
         # Cancel any remaining active orders before stopping
@@ -378,7 +378,7 @@ class MarketMakerBot:
 if __name__ == "__main__":
     if API_KEY == "YOUR_API_KEY" or API_SECRET == "YOUR_API_SECRET":
         logger.critical(
-            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_market_maker_template.py."
+            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_market_maker_template.py.",
         )
         exit()
 

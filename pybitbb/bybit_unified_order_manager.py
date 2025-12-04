@@ -2,8 +2,7 @@
 import logging
 import threading
 import time
-from typing import Any
-from typing import Literal
+from typing import Any, Literal
 
 # Import the specific helpers we've already created
 from bybit_trade_helper import BybitTradeHelper
@@ -47,7 +46,7 @@ class BybitUnifiedOrderManager:
         """
         if not api_key or not api_secret:
             logger.error(
-                "API Key and Secret are required for BybitUnifiedOrderManager."
+                "API Key and Secret are required for BybitUnifiedOrderManager.",
             )
             raise ValueError("API Key and Secret must be provided.")
 
@@ -60,7 +59,7 @@ class BybitUnifiedOrderManager:
         # Initialize underlying helpers
         self._http_trade_helper = BybitTradeHelper(api_key, api_secret, testnet)
         self._ws_trade_helper = BybitWsTradeHelper(
-            api_key, api_secret, testnet, ws_recv_window
+            api_key, api_secret, testnet, ws_recv_window,
         )
         self._ws_private_helper = BybitWsPrivateHelper(api_key, api_secret, testnet)
 
@@ -73,7 +72,7 @@ class BybitUnifiedOrderManager:
         self._ws_private_thread: threading.Thread | None = None
 
         logger.info(
-            f"BybitUnifiedOrderManager initialized. Default mode: '{self.default_mode}'. Testnet: {self.testnet}"
+            f"BybitUnifiedOrderManager initialized. Default mode: '{self.default_mode}'. Testnet: {self.testnet}",
         )
 
     def _start_ws_private_listener(self) -> None:
@@ -84,18 +83,18 @@ class BybitUnifiedOrderManager:
 
         logger.info("Starting Private WebSocket listener thread for order updates...")
         self._ws_private_thread = threading.Thread(
-            target=self._run_ws_private_helper_loop, daemon=True
+            target=self._run_ws_private_helper_loop, daemon=True,
         )
         self._ws_private_thread.start()
 
         # Wait for the private WS to be ready
         if not self._ws_private_ready_event.wait(timeout=15):
             logger.error(
-                "Timeout waiting for private WebSocket listener to become ready."
+                "Timeout waiting for private WebSocket listener to become ready.",
             )
             raise RuntimeError("Private WebSocket listener failed to start or sync.")
         logger.info(
-            "Private WebSocket listener thread ready and subscribed to order stream."
+            "Private WebSocket listener thread ready and subscribed to order stream.",
         )
 
     def _run_ws_private_helper_loop(self) -> None:
@@ -103,10 +102,10 @@ class BybitUnifiedOrderManager:
         try:
             if self._ws_private_helper.connect(wait_for_connection=True, timeout=15):
                 logger.info(
-                    "Private WS helper connected. Subscribing to order stream..."
+                    "Private WS helper connected. Subscribing to order stream...",
                 )
                 self._ws_private_helper.subscribe_to_order_stream(
-                    self._on_private_order_update
+                    self._on_private_order_update,
                 )
                 self._ws_private_ready_event.set()  # Signal that it's ready
                 # Keep the thread alive while connected
@@ -137,19 +136,19 @@ class BybitUnifiedOrderManager:
                         # Only log and update if status has changed
                         if new_status and new_status != old_status:
                             logger.debug(
-                                f"Order {order_id} status changed from {old_status} to {new_status}"
+                                f"Order {order_id} status changed from {old_status} to {new_status}",
                             )
                             # Update all fields for the tracked order
                             self.tracked_orders[order_id].update(order_update)
                         elif not new_status:
                             logger.warning(
-                                f"Order update for {order_id} received without new status: {order_update}"
+                                f"Order update for {order_id} received without new status: {order_update}",
                             )
                     elif order_id:
                         # If an order update comes for an untracked order, log it but don't add to tracked_orders
                         # (this manager only tracks orders it places or is explicitly told to track)
                         logger.debug(
-                            f"Received WS update for untracked order ID {order_id}: {order_update.get('orderStatus')}"
+                            f"Received WS update for untracked order ID {order_id}: {order_update.get('orderStatus')}",
                         )
 
     def start(self) -> None:
@@ -161,7 +160,7 @@ class BybitUnifiedOrderManager:
         if self.default_mode == "websocket":
             if not self._ws_trade_helper.connect():
                 logger.error(
-                    "Failed to connect WebSocket Trading client for default mode 'websocket'."
+                    "Failed to connect WebSocket Trading client for default mode 'websocket'.",
                 )
                 raise RuntimeError("Failed to connect WebSocket Trading client.")
 
@@ -178,7 +177,7 @@ class BybitUnifiedOrderManager:
                 self._ws_private_thread.join(timeout=5)  # Wait for thread to finish
                 if self._ws_private_thread.is_alive():
                     logger.warning(
-                        "Private WS listener thread did not terminate gracefully."
+                        "Private WS listener thread did not terminate gracefully.",
                     )
         logger.info("BybitUnifiedOrderManager services stopped.")
 
@@ -210,16 +209,16 @@ class BybitUnifiedOrderManager:
 
         if actual_mode == "http":
             response = self._http_trade_helper.place_order(
-                category, symbol, side, order_type, qty, price, **kwargs
+                category, symbol, side, order_type, qty, price, **kwargs,
             )
         elif actual_mode == "websocket":
             if not self._ws_trade_helper.is_connected():
                 logger.error(
-                    f"WebSocket trading client not connected for placing order for {symbol}. Attempting to reconnect..."
+                    f"WebSocket trading client not connected for placing order for {symbol}. Attempting to reconnect...",
                 )
                 if not self._ws_trade_helper.connect():
                     logger.error(
-                        "Failed to connect WebSocket trading client. Cannot place order via WS."
+                        "Failed to connect WebSocket trading client. Cannot place order via WS.",
                     )
                     return None
 
@@ -246,7 +245,7 @@ class BybitUnifiedOrderManager:
 
             if not ws_response_event.wait(timeout=10):  # Wait for WS response
                 logger.error(
-                    f"Timeout waiting for WebSocket order placement response for {symbol}."
+                    f"Timeout waiting for WebSocket order placement response for {symbol}.",
                 )
                 return None
 
@@ -254,7 +253,7 @@ class BybitUnifiedOrderManager:
                 response = ws_response_data.get("data")
             else:
                 logger.error(
-                    f"WS order placement failed: {ws_response_data.get('retMsg')}"
+                    f"WS order placement failed: {ws_response_data.get('retMsg')}",
                 )
                 return None
         else:
@@ -274,7 +273,7 @@ class BybitUnifiedOrderManager:
                     "qty": qty,
                     "price": price,
                     "orderStatus": response.get(
-                        "orderStatus", "New"
+                        "orderStatus", "New",
                     ),  # Default to 'New' if not provided
                     "placedTime": int(time.time() * 1000),
                 }
@@ -309,12 +308,12 @@ class BybitUnifiedOrderManager:
 
         if actual_mode == "http":
             response = self._http_trade_helper.amend_order(
-                category, symbol, order_id, order_link_id, new_qty, new_price, **kwargs
+                category, symbol, order_id, order_link_id, new_qty, new_price, **kwargs,
             )
         elif actual_mode == "websocket":
             if not self._ws_trade_helper.is_connected():
                 logger.error(
-                    f"WebSocket trading client not connected for amending order for {symbol}."
+                    f"WebSocket trading client not connected for amending order for {symbol}.",
                 )
                 return None
 
@@ -339,7 +338,7 @@ class BybitUnifiedOrderManager:
 
             if not ws_response_event.wait(timeout=10):
                 logger.error(
-                    f"Timeout waiting for WebSocket order amendment response for {symbol}."
+                    f"Timeout waiting for WebSocket order amendment response for {symbol}.",
                 )
                 return None
 
@@ -347,7 +346,7 @@ class BybitUnifiedOrderManager:
                 response = ws_response_data.get("data")
             else:
                 logger.error(
-                    f"WS order amendment failed: {ws_response_data.get('retMsg')}"
+                    f"WS order amendment failed: {ws_response_data.get('retMsg')}",
                 )
                 return None
         else:
@@ -369,11 +368,11 @@ class BybitUnifiedOrderManager:
                             "orderStatus": response.get(
                                 "orderStatus",
                                 self.tracked_orders[response["orderId"]].get(
-                                    "orderStatus"
+                                    "orderStatus",
                                 ),
                             ),
                             "amendedTime": int(time.time() * 1000),
-                        }
+                        },
                     )
             logger.info(f"Order {response['orderId']} amended and tracking updated.")
         return response
@@ -400,12 +399,12 @@ class BybitUnifiedOrderManager:
 
         if actual_mode == "http":
             response = self._http_trade_helper.cancel_order(
-                category, symbol, order_id, order_link_id
+                category, symbol, order_id, order_link_id,
             )
         elif actual_mode == "websocket":
             if not self._ws_trade_helper.is_connected():
                 logger.error(
-                    f"WebSocket trading client not connected for cancelling order for {symbol}."
+                    f"WebSocket trading client not connected for cancelling order for {symbol}.",
                 )
                 return None
 
@@ -418,12 +417,12 @@ class BybitUnifiedOrderManager:
                 ws_response_event.set()
 
             self._ws_trade_helper.cancel_ws_order(
-                _temp_ws_callback, category, symbol, order_id, order_link_id
+                _temp_ws_callback, category, symbol, order_id, order_link_id,
             )
 
             if not ws_response_event.wait(timeout=10):
                 logger.error(
-                    f"Timeout waiting for WebSocket order cancellation response for {symbol}."
+                    f"Timeout waiting for WebSocket order cancellation response for {symbol}.",
                 )
                 return None
 
@@ -431,7 +430,7 @@ class BybitUnifiedOrderManager:
                 response = ws_response_data.get("data")
             else:
                 logger.error(
-                    f"WS order cancellation failed: {ws_response_data.get('retMsg')}"
+                    f"WS order cancellation failed: {ws_response_data.get('retMsg')}",
                 )
                 return None
         else:
@@ -446,7 +445,7 @@ class BybitUnifiedOrderManager:
                         "Cancelled"
                     )
                     self.tracked_orders[response["orderId"]]["cancelledTime"] = int(
-                        time.time() * 1000
+                        time.time() * 1000,
                     )
             logger.info(f"Order {response['orderId']} cancelled and tracking updated.")
         return response
@@ -488,7 +487,7 @@ class BybitUnifiedOrderManager:
         actual_mode = mode if mode else self.default_mode
         if actual_mode == "websocket":
             logger.warning(
-                "WebSocket trading client does not support direct 'get_open_orders' query. Falling back to HTTP."
+                "WebSocket trading client does not support direct 'get_open_orders' query. Falling back to HTTP.",
             )
             actual_mode = "http"  # Force HTTP for queries
 
@@ -511,7 +510,7 @@ class BybitUnifiedOrderManager:
         :return: A dictionary containing the cancellation response or None on failure.
         """
         logger.info(
-            f"Cancelling all orders for {symbol if symbol else category} via HTTP (always uses HTTP for cancel_all_orders)."
+            f"Cancelling all orders for {symbol if symbol else category} via HTTP (always uses HTTP for cancel_all_orders).",
         )
         response = self._http_trade_helper.cancel_all_orders(category, symbol, **kwargs)
 
@@ -522,7 +521,7 @@ class BybitUnifiedOrderManager:
                     if order_id and order_id in self.tracked_orders:
                         self.tracked_orders[order_id]["orderStatus"] = "Cancelled"
                         self.tracked_orders[order_id]["cancelledTime"] = int(
-                            time.time() * 1000
+                            time.time() * 1000,
                         )
             logger.info("Tracked orders updated after mass cancellation.")
         return response
@@ -537,7 +536,7 @@ if __name__ == "__main__":
 
     if API_KEY == "YOUR_API_KEY" or API_SECRET == "YOUR_API_SECRET":
         logger.error(
-            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_unified_order_manager.py example."
+            "Please replace YOUR_API_KEY and YOUR_API_SECRET with your actual credentials in bybit_unified_order_manager.py example.",
         )
         # For demonstration, we'll proceed but expect API calls to fail.
         # exit()
@@ -559,13 +558,13 @@ if __name__ == "__main__":
         # 1. Start the Unified Order Manager's services (private WS listener)
         order_manager.start()
         logger.info(
-            "Manager services started. Waiting for 5 seconds for WS to connect..."
+            "Manager services started. Waiting for 5 seconds for WS to connect...",
         )
         time.sleep(5)  # Give time for WS to connect and subscribe
 
         # 2. Place an order (using default mode, e.g., HTTP)
         print(
-            f"\n--- Placing a BUY Limit Order for {SYMBOL} (Mode: {order_manager.default_mode}) ---"
+            f"\n--- Placing a BUY Limit Order for {SYMBOL} (Mode: {order_manager.default_mode}) ---",
         )
         client_order_id = f"unified-buy-{int(time.time())}"
         place_response = order_manager.place_order(
@@ -582,7 +581,7 @@ if __name__ == "__main__":
         if place_response:
             placed_order_id = place_response.get("orderId")
             logger.info(
-                f"Order placed: {placed_order_id}, Client ID: {client_order_id}"
+                f"Order placed: {placed_order_id}, Client ID: {client_order_id}",
             )
             # Give some time for WS update to reflect status
             time.sleep(2)
@@ -595,7 +594,7 @@ if __name__ == "__main__":
         # 3. Amend the order (if placed successfully)
         if placed_order_id:
             print(
-                f"\n--- Amending Order {placed_order_id} to new price (Mode: {order_manager.default_mode}) ---"
+                f"\n--- Amending Order {placed_order_id} to new price (Mode: {order_manager.default_mode}) ---",
             )
             amend_response = order_manager.amend_order(
                 category=CATEGORY,
@@ -609,17 +608,17 @@ if __name__ == "__main__":
                 tracked_order = order_manager.get_tracked_order(placed_order_id)
                 if tracked_order:
                     print(
-                        f"  Tracked order status after amendment: {tracked_order.get('orderStatus')}, new price: {tracked_order.get('price')}"
+                        f"  Tracked order status after amendment: {tracked_order.get('orderStatus')}, new price: {tracked_order.get('price')}",
                     )
             else:
                 print("  Failed to amend order.")
 
             # 4. Cancel the order
             print(
-                f"\n--- Cancelling Order {placed_order_id} (Mode: {order_manager.default_mode}) ---"
+                f"\n--- Cancelling Order {placed_order_id} (Mode: {order_manager.default_mode}) ---",
             )
             cancel_response = order_manager.cancel_order(
-                category=CATEGORY, symbol=SYMBOL, order_id=placed_order_id
+                category=CATEGORY, symbol=SYMBOL, order_id=placed_order_id,
             )
             if cancel_response:
                 logger.info(f"Order {placed_order_id} cancelled.")
@@ -627,7 +626,7 @@ if __name__ == "__main__":
                 tracked_order = order_manager.get_tracked_order(placed_order_id)
                 if tracked_order:
                     print(
-                        f"  Tracked order status after cancellation: {tracked_order.get('orderStatus')}"
+                        f"  Tracked order status after cancellation: {tracked_order.get('orderStatus')}",
                     )
             else:
                 print("  Failed to cancel order.")
@@ -639,7 +638,7 @@ if __name__ == "__main__":
             print("  Open Orders:")
             for order in open_orders["list"]:
                 print(
-                    f"    ID: {order.get('orderId')}, Side: {order.get('side')}, Price: {order.get('price')}, Status: {order.get('orderStatus')}"
+                    f"    ID: {order.get('orderId')}, Side: {order.get('side')}, Price: {order.get('price')}, Status: {order.get('orderStatus')}",
                 )
         else:
             print("  No open orders or failed to retrieve.")
@@ -661,7 +660,7 @@ if __name__ == "__main__":
 
         print(f"\n--- Cancelling ALL orders for {SYMBOL} ---")
         cancel_all_response = order_manager.cancel_all_orders(
-            category=CATEGORY, symbol=SYMBOL
+            category=CATEGORY, symbol=SYMBOL,
         )
         if cancel_all_response:
             logger.info("All orders cancellation initiated.")

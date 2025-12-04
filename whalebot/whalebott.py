@@ -59,24 +59,17 @@ import sys
 import threading
 import time
 from collections.abc import Callable
-from datetime import UTC
-from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
+from datetime import UTC, datetime
+from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
 from pathlib import Path
-from typing import Any
-from typing import Optional
+from typing import Any, Optional
 
 # --- External Dependencies ---
 import numpy as np
 import pandas as pd
 
 # --- Colorama Initialization ---
-from colorama import Back
-from colorama import Fore
-from colorama import Style
+from colorama import Back, Fore, Style
 from colorama import init as colorama_init
 
 colorama_init(autoreset=True)  # Auto-reset styles after each print
@@ -103,10 +96,11 @@ except Exception as e:
 print(f"{Fore.CYAN}----------------------------{Style.RESET_ALL}", file=sys.stderr)
 
 # --- Pybit Imports ---
-from pybit.exceptions import FailedRequestError
-from pybit.exceptions import InvalidRequestError
-from pybit.unified_trading import HTTP  # For REST API client
-from pybit.unified_trading import WebSocket  # For WebSocket client
+from pybit.exceptions import FailedRequestError, InvalidRequestError
+from pybit.unified_trading import (
+    HTTP,  # For REST API client
+    WebSocket,  # For WebSocket client
+)
 
 PYBIT_AVAILABLE = True
 
@@ -118,10 +112,7 @@ import ccxt
 from dotenv import load_dotenv
 
 # --- Pydantic Imports ---
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import ValidationError
-from pydantic import validator
+from pydantic import BaseModel, Field, ValidationError, validator
 
 
 # --- Custom Logging Formatters (Placeholder definitions) ---
@@ -8993,7 +8984,7 @@ def manage_positions(candle_data: dict[str, Any]):
     # Check for exit signals (e.g., opposite signal, indicator divergence, etc.)
     # or if position size needs reduction based on profit targets.
 
-    pass  # Placeholder for position management logic
+    # Placeholder for position management logic
 
 
 # --- Entry Point of the Script ---

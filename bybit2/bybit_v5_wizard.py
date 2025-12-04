@@ -7,9 +7,7 @@ import time
 
 import requests
 import websocket
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 
 # Initialize Colorama for vibrant terminal output
 init()
@@ -26,7 +24,7 @@ class BybitV5Wizard:
     """A mystical class to wield Bybit's V5 API for trading sorcery."""
 
     def __init__(
-        self, config_path: str = "/data/data/com.termux/files/home/.bybit_config"
+        self, config_path: str = "/data/data/com.termux/files/home/.bybit_config",
     ):
         """Initialize the Bybit V5 Wizard with sacred credentials from config file.
 
@@ -41,9 +39,9 @@ class BybitV5Wizard:
                 self.api_secret = config["api_secret"]
                 self.testnet = config.get("testnet", False)
         except Exception as e:
-            logging.error(f"Failed to load config: {e!s}")
+            logging.exception(f"Failed to load config: {e!s}")
             raise ValueError(
-                Fore.RED + f"# Failed to load config: {e!s}" + Style.RESET_ALL
+                Fore.RED + f"# Failed to load config: {e!s}" + Style.RESET_ALL,
             )
 
         self.base_url = (
@@ -80,7 +78,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Bybit V5 Wizard awakened with ethereal power..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     def _generate_signature(self, params: dict, timestamp: str) -> str:
@@ -92,7 +90,7 @@ class BybitV5Wizard:
             + json.dumps(params, separators=(",", ":"))
         )
         return hmac.new(
-            self.api_secret.encode("utf-8"), param_str.encode("utf-8"), hashlib.sha256
+            self.api_secret.encode("utf-8"), param_str.encode("utf-8"), hashlib.sha256,
         ).hexdigest()
 
     def _enforce_rate_limit(self):
@@ -104,7 +102,7 @@ class BybitV5Wizard:
             self.last_request_time = time.time()
 
     def _send_request(
-        self, method: str, endpoint: str, params: dict = None, retries: int = 3
+        self, method: str, endpoint: str, params: dict = None, retries: int = 3,
     ) -> dict:
         """Cast an HTTP spell to commune with Bybit's API with retry logic and rate limiting.
 
@@ -138,37 +136,37 @@ class BybitV5Wizard:
                     response = self.session.post(url, headers=headers, json=params)
                 else:
                     raise ValueError(
-                        Fore.RED + "Invalid method invoked!" + Style.RESET_ALL
+                        Fore.RED + "Invalid method invoked!" + Style.RESET_ALL,
                     )
                 response.raise_for_status()
                 result = response.json()
                 logging.info(
-                    f"Request: {method} {endpoint} - Params: {params} - Response: {result}"
+                    f"Request: {method} {endpoint} - Params: {params} - Response: {result}",
                 )
                 if result.get("retCode") == 0:
                     print(
                         Fore.GREEN
                         + f"# Spell cast successfully: {endpoint}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     return result.get("result", {})
                 print(
                     Fore.RED
                     + f"# Spell failed: {result.get('retMsg')}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 logging.error(
-                    f"API error: {result.get('retMsg')} for endpoint {endpoint}"
+                    f"API error: {result.get('retMsg')} for endpoint {endpoint}",
                 )
                 return {}
             except Exception as e:
                 print(
                     Fore.RED
                     + f"# Attempt {attempt + 1}/{retries}: The ether rejects the call: {e!s}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
-                logging.error(
-                    f"Request failed: {e!s} for endpoint {endpoint} (attempt {attempt + 1})"
+                logging.exception(
+                    f"Request failed: {e!s} for endpoint {endpoint} (attempt {attempt + 1})",
                 )
                 if attempt < retries - 1:
                     time.sleep(self.retry_delay * (2**attempt))  # Exponential backoff
@@ -204,7 +202,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching kline for {symbol} ({interval})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -235,7 +233,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching mark price kline for {symbol} ({interval})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -266,7 +264,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching index price kline for {symbol} ({interval})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -297,7 +295,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching premium index price kline for {symbol} ({interval})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -323,7 +321,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching instruments info for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -436,7 +434,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching historical volatility for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -482,7 +480,7 @@ class BybitV5Wizard:
         if base_coin:
             params["baseCoin"] = base_coin
         print(
-            Fore.CYAN + f"# Fetching delivery price for {category}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Fetching delivery price for {category}..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -523,7 +521,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Casting market order for {symbol} ({side})..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         result = self._send_request("POST", endpoint, params)
         if result and (break_even or tsl or profit_target):
@@ -566,7 +564,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Forging limit order for {symbol} at {price}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         result = self._send_request("POST", endpoint, params)
         if result and (break_even or tsl or profit_target):
@@ -610,7 +608,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Summoning conditional order for {symbol} at trigger {trigger_price}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -640,12 +638,12 @@ class BybitV5Wizard:
         if stop_loss:
             params["stopLoss"] = str(stop_loss)
         print(
-            Fore.CYAN + f"# Enchanting {symbol} order with TP/SL..." + Style.RESET_ALL
+            Fore.CYAN + f"# Enchanting {symbol} order with TP/SL..." + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def place_batch_orders(
-        self, symbol: str, orders: list[dict], category: str = "linear"
+        self, symbol: str, orders: list[dict], category: str = "linear",
     ) -> dict:
         """Unleash a flurry of orders in a single incantation.
 
@@ -679,7 +677,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Casting {len(orders)} batch orders for {symbol}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -705,12 +703,12 @@ class BybitV5Wizard:
         if trigger_price:
             params["triggerPrice"] = str(trigger_price)
         print(
-            Fore.CYAN + f"# Amending order {order_id} for {symbol}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Amending order {order_id} for {symbol}..." + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def amend_batch_orders(
-        self, symbol: str, orders: list[dict], category: str = "linear"
+        self, symbol: str, orders: list[dict], category: str = "linear",
     ) -> dict:
         """Amend multiple orders in a single incantation.
 
@@ -738,12 +736,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Amending {len(orders)} batch orders for {symbol}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def cancel_order(
-        self, symbol: str, order_id: str, category: str = "linear"
+        self, symbol: str, order_id: str, category: str = "linear",
     ) -> dict:
         """Banish an order back to the void.
 
@@ -754,12 +752,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Banishing order {order_id} for {symbol}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def cancel_all_orders(
-        self, category: str = "linear", symbol: str | None = None
+        self, category: str = "linear", symbol: str | None = None,
     ) -> dict:
         """Obliterate all orders in a cataclysmic sweep.
 
@@ -772,7 +770,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"#发展和# Obliterating all {category} orders..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -805,12 +803,12 @@ class BybitV5Wizard:
         if price and order_type == "Limit":
             params["price"] = str(price)
         print(
-            Fore.CYAN + f"# Closing position for {symbol} ({side})..." + Style.RESET_ALL
+            Fore.CYAN + f"# Closing position for {symbol} ({side})..." + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def get_open_orders(
-        self, category: str = "linear", symbol: str | None = None
+        self, category: str = "linear", symbol: str | None = None,
     ) -> dict:
         """Reveal the active orders lingering in the ether.
 
@@ -824,7 +822,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, params)
 
     def get_order_history(
-        self, category: str = "linear", symbol: str | None = None, limit: int = 50
+        self, category: str = "linear", symbol: str | None = None, limit: int = 50,
     ) -> dict:
         """Seek the chronicles of past trades.
 
@@ -835,14 +833,14 @@ class BybitV5Wizard:
         if symbol:
             params["symbol"] = symbol
         print(
-            Fore.CYAN + f"# Seeking order history for {category}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Seeking order history for {category}..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     # --- Position Endpoints ---
 
     def get_positions(
-        self, category: str = "linear", symbol: str | None = None
+        self, category: str = "linear", symbol: str | None = None,
     ) -> dict:
         """Summon the spirits of your active positions.
 
@@ -876,7 +874,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Bending leverage for {symbol} to {buy_leverage}x..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -907,12 +905,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Enchanting {symbol} with TP/SL/TSL wards..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
     def set_risk_limit(
-        self, symbol: str, risk_id: int, category: str = "linear"
+        self, symbol: str, risk_id: int, category: str = "linear",
     ) -> dict:
         """Set the risk limit for a position.
 
@@ -934,7 +932,7 @@ class BybitV5Wizard:
         return self._send_request("POST", endpoint, params)
 
     def set_auto_add_margin(
-        self, symbol: str, auto_add_margin: bool, category: str = "linear"
+        self, symbol: str, auto_add_margin: bool, category: str = "linear",
     ) -> dict:
         """Enable or disable auto-add margin.
 
@@ -949,7 +947,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Setting auto-add margin for {symbol} to {auto_add_margin}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -976,7 +974,7 @@ class BybitV5Wizard:
         return self._send_request("GET", endpoint, params)
 
     def set_margin_mode(
-        self, symbol: str, mode: str = "ISOLATED", category: str = "linear"
+        self, symbol: str, mode: str = "ISOLATED", category: str = "linear",
     ) -> dict:
         """Toggle between isolated and cross margin modes.
 
@@ -985,7 +983,7 @@ class BybitV5Wizard:
         endpoint = "/v5/account/set-margin-mode"
         params = {"category": category, "symbol": symbol, "marginMode": mode.upper()}
         print(
-            Fore.CYAN + f"# Setting {symbol} to {mode} margin mode..." + Style.RESET_ALL
+            Fore.CYAN + f"# Setting {symbol} to {mode} margin mode..." + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1024,7 +1022,7 @@ class BybitV5Wizard:
     # --- Pre-upgrade Endpoints ---
 
     def get_pre_upgrade_order_history(
-        self, category: str, base_coin: str | None = None, limit: int = 50
+        self, category: str, base_coin: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve pre-upgrade order history.
 
@@ -1037,12 +1035,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching pre-upgrade order history for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_pre_upgrade_trade_history(
-        self, category: str, base_coin: str | None = None, limit: int = 50
+        self, category: str, base_coin: str | None = None, limit: int = 50,
     ) -> dict:
         """Retrieve pre-upgrade trade history.
 
@@ -1055,7 +1053,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching pre-upgrade trade history for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1082,7 +1080,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching pre-upgrade closed PNL for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1131,7 +1129,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Fetching pre-upgrade option delivery record..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1153,7 +1151,7 @@ class BybitV5Wizard:
         if cursor:
             params["cursor"] = cursor
         print(
-            Fore.CYAN + "# Fetching pre-upgrade settlement record..." + Style.RESET_ALL
+            Fore.CYAN + "# Fetching pre-upgrade settlement record..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1211,12 +1209,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching delivery record for {category}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_usdc_settlement(
-        self, category: str = "option", cursor: str | None = None
+        self, category: str = "option", cursor: str | None = None,
     ) -> dict:
         """Retrieve USDC settlement history.
 
@@ -1239,7 +1237,7 @@ class BybitV5Wizard:
         if coin:
             params["coin"] = coin
         print(
-            Fore.CYAN + f"# Fetching asset info for {account_type}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Fetching asset info for {account_type}..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1265,7 +1263,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching all coins balance for {account_type}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1291,12 +1289,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching single coin balance for {account_type}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_transferable_coin(
-        self, from_account_type: str, to_account_type: str
+        self, from_account_type: str, to_account_type: str,
     ) -> dict:
         """Retrieve transferable coins between account types.
 
@@ -1310,7 +1308,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# FetchSix transferable coins from {from_account_type} to {to_account_type}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1337,7 +1335,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Creating internal transfer of {amount} {coin}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1407,7 +1405,7 @@ class BybitV5Wizard:
         if cursor:
             params["cursor"] = cursor
         print(
-            Fore.CYAN + "# Fetching sub-account transfer records..." + Style.RESET_ALL
+            Fore.CYAN + "# Fetching sub-account transfer records..." + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1469,7 +1467,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Creating universal transfer of {amount} {coin}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1581,12 +1579,12 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching master deposit address for {coin}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
     def get_sub_deposit_address(
-        self, sub_member_id: str, coin: str, chain_type: str
+        self, sub_member_id: str, coin: str, chain_type: str,
     ) -> dict:
         """Retrieve sub-account deposit address.
 
@@ -1597,7 +1595,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Fetching sub-account deposit address for {coin}..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return self._send_request("GET", endpoint, params)
 
@@ -1674,7 +1672,7 @@ class BybitV5Wizard:
         if fee_type is not None:
             params["feeType"] = fee_type
         print(
-            Fore.CYAN + f"# Creating withdrawal of {amount} {coin}..." + Style.RESET_ALL
+            Fore.CYAN + f"# Creating withdrawal of {amount} {coin}..." + Style.RESET_ALL,
         )
         return self._send_request("POST", endpoint, params)
 
@@ -1709,7 +1707,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + f"# Calculated position size for {symbol}: {position_size} units"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return position_size
 
@@ -1728,7 +1726,7 @@ class BybitV5Wizard:
             print(
                 Fore.CYAN
                 + f"# Monitoring {symbol} for {profit_target}% profit with action {action}..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(Fore.RED + f"# No position found for {symbol}!" + Style.RESET_ALL)
@@ -1740,13 +1738,13 @@ class BybitV5Wizard:
             print(
                 Fore.CYAN
                 + f"# Break-even {'enabled' if enable else 'disabled'} for {symbol}..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(Fore.RED + f"# No position found for {symbol}!" + Style.RESET_ALL)
 
     def enable_trailing_stop(
-        self, symbol: str, enable: bool = True, distance: float | None = None
+        self, symbol: str, enable: bool = True, distance: float | None = None,
     ):
         """Enable or disable trailing stop-loss enchantment for a position."""
         if symbol in self.positions:
@@ -1756,7 +1754,7 @@ class BybitV5Wizard:
             print(
                 Fore.CYAN
                 + f"# Trailing stop {'enabled' if enable else 'disabled'} for {symbol}..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             print(Fore.RED + f"# No position found for {symbol}!" + Style.RESET_ALL)
@@ -1764,7 +1762,7 @@ class BybitV5Wizard:
     # --- WebSocket Functions ---
 
     def start_websocket(
-        self, symbols: list[str] = None, public_streams: list[str] = None
+        self, symbols: list[str] = None, public_streams: list[str] = None,
     ):
         """Summon WebSocket spirits for private and public streams."""
         private_topics = (
@@ -1781,7 +1779,7 @@ class BybitV5Wizard:
             on_close=self._on_close,
         )
         self.ws_thread = threading.Thread(
-            target=self._ws_run_with_reconnect, args=(self.ws, self.ws_url)
+            target=self._ws_run_with_reconnect, args=(self.ws, self.ws_url),
         )
         self.ws_thread.daemon = True
         self.ws_thread.start()
@@ -1811,7 +1809,7 @@ class BybitV5Wizard:
             on_close=self._on_close,
         )
         self.ws_trade_thread = threading.Thread(
-            target=self._ws_run_with_reconnect, args=(self.ws_trade, self.ws_trade_url)
+            target=self._ws_run_with_reconnect, args=(self.ws_trade, self.ws_trade_url),
         )
         self.ws_trade_thread.daemon = True
         self.ws_trade_thread.start()
@@ -1825,19 +1823,19 @@ class BybitV5Wizard:
                 ws.run_forever()
             except Exception as e:
                 print(Fore.RED + f"# WebSocket crashed: {e!s}" + Style.RESET_ALL)
-                logging.error(f"WebSocket crashed: {e!s} for {url}")
+                logging.exception(f"WebSocket crashed: {e!s} for {url}")
             attempt += 1
             delay = min(2**attempt, 60)
             print(
                 Fore.YELLOW
                 + f"# Reconnecting WebSocket in {delay}s (attempt {attempt})..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             time.sleep(delay)
             ws.url = url
             if attempt >= 5:
                 print(
-                    Fore.RED + "# Max reconnection attempts reached!" + Style.RESET_ALL
+                    Fore.RED + "# Max reconnection attempts reached!" + Style.RESET_ALL,
                 )
                 break
 
@@ -1846,7 +1844,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Private WebSocket connected, channeling the ether..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         expires = int((time.time() + 1) * 1000)
         signature = hmac.new(
@@ -1871,7 +1869,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Public WebSocket connected, channeling market whispers..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         subscribe_message = {"op": "subscribe", "args": topics}
         ws.send(json.dumps(subscribe_message))
@@ -1888,7 +1886,7 @@ class BybitV5Wizard:
         print(
             Fore.CYAN
             + "# Trade WebSocket connected, ready to cast orders..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         expires = int((time.time() + 1) * 1000)
         signature = hmac.new(
@@ -1907,7 +1905,7 @@ class BybitV5Wizard:
         print(
             Fore.YELLOW
             + f"# Received private message: {json.dumps(data, indent=2)}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         if data.get("topic", "").startswith("position"):
             self._handle_position_update(data)
@@ -1922,7 +1920,7 @@ class BybitV5Wizard:
         print(
             Fore.YELLOW
             + f"# Received market whisper: {json.dumps(data, indent=2)}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         if data.get("topic", "").startswith("tickers"):
             self._handle_ticker_update(data)
@@ -1935,7 +1933,7 @@ class BybitV5Wizard:
         print(
             Fore.YELLOW
             + f"# Received trade message: {json.dumps(data, indent=2)}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     def _on_error(self, ws, error):
@@ -1977,12 +1975,12 @@ class BybitV5Wizard:
                 and stop_loss != entry_price
             ):
                 self.set_trading_stop(
-                    symbol=symbol, category="linear", stop_loss=entry_price
+                    symbol=symbol, category="linear", stop_loss=entry_price,
                 )
                 print(
                     Fore.GREEN
                     + f"# Break-even stop set for {symbol} at {entry_price}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
             # Trailing stop-loss logic
@@ -1994,23 +1992,23 @@ class BybitV5Wizard:
                     new_stop = mark_price - self.positions[symbol]["tsl_distance"]
                     if new_stop > stop_loss:
                         self.set_trading_stop(
-                            symbol=symbol, category="linear", stop_loss=new_stop
+                            symbol=symbol, category="linear", stop_loss=new_stop,
                         )
                         print(
                             Fore.GREEN
                             + f"# Trailing stop updated for {symbol} to {new_stop}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                 elif side == "Sell" and mark_price < entry_price:
                     new_stop = mark_price + self.positions[symbol]["tsl_distance"]
                     if new_stop < stop_loss or stop_loss == 0:
                         self.set_trading_stop(
-                            symbol=symbol, category="linear", stop_loss=new_stop
+                            symbol=symbol, category="linear", stop_loss=new_stop,
                         )
                         print(
                             Fore.GREEN
                             + f"# Trailing stop updated for {symbol} to {new_stop}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
 
             # Profit check logic
@@ -2023,31 +2021,31 @@ class BybitV5Wizard:
                             self.positions[symbol]["close_percentage"] / 100
                         )
                         self.place_market_order(
-                            symbol, "Sell" if side == "Buy" else "Buy", close_qty
+                            symbol, "Sell" if side == "Buy" else "Buy", close_qty,
                         )
                         print(
                             Fore.GREEN
                             + f"# Partial close triggered for {symbol}: {close_qty} units"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                     elif action == "set_take_profit":
                         take_profit = mark_price * (
                             1 + 0.01 if side == "Buy" else 1 - 0.01
                         )
                         self.set_trading_stop(
-                            symbol=symbol, category="linear", take_profit=take_profit
+                            symbol=symbol, category="linear", take_profit=take_profit,
                         )
                         print(
                             Fore.GREEN
                             + f"# Take-profit set for {symbol} at {take_profit}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                     elif action == "close":
                         self.close_position(symbol)
                         print(
                             Fore.GREEN
                             + f"# Full position closed for {symbol}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                     self.positions[symbol]["profit_target"] = None
 
@@ -2061,7 +2059,7 @@ class BybitV5Wizard:
                 print(
                     Fore.GREEN
                     + f"# Position entry price updated for {symbol}: {self.positions[symbol]['entry_price']}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     def _handle_ticker_update(self, data: dict):
@@ -2071,7 +2069,7 @@ class BybitV5Wizard:
         print(
             Fore.YELLOW
             + f"# Market whisper for {symbol}: Last price {last_price}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     def send_ws_order(
@@ -2112,7 +2110,7 @@ class BybitV5Wizard:
                 print(
                     Fore.CYAN
                     + f"# Casting WebSocket order for {symbol}..."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
             else:
                 print(Fore.RED + "# Trade WebSocket not connected!" + Style.RESET_ALL)
@@ -2126,13 +2124,13 @@ class BybitV5Wizard:
                 print(
                     Fore.GREEN
                     + "# API connection healthy. Server time retrieved."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 return True
             print(
                 Fore.RED
                 + "# API connection unhealthy. Could not retrieve server time."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return False
         except Exception as e:
@@ -2148,7 +2146,7 @@ class BybitV5Wizard:
             print(Fore.GREEN + "# Private WebSocket thread is alive." + Style.RESET_ALL)
         else:
             print(
-                Fore.RED + "# Private WebSocket thread is not alive." + Style.RESET_ALL
+                Fore.RED + "# Private WebSocket thread is not alive." + Style.RESET_ALL,
             )
             ws_healthy = False
 
@@ -2158,7 +2156,7 @@ class BybitV5Wizard:
             print(
                 Fore.YELLOW
                 + "# Public WebSocket thread not started or not alive."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             # Not critical for overall health if not explicitly used
 

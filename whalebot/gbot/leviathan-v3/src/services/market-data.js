@@ -34,10 +34,21 @@ export class MarketData {
                 });
                 if (res.data.retCode === 0) {
                     this.buffers[targetBuffer] = res.data.result.list.map(k => ({
-                        t: parseInt(k[0]), o: parseFloat(k[1]), h: parseFloat(k[2]), 
-                        l: parseFloat(k[3]), c: parseFloat(k[4]), v: parseFloat(k[5])
+                        startTime: parseInt(k[0]), 
+                        open: parseFloat(k[1]), 
+                        high: parseFloat(k[2]), 
+                        low: parseFloat(k[3]), 
+                        close: parseFloat(k[4]), 
+                        volume: parseFloat(k[5])
                     })).reverse(); // Bybit sends newest first, we want oldest first
                     console.log(COLOR.GREEN(`[MarketData] Loaded ${interval} klines for buffer: ${targetBuffer}`));
+                    // Added logging for loadHistory
+                    if (this.buffers[targetBuffer].length > 0) {
+                        const lastKline = this.buffers[targetBuffer][this.buffers[targetBuffer].length - 1];
+                        console.log(COLOR.CYAN(`[MarketData-History] Buffer: ${targetBuffer}, Last Kline Close: ${lastKline.close}, Length: ${this.buffers[targetBuffer].length}`));
+                    } else {
+                        console.log(COLOR.YELLOW(`[MarketData-History] Buffer: ${targetBuffer} is empty after loading.`));
+                    }
                 } else {
                     console.error(COLOR.RED(`[MarketData] Failed loading ${interval} klines: ${res.data.retMsg}`));
                 }
@@ -119,14 +130,25 @@ export class MarketData {
         const interval = msg.topic.split('.')[1];
         const type = interval === this.config.intervals.scalping ? 'scalping' : 'main';
         
+        // Added logging for handleKline
+        if (!k || typeof k.close === 'undefined') {
+            console.warn(COLOR.RED(`[MarketData-WSS] Received kline data with missing or undefined k.close. Full k: ${JSON.stringify(k)}`));
+        } else {
+            console.log(COLOR.CYAN(`[MarketData-WSS] Raw k.close: ${k.close}, Parsed candle.close: ${parseFloat(k.close)}`));
+        }
+
         const candle = {
-            t: parseInt(k.start), o: parseFloat(k.open), h: parseFloat(k.high),
-            l: parseFloat(k.low), c: parseFloat(k.close), v: parseFloat(k.volume)
+            startTime: parseInt(k.start), 
+            open: parseFloat(k.open), 
+            high: parseFloat(k.high),
+            low: parseFloat(k.low), 
+            close: parseFloat(k.close), 
+            volume: parseFloat(k.volume)
         };
         
         const buf = this.buffers[type];
         if (buf) {
-            if (buf.length > 0 && buf[buf.length - 1].t === candle.t) {
+            if (buf.length > 0 && buf[buf.length - 1].startTime === candle.startTime) {
                 buf[buf.length - 1] = candle; // Update last candle
             } else {
                 buf.push(candle); // Add new candle
@@ -134,6 +156,8 @@ export class MarketData {
                     buf.shift(); // Maintain buffer size
                 }
             }
+            // Added logging after buffer update
+            console.log(COLOR.CYAN(`[MarketData-WSS] Buffer: ${type}, Current Last Kline Close: ${buf[buf.length-1]?.close}, Length: ${buf.length}`));
             this.leviathanInstance.onTick('kline'); // Direct call
         }
     }

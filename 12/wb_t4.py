@@ -12,11 +12,9 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -24,8 +22,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
-from colorama import Fore
-from colorama import Style
+from colorama import Fore, Style
 from colorama import init as colorama_init
 from dotenv import load_dotenv
 
@@ -95,14 +92,14 @@ def retry_api_call(max_attempts: int = 3, delay: int = 5):
                     status_code = getattr(e.response, "status_code", None)
                     if status_code in RETRY_ERROR_CODES:
                         LOGGER.warning(
-                            f"{NEON_YELLOW}API request failed (Attempt {attempt}/{max_attempts}, Status: {status_code}). Retrying in {delay}s...{RESET}"
+                            f"{NEON_YELLOW}API request failed (Attempt {attempt}/{max_attempts}, Status: {status_code}). Retrying in {delay}s...{RESET}",
                         )
                         time.sleep(delay * (2 ** (attempt - 1)))
                     else:
                         LOGGER.error(f"{NEON_RED}Fatal API error: {e}{RESET}")
                         raise
             LOGGER.error(
-                f"{NEON_RED}API call failed after {max_attempts} attempts. Aborting.{RESET}"
+                f"{NEON_RED}API call failed after {max_attempts} attempts. Aborting.{RESET}",
             )
             return None
 
@@ -259,7 +256,7 @@ def load_config(fp: Path) -> BotConfig:
     defaults = _get_default_config()
     if not fp.exists():
         LOGGER.warning(
-            f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}"
+            f"{NEON_YELLOW}Config not found. Creating default at: {fp}{RESET}",
         )
         try:
             fp.write_text(json.dumps(defaults, indent=4))
@@ -278,7 +275,7 @@ def load_config(fp: Path) -> BotConfig:
                 merged[key] = value
     except (OSError, json.JSONDecodeError) as e:
         LOGGER.error(
-            f"{NEON_RED}Error with config file: {e}. Rebuilding default.{RESET}"
+            f"{NEON_RED}Error with config file: {e}. Rebuilding default.{RESET}",
         )
         backup_fp = fp.with_name(f"{fp.stem}.bak_{int(time.time())}{fp.suffix}")
         try:
@@ -286,13 +283,13 @@ def load_config(fp: Path) -> BotConfig:
             fp.write_text(json.dumps(defaults, indent=4))
         except OSError as backup_err:
             LOGGER.error(
-                f"{NEON_RED}Could not back up corrupt config: {backup_err}{RESET}"
+                f"{NEON_RED}Could not back up corrupt config: {backup_err}{RESET}",
             )
         merged = defaults
 
     if merged["interval"] not in VALID_INTERVALS:
         LOGGER.warning(
-            f"{NEON_YELLOW}Invalid interval '{merged['interval']}'. Falling back to default.{RESET}"
+            f"{NEON_YELLOW}Invalid interval '{merged['interval']}'. Falling back to default.{RESET}",
         )
         merged["interval"] = "15"
 
@@ -309,7 +306,7 @@ class BybitClient:
     """A client to interact with the Bybit API."""
 
     def __init__(
-        self, base_url: str, api_key: str, api_secret: str, log: logging.Logger
+        self, base_url: str, api_key: str, api_secret: str, log: logging.Logger,
     ):
         self.base_url = base_url
         self.api_key = api_key
@@ -320,15 +317,15 @@ class BybitClient:
     def _generate_signature(self, params: dict) -> str:
         """Generates the HMAC SHA256 signature for Bybit API requests."""
         param_str = "&".join(
-            [f"{key}={value}" for key, value in sorted(params.items())]
+            [f"{key}={value}" for key, value in sorted(params.items())],
         )
         return hmac.new(
-            self.api_secret.encode(), param_str.encode(), hashlib.sha256
+            self.api_secret.encode(), param_str.encode(), hashlib.sha256,
         ).hexdigest()
 
     @retry_api_call()
     def _bybit_request(
-        self, method: str, endpoint: str, params: dict[str, Any] = None
+        self, method: str, endpoint: str, params: dict[str, Any] = None,
     ) -> dict | None:
         """Sends a signed request to the Bybit API with retry logic."""
         params = params or {}
@@ -371,13 +368,13 @@ class BybitClient:
                         last_price = ticker.get("lastPrice")
                         return Decimal(last_price) if last_price else None
         self.log.error(
-            f"{NEON_RED}Could not fetch current price for {symbol}. Response: {response_data}{RESET}"
+            f"{NEON_RED}Could not fetch current price for {symbol}. Response: {response_data}{RESET}",
         )
         return None
 
     @retry_api_call()
     def fetch_klines(
-        self, symbol: str, interval: str, limit: int = 200
+        self, symbol: str, interval: str, limit: int = 200,
     ) -> pd.DataFrame:
         """Fetches historical K-line data with caching."""
         kline_key = f"{symbol}_{interval}_{limit}"
@@ -388,7 +385,7 @@ class BybitClient:
             return self.kline_cache[kline_key]["data"]
 
         self.log.info(
-            f"{NEON_BLUE}Fetching fresh Kline data for {symbol} ({interval})...{RESET}"
+            f"{NEON_BLUE}Fetching fresh Kline data for {symbol} ({interval})...{RESET}",
         )
         endpoint = "/v5/market/kline"
         params = {
@@ -427,7 +424,7 @@ class BybitClient:
             return df
 
         self.log.error(
-            f"{NEON_RED}Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}"
+            f"{NEON_RED}Failed to fetch Kline data for {symbol}, interval {interval}. Response: {response_data}{RESET}",
         )
         return pd.DataFrame()
 
@@ -444,7 +441,7 @@ class BybitClient:
         ):
             return response_data["result"]
         self.log.warning(
-            f"{NEON_YELLOW}Could not fetch order book for {symbol}. Response: {response_data}{RESET}"
+            f"{NEON_YELLOW}Could not fetch order book for {symbol}. Response: {response_data}{RESET}",
         )
         return None
 
@@ -475,7 +472,7 @@ class Indicators:
 
     @staticmethod
     def atr(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int,
     ) -> pd.Series:
         """Decimal-safe Average True Range."""
         tr1 = high - low
@@ -494,12 +491,12 @@ class Indicators:
         avg_loss = Indicators.ema(loss, span=window)
         rs = avg_gain / avg_loss.replace(Decimal("0"), Decimal("NaN"))
         return (Decimal("100") - (Decimal("100") / (Decimal("1") + rs))).fillna(
-            Decimal("50")
+            Decimal("50"),
         )
 
     @staticmethod
     def macd(
-        close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
+        close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9,
     ) -> pd.DataFrame:
         """Decimal-safe Moving Average Convergence Divergence."""
         ema_fast = Indicators.ema(close, span=fast)
@@ -508,25 +505,25 @@ class Indicators:
         signal_line = Indicators.ema(macd_line, span=signal)
         histogram = macd_line - signal_line
         return pd.DataFrame(
-            {"macd": macd_line, "signal": signal_line, "histogram": histogram}
+            {"macd": macd_line, "signal": signal_line, "histogram": histogram},
         )
 
     @staticmethod
     def adx(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14,
     ) -> pd.DataFrame:
         """Decimal-safe Average Directional Index."""
         plus_dm = high.diff()
         minus_dm = low.diff().mul(Decimal("-1"))
         plus_dm_s = Indicators.ema(
             plus_dm.where(
-                (plus_dm > Decimal("0")) & (plus_dm > minus_dm), Decimal("0")
+                (plus_dm > Decimal("0")) & (plus_dm > minus_dm), Decimal("0"),
             ),
             span=window,
         )
         minus_dm_s = Indicators.ema(
             minus_dm.where(
-                (minus_dm > Decimal("0")) & (minus_dm > plus_dm), Decimal("0")
+                (minus_dm > Decimal("0")) & (minus_dm > plus_dm), Decimal("0"),
             ),
             span=window,
         )
@@ -555,14 +552,14 @@ class Indicators:
         lowest_low = low.rolling(window=k_period).min()
         denominator = (highest_high - lowest_low).replace(Decimal("0"), Decimal("NaN"))
         k_line = ((close - lowest_low) / denominator * Decimal("100")).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
         d_line = Indicators.sma(k_line, window=d_period)
         return pd.DataFrame({"k": k_line, "d": d_line})
 
     @staticmethod
     def stoch_rsi(
-        close: pd.Series, rsi_period: int = 14, k_period: int = 3, d_period: int = 3
+        close: pd.Series, rsi_period: int = 14, k_period: int = 3, d_period: int = 3,
     ) -> pd.DataFrame:
         """Decimal-safe Stochastic RSI."""
         rsi_vals = Indicators.rsi(close, window=rsi_period)
@@ -570,12 +567,12 @@ class Indicators:
         max_rsi = rsi_vals.rolling(window=k_period).max()
         denominator = (max_rsi - min_rsi).replace(Decimal("0"), Decimal("NaN"))
         stoch_rsi_val = ((rsi_vals - min_rsi) / denominator * Decimal("100")).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
         k_line = Indicators.sma(stoch_rsi_val, window=k_period)
         d_line = Indicators.sma(k_line, window=d_period)
         return pd.DataFrame(
-            {"rsi": rsi_vals, "stoch_rsi_k": k_line, "stoch_rsi_d": d_line}
+            {"rsi": rsi_vals, "stoch_rsi_k": k_line, "stoch_rsi_d": d_line},
         )
 
     @staticmethod
@@ -603,7 +600,7 @@ class Indicators:
             if trend == 1:
                 psar.iloc[i] = prev_psar + af * (ep - prev_psar)
                 psar.iloc[i] = min(
-                    psar.iloc[i], curr_l, low.iloc[i - 1] if i > 1 else curr_l
+                    psar.iloc[i], curr_l, low.iloc[i - 1] if i > 1 else curr_l,
                 )
                 if curr_h > ep:
                     ep, af = curr_h, min(af + acceleration, max_acceleration)
@@ -612,7 +609,7 @@ class Indicators:
             else:
                 psar.iloc[i] = prev_psar + af * (ep - prev_psar)
                 psar.iloc[i] = max(
-                    psar.iloc[i], curr_h, high.iloc[i - 1] if i > 1 else curr_h
+                    psar.iloc[i], curr_h, high.iloc[i - 1] if i > 1 else curr_h,
                 )
                 if curr_l < ep:
                     ep, af = curr_l, min(af + acceleration, max_acceleration)
@@ -636,7 +633,7 @@ class Indicators:
 
     @staticmethod
     def adi(
-        high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
+        high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series,
     ) -> pd.Series:
         """Decimal-safe Accumulation/Distribution Index."""
         mfm_denom = (high - low).replace(Decimal("0"), Decimal("NaN"))
@@ -667,7 +664,7 @@ class Indicators:
 
     @staticmethod
     def williams_r(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14,
     ) -> pd.Series:
         """Decimal-safe Williams %R."""
         highest_high = high.rolling(window=window).max()
@@ -701,14 +698,14 @@ class Indicators:
         )
         mf_ratio = pos_sum / neg_sum.replace(Decimal("0"), Decimal("NaN"))
         return (Decimal("100") - (Decimal("100") / (Decimal("1") + mf_ratio))).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
 
     @staticmethod
     def momentum(close: pd.Series, period: int = 10) -> pd.Series:
         """Decimal-safe Momentum."""
         return ((close.diff(period) / close.shift(period)) * Decimal("100")).fillna(
-            Decimal("0")
+            Decimal("0"),
         )
 
     @staticmethod
@@ -742,7 +739,7 @@ class Indicators:
         mfm = (((close - low) - (high - close)) / mfm_denom).fillna(Decimal("0"))
         mfv = mfm * volume
         return mfv.rolling(window=window).sum() / volume.rolling(
-            window=window
+            window=window,
         ).sum().replace(Decimal("0"), Decimal("NaN"))
 
     @staticmethod
@@ -755,21 +752,21 @@ class Indicators:
 
     @staticmethod
     def vi(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14,
     ) -> pd.DataFrame:
         """Decimal-safe Vortex Indicator (VI)."""
         tr = Indicators.atr(high, low, close, 1).rolling(window=window).sum()
         plus_vi = (high.diff().abs() + low.diff().abs()).rolling(
-            window=window
+            window=window,
         ).sum() / tr
         minus_vi = (high.diff(-1).abs() + low.diff(-1).abs()).shift(-1).rolling(
-            window=window
+            window=window,
         ).sum() / tr
         return pd.DataFrame({"+VI": plus_vi, "-VI": minus_vi})
 
     @staticmethod
     def bb(
-        close: pd.Series, window: int = 20, std_dev_mult: Decimal = Decimal("2")
+        close: pd.Series, window: int = 20, std_dev_mult: Decimal = Decimal("2"),
     ) -> pd.DataFrame:
         """Decimal-safe Bollinger Bands (BB)."""
         sma = Indicators.sma(close, window=window)
@@ -838,7 +835,7 @@ class TradingAnalyzer:
         if self.df.empty:
             return
         atr_series = Indicators.atr(
-            self.df.high, self.df.low, self.df.close, self.cfg["atr_period"]
+            self.df.high, self.df.low, self.df.close, self.cfg["atr_period"],
         )
         if not atr_series.empty and pd.notna(atr_series.iloc[-1]):
             self.atr_value = atr_series.iloc[-1]
@@ -852,7 +849,7 @@ class TradingAnalyzer:
             else "low_volatility"
         )
         self.log.info(
-            f"Market Volatility: {NEON_YELLOW}{vol_mode.upper()}{RESET} (ATR: {self.atr_value:.5f})"
+            f"Market Volatility: {NEON_YELLOW}{vol_mode.upper()}{RESET} (ATR: {self.atr_value:.5f})",
         )
         return self.cfg["weight_sets"][vol_mode]
 
@@ -923,7 +920,7 @@ class TradingAnalyzer:
         return None
 
     def _analyze_order_book_walls(
-        self, order_book: dict[str, Any]
+        self, order_book: dict[str, Any],
     ) -> tuple[bool, bool, dict[str, Decimal], dict[str, Decimal]]:
         """Detect bullish/bearish walls from bids/asks."""
         enabled = self.cfg.get("order_book_analysis", {}).get("enabled", False)
@@ -937,7 +934,7 @@ class TradingAnalyzer:
             return False, False, {}, {}
         avg_qty = sum(all_qty) / Decimal(str(len(all_qty)))
         wall_threshold = avg_qty * Decimal(
-            str(self.cfg.get("order_book_wall_threshold_multiplier", 2.0))
+            str(self.cfg.get("order_book_wall_threshold_multiplier", 2.0)),
         )
         current_price = self.df.close.iloc[-1]
         bullish, bearish = {}, {}
@@ -952,7 +949,7 @@ class TradingAnalyzer:
         return bool(bullish), bool(bearish), bullish, bearish
 
     def calculate_fibonacci_retracement(
-        self, high: Decimal, low: Decimal, current_price: Decimal
+        self, high: Decimal, low: Decimal, current_price: Decimal,
     ) -> None:
         """Calculates Fibonacci retracement levels based on a given high and low."""
         diff = high - low
@@ -1001,11 +998,11 @@ class TradingAnalyzer:
             "S3": s3,
         }
         self.levels.update(
-            {label: val.quantize(precision) for label, val in pivots.items()}
+            {label: val.quantize(precision) for label, val in pivots.items()},
         )
 
     def find_nearest_levels(
-        self, current_price: Decimal, num_levels: int = 5
+        self, current_price: Decimal, num_levels: int = 5,
     ) -> tuple[list[tuple[str, Decimal]], list[tuple[str, Decimal]]]:
         """Finds the nearest support and resistance levels from calculated Fibonacci and Pivot Points."""
         supports, resistances = [], []
@@ -1147,7 +1144,7 @@ class TradingAnalyzer:
                 "rsi_period": cfg_prd.get("stoch_rsi_period", 14),
                 "short_period": cfg_prd.get("ao_short", 5),
                 "long_period": cfg_prd.get("ao_long", 34),
-            }
+            },
         )
 
         # Calculate and store indicator values dynamically
@@ -1178,7 +1175,7 @@ class TradingAnalyzer:
                             params["volume"] = indicator_data["volume"]
                         else:
                             self.log.debug(
-                                f"Skipping parameter '{param_name}' for indicator '{name}' due to missing data."
+                                f"Skipping parameter '{param_name}' for indicator '{name}' due to missing data.",
                             )
 
                     series = indicator_method(**params)
@@ -1193,7 +1190,7 @@ class TradingAnalyzer:
                     )
             except Exception as e:
                 self.log.error(
-                    f"{NEON_RED}Error calculating indicator '{name}': {e}{RESET}"
+                    f"{NEON_RED}Error calculating indicator '{name}': {e}{RESET}",
                 )
                 self.indicator_values[name] = None
 
@@ -1234,11 +1231,11 @@ class TradingAnalyzer:
         log_lines.append(f"\n{NEON_BLUE}Order Book Walls:{RESET}")
         if has_bull:
             log_lines.append(
-                f"{NEON_GREEN}  Bullish Walls Found: {', '.join([f'{k}:{v:,.0f}' for k, v in bullish_details.items()])}{RESET}"
+                f"{NEON_GREEN}  Bullish Walls Found: {', '.join([f'{k}:{v:,.0f}' for k, v in bullish_details.items()])}{RESET}",
             )
         if has_bear:
             log_lines.append(
-                f"{NEON_RED}  Bearish Walls Found: {', '.join([f'{k}:{v:,.0f}' for k, v in bearish_details.items()])}{RESET}"
+                f"{NEON_RED}  Bearish Walls Found: {', '.join([f'{k}:{v:,.0f}' for k, v in bearish_details.items()])}{RESET}",
             )
         if not has_bull and not has_bear:
             log_lines.append("  No significant walls detected.")
@@ -1371,12 +1368,12 @@ class TradingAnalyzer:
         ob_walls = self.indicator_values.get("order_book_walls", {})
         if ob_walls.get("bullish"):
             raw_score += Decimal(
-                str(self.cfg.get("order_book_support_confidence_boost", 0))
+                str(self.cfg.get("order_book_support_confidence_boost", 0)),
             )
             conditions_met.append("Order Book: Bullish Wall")
         if ob_walls.get("bearish"):
             raw_score -= Decimal(
-                str(self.cfg.get("order_book_resistance_confidence_boost", 0))
+                str(self.cfg.get("order_book_resistance_confidence_boost", 0)),
             )
             conditions_met.append("Order Book: Bearish Wall")
 
@@ -1400,12 +1397,12 @@ class TradingAnalyzer:
 
         # Normalize score to a confidence level
         max_score = sum(self.weights.values()) + self.cfg.get(
-            "order_book_support_confidence_boost", 0
+            "order_book_support_confidence_boost", 0,
         )
         confidence = abs(float(raw_score)) / max_score if max_score > 0 else 0
 
         return TradeSignal(
-            signal, confidence, conditions_met, {"stop_loss": sl, "take_profit": tp}
+            signal, confidence, conditions_met, {"stop_loss": sl, "take_profit": tp},
         )
 
 
@@ -1416,7 +1413,7 @@ def main():
     """Main function to initialize and run the trading bot loop."""
     if not API_KEY or not API_SECRET:
         LOGGER.critical(
-            f"{NEON_RED}API credentials (BYBIT_API_KEY, BYBIT_API_SECRET) are missing in .env file.{RESET}"
+            f"{NEON_RED}API credentials (BYBIT_API_KEY, BYBIT_API_SECRET) are missing in .env file.{RESET}",
         )
         return
 
@@ -1427,19 +1424,19 @@ def main():
     ).upper()
     interval = (
         input(
-            f"{NEON_BLUE}Enter interval ({', '.join(VALID_INTERVALS)}) (default {CFG['interval']}): {RESET}"
+            f"{NEON_BLUE}Enter interval ({', '.join(VALID_INTERVALS)}) (default {CFG['interval']}): {RESET}",
         )
         or CFG["interval"]
     )
     if interval not in VALID_INTERVALS:
         LOGGER.warning(
-            f"{NEON_YELLOW}Invalid interval '{interval}'. Using default '{CFG['interval']}'.{RESET}"
+            f"{NEON_YELLOW}Invalid interval '{interval}'. Using default '{CFG['interval']}'.{RESET}",
         )
         interval = CFG["interval"]
 
     symbol_logger = setup_logger(symbol)
     symbol_logger.info(
-        f"🚀 WhaleBot Enhanced starting for {NEON_PURPLE}{symbol}{RESET} on interval {NEON_PURPLE}{interval}{RESET}"
+        f"🚀 WhaleBot Enhanced starting for {NEON_PURPLE}{symbol}{RESET} on interval {NEON_PURPLE}{interval}{RESET}",
     )
 
     last_signal_time = 0.0
@@ -1451,7 +1448,7 @@ def main():
             price = bybit_client.fetch_current_price(symbol)
             if price is None:
                 symbol_logger.error(
-                    f"{NEON_RED}Failed to fetch current price. Retrying in {CFG['retry_delay']}s...{RESET}"
+                    f"{NEON_RED}Failed to fetch current price. Retrying in {CFG['retry_delay']}s...{RESET}",
                 )
                 time.sleep(CFG["retry_delay"])
                 continue
@@ -1460,18 +1457,18 @@ def main():
             for name, enabled in CFG["indicators"].items():
                 if enabled and name in CFG["indicator_periods"]:
                     min_data_needed = max(
-                        min_data_needed, CFG["indicator_periods"][name]
+                        min_data_needed, CFG["indicator_periods"][name],
                     )
                 if enabled and name == "stoch_rsi":
                     min_data_needed = max(
-                        min_data_needed, CFG["indicator_periods"]["stoch_rsi_period"]
+                        min_data_needed, CFG["indicator_periods"]["stoch_rsi_period"],
                     )
             min_data_needed += 10
 
             df = bybit_client.fetch_klines(symbol, interval, min_data_needed)
             if df.empty or len(df) < min_data_needed:
                 symbol_logger.warning(
-                    f"{NEON_YELLOW}Insufficient Kline data ({len(df)}/{min_data_needed} bars). Retrying...{RESET}"
+                    f"{NEON_YELLOW}Insufficient Kline data ({len(df)}/{min_data_needed} bars). Retrying...{RESET}",
                 )
                 time.sleep(CFG["retry_delay"])
                 continue
@@ -1479,7 +1476,7 @@ def main():
             current_time = time.time()
             if current_time - last_ob_fetch_time >= CFG["order_book_debounce_s"]:
                 order_book = bybit_client.fetch_order_book(
-                    symbol, CFG["order_book_depth_to_check"]
+                    symbol, CFG["order_book_depth_to_check"],
                 )
                 last_ob_fetch_time = current_time
 
@@ -1496,7 +1493,7 @@ def main():
                 symbol_logger.info(
                     f"\n{color}🔔 {'-' * 10} TRADE SIGNAL: {trade_signal.signal.upper()} {'-' * 10}{RESET}\n"
                     f"   Confidence Score: {trade_signal.confidence:.2f}\n"
-                    f"   Conditions Met: {'; '.join(trade_signal.conditions)}\n"
+                    f"   Conditions Met: {'; '.join(trade_signal.conditions)}\n",
                 )
                 if trade_signal.levels:
                     sl, tp = (
@@ -1504,21 +1501,21 @@ def main():
                         trade_signal.levels["take_profit"],
                     )
                     symbol_logger.info(
-                        f"   Stop Loss: {sl:.5f} | Take Profit: {tp:.5f}"
+                        f"   Stop Loss: {sl:.5f} | Take Profit: {tp:.5f}",
                     )
                 symbol_logger.info(
-                    f"{NEON_YELLOW}   --- Placeholder: Order placement logic would execute here ---{RESET}\n"
+                    f"{NEON_YELLOW}   --- Placeholder: Order placement logic would execute here ---{RESET}\n",
                 )
 
             time.sleep(CFG["analysis_interval"])
 
     except KeyboardInterrupt:
         symbol_logger.info(
-            f"\n{NEON_YELLOW}User stopped analysis. Shutting down...{RESET}"
+            f"\n{NEON_YELLOW}User stopped analysis. Shutting down...{RESET}",
         )
     except Exception as e:
         symbol_logger.exception(
-            f"{NEON_RED}An unexpected critical error occurred: {e}{RESET}"
+            f"{NEON_RED}An unexpected critical error occurred: {e}{RESET}",
         )
         time.sleep(CFG["retry_delay"] * 2)
 

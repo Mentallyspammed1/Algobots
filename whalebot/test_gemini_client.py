@@ -2,8 +2,7 @@ import os
 import sys
 import unittest
 from decimal import Decimal
-from unittest.mock import Mock
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import requests
 

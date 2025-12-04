@@ -40,7 +40,7 @@ class OrderManager:
                     }
                     placed_orders.append(order_data)
                     self.logger.info(
-                        f"Order placed: {order_data['orderId']} - {order['side']} {order['qty']} @ {order['price']}"
+                        f"Order placed: {order_data['orderId']} - {order['side']} {order['qty']} @ {order['price']}",
                     )
                 else:
                     self.logger.error(f"Failed to place order: {response['retMsg']}")
@@ -56,7 +56,7 @@ class OrderManager:
         """Cancel all active orders for a symbol"""
         try:
             response = self.client.cancel_all_orders(
-                category=self.config["trading"]["market_type"], symbol=symbol
+                category=self.config["trading"]["market_type"], symbol=symbol,
             )
 
             if response["retCode"] == 0:
@@ -91,7 +91,7 @@ class OrderManager:
                     del self.active_orders[order_id]
                 return True
             self.logger.error(
-                f"Failed to cancel order {order_id}: {response['retMsg']}"
+                f"Failed to cancel order {order_id}: {response['retMsg']}",
             )
             return False
 
@@ -116,7 +116,7 @@ class OrderManager:
         """Update active orders from exchange"""
         try:
             response = self.client.get_open_orders(
-                category=self.config["trading"]["market_type"], symbol=symbol
+                category=self.config["trading"]["market_type"], symbol=symbol,
             )
 
             if response["retCode"] == 0:
@@ -143,7 +143,7 @@ class OrderManager:
                             "price": float(order["price"]),
                             "status": order["orderStatus"],
                             "created_at": datetime.fromtimestamp(
-                                int(order["createdTime"]) / 1000
+                                int(order["createdTime"]) / 1000,
                             ),
                         }
 
@@ -196,10 +196,10 @@ class OrderManager:
             "total_volume": total_volume,
             "imbalance": imbalance,
             "buy_orders": len(
-                [o for o in self.active_orders.values() if o["side"] == "Buy"]
+                [o for o in self.active_orders.values() if o["side"] == "Buy"],
             ),
             "sell_orders": len(
-                [o for o in self.active_orders.values() if o["side"] == "Sell"]
+                [o for o in self.active_orders.values() if o["side"] == "Sell"],
             ),
         }
 
@@ -208,15 +208,15 @@ class OrderManager:
         return {
             "total_orders": len(self.active_orders),
             "buy_orders": len(
-                [o for o in self.active_orders.values() if o["side"] == "Buy"]
+                [o for o in self.active_orders.values() if o["side"] == "Buy"],
             ),
             "sell_orders": len(
-                [o for o in self.active_orders.values() if o["side"] == "Sell"]
+                [o for o in self.active_orders.values() if o["side"] == "Sell"],
             ),
             "total_value": sum(
                 o["qty"] * o["price"] for o in self.active_orders.values()
             ),
             "oldest_order": min(
-                (o["created_at"] for o in self.active_orders.values()), default=None
+                (o["created_at"] for o in self.active_orders.values()), default=None,
             ),
         }

@@ -1,9 +1,7 @@
 import argparse
 import sys
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from transformers import pipeline
 
 # Initialize colorama for cross-platform colored terminal output
@@ -21,7 +19,7 @@ def main():
     """Main function to handle model pipeline and user interaction."""
     # Create an argument parser for future enhancements
     parser = argparse.ArgumentParser(
-        description=f"{NEON_CYAN}Advanced Text Generation with a specified model.{RESET}"
+        description=f"{NEON_CYAN}Advanced Text Generation with a specified model.{RESET}",
     )
     parser.add_argument(
         "--model",
@@ -38,7 +36,7 @@ def main():
         model_name = args.model
         if model_name == "zai-org/GLM-4.5":
             print(
-                f"{NEON_YELLOW}Warning: The model 'zai-org/GLM-4.5' is not recognized on Hugging Face. Using 'gpt2' as a fallback.{RESET}"
+                f"{NEON_YELLOW}Warning: The model 'zai-org/GLM-4.5' is not recognized on Hugging Face. Using 'gpt2' as a fallback.{RESET}",
             )
             model_name = "gpt2"
 
@@ -52,7 +50,7 @@ def main():
     except ImportError:
         print(f"{Fore.RED}Error: The 'transformers' library is not installed.{RESET}")
         print(
-            f"{NEON_YELLOW}Please install it using: 'pip install transformers torch'{RESET}"
+            f"{NEON_YELLOW}Please install it using: 'pip install transformers torch'{RESET}",
         )
         sys.exit(1)
     except Exception as e:
@@ -79,7 +77,7 @@ def main():
 
             # Generate response from the pipeline
             response_data = pipe(
-                user_input, max_length=150, num_return_sequences=1, truncation=True
+                user_input, max_length=150, num_return_sequences=1, truncation=True,
             )
 
             # Extract and clean the generated text

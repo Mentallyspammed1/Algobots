@@ -85,7 +85,7 @@ async def ehlers_ma_cross_strategy(
 
         if len(closing_prices) < max(fast_ema_period, slow_ema_period):
             logger.warning(
-                f"Not enough historical data for {symbol} to calculate EMAs. Need at least {max(fast_ema_period, slow_ema_period)} periods."
+                f"Not enough historical data for {symbol} to calculate EMAs. Need at least {max(fast_ema_period, slow_ema_period)} periods.",
             )
             continue
 
@@ -94,7 +94,7 @@ async def ehlers_ma_cross_strategy(
 
         if not fast_ema or not slow_ema or len(fast_ema) < 2 or len(slow_ema) < 2:
             logger.warning(
-                f"EMA calculation failed or not enough EMA data for {symbol}. Skipping strategy."
+                f"EMA calculation failed or not enough EMA data for {symbol}. Skipping strategy.",
             )
             continue
 
@@ -107,7 +107,7 @@ async def ehlers_ma_cross_strategy(
         previous_slow_ema = slow_ema[-2]
 
         current_price = float(
-            market_data.get(symbol, {}).get("ticker", [{}])[0].get("lastPrice", 0)
+            market_data.get(symbol, {}).get("ticker", [{}])[0].get("lastPrice", 0),
         )
         logger.info(f"Current price for {symbol}: {current_price}")
 
@@ -133,25 +133,25 @@ async def ehlers_ma_cross_strategy(
         if previous_fast_ema <= previous_slow_ema and latest_fast_ema > latest_slow_ema:
             signal = "buy"
             logger.info(
-                f"BUY Signal for {symbol}: Fast EMA ({latest_fast_ema:.5f}) crossed above Slow EMA ({latest_slow_ema:.5f})"
+                f"BUY Signal for {symbol}: Fast EMA ({latest_fast_ema:.5f}) crossed above Slow EMA ({latest_slow_ema:.5f})",
             )
         elif (
             previous_fast_ema >= previous_slow_ema and latest_fast_ema < latest_slow_ema
         ):
             signal = "sell"
             logger.info(
-                f"SELL Signal for {symbol}: Fast EMA ({latest_fast_ema:.5f}) crossed below Slow EMA ({latest_slow_ema:.5f})"
+                f"SELL Signal for {symbol}: Fast EMA ({latest_fast_ema:.5f}) crossed below Slow EMA ({latest_slow_ema:.5f})",
             )
         else:
             logger.info(
-                f"No cross signal for {symbol}. Fast EMA: {latest_fast_ema:.5f}, Slow EMA: {latest_slow_ema:.5f}"
+                f"No cross signal for {symbol}. Fast EMA: {latest_fast_ema:.5f}, Slow EMA: {latest_slow_ema:.5f}",
             )
 
         # Execute trades based on signal and current position
         if signal == "buy":
             if not has_long_position:  # Only buy if not already long
                 logger.info(
-                    f"Attempting to BUY {trade_quantity} {symbol} at {current_price}"
+                    f"Attempting to BUY {trade_quantity} {symbol} at {current_price}",
                 )
                 await bot_instance.place_order(
                     category="linear",
@@ -162,12 +162,12 @@ async def ehlers_ma_cross_strategy(
                 )
             else:
                 logger.info(
-                    f"Already in a LONG position for {symbol}. No new buy order."
+                    f"Already in a LONG position for {symbol}. No new buy order.",
                 )
         elif signal == "sell":
             if not has_short_position:  # Only sell if not already short
                 logger.info(
-                    f"Attempting to SELL {trade_quantity} {symbol} at {current_price}"
+                    f"Attempting to SELL {trade_quantity} {symbol} at {current_price}",
                 )
                 await bot_instance.place_order(
                     category="linear",

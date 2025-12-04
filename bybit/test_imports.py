@@ -8,6 +8,6 @@ try:
     print(f"numpy version: {np.__version__}")
 except ImportError as e:
     print(
-        f"CRITICAL ERROR: Missing package '{e.name}'. Please install it with: pip install \"{e.name}\""
+        f"CRITICAL ERROR: Missing package '{e.name}'. Please install it with: pip install \"{e.name}\"",
     )
     sys.exit(1)

@@ -4,15 +4,13 @@ from typing import Any
 
 import pandas as pd
 from algobots_types import OrderBlock
-from color_codex import COLOR_CYAN
-from color_codex import COLOR_GREEN
-from color_codex import COLOR_RED
-from color_codex import COLOR_RESET
-from color_codex import COLOR_YELLOW
-from config import EHLERS_FISHER_SIGNAL_PERIOD
-from config import OB_TOLERANCE_PCT
-from config import PIVOT_TOLERANCE_PCT
-from config import SMA_PERIOD
+from color_codex import COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_RESET, COLOR_YELLOW
+from config import (
+    EHLERS_FISHER_SIGNAL_PERIOD,
+    OB_TOLERANCE_PCT,
+    PIVOT_TOLERANCE_PCT,
+    SMA_PERIOD,
+)
 from strategies.strategy_template import StrategyTemplate
 
 strategy_logger = logging.getLogger("stochrsi_fib_ob_strategy")
@@ -26,7 +24,7 @@ def _to_decimal(value: Any) -> Decimal:
         return Decimal(str(value))
     except Exception as e:
         strategy_logger.error(
-            f"{COLOR_RED}Failed to transmute '{value}' to Decimal: {e}{COLOR_RESET}"
+            f"{COLOR_RED}Failed to transmute '{value}' to Decimal: {e}{COLOR_RESET}",
         )
         return Decimal("0")
 
@@ -62,7 +60,7 @@ def _check_confluence(
 
         if ob_bottom == Decimal("0") or ob_top == Decimal("0") or ob_bottom > ob_top:
             strategy_logger.warning(
-                f"{COLOR_YELLOW}Order Block with invalid boundary detected: {ob}. Skipping.{COLOR_RESET}"
+                f"{COLOR_YELLOW}Order Block with invalid boundary detected: {ob}. Skipping.{COLOR_RESET}",
             )
             continue
 
@@ -111,11 +109,11 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
         pivot_resistance_levels = kwargs.get("pivot_resistance_levels")
 
         min_rows_needed = max(
-            SMA_PERIOD, stoch_k_period, stoch_d_period, EHLERS_FISHER_SIGNAL_PERIOD, 2
+            SMA_PERIOD, stoch_k_period, stoch_d_period, EHLERS_FISHER_SIGNAL_PERIOD, 2,
         )
         if df.empty or len(df) < min_rows_needed:
             self.logger.debug(
-                f"{COLOR_YELLOW}DataFrame too short or empty for signal generation. Required at least {min_rows_needed} rows. Skipping signal generation.{COLOR_RESET}"
+                f"{COLOR_YELLOW}DataFrame too short or empty for signal generation. Required at least {min_rows_needed} rows. Skipping signal generation.{COLOR_RESET}",
             )
             return signals
 
@@ -131,7 +129,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             self.logger.error(
-                f"{COLOR_RED}DataFrame is missing crucial columns for signal generation: {missing_cols}. Skipping signal generation.{COLOR_RESET}"
+                f"{COLOR_RED}DataFrame is missing crucial columns for signal generation: {missing_cols}. Skipping signal generation.{COLOR_RESET}",
             )
             return signals
 
@@ -183,7 +181,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
         if enable_fib_pivot_actions:
             if not pivot_support_levels and not pivot_resistance_levels:
                 self.logger.warning(
-                    f"{COLOR_YELLOW}Fib Pivot confirmation enabled, but no pivot levels calculated. Entry check may be impacted.{COLOR_RESET}"
+                    f"{COLOR_YELLOW}Fib Pivot confirmation enabled, but no pivot levels calculated. Entry check may be impacted.{COLOR_RESET}",
                 )
 
             if current_trend_is_up:
@@ -197,7 +195,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                         break
                 if not fib_long_confirm:
                     self.logger.debug(
-                        f"Buy signal considered, but price {latest_close:.2f} not near any Fib support level within {fib_entry_confirm_dec * 100:.3f}%. (Current: {pivot_support_levels})"
+                        f"Buy signal considered, but price {latest_close:.2f} not near any Fib support level within {fib_entry_confirm_dec * 100:.3f}%. (Current: {pivot_support_levels})",
                     )
 
             if current_trend_is_down:
@@ -211,7 +209,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                         break
                 if not fib_short_confirm:
                     self.logger.debug(
-                        f"Sell signal considered, but price {latest_close:.2f} not near any Fib resistance level within {fib_entry_confirm_dec * 100:.3f}%. (Current: {pivot_resistance_levels})"
+                        f"Sell signal considered, but price {latest_close:.2f} not near any Fib resistance level within {fib_entry_confirm_dec * 100:.3f}%. (Current: {pivot_resistance_levels})",
                     )
         else:
             fib_long_confirm = True
@@ -264,26 +262,26 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                                     "fib_confirm": fib_reason_part,
                                     "ehlers_confirm": f"Fisher {'crossover' if fisher_buy_signal else 'bias'} confirmed",
                                 },
-                            )
+                            ),
                         )
                         self.logger.info(
-                            f"{COLOR_GREEN}BUY Signal ({stoch_type_str}) at {latest_close:.2f}. {confluence_reason_buy}. {fib_reason_part}. Ehlers Fisher confirmed.{COLOR_RESET}"
+                            f"{COLOR_GREEN}BUY Signal ({stoch_type_str}) at {latest_close:.2f}. {confluence_reason_buy}. {fib_reason_part}. Ehlers Fisher confirmed.{COLOR_RESET}",
                         )
                     else:
                         self.logger.debug(
-                            f"Buy signal considered, but Ehlers Fisher not confirming (Fisher: {latest_ehlers_fisher:.2f}, Signal: {latest_ehlers_fisher_signal:.2f}, Prev Fisher: {prev_ehlers_fisher:.2f})."
+                            f"Buy signal considered, but Ehlers Fisher not confirming (Fisher: {latest_ehlers_fisher:.2f}, Signal: {latest_ehlers_fisher_signal:.2f}, Prev Fisher: {prev_ehlers_fisher:.2f}).",
                         )
                 else:
                     self.logger.debug(
-                        f"Buy signal considered, but StochRSI condition not met (K: {latest_stoch_k:.2f}, D: {latest_stoch_d:.2f})."
+                        f"Buy signal considered, but StochRSI condition not met (K: {latest_stoch_k:.2f}, D: {latest_stoch_d:.2f}).",
                     )
             else:
                 self.logger.debug(
-                    f"Buy signal considered, but no confluence found: {confluence_reason_buy}"
+                    f"Buy signal considered, but no confluence found: {confluence_reason_buy}",
                 )
         else:
             self.logger.debug(
-                f"Buy signal skipped: Trend Up={current_trend_is_up}, FibConfirm={fib_long_confirm}."
+                f"Buy signal skipped: Trend Up={current_trend_is_up}, FibConfirm={fib_long_confirm}.",
             )
 
         if current_trend_is_down and fib_short_confirm:
@@ -326,26 +324,26 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                                     "fib_confirm": fib_reason_part,
                                     "ehlers_confirm": f"Fisher {'crossover' if fisher_sell_signal else 'bias'} confirmed",
                                 },
-                            )
+                            ),
                         )
                         self.logger.info(
-                            f"{COLOR_RED}SELL Signal ({stoch_type_str}) at {latest_close:.2f}. {confluence_reason_sell}. {fib_reason_part}. Ehlers Fisher confirmed.{COLOR_RESET}"
+                            f"{COLOR_RED}SELL Signal ({stoch_type_str}) at {latest_close:.2f}. {confluence_reason_sell}. {fib_reason_part}. Ehlers Fisher confirmed.{COLOR_RESET}",
                         )
                     else:
                         self.logger.debug(
-                            f"Sell signal considered, but Ehlers Fisher not confirming (Fisher: {latest_ehlers_fisher:.2f}, Signal: {latest_ehlers_fisher_signal:.2f}, Prev Fisher: {prev_ehlers_fisher:.2f})."
+                            f"Sell signal considered, but Ehlers Fisher not confirming (Fisher: {latest_ehlers_fisher:.2f}, Signal: {latest_ehlers_fisher_signal:.2f}, Prev Fisher: {prev_ehlers_fisher:.2f}).",
                         )
                 else:
                     self.logger.debug(
-                        f"Sell signal considered, but StochRSI condition not met (K: {latest_stoch_k:.2f}, D: {latest_stoch_d:.2f})."
+                        f"Sell signal considered, but StochRSI condition not met (K: {latest_stoch_k:.2f}, D: {latest_stoch_d:.2f}).",
                     )
             else:
                 self.logger.debug(
-                    f"Sell signal considered, but no confluence found: {confluence_reason_sell}"
+                    f"Sell signal considered, but no confluence found: {confluence_reason_sell}",
                 )
         else:
             self.logger.debug(
-                f"Sell signal skipped: Trend Down={current_trend_is_down}, FibConfirm={fib_short_confirm}."
+                f"Sell signal skipped: Trend Down={current_trend_is_down}, FibConfirm={fib_short_confirm}.",
             )
 
         return signals
@@ -372,11 +370,11 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
         pivot_resistance_levels = kwargs.get("pivot_resistance_levels")
 
         min_rows_needed = max(
-            SMA_PERIOD, stoch_k_period, stoch_d_period, EHLERS_FISHER_SIGNAL_PERIOD, 2
+            SMA_PERIOD, stoch_k_period, stoch_d_period, EHLERS_FISHER_SIGNAL_PERIOD, 2,
         )
         if df.empty or len(df) < min_rows_needed:
             self.logger.warning(
-                f"{COLOR_YELLOW}DataFrame too short or empty for exit signal generation. Required at least {min_rows_needed} rows.{COLOR_RESET}"
+                f"{COLOR_YELLOW}DataFrame too short or empty for exit signal generation. Required at least {min_rows_needed} rows.{COLOR_RESET}",
             )
             return exit_signals
 
@@ -392,7 +390,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             self.logger.error(
-                f"{COLOR_RED}DataFrame is missing crucial columns for exit signal generation: {missing_cols}{COLOR_RESET}"
+                f"{COLOR_RED}DataFrame is missing crucial columns for exit signal generation: {missing_cols}{COLOR_RESET}",
             )
             return exit_signals
 
@@ -442,7 +440,7 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
         if enable_fib_pivot_actions:
             if not pivot_support_levels and not pivot_resistance_levels:
                 self.logger.warning(
-                    f"{COLOR_YELLOW}Fib Pivot exit check enabled, but no pivot levels calculated. Exit check may be impacted.{COLOR_RESET}"
+                    f"{COLOR_YELLOW}Fib Pivot exit check enabled, but no pivot levels calculated. Exit check may be impacted.{COLOR_RESET}",
                 )
 
             if current_position_side == "BUY":
@@ -455,11 +453,11 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                         if fib_exit_action == "exit":
                             fib_exit_triggered = True
                             self.logger.info(
-                                f"{COLOR_YELLOW}Fibonacci Exit Triggered (BUY position): {fib_exit_reason}{COLOR_RESET}"
+                                f"{COLOR_YELLOW}Fibonacci Exit Triggered (BUY position): {fib_exit_reason}{COLOR_RESET}",
                             )
                         else:
                             self.logger.warning(
-                                f"{COLOR_YELLOW}Fibonacci Exit Warning (BUY position): {fib_exit_reason}{COLOR_RESET}"
+                                f"{COLOR_YELLOW}Fibonacci Exit Warning (BUY position): {fib_exit_reason}{COLOR_RESET}",
                             )
                         break
             elif current_position_side == "SELL":
@@ -472,11 +470,11 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                         if fib_exit_action == "exit":
                             fib_exit_triggered = True
                             self.logger.info(
-                                f"{COLOR_YELLOW}Fibonacci Exit Triggered (SELL position): {fib_exit_reason}{COLOR_RESET}"
+                                f"{COLOR_YELLOW}Fibonacci Exit Triggered (SELL position): {fib_exit_reason}{COLOR_RESET}",
                             )
                         else:
                             self.logger.warning(
-                                f"{COLOR_YELLOW}Fibonacci Exit Warning (SELL position): {fib_exit_reason}{COLOR_RESET}"
+                                f"{COLOR_YELLOW}Fibonacci Exit Warning (SELL position): {fib_exit_reason}{COLOR_RESET}",
                             )
                         break
 
@@ -537,10 +535,10 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                             "confluence_detail": confluence_reason_exit,
                             "fib_trigger_detail": fib_exit_reason,
                         },
-                    )
+                    ),
                 )
                 self.logger.info(
-                    f"{COLOR_CYAN}EXIT BUY Signal at {latest_close:.2f}. Reason: {exit_reason_str}{COLOR_RESET}"
+                    f"{COLOR_CYAN}EXIT BUY Signal at {latest_close:.2f}. Reason: {exit_reason_str}{COLOR_RESET}",
                 )
 
         elif current_position_side == "SELL":
@@ -600,14 +598,14 @@ class StochRSI_Fib_OB_Strategy(StrategyTemplate):
                             "confluence_detail": confluence_reason_exit,
                             "fib_trigger_detail": fib_exit_reason,
                         },
-                    )
+                    ),
                 )
                 self.logger.info(
-                    f"{COLOR_CYAN}EXIT SELL Signal at {latest_close:.2f}. Reason: {exit_reason_str}{COLOR_RESET}"
+                    f"{COLOR_CYAN}EXIT SELL Signal at {latest_close:.2f}. Reason: {exit_reason_str}{COLOR_RESET}",
                 )
         else:
             self.logger.debug(
-                f"No active position to generate exit signals for, or unknown position side: {current_position_side}."
+                f"No active position to generate exit signals for, or unknown position side: {current_position_side}.",
             )
 
     return exit_signals

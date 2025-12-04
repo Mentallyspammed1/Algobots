@@ -1,30 +1,32 @@
+import json
+import logging
+import os
+import random
+import re
+import signal
 import sys
 import time
-import json
-import re
-import logging
-import signal
-import os
-import requests
-import random
 import uuid
-import numpy as np
-import pandas as pd
-import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
+from collections import deque
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_DOWN, getcontext
+from decimal import ROUND_DOWN, Decimal, getcontext
+from functools import wraps
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Dict, Literal, Optional, List, Any, Callable, TypeVar, Deque
-from collections import deque
+from typing import Any, Literal, TypeVar
+
+import google.generativeai as genai
+import numpy as np
+import pandas as pd
+import requests
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
+from google.api_core import exceptions as google_exceptions
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from colorama import Fore, Style, init
-from functools import wraps
 
 # --- Global Setup ---
 getcontext().prec = 28
@@ -50,7 +52,7 @@ def setup_logger(name: str) -> logging.Logger:
     logger.propagate = False
 
     if not logger.handlers:
-        fmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
+        fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S")
 
         ch = logging.StreamHandler(sys.stdout)
         ch.setFormatter(fmt)
@@ -94,8 +96,8 @@ class MarketData:
     klines: pd.DataFrame
     timestamp: float
     ob_imbalance: float = 0.0
-    pivots: Dict[str, float] = field(default_factory=dict)
-    sr_levels: Dict[str, float] = field(default_factory=dict)
+    pivots: dict[str, float] = field(default_factory=dict)
+    sr_levels: dict[str, float] = field(default_factory=dict)
 
     def __repr__(self):
         return f"MarketData(symbol='{self.symbol}', price={self.price}, klines={len(self.klines)}, ob={self.ob_imbalance:.2f})"
@@ -116,7 +118,7 @@ class TradeSignal:
         if not isinstance(self.entry, Decimal): self.entry = Decimal(str(self.entry))
         if not isinstance(self.sl, Decimal): self.sl = Decimal(str(self.sl))
         if not isinstance(self.tp, Decimal): self.tp = Decimal(str(self.tp))
-        
+
         if self.action not in ["BUY", "SELL", "HOLD"]:
             self.action = "HOLD"
 
@@ -134,7 +136,7 @@ class Position:
     take_profit: Decimal
     entry_time: datetime
     open_price: Decimal = field(init=False)
-    close_price: Optional[Decimal] = field(default=None)
+    close_price: Decimal | None = field(default=None)
     pnl: Decimal = field(default=Decimal(0))
     status: Literal["OPEN", "CLOSED"] = "OPEN"
     last_update_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -147,33 +149,33 @@ class Position:
 
 # --- Configuration Service ---
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 class Config:
     DEFAULTS = {
         "symbol": "BTCUSDT", "interval": "15", "loop_delay": 30,
         "gemini_model": "gemini-1.5-flash-latest", "min_confidence": 0.60,
         "paper_trading": {
-            "initial_balance": 1000.0, "risk_per_trade": 1.0, "fee_rate": 0.00055, "slippage": 0.0001
+            "initial_balance": 1000.0, "risk_per_trade": 1.0, "fee_rate": 0.00055, "slippage": 0.0001,
         },
         "indicators": {
             "rsi_period": 14, "stoch_period": 14, "stoch_k": 3, "stoch_d": 3,
-            "bb_period": 20, "bb_std": 2.0, "ehlers_period": 10, "ehlers_mult": 3.0, "sr_lookback": 20
-        }
+            "bb_period": 20, "bb_std": 2.0, "ehlers_period": 10, "ehlers_mult": 3.0, "sr_lookback": 20,
+        },
     }
 
     def __init__(self):
         self.data = self._load_config()
         self._validate()
 
-    def _load_config(self) -> Dict:
+    def _load_config(self) -> dict:
         if not Path(CONFIG_FILE).exists():
-            logger.info(f"Config file not found. Creating with defaults.")
+            logger.info("Config file not found. Creating with defaults.")
             self._save_defaults()
             return self.DEFAULTS.copy()
 
         try:
-            with open(CONFIG_FILE, 'r') as f:
+            with open(CONFIG_FILE) as f:
                 user_cfg = json.load(f)
             updated_cfg = self._deep_update(self.DEFAULTS.copy(), user_cfg)
             logger.info(f"Configuration loaded successfully from {CONFIG_FILE}")
@@ -184,13 +186,13 @@ class Config:
 
     def _save_defaults(self):
         try:
-            with open(CONFIG_FILE, 'w') as f:
+            with open(CONFIG_FILE, "w") as f:
                 json.dump(self.DEFAULTS, f, indent=4)
             logger.info(f"Default configuration saved to {CONFIG_FILE}")
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Failed to write config: {e}")
 
-    def _deep_update(self, target: Dict, source: Dict) -> Dict:
+    def _deep_update(self, target: dict, source: dict) -> dict:
         for k, v in source.items():
             if isinstance(v, dict) and k in target and isinstance(target[k], dict):
                 self._deep_update(target[k], v)
@@ -212,20 +214,20 @@ class Config:
             logger.critical(f"Failed to configure or validate Gemini API: {e}")
             sys.exit(1)
 
-        if not isinstance(self.data['loop_delay'], int) or self.data['loop_delay'] <= 0:
+        if not isinstance(self.data["loop_delay"], int) or self.data["loop_delay"] <= 0:
             logger.warning(f"Invalid loop_delay ({self.data['loop_delay']}). Resetting to 30.")
-            self.data['loop_delay'] = 30
-        
-        risk = self.data['paper_trading']['risk_per_trade']
+            self.data["loop_delay"] = 30
+
+        risk = self.data["paper_trading"]["risk_per_trade"]
         if not (0 < risk <= 100):
             logger.warning(f"Invalid risk_per_trade ({risk}%). Resetting to 1.0%.")
-            self.data['paper_trading']['risk_per_trade'] = 1.0
+            self.data["paper_trading"]["risk_per_trade"] = 1.0
 
-        if not (0 <= self.data['min_confidence'] <= 1):
+        if not (0 <= self.data["min_confidence"] <= 1):
              logger.warning(f"Invalid min_confidence ({self.data['min_confidence']}). Resetting to 0.6.")
-             self.data['min_confidence'] = 0.6
+             self.data["min_confidence"] = 0.6
 
-    def get(self, key: str, default: Optional[T] = None) -> T:
+    def get(self, key: str, default: T | None = None) -> T:
         return self.data.get(key, default)
 
 # --- Market Data Service ---
@@ -242,9 +244,9 @@ class MarketDataProvider:
         s = requests.Session()
         retries = Retry(
             total=5, backoff_factor=0.7, status_forcelist=[500, 502, 503, 504, 429],
-            allowed_methods=["HEAD", "GET", "OPTIONS"]
+            allowed_methods=["HEAD", "GET", "OPTIONS"],
         )
-        s.mount('https://', HTTPAdapter(max_retries=retries))
+        s.mount("https://", HTTPAdapter(max_retries=retries))
         s.headers.update({"User-Agent": user_agent, "Content-Type": "application/json"})
         return s
 
@@ -253,11 +255,11 @@ class MarketDataProvider:
         resp = self.session.get(
             f"{self.BASE_URL}/v5/market/tickers",
             params={"category": "linear", "symbol": symbol},
-            timeout=10
+            timeout=10,
         )
         resp.raise_for_status()
         data = resp.json()
-        price = data['result']['list'][0]['lastPrice']
+        price = data["result"]["list"][0]["lastPrice"]
         return Decimal(str(price))
 
     @retry_with_backoff(retries=5, backoff_in_seconds=2)
@@ -266,15 +268,15 @@ class MarketDataProvider:
         resp = self.session.get(
             f"{self.BASE_URL}/v5/market/kline",
             params={"category": "linear", "symbol": symbol, "interval": interval, "limit": limit},
-            timeout=10
+            timeout=10,
         )
         resp.raise_for_status()
-        raw = resp.json()['result']['list']
+        raw = resp.json()["result"]["list"]
         if not raw: return pd.DataFrame()
 
-        df = pd.DataFrame(raw, columns=['startTime', 'open', 'high', 'low', 'close', 'volume', 'turnover'])
-        cols = ['open', 'high', 'low', 'close', 'volume', 'turnover']
-        df[cols] = df[cols].apply(pd.to_numeric, errors='coerce')
+        df = pd.DataFrame(raw, columns=["startTime", "open", "high", "low", "close", "volume", "turnover"])
+        cols = ["open", "high", "low", "close", "volume", "turnover"]
+        df[cols] = df[cols].apply(pd.to_numeric, errors="coerce")
 
         if df[cols].isnull().any().any():
             logger.warning(f"NaN values found in kline data for {symbol}, dropping rows.")
@@ -282,19 +284,18 @@ class MarketDataProvider:
 
         if df.empty: return pd.DataFrame()
 
-        df['startTime'] = pd.to_datetime(pd.to_numeric(df['startTime']), unit='ms')
-        return df.sort_values('startTime').set_index('startTime')
+        df["startTime"] = pd.to_datetime(pd.to_numeric(df["startTime"]), unit="ms")
+        return df.sort_values("startTime").set_index("startTime")
 
     @retry_with_backoff(retries=3, backoff_in_seconds=1)
-    def _get_daily_candle(self, symbol: str) -> Optional[Dict]:
+    def _get_daily_candle(self, symbol: str) -> dict | None:
         try:
             df = self._get_klines(symbol, "D", limit=2)
             if len(df) >= 2:
                 yesterday = df.iloc[-2]
-                return {'high': float(yesterday['high']), 'low': float(yesterday['low']), 'close': float(yesterday['close'])}
-            else:
-                logger.warning(f"Not enough daily data for pivots ({len(df)} bars).")
-                return None
+                return {"high": float(yesterday["high"]), "low": float(yesterday["low"]), "close": float(yesterday["close"])}
+            logger.warning(f"Not enough daily data for pivots ({len(df)} bars).")
+            return None
         except Exception as e:
             logger.warning(f"Failed to fetch daily candle for pivots: {e}")
             return None
@@ -304,9 +305,9 @@ class MarketDataProvider:
         try:
             resp = self.session.get(f"{self.BASE_URL}/v5/market/orderbook", params={"category": "linear", "symbol": symbol, "limit": 50}, timeout=5)
             resp.raise_for_status()
-            data = resp.json()['result']
-            bids = np.array(data.get('b', []), dtype=float)
-            asks = np.array(data.get('a', []), dtype=float)
+            data = resp.json()["result"]
+            bids = np.array(data.get("b", []), dtype=float)
+            asks = np.array(data.get("a", []), dtype=float)
 
             if bids.size == 0 or asks.size == 0: return 0.0
 
@@ -318,7 +319,7 @@ class MarketDataProvider:
             logger.warning(f"Failed to get orderbook imbalance: {e}")
             return 0.0
 
-    def fetch_all(self, symbol: str, interval: str) -> Optional[MarketData]:
+    def fetch_all(self, symbol: str, interval: str) -> MarketData | None:
         f_price = self.executor.submit(self._get_price, symbol)
         f_klines = self.executor.submit(self._get_klines, symbol, interval)
         f_daily = self.executor.submit(self._get_daily_candle, symbol)
@@ -340,7 +341,7 @@ class MarketDataProvider:
         pivots = {}
         if daily_data:
             try:
-                h, l, c = Decimal(str(daily_data['high'])), Decimal(str(daily_data['low'])), Decimal(str(daily_data['close']))
+                h, l, c = Decimal(str(daily_data["high"])), Decimal(str(daily_data["low"])), Decimal(str(daily_data["close"]))
                 p = (h + l + c) / 3
                 range_hl = h - l
                 if range_hl > 0:
@@ -352,58 +353,58 @@ class MarketDataProvider:
 
         return MarketData(
             symbol=symbol, price=price, klines=klines, ob_imbalance=ob,
-            pivots=pivots, timestamp=time.time()
+            pivots=pivots, timestamp=time.time(),
         )
 
 # --- Analysis Service ---
 
 class TechnicalAnalysis:
     @staticmethod
-    def calculate(df: pd.DataFrame, cfg: Dict) -> pd.DataFrame:
-        max_period = max(cfg.get('bb_period', 20), cfg.get('rsi_period', 14), cfg.get('stoch_period', 14), cfg.get('sr_lookback', 20)) + 5
+    def calculate(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+        max_period = max(cfg.get("bb_period", 20), cfg.get("rsi_period", 14), cfg.get("stoch_period", 14), cfg.get("sr_lookback", 20)) + 5
         if df.empty or len(df) < max_period:
             logger.warning(f"Not enough data for full indicator calculation. Need {max_period}, have {len(df)}.")
             return df
 
         df = df.copy()
-        close = df['close']; high = df['high']; low = df['low']
+        close = df["close"]; high = df["high"]; low = df["low"]
 
         # 1. RSI & Stochastics
-        rsi_period = cfg.get('rsi_period', 14)
-        stoch_period = cfg.get('stoch_period', 14)
-        stoch_k_smooth = cfg.get('stoch_k', 3)
-        stoch_d_smooth = cfg.get('stoch_d', 3)
+        rsi_period = cfg.get("rsi_period", 14)
+        stoch_period = cfg.get("stoch_period", 14)
+        stoch_k_smooth = cfg.get("stoch_k", 3)
+        stoch_d_smooth = cfg.get("stoch_d", 3)
 
         delta = close.diff()
         gain = (delta.where(delta > 0, 0)).ewm(alpha=1/rsi_period, adjust=False).mean()
         loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/rsi_period, adjust=False).mean()
         rs = gain / loss
-        df['RSI'] = 100 - (100 / (1 + rs))
+        df["RSI"] = 100 - (100 / (1 + rs))
 
-        rsi_min = df['RSI'].rolling(stoch_period).min()
-        rsi_max = df['RSI'].rolling(stoch_period).max()
+        rsi_min = df["RSI"].rolling(stoch_period).min()
+        rsi_max = df["RSI"].rolling(stoch_period).max()
         range_rsi = rsi_max - rsi_min
-        df['Stoch_K'] = np.where(range_rsi == 0, 0, ((df['RSI'] - rsi_min) / range_rsi) * 100)
-        df['Stoch_D'] = df['Stoch_K'].rolling(stoch_d_smooth).mean()
+        df["Stoch_K"] = np.where(range_rsi == 0, 0, ((df["RSI"] - rsi_min) / range_rsi) * 100)
+        df["Stoch_D"] = df["Stoch_K"].rolling(stoch_d_smooth).mean()
 
         # 2. Bollinger Bands & MACD
-        bb_period = cfg.get('bb_period', 20); bb_std = cfg.get('bb_std', 2.0)
+        bb_period = cfg.get("bb_period", 20); bb_std = cfg.get("bb_std", 2.0)
         sma = close.rolling(bb_period).mean()
         std = close.rolling(bb_period).std()
-        df['BB_Upper'] = sma + (std * bb_std)
-        df['BB_Lower'] = sma - (std * bb_std)
+        df["BB_Upper"] = sma + (std * bb_std)
+        df["BB_Lower"] = sma - (std * bb_std)
 
         ema12 = close.ewm(span=12, adjust=False).mean()
         ema26 = close.ewm(span=26, adjust=False).mean()
-        df['MACD'] = ema12 - ema26
-        df['MACD_Sig'] = df['MACD'].ewm(span=9, adjust=False).mean()
+        df["MACD"] = ema12 - ema26
+        df["MACD_Sig"] = df["MACD"].ewm(span=9, adjust=False).mean()
 
         # 3. ATR & ADX
         tr1 = high - low
         tr2 = (high - close.shift()).abs()
         tr3 = (low - close.shift()).abs()
         tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        df['ATR'] = tr.ewm(alpha=1/14, adjust=False).mean()
+        df["ATR"] = tr.ewm(alpha=1/14, adjust=False).mean()
 
         plus_dm_raw = high.diff(); minus_dm_raw = low.diff()
         plus_dm = pd.Series(0.0, index=df.index)
@@ -422,26 +423,26 @@ class TechnicalAnalysis:
 
         di_diff_sum = plus_di + minus_di
         dx = np.where(di_diff_sum == 0, 0, (abs(plus_di - minus_di) / di_diff_sum) * 100)
-        df['ADX'] = pd.Series(dx, index=df.index).ewm(alpha=1/atr_ema_period, adjust=False).mean()
+        df["ADX"] = pd.Series(dx, index=df.index).ewm(alpha=1/atr_ema_period, adjust=False).mean()
 
         # 4. Ehlers Indicator (SuperSmoother + SS Trend Filter)
-        ehlers_period = cfg.get('ehlers_period', 10); ehlers_mult = cfg.get('ehlers_mult', 3.0)
+        ehlers_period = cfg.get("ehlers_period", 10); ehlers_mult = cfg.get("ehlers_mult", 3.0)
         if ehlers_period > 0:
             a1 = np.exp(-np.pi / ehlers_period)
             b1 = 2 * a1 * np.cos(np.pi / ehlers_period)
             c2, c3, c1 = b1, -a1 * a1, 1 - b1 + a1 * a1
-            
+
             filt = np.zeros_like(close.values, dtype=float)
-            ss_tr = np.zeros_like(df['ATR'].values, dtype=float)
+            ss_tr = np.zeros_like(df["ATR"].values, dtype=float)
             trend = np.zeros_like(close.values, dtype=int)
 
             if len(close.values) > 2:
                 filt[0:2] = close.values[0:2]
-                ss_tr[0:2] = df['ATR'].values[0:2]
+                ss_tr[0:2] = df["ATR"].values[0:2]
 
             for i in range(2, len(close.values)):
                 filt[i] = c1 * (close.values[i] + close.values[i-1]) / 2 + c2 * filt[i-1] + c3 * filt[i-2]
-                ss_tr[i] = c1 * (df['ATR'].values[i] + df['ATR'].values[i-1]) / 2 + c2 * ss_tr[i-1] + c3 * ss_tr[i-2]
+                ss_tr[i] = c1 * (df["ATR"].values[i] + df["ATR"].values[i-1]) / 2 + c2 * ss_tr[i-1] + c3 * ss_tr[i-2]
 
             upper = filt + ehlers_mult * ss_tr
             lower = filt - ehlers_mult * ss_tr
@@ -456,43 +457,42 @@ class TechnicalAnalysis:
                         trend[i] = -1; st[i] = upper[i]
                     else:
                         trend[i] = 1; st[i] = max(lower[i], prev_st)
+                elif close.values[i] > prev_st:
+                    trend[i] = 1; st[i] = lower[i]
                 else:
-                    if close.values[i] > prev_st:
-                        trend[i] = 1; st[i] = lower[i]
-                    else:
-                        trend[i] = -1; st[i] = min(upper[i], prev_st)
+                    trend[i] = -1; st[i] = min(upper[i], prev_st)
 
-            df['Ehlers_Trend'] = trend
-            df['SS_Filter'] = filt
+            df["Ehlers_Trend"] = trend
+            df["SS_Filter"] = filt
         else:
-            df['Ehlers_Trend'] = 0
-            df['SS_Filter'] = close.values
+            df["Ehlers_Trend"] = 0
+            df["SS_Filter"] = close.values
             logger.warning("Ehlers period is invalid, skipping Ehlers indicator.")
 
         # 5. Dynamic S/R
-        sr_lookback = cfg.get('sr_lookback', 20)
+        sr_lookback = cfg.get("sr_lookback", 20)
         if len(df) >= sr_lookback:
-            df['Swing_High'] = df['high'].rolling(window=sr_lookback).max()
-            df['Swing_Low'] = df['low'].rolling(window=sr_lookback).min()
+            df["Swing_High"] = df["high"].rolling(window=sr_lookback).max()
+            df["Swing_Low"] = df["low"].rolling(window=sr_lookback).min()
         else:
-            df['Swing_High'] = np.nan
-            df['Swing_Low'] = np.nan
-        
+            df["Swing_High"] = np.nan
+            df["Swing_Low"] = np.nan
+
         # Robust non-finite value cleaning
         df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df.fillna(0, inplace=True) 
-        
+        df.fillna(0, inplace=True)
+
         return df
 
     @staticmethod
-    def get_nearest_sr(df: pd.DataFrame, current_price: float) -> Dict[str, float]:
+    def get_nearest_sr(df: pd.DataFrame, current_price: float) -> dict[str, float]:
         if df.empty: return {}
         last = df.iloc[-1]
         sr_levels = {}
-        if 'Swing_High' in last and last['Swing_High'] != 0:
-            sr_levels["Dynamic_Res"] = float(last['Swing_High'])
-        if 'Swing_Low' in last and last['Swing_Low'] != 0:
-             sr_levels["Dynamic_Sup"] = float(last['Swing_Low'])
+        if "Swing_High" in last and last["Swing_High"] != 0:
+            sr_levels["Dynamic_Res"] = float(last["Swing_High"])
+        if "Swing_Low" in last and last["Swing_Low"] != 0:
+             sr_levels["Dynamic_Sup"] = float(last["Swing_Low"])
         return sr_levels
 
 # --- AI Service ---
@@ -504,7 +504,7 @@ class GeminiService:
         except Exception as e:
             logger.critical(f"Failed to initialize Gemini model '{model_name}': {e}")
             sys.exit(1)
-        self.request_timestamps: Deque[float] = deque()
+        self.request_timestamps: deque[float] = deque()
         self.rate_limit_count = 30
         self.rate_limit_window = 60
         self.min_conf = min_confidence
@@ -537,7 +537,7 @@ class GeminiService:
                     prompt,
                     generation_config=generation_config,
                     safety_settings=[{"category": cat, "threshold": "BLOCK_NONE"} for cat in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]],
-                    request_options={"timeout": 30}
+                    request_options={"timeout": 30},
                 )
 
                 if not response.candidates:
@@ -546,7 +546,7 @@ class GeminiService:
 
                 return self._parse_response(response.text, market)
 
-            except google_exceptions.ResourceExhausted as e:
+            except google_exceptions.ResourceExhausted:
                 wait_time = 20 * (retries + 1)
                 logger.warning(f"Quota exceeded. Sleeping {wait_time}s before retry {retries+1}/{max_retries}...")
                 time.sleep(wait_time); retries += 1
@@ -565,7 +565,7 @@ class GeminiService:
     def _build_prompt(self, market: MarketData) -> str:
         last = market.klines.iloc[-1]
         prev = market.klines.iloc[-2] if len(market.klines) > 1 else market.klines.iloc[-1]
-        pct_change = ((last['close'] - prev['close']) / prev['close']) * 100 if prev['close'] != 0 else 0
+        pct_change = ((last["close"] - prev["close"]) / prev["close"]) * 100 if prev["close"] != 0 else 0
 
         key_levels = {**market.pivots, **market.sr_levels}
         key_levels = {k: v for k, v in key_levels.items() if v and np.isfinite(v)}
@@ -586,19 +586,19 @@ class GeminiService:
             "symbol": market.symbol,
             "current_price": clean_val(market.price),
             "price_change_24h_pct": clean_val(pct_change),
-            "rsi": clean_val(last.get('RSI')),
-            "stoch_k": clean_val(last.get('Stoch_K')),
-            "stoch_d": clean_val(last.get('Stoch_D')),
-            "adx": clean_val(last.get('ADX')),
-            "macd_val": clean_val(last.get('MACD')),
-            "macd_signal": clean_val(last.get('MACD_Sig')),
-            "bb_upper": clean_val(last.get('BB_Upper')),
-            "bb_lower": clean_val(last.get('BB_Lower')),
-            "atr": clean_val(last.get('ATR')),
-            "trend_ehlers": "BULLISH" if last.get('Ehlers_Trend') == 1 else "BEARISH" if last.get('Ehlers_Trend') == -1 else "UNKNOWN",
-            "ss_filter": clean_val(last.get('SS_Filter')),
+            "rsi": clean_val(last.get("RSI")),
+            "stoch_k": clean_val(last.get("Stoch_K")),
+            "stoch_d": clean_val(last.get("Stoch_D")),
+            "adx": clean_val(last.get("ADX")),
+            "macd_val": clean_val(last.get("MACD")),
+            "macd_signal": clean_val(last.get("MACD_Sig")),
+            "bb_upper": clean_val(last.get("BB_Upper")),
+            "bb_lower": clean_val(last.get("BB_Lower")),
+            "atr": clean_val(last.get("ATR")),
+            "trend_ehlers": "BULLISH" if last.get("Ehlers_Trend") == 1 else "BEARISH" if last.get("Ehlers_Trend") == -1 else "UNKNOWN",
+            "ss_filter": clean_val(last.get("SS_Filter")),
             "ob_imbalance": round(market.ob_imbalance, 3),
-            "key_levels": {k: round(float(v), 2) for k, v in key_levels.items() if np.isfinite(v)}
+            "key_levels": {k: round(float(v), 2) for k, v in key_levels.items() if np.isfinite(v)},
         }
 
         bb_pos = "INSIDE"
@@ -651,32 +651,32 @@ class GeminiService:
             if not all(key in data for key in required_keys):
                 raise ValueError("Missing required keys in AI JSON response.")
 
-            action = data.get('action', 'HOLD').upper()
-            confidence = float(data.get('confidence', 0.0))
-            
+            action = data.get("action", "HOLD").upper()
+            confidence = float(data.get("confidence", 0.0))
+
             if action in ["BUY", "SELL"] and confidence < self.min_conf:
                 return self._fallback(market, f"AI Confidence ({confidence:.2f}) < Min ({self.min_conf:.2f})")
 
             if action not in ["BUY", "SELL"]:
                 return self._fallback(market, "AI returned HOLD")
-            
-            entry = Decimal(str(data.get('entry'))); sl = Decimal(str(data.get('sl'))); tp = Decimal(str(data.get('tp')))
+
+            entry = Decimal(str(data.get("entry"))); sl = Decimal(str(data.get("sl"))); tp = Decimal(str(data.get("tp")))
             if entry <= 0 or sl <= 0 or tp <= 0:
                  logger.warning(f"Invalid price in AI response for {market.symbol}. Falling back.")
                  return self._fallback(market, "Invalid Prices from AI")
 
             # Adjust SL/TP using ATR if they are illogical relative to entry
-            last_atr = Decimal(str(market.klines.iloc[-1]['ATR'])) if not market.klines.empty else Decimal("0.001")
-            
+            last_atr = Decimal(str(market.klines.iloc[-1]["ATR"])) if not market.klines.empty else Decimal("0.001")
+
             if action == "BUY":
                 if sl >= entry: sl = entry - (last_atr * Decimal("1.5"))
                 if tp <= entry: tp = entry + (last_atr * Decimal("2.0"))
             elif action == "SELL":
                 if sl <= entry: sl = entry + (last_atr * Decimal("1.5"))
                 if tp >= entry: tp = entry - (last_atr * Decimal("2.0"))
-            
+
             confidence = max(self.min_conf, min(confidence, 1.0))
-            return TradeSignal(action=action, entry=entry, sl=sl, tp=tp, confidence=confidence, source="AI", reason=data.get('reason', 'AI Analysis'))
+            return TradeSignal(action=action, entry=entry, sl=sl, tp=tp, confidence=confidence, source="AI", reason=data.get("reason", "AI Analysis"))
 
         except Exception as e:
             logger.error(f"Error parsing AI response: {e}")
@@ -687,15 +687,15 @@ class GeminiService:
              return TradeSignal(action="HOLD", entry=Decimal(0), sl=Decimal(0), tp=Decimal(0), confidence=0.0, source="TECHNICAL_FALLBACK", reason=f"No klines: {reason}")
 
         last = market.klines.iloc[-1]
-        trend = last.get('Ehlers_Trend', 0)
-        rsi = last.get('RSI', 50)
-        stoch_k = last.get('Stoch_K', 50)
-        adx = last.get('ADX', 0)
-        atr = Decimal(str(last.get('ATR', 0.001)))
-        
+        trend = last.get("Ehlers_Trend", 0)
+        rsi = last.get("RSI", 50)
+        stoch_k = last.get("Stoch_K", 50)
+        adx = last.get("ADX", 0)
+        atr = Decimal(str(last.get("ATR", 0.001)))
+
         action, confidence, entry = "HOLD", 0.0, market.price
         sl, tp = Decimal(0), Decimal(0)
-        
+
         STRONG_TREND_THRESHOLD = 25; RSI_OVERSOLD_THRESHOLD = 30; RSI_OVERBOUGHT_THRESHOLD = 70
         STOCH_K_LOW_THRESHOLD = 20; STOCH_K_HIGH_THRESHOLD = 80
         FALLBACK_CONFIDENCE = 0.65
@@ -703,13 +703,13 @@ class GeminiService:
         if trend == 1 and adx > STRONG_TREND_THRESHOLD and RSI_OVERSOLD_THRESHOLD < rsi < RSI_OVERBOUGHT_THRESHOLD and stoch_k < STOCH_K_HIGH_THRESHOLD:
             action = "BUY"
             confidence = FALLBACK_CONFIDENCE
-            sl = max(last.get('Swing_Low', entry - atr*1.5), entry - atr*1.5)
+            sl = max(last.get("Swing_Low", entry - atr*1.5), entry - atr*1.5)
             tp = entry + atr*2.0
             reason = f"Bullish Trend, RSI/Stoch OK, ADX>={STRONG_TREND_THRESHOLD}"
         elif trend == -1 and adx > STRONG_TREND_THRESHOLD and RSI_OVERSOLD_THRESHOLD < rsi < RSI_OVERBOUGHT_THRESHOLD and stoch_k > STOCH_K_LOW_THRESHOLD:
             action = "SELL"
             confidence = FALLBACK_CONFIDENCE
-            sl = min(last.get('Swing_High', entry + atr*1.5), entry + atr*1.5)
+            sl = min(last.get("Swing_High", entry + atr*1.5), entry + atr*1.5)
             tp = entry - atr*2.0
             reason = f"Bearish Trend, RSI/Stoch OK, ADX>={STRONG_TREND_THRESHOLD}"
         elif trend == 0 and adx < STRONG_TREND_THRESHOLD:
@@ -739,19 +739,19 @@ class ExecutionEngine:
     def __init__(self, config: Config):
         self.cfg = config.get("paper_trading")
         self.min_conf = Decimal(str(config.get("min_confidence", 0.6)))
-        self.balance = Decimal(str(self.cfg['initial_balance']))
-        self.positions: Dict[str, Position] = {}
-        self.history: List[Dict] = []
-        self.slippage = Decimal(str(self.cfg['slippage']))
-        self.fee_rate = Decimal(str(self.cfg['fee_rate']))
+        self.balance = Decimal(str(self.cfg["initial_balance"]))
+        self.positions: dict[str, Position] = {}
+        self.history: list[dict] = []
+        self.slippage = Decimal(str(self.cfg["slippage"]))
+        self.fee_rate = Decimal(str(self.cfg["fee_rate"]))
         self.min_qty_threshold = Decimal("0.001")
         self.min_trade_value = Decimal("10")
 
-    def _calculate_qty(self, signal: TradeSignal, current_price: Decimal) -> Optional[Decimal]:
-        risk_per_trade_pct = Decimal(str(self.cfg['risk_per_trade'])) / Decimal("100")
+    def _calculate_qty(self, signal: TradeSignal, current_price: Decimal) -> Decimal | None:
+        risk_per_trade_pct = Decimal(str(self.cfg["risk_per_trade"])) / Decimal("100")
         risk_amount = self.balance * risk_per_trade_pct
         stop_distance = abs(signal.entry - signal.sl)
-        
+
         if stop_distance <= Decimal("0.000001"):
             logger.warning(f"Stop distance is too small for signal {signal}. Cannot calculate quantity.")
             return None
@@ -761,7 +761,7 @@ class ExecutionEngine:
         max_qty_leverage = (self.balance * max_leverage) / current_price
 
         qty = min(qty_risk, max_qty_leverage)
-        
+
         qty = qty.quantize(Decimal("0.00001"), rounding=ROUND_DOWN)
 
         if qty < self.min_qty_threshold or (qty * current_price) < self.min_trade_value:
@@ -793,7 +793,7 @@ class ExecutionEngine:
         pos = Position(
             id=pos_id, symbol="BTCUSDT", side=signal.action,
             entry_price=entry_price, qty=qty, stop_loss=signal.sl,
-            take_profit=signal.tp, entry_time=datetime.now(timezone.utc)
+            take_profit=signal.tp, entry_time=datetime.now(timezone.utc),
         )
 
         self.positions[pos_id] = pos
@@ -813,9 +813,8 @@ class ExecutionEngine:
             if pos.side == "BUY":
                 if current_price <= pos.stop_loss: exit_price, closed, reason = pos.stop_loss, True, "SL Hit"
                 elif current_price >= pos.take_profit: exit_price, closed, reason = pos.take_profit, True, "TP Hit"
-            else: # SELL
-                if current_price >= pos.stop_loss: exit_price, closed, reason = pos.stop_loss, True, "SL Hit"
-                elif current_price <= pos.take_profit: exit_price, closed, reason = pos.take_profit, True, "TP Hit"
+            elif current_price >= pos.stop_loss: exit_price, closed, reason = pos.stop_loss, True, "SL Hit"
+            elif current_price <= pos.take_profit: exit_price, closed, reason = pos.take_profit, True, "TP Hit"
 
             if closed:
                 if pos.side == "BUY": pnl_gross = (exit_price - pos.entry_price) * pos.qty
@@ -853,7 +852,7 @@ class WhaleBot:
 
         self.cfg = Config()
         min_conf_val = self.cfg.get("min_confidence", 0.60)
-        
+
         self.data_provider = MarketDataProvider()
         self.ai_service = GeminiService(self.cfg.get("gemini_model"), min_conf_val)
         self.execution_engine = ExecutionEngine(self.cfg)
@@ -890,7 +889,7 @@ class WhaleBot:
 
                 # Logging the signal
                 action_color = NEON_GREEN if trade_signal.action == "BUY" else NEON_RED if trade_signal.action == "SELL" else NEON_BLUE
-                reason_short = (trade_signal.reason[:60] + '...') if len(trade_signal.reason) > 60 else trade_signal.reason
+                reason_short = (trade_signal.reason[:60] + "...") if len(trade_signal.reason) > 60 else trade_signal.reason
                 log_message = (
                     f"Price: {market_data.price:.4f} | "
                     f"{action_color}{trade_signal.action:<4} (Conf: {trade_signal.confidence:.2f}){RESET} | "

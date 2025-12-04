@@ -25,21 +25,12 @@ from collections import deque
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
-from enum import Enum
-from enum import auto
-from functools import lru_cache
-from functools import wraps
-from logging.handlers import QueueHandler
-from logging.handlers import QueueListener
-from logging.handlers import RotatingFileHandler
+from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
+from enum import Enum, auto
+from functools import lru_cache, wraps
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -50,8 +41,7 @@ import prometheus_client
 import redis
 import uvloop
 from cryptography.fernet import Fernet
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 from pythonjsonlogger import jsonlogger
 
 # --- High-Performance Event Loop ---
@@ -113,7 +103,7 @@ def _parse_env_int(var_name: str, default: int = 0) -> int:
         return int(os.getenv(var_name, str(default)))
     except ValueError:
         logging.getLogger(__name__).warning(
-            f"Invalid integer for {var_name}, using default: {default}"
+            f"Invalid integer for {var_name}, using default: {default}",
         )
         return default
 
@@ -176,7 +166,7 @@ def advanced_retry(
                         )
                         raise
                     logger.warning(
-                        f"Attempt {attempt + 1}/{len(delays)} failed for {func.__name__}: {e}. Retrying in {delay:.2f}s..."
+                        f"Attempt {attempt + 1}/{len(delays)} failed for {func.__name__}: {e}. Retrying in {delay:.2f}s...",
                     )
                     await asyncio.sleep(delay)
             return None
@@ -184,7 +174,7 @@ def advanced_retry(
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             raise NotImplementedError(
-                "Sync wrapper for advanced_retry is not implemented for this context."
+                "Sync wrapper for advanced_retry is not implemented for this context.",
             )
 
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
@@ -246,11 +236,11 @@ class BotConfiguration:
             logger.warning("ws_ping_interval less than 5s might be too frequent.")
         if self.ws_liveness_timeout < self.ws_ping_interval * 2:
             logger.warning(
-                "ws_liveness_timeout should ideally be at least twice ws_ping_interval."
+                "ws_liveness_timeout should ideally be at least twice ws_ping_interval.",
             )
         if self.paper_trading:
             logger.warning(
-                "PAPER TRADING MODE IS ENABLED. NO REAL ORDERS WILL BE PLACED."
+                "PAPER TRADING MODE IS ENABLED. NO REAL ORDERS WILL BE PLACED.",
             )
 
 
@@ -272,21 +262,21 @@ def setup_logging(log_level: str, log_queue: queue.Queue) -> QueueListener:
 
     console_handler = logging.StreamHandler()
     console_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
+        "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
     )
     console_handler.setFormatter(console_formatter)
 
     file_handler = RotatingFileHandler(
-        "bybit_trading_bot.log", maxBytes=50 * 1024 * 1024, backupCount=10
+        "bybit_trading_bot.log", maxBytes=50 * 1024 * 1024, backupCount=10,
     )
     file_handler.setFormatter(
         CustomJsonFormatter(
-            "%(timestamp)s %(level)s %(name)s %(module)s %(funcName)s %(line)s %(message)s"
-        )
+            "%(timestamp)s %(level)s %(name)s %(module)s %(funcName)s %(line)s %(message)s",
+        ),
     )
 
     listener = QueueListener(
-        log_queue, console_handler, file_handler, respect_handler_level=True
+        log_queue, console_handler, file_handler, respect_handler_level=True,
     )
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, log_level, logging.INFO))
@@ -326,26 +316,26 @@ metrics: dict[str, Any] = {}
 if config.enable_metrics:
     metrics = {
         "total_trades": prometheus_client.Counter(
-            "bot_total_trades", "Total number of trades (fills)", ["mode"]
+            "bot_total_trades", "Total number of trades (fills)", ["mode"],
         ),
         "successful_trades": prometheus_client.Counter(
-            "bot_successful_trades", "Number of profitable fills", ["mode"]
+            "bot_successful_trades", "Number of profitable fills", ["mode"],
         ),
         "failed_trades": prometheus_client.Counter(
-            "bot_failed_trades", "Number of losing fills", ["mode"]
+            "bot_failed_trades", "Number of losing fills", ["mode"],
         ),
         "api_calls": prometheus_client.Counter(
-            "bot_api_calls", "Total API calls made", ["endpoint"]
+            "bot_api_calls", "Total API calls made", ["endpoint"],
         ),
         "ws_messages": prometheus_client.Counter(
-            "bot_ws_messages", "WebSocket messages received", ["channel"]
+            "bot_ws_messages", "WebSocket messages received", ["channel"],
         ),
         "order_latency": prometheus_client.Histogram(
-            "bot_order_latency_seconds", "Order execution latency in seconds"
+            "bot_order_latency_seconds", "Order execution latency in seconds",
         ),
         "pnl": prometheus_client.Gauge("bot_pnl_total", "Current total P&L"),
         "open_positions": prometheus_client.Gauge(
-            "bot_open_positions", "Number of open positions"
+            "bot_open_positions", "Number of open positions",
         ),
     }
 
@@ -477,7 +467,7 @@ class Order:
     reduce_only: bool = False
     order_id: str | None = None
     client_order_id: str | None = field(
-        default_factory=lambda: f"bot-{int(time.time() * 1000)}_{os.getpid()}_{uuid4().hex[:6]}"
+        default_factory=lambda: f"bot-{int(time.time() * 1000)}_{os.getpid()}_{uuid4().hex[:6]}",
     )
     created_at: datetime = field(default_factory=datetime.utcnow)
     strategy_name: str | None = None  # Helps route fills back to strategy
@@ -542,7 +532,7 @@ class Position:
         return float(pnl_usd / entry_value) * 100
 
     def should_close(
-        self, take_profit_pct: float = 2.0, stop_loss_pct: float = 1.0
+        self, take_profit_pct: float = 2.0, stop_loss_pct: float = 1.0,
     ) -> str | None:
         pnl_pct = self.get_pnl_percentage()
         if pnl_pct >= take_profit_pct:
@@ -557,7 +547,7 @@ class RiskManager:
     """Comprehensive risk management system."""
 
     def __init__(
-        self, max_position_size: Decimal, max_leverage: int, max_drawdown: Decimal
+        self, max_position_size: Decimal, max_leverage: int, max_drawdown: Decimal,
     ):
         self.max_position_size = max_position_size
         self.max_leverage = max_leverage
@@ -625,7 +615,7 @@ class RiskManager:
             if available_balance == 0:
                 # If account info is sparse, allow but warn
                 logger.warning(
-                    "Available balance is zero or missing in account info. Risk checks limited."
+                    "Available balance is zero or missing in account info. Risk checks limited.",
                 )
             elif required_margin > available_balance * Decimal("0.8"):
                 return (
@@ -641,7 +631,7 @@ class RiskManager:
         )
 
     def get_position_size(
-        self, account_balance: Decimal, risk_per_trade: Decimal = Decimal("0.02")
+        self, account_balance: Decimal, risk_per_trade: Decimal = Decimal("0.02"),
     ) -> Decimal:
         calculated_size = account_balance * risk_per_trade * self.max_leverage
         return min(calculated_size, self.max_position_size)
@@ -670,11 +660,11 @@ class CacheManager(metaclass=SingletonMeta):
                 logger.info("Redis cache connected successfully.")
             except redis.exceptions.ConnectionError as e:
                 logger.warning(
-                    f"Redis not available at {config.redis_host}:{config.redis_port}: {e}. Falling back to in-memory cache."
+                    f"Redis not available at {config.redis_host}:{config.redis_port}: {e}. Falling back to in-memory cache.",
                 )
             except Exception as e:
                 logger.error(
-                    f"Failed to initialize Redis client: {e}. Falling back to in-memory cache."
+                    f"Failed to initialize Redis client: {e}. Falling back to in-memory cache.",
                 )
 
     async def get(self, key: str, default: Any = None) -> Any:
@@ -700,7 +690,7 @@ class CacheManager(metaclass=SingletonMeta):
         if self.enabled and self.redis_client:
             try:
                 await asyncio.to_thread(
-                    self.redis_client.setex, key, expire, json.dumps(value)
+                    self.redis_client.setex, key, expire, json.dumps(value),
                 )
             except Exception as e:
                 logger.debug(f"Redis cache set error for key '{key}': {e}")
@@ -756,7 +746,7 @@ class SecurityManager(metaclass=SingletonMeta):
                 if not key_str:
                     key = Fernet.generate_key()
                     logger.warning(
-                        f"ENCRYPTION_KEY not set. Generated a temporary key: {key.decode()}. For production, set ENCRYPTION_KEY for persistence."
+                        f"ENCRYPTION_KEY not set. Generated a temporary key: {key.decode()}. For production, set ENCRYPTION_KEY for persistence.",
                     )
                     self.fernet = Fernet(key)
                 else:
@@ -782,7 +772,7 @@ class SecurityManager(metaclass=SingletonMeta):
                 return self.fernet.decrypt(data.encode()).decode()
             except Exception as e:
                 logger.error(
-                    f"Failed to decrypt data: {e}. Returning original.", exc_info=True
+                    f"Failed to decrypt data: {e}. Returning original.", exc_info=True,
                 )
                 return data
         return data
@@ -793,7 +783,7 @@ class SecurityManager(metaclass=SingletonMeta):
 
 # --- Async utilities ---
 async def sleep_until_stop(
-    stop_event: threading.Event, timeout: float, check_interval: float = 0.2
+    stop_event: threading.Event, timeout: float, check_interval: float = 0.2,
 ):
     """Async sleep that wakes early if a threading.Event is set."""
     loop = asyncio.get_running_loop()
@@ -843,7 +833,7 @@ class EnhancedWebSocketManager:
     """Advanced WebSocket management with liveness checks and auto-reconnection."""
 
     def __init__(
-        self, api_key: str, api_secret: str, testnet: bool, paper_trading: bool
+        self, api_key: str, api_secret: str, testnet: bool, paper_trading: bool,
     ):
         self._testnet = testnet
         self._api_key = api_key
@@ -888,7 +878,7 @@ class EnhancedWebSocketManager:
                 break
             if time.monotonic() - self._last_message_time > config.ws_liveness_timeout:
                 logger.warning(
-                    "No WebSocket message received recently. Triggering reconnect."
+                    "No WebSocket message received recently. Triggering reconnect.",
                 )
                 await self.reconnect()
         logger.debug("WebSocket liveness check loop stopped.")
@@ -911,7 +901,7 @@ class EnhancedWebSocketManager:
         logger.debug("WebSocket heartbeat loop stopped.")
 
     @advanced_retry(
-        max_retries=config.max_reconnect_attempts, strategy=RetryStrategy.EXPONENTIAL
+        max_retries=config.max_reconnect_attempts, strategy=RetryStrategy.EXPONENTIAL,
     )
     async def reconnect(self):
         async with self._reconnect_lock:
@@ -955,7 +945,7 @@ class EnhancedWebSocketManager:
         )
         if not ws_instance:
             logger.warning(
-                f"Cannot subscribe to channel '{channel}' (no {'private' if channel in ['position', 'order', 'execution'] else 'public'} WebSocket client available)."
+                f"Cannot subscribe to channel '{channel}' (no {'private' if channel in ['position', 'order', 'execution'] else 'public'} WebSocket client available).",
             )
             return
 
@@ -981,7 +971,7 @@ class EnhancedWebSocketManager:
 
         except Exception as e:
             logger.error(
-                f"Subscription failed for {subscription_key}: {e}", exc_info=True
+                f"Subscription failed for {subscription_key}: {e}", exc_info=True,
             )
             raise
 
@@ -1034,7 +1024,7 @@ class EnhancedWebSocketManager:
 
         if "U" in data and _dec(data["U"]) > last_update_id:
             logger.warning(
-                f"Orderbook update for {symbol} out of sequence. Last: {last_update_id}, Prev: {data.get('U')}, Current: {current_update_id}."
+                f"Orderbook update for {symbol} out of sequence. Last: {last_update_id}, Prev: {data.get('U')}, Current: {current_update_id}.",
             )
 
         self.market_data.setdefault(symbol, {})["orderbook"] = {
@@ -1046,8 +1036,8 @@ class EnhancedWebSocketManager:
         self.market_data[symbol]["last_update"] = datetime.utcnow()
         asyncio.create_task(
             CacheManager().set(
-                f"orderbook:{symbol}", self.market_data[symbol]["orderbook"], expire=60
-            )
+                f"orderbook:{symbol}", self.market_data[symbol]["orderbook"], expire=60,
+            ),
         )
 
     def _handle_trade(self, message: dict, symbol: str | None):
@@ -1063,7 +1053,7 @@ class EnhancedWebSocketManager:
                     "qty": _dec(trade.get("v")),
                     "side": trade.get("S"),
                     "timestamp": _dec(trade.get("T")),
-                }
+                },
             )
             market_data["last_trade"] = trade
             market_data["last_update"] = datetime.utcnow()
@@ -1103,11 +1093,11 @@ class EnhancedWebSocketManager:
 
                 if config.enable_metrics:
                     metrics["open_positions"].set(
-                        len([p for p in self.positions.values() if p.size > 0])
+                        len([p for p in self.positions.values() if p.size > 0]),
                     )
 
                 logger.debug(
-                    f"Position update for {symbol}: Size={position.size}, PnL={position.unrealized_pnl:.2f}"
+                    f"Position update for {symbol}: Size={position.size}, PnL={position.unrealized_pnl:.2f}",
                 )
 
     def _handle_order(self, message: dict):
@@ -1116,7 +1106,7 @@ class EnhancedWebSocketManager:
             if order_id:
                 self.orders[order_id] = order_data
                 logger.info(
-                    f"Order update: {order_id} - Symbol: {order_data.get('symbol')}, Status: {order_data.get('orderStatus')}, Qty: {order_data.get('qty')}, Filled: {order_data.get('cumExecQty')}"
+                    f"Order update: {order_id} - Symbol: {order_data.get('symbol')}, Status: {order_data.get('orderStatus')}, Qty: {order_data.get('qty')}, Filled: {order_data.get('cumExecQty')}",
                 )
 
     def _handle_execution(self, message: dict):
@@ -1131,7 +1121,7 @@ class EnhancedWebSocketManager:
                     _dec(exec_data.get("execValue", 0)) - fee
                 )  # rough placeholder if needed
                 logger.info(
-                    f"Execution: {symbol} - Price: {exec_price}, Qty: {exec_qty}, Side: {side}, Fee: {fee}"
+                    f"Execution: {symbol} - Price: {exec_price}, Qty: {exec_qty}, Side: {side}, Fee: {fee}",
                 )
 
                 if config.enable_metrics and "T" in exec_data:
@@ -1176,20 +1166,20 @@ class StrategyInterface:
         self.parameters.update(kwargs)
 
     async def analyze(
-        self, market_data: dict[str, Any], account_info: dict[str, Any]
+        self, market_data: dict[str, Any], account_info: dict[str, Any],
     ) -> list[Order]:
         raise NotImplementedError
 
     async def on_order_filled(
-        self, order: Order, execution_price: Decimal, filled_qty: Decimal, pnl: Decimal
+        self, order: Order, execution_price: Decimal, filled_qty: Decimal, pnl: Decimal,
     ):
         logger.info(
-            f"Strategy '{self.name}': Order {order.order_id} filled for {order.symbol} at {execution_price} (Qty: {filled_qty}). PnL: {pnl}"
+            f"Strategy '{self.name}': Order {order.order_id} filled for {order.symbol} at {execution_price} (Qty: {filled_qty}). PnL: {pnl}",
         )
 
     async def on_position_update(self, position: Position):
         logger.debug(
-            f"Strategy '{self.name}': Position update for {position.symbol}. Size: {position.size}, Unrealized PnL: {position.unrealized_pnl:.2f}"
+            f"Strategy '{self.name}': Position update for {position.symbol}. Size: {position.size}, Unrealized PnL: {position.unrealized_pnl:.2f}",
         )
 
 
@@ -1198,10 +1188,10 @@ class AdvancedBybitTradingBot:
     def __init__(self, config: BotConfiguration):
         self.config = config
         self._api_executor = ThreadPoolExecutor(
-            max_workers=max(2, config.rate_limit_per_second * 2)
+            max_workers=max(2, config.rate_limit_per_second * 2),
         )
         self._rate_limiter = AsyncRateLimiter(
-            rate=config.rate_limit_per_second, capacity=config.rate_limit_per_second
+            rate=config.rate_limit_per_second, capacity=config.rate_limit_per_second,
         )
 
         self.session: HTTP | None = None
@@ -1214,7 +1204,7 @@ class AdvancedBybitTradingBot:
             )
 
         self.ws_manager = EnhancedWebSocketManager(
-            config.api_key, config.api_secret, config.use_testnet, config.paper_trading
+            config.api_key, config.api_secret, config.use_testnet, config.paper_trading,
         )
 
         self.strategies: dict[str, StrategyInterface] = {}
@@ -1236,7 +1226,7 @@ class AdvancedBybitTradingBot:
             "USDT": {
                 "walletBalance": Decimal("100000"),
                 "availableToWithdraw": Decimal("100000"),
-            }
+            },
         }
         self._paper_positions: dict[str, Position] = {}
         self._paper_orders: dict[str, Order] = {}
@@ -1266,11 +1256,11 @@ class AdvancedBybitTradingBot:
                     if strategy.name in all_params:
                         strategy.set_parameters(**all_params[strategy.name])
                         logger.info(
-                            f"Strategy '{strategy.name}' loaded parameters: {strategy.parameters}"
+                            f"Strategy '{strategy.name}' loaded parameters: {strategy.parameters}",
                         )
             else:
                 logger.warning(
-                    f"Strategy params file not found at '{self.config.strategy_params_file}'. Using strategy defaults."
+                    f"Strategy params file not found at '{self.config.strategy_params_file}'. Using strategy defaults.",
                 )
         except Exception as e:
             logger.error(
@@ -1278,7 +1268,7 @@ class AdvancedBybitTradingBot:
                 exc_info=True,
             )
             logger.warning(
-                f"Strategy '{strategy.name}' will use its default parameters."
+                f"Strategy '{strategy.name}' will use its default parameters.",
             )
         logger.info(f"Added strategy: {strategy.name}")
 
@@ -1307,12 +1297,12 @@ class AdvancedBybitTradingBot:
             return result
         except TimeoutError:
             logger.error(
-                f"API call to {func.__name__} timed out after {self.config.api_call_timeout}s."
+                f"API call to {func.__name__} timed out after {self.config.api_call_timeout}s.",
             )
             raise TimeoutError(f"API call to {func.__name__} timed out.")
         except Exception as e:
             logger.error(
-                f"Unexpected error during API call {func.__name__}: {e}", exc_info=True
+                f"Unexpected error during API call {func.__name__}: {e}", exc_info=True,
             )
             raise
 
@@ -1358,7 +1348,7 @@ class AdvancedBybitTradingBot:
             logger.error(f"Error fetching symbol info: {e}", exc_info=True)
             if not self.symbol_info:
                 logger.critical(
-                    "Failed to get ANY symbol info. Bot might not function correctly."
+                    "Failed to get ANY symbol info. Bot might not function correctly.",
                 )
             raise
 
@@ -1371,30 +1361,30 @@ class AdvancedBybitTradingBot:
                 raise ValueError("Limit order requires a price.")
         except ValueError as e:
             logger.error(
-                f"Pre-validation failed for order {order.symbol} {order.side.value} {order.qty}: {e}"
+                f"Pre-validation failed for order {order.symbol} {order.side.value} {order.qty}: {e}",
             )
             return None
 
         account_info = await self.get_account_info()
         approved, reason = self.risk_manager.check_order_risk(
-            order, account_info, self.symbol_info, self.ws_manager.market_data
+            order, account_info, self.symbol_info, self.ws_manager.market_data,
         )
         if not approved:
             logger.warning(
-                f"Order rejected by risk manager ({order.symbol} {order.side.value} {order.qty}): {reason}"
+                f"Order rejected by risk manager ({order.symbol} {order.side.value} {order.qty}): {reason}",
             )
             return None
 
         if self.config.paper_trading:
             logger.info(
-                f"PAPER TRADING: Simulating order placement for {order.symbol} {order.side.value} {order.qty} @ {order.price or 'MARKET'}"
+                f"PAPER TRADING: Simulating order placement for {order.symbol} {order.side.value} {order.qty} @ {order.price or 'MARKET'}",
             )
             order.order_id = f"PAPER_{order.client_order_id}"
 
             if order.order_type == OrderType.MARKET:
                 try:
                     ticker = self.ws_manager.market_data.get(order.symbol, {}).get(
-                        "ticker", {}
+                        "ticker", {},
                     )
                     current_price = (
                         _dec(ticker.get("last_price"))
@@ -1403,7 +1393,7 @@ class AdvancedBybitTradingBot:
                     )
                     if current_price == 0:
                         logger.error(
-                            f"PAPER TRADING: Cannot simulate market order fill for {order.symbol}, no current price."
+                            f"PAPER TRADING: Cannot simulate market order fill for {order.symbol}, no current price.",
                         )
                         return None
 
@@ -1417,7 +1407,7 @@ class AdvancedBybitTradingBot:
                     if order.side == OrderSide.BUY:
                         if self._paper_balance["USDT"]["availableToWithdraw"] < cost:
                             logger.warning(
-                                f"PAPER TRADING: Insufficient balance to simulate buy order for {order.symbol}."
+                                f"PAPER TRADING: Insufficient balance to simulate buy order for {order.symbol}.",
                             )
                             return None
                         self._paper_balance["USDT"]["availableToWithdraw"] -= cost
@@ -1488,10 +1478,10 @@ class AdvancedBybitTradingBot:
                             "price": fill_price,
                             "pnl": pnl,
                             "volume": order.qty * fill_price,
-                        }
+                        },
                     )
                     logger.info(
-                        f"PAPER TRADING: Market order {order.symbol} filled at {fill_price:.8f}. Balance: {self._paper_balance['USDT']['availableToWithdraw']:.2f}"
+                        f"PAPER TRADING: Market order {order.symbol} filled at {fill_price:.8f}. Balance: {self._paper_balance['USDT']['availableToWithdraw']:.2f}",
                     )
                     return order
                 except Exception as e:
@@ -1503,26 +1493,26 @@ class AdvancedBybitTradingBot:
             else:
                 self._paper_orders[order.order_id] = order
                 logger.info(
-                    f"PAPER TRADING: Limit order {order.symbol} placed (not yet filled)."
+                    f"PAPER TRADING: Limit order {order.symbol} placed (not yet filled).",
                 )
                 return order
 
         try:
             result = await self._api_call(
-                self.session.place_order, category="linear", **order.to_dict()
+                self.session.place_order, category="linear", **order.to_dict(),
             )
             order_id = result.get("result", {}).get("orderId")
             if order_id:
                 order.order_id = order_id
                 logger.info(
-                    f"Order placed: {order_id} - {order.symbol} {order.side.value} {order.qty} @ {order.price or 'MARKET'}"
+                    f"Order placed: {order_id} - {order.symbol} {order.side.value} {order.qty} @ {order.price or 'MARKET'}",
                 )
                 return order
             logger.error(f"Order placement failed, no orderId in response: {result}")
             return None
         except Exception as e:
             logger.error(
-                f"Order placement failed for {order.symbol}: {e}", exc_info=True
+                f"Order placement failed for {order.symbol}: {e}", exc_info=True,
             )
             return None
 
@@ -1533,7 +1523,7 @@ class AdvancedBybitTradingBot:
                 logger.info(f"PAPER TRADING: Order {order_id} cancelled.")
                 return True
             logger.warning(
-                f"PAPER TRADING: Order {order_id} not found for cancellation."
+                f"PAPER TRADING: Order {order_id} not found for cancellation.",
             )
             return False
 
@@ -1548,7 +1538,7 @@ class AdvancedBybitTradingBot:
             return True
         except Exception as e:
             logger.error(
-                f"Order cancellation failed for {order_id}: {e}", exc_info=True
+                f"Order cancellation failed for {order_id}: {e}", exc_info=True,
             )
             return False
 
@@ -1633,7 +1623,7 @@ class AdvancedBybitTradingBot:
             return {
                 "totalAvailableBalance": self._paper_balance["USDT"][
                     "availableToWithdraw"
-                ]
+                ],
             }
 
         cache_key = f"account_info:{account_type}"
@@ -1643,7 +1633,7 @@ class AdvancedBybitTradingBot:
 
         try:
             result = await self._api_call(
-                self.session.get_wallet_balance, accountType=account_type
+                self.session.get_wallet_balance, accountType=account_type,
             )
             account_info = {}
             lst = result.get("result", {}).get("list", [])
@@ -1690,13 +1680,13 @@ class AdvancedBybitTradingBot:
                 break
             try:
                 orders_to_place = await strategy.analyze(
-                    filtered_market_data, account_info
+                    filtered_market_data, account_info,
                 )
                 # For backward compatibility: if strategy returns orders, place them
                 for order in orders_to_place or []:
                     if self._emergency_stop.is_set():
                         logger.info(
-                            "Emergency stop received, abandoning further order placement."
+                            "Emergency stop received, abandoning further order placement.",
                         )
                         break
                     open_positions_count = len(
@@ -1704,11 +1694,11 @@ class AdvancedBybitTradingBot:
                             p
                             for p in self.ws_manager.positions.values()
                             if p.size != Decimal(0)
-                        ]
+                        ],
                     )
                     if open_positions_count >= self.config.max_open_positions:
                         logger.warning(
-                            f"Max positions ({self.config.max_open_positions}) reached. Skipping new order for {order.symbol}."
+                            f"Max positions ({self.config.max_open_positions}) reached. Skipping new order for {order.symbol}.",
                         )
                         continue
                     await self.place_order(order)
@@ -1742,7 +1732,7 @@ class AdvancedBybitTradingBot:
             close_reason = position.should_close(take_profit_pct=2.0, stop_loss_pct=1.0)
             if close_reason:
                 logger.info(
-                    f"Initiating close for {symbol} position ({position.side} {position.size}) due to: {close_reason}"
+                    f"Initiating close for {symbol} position ({position.side} {position.size}) due to: {close_reason}",
                 )
                 positions_to_close.append(symbol)
 
@@ -1759,11 +1749,11 @@ class AdvancedBybitTradingBot:
         )
 
     async def _periodic_task(
-        self, period_seconds: int, task_func: Callable, *args: Any
+        self, period_seconds: int, task_func: Callable, *args: Any,
     ):
         task_name = task_func.__name__
         logger.debug(
-            f"Starting periodic task: {task_name}, interval: {period_seconds}s"
+            f"Starting periodic task: {task_name}, interval: {period_seconds}s",
         )
         while not self._emergency_stop.is_set():
             try:
@@ -1773,14 +1763,14 @@ class AdvancedBybitTradingBot:
                 break
             except Exception as e:
                 logger.error(
-                    f"Error in periodic task '{task_name}': {e}", exc_info=True
+                    f"Error in periodic task '{task_name}': {e}", exc_info=True,
                 )
             await sleep_until_stop(self._emergency_stop, period_seconds)
         logger.debug(f"Periodic task {task_name} stopped.")
 
     async def run(self, symbols: list[str], interval: int = 5):
         logger.info(
-            f"Starting bot for symbols: {symbols} with interval: {interval}s (Mode: {self._metrics_mode})"
+            f"Starting bot for symbols: {symbols} with interval: {interval}s (Mode: {self._metrics_mode})",
         )
 
         await self.ws_manager.initialize()
@@ -1802,15 +1792,15 @@ class AdvancedBybitTradingBot:
                 logger.info("Prometheus metrics server started on port 8000.")
             except OSError as e:
                 logger.error(
-                    f"Failed to start Prometheus server (port 8000 likely in use): {e}"
+                    f"Failed to start Prometheus server (port 8000 likely in use): {e}",
                 )
 
         asyncio.create_task(self._periodic_task(3600, self.fetch_symbol_info, symbols))
         asyncio.create_task(self._periodic_task(3600, self.save_performance_data))
         asyncio.create_task(
             self._periodic_task(
-                300, self.cache._cache_maintenance, self._emergency_stop
-            )
+                300, self.cache._cache_maintenance, self._emergency_stop,
+            ),
         )
 
         try:
@@ -1867,7 +1857,7 @@ class AdvancedBybitTradingBot:
             task.cancel()
         with suppress(asyncio.CancelledError):
             await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True), timeout=5
+                asyncio.gather(*tasks, return_exceptions=True), timeout=5,
             )
         logger.info("Remaining asyncio tasks cancelled/finished.")
         logger.info("Bot cleanup complete.")
@@ -1906,7 +1896,7 @@ class MarketMakerStrategy(StrategyInterface):
         )
 
     async def analyze(
-        self, market_data: dict[str, Any], account_info: dict[str, Any]
+        self, market_data: dict[str, Any], account_info: dict[str, Any],
     ) -> list[Order]:
         orders_to_cancel: list[tuple[str, str]] = []
         current_time = datetime.utcnow()
@@ -1916,7 +1906,7 @@ class MarketMakerStrategy(StrategyInterface):
                 "order_timeout_seconds"
             ]:
                 logger.info(
-                    f"MarketMaker: Order {order.order_id} for {order.symbol} timed out. Cancelling."
+                    f"MarketMaker: Order {order.order_id} for {order.symbol} timed out. Cancelling.",
                 )
                 orders_to_cancel.append((order_id, order.symbol))
         for order_id, symbol in orders_to_cancel:
@@ -1927,7 +1917,7 @@ class MarketMakerStrategy(StrategyInterface):
         for symbol, data in market_data.items():
             if symbol not in self.bot.symbol_info:
                 logger.debug(
-                    f"MarketMaker: Skipping {symbol}, no symbol info available."
+                    f"MarketMaker: Skipping {symbol}, no symbol info available.",
                 )
                 continue
 
@@ -1935,7 +1925,7 @@ class MarketMakerStrategy(StrategyInterface):
             ticker = data.get("ticker")
             if not ob or not ob["bids"] or not ob["asks"] or not ticker:
                 logger.debug(
-                    f"MarketMaker: Skipping {symbol}, insufficient market data."
+                    f"MarketMaker: Skipping {symbol}, insufficient market data.",
                 )
                 continue
 
@@ -1943,7 +1933,7 @@ class MarketMakerStrategy(StrategyInterface):
             best_ask = _dec(ob["asks"][0][0])
             if best_bid == 0 or best_ask == 0 or best_ask <= best_bid:
                 logger.warning(
-                    f"MarketMaker: Invalid bid/ask for {symbol}. Bid: {best_bid}, Ask: {best_ask}."
+                    f"MarketMaker: Invalid bid/ask for {symbol}. Bid: {best_bid}, Ask: {best_ask}.",
                 )
                 continue
 
@@ -1961,7 +1951,7 @@ class MarketMakerStrategy(StrategyInterface):
             order_qty = round_to_step(order_qty, qty_step, ROUND_DOWN)
             if order_qty == Decimal(0):
                 logger.warning(
-                    f"MarketMaker: Calculated order quantity for {symbol} is zero after step adjust. Skipping."
+                    f"MarketMaker: Calculated order quantity for {symbol} is zero after step adjust. Skipping.",
                 )
                 continue
 
@@ -2051,7 +2041,7 @@ async def main():
         interval = _parse_env_int("BOT_INTERVAL", 5)
 
         logger.info(
-            f"Bot Configuration: Testnet={config.use_testnet}, Paper_Trading={config.paper_trading}, Symbols={symbols}, Interval={interval}s"
+            f"Bot Configuration: Testnet={config.use_testnet}, Paper_Trading={config.paper_trading}, Symbols={symbols}, Interval={interval}s",
         )
         await bot.run(symbols, interval)
     except KeyboardInterrupt:
@@ -2078,6 +2068,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Unhandled exception outside asyncio.run: {e}")
         logging.getLogger(__name__).critical(
-            f"Unhandled exception outside asyncio.run: {e}", exc_info=True
+            f"Unhandled exception outside asyncio.run: {e}", exc_info=True,
         )
         sys.exit(1)

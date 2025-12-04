@@ -10,17 +10,11 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
-from enum import Enum
-from enum import auto
-from functools import lru_cache
-from functools import wraps
+from decimal import Decimal, InvalidOperation, getcontext
+from enum import Enum, auto
+from functools import lru_cache, wraps
 from typing import Any
 
 import aiofiles
@@ -29,8 +23,7 @@ import prometheus_client  # Improvement #3: Prometheus metrics
 import redis  # Improvement #2: Redis for distributed caching
 import uvloop  # Improvement #1: High-performance event loop
 from cryptography.fernet import Fernet  # Improvement #4: Encryption for sensitive data
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # Improvement #5: Use uvloop for better async performance
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -94,7 +87,7 @@ def advanced_retry(
                     if attempt == len(delays) - 1:
                         raise
                     logger.warning(
-                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s..."
+                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...",
                     )
                     await asyncio.sleep(delay)
             return None
@@ -116,7 +109,7 @@ def advanced_retry(
                     if attempt == len(delays) - 1:
                         raise
                     logger.warning(
-                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s..."
+                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...",
                     )
                     time.sleep(delay)
             return None
@@ -204,9 +197,7 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
 
 
 # Setup logging
-from logging.handlers import QueueHandler
-from logging.handlers import QueueListener
-from logging.handlers import RotatingFileHandler
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 
 log_queue = queue.Queue()
 queue_handler = QueueHandler(log_queue)
@@ -214,7 +205,7 @@ queue_handler = QueueHandler(log_queue)
 # Console handler
 console_handler = logging.StreamHandler()
 console_formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
+    "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
 )
 console_handler.setFormatter(console_formatter)
 
@@ -274,24 +265,24 @@ logger.addHandler(queue_handler)
 if config.enable_metrics:
     metrics = {
         "total_trades": prometheus_client.Counter(
-            "bot_total_trades", "Total number of trades"
+            "bot_total_trades", "Total number of trades",
         ),
         "successful_trades": prometheus_client.Counter(
-            "bot_successful_trades", "Number of successful trades"
+            "bot_successful_trades", "Number of successful trades",
         ),
         "failed_trades": prometheus_client.Counter(
-            "bot_failed_trades", "Number of failed trades"
+            "bot_failed_trades", "Number of failed trades",
         ),
         "api_calls": prometheus_client.Counter("bot_api_calls", "Total API calls made"),
         "ws_messages": prometheus_client.Counter(
-            "bot_ws_messages", "WebSocket messages received"
+            "bot_ws_messages", "WebSocket messages received",
         ),
         "order_latency": prometheus_client.Histogram(
-            "bot_order_latency", "Order execution latency"
+            "bot_order_latency", "Order execution latency",
         ),
         "pnl": prometheus_client.Gauge("bot_pnl", "Current P&L"),
         "open_positions": prometheus_client.Gauge(
-            "bot_open_positions", "Number of open positions"
+            "bot_open_positions", "Number of open positions",
         ),
     }
 
@@ -486,7 +477,7 @@ class Position:
         return float((self.unrealized_pnl / (self.size * self.entry_price)) * 100)
 
     def should_close(
-        self, take_profit_pct: float = 2.0, stop_loss_pct: float = 1.0
+        self, take_profit_pct: float = 2.0, stop_loss_pct: float = 1.0,
     ) -> str | None:
         """Determine if position should be closed."""
         pnl_pct = self.get_pnl_percentage()
@@ -502,7 +493,7 @@ class RiskManager:
     """Comprehensive risk management system."""
 
     def __init__(
-        self, max_position_size: Decimal, max_leverage: int, max_drawdown: Decimal
+        self, max_position_size: Decimal, max_leverage: int, max_drawdown: Decimal,
     ):
         self.max_position_size = max_position_size
         self.max_leverage = max_leverage
@@ -512,7 +503,7 @@ class RiskManager:
         self.position_limits: dict[str, Decimal] = {}
 
     def check_order_risk(
-        self, order: Order, account_balance: Decimal
+        self, order: Order, account_balance: Decimal,
     ) -> tuple[bool, str]:
         """Check if order meets risk requirements."""
         # Check position size
@@ -537,7 +528,7 @@ class RiskManager:
         self.current_exposure = sum(pos.size * pos.mark_price for pos in positions)
 
     def get_position_size(
-        self, account_balance: Decimal, risk_per_trade: Decimal = Decimal(0.02)
+        self, account_balance: Decimal, risk_per_trade: Decimal = Decimal(0.02),
     ) -> Decimal:
         """Calculate appropriate position size based on Kelly Criterion."""
         # Simplified Kelly Criterion
@@ -753,7 +744,7 @@ class EnhancedWebSocketManager:
             for attempt in range(config.max_reconnect_attempts):
                 try:
                     logger.info(
-                        f"Reconnecting {ws_type} WebSocket (attempt {attempt + 1})"
+                        f"Reconnecting {ws_type} WebSocket (attempt {attempt + 1})",
                     )
 
                     if ws_type == "public":
@@ -773,7 +764,7 @@ class EnhancedWebSocketManager:
                     await asyncio.sleep(wait_time)
 
             logger.critical(
-                f"Failed to reconnect {ws_type} WebSocket after {config.max_reconnect_attempts} attempts"
+                f"Failed to reconnect {ws_type} WebSocket after {config.max_reconnect_attempts} attempts",
             )
             return False
 
@@ -803,21 +794,21 @@ class EnhancedWebSocketManager:
                 )
             elif channel == "trade":
                 ws.trade_stream(
-                    symbol=symbol, callback=self._create_callback("trade", symbol)
+                    symbol=symbol, callback=self._create_callback("trade", symbol),
                 )
             elif channel == "ticker":
                 ws.ticker_stream(
-                    symbol=symbol, callback=self._create_callback("ticker", symbol)
+                    symbol=symbol, callback=self._create_callback("ticker", symbol),
                 )
             elif channel == "position" and self.ws_private:
                 self.ws_private.position_stream(
-                    callback=self._create_callback("position")
+                    callback=self._create_callback("position"),
                 )
             elif channel == "order" and self.ws_private:
                 self.ws_private.order_stream(callback=self._create_callback("order"))
             elif channel == "execution" and self.ws_private:
                 self.ws_private.execution_stream(
-                    callback=self._create_callback("execution")
+                    callback=self._create_callback("execution"),
                 )
 
             logger.debug(f"Subscribed to {subscription_key}")
@@ -880,8 +871,8 @@ class EnhancedWebSocketManager:
             # Cache the data
             asyncio.create_task(
                 self.cache.set(
-                    f"orderbook:{symbol}", market_data["orderbook"], expire=60
-                )
+                    f"orderbook:{symbol}", market_data["orderbook"], expire=60,
+                ),
             )
 
     def _handle_trade(self, message: dict, symbol: str):
@@ -899,7 +890,7 @@ class EnhancedWebSocketManager:
                     "qty": _dec(trade.get("v")),
                     "side": trade.get("S"),
                     "timestamp": trade.get("T"),
-                }
+                },
             )
             market_data["last_trade"] = trade
             market_data["last_update"] = datetime.now()
@@ -951,7 +942,7 @@ class EnhancedWebSocketManager:
                 # Store order info
                 self.orders[order_id] = order_data
                 logger.info(
-                    f"Order update: {order_id} - Status: {order_data.get('orderStatus')}"
+                    f"Order update: {order_id} - Status: {order_data.get('orderStatus')}",
                 )
 
     def _handle_execution(self, message: dict):
@@ -961,7 +952,7 @@ class EnhancedWebSocketManager:
                 f"Execution: {exec_data.get('symbol')} - "
                 f"Price: {exec_data.get('execPrice')}, "
                 f"Qty: {exec_data.get('execQty')}, "
-                f"Side: {exec_data.get('side')}"
+                f"Side: {exec_data.get('side')}",
             )
 
             # Track execution latency
@@ -1041,7 +1032,7 @@ class AdvancedBybitTradingBot:
         )
 
         self.ws_manager = EnhancedWebSocketManager(
-            config.api_key, config.api_secret, config.use_testnet
+            config.api_key, config.api_secret, config.use_testnet,
         )
 
         self.strategies: dict[str, StrategyInterface] = {}
@@ -1120,7 +1111,7 @@ class AdvancedBybitTradingBot:
 
         try:
             result = await self._api_call(
-                self.session.get_instruments_info, category=category
+                self.session.get_instruments_info, category=category,
             )
 
             all_instruments = result.get("result", {}).get("list", [])
@@ -1171,7 +1162,7 @@ class AdvancedBybitTradingBot:
         try:
             async with self._order_lock:
                 result = await self._api_call(
-                    self.session.place_order, category="linear", **order.to_dict()
+                    self.session.place_order, category="linear", **order.to_dict(),
                 )
 
                 order_id = result.get("result", {}).get("orderId")
@@ -1180,7 +1171,7 @@ class AdvancedBybitTradingBot:
                     self._pending_orders[order_id] = order
 
                     logger.info(
-                        f"Order placed: {order_id} - {order.symbol} {order.side.value} {order.qty}"
+                        f"Order placed: {order_id} - {order.symbol} {order.side.value} {order.qty}",
                     )
 
                     # Track in performance metrics
@@ -1274,7 +1265,7 @@ class AdvancedBybitTradingBot:
 
         try:
             result = await self._api_call(
-                self.session.get_wallet_balance, accountType=account_type
+                self.session.get_wallet_balance, accountType=account_type,
             )
 
             account_info = result.get("result", {}).get("list", [{}])[0]
@@ -1323,11 +1314,11 @@ class AdvancedBybitTradingBot:
 
                     # Check position limit
                     open_positions = len(
-                        [p for p in self.ws_manager.positions.values() if p.size != 0]
+                        [p for p in self.ws_manager.positions.values() if p.size != 0],
                     )
                     if open_positions >= self.config.max_open_positions:
                         logger.warning(
-                            f"Max positions ({self.config.max_open_positions}) reached"
+                            f"Max positions ({self.config.max_open_positions}) reached",
                         )
                         break
 
@@ -1486,7 +1477,7 @@ class MarketMakerStrategy(StrategyInterface):
                     qty=Decimal(self.parameters["order_size"]),
                     price=buy_price,
                     time_in_force="PostOnly",
-                )
+                ),
             )
 
             orders.append(
@@ -1497,7 +1488,7 @@ class MarketMakerStrategy(StrategyInterface):
                     qty=Decimal(self.parameters["order_size"]),
                     price=sell_price,
                     time_in_force="PostOnly",
-                )
+                ),
             )
 
         return orders
@@ -1555,7 +1546,7 @@ class TechnicalIndicators:
 
     @staticmethod
     def bollinger_bands(
-        data: list[float], period: int = 20, std_dev: int = 2
+        data: list[float], period: int = 20, std_dev: int = 2,
     ) -> tuple[float, float, float]:
         """Bollinger Bands."""
         if len(data) < period:
@@ -1591,7 +1582,7 @@ async def main():
         interval = int(os.getenv("BOT_INTERVAL", "5"))
 
         logger.info(
-            f"Configuration: Testnet={config.use_testnet}, Symbols={symbols}, Interval={interval}s"
+            f"Configuration: Testnet={config.use_testnet}, Symbols={symbols}, Interval={interval}s",
         )
 
         # Run bot

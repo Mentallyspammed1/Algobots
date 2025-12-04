@@ -4,8 +4,7 @@ import numpy as np
 import pandas as pd
 
 # We need to import the class we want to test
-from whalebot import TradingAnalyzer
-from whalebot import load_config
+from whalebot import TradingAnalyzer, load_config
 
 
 # Mock the logger to prevent actual log file creation during tests
@@ -37,7 +36,7 @@ class TestTradingAnalyzerIndicators(unittest.TestCase):
         # Create a more realistic and longer sample DataFrame
         data = {
             "start_time": pd.to_datetime(
-                pd.date_range(start="2023-01-01", periods=100, freq="H")
+                pd.date_range(start="2023-01-01", periods=100, freq="H"),
             ),
             "open": np.random.uniform(90, 110, 100),
             "high": np.random.uniform(100, 120, 100),

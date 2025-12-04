@@ -4,8 +4,7 @@ from typing import Any
 
 import config
 from bot_logger import log_exception
-from bybit_api import BybitAPIError
-from bybit_api import BybitContractAPI
+from bybit_api import BybitAPIError, BybitContractAPI
 from utils import calculate_order_quantity
 
 # --- Pyrmethus's Color Codex ---
@@ -41,7 +40,7 @@ class OrderManager:
         """Fetches and returns instrument details like min quantity and step size."""
         try:
             instrument_info_resp = await self.bybit_client.get_instruments_info(
-                category=config.BYBIT_CATEGORY, symbol=symbol
+                category=config.BYBIT_CATEGORY, symbol=symbol,
             )
             if (
                 not instrument_info_resp
@@ -49,24 +48,24 @@ class OrderManager:
                 or not instrument_info_resp.get("result", {}).get("list")
             ):
                 raise ValueError(
-                    f"Failed to fetch instrument info: {instrument_info_resp.get('retMsg', 'N/A')}"
+                    f"Failed to fetch instrument info: {instrument_info_resp.get('retMsg', 'N/A')}",
                 )
 
             instrument = instrument_info_resp["result"]["list"][0]
             return {
                 "min_qty": Decimal(
-                    instrument.get("lotSizeFilter", {}).get("minOrderQty", "0.001")
+                    instrument.get("lotSizeFilter", {}).get("minOrderQty", "0.001"),
                 ),
                 "qty_step": Decimal(
-                    instrument.get("lotSizeFilter", {}).get("qtyStep", "0.001")
+                    instrument.get("lotSizeFilter", {}).get("qtyStep", "0.001"),
                 ),
                 "min_order_value": Decimal(
-                    instrument.get("lotSizeFilter", {}).get("minOrderIv", "10")
+                    instrument.get("lotSizeFilter", {}).get("minOrderIv", "10"),
                 ),
             }
         except BybitAPIError as e:
             await self.bot._handle_api_error(
-                e, f"fetching instrument info for {symbol}"
+                e, f"fetching instrument info for {symbol}",
             )
             return None
         except Exception as e:
@@ -81,7 +80,7 @@ class OrderManager:
         """Fetches and returns the available USDT wallet balance."""
         try:
             balance_response = await self.bybit_client.get_wallet_balance(
-                accountType="UNIFIED", coin="USDT"
+                accountType="UNIFIED", coin="USDT",
             )
             if (
                 balance_response
@@ -99,7 +98,7 @@ class OrderManager:
                 if usdt_balance_data:
                     return Decimal(usdt_balance_data["coin"][0]["walletBalance"])
             self.logger.warning(
-                f"{PYRMETHUS_YELLOW}Could not retrieve USDT balance. Response: {balance_response.get('retMsg', 'N/A')}{COLOR_RESET}"
+                f"{PYRMETHUS_YELLOW}Could not retrieve USDT balance. Response: {balance_response.get('retMsg', 'N/A')}{COLOR_RESET}",
             )
             return Decimal("0")
         except BybitAPIError as e:
@@ -113,7 +112,7 @@ class OrderManager:
         """Fetches the latest market price for immediate execution calculations."""
         try:
             ticker_info = await self.bybit_client.get_symbol_ticker(
-                category=config.BYBIT_CATEGORY, symbol=symbol
+                category=config.BYBIT_CATEGORY, symbol=symbol,
             )
             if (
                 not ticker_info
@@ -121,7 +120,7 @@ class OrderManager:
                 or not ticker_info.get("result", {}).get("list")
             ):
                 raise ValueError(
-                    f"Failed to fetch ticker info: {ticker_info.get('retMsg', 'N/A')}"
+                    f"Failed to fetch ticker info: {ticker_info.get('retMsg', 'N/A')}",
                 )
             return Decimal(str(ticker_info["result"]["list"][0]["lastPrice"]))
         except BybitAPIError as e:
@@ -129,7 +128,7 @@ class OrderManager:
             return Decimal("0")
         except Exception as e:
             log_exception(
-                self.logger, f"Failed to fetch current price for {symbol}: {e}", e
+                self.logger, f"Failed to fetch current price for {symbol}: {e}", e,
             )
             return Decimal("0")
 
@@ -142,7 +141,7 @@ class OrderManager:
     ) -> bool:
         """Handles the complete logic for executing an entry order."""
         self.logger.info(
-            f"{PYRMETHUS_PURPLE}💡 OrderManager received {signal_type.upper()} signal at {signal_price:.4f}{COLOR_RESET}"
+            f"{PYRMETHUS_PURPLE}💡 OrderManager received {signal_type.upper()} signal at {signal_price:.4f}{COLOR_RESET}",
         )
 
         # --- Pre-flight Checks ---
@@ -152,7 +151,7 @@ class OrderManager:
             and not config.USE_PERCENTAGE_ORDER_SIZING
         ):
             self.logger.warning(
-                f"{PYRMETHUS_YELLOW}Insufficient balance ({usdt_balance:.2f}) for fixed trade amount. Skipping.{COLOR_RESET}"
+                f"{PYRMETHUS_YELLOW}Insufficient balance ({usdt_balance:.2f}) for fixed trade amount. Skipping.{COLOR_RESET}",
             )
             return False
 
@@ -163,7 +162,7 @@ class OrderManager:
         current_price = await self._get_current_execution_price(config.SYMBOL)
         if current_price <= 0:
             self.logger.error(
-                f"{COLOR_RED}Invalid execution price ({current_price}). Aborting order.{COLOR_RESET}"
+                f"{COLOR_RED}Invalid execution price ({current_price}). Aborting order.{COLOR_RESET}",
             )
             return False
 
@@ -173,7 +172,7 @@ class OrderManager:
             volatility_factor = Decimal("1")
             if self.bot.cached_atr and current_price > 0:
                 volatility_factor = min(
-                    Decimal("1"), self.bot.cached_atr / current_price
+                    Decimal("1"), self.bot.cached_atr / current_price,
                 )
             target_usdt_value = (
                 usdt_balance
@@ -181,7 +180,7 @@ class OrderManager:
                 * volatility_factor
             )
             self.logger.info(
-                f"{PYRMETHUS_BLUE}Dynamic sizing: Balance={usdt_balance:.2f}, Volatility Factor={volatility_factor:.3f}, Target USDT={target_usdt_value:.2f}{COLOR_RESET}"
+                f"{PYRMETHUS_BLUE}Dynamic sizing: Balance={usdt_balance:.2f}, Volatility Factor={volatility_factor:.3f}, Target USDT={target_usdt_value:.2f}{COLOR_RESET}",
             )
 
         quantity = calculate_order_quantity(
@@ -195,7 +194,7 @@ class OrderManager:
 
         if quantity <= 0:
             self.logger.error(
-                f"{COLOR_RED}Final calculated quantity is zero or negative. Aborting order.{COLOR_RESET}"
+                f"{COLOR_RED}Final calculated quantity is zero or negative. Aborting order.{COLOR_RESET}",
             )
             return False
 
@@ -215,7 +214,7 @@ class OrderManager:
             order_kwargs["positionIdx"] = 0
 
         self.logger.info(
-            f"{PYRMETHUS_ORANGE}Placing {signal_type.upper()} Limit order: Qty={quantity:.4f} @ {signal_price:.4f}{COLOR_RESET}"
+            f"{PYRMETHUS_ORANGE}Placing {signal_type.upper()} Limit order: Qty={quantity:.4f} @ {signal_price:.4f}{COLOR_RESET}",
         )
 
         try:
@@ -223,15 +222,15 @@ class OrderManager:
             if response and response.get("retCode") == 0:
                 order_id = response.get("result", {}).get("orderId")
                 self.logger.info(
-                    f"{PYRMETHUS_GREEN}Successfully placed order {order_id}.{COLOR_RESET}"
+                    f"{PYRMETHUS_GREEN}Successfully placed order {order_id}.{COLOR_RESET}",
                 )
                 if order_id:
                     asyncio.create_task(
-                        self.chase_limit_order(order_id, config.SYMBOL, side)
+                        self.chase_limit_order(order_id, config.SYMBOL, side),
                     )
                 return True
             self.logger.error(
-                f"{COLOR_RED}Order placement failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}"
+                f"{COLOR_RED}Order placement failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}",
             )
             return False
         except BybitAPIError as e:
@@ -251,12 +250,12 @@ class OrderManager:
     ) -> bool:
         """Handles the complete logic for executing a market exit order."""
         self.logger.info(
-            f"{PYRMETHUS_PURPLE}💡 OrderManager received {exit_type.upper()} exit signal at {exit_price:.4f}{COLOR_RESET}"
+            f"{PYRMETHUS_PURPLE}💡 OrderManager received {exit_type.upper()} exit signal at {exit_price:.4f}{COLOR_RESET}",
         )
 
         if inventory == 0:
             self.logger.warning(
-                f"{COLOR_YELLOW}No open position to exit. Signal ignored.{COLOR_RESET}"
+                f"{COLOR_YELLOW}No open position to exit. Signal ignored.{COLOR_RESET}",
             )
             return False
 
@@ -276,19 +275,19 @@ class OrderManager:
             exit_order_kwargs["positionIdx"] = 0
 
         self.logger.info(
-            f"{PYRMETHUS_ORANGE}Placing {side_for_exit} Market exit for {exit_quantity:.4f} {config.SYMBOL}{COLOR_RESET}"
+            f"{PYRMETHUS_ORANGE}Placing {side_for_exit} Market exit for {exit_quantity:.4f} {config.SYMBOL}{COLOR_RESET}",
         )
 
         try:
             response = await self.bybit_client.create_order(**exit_order_kwargs)
             if response and response.get("retCode") == 0:
                 self.logger.info(
-                    f"{PYRMETHUS_GREEN}Successfully placed exit order.{COLOR_RESET}"
+                    f"{PYRMETHUS_GREEN}Successfully placed exit order.{COLOR_RESET}",
                 )
                 # The main bot loop will handle the position state reset via WebSocket updates.
                 return True
             self.logger.error(
-                f"{COLOR_RED}Exit order failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}"
+                f"{COLOR_RED}Exit order failed. Response: {response.get('retMsg', 'Unknown error')}{COLOR_RESET}",
             )
             return False
         except BybitAPIError as e:
@@ -307,7 +306,7 @@ class OrderManager:
     ):
         """Monitors and amends a limit order to keep it competitive."""
         self.logger.info(
-            f"{PYRMETHUS_ORANGE}Chasing limit order {order_id} for {symbol}...{COLOR_RESET}"
+            f"{PYRMETHUS_ORANGE}Chasing limit order {order_id} for {symbol}...{COLOR_RESET}",
         )
         max_amendments = 10
         amendment_count = 0
@@ -316,21 +315,21 @@ class OrderManager:
             await asyncio.sleep(config.POLLING_INTERVAL_SECONDS)
             try:
                 order_status_resp = await self.bybit_client.get_order_status(
-                    category=config.BYBIT_CATEGORY, order_id=order_id, symbol=symbol
+                    category=config.BYBIT_CATEGORY, order_id=order_id, symbol=symbol,
                 )
                 order_status = order_status_resp.get("result", {}).get("list", [{}])[0]
                 if order_status.get("orderStatus") not in ["New", "PartiallyFilled"]:
                     self.logger.info(
-                        f"{PYRMETHUS_GREEN}Order {order_id} is no longer active ({order_status.get('orderStatus')}). Stopping chase.{COLOR_RESET}"
+                        f"{PYRMETHUS_GREEN}Order {order_id} is no longer active ({order_status.get('orderStatus')}). Stopping chase.{COLOR_RESET}",
                     )
                     break
 
                 order_book_resp = await self.bybit_client.get_orderbook(
-                    category=config.BYBIT_CATEGORY, symbol=symbol
+                    category=config.BYBIT_CATEGORY, symbol=symbol,
                 )
                 if not order_book_resp or order_book_resp.get("retCode") != 0:
                     self.logger.warning(
-                        f"{COLOR_YELLOW}Could not fetch order book for chasing.{COLOR_RESET}"
+                        f"{COLOR_YELLOW}Could not fetch order book for chasing.{COLOR_RESET}",
                     )
                     continue
 
@@ -353,18 +352,18 @@ class OrderManager:
                     )
                     if amendment_result and amendment_result.get("retCode") == 0:
                         self.logger.info(
-                            f"{PYRMETHUS_BLUE}Amended order {order_id} to new price {new_price:.4f}{COLOR_RESET}"
+                            f"{PYRMETHUS_BLUE}Amended order {order_id} to new price {new_price:.4f}{COLOR_RESET}",
                         )
                         amendment_count += 1
                     else:
                         self.logger.error(
-                            f"{COLOR_RED}Failed to amend order {order_id}: {amendment_result.get('retMsg', 'N/A')}{COLOR_RESET}"
+                            f"{COLOR_RED}Failed to amend order {order_id}: {amendment_result.get('retMsg', 'N/A')}{COLOR_RESET}",
                         )
 
             except BybitAPIError as e:
                 if e.ret_code in [10009, 110001]:  # Order not found
                     self.logger.info(
-                        f"Order {order_id} not found, assuming it was filled or cancelled."
+                        f"Order {order_id} not found, assuming it was filled or cancelled.",
                     )
                     break
                 await self.bot._handle_api_error(e, f"chasing order {order_id}")
@@ -373,5 +372,5 @@ class OrderManager:
 
         if amendment_count >= max_amendments:
             self.logger.warning(
-                f"{COLOR_YELLOW}Reached max amendments for order {order_id}. Stopping chase.{COLOR_RESET}"
+                f"{COLOR_YELLOW}Reached max amendments for order {order_id}. Stopping chase.{COLOR_RESET}",
             )

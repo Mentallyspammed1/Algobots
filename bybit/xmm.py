@@ -11,19 +11,12 @@ import os
 import signal
 import sys
 import time
-from decimal import ROUND_DOWN
-from decimal import ROUND_UP
-from decimal import Decimal
-from decimal import DecimalException
-from decimal import getcontext
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, DecimalException, getcontext
 from typing import Any
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # Initialize colorama for cross-platform color support
 init(autoreset=True)
@@ -243,15 +236,15 @@ def on_public_ws_message(msg: dict[str, Any]) -> None:
                 ws_state["last_update_time"] = time.time()
                 # Log detailed market data only at debug level
                 logger.debug(
-                    f"WS Orderbook: Bid={ws_state['best_bid']:.4f}, Ask={ws_state['best_ask']:.4f}, Mid={ws_state['mid_price']:.4f}"
+                    f"WS Orderbook: Bid={ws_state['best_bid']:.4f}, Ask={ws_state['best_ask']:.4f}, Mid={ws_state['mid_price']:.4f}",
                 )
     except (KeyError, IndexError, ValueError, TypeError, DecimalException) as e:
         logger.error(
-            f"Error processing public WS message: {type(e).__name__} - {e} | Message: {msg}"
+            f"Error processing public WS message: {type(e).__name__} - {e} | Message: {msg}",
         )
     except Exception as e:
         logger.error(
-            f"Unexpected error in public WS handler: {type(e).__name__} - {e} | Message: {msg}"
+            f"Unexpected error in public WS handler: {type(e).__name__} - {e} | Message: {msg}",
         )
 
 
@@ -268,7 +261,7 @@ def on_private_ws_message(msg: dict[str, Any]) -> None:
                 if o.get("orderStatus") in ("Filled", "Canceled", "Deactivated"):
                     ws_state["open_orders"].pop(oid, None)
                     logger.debug(
-                        f"WS Order Closed: ID {oid}, Status {o['orderStatus']}"
+                        f"WS Order Closed: ID {oid}, Status {o['orderStatus']}",
                     )
                 else:
                     ws_state["open_orders"][oid] = {
@@ -291,11 +284,11 @@ def on_private_ws_message(msg: dict[str, Any]) -> None:
                     }
     except (KeyError, ValueError, TypeError, DecimalException) as e:
         logger.error(
-            f"Error processing private WS message: {type(e).__name__} - {e} | Message: {msg}"
+            f"Error processing private WS message: {type(e).__name__} - {e} | Message: {msg}",
         )
     except Exception as e:
         logger.error(
-            f"Unexpected error in private WS handler: {type(e).__name__} - {e} | Message: {msg}"
+            f"Unexpected error in private WS handler: {type(e).__name__} - {e} | Message: {msg}",
         )
 
 
@@ -314,7 +307,7 @@ class BybitClient:
         self.http = HTTP(testnet=testnet, api_key=key, api_secret=secret)
         # Set retries for WebSocket reconnection
         self.ws_public = WebSocket(
-            testnet=testnet, channel_type="linear", retries=self.MAX_RETRIES
+            testnet=testnet, channel_type="linear", retries=self.MAX_RETRIES,
         )
         self.ws_private = WebSocket(
             testnet=testnet,
@@ -349,12 +342,12 @@ class BybitClient:
         if ws_type == "public":
             self.is_public_ws_connected = False
             logger.warning(
-                "Public WebSocket connection closed. Attempting to reconnect..."
+                "Public WebSocket connection closed. Attempting to reconnect...",
             )
         elif ws_type == "private":
             self.is_private_ws_connected = False
             logger.warning(
-                "Private WebSocket connection closed. Attempting to reconnect..."
+                "Private WebSocket connection closed. Attempting to reconnect...",
             )
 
     def _on_ws_error(self, ws_type: str, error: Exception):
@@ -391,7 +384,7 @@ class BybitClient:
                         await asyncio.sleep(delay)
                     else:
                         logger.error(
-                            f"API retries exhausted for {api_method.__name__}. Last error: {ret_msg}"
+                            f"API retries exhausted for {api_method.__name__}. Last error: {ret_msg}",
                         )
                         return None
                 else:
@@ -410,7 +403,7 @@ class BybitClient:
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
-                        f"API call failed after all retries: {type(e).__name__} - {e}"
+                        f"API call failed after all retries: {type(e).__name__} - {e}",
                     )
                     return None
         return None  # Should not be reached if MAX_RETRIES >= 1, but good practice
@@ -418,7 +411,7 @@ class BybitClient:
     async def get_symbol_info(self) -> bool:
         """Fetch symbol precision details, including min order value."""
         response = await self._api(
-            self.http.get_instruments_info, category=CATEGORY, symbol=SYMBOL
+            self.http.get_instruments_info, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             instruments = response.get("result", {}).get("list")
@@ -428,10 +421,10 @@ class BybitClient:
                 lot_size_filter = instrument_info.get("lotSizeFilter", {})
 
                 symbol_info["price_precision"] = Decimal(
-                    price_filter.get("tickSize", "0.0001")
+                    price_filter.get("tickSize", "0.0001"),
                 )
                 symbol_info["qty_precision"] = Decimal(
-                    lot_size_filter.get("qtyStep", "0.001")
+                    lot_size_filter.get("qtyStep", "0.001"),
                 )
 
                 # Attempt to infer minimum order value. Bybit's API doesn't directly expose min_order_value.
@@ -450,11 +443,11 @@ class BybitClient:
                     symbol_info["min_order_value"] = min_price * min_qty
                 else:
                     symbol_info["min_order_value"] = Decimal(
-                        "10.0"
+                        "10.0",
                     )  # Default if cannot infer
 
                 logger.info(
-                    f"Symbol Info: {SYMBOL} | Price Precision={symbol_info['price_precision']}, Qty Precision={symbol_info['qty_precision']}, Min Price={min_price}, Min Qty={min_qty}"
+                    f"Symbol Info: {SYMBOL} | Price Precision={symbol_info['price_precision']}, Qty Precision={symbol_info['qty_precision']}, Min Price={min_price}, Min Qty={min_qty}",
                 )
                 return True
             logger.error(f"Symbol {SYMBOL} not found in instruments info.")
@@ -469,7 +462,7 @@ class BybitClient:
             logger.info("API credentials validated successfully.")
             return True
         logger.error(
-            "API credentials validation failed. Check keys, secret, and testnet setting."
+            "API credentials validation failed. Check keys, secret, and testnet setting.",
         )
         return False
 
@@ -477,7 +470,7 @@ class BybitClient:
         """Start public and private WebSocket streams."""
         logger.info(f"Starting public orderbook stream for {SYMBOL}...")
         self.ws_public.orderbook_stream(
-            symbol=SYMBOL, depth=1, callback=on_public_ws_message
+            symbol=SYMBOL, depth=1, callback=on_public_ws_message,
         )
         logger.info("Starting private order and position streams...")
         self.ws_private.order_stream(callback=on_private_ws_message)
@@ -487,7 +480,7 @@ class BybitClient:
     async def get_balance(self) -> Decimal:
         """Fetch available balance for USDT."""
         response = await self._api(
-            self.http.get_wallet_balance, accountType="UNIFIED", coin="USDT"
+            self.http.get_wallet_balance, accountType="UNIFIED", coin="USDT",
         )
         if response and response.get("retCode") == 0:
             try:
@@ -505,7 +498,7 @@ class BybitClient:
                 return Decimal("0")
             except (KeyError, IndexError, ValueError, DecimalException, TypeError) as e:
                 logger.error(
-                    f"Error parsing balance response: {type(e).__name__} - {e}"
+                    f"Error parsing balance response: {type(e).__name__} - {e}",
                 )
                 return Decimal("0")
         logger.error("Failed to fetch balance.")
@@ -514,7 +507,7 @@ class BybitClient:
     async def get_open_orders_rest(self) -> dict[str, Any]:
         """Sync open orders from REST API."""
         response = await self._api(
-            self.http.get_open_orders, category=CATEGORY, symbol=SYMBOL
+            self.http.get_open_orders, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             orders_data = response.get("result", {}).get("list", [])
@@ -535,7 +528,7 @@ class BybitClient:
                     }
                 except (KeyError, ValueError, DecimalException, TypeError) as e:
                     logger.error(
-                        f"Error processing REST order data: {type(e).__name__} - {e} | Order: {order}"
+                        f"Error processing REST order data: {type(e).__name__} - {e} | Order: {order}",
                     )
 
             ws_state["open_orders"] = current_open_orders
@@ -547,7 +540,7 @@ class BybitClient:
     async def get_positions_rest(self) -> dict[str, Any]:
         """Sync positions from REST API."""
         response = await self._api(
-            self.http.get_positions, category=CATEGORY, symbol=SYMBOL
+            self.http.get_positions, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             positions_data = response.get("result", {}).get("list", [])
@@ -555,7 +548,7 @@ class BybitClient:
             for pos in positions_data:
                 try:
                     if pos.get("symbol") == SYMBOL and Decimal(
-                        pos.get("size", "0")
+                        pos.get("size", "0"),
                     ) > Decimal("0"):
                         side = "Long" if pos.get("side") == "Buy" else "Short"
                         current_positions[side] = {
@@ -565,7 +558,7 @@ class BybitClient:
                         }
                 except (KeyError, ValueError, DecimalException, TypeError) as e:
                     logger.error(
-                        f"Error processing REST position data: {type(e).__name__} - {e} | Position: {pos}"
+                        f"Error processing REST position data: {type(e).__name__} - {e} | Position: {pos}",
                     )
 
             ws_state["positions"] = current_positions
@@ -593,11 +586,11 @@ class BybitClient:
         # Validate quantity against precision and minimums
         try:
             quantized_qty = qty.quantize(
-                symbol_info["qty_precision"], rounding=ROUND_DOWN
+                symbol_info["qty_precision"], rounding=ROUND_DOWN,
             )
             if quantized_qty <= Decimal("0"):
                 logger.error(
-                    f"Order quantity {qty} results in zero or negative after quantization ({quantized_qty})."
+                    f"Order quantity {qty} results in zero or negative after quantization ({quantized_qty}).",
                 )
                 return None
             if (
@@ -605,7 +598,7 @@ class BybitClient:
                 and symbol_info.get("min_qty", Decimal("0")) > 0
             ):
                 logger.error(
-                    f"Order quantity {quantized_qty} is below minimum required quantity ({symbol_info['min_qty']})."
+                    f"Order quantity {quantized_qty} is below minimum required quantity ({symbol_info['min_qty']}).",
                 )
                 return None
         except DecimalException as e:
@@ -618,7 +611,7 @@ class BybitClient:
             try:
                 rounding_method = ROUND_DOWN if side == "Buy" else ROUND_UP
                 quantized_price = price.quantize(
-                    symbol_info["price_precision"], rounding=rounding_method
+                    symbol_info["price_precision"], rounding=rounding_method,
                 )
 
                 # Check against minimum price
@@ -627,7 +620,7 @@ class BybitClient:
                     and quantized_price < symbol_info["min_price"]
                 ):
                     logger.error(
-                        f"Order price {quantized_price} is below minimum required price ({symbol_info['min_price']})."
+                        f"Order price {quantized_price} is below minimum required price ({symbol_info['min_price']}).",
                     )
                     return None
             except DecimalException as e:
@@ -643,7 +636,7 @@ class BybitClient:
             order_value = quantized_qty * quantized_price
             if order_value < symbol_info["min_order_value"]:
                 logger.error(
-                    f"Calculated order value ({order_value:.2f}) is below minimum order value ({symbol_info['min_order_value']:.2f})."
+                    f"Calculated order value ({order_value:.2f}) is below minimum order value ({symbol_info['min_order_value']:.2f}).",
                 )
                 return None
 
@@ -670,18 +663,18 @@ class BybitClient:
         if response and response.get("retCode") == 0:
             order_info = response["result"]
             logger.info(
-                f"Successfully placed {order_type} {side} order: ID={order_info.get('orderId', 'N/A')}, Qty={quantized_qty}, Price={quantized_price if quantized_price else 'N/A'}"
+                f"Successfully placed {order_type} {side} order: ID={order_info.get('orderId', 'N/A')}, Qty={quantized_qty}, Price={quantized_price if quantized_price else 'N/A'}",
             )
             return order_info
         logger.error(
-            f"Failed to place {order_type} {side} order: {response.get('retMsg', 'Unknown error') if response else 'No response'}"
+            f"Failed to place {order_type} {side} order: {response.get('retMsg', 'Unknown error') if response else 'No response'}",
         )
         return None
 
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel a specific order."""
         response = await self._api(
-            self.http.cancel_order, category=CATEGORY, symbol=SYMBOL, orderId=order_id
+            self.http.cancel_order, category=CATEGORY, symbol=SYMBOL, orderId=order_id,
         )
         if response and response.get("retCode") == 0:
             logger.info(f"Successfully canceled order: {order_id}")
@@ -689,7 +682,7 @@ class BybitClient:
             ws_state["open_orders"].pop(order_id, None)
             return True
         logger.error(
-            f"Failed to cancel order {order_id}: {response.get('retMsg', 'Unknown error') if response else 'No response'}"
+            f"Failed to cancel order {order_id}: {response.get('retMsg', 'Unknown error') if response else 'No response'}",
         )
         return False
 
@@ -697,18 +690,18 @@ class BybitClient:
         """Cancel all open orders for the current symbol."""
         logger.warning(f"Attempting to cancel all open orders for {SYMBOL}...")
         response = await self._api(
-            self.http.cancel_all_orders, category=CATEGORY, symbol=SYMBOL
+            self.http.cancel_all_orders, category=CATEGORY, symbol=SYMBOL,
         )
         if response and response.get("retCode") == 0:
             logger.info(f"Successfully canceled all open orders for {SYMBOL}.")
             ws_state["open_orders"].clear()  # Clear state immediately
         else:
             logger.error(
-                f"Failed to cancel all orders for {SYMBOL}: {response.get('retMsg', 'Unknown error') if response else 'No response'}"
+                f"Failed to cancel all orders for {SYMBOL}: {response.get('retMsg', 'Unknown error') if response else 'No response'}",
             )
 
     async def place_batch_orders(
-        self, orders: list[dict[str, Any]]
+        self, orders: list[dict[str, Any]],
     ) -> dict[str, Any] | None:
         """Place multiple orders in a single batch request, with quantization and validation."""
         if not orders:
@@ -726,17 +719,17 @@ class BybitClient:
 
                 if not side or not qty:
                     logger.warning(
-                        f"Skipping batch order due to missing side or quantity: {order}"
+                        f"Skipping batch order due to missing side or quantity: {order}",
                     )
                     continue
 
                 # Quantize quantity
                 quantized_qty = qty.quantize(
-                    symbol_info["qty_precision"], rounding=ROUND_DOWN
+                    symbol_info["qty_precision"], rounding=ROUND_DOWN,
                 )
                 if quantized_qty <= Decimal("0"):
                     logger.warning(
-                        f"Skipping batch order due to zero/negative quantized quantity: {quantized_qty}"
+                        f"Skipping batch order due to zero/negative quantized quantity: {quantized_qty}",
                     )
                     continue
                 if (
@@ -744,7 +737,7 @@ class BybitClient:
                     and quantized_qty < symbol_info["min_qty"]
                 ):
                     logger.warning(
-                        f"Skipping batch order: quantity {quantized_qty} below minimum {symbol_info['min_qty']}."
+                        f"Skipping batch order: quantity {quantized_qty} below minimum {symbol_info['min_qty']}.",
                     )
                     continue
 
@@ -753,14 +746,14 @@ class BybitClient:
                 if price is not None:
                     rounding_method = ROUND_DOWN if side == "Buy" else ROUND_UP
                     quantized_price = price.quantize(
-                        symbol_info["price_precision"], rounding=rounding_method
+                        symbol_info["price_precision"], rounding=rounding_method,
                     )
                     if (
                         symbol_info.get("min_price", Decimal("0")) > 0
                         and quantized_price < symbol_info["min_price"]
                     ):
                         logger.warning(
-                            f"Skipping batch order: price {quantized_price} below minimum {symbol_info['min_price']}."
+                            f"Skipping batch order: price {quantized_price} below minimum {symbol_info['min_price']}.",
                         )
                         continue
 
@@ -773,7 +766,7 @@ class BybitClient:
                     order_value = quantized_qty * quantized_price
                     if order_value < symbol_info["min_order_value"]:
                         logger.warning(
-                            f"Skipping batch order: value {order_value:.2f} below minimum {symbol_info['min_order_value']:.2f}."
+                            f"Skipping batch order: value {order_value:.2f} below minimum {symbol_info['min_order_value']:.2f}.",
                         )
                         continue
 
@@ -795,11 +788,11 @@ class BybitClient:
 
             except (KeyError, ValueError, DecimalException, TypeError) as e:
                 logger.error(
-                    f"Error preparing batch order {order}: {type(e).__name__} - {e}"
+                    f"Error preparing batch order {order}: {type(e).__name__} - {e}",
                 )
             except Exception as e:
                 logger.error(
-                    f"Unexpected error preparing batch order {order}: {type(e).__name__} - {e}"
+                    f"Unexpected error preparing batch order {order}: {type(e).__name__} - {e}",
                 )
 
         if not batch_payloads:
@@ -816,7 +809,7 @@ class BybitClient:
             logger.info(f"Successfully placed {len(batch_payloads)} batch orders.")
             return response["result"]
         logger.error(
-            f"Failed to place batch orders: {response.get('retMsg', 'Unknown error') if response else 'No response'}"
+            f"Failed to place batch orders: {response.get('retMsg', 'Unknown error') if response else 'No response'}",
         )
         return None
 
@@ -834,7 +827,7 @@ class MarketMakingStrategy:
         self.stop_loss_task = None
         self.exit_flag = asyncio.Event()
         self.last_mid_price_for_replacement = Decimal(
-            "0"
+            "0",
         )  # Tracks price for MM order replacement logic
         self.balance_update_interval = 30  # Update balance every 30 seconds
 
@@ -845,7 +838,7 @@ class MarketMakingStrategy:
         age = time.time() - ws_state["last_update_time"]
         if age > MAX_DATA_AGE_SECONDS:
             logger.warning(
-                f"Market data is stale (age: {age:.1f}s > {MAX_DATA_AGE_SECONDS}s). Skipping operation."
+                f"Market data is stale (age: {age:.1f}s > {MAX_DATA_AGE_SECONDS}s). Skipping operation.",
             )
             return False
         return True
@@ -869,13 +862,13 @@ class MarketMakingStrategy:
                 )
                 if price_change >= PRICE_THRESHOLD:
                     logger.info(
-                        f"Price moved {price_change:.4%}, initiating order re-placement sequence."
+                        f"Price moved {price_change:.4%}, initiating order re-placement sequence.",
                     )
                     await self.client.cancel_all_orders()  # Cancel existing MM orders
                     self.last_mid_price_for_replacement = mid  # Update reference price
             except DecimalException:
                 logger.warning(
-                    "Decimal division error during price change calculation."
+                    "Decimal division error during price change calculation.",
                 )
 
         # Update order state from REST to ensure accuracy
@@ -887,7 +880,7 @@ class MarketMakingStrategy:
         # If we have reached the maximum number of open MM orders, do nothing
         if len(ws_state["open_orders"]) >= MAX_OPEN_ORDERS:
             logger.debug(
-                f"Max open orders ({MAX_OPEN_ORDERS}) reached. Skipping new MM orders."
+                f"Max open orders ({MAX_OPEN_ORDERS}) reached. Skipping new MM orders.",
             )
             return
 
@@ -897,10 +890,10 @@ class MarketMakingStrategy:
 
         # Adjust prices to be within the current best bid/ask and quantized
         bid_price = min(
-            bid_price.quantize(symbol_info["price_precision"], rounding=ROUND_DOWN), bid
+            bid_price.quantize(symbol_info["price_precision"], rounding=ROUND_DOWN), bid,
         )
         ask_price = max(
-            ask_price.quantize(symbol_info["price_precision"], rounding=ROUND_UP), ask
+            ask_price.quantize(symbol_info["price_precision"], rounding=ROUND_UP), ask,
         )
 
         # Prepare orders to place
@@ -919,7 +912,7 @@ class MarketMakingStrategy:
                     "price": bid_price,
                     "client_order_id": client_buy_id,
                     "orderType": "Limit",
-                }
+                },
             )
 
         # Add Sell order if no existing sell order and we have capacity
@@ -935,7 +928,7 @@ class MarketMakingStrategy:
                     "price": ask_price,
                     "client_order_id": client_sell_id,
                     "orderType": "Limit",
-                }
+                },
             )
 
         if orders_to_place:
@@ -953,14 +946,14 @@ class MarketMakingStrategy:
         """Cancel orders that have exceeded their lifespan."""
         stale_order_ids = []
         for oid, data in list(
-            ws_state["open_orders"].items()
+            ws_state["open_orders"].items(),
         ):  # Use list to allow modification during iteration
             if time.time() - data.get("timestamp", 0) > ORDER_LIFESPAN_SECONDS:
                 stale_order_ids.append(oid)
 
         if stale_order_ids:
             logger.info(
-                f"Found {len(stale_order_ids)} stale orders. Cancelling them..."
+                f"Found {len(stale_order_ids)} stale orders. Cancelling them...",
             )
             # Concurrently cancel stale orders
             tasks = [self.client.cancel_order(oid) for oid in stale_order_ids]
@@ -988,17 +981,17 @@ class MarketMakingStrategy:
                 "Sell" if net_position > Decimal("0") else "Buy"
             )  # Close long if positive, close short if negative
             qty_to_rebalance = abs(net_position).quantize(
-                symbol_info["qty_precision"], rounding=ROUND_DOWN
+                symbol_info["qty_precision"], rounding=ROUND_DOWN,
             )
 
             if qty_to_rebalance <= Decimal("0"):
                 logger.warning(
-                    "Rebalance quantity is zero after quantization. Skipping rebalance."
+                    "Rebalance quantity is zero after quantization. Skipping rebalance.",
                 )
                 return
 
             logger.info(
-                f"{YELLOW}Inventory imbalance detected: Net Position {net_position:.{_calculate_decimal_precision(symbol_info['qty_precision'])}f}. Rebalancing by closing {side_to_close} {qty_to_rebalance}.{NC}"
+                f"{YELLOW}Inventory imbalance detected: Net Position {net_position:.{_calculate_decimal_precision(symbol_info['qty_precision'])}f}. Rebalancing by closing {side_to_close} {qty_to_rebalance}.{NC}",
             )
             send_toast(f"Rebalancing {qty_to_rebalance} {SYMBOL}!")
 
@@ -1030,24 +1023,24 @@ class MarketMakingStrategy:
             # Calculate PnL percentage based on exchange's PnL figure
             pnl_percentage = Decimal("0")
             if abs(unrealised_pnl) > Decimal("0") and (avg_price * size) != Decimal(
-                "0"
+                "0",
             ):
                 # Use direct PnL from exchange for percentage calculation
                 pnl_percentage = unrealised_pnl / (avg_price * size)
 
             quantized_size = size.quantize(
-                symbol_info["qty_precision"], rounding=ROUND_DOWN
+                symbol_info["qty_precision"], rounding=ROUND_DOWN,
             )
             if quantized_size <= Decimal("0"):
                 logger.warning(
-                    f"Position size {size} for {side} resulted in zero quantized size. Skipping PnL management."
+                    f"Position size {size} for {side} resulted in zero quantized size. Skipping PnL management.",
                 )
                 continue
 
             # Trigger Stop Loss
             if pnl_percentage < -STOP_LOSS_PERCENTAGE:
                 logger.critical(
-                    f"{RED}Stop-loss triggered for {side} position! PnL: {unrealised_pnl:.2f} ({pnl_percentage:.2%}). Closing position.{NC}"
+                    f"{RED}Stop-loss triggered for {side} position! PnL: {unrealised_pnl:.2f} ({pnl_percentage:.2%}). Closing position.{NC}",
                 )
                 send_toast(f"{side} SL triggered! PnL: {unrealised_pnl:.2f}")
                 # Close position with a market order
@@ -1061,7 +1054,7 @@ class MarketMakingStrategy:
             # Trigger Profit Take
             elif pnl_percentage >= PROFIT_PERCENTAGE:
                 logger.info(
-                    f"{GREEN}Profit-take triggered for {side} position! PnL: {unrealised_pnl:.2f} ({pnl_percentage:.2%}). Closing position.{NC}"
+                    f"{GREEN}Profit-take triggered for {side} position! PnL: {unrealised_pnl:.2f} ({pnl_percentage:.2%}). Closing position.{NC}",
                 )
                 send_toast(f"{side} TP triggered! PnL: {unrealised_pnl:.2f}")
                 # Close position with a market order
@@ -1113,7 +1106,7 @@ class MarketMakingStrategy:
         # Fetch critical symbol information first
         if not await self.client.get_symbol_info():
             logger.critical(
-                "Failed to fetch symbol information. Cannot proceed without it."
+                "Failed to fetch symbol information. Cannot proceed without it.",
             )
             send_toast("MMXCEL Error: Symbol Info Failed!", "red")
             return
@@ -1121,7 +1114,7 @@ class MarketMakingStrategy:
         # Re-validate config against fetched symbol info
         if not self._validate_config_against_symbol_info():
             logger.critical(
-                "Configuration validation failed against symbol info. Aborting startup."
+                "Configuration validation failed against symbol info. Aborting startup.",
             )
             send_toast("MMXCEL Config Error (Symbol Info)!", "red")
             return
@@ -1131,17 +1124,17 @@ class MarketMakingStrategy:
         try:
             # Use set_position_mode for Hedge Mode
             response = await self.client._api(
-                self.client.http.set_position_mode, hedgeMode=True
+                self.client.http.set_position_mode, hedgeMode=True,
             )  # category is often implied or default is linear
             if response and response.get("retCode") == 0:
                 logger.info("Trading preference set to Hedge Mode successfully.")
             else:
                 logger.warning(
-                    f"Failed to set trading preference to Hedge Mode: {response.get('retMsg', 'Unknown error')}. This might be expected if already set or an API issue. Ensure HedgeMode is enabled in Bybit settings. Proceeding..."
+                    f"Failed to set trading preference to Hedge Mode: {response.get('retMsg', 'Unknown error')}. This might be expected if already set or an API issue. Ensure HedgeMode is enabled in Bybit settings. Proceeding...",
                 )
         except Exception as e:
             logger.warning(
-                f"Error setting trading preference: {type(e).__name__} - {e}. Ensure HedgeMode is enabled in Bybit settings. Proceeding..."
+                f"Error setting trading preference: {type(e).__name__} - {e}. Ensure HedgeMode is enabled in Bybit settings. Proceeding...",
             )
 
         # Start WebSocket streams
@@ -1165,7 +1158,7 @@ class MarketMakingStrategy:
         )
         self.stop_loss_task = asyncio.create_task(
             self._periodic_task(
-                self.manage_stop_loss_and_profit_take, 2, "PnLManagement"
+                self.manage_stop_loss_and_profit_take, 2, "PnLManagement",
             ),
             name="pnl_task",
         )
@@ -1275,7 +1268,7 @@ class MarketMakingStrategy:
         if SPREAD_PERCENTAGE >= PRICE_THRESHOLD and Decimal("0") < PRICE_THRESHOLD:
             logger.warning(
                 f"{YELLOW}Warning: SPREAD_PERCENTAGE ({SPREAD_PERCENTAGE:.4%}) is greater than or equal to PRICE_THRESHOLD ({PRICE_THRESHOLD:.4%}). "
-                "This may lead to frequent order re-placements.{NC}"
+                "This may lead to frequent order re-placements.{NC}",
             )
 
         return is_valid
@@ -1287,11 +1280,11 @@ class MarketMakingStrategy:
         # Validate QUANTITY against symbol's minimum quantity and precision
         try:
             quantized_config_qty = QUANTITY.quantize(
-                symbol_info["qty_precision"], rounding=ROUND_DOWN
+                symbol_info["qty_precision"], rounding=ROUND_DOWN,
             )
             if quantized_config_qty <= Decimal("0"):
                 logger.critical(
-                    f"Config Error: QUANTITY ({QUANTITY}) results in zero or negative after quantization ({quantized_config_qty})."
+                    f"Config Error: QUANTITY ({QUANTITY}) results in zero or negative after quantization ({quantized_config_qty}).",
                 )
                 is_valid = False
             elif (
@@ -1299,7 +1292,7 @@ class MarketMakingStrategy:
                 and quantized_config_qty < symbol_info["min_qty"]
             ):
                 logger.critical(
-                    f"Config Error: QUANTITY ({QUANTITY}, quantized to {quantized_config_qty}) is below the symbol's minimum trade quantity ({symbol_info['min_qty']})."
+                    f"Config Error: QUANTITY ({QUANTITY}, quantized to {quantized_config_qty}) is below the symbol's minimum trade quantity ({symbol_info['min_qty']}).",
                 )
                 is_valid = False
 
@@ -1307,7 +1300,7 @@ class MarketMakingStrategy:
             # Using a placeholder price for this check as mid_price might not be available yet, or could be 0
             # Use min_price from symbol info as a safer lower bound for this check.
             min_price_check = symbol_info.get(
-                "min_price", Decimal("1")
+                "min_price", Decimal("1"),
             )  # Default to 1 if not found
             if min_price_check <= Decimal("0"):
                 min_price_check = Decimal("1")  # Ensure it's positive
@@ -1318,13 +1311,13 @@ class MarketMakingStrategy:
                 and min_order_val_check < symbol_info["min_order_value"]
             ):
                 logger.critical(
-                    f"Config Error: QUANTITY ({QUANTITY}) multiplied by minimum price ({min_price_check}) results in an order value ({min_order_val_check:.2f}) potentially below the symbol's minimum order value ({symbol_info['min_order_value']:.2f}). Adjust QUANTITY or check symbol specs."
+                    f"Config Error: QUANTITY ({QUANTITY}) multiplied by minimum price ({min_price_check}) results in an order value ({min_order_val_check:.2f}) potentially below the symbol's minimum order value ({symbol_info['min_order_value']:.2f}). Adjust QUANTITY or check symbol specs.",
                 )
                 is_valid = False
 
         except DecimalException as e:
             logger.critical(
-                f"Config Validation Error: Decimal issue with QUANTITY or symbol info: {e}"
+                f"Config Validation Error: Decimal issue with QUANTITY or symbol info: {e}",
             )
             is_valid = False
 
@@ -1343,12 +1336,12 @@ class MarketMakingStrategy:
 
         print(format_metric("Symbol", SYMBOL, YELLOW, WHITE))
         print(
-            format_metric("Order Qty", QUANTITY, YELLOW, value_precision=qty_disp_prec)
+            format_metric("Order Qty", QUANTITY, YELLOW, value_precision=qty_disp_prec),
         )
         print(
             format_metric(
-                "Spread %", SPREAD_PERCENTAGE * 100, YELLOW, value_precision=4
-            )
+                "Spread %", SPREAD_PERCENTAGE * 100, YELLOW, value_precision=4,
+            ),
         )
         print(format_metric("Max Open Orders", MAX_OPEN_ORDERS, YELLOW))
         print(format_metric("Order Lifespan (s)", ORDER_LIFESPAN_SECONDS, YELLOW))
@@ -1358,7 +1351,7 @@ class MarketMakingStrategy:
                 REBALANCE_THRESHOLD_QTY,
                 YELLOW,
                 value_precision=qty_disp_prec,
-            )
+            ),
         )
         print(format_metric("Profit Take %", PROFIT_PERCENTAGE * 100, YELLOW))
         print(format_metric("Stop Loss %", STOP_LOSS_PERCENTAGE * 100, YELLOW))
@@ -1371,7 +1364,7 @@ class MarketMakingStrategy:
                 symbol_info["price_precision"],
                 YELLOW,
                 value_precision=price_disp_prec,
-            )
+            ),
         )
         print(
             format_metric(
@@ -1379,7 +1372,7 @@ class MarketMakingStrategy:
                 symbol_info["qty_precision"],
                 YELLOW,
                 value_precision=qty_disp_prec,
-            )
+            ),
         )
         print(
             format_metric(
@@ -1389,7 +1382,7 @@ class MarketMakingStrategy:
                 value_precision=qty_disp_prec
                 if symbol_info.get("min_qty", Decimal("0")) > 0
                 else None,
-            )
+            ),
         )
         print(
             format_metric(
@@ -1399,7 +1392,7 @@ class MarketMakingStrategy:
                 value_precision=2
                 if symbol_info.get("min_order_value", Decimal("0")) > 0
                 else None,
-            )
+            ),
         )
         print_neon_separator()
 
@@ -1409,8 +1402,8 @@ class MarketMakingStrategy:
         data_freshness_color = GREEN if market_data_fresh else RED
         print(
             format_metric(
-                "Market Data Fresh", market_data_fresh, YELLOW, data_freshness_color
-            )
+                "Market Data Fresh", market_data_fresh, YELLOW, data_freshness_color,
+            ),
         )
 
         if market_data_fresh:
@@ -1420,7 +1413,7 @@ class MarketMakingStrategy:
                     ws_state["mid_price"],
                     BLUE,
                     value_precision=price_disp_prec,
-                )
+                ),
             )
             print(
                 format_metric(
@@ -1428,7 +1421,7 @@ class MarketMakingStrategy:
                     ws_state["best_bid"],
                     GREEN,
                     value_precision=price_disp_prec,
-                )
+                ),
             )
             print(
                 format_metric(
@@ -1436,7 +1429,7 @@ class MarketMakingStrategy:
                     ws_state["best_ask"],
                     RED,
                     value_precision=price_disp_prec,
-                )
+                ),
             )
         else:
             print(format_metric("Mid Price", "N/A", BLUE))
@@ -1449,23 +1442,23 @@ class MarketMakingStrategy:
                 self.client.current_balance,
                 YELLOW,
                 value_precision=2,
-            )
+            ),
         )
         print_neon_separator()
 
         # Display Positions
         print(f"{BOLD}{CYAN}--- Positions ({SYMBOL}) ---{NC}")
         long_pos = ws_state["positions"].get(
-            "Long", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")}
+            "Long", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")},
         )
         short_pos = ws_state["positions"].get(
-            "Short", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")}
+            "Short", {"size": Decimal("0"), "unrealisedPnl": Decimal("0")},
         )
 
         print(
             format_metric(
-                "Long Position", long_pos["size"], GREEN, value_precision=qty_disp_prec
-            )
+                "Long Position", long_pos["size"], GREEN, value_precision=qty_disp_prec,
+            ),
         )
         print(
             format_metric(
@@ -1474,12 +1467,12 @@ class MarketMakingStrategy:
                 GREEN,
                 is_pnl=True,
                 value_precision=2,
-            )
+            ),
         )
         print(
             format_metric(
-                "Short Position", short_pos["size"], RED, value_precision=qty_disp_prec
-            )
+                "Short Position", short_pos["size"], RED, value_precision=qty_disp_prec,
+            ),
         )
         print(
             format_metric(
@@ -1488,7 +1481,7 @@ class MarketMakingStrategy:
                 RED,
                 is_pnl=True,
                 value_precision=2,
-            )
+            ),
         )
         print_neon_separator()
 
@@ -1507,7 +1500,7 @@ class MarketMakingStrategy:
                 price_val = order.get("price", Decimal("0"))
                 qty_val = order.get("qty", Decimal("0"))
                 print(
-                    f"  [{color}{order.get('side', 'N/A')}{NC}] @ {price_val:.{price_disp_prec}f} Qty: {qty_val:.{qty_disp_prec}f} (ID: {order.get('status', 'N/A')}, Client: {client_id})"
+                    f"  [{color}{order.get('side', 'N/A')}{NC}] @ {price_val:.{price_disp_prec}f} Qty: {qty_val:.{qty_disp_prec}f} (ID: {order.get('status', 'N/A')}, Client: {client_id})",
                 )
         else:
             print(f"  {YELLOW}No open orders detected.{NC}")
@@ -1522,7 +1515,7 @@ class MarketMakingStrategy:
 def signal_handler(sig, frame):
     """Handle termination signals (SIGINT, SIGTERM) for graceful shutdown."""
     logger.warning(
-        f"Received termination signal ({sig}). Initiating graceful shutdown..."
+        f"Received termination signal ({sig}). Initiating graceful shutdown...",
     )
     loop = asyncio.get_event_loop()
 
@@ -1551,7 +1544,7 @@ async def main():
     # Check for essential configuration first
     if not API_KEY or not API_SECRET:
         print(
-            f"{RED}ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found in .env file.{NC}"
+            f"{RED}ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found in .env file.{NC}",
         )
         sys.exit(1)
 
@@ -1559,7 +1552,7 @@ async def main():
     _HAS_TERMUX_TOAST_CMD = check_termux_toast()
     if not _HAS_TERMUX_TOAST_CMD:
         logger.warning(
-            "Termux:API command 'termux-toast' not found. Toasts will be disabled. Please install 'termux-api' package and app."
+            "Termux:API command 'termux-toast' not found. Toasts will be disabled. Please install 'termux-api' package and app.",
         )
 
     send_toast("MMXCEL: Starting bot...", "#336699")
@@ -1581,11 +1574,11 @@ async def main():
             logger.info("Trading preference set to Hedge Mode successfully.")
         else:
             logger.warning(
-                f"Failed to set trading preference: {response.get('retMsg', 'Unknown error')}. Ensure HedgeMode is enabled in Bybit account settings. Proceeding..."
+                f"Failed to set trading preference: {response.get('retMsg', 'Unknown error')}. Ensure HedgeMode is enabled in Bybit account settings. Proceeding...",
             )
     except Exception as e:
         logger.warning(
-            f"Error setting trading preference: {type(e).__name__} - {e}. Ensure HedgeMode is enabled in Bybit settings. Proceeding..."
+            f"Error setting trading preference: {type(e).__name__} - {e}. Ensure HedgeMode is enabled in Bybit settings. Proceeding...",
         )
 
     # 3. Fetch Symbol Information (Crucial for precision)
@@ -1617,7 +1610,7 @@ async def main():
     )
     strategy.stop_loss_task = asyncio.create_task(
         strategy._periodic_task(
-            strategy.manage_stop_loss_and_profit_take, 2, "PnLManagement"
+            strategy.manage_stop_loss_and_profit_take, 2, "PnLManagement",
         ),
         name="pnl_task",
     )

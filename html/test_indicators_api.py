@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
 import pytest
-from indicators_api import calculate_ehlers_fisher_transform
-from indicators_api import calculate_ema
-from indicators_api import calculate_macd
-from indicators_api import calculate_rsi
-from indicators_api import calculate_supertrend
+from indicators_api import (
+    calculate_ehlers_fisher_transform,
+    calculate_ema,
+    calculate_macd,
+    calculate_rsi,
+    calculate_supertrend,
+)
 
 
 # Fixture for a basic DataFrame
@@ -207,7 +209,7 @@ def test_calculate_ehlers_fisher_transform_basic(sample_dataframe):
 
 def test_calculate_ehlers_fisher_transform_insufficient_data(insufficient_dataframe):
     df_result = calculate_ehlers_fisher_transform(
-        insufficient_dataframe.copy(), period=10
+        insufficient_dataframe.copy(), period=10,
     )
     assert df_result["fisher_10"].isnull().all()
     assert df_result["fisher_signal_10"].isnull().all()
@@ -216,7 +218,7 @@ def test_calculate_ehlers_fisher_transform_insufficient_data(insufficient_datafr
 def test_calculate_ehlers_fisher_transform_value_error(sample_dataframe):
     with pytest.raises(ValueError):
         calculate_ehlers_fisher_transform(
-            sample_dataframe.copy(), column="non_existent_column"
+            sample_dataframe.copy(), column="non_existent_column",
         )
 
 

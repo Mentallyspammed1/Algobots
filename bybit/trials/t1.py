@@ -6,17 +6,12 @@ import sys
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import datetime
-from datetime import timedelta
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation, getcontext
 from typing import Any
 
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 # --- Global Decimal Precision for financial calc ---
 getcontext().prec = (
@@ -37,7 +32,7 @@ def retry_on_exception(max_retries: int = 3, delay: float = 1.0):
                     if attempt == max_retries - 1:
                         raise
                     logger.warning(
-                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s..."
+                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...",
                     )
                     await asyncio.sleep(delay * (attempt + 1))
             return None
@@ -50,7 +45,7 @@ def retry_on_exception(max_retries: int = 3, delay: float = 1.0):
                     if attempt == max_retries - 1:
                         raise
                     logger.warning(
-                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s..."
+                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...",
                     )
                     time.sleep(delay * (attempt + 1))
             return None
@@ -88,7 +83,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 from logging.handlers import RotatingFileHandler
 
 log_formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
+    "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
 )
 
 # Console handler
@@ -265,7 +260,7 @@ class BybitWebSocketManager:
                 oid = exe.get("orderId")
                 if oid:
                     logger.info(
-                        f"Execution: {oid}, Price: {exe.get('execPrice')}, Qty: {exe.get('execQty')}"
+                        f"Execution: {oid}, Price: {exe.get('execPrice')}, Qty: {exe.get('execQty')}",
                     )
                     self._message_count["private"] += 1
         except Exception as e:
@@ -315,7 +310,7 @@ class BybitWebSocketManager:
             if "orderbook" in channels:
                 try:
                     self.ws_public.orderbook_stream(
-                        depth=1, symbol=symbol, callback=self.handle_orderbook
+                        depth=1, symbol=symbol, callback=self.handle_orderbook,
                     )
                     logger.debug(f"Subscribed to orderbook for {symbol}")
                 except Exception as e:
@@ -324,7 +319,7 @@ class BybitWebSocketManager:
             if "publicTrade" in channels:
                 try:
                     self.ws_public.trade_stream(
-                        symbol=symbol, callback=self.handle_trades
+                        symbol=symbol, callback=self.handle_trades,
                     )
                     logger.debug(f"Subscribed to trades for {symbol}")
                 except Exception as e:
@@ -333,7 +328,7 @@ class BybitWebSocketManager:
             if "tickers" in channels:
                 try:
                     self.ws_public.ticker_stream(
-                        symbol=symbol, callback=self.handle_ticker
+                        symbol=symbol, callback=self.handle_ticker,
                     )
                     logger.debug(f"Subscribed to ticker for {symbol}")
                 except Exception as e:
@@ -341,7 +336,7 @@ class BybitWebSocketManager:
 
     @retry_on_exception(max_retries=3, delay=2.0)
     async def subscribe_private_channels(
-        self, channels: list[str] = ["position", "order", "execution", "wallet"]
+        self, channels: list[str] = ["position", "order", "execution", "wallet"],
     ):
         """Subscribe to private channels with retry logic."""
         self._init_private_ws()
@@ -368,7 +363,7 @@ class BybitWebSocketManager:
 class BybitTradingBot:
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
         self.session = HTTP(
-            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000
+            testnet=testnet, api_key=api_key, api_secret=api_secret, recv_window=10000,
         )
         self.ws_manager = BybitWebSocketManager(api_key, api_secret, testnet)
         self.strategy: Callable[[dict, dict, HTTP, Any, list[str]], None] | None = None
@@ -448,7 +443,7 @@ class BybitTradingBot:
             raise
 
     def set_strategy(
-        self, strategy_func: Callable[[dict, dict, HTTP, Any, list[str]], None]
+        self, strategy_func: Callable[[dict, dict, HTTP, Any, list[str]], None],
     ):
         """Set trading strategy with validation."""
         if not callable(strategy_func):
@@ -487,13 +482,13 @@ class BybitTradingBot:
                 connection_health = await self.ws_manager.check_connection_health()
                 if not all(connection_health.values()):
                     logger.warning(
-                        f"Connection health check failed: {connection_health}"
+                        f"Connection health check failed: {connection_health}",
                     )
 
                 # Fetch market data in parallel
                 tasks = [self.get_market_data(sym) for sym in symbols]
                 market_data_results = await asyncio.gather(
-                    *tasks, return_exceptions=True
+                    *tasks, return_exceptions=True,
                 )
 
                 mkt_data = {}
@@ -507,7 +502,7 @@ class BybitTradingBot:
 
                 if mkt_data and acct_info:
                     await self.strategy(
-                        mkt_data, acct_info, self.session, self, symbols
+                        mkt_data, acct_info, self.session, self, symbols,
                     )
                     self.metrics.update()
 
@@ -521,7 +516,7 @@ class BybitTradingBot:
                     logger.info(
                         f"Performance - Success Rate: {self.metrics.get_success_rate():.2f}%, "
                         f"Total Trades: {self.metrics.total_trades}, "
-                        f"Uptime: {self.metrics.get_uptime()}"
+                        f"Uptime: {self.metrics.get_uptime()}",
                     )
 
                 # Dynamic sleep to maintain consistent interval
@@ -542,7 +537,7 @@ class BybitTradingBot:
 
     @retry_on_exception(max_retries=2, delay=0.5)
     async def get_market_data(
-        self, symbol: str, category: str = "linear"
+        self, symbol: str, category: str = "linear",
     ) -> dict | None:
         """Fetch market data with error handling and rate limiting."""
         try:
@@ -551,13 +546,13 @@ class BybitTradingBot:
             # Parallel fetch orderbook and ticker
             ob_task = asyncio.create_task(
                 asyncio.to_thread(
-                    self.session.get_orderbook, category=category, symbol=symbol
-                )
+                    self.session.get_orderbook, category=category, symbol=symbol,
+                ),
             )
             tk_task = asyncio.create_task(
                 asyncio.to_thread(
-                    self.session.get_tickers, category=category, symbol=symbol
-                )
+                    self.session.get_tickers, category=category, symbol=symbol,
+                ),
             )
 
             ob, tk = await asyncio.gather(ob_task, tk_task, return_exceptions=True)

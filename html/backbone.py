@@ -3,14 +3,11 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from decimal import ROUND_DOWN
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask
-from flask import jsonify
-from flask import request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from pybit.unified_trading import HTTP
 
@@ -174,7 +171,7 @@ class PrecisionManager:
         """Round price to correct tick size"""
         if symbol not in self.instruments:
             self.logger.warning(
-                f"Symbol {symbol} not found, using default price precision"
+                f"Symbol {symbol} not found, using default price precision",
             )
             return Decimal(str(price)).quantize(Decimal("0.01"))
 
@@ -184,7 +181,7 @@ class PrecisionManager:
 
         # Round to nearest tick
         rounded = (price_decimal / tick_size).quantize(
-            Decimal("1"), rounding=ROUND_DOWN
+            Decimal("1"), rounding=ROUND_DOWN,
         ) * tick_size
 
         # Ensure within min/max bounds
@@ -196,7 +193,7 @@ class PrecisionManager:
         """Round quantity to correct step size"""
         if symbol not in self.instruments:
             self.logger.warning(
-                f"Symbol {symbol} not found, using default quantity precision"
+                f"Symbol {symbol} not found, using default quantity precision",
             )
             return Decimal(str(quantity)).quantize(Decimal("0.001"))
 
@@ -206,7 +203,7 @@ class PrecisionManager:
 
         # Round down to nearest step
         rounded = (qty_decimal / qty_step).quantize(
-            Decimal("1"), rounding=ROUND_DOWN
+            Decimal("1"), rounding=ROUND_DOWN,
         ) * qty_step
 
         # Ensure within min/max bounds
@@ -299,7 +296,7 @@ logger.addHandler(dh)
 
 # --- Helper for API Calls with Retry and Specific Error Handling ---
 def _make_api_call(
-    api_client, method, endpoint, params=None, max_retries=3, initial_delay=1
+    api_client, method, endpoint, params=None, max_retries=3, initial_delay=1,
 ):
     """Generic function to make Bybit API calls with retry logic and specific error handling.
     Handles general Exceptions.
@@ -330,13 +327,13 @@ def _make_api_call(
         except (
             Exception
         ) as e:  # Catch any Pybit-related exceptions or other unexpected errors
-            logging.error(
-                f"API call error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})"
+            logging.exception(
+                f"API call error for {endpoint}: {e}. Retrying in {initial_delay * (2**attempt)}s... (Attempt {attempt + 1})",
             )
             time.sleep(initial_delay * (2**attempt))  # Exponential backoff
 
     logging.error(
-        f"Failed to complete API call to {endpoint} after {max_retries} attempts."
+        f"Failed to complete API call to {endpoint} after {max_retries} attempts.",
     )
     return {"retCode": 1, "retMsg": f"Failed after {max_retries} attempts: {endpoint}"}
 
@@ -370,7 +367,7 @@ def trading_bot_loop():
             if klines_res.get("retCode") != 0:
                 logging.error(f"Failed to fetch klines: {klines_res.get('retMsg')}")
                 time.sleep(
-                    config.get("api_error_retry_delay", 60)
+                    config.get("api_error_retry_delay", 60),
                 )  # Use configurable delay
                 continue
 
@@ -400,7 +397,7 @@ def trading_bot_loop():
                 )
                 dashboard["botStatus"] = "Waiting"
                 time.sleep(
-                    config.get("indicator_wait_delay", 60)
+                    config.get("indicator_wait_delay", 60),
                 )  # Use configurable delay
                 continue
 
@@ -432,7 +429,7 @@ def trading_bot_loop():
                     current_position = pos_list[0]
             else:
                 logging.error(
-                    f"Failed to fetch positions: {position_res.get('retMsg')}"
+                    f"Failed to fetch positions: {position_res.get('retMsg')}",
                 )
 
             balance = 0
@@ -492,11 +489,11 @@ def trading_bot_loop():
                     # Update peak price
                     if pos_info["side"] == "Buy":
                         pos_info["peak_price"] = max(
-                            pos_info.get("peak_price", current_price), current_price
+                            pos_info.get("peak_price", current_price), current_price,
                         )
                     else:  # Sell
                         pos_info["peak_price"] = min(
-                            pos_info.get("peak_price", current_price), current_price
+                            pos_info.get("peak_price", current_price), current_price,
                         )
 
                     # Calculate new trailing stop price
@@ -515,8 +512,8 @@ def trading_bot_loop():
                     precision_mgr = BOT_STATE["precision_manager"]
                     new_trailing_stop_price = float(
                         precision_mgr.round_price(
-                            config["symbol"], new_trailing_stop_price
-                        )
+                            config["symbol"], new_trailing_stop_price,
+                        ),
                     )
 
                     # Get current stop loss from the actual position (if available)
@@ -558,11 +555,11 @@ def trading_bot_loop():
                         )
                         if amend_res.get("retCode") == 0:
                             log_message(
-                                "Trailing stop amended successfully.", "success"
+                                "Trailing stop amended successfully.", "success",
                             )
                         else:
                             logging.error(
-                                f"Failed to amend trailing stop: {amend_res.get('retMsg')}"
+                                f"Failed to amend trailing stop: {amend_res.get('retMsg')}",
                             )
 
             # 6. Core Trading Logic
@@ -631,7 +628,7 @@ def trading_bot_loop():
                             and balance_res["result"]["list"]
                         ):
                             balance = float(
-                                balance_res["result"]["list"][0]["totalWalletBalance"]
+                                balance_res["result"]["list"][0]["totalWalletBalance"],
                             )
                         else:
                             log_message(
@@ -690,8 +687,8 @@ def trading_bot_loop():
                     qty_in_base_currency = position_value_usdt / current_price
                     qty_in_base_currency = float(
                         precision_mgr.round_quantity(
-                            config["symbol"], qty_in_base_currency
-                        )
+                            config["symbol"], qty_in_base_currency,
+                        ),
                     )
 
                     log_message(
@@ -753,7 +750,7 @@ def trading_bot_loop():
             interval_seconds = 60  # Default to 1 minute if format is unexpected
 
         log_message(
-            f"Waiting for {interval_seconds} seconds until next iteration.", "info"
+            f"Waiting for {interval_seconds} seconds until next iteration.", "info",
         )
         time.sleep(interval_seconds)
 
@@ -766,7 +763,7 @@ def start_bot():
     with STATE_LOCK:
         if BOT_STATE["running"]:
             return jsonify(
-                {"status": "error", "message": "Bot is already running."}
+                {"status": "error", "message": "Bot is already running."},
             ), 400
 
         config = request.json
@@ -778,7 +775,7 @@ def start_bot():
                 {
                     "status": "error",
                     "message": "Bybit API Key or Secret not found in backend .env file.",
-                }
+                },
             ), 400
 
         BOT_STATE["config"] = config
@@ -792,17 +789,17 @@ def start_bot():
         BOT_STATE["config"]["bb_period"] = config.get("bb_period", 20)
         BOT_STATE["config"]["bb_std_dev"] = config.get("bb_std_dev", 2.0)
         BOT_STATE["config"]["api_error_retry_delay"] = config.get(
-            "api_error_retry_delay", 60
+            "api_error_retry_delay", 60,
         )  # New configurable delay
         BOT_STATE["config"]["indicator_wait_delay"] = config.get(
-            "indicator_wait_delay", 60
+            "indicator_wait_delay", 60,
         )  # New configurable delay
 
         BOT_STATE["bybit_session"] = HTTP(
-            testnet=False, api_key=BYBIT_API_KEY, api_secret=BYBIT_API_SECRET
+            testnet=False, api_key=BYBIT_API_KEY, api_secret=BYBIT_API_SECRET,
         )  # LIVE TRADING
         BOT_STATE["precision_manager"] = PrecisionManager(
-            BOT_STATE["bybit_session"], logging
+            BOT_STATE["bybit_session"], logging,
         )
 
     # Verify API connection
@@ -818,7 +815,7 @@ def start_bot():
             {
                 "status": "error",
                 "message": f"API connection failed: {balance_check.get('retMsg')}",
-            }
+            },
         ), 400
 
     log_message("API connection successful.", "success")
@@ -850,7 +847,7 @@ def start_bot():
     should_set_leverage = True
     if position_info_res.get("retCode") == 0 and position_info_res["result"]["list"]:
         current_leverage = float(
-            position_info_res["result"]["list"][0].get("leverage", 0)
+            position_info_res["result"]["list"][0].get("leverage", 0),
         )
         if current_leverage == leverage:
             log_message(
@@ -873,7 +870,7 @@ def start_bot():
         )
         if lev_res.get("retCode") == 0:
             log_message(
-                f"Leverage set to {leverage}x for {config['symbol']}", "success"
+                f"Leverage set to {leverage}x for {config['symbol']}", "success",
             )
         else:
             log_message(f"Failed to set leverage: {lev_res.get('retMsg')}", "warning")
@@ -918,7 +915,7 @@ def get_status():
                 "running": BOT_STATE["running"],
                 "dashboard": BOT_STATE["dashboard"],
                 "logs": list(BOT_STATE["logs"]),
-            }
+            },
         )
 
 
@@ -926,7 +923,7 @@ def get_status():
 def get_gemini_insight():
     if not GEMINI_API_KEY:
         return jsonify(
-            {"status": "error", "message": "Gemini API key not configured on server."}
+            {"status": "error", "message": "Gemini API key not configured on server."},
         ), 503
 
     data = request.json
@@ -949,7 +946,7 @@ def get_symbols():
         precision_mgr = BOT_STATE.get("precision_manager")
         if not precision_mgr:
             return jsonify(
-                {"status": "error", "message": "Precision manager not initialized."}
+                {"status": "error", "message": "Precision manager not initialized."},
             ), 500
 
         linear_symbols = sorted(
@@ -957,7 +954,7 @@ def get_symbols():
                 s
                 for s, specs in precision_mgr.instruments.items()
                 if specs.category == "linear" and specs.status == "trading"
-            ]
+            ],
         )
         return jsonify({"status": "success", "symbols": linear_symbols})
     except Exception as e:

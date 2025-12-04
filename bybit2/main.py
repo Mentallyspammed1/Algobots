@@ -36,7 +36,7 @@ OB_PERCENTAGE_THRESHOLD = 0.01
 # API Keys - prioritize environment variables
 API_KEY = os.getenv("BYBIT_API_KEY", "YOUR_BYBIT_API_KEY")
 API_SECRET = os.getenv(
-    "BYBIT_API_SECRET", "YOUR_BYBIT_API_SECRET"
+    "BYBIT_API_SECRET", "YOUR_BYBIT_API_SECRET",
 )  # Replace with your secret or set env var
 
 try:
@@ -67,11 +67,11 @@ try:
     ICHIMOKU_KIJUN = getattr(config_module, "ICHIMOKU_KIJUN", ICHIMOKU_KIJUN)
     ICHIMOKU_SENKOU = getattr(config_module, "ICHIMOKU_SENKOU", ICHIMOKU_SENKOU)
     EHLERS_FISHER_PERIOD = getattr(
-        config_module, "EHLERS_FISHER_PERIOD", EHLERS_FISHER_PERIOD
+        config_module, "EHLERS_FISHER_PERIOD", EHLERS_FISHER_PERIOD,
     )
     EHLERS_SSF_PERIOD = getattr(config_module, "EHLERS_SSF_PERIOD", EHLERS_SSF_PERIOD)
     OB_PERCENTAGE_THRESHOLD = getattr(
-        config_module, "OB_PERCENTAGE_THRESHOLD", OB_PERCENTAGE_THRESHOLD
+        config_module, "OB_PERCENTAGE_THRESHOLD", OB_PERCENTAGE_THRESHOLD,
     )
 
     # Update API keys from config.py if environment variables are not set
@@ -88,7 +88,7 @@ except Exception as e:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Bybit Trend Analyzer: Fetches kline data and performs technical analysis."
+        description="Bybit Trend Analyzer: Fetches kline data and performs technical analysis.",
     )
     # Use values from config.py (loaded into global variables) as defaults
     parser.add_argument(
@@ -118,17 +118,17 @@ def main():
         help="Number of historical candles to fetch (max 1000).",
     )
     parser.add_argument(
-        "--testnet", action="store_true", help="Use Bybit Testnet instead of Mainnet."
+        "--testnet", action="store_true", help="Use Bybit Testnet instead of Mainnet.",
     )
 
     args = parser.parse_args()
 
     analyzer = BybitTrendAnalyzer(
-        api_key=API_KEY, api_secret=API_SECRET, testnet=args.testnet
+        api_key=API_KEY, api_secret=API_SECRET, testnet=args.testnet,
     )
 
     print(
-        f"\n--- Analyzing Trend for {args.symbol} on {args.interval} interval ({args.category} category) ---"
+        f"\n--- Analyzing Trend for {args.symbol} on {args.interval} interval ({args.category} category) ---",
     )
     trend_summary = analyzer.get_trend_summary(
         category=args.category,
@@ -167,17 +167,17 @@ def main():
                 print(f"  {key.replace('_', ' ').title()}: {value}")
         print(f"\nCandles Fetched: {trend_summary['num_candles_fetched']}")
         print(
-            f"Candles Analyzed (after cleaning NaNs): {trend_summary['num_candles_analyzed']}"
+            f"Candles Analyzed (after cleaning NaNs): {trend_summary['num_candles_analyzed']}",
         )
     else:
         print(
-            f"\nError during analysis: {trend_summary.get('message', 'Unknown error')}"
+            f"\nError during analysis: {trend_summary.get('message', 'Unknown error')}",
         )
 
     # Example: Fetch raw kline data and print head
     print(f"\n--- Raw Kline Data (first 5 rows) for {args.symbol} ---")
     df_klines = analyzer.fetch_klines(
-        args.category, args.symbol, args.interval, num_candles=10
+        args.category, args.symbol, args.interval, num_candles=10,
     )
     if not df_klines.empty:
         print(df_klines.head())
@@ -187,7 +187,7 @@ def main():
     # Example: Fetch data and calculate indicators, then print tail
     print(f"\n--- Kline Data with Indicators (last 5 rows) for {args.symbol} ---")
     df_with_indicators = analyzer.fetch_klines(
-        args.category, args.symbol, args.interval, num_candles=args.num_candles
+        args.category, args.symbol, args.interval, num_candles=args.num_candles,
     )
     if not df_with_indicators.empty:
         df_with_indicators = analyzer.calculate_indicators(

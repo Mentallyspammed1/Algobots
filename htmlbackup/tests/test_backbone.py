@@ -3,8 +3,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # Add the parent directory to the sys.path to allow importing modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -18,9 +17,7 @@ with patch.dict(
         "GEMINI_API_KEY": "test_gemini_key",
     },
 ):
-    from backbone import BOT_STATE
-    from backbone import app
-    from backbone import log_message
+    from backbone import BOT_STATE, app, log_message
 
 
 class TestBackbone(unittest.TestCase):
@@ -86,8 +83,8 @@ class TestBackbone(unittest.TestCase):
                     {
                         "priceFilter": {"tickSize": "0.01"},
                         "lotFilter": {"qtyStep": "0.001"},
-                    }
-                ]
+                    },
+                ],
             },
         }
         mock_session_instance.set_leverage.return_value = {"retCode": 0}
@@ -104,7 +101,7 @@ class TestBackbone(unittest.TestCase):
             "efPeriod": 10,
         }
         response = self.app.post(
-            "/api/start", data=json.dumps(config_data), content_type="application/json"
+            "/api/start", data=json.dumps(config_data), content_type="application/json",
         )
         data = json.loads(response.data)
 
@@ -138,7 +135,7 @@ class TestBackbone(unittest.TestCase):
             "efPeriod": 10,
         }
         response = self.app.post(
-            "/api/start", data=json.dumps(config_data), content_type="application/json"
+            "/api/start", data=json.dumps(config_data), content_type="application/json",
         )
         data = json.loads(response.data)
 
@@ -146,7 +143,7 @@ class TestBackbone(unittest.TestCase):
         self.assertEqual(data["status"], "error")
         self.assertFalse(BOT_STATE["running"])
         mock_log_message.assert_any_call(
-            unittest.mock.ANY, "error"
+            unittest.mock.ANY, "error",
         )  # Check for any error message
 
     def test_stop_bot(self):
@@ -166,7 +163,7 @@ class TestBackbone(unittest.TestCase):
         BOT_STATE["running"] = True
         BOT_STATE["dashboard"]["currentPrice"] = "$50000"
         BOT_STATE["logs"].append(
-            {"timestamp": "12:00:00", "level": "info", "message": "Test log"}
+            {"timestamp": "12:00:00", "level": "info", "message": "Test log"},
         )
 
         response = self.app.get("/api/status")
@@ -217,7 +214,7 @@ class TestBackbone(unittest.TestCase):
         self.assertIn("Gemini API Error", data["message"])
         print(mock_log_message.call_args_list)  # Debug print
         mock_log_message.assert_any_call(
-            unittest.mock.ANY, "error"
+            unittest.mock.ANY, "error",
         )  # Check for any error message
 
     # TODO: Add tests for trading_bot_loop logic (requires extensive mocking of session.get_kline, session.get_positions, session.place_order, session.amend_order)

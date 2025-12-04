@@ -5,33 +5,24 @@ import random
 import sys
 import threading  # Added for WebSocket
 import time
-from datetime import UTC
-from datetime import datetime
-from decimal import ROUND_DOWN
-from decimal import ROUND_UP
-from decimal import Decimal
-from decimal import getcontext
+from datetime import UTC, datetime
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any
-from typing import ClassVar
-from typing import Literal
+from typing import Any, ClassVar, Literal
 
 import indicators  # Import the new indicators module
 import numpy as np
 import pandas as pd
 from alert_system import AlertSystem
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import dotenv_values
 
 # Guarded import for the live trading client
 try:
     import pybit.exceptions
-    from pybit.unified_trading import HTTP
+    from pybit.unified_trading import HTTP, WebSocket
     from pybit.unified_trading import HTTP as PybitHTTP
-    from pybit.unified_trading import WebSocket
 
     PYBIT_AVAILABLE = True
 except ImportError:

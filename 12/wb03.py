@@ -14,8 +14,7 @@ import time
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -23,8 +22,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
-from colorama import Fore
-from colorama import Style
+from colorama import Fore, Style
 from colorama import init as colorama_init
 from dotenv import load_dotenv
 
@@ -206,7 +204,7 @@ def _send_request(
         except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as err:
             sleep_s = (2**attempt) + random.random()
             logger.warning(
-                f"{NEON_YELLOW}HTTP issue {err} – retry {attempt}/{retries} in {sleep_s:.1f}s{RESET}"
+                f"{NEON_YELLOW}HTTP issue {err} – retry {attempt}/{retries} in {sleep_s:.1f}s{RESET}",
             )
             time.sleep(sleep_s)
     logger.error(f"{NEON_RED}Max retries exceeded: {method} {endpoint}{RESET}")
@@ -299,7 +297,7 @@ class Indicators:
 
     @staticmethod
     def atr(
-        high: pd.Series, low: pd.Series, close: pd.Series, window: int
+        high: pd.Series, low: pd.Series, close: pd.Series, window: int,
     ) -> pd.Series:
         tr = pd.concat(
             [high - low, (high - close.shift()).abs(), (low - close.shift()).abs()],
@@ -356,7 +354,7 @@ class TradingAnalyzer:
         self.cache: dict[str, Any] = {}
         # quick stats
         self.atr_val: float = float(
-            Indicators.atr(df.high, df.low, df.close, cfg["atr_period"]).iloc[-1]
+            Indicators.atr(df.high, df.low, df.close, cfg["atr_period"]).iloc[-1],
         )
 
     # ─────────────────────────────────────────────────────────────────────
@@ -366,7 +364,7 @@ class TradingAnalyzer:
         ema_s = Indicators.ema(self.df.close, self.cfg["momentum_ma_short"])
         ema_l = Indicators.ema(self.df.close, self.cfg["momentum_ma_long"])
         if len(self.df) < max(
-            self.cfg["momentum_ma_short"], self.cfg["momentum_ma_long"]
+            self.cfg["momentum_ma_short"], self.cfg["momentum_ma_long"],
         ):
             return 0.0
         # last 3 bars majority
@@ -383,7 +381,7 @@ class TradingAnalyzer:
         vol_ma = Indicators.sma(self.df.volume, self.cfg["volume_ma_period"])
         return bool(
             self.df.volume.iloc[-1]
-            > vol_ma.iloc[-1] * self.cfg["volume_confirmation_multiplier"]
+            > vol_ma.iloc[-1] * self.cfg["volume_confirmation_multiplier"],
         )
 
     # ─────────────────────────────────────────────────────────────────────
@@ -397,14 +395,14 @@ class TradingAnalyzer:
         self.log.info(
             f"""\n{NEON_BLUE}{self.sym} {self.intv} @ {price}  ({ts}){RESET}
 {NEON_GREEN}ATR{RESET}:{self.atr_val:.4f} │ {NEON_PURPLE}RSI{RESET}:{rsi_val:.2f} │ \
-EMA-Align:{ema_score:+.1f} │ Vol-Spike:{self.volume_confirmation()}"""
+EMA-Align:{ema_score:+.1f} │ Vol-Spike:{self.volume_confirmation()}""",
         )
         # orderbook summary if provided
         if orderbook and "bids" in orderbook:
             bid0 = orderbook["bids"][0]
             ask0 = orderbook["asks"][0]
             self.log.info(
-                f"OB top:  bid {bid0[1]:,.0f}@{bid0[0]}  │  ask {ask0[1]:,.0f}@{ask0[0]}"
+                f"OB top:  bid {bid0[1]:,.0f}@{bid0[0]}  │  ask {ask0[1]:,.0f}@{ask0[0]}",
             )
 
     # ─────────────────────────────────────────────────────────────────────
@@ -462,7 +460,7 @@ def main() -> None:
     sym = (input(f"{NEON_BLUE}Symbol (default BTCUSDT): {RESET}") or "BTCUSDT").upper()
     intv = (
         input(
-            f"{NEON_BLUE}Interval {VALID_INTERVALS} (default {CFG['interval']}): {RESET}"
+            f"{NEON_BLUE}Interval {VALID_INTERVALS} (default {CFG['interval']}): {RESET}",
         )
         or CFG["interval"]
     )
@@ -504,14 +502,14 @@ def main() -> None:
             if sig.signal and now - last_sig_t >= CFG["signal_cooldown_s"]:
                 slog.info(
                     f"""{NEON_PURPLE}>>> SIGNAL {sig.signal.upper()} | score {sig.confidence:.2f}{RESET}
-• {"; ".join(sig.conditions) if sig.conditions else "no conditions??"}"""
+• {"; ".join(sig.conditions) if sig.conditions else "no conditions??"}""",
                 )
                 if sig.levels:
                     slog.info(
-                        f"SL {sig.levels['stop_loss']}, TP {sig.levels['take_profit']}"
+                        f"SL {sig.levels['stop_loss']}, TP {sig.levels['take_profit']}",
                     )
                 slog.info(
-                    f"{NEON_YELLOW}-- PLACEHOLDER: actual order routing goes here --{RESET}"
+                    f"{NEON_YELLOW}-- PLACEHOLDER: actual order routing goes here --{RESET}",
                 )
                 last_sig_t = now
 

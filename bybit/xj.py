@@ -15,17 +15,11 @@ import sqlite3  # (Pyrmethus's Insight #31) For persistent state storage
 import threading
 import time
 import warnings
-from collections import defaultdict
-from collections import deque
+from collections import defaultdict, deque
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
-from decimal import ROUND_DOWN
-from decimal import Decimal
-from decimal import InvalidOperation
-from decimal import getcontext
+from dataclasses import asdict, dataclass, field
+from decimal import ROUND_DOWN, Decimal, InvalidOperation, getcontext
 from enum import Enum
 from typing import Any
 
@@ -34,15 +28,12 @@ from cryptography.fernet import (
     Fernet,  # (Pyrmethus's Insight #34) For API key encryption
 )
 from dotenv import load_dotenv
-from pybit.unified_trading import HTTP
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import HTTP, WebSocket
 
 warnings.filterwarnings("ignore")
 
 # Channeling the ether for vibrant terminal displays
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 
 init(autoreset=True)
 
@@ -143,7 +134,7 @@ class EnhancedPerformanceMetrics:
             self.max_drawdown = max(self.max_drawdown, drawdown)
 
     def calculate_sharpe_ratio(
-        self, returns: list[float], risk_free_rate: float = 0.0
+        self, returns: list[float], risk_free_rate: float = 0.0,
     ) -> float:
         """(Pyrmethus's Insight #39) Calculate Sharpe ratio for risk-adjusted returns."""
         if len(returns) < 2:
@@ -255,7 +246,7 @@ class DatabaseManager:
             self.conn.commit()
 
     def save_performance_snapshot(
-        self, metrics: EnhancedPerformanceMetrics, equity: Decimal
+        self, metrics: EnhancedPerformanceMetrics, equity: Decimal,
     ):
         """Save performance snapshot for historical analysis."""
         with self._lock:
@@ -387,7 +378,7 @@ def setup_logging():
     from logging.handlers import RotatingFileHandler
 
     file_handler = RotatingFileHandler(
-        "pyrm_ultimate.log", maxBytes=10 * 1024 * 1024, backupCount=5
+        "pyrm_ultimate.log", maxBytes=10 * 1024 * 1024, backupCount=5,
     )
     file_handler.setFormatter(logging.Formatter(log_format))
 
@@ -412,7 +403,7 @@ def to_decimal(val: Any, default: Decimal = Decimal("0")) -> Decimal:
         logger.error(
             Fore.RED
             + f"  # Failed to transmute value '{val}' into Decimal. Defaulting to {default}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return default
 
@@ -434,7 +425,7 @@ class SecureConfig:
             logger.warning(
                 Fore.YELLOW
                 + f"  # Generated new encryption key. Save this in .env: ENCRYPTION_KEY={key.decode()}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             key = key.encode() if isinstance(key, str) else key
@@ -471,7 +462,7 @@ def to_decimal(val: Any, default: Decimal = Decimal("0")) -> Decimal:
         logger.error(
             Fore.RED
             + f"  # Failed to transmute value '{val}' into Decimal. Defaulting to {default}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return default
 
@@ -493,7 +484,7 @@ class SecureConfig:
             logger.warning(
                 Fore.YELLOW
                 + f"  # Generated new encryption key. Save this in .env: ENCRYPTION_KEY={key.decode()}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         else:
             key = key.encode() if isinstance(key, str) else key
@@ -520,25 +511,25 @@ logger.warning(Style.BRIGHT + Fore.LIGHTRED_EX + "=" * 60)
 logger.warning(
     Style.BRIGHT
     + Fore.LIGHTRED_EX
-    + "      *** ULTIMATE LIVE TRADING MODE ACTIVATED ***"
+    + "      *** ULTIMATE LIVE TRADING MODE ACTIVATED ***",
 )
 logger.warning(
     Style.BRIGHT
     + Fore.LIGHTRED_EX
-    + "This bot is configured to execute trades on the LIVE market."
+    + "This bot is configured to execute trades on the LIVE market.",
 )
 logger.warning(
     Style.BRIGHT
     + Fore.LIGHTRED_EX
-    + "Ensure your API keys in .env are for your LIVE account."
+    + "Ensure your API keys in .env are for your LIVE account.",
 )
 logger.warning(
-    Style.BRIGHT + Fore.LIGHTRED_EX + "           You are trading with REAL funds."
+    Style.BRIGHT + Fore.LIGHTRED_EX + "           You are trading with REAL funds.",
 )
 logger.warning(
     Style.BRIGHT
     + Fore.LIGHTRED_EX
-    + "      Proceed with caution. Monitor your account closely."
+    + "      Proceed with caution. Monitor your account closely.",
 )
 logger.warning(Style.BRIGHT + Fore.LIGHTRED_EX + "=" * 60 + Style.RESET_ALL)
 
@@ -571,7 +562,7 @@ class EnhancedCircuitBreaker:
                     logger.info(
                         Fore.GREEN
                         + f"  # Circuit breaker fully recovered after {self.success_count} successful calls."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     self.state = "CLOSED"
                     self.failure_count = 0
@@ -590,7 +581,7 @@ class EnhancedCircuitBreaker:
                 logger.warning(
                     Fore.YELLOW
                     + f"  # Circuit breaker opened after {self.failure_count} failures. Recent failures: {list(self.failure_reasons)}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
             elif self.state == "HALF_OPEN":
                 self.state = "OPEN"
@@ -598,7 +589,7 @@ class EnhancedCircuitBreaker:
                 logger.warning(
                     Fore.YELLOW
                     + "  # Circuit breaker returned to OPEN state after HALF_OPEN test failed."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     def can_execute(self) -> bool:
@@ -612,7 +603,7 @@ class EnhancedCircuitBreaker:
                     logger.info(
                         Fore.CYAN
                         + "  # Circuit breaker entering HALF_OPEN state. Testing API health..."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     return True
                 return False
@@ -627,13 +618,13 @@ class MarketMicrostructureAnalyzer:
     def __init__(self, lookback_periods: int = 100):
         self.lookback_periods = lookback_periods
         self.order_flow_imbalance: dict[str, deque] = defaultdict(
-            lambda: deque(maxlen=lookback_periods)
+            lambda: deque(maxlen=lookback_periods),
         )
         self.spread_history: dict[str, deque] = defaultdict(
-            lambda: deque(maxlen=lookback_periods)
+            lambda: deque(maxlen=lookback_periods),
         )
         self.volume_profile: dict[str, dict[Decimal, Decimal]] = defaultdict(
-            lambda: defaultdict(Decimal)
+            lambda: defaultdict(Decimal),
         )
         self._lock = threading.Lock()
 
@@ -665,7 +656,7 @@ class MarketMicrostructureAnalyzer:
             return float(np.mean(recent_imbalances))
 
     def detect_market_regime(
-        self, symbol: str, price_history: deque
+        self, symbol: str, price_history: deque,
     ) -> tuple[MarketRegime, float]:
         """Detect current market regime with confidence score."""
         if len(price_history) < 50:
@@ -686,12 +677,12 @@ class MarketMicrostructureAnalyzer:
             )
             confidence = min(0.9, abs(trend) / (volatility * 3))
         elif volatility > np.percentile(
-            [np.std(returns[i : i + 10]) for i in range(len(returns) - 10)], 80
+            [np.std(returns[i : i + 10]) for i in range(len(returns) - 10)], 80,
         ):
             regime = MarketRegime.VOLATILE
             confidence = min(0.9, volatility / np.mean(np.abs(returns)))
         elif volatility < np.percentile(
-            [np.std(returns[i : i + 10]) for i in range(len(returns) - 10)], 20
+            [np.std(returns[i : i + 10]) for i in range(len(returns) - 10)], 20,
         ):
             regime = MarketRegime.CALM
             confidence = 0.7
@@ -709,7 +700,7 @@ class SmartOrderManager:
     def __init__(self, db_manager: DatabaseManager):
         self._orders: dict[str, dict] = {}
         self._order_layers: dict[str, list[dict]] = defaultdict(
-            list
+            list,
         )  # For order layering
         self._iceberg_orders: dict[str, dict] = {}  # For iceberg orders
         self._lock = threading.Lock()
@@ -791,7 +782,7 @@ class EnhancedBybitWebSocketManager:
         self.market_data: dict[str, Any] = {}
         self.positions: dict[str, Any] = {}
         self.executions: dict[str, list[dict]] = defaultdict(
-            list
+            list,
         )  # (Pyrmethus's Insight #43) Track executions
         self.price_history: dict[str, deque[tuple[float, Decimal]]] = {}
         self._lock = threading.Lock()
@@ -800,7 +791,7 @@ class EnhancedBybitWebSocketManager:
         self._max_reconnect_attempts = 5
         self._reconnect_delay_base = 1
         self._message_sequence: dict[str, int] = defaultdict(
-            int
+            int,
         )  # (Pyrmethus's Insight #44) Message sequencing
         self.microstructure_analyzer = MarketMicrostructureAnalyzer()
 
@@ -822,7 +813,7 @@ class EnhancedBybitWebSocketManager:
                 logger.error(
                     Fore.RED
                     + f"  # The {ws_type} WebSocket failed to establish a stable link."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 self._handle_reconnect(private)
                 return
@@ -832,14 +823,14 @@ class EnhancedBybitWebSocketManager:
                 logger.info(
                     Fore.CYAN
                     + "  # Private WebSocket channel opened for personal insights."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
             else:
                 self.ws_public = ws_obj
                 logger.info(
                     Fore.CYAN
                     + "  # Public WebSocket channel opened for market whispers."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
             self._reconnect_attempts[ws_type] = 0
@@ -864,20 +855,20 @@ class EnhancedBybitWebSocketManager:
             logger.critical(
                 Fore.RED
                 + f"  # Max reconnection attempts reached for {ws_type} WebSocket."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return
 
         # Add jitter to prevent thundering herd
         jitter = random.uniform(0, 0.3)
         backoff_time = min(
-            60, self._reconnect_delay_base * (2 ** (attempt - 1)) * (1 + jitter)
+            60, self._reconnect_delay_base * (2 ** (attempt - 1)) * (1 + jitter),
         )
 
         logger.warning(
             Fore.YELLOW
             + f"  # Reconnecting {ws_type} WebSocket (Attempt {attempt}/{self._max_reconnect_attempts}) in {backoff_time:.1f}s..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         await asyncio.sleep(backoff_time)
         self._init_ws(private)
@@ -894,7 +885,7 @@ class EnhancedBybitWebSocketManager:
                     # Check message sequence
                     if sequence <= self._message_sequence[f"{symbol}_orderbook"]:
                         logger.debug(
-                            f"  # Stale orderbook message for {symbol} (seq: {sequence})"
+                            f"  # Stale orderbook message for {symbol} (seq: {sequence})",
                         )
                         return
 
@@ -918,7 +909,7 @@ class EnhancedBybitWebSocketManager:
                         bid_volume = sum(to_decimal(b[1]) for b in bids[:5])
                         ask_volume = sum(to_decimal(a[1]) for a in asks[:5])
                         self.microstructure_analyzer.update_order_flow(
-                            symbol, bid_volume, ask_volume
+                            symbol, bid_volume, ask_volume,
                         )
                         self.microstructure_analyzer.update_spread(symbol, spread)
 
@@ -926,7 +917,7 @@ class EnhancedBybitWebSocketManager:
                         timestamp = float(msg.get("ts")) / 1000
                         if symbol not in self.price_history:
                             self.price_history[symbol] = deque(
-                                maxlen=3600
+                                maxlen=3600,
                             )  # 1 hour at 1-second intervals
 
                         self.price_history[symbol].append((timestamp, mid_price))
@@ -983,7 +974,7 @@ class EnhancedBybitWebSocketManager:
                 logger.error(
                     Fore.RED
                     + "  # Failed to establish public WebSocket."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 return
 
@@ -992,22 +983,22 @@ class EnhancedBybitWebSocketManager:
             try:
                 # Subscribe to orderbook
                 self.ws_public.orderbook_stream(
-                    depth=25, symbol=symbol, callback=self.handle_orderbook
+                    depth=25, symbol=symbol, callback=self.handle_orderbook,
                 )
                 # Subscribe to trades for better market insight
                 self.ws_public.trade_stream(
-                    symbol=symbol, callback=lambda msg: logger.debug(f"Trade: {msg}")
+                    symbol=symbol, callback=lambda msg: logger.debug(f"Trade: {msg}"),
                 )
                 logger.info(
                     Fore.CYAN
                     + f"  # Subscribed to enhanced market streams for {symbol}."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
             except Exception as e:
                 logger.error(
                     Fore.RED
                     + f"  # Failed to subscribe to {symbol}: {e}"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
 
     async def subscribe_private(self):
@@ -1018,7 +1009,7 @@ class EnhancedBybitWebSocketManager:
                 logger.error(
                     Fore.RED
                     + "  # Failed to establish private WebSocket."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 return
 
@@ -1026,21 +1017,21 @@ class EnhancedBybitWebSocketManager:
         try:
             self.ws_private.position_stream(callback=self.handle_position)
             self.ws_private.execution_stream(
-                callback=self.handle_execution
+                callback=self.handle_execution,
             )  # Track fills
             self.ws_private.order_stream(
-                callback=lambda msg: logger.debug(f"Order update: {msg}")
+                callback=lambda msg: logger.debug(f"Order update: {msg}"),
             )
             logger.info(
                 Fore.CYAN
                 + "  # Subscribed to enhanced private streams."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
         except Exception as e:
             logger.error(
                 Fore.RED
                 + f"  # Failed to subscribe to private streams: {e}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
     def stop(self):
@@ -1052,13 +1043,13 @@ class EnhancedBybitWebSocketManager:
                     logger.info(
                         Fore.MAGENTA
                         + f"  # {name.capitalize()} WebSocket gracefully closed."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                 except Exception as e:
                     logger.error(
                         Fore.RED
                         + f"  # Error closing {name} WebSocket: {e}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
 
     def is_public_connected(self) -> bool:
@@ -1101,13 +1092,13 @@ class UltimateBybitTradingBot:
         # Configuration
         self.max_open_positions = int(os.getenv("BOT_MAX_OPEN_POSITIONS", 5))
         self.max_drawdown_pct = to_decimal(
-            os.getenv("BOT_MAX_DRAWDOWN_PCT", "0.2")
+            os.getenv("BOT_MAX_DRAWDOWN_PCT", "0.2"),
         )  # 20% default
         self.category = os.getenv("BYBIT_CATEGORY", "linear")
         self.min_notional_usd = to_decimal(os.getenv("BOT_MIN_NOTIONAL_USD", "5"))
         self.api_timeout_s = 10
         self.account_refresh_interval = int(
-            os.getenv("BOT_ACCOUNT_REFRESH_INTERVAL_S", "300")
+            os.getenv("BOT_ACCOUNT_REFRESH_INTERVAL_S", "300"),
         )
         self._last_account_refresh_time = 0
         self._cached_account_info = None
@@ -1129,7 +1120,7 @@ class UltimateBybitTradingBot:
             logger.warning(
                 Fore.YELLOW
                 + f"  # Rate limit reached for {endpoint}. Waiting {wait_time:.1f}s..."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             await asyncio.sleep(wait_time)
 
@@ -1138,7 +1129,7 @@ class UltimateBybitTradingBot:
             logger.warning(
                 Fore.YELLOW
                 + f"  # Circuit breaker OPEN. Blocking {endpoint}."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             return None
 
@@ -1148,7 +1139,7 @@ class UltimateBybitTradingBot:
         for attempt in range(3):
             try:
                 response = await asyncio.wait_for(
-                    asyncio.to_thread(method, **kwargs), timeout=self.api_timeout_s
+                    asyncio.to_thread(method, **kwargs), timeout=self.api_timeout_s,
                 )
 
                 if response and response.get("retCode") == 0:
@@ -1171,14 +1162,14 @@ class UltimateBybitTradingBot:
                 logger.warning(
                     Fore.YELLOW
                     + f"  # {endpoint} timed out (attempt {attempt + 1}/3)"
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 self.circuit_breaker.call_failed(f"{endpoint}: Timeout")
             except RateLimitExceeded:
                 logger.error(
                     Fore.RED
                     + f"  # Rate limit exceeded for {endpoint}. Backing off..."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
                 await asyncio.sleep(60)  # Back off for 1 minute on rate limit
             except Exception as e:
@@ -1191,7 +1182,7 @@ class UltimateBybitTradingBot:
             await asyncio.sleep(1 * (2**attempt))
 
         logger.critical(
-            Fore.RED + f"  # All attempts to call {endpoint} failed." + Style.RESET_ALL
+            Fore.RED + f"  # All attempts to call {endpoint} failed." + Style.RESET_ALL,
         )
         return None
 
@@ -1200,12 +1191,12 @@ class UltimateBybitTradingBot:
         logger.info(
             Fore.CYAN
             + f"  # Fetching instrument info for: {', '.join(symbols)}"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Batch fetch if possible
         response = await self._http_call(
-            self.session.get_instruments_info, category=self.category
+            self.session.get_instruments_info, category=self.category,
         )
 
         if response and response.get("retCode") == 0:
@@ -1216,32 +1207,32 @@ class UltimateBybitTradingBot:
                     try:
                         self.symbol_info[symbol] = {
                             "minOrderQty": to_decimal(
-                                instrument["lotSizeFilter"]["minOrderQty"]
+                                instrument["lotSizeFilter"]["minOrderQty"],
                             ),
                             "qtyStep": to_decimal(
-                                instrument["lotSizeFilter"]["qtyStep"]
+                                instrument["lotSizeFilter"]["qtyStep"],
                             ),
                             "tickSize": to_decimal(
-                                instrument["priceFilter"]["tickSize"]
+                                instrument["priceFilter"]["tickSize"],
                             ),
                             "minPrice": to_decimal(
-                                instrument["priceFilter"].get("minPrice", "0")
+                                instrument["priceFilter"].get("minPrice", "0"),
                             ),
                             "maxPrice": to_decimal(
-                                instrument["priceFilter"].get("maxPrice", "999999")
+                                instrument["priceFilter"].get("maxPrice", "999999"),
                             ),
                             "status": instrument.get("status", "Trading"),
                         }
                         logger.info(
                             Fore.GREEN
                             + f"  # Loaded info for {symbol}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
                     except (KeyError, IndexError) as e:
                         logger.error(
                             Fore.RED
                             + f"  # Malformed instrument data for {symbol}: {e}"
-                            + Style.RESET_ALL
+                            + Style.RESET_ALL,
                         )
 
         # Verify all symbols were loaded
@@ -1250,7 +1241,7 @@ class UltimateBybitTradingBot:
             logger.error(
                 Fore.RED
                 + f"  # Failed to load info for: {', '.join(missing_symbols)}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
 
     def add_strategy(self, strategy_func: Callable):
@@ -1259,7 +1250,7 @@ class UltimateBybitTradingBot:
         logger.info(
             Fore.MAGENTA
             + f"  # Strategy '{strategy_func.__name__}' added to bot."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     def _round_qty(self, symbol: str, quantity: Decimal) -> Decimal:
@@ -1268,7 +1259,7 @@ class UltimateBybitTradingBot:
         if not info or info["qtyStep"] <= 0:
             return quantity
         return (quantity / info["qtyStep"]).to_integral_value(
-            rounding=ROUND_DOWN
+            rounding=ROUND_DOWN,
         ) * info["qtyStep"]
 
     def _round_price(self, symbol: str, price: Decimal) -> Decimal:
@@ -1279,7 +1270,7 @@ class UltimateBybitTradingBot:
         return price.quantize(info["tickSize"], rounding=ROUND_DOWN)
 
     async def calculate_position_size(
-        self, symbol: str, capital_percentage: float, price: Decimal, account_info: dict
+        self, symbol: str, capital_percentage: float, price: Decimal, account_info: dict,
     ) -> Decimal:
         """Calculate position size with advanced risk management."""
         # Get available balance
@@ -1292,7 +1283,7 @@ class UltimateBybitTradingBot:
                     if c.get("coin") == "USDT"
                 ),
                 "0",
-            )
+            ),
         )
 
         if available_balance <= 0 or price <= 0:
@@ -1300,7 +1291,7 @@ class UltimateBybitTradingBot:
 
         # Check drawdown limits
         current_equity = to_decimal(
-            account_info.get("result", {}).get("list", [{}])[0].get("totalEquity", "0")
+            account_info.get("result", {}).get("list", [{}])[0].get("totalEquity", "0"),
         )
         self.metrics.update_drawdown(current_equity)
 
@@ -1308,10 +1299,10 @@ class UltimateBybitTradingBot:
             logger.warning(
                 Fore.RED
                 + f"  # Max drawdown exceeded ({self.metrics.max_drawdown:.2%}). Halting new positions."
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             raise MaxDrawdownExceeded(
-                f"Drawdown {self.metrics.max_drawdown:.2%} exceeds limit {self.max_drawdown_pct:.2%}"
+                f"Drawdown {self.metrics.max_drawdown:.2%} exceeds limit {self.max_drawdown_pct:.2%}",
             )
 
         # Calculate base position size
@@ -1378,7 +1369,7 @@ class UltimateBybitTradingBot:
         # Track layered orders
         if orders_placed and layers > 1:
             self.order_manager.add_order_layer(
-                orders_placed[0]["orderLinkId"], orders_placed[1:]
+                orders_placed[0]["orderLinkId"], orders_placed[1:],
             )
 
         return orders_placed
@@ -1396,12 +1387,12 @@ class UltimateBybitTradingBot:
             mock_response = {
                 "orderId": f"dry_{int(time.time() * 1000)}",
                 "orderLinkId": kwargs.get(
-                    "orderLinkId", f"dry_link_{int(time.time() * 1000)}"
+                    "orderLinkId", f"dry_link_{int(time.time() * 1000)}",
                 ),
                 **kwargs,
             }
             logger.info(
-                Fore.YELLOW + f"[DRY RUN] Would place order: {kwargs}" + Style.RESET_ALL
+                Fore.YELLOW + f"[DRY RUN] Would place order: {kwargs}" + Style.RESET_ALL,
             )
             self.order_manager.add(mock_response)
             self.metrics.successful_orders += 1
@@ -1409,13 +1400,13 @@ class UltimateBybitTradingBot:
 
         try:
             order_response = await self._http_call(
-                self.session.place_order, category=self.category, **kwargs
+                self.session.place_order, category=self.category, **kwargs,
             )
 
             if order_response and order_response.get("retCode") == 0:
                 result = order_response["result"]
                 logger.info(
-                    Fore.GREEN + f"  # Order placed: {result}" + Style.RESET_ALL
+                    Fore.GREEN + f"  # Order placed: {result}" + Style.RESET_ALL,
                 )
                 self.order_manager.add({**result, "symbol": kwargs.get("symbol")})
                 self.metrics.successful_orders += 1
@@ -1430,7 +1421,7 @@ class UltimateBybitTradingBot:
                 order_response.get("retMsg") if order_response else "No response"
             )
             logger.error(
-                Fore.RED + f"  # Order placement failed: {error_msg}" + Style.RESET_ALL
+                Fore.RED + f"  # Order placement failed: {error_msg}" + Style.RESET_ALL,
             )
             self.metrics.failed_orders += 1
             raise OrderPlacementError(f"Order placement failed: {error_msg}")
@@ -1445,7 +1436,7 @@ class UltimateBybitTradingBot:
             logger.info(
                 Fore.YELLOW
                 + f"[DRY RUN] Would cancel order: {order_link_id}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             self.order_manager.remove(order_link_id)
             return True
@@ -1461,20 +1452,20 @@ class UltimateBybitTradingBot:
             logger.info(
                 Fore.GREEN
                 + f"  # Order cancelled: {response['result']}"
-                + Style.RESET_ALL
+                + Style.RESET_ALL,
             )
             self.order_manager.remove(order_link_id)
             return True
 
         logger.error(
-            Fore.RED + f"  # Failed to cancel order {order_link_id}" + Style.RESET_ALL
+            Fore.RED + f"  # Failed to cancel order {order_link_id}" + Style.RESET_ALL,
         )
         return False
 
     async def cancel_all_tracked_orders(self):
         """Cancel all tracked orders efficiently."""
         logger.info(
-            Fore.MAGENTA + "  # Cancelling all tracked orders..." + Style.RESET_ALL
+            Fore.MAGENTA + "  # Cancelling all tracked orders..." + Style.RESET_ALL,
         )
         orders = self.order_manager.get_all_orders()
 
@@ -1510,7 +1501,7 @@ class UltimateBybitTradingBot:
             return
 
         current_equity = to_decimal(
-            account_info.get("result", {}).get("list", [{}])[0].get("totalEquity", "0")
+            account_info.get("result", {}).get("list", [{}])[0].get("totalEquity", "0"),
         )
 
         # Calculate unrealized P&L from positions
@@ -1533,7 +1524,7 @@ class UltimateBybitTradingBot:
             + f"Unrealized P&L={unrealized_pnl:.2f} | "
             + f"Max DD={self.metrics.max_drawdown:.2%} | "
             + f"Win Rate={self.metrics.get_win_rate():.1f}%"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     async def _async_termux_toast(self, message: str):
@@ -1558,7 +1549,7 @@ class UltimateBybitTradingBot:
         logger.info(
             Fore.MAGENTA
             + "  # Ultimate Pyrmethus bot commencing operations..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         loop_count = 0
@@ -1571,7 +1562,7 @@ class UltimateBybitTradingBot:
                     logger.warning(
                         Fore.YELLOW
                         + "  # Public WS disconnected. Reconnecting..."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     await self.ws_manager.subscribe_public(symbols)
 
@@ -1579,7 +1570,7 @@ class UltimateBybitTradingBot:
                     logger.warning(
                         Fore.YELLOW
                         + "  # Private WS disconnected. Reconnecting..."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     await self.ws_manager.subscribe_private()
 
@@ -1599,7 +1590,7 @@ class UltimateBybitTradingBot:
                     logger.critical(
                         Fore.RED
                         + "  # Failed to get account info. Skipping cycle."
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
                     await asyncio.sleep(interval)
                     continue
@@ -1616,11 +1607,11 @@ class UltimateBybitTradingBot:
                             logger.critical(
                                 Fore.RED
                                 + "  # MAX DRAWDOWN EXCEEDED. Halting all trading."
-                                + Style.RESET_ALL
+                                + Style.RESET_ALL,
                             )
                             await self.cancel_all_tracked_orders()
                             await self._async_termux_toast(
-                                "⚠️ Pyrmethus: MAX DRAWDOWN EXCEEDED! Trading halted."
+                                "⚠️ Pyrmethus: MAX DRAWDOWN EXCEEDED! Trading halted.",
                             )
                             return  # Exit the bot
                         except Exception as e:
@@ -1639,7 +1630,7 @@ class UltimateBybitTradingBot:
                         + f"Orders: {self.metrics.successful_orders}/{self.metrics.total_orders_placed} | "
                         + f"Win Rate: {self.metrics.get_win_rate():.1f}% | "
                         + f"Max DD: {self.metrics.max_drawdown:.2%}"
-                        + Style.RESET_ALL
+                        + Style.RESET_ALL,
                     )
 
                 # Sleep for remainder of interval

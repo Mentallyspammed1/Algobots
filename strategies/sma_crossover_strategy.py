@@ -3,11 +3,7 @@ from typing import Any
 
 import pandas as pd
 from algobots_types import OrderBlock
-from color_codex import COLOR_CYAN
-from color_codex import COLOR_GREEN
-from color_codex import COLOR_RED
-from color_codex import COLOR_RESET
-from color_codex import COLOR_YELLOW
+from color_codex import COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_RESET, COLOR_YELLOW
 from config import SMA_PERIOD  # Assuming SMA_PERIOD is defined in config.py
 from strategies.strategy_template import StrategyTemplate
 
@@ -20,7 +16,7 @@ class SMA_Crossover_Strategy(StrategyTemplate):
     def _calculate_sma(self, df: pd.DataFrame, length: int) -> pd.Series:
         if "close" not in df.columns:
             self.logger.error(
-                "DataFrame must contain a 'close' column for SMA calculation."
+                "DataFrame must contain a 'close' column for SMA calculation.",
             )
             return pd.Series(dtype="object")
         close_prices = df["close"].apply(Decimal)
@@ -42,7 +38,7 @@ class SMA_Crossover_Strategy(StrategyTemplate):
             df.empty or len(df) < SMA_PERIOD + 1
         ):  # Need at least SMA_PERIOD + 1 for crossover
             self.logger.warning(
-                f"{COLOR_YELLOW}DataFrame too short for SMA Crossover signal generation. Required at least {SMA_PERIOD + 1} rows.{COLOR_RESET}"
+                f"{COLOR_YELLOW}DataFrame too short for SMA Crossover signal generation. Required at least {SMA_PERIOD + 1} rows.{COLOR_RESET}",
             )
             return signals
 
@@ -52,7 +48,7 @@ class SMA_Crossover_Strategy(StrategyTemplate):
         # Ensure SMA values are not NaN for the last two candles
         if pd.isna(df["sma"].iloc[-1]) or pd.isna(df["sma"].iloc[-2]):
             self.logger.debug(
-                "SMA values are NaN for recent candles. Skipping signal generation."
+                "SMA values are NaN for recent candles. Skipping signal generation.",
             )
             return signals
 
@@ -65,19 +61,19 @@ class SMA_Crossover_Strategy(StrategyTemplate):
         # Buy signal: Price crosses above SMA
         if prev_close < prev_sma and latest_close > latest_sma:
             signals.append(
-                ("BUY", latest_close, current_timestamp, {"strategy": "SMA_Crossover"})
+                ("BUY", latest_close, current_timestamp, {"strategy": "SMA_Crossover"}),
             )
             self.logger.info(
-                f"{COLOR_GREEN}BUY Signal (SMA Crossover) at {latest_close:.2f}.{COLOR_RESET}"
+                f"{COLOR_GREEN}BUY Signal (SMA Crossover) at {latest_close:.2f}.{COLOR_RESET}",
             )
 
         # Sell signal: Price crosses below SMA
         elif prev_close > prev_sma and latest_close < latest_sma:
             signals.append(
-                ("SELL", latest_close, current_timestamp, {"strategy": "SMA_Crossover"})
+                ("SELL", latest_close, current_timestamp, {"strategy": "SMA_Crossover"}),
             )
             self.logger.info(
-                f"{COLOR_RED}SELL Signal (SMA Crossover) at {latest_close:.2f}.{COLOR_RESET}"
+                f"{COLOR_RED}SELL Signal (SMA Crossover) at {latest_close:.2f}.{COLOR_RESET}",
             )
 
         return signals
@@ -115,10 +111,10 @@ class SMA_Crossover_Strategy(StrategyTemplate):
                         latest_close,
                         current_timestamp,
                         {"strategy": "SMA_Crossover_Exit"},
-                    )
+                    ),
                 )
                 self.logger.info(
-                    f"{COLOR_CYAN}EXIT BUY Signal (SMA Crossover) at {latest_close:.2f}.{COLOR_RESET}"
+                    f"{COLOR_CYAN}EXIT BUY Signal (SMA Crossover) at {latest_close:.2f}.{COLOR_RESET}",
                 )
         elif current_position_side == "SELL":
             # Exit short: Price crosses above SMA
@@ -129,10 +125,10 @@ class SMA_Crossover_Strategy(StrategyTemplate):
                         latest_close,
                         current_timestamp,
                         {"strategy": "SMA_Crossover_Exit"},
-                    )
+                    ),
                 )
                 self.logger.info(
-                    f"{COLOR_CYAN}EXIT SELL Signal (SMA Crossover) at {latest_close:.2f}.{COLOR_RESET}"
+                    f"{COLOR_CYAN}EXIT SELL Signal (SMA Crossover) at {latest_close:.2f}.{COLOR_RESET}",
                 )
 
         return exit_signals

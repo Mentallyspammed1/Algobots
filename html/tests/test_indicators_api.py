@@ -1,8 +1,6 @@
 import pandas as pd
 import pytest
-from indicators_api import calculate_ema
-from indicators_api import calculate_rsi
-from indicators_api import calculate_supertrend
+from indicators_api import calculate_ema, calculate_rsi, calculate_supertrend
 
 
 # Fixture for a basic DataFrame
@@ -111,10 +109,10 @@ def test_calculate_ema(sample_dataframe):
         not df_ema[f"ema_{period}"].isnull().all()
     )  # Ensure some values are calculated
     assert pd.isna(
-        df_ema[f"ema_{period}"].iloc[period - 2]
+        df_ema[f"ema_{period}"].iloc[period - 2],
     )  # First (period-1) values are NaN
     assert not pd.isna(
-        df_ema[f"ema_{period}"].iloc[period - 1]
+        df_ema[f"ema_{period}"].iloc[period - 1],
     )  # First calculated value
 
 
@@ -142,10 +140,10 @@ def test_calculate_rsi(sample_dataframe):
         not df_rsi[f"rsi_{period}"].isnull().all()
     )  # Ensure some values are calculated
     assert pd.isna(
-        df_rsi[f"rsi_{period}"].iloc[period - 2]
+        df_rsi[f"rsi_{period}"].iloc[period - 2],
     )  # First (period-1) values are NaN
     assert not pd.isna(
-        df_rsi[f"rsi_{period}"].iloc[period - 1]
+        df_rsi[f"rsi_{period}"].iloc[period - 1],
     )  # First calculated value
     assert (df_rsi[f"rsi_{period}"].dropna() >= 0).all() and (
         df_rsi[f"rsi_{period}"].dropna() <= 100
@@ -204,6 +202,6 @@ def test_calculate_supertrend_insufficient_data(sample_dataframe):
 def test_calculate_supertrend_missing_columns(sample_dataframe):
     df_no_high = sample_dataframe.drop(columns=["high"]).copy()
     with pytest.raises(
-        ValueError, match="DataFrame must contain 'high', 'low', and 'close' columns"
+        ValueError, match="DataFrame must contain 'high', 'low', and 'close' columns",
     ):
         calculate_supertrend(df_no_high)

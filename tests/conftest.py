@@ -1,8 +1,6 @@
 # tests/conftest.py
-from datetime import UTC
-from datetime import datetime
-from unittest.mock import Mock
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import Mock, patch
 
 import pandas as pd
 import pytest
@@ -30,7 +28,7 @@ def mock_bybit_client():
                     "volume": float(k[5]),
                 }
                 for k in mock_kline_data
-            ]
+            ],
         )
         .set_index("timestamp")
         .sort_index()
@@ -45,7 +43,7 @@ def mock_bybit_client():
     }
     mock_client.place_order.return_value = True
     mock_client.get_instrument_info.return_value = {
-        "lotSizeFilter": {"minOrderQty": "0.001", "qtyStep": "0.0001"}
+        "lotSizeFilter": {"minOrderQty": "0.001", "qtyStep": "0.0001"},
     }
     return mock_client
 

@@ -1,8 +1,6 @@
 import os
 
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 
@@ -13,7 +11,7 @@ def get_all_open_positions():
     print(
         Fore.MAGENTA
         + "\n# Scrying the battlefield to retrieve all open positions on your Bybit v5 Unified Account...\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
     load_dotenv()
@@ -25,12 +23,12 @@ def get_all_open_positions():
         print(
             Fore.RED
             + "  # ERROR: BYBIT_API_KEY or BYBIT_API_SECRET not found."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please ensure your .env file is correctly configured."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         return
 
@@ -39,7 +37,7 @@ def get_all_open_positions():
         print(
             Fore.CYAN
             + "  # Requesting all open positions for Unified Account..."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
         # Fetch positions for Unified Account
@@ -56,13 +54,13 @@ def get_all_open_positions():
                         + f"    Symbol: {position.get('symbol')}, Side: {position.get('side')}, "
                         f"Size: {position.get('size')}, Entry Price: {position.get('avgPrice')}, "
                         f"Mark Price: {position.get('markPrice')}, Unrealized PnL: {position.get('unrealisedPnl')}, "
-                        f"Leverage: {position.get('leverage')}" + Style.RESET_ALL
+                        f"Leverage: {position.get('leverage')}" + Style.RESET_ALL,
                     )
             else:
                 print(
                     Fore.YELLOW
                     + "  # No open positions found on your Unified Account."
-                    + Style.RESET_ALL
+                    + Style.RESET_ALL,
                 )
         else:
             print(Fore.RED + "  # Failed to retrieve open positions." + Style.RESET_ALL)
@@ -73,13 +71,13 @@ def get_all_open_positions():
         print(
             Fore.YELLOW
             + "  # Ensure your network connection is stable and API keys are valid."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     print(
         Fore.MAGENTA
         + "\n# The scroll of open positions has been fully revealed!\n"
-        + Style.RESET_ALL
+        + Style.RESET_ALL,
     )
 
 
@@ -91,22 +89,22 @@ if __name__ == "__main__":
             f.write("BYBIT_API_KEY=YOUR_API_KEY_HERE\n")
             f.write("BYBIT_API_SECRET=YOUR_API_SECRET_HERE\n")
             f.write(
-                "BYBIT_TESTNET=True\n"
+                "BYBIT_TESTNET=True\n",
             )  # Set to True for testnet, False for mainnet
         print(
             Fore.YELLOW
             + f"  # A '.env' file has been created at {env_file_path}."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Please edit it with your actual Bybit API Key and Secret."
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
         print(
             Fore.YELLOW
             + "  # Remember to use Testnet keys for testing!"
-            + Style.RESET_ALL
+            + Style.RESET_ALL,
         )
 
     get_all_open_positions()

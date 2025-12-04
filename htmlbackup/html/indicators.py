@@ -113,7 +113,7 @@ def calculate_indicators(klines: list, config: dict) -> dict | None:
                 "finalLowerBand": final_lower_band,
                 "supertrend": supertrend_val,
                 "direction": direction,
-            }
+            },
         )
 
     final_supertrend = supertrend_data[-1]

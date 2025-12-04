@@ -46,15 +46,10 @@ import logging.handlers
 import os
 import pickle
 import sys
-from collections import defaultdict
-from collections import deque
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import UTC
-from datetime import datetime
-from decimal import Decimal
-from decimal import getcontext
+from collections import defaultdict, deque
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from decimal import Decimal, getcontext
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -67,15 +62,13 @@ try:
     import pandas as pd
     import pandas_ta as ta
     from aioconsole import start_interactive_server
-    from colorama import Back
-    from colorama import Fore
-    from colorama import Style
+    from colorama import Back, Fore, Style
     from colorama import init as colorama_init
     from dotenv import load_dotenv
     from scipy import stats
 except ImportError as e:
     print(
-        f"CRITICAL ERROR: Missing package '{e.name}'. Please install it with: pip install \"{e.name}\""
+        f"CRITICAL ERROR: Missing package '{e.name}'. Please install it with: pip install \"{e.name}\"",
     )
     sys.exit(1)
 
@@ -165,7 +158,7 @@ class PerformanceMetrics:
             self.losing_trades += 1
             self.consecutive_losses += 1
             self.max_consecutive_losses = max(
-                self.max_consecutive_losses, self.consecutive_losses
+                self.max_consecutive_losses, self.consecutive_losses,
             )
 
         today = datetime.now(UTC).date().isoformat()
@@ -218,7 +211,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         logging.handlers.RotatingFileHandler(
-            log_filename, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_filename, maxBytes=10 * 1024 * 1024, backupCount=5,
         ),
         logging.StreamHandler(sys.stdout),
     ],
@@ -244,7 +237,7 @@ class Config:
             p.value for p in [AlertPriority.CRITICAL, AlertPriority.TRADE]
         ]
         self.database_path: str = os.getenv(
-            "DATABASE_PATH", f"trades_{self.symbol.replace('/', '_')}.db"
+            "DATABASE_PATH", f"trades_{self.symbol.replace('/', '_')}.db",
         )
         # Add other config variables from v11 as needed...
 
@@ -261,7 +254,7 @@ class DatabaseManager:
             await self._conn.execute("PRAGMA journal_mode=WAL;")
             await self._init_database()
             logger.info(
-                f"{Fore.CYAN}Database connection established: {self.db_path}{Style.RESET_ALL}"
+                f"{Fore.CYAN}Database connection established: {self.db_path}{Style.RESET_ALL}",
             )
         except Exception as e:
             logger.critical(f"Database connection failed: {e}")
@@ -287,7 +280,7 @@ class DatabaseManager:
         try:
             trade_dict = trade.to_dict()
             trade_dict["indicators_at_entry"] = json.dumps(
-                trade_dict["indicators_at_entry"]
+                trade_dict["indicators_at_entry"],
             )
             placeholders = ", ".join(["?"] * len(trade_dict))
             columns = ", ".join(trade_dict.keys())
@@ -343,7 +336,7 @@ async def send_sms_alert(message: str, priority: AlertPriority, config: Config):
 
 
 async def send_termux_notification(
-    message: str, priority: AlertPriority
+    message: str, priority: AlertPriority,
 ):  # (Enchantment #10)
     try:
         title = f"Scalping Wizard [{priority.name}]"
@@ -398,7 +391,7 @@ class ScalpingWizard:  # (Enchantment #15)
                     "secret": config.api_secret,
                     "enableRateLimit": True,
                     "options": {"defaultType": "swap"},
-                }
+                },
             )
             if config.testnet:
                 exchange.set_sandbox_mode(True)
@@ -432,7 +425,7 @@ class ScalpingWizard:  # (Enchantment #15)
         if not self.ctx:
             return
         state_file = Path(
-            f"logs/perf_state_{self.ctx.config.symbol.replace('/', '_')}.pkl"
+            f"logs/perf_state_{self.ctx.config.symbol.replace('/', '_')}.pkl",
         )
         try:
             with open(state_file, "wb") as f:
@@ -467,7 +460,7 @@ class ScalpingWizard:  # (Enchantment #15)
                 # This would involve fetching OHLCV, calculating indicators,
                 # checking position, and deciding to enter/exit.
                 logger.info(
-                    f"Executing trading logic cycle for {self.ctx.config.symbol}..."
+                    f"Executing trading logic cycle for {self.ctx.config.symbol}...",
                 )
 
                 # Real-time P&L Scrying (Enchantment #7)
@@ -535,7 +528,7 @@ class ScalpingWizard:  # (Enchantment #15)
 
         try:
             server = await asyncio.start_server(
-                cli_callback, "localhost", self.ctx.config.cli_port
+                cli_callback, "localhost", self.ctx.config.cli_port,
             )
             logger.info(f"Interactive CLI listening on port {self.ctx.config.cli_port}")
             async with server:
@@ -548,7 +541,7 @@ class ScalpingWizard:  # (Enchantment #15)
             return
 
         logger.warning(
-            f"{Fore.YELLOW}--- INITIATING GRACEFUL SHUTDOWN ---{Style.RESET_ALL}"
+            f"{Fore.YELLOW}--- INITIATING GRACEFUL SHUTDOWN ---{Style.RESET_ALL}",
         )
         self.ctx.shutdown_event.set()
 

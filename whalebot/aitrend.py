@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
+import argparse
 import asyncio
-import aiohttp
-import hmac
 import hashlib
+import hmac
 import json
-import os
-import pandas as pd
-import numpy as np
 import logging
 import time
+from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, field
+from typing import Any
+
+import aiohttp
+import google.generativeai as genai
+import numpy as np
+import pandas as pd
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.progress import track
-import argparse
-import google.generativeai as genai
+from rich.table import Table
 from tenacity import retry, stop_after_attempt, wait_random_exponential
+
 
 # --- Configuration and Settings ---
 class Settings(BaseSettings):
@@ -29,7 +30,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
         extra="ignore",
-        yaml_file="config.yaml"
+        yaml_file="config.yaml",
     )
 
     bybit_api_key: str = Field(..., alias="BYBIT_API_KEY")
@@ -39,7 +40,7 @@ class Settings(BaseSettings):
     bybit_base_url: str = "https://api.bybit.com"
     gemini_model_name: str = "gemini-1.5-flash-latest"
 
-    symbols: List[str] = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    symbols: list[str] = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
     interval: str = "1m"
     category: str = "linear"
     kline_limit: int = 200
@@ -64,36 +65,36 @@ console = Console()
 # --- Data Models ---
 @dataclass
 class IndicatorData:
-    rsi: Optional[float] = None
-    macd: Optional[float] = None
-    macd_signal: Optional[float] = None
-    macd_histogram: Optional[float] = None
-    bb_upper: Optional[float] = None
-    bb_middle: Optional[float] = None
-    bb_lower: Optional[float] = None
-    sma_20: Optional[float] = None
-    sma_50: Optional[float] = None
-    ema_12: Optional[float] = None
-    ema_26: Optional[float] = None
-    atr: Optional[float] = None
-    adx: Optional[float] = None
-    cci: Optional[float] = None
-    stoch_k: Optional[float] = None
-    stoch_d: Optional[float] = None
-    williams_r: Optional[float] = None
-    fisher: Optional[float] = None
-    super_smoother: Optional[float] = None
-    volume_change_pct: Optional[float] = None
+    rsi: float | None = None
+    macd: float | None = None
+    macd_signal: float | None = None
+    macd_histogram: float | None = None
+    bb_upper: float | None = None
+    bb_middle: float | None = None
+    bb_lower: float | None = None
+    sma_20: float | None = None
+    sma_50: float | None = None
+    ema_12: float | None = None
+    ema_26: float | None = None
+    atr: float | None = None
+    adx: float | None = None
+    cci: float | None = None
+    stoch_k: float | None = None
+    stoch_d: float | None = None
+    williams_r: float | None = None
+    fisher: float | None = None
+    super_smoother: float | None = None
+    volume_change_pct: float | None = None
 
 class SignalAnalysis(BaseModel):
     trend: str = Field(..., description="Overall trend: bullish, bearish, or neutral")
     signal: str = Field(..., description="Trading signal: BUY, SELL, or HOLD")
     confidence: int = Field(..., ge=0, le=100, description="Confidence level from 0 to 100")
     explanation: str = Field(..., description="Brief explanation for the decision")
-    key_factors: List[str] = Field(default_factory=list, description="List of key factors influencing the decision")
-    entry_price: Optional[float] = Field(None, description="Suggested entry price")
-    target_price: Optional[float] = Field(None, description="Suggested take-profit price")
-    stop_loss_price: Optional[float] = Field(None, description="Suggested stop-loss price")
+    key_factors: list[str] = Field(default_factory=list, description="List of key factors influencing the decision")
+    entry_price: float | None = Field(None, description="Suggested entry price")
+    target_price: float | None = Field(None, description="Suggested take-profit price")
+    stop_loss_price: float | None = Field(None, description="Suggested stop-loss price")
 
 class AnalysisResult(BaseModel):
     symbol: str
@@ -103,8 +104,8 @@ class AnalysisResult(BaseModel):
     current_price: float
     analysis: SignalAnalysis
     indicators: IndicatorData
-    additional_info: Dict[str, Any] = Field(default_factory=dict)
-    error: Optional[str] = None
+    additional_info: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
 
 # --- API Clients ---
 class RateLimiter:
@@ -120,8 +121,7 @@ class RateLimiter:
             now = time.time()
             time_passed = now - self.last_update
             self.tokens += time_passed * (self.rate_limit / self.period)
-            if self.tokens > self.rate_limit:
-                self.tokens = self.rate_limit
+            self.tokens = min(self.tokens, self.rate_limit)
             self.last_update = now
 
             if self.tokens < 1:
@@ -137,7 +137,7 @@ class BybitClient:
         self.api_key = settings.bybit_api_key
         self.api_secret = settings.bybit_api_secret
         self.base_url = settings.bybit_base_url
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self.rate_limiter = RateLimiter(rate_limit=10, period=1)
 
     async def __aenter__(self):
@@ -151,34 +151,34 @@ class BybitClient:
     def _generate_timestamp(self) -> str:
         return str(int(time.time() * 1000))
 
-    def _generate_signature(self, method: str, endpoint: str, params: Dict[str, Any]) -> str:
+    def _generate_signature(self, method: str, endpoint: str, params: dict[str, Any]) -> str:
         timestamp = self._generate_timestamp()
-        params_str = '&'.join([f'{k}={v}' for k, v in sorted(params.items())])
+        params_str = "&".join([f"{k}={v}" for k, v in sorted(params.items())])
         recv_window = 5000 # Default receive window
-        
+
         sign_str = f"{timestamp}{self.api_key}{recv_window}{method.upper()}{endpoint}{params_str}"
-        
+
         signature = hmac.new(
             bytes(self.api_secret, "utf-8"),
             bytes(sign_str, "utf-8"),
-            hashlib.sha256
+            hashlib.sha256,
         ).hexdigest()
-        
+
         return signature, timestamp, recv_window
 
     @retry(stop=stop_after_attempt(settings.max_retries), wait=wait_random_exponential(multiplier=settings.backoff_factor, min=1, max=10))
-    async def _request(self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None, signed: bool = False) -> Dict[str, Any]:
+    async def _request(self, method: str, endpoint: str, params: dict[str, Any] | None = None, signed: bool = False) -> dict[str, Any]:
         if not self.session:
             raise RuntimeError("ClientSession not initialized. Use 'async with' statement.")
-        
+
         await self.rate_limiter.acquire()
-        
+
         url = f"{self.base_url}{endpoint}"
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        
+
         request_params = params if method.upper() == "GET" else None
         request_body = params if method.upper() == "POST" else None
 
@@ -194,15 +194,15 @@ class BybitClient:
                 if response.status == 429:
                     logger.warning(f"Rate limit hit for {method} {endpoint}. Retrying...")
                     response.raise_for_status() # This will raise an exception that tenacity can catch
-                
+
                 response.raise_for_status()
                 data = await response.json()
-                
+
                 if data.get("retCode") != 0:
-                    ret_msg = data.get('retMsg', 'Unknown error')
+                    ret_msg = data.get("retMsg", "Unknown error")
                     logger.error(f"Bybit API Error: {ret_msg} (Code: {data.get('retCode')}) for {method} {endpoint}")
                     raise Exception(f"Bybit API error: {ret_msg} (Code: {data.get('retCode')})")
-                
+
                 return data.get("result", {})
         except aiohttp.ClientError as e:
             logger.error(f"HTTP Client Error: {e} for {method} {endpoint}")
@@ -215,12 +215,12 @@ class BybitClient:
         endpoint = "/v5/market/kline"
         params = {"category": category, "symbol": symbol, "interval": interval, "limit": str(limit)}
         result = await self._request("GET", endpoint, params=params)
-        
+
         klines = result.get("list", [])
         if not klines:
             logger.warning(f"No kline data received for {symbol} with interval {interval}.")
             return pd.DataFrame()
-        
+
         df = pd.DataFrame(klines, columns=["timestamp", "open", "high", "low", "close", "volume"])
         df = df.astype({
             "timestamp": "int64",
@@ -233,7 +233,7 @@ class BybitClient:
         df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
         return df.sort_values("timestamp").reset_index(drop=True)
 
-    async def get_tickers(self, category: str, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_tickers(self, category: str, symbol: str | None = None) -> list[dict[str, Any]]:
         endpoint = "/v5/market/tickers"
         params = {"category": category}
         if symbol:
@@ -241,19 +241,19 @@ class BybitClient:
         result = await self._request("GET", endpoint, params=params)
         return result.get("list", [])
 
-    async def place_order(self, symbol: str, side: str, order_type: str, qty: float, price: Optional[float] = None, category: str = "linear") -> Dict[str, Any]:
+    async def place_order(self, symbol: str, side: str, order_type: str, qty: float, price: float | None = None, category: str = "linear") -> dict[str, Any]:
         endpoint = "/v5/order/create"
         params = {"category": category, "symbol": symbol, "side": side, "orderType": order_type, "qty": str(qty)}
         if price is not None:
             params["price"] = str(price)
         return await self._request("POST", endpoint, params=params, signed=True)
 
-    async def cancel_order(self, symbol: str, order_id: str, category: str = "linear") -> Dict[str, Any]:
+    async def cancel_order(self, symbol: str, order_id: str, category: str = "linear") -> dict[str, Any]:
         endpoint = "/v5/order/cancel"
         params = {"category": category, "symbol": symbol, "orderId": order_id}
         return await self._request("POST", endpoint, params=params, signed=True)
 
-    async def get_open_orders(self, symbol: Optional[str] = None, category: str = "linear") -> List[Dict[str, Any]]:
+    async def get_open_orders(self, symbol: str | None = None, category: str = "linear") -> list[dict[str, Any]]:
         endpoint = "/v5/order/realtime"
         params = {"category": category}
         if symbol:
@@ -261,7 +261,7 @@ class BybitClient:
         result = await self._request("GET", endpoint, params=params, signed=True)
         return result.get("list", [])
 
-    async def get_position_info(self, symbol: Optional[str] = None, category: str = "linear") -> List[Dict[str, Any]]:
+    async def get_position_info(self, symbol: str | None = None, category: str = "linear") -> list[dict[str, Any]]:
         endpoint = "/v5/position/list"
         params = {"category": category}
         if symbol:
@@ -339,18 +339,18 @@ class GeminiAnalyzer:
     @retry(stop=stop_after_attempt(settings.max_retries), wait=wait_random_exponential(multiplier=settings.backoff_factor, min=1, max=10))
     async def analyze(self, symbol: str, timeframe: str, price: float, indicators: IndicatorData) -> SignalAnalysis:
         prompt = self._create_prompt(symbol, timeframe, price, indicators)
-        
+
         try:
             response = await self.model.generate_content_async(prompt)
             response_text = response.text.strip()
-            
+
             logger.debug(f"Raw Gemini response for {symbol}:\n{response_text}")
 
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0].strip()
             elif response_text.startswith("```"):
                 response_text = response_text.split("```")[1].split("```")[0].strip()
-            
+
             if not response_text:
                 raise ValueError("Received empty response from Gemini.")
 
@@ -362,19 +362,19 @@ class GeminiAnalyzer:
             logger.error(f"Failed to parse JSON from Gemini for {symbol}. Response: '{response_text}'. Error: {e}")
             return SignalAnalysis(
                 trend="neutral", signal="HOLD", confidence=0,
-                explanation=f"AI response parsing failed. Response snippet: {response_text[:100]}..."
+                explanation=f"AI response parsing failed. Response snippet: {response_text[:100]}...",
             )
         except ValueError as e:
              logger.error(f"Validation error from Gemini for {symbol}: {e}. Response: '{response_text}'.")
              return SignalAnalysis(
                 trend="neutral", signal="HOLD", confidence=0,
-                explanation=f"AI response validation failed. Response snippet: {response_text[:100]}..."
+                explanation=f"AI response validation failed. Response snippet: {response_text[:100]}...",
             )
         except Exception as e:
             logger.error(f"Error during Gemini analysis for {symbol}: {e}")
             return SignalAnalysis(
                 trend="neutral", signal="HOLD", confidence=0,
-                explanation=f"An unexpected error occurred during AI analysis: {str(e)}"
+                explanation=f"An unexpected error occurred during AI analysis: {e!s}",
             )
 
 # --- Technical Indicators ---
@@ -384,82 +384,82 @@ def add_technical_indicators(df: pd.DataFrame) -> IndicatorData:
         return IndicatorData()
 
     try:
-        df['sma_20'] = df['close'].rolling(window=20).mean()
-        df['sma_50'] = df['close'].rolling(window=50).mean()
-        df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
-        df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
-        df['macd'] = df['ema_12'] - df['ema_26']
-        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-        df['macd_histogram'] = df['macd'] - df['macd_signal']
-        
-        delta = df['close'].diff()
+        df["sma_20"] = df["close"].rolling(window=20).mean()
+        df["sma_50"] = df["close"].rolling(window=50).mean()
+        df["ema_12"] = df["close"].ewm(span=12, adjust=False).mean()
+        df["ema_26"] = df["close"].ewm(span=26, adjust=False).mean()
+        df["macd"] = df["ema_12"] - df["ema_26"]
+        df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+        df["macd_histogram"] = df["macd"] - df["macd_signal"]
+
+        delta = df["close"].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
-        
-        df['bb_middle'] = df['close'].rolling(window=20).mean()
-        bb_std = df['close'].rolling(window=20).std()
-        df['bb_upper'] = df['bb_middle'] + (bb_std * 2)
-        df['bb_lower'] = df['bb_middle'] - (bb_std * 2)
-        
-        df['volume_change_pct'] = df['volume'].pct_change() * 100
+        df["rsi"] = 100 - (100 / (1 + rs))
+
+        df["bb_middle"] = df["close"].rolling(window=20).mean()
+        bb_std = df["close"].rolling(window=20).std()
+        df["bb_upper"] = df["bb_middle"] + (bb_std * 2)
+        df["bb_lower"] = df["bb_middle"] - (bb_std * 2)
+
+        df["volume_change_pct"] = df["volume"].pct_change() * 100
 
         # ATR Calculation
-        high_low = df['high'] - df['low']
-        high_close = np.abs(df['high'] - df['close'].shift())
-        low_close = np.abs(df['low'] - df['close'].shift())
+        high_low = df["high"] - df["low"]
+        high_close = np.abs(df["high"] - df["close"].shift())
+        low_close = np.abs(df["low"] - df["close"].shift())
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
         true_range = ranges.max(axis=1)
-        df['atr'] = true_range.ewm(com=13, adjust=False).mean() # Using Wilder's smoothing for ATR
+        df["atr"] = true_range.ewm(com=13, adjust=False).mean() # Using Wilder's smoothing for ATR
 
         # ADX Calculation
-        up_move = df['high'].diff()
-        down_move = -df['low'].diff()
-        
+        up_move = df["high"].diff()
+        down_move = -df["low"].diff()
+
         up_move[up_move < 0] = 0
         down_move[down_move < 0] = 0
-        
+
         avg_up = up_move.ewm(com=13, adjust=False).mean()
         avg_down = down_move.ewm(com=13, adjust=False).mean()
-        
-        positive_di = (avg_up / df['atr']) * 100
-        negative_di = (avg_down / df['atr']) * 100
-        
-        tr_14 = df['atr'].rolling(14).mean() # Re-calculating ATR for ADX, often done this way
+
+        positive_di = (avg_up / df["atr"]) * 100
+        negative_di = (avg_down / df["atr"]) * 100
+
+        tr_14 = df["atr"].rolling(14).mean() # Re-calculating ATR for ADX, often done this way
         dx = ((abs(positive_di - negative_di) / (positive_di + negative_di)) * 100)
-        df['adx'] = dx.ewm(com=13, adjust=False).mean()
+        df["adx"] = dx.ewm(com=13, adjust=False).mean()
 
         # CCI Calculation
-        tp = (df['high'] + df['low'] + df['close']) / 3
-        df['cci'] = (tp - tp.rolling(20).mean()) / (0.015 * tp.rolling(20).std())
-        
+        tp = (df["high"] + df["low"] + df["close"]) / 3
+        df["cci"] = (tp - tp.rolling(20).mean()) / (0.015 * tp.rolling(20).std())
+
         # Stochastic Oscillator Calculation
-        low_min = df['low'].rolling(window=14).min()
-        high_max = df['high'].rolling(window=14).max()
-        k_percent = 100 * (df['close'] - low_min) / (high_max - low_min)
-        df['stoch_k'] = k_percent.rolling(window=3).mean()
-        df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
-        
+        low_min = df["low"].rolling(window=14).min()
+        high_max = df["high"].rolling(window=14).max()
+        k_percent = 100 * (df["close"] - low_min) / (high_max - low_min)
+        df["stoch_k"] = k_percent.rolling(window=3).mean()
+        df["stoch_d"] = df["stoch_k"].rolling(window=3).mean()
+
         # Williams %R Calculation
-        df['williams_r'] = -100 * (high_max - df['close']) / (high_max - low_min)
+        df["williams_r"] = -100 * (high_max - df["close"]) / (high_max - low_min)
 
         # Fisher Transform Calculation
         def _fisher_transform(series: pd.Series, period: int = 9) -> pd.Series:
             min_val = series.rolling(window=period).min()
             max_val = series.rolling(window=period).max()
-            
+
             # Avoid division by zero or log of non-positive numbers
             ratio = np.where((max_val - min_val) > 1e-9, (series - min_val) / (max_val - min_val), 0.5)
-            
+
             # Clamp ratio to avoid log(0) or log of negative numbers
-            ratio = np.clip(ratio, 1e-9, 1 - 1e-9) 
-            
+            ratio = np.clip(ratio, 1e-9, 1 - 1e-9)
+
             fisher = 0.25 * np.log((1 + 2 * ratio) / (1 - 2 * ratio))
             return fisher
 
-        df['fisher'] = _fisher_transform(df['close'], period=9)
-        
+        df["fisher"] = _fisher_transform(df["close"], period=9)
+
         # Super Smoother Calculation
         def _super_smoother(series: pd.Series, period: int = 10) -> pd.Series:
             a2 = np.exp(-1.414 * np.pi / period)
@@ -473,31 +473,31 @@ def add_technical_indicators(df: pd.DataFrame) -> IndicatorData:
                 output[i] = coef1 * (series[i] + 2 * series[i-1] + series[i-2]) + b2 * output[i-1] - c2 * output[i-2]
             return output
 
-        df['super_smoother'] = _super_smoother(df['close'], period=10)
+        df["super_smoother"] = _super_smoother(df["close"], period=10)
 
         latest = df.iloc[-1]
-        
+
         return IndicatorData(
-            rsi=latest.get('rsi'),
-            macd=latest.get('macd'),
-            macd_signal=latest.get('macd_signal'),
-            macd_histogram=latest.get('macd_histogram'),
-            bb_upper=latest.get('bb_upper'),
-            bb_middle=latest.get('bb_middle'),
-            bb_lower=latest.get('bb_lower'),
-            sma_20=latest.get('sma_20'),
-            sma_50=latest.get('sma_50'),
-            ema_12=latest.get('ema_12'),
-            ema_26=latest.get('ema_26'),
-            atr=latest.get('atr'),
-            adx=latest.get('adx'),
-            cci=latest.get('cci'),
-            stoch_k=latest.get('stoch_k'),
-            stoch_d=latest.get('stoch_d'),
-            williams_r=latest.get('williams_r'),
-            fisher=latest.get('fisher'),
-            super_smoother=latest.get('super_smoother'),
-            volume_change_pct=latest.get('volume_change_pct')
+            rsi=latest.get("rsi"),
+            macd=latest.get("macd"),
+            macd_signal=latest.get("macd_signal"),
+            macd_histogram=latest.get("macd_histogram"),
+            bb_upper=latest.get("bb_upper"),
+            bb_middle=latest.get("bb_middle"),
+            bb_lower=latest.get("bb_lower"),
+            sma_20=latest.get("sma_20"),
+            sma_50=latest.get("sma_50"),
+            ema_12=latest.get("ema_12"),
+            ema_26=latest.get("ema_26"),
+            atr=latest.get("atr"),
+            adx=latest.get("adx"),
+            cci=latest.get("cci"),
+            stoch_k=latest.get("stoch_k"),
+            stoch_d=latest.get("stoch_d"),
+            williams_r=latest.get("williams_r"),
+            fisher=latest.get("fisher"),
+            super_smoother=latest.get("super_smoother"),
+            volume_change_pct=latest.get("volume_change_pct"),
         )
     except Exception as e:
         logger.error(f"Error calculating technical indicators: {e}")
@@ -518,14 +518,14 @@ class TrendAnalysisEngine:
 
             if len(df) < 50: # Ensure enough data for indicators
                 logger.warning(f"Insufficient data points ({len(df)}) for {symbol} to calculate indicators reliably. Need at least 50.")
-                return AnalysisResult(symbol=symbol, interval=settings.interval, category=settings.category, timestamp=datetime.utcnow(), current_price=df['close'].iloc[-1] if not df.empty else 0, error=f"Insufficient data points ({len(df)}). Need at least 50.")
+                return AnalysisResult(symbol=symbol, interval=settings.interval, category=settings.category, timestamp=datetime.utcnow(), current_price=df["close"].iloc[-1] if not df.empty else 0, error=f"Insufficient data points ({len(df)}). Need at least 50.")
 
-            current_price = df['close'].iloc[-1]
-            
+            current_price = df["close"].iloc[-1]
+
             indicators = add_technical_indicators(df.copy()) # Use copy to avoid SettingWithCopyWarning
-            
+
             analysis = await self.gemini_analyzer.analyze(symbol, settings.interval, current_price, indicators)
-            
+
             ticker_info = {}
             try:
                 tickers = await client.get_tickers(settings.category, symbol)
@@ -548,7 +548,7 @@ class TrendAnalysisEngine:
                 current_price=current_price,
                 analysis=analysis,
                 indicators=indicators,
-                additional_info=ticker_info
+                additional_info=ticker_info,
             )
         except Exception as e:
             logger.exception(f"Failed to analyze {symbol}: {e}") # Use logger.exception to include traceback
@@ -556,16 +556,16 @@ class TrendAnalysisEngine:
 
     async def run_analysis(self):
         console.print(Panel.fit("🚀 Starting Enhanced Trend Analysis Engine", style="bold blue"))
-        
+
         async with BybitClient() as client:
             tasks = [self.analyze_symbol(client, symbol) for symbol in settings.symbols]
-            
+
             results = []
             # Use track for progress visualization
             for task in track(asyncio.as_completed(tasks), total=len(settings.symbols), description="Analyzing symbols..."):
                 result = await task
                 results.append(result)
-            
+
             successful_results = [r for r in results if not r.error and r.analysis.confidence >= settings.min_confidence]
             low_confidence_results = [r for r in results if not r.error and r.analysis.confidence < settings.min_confidence]
             failed_results = [r for r in results if r.error]
@@ -584,7 +584,7 @@ class TrendAnalysisEngine:
                 for res in failed_results:
                     console.print(f"  - {res.symbol}: [red]{res.error}[/red]")
 
-    def display_results(self, results: List[AnalysisResult], confidence_threshold: Optional[int] = None):
+    def display_results(self, results: list[AnalysisResult], confidence_threshold: int | None = None):
         if not results:
             return
 
@@ -613,7 +613,7 @@ class TrendAnalysisEngine:
             trend_style = "green" if trend == "bullish" else "red" if trend == "bearish" else "yellow"
             signal_style = "green" if signal == "BUY" else "red" if signal == "SELL" else "dim"
             confidence_str = f"{confidence}%"
-            
+
             # Truncate explanation for table display
             display_explanation = explanation[:70] + "..." if len(explanation) > 70 else explanation
 
@@ -624,18 +624,18 @@ class TrendAnalysisEngine:
                 f"[{trend_style}]{trend.upper()}[/{trend_style}]",
                 f"[{signal_style}]{signal}[/{signal_style}]",
                 f"[{signal_style}]{confidence_str}[/{signal_style}]",
-                display_explanation
+                display_explanation,
             )
         console.print(table)
 
 # --- Main CLI ---
 async def main():
     parser = argparse.ArgumentParser(description="AI-powered crypto trend analysis.")
-    parser.add_argument("--symbols", nargs='+', default=settings.symbols, help="List of trading symbols to analyze (e.g., BTCUSDT ETHUSDT).")
+    parser.add_argument("--symbols", nargs="+", default=settings.symbols, help="List of trading symbols to analyze (e.g., BTCUSDT ETHUSDT).")
     parser.add_argument("--interval", type=str, default=settings.interval, help="Candlestick interval (e.g., 1m, 5m, 1h).")
     parser.add_argument("--kline_limit", type=int, default=settings.kline_limit, help="Number of historical candles to fetch.")
     parser.add_argument("--min_confidence", type=int, default=settings.min_confidence, help="Minimum confidence level to display as a primary signal.")
-    
+
     args = parser.parse_args()
 
     # Update settings based on command-line arguments
@@ -643,7 +643,7 @@ async def main():
     settings.interval = args.interval
     settings.kline_limit = args.kline_limit
     settings.min_confidence = args.min_confidence
-    
+
     if settings.logging_level == "DEBUG":
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug logging enabled.")

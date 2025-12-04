@@ -1,6 +1,5 @@
 import logging
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from datetime import datetime
 
 import pandas as pd
@@ -13,10 +12,9 @@ class DataProvider(ABC):
 
     @abstractmethod
     def get_historical_data(
-        self, symbol: str, timeframe: str, limit: int
+        self, symbol: str, timeframe: str, limit: int,
     ) -> pd.DataFrame:
         """Get historical market data."""
-        pass
 
 
 class BybitDataProvider(DataProvider):
@@ -27,7 +25,7 @@ class BybitDataProvider(DataProvider):
         self.session = session
 
     def get_historical_data(
-        self, symbol: str, timeframe: str, limit: int
+        self, symbol: str, timeframe: str, limit: int,
     ) -> pd.DataFrame:
         """Get historical kline data from Bybit.
 
@@ -55,7 +53,7 @@ class BybitDataProvider(DataProvider):
             if response["retCode"] != 0:
                 logger.error(
                     f"Error fetching kline data for {symbol}: "
-                    f"{response.get('retMsg', 'Unknown error')}"
+                    f"{response.get('retMsg', 'Unknown error')}",
                 )
                 return pd.DataFrame()
 
@@ -81,7 +79,7 @@ class BybitDataProvider(DataProvider):
             # Convert to numeric types and timestamp
             try:
                 df["timestamp"] = pd.to_datetime(
-                    df["timestamp"].astype(float), unit="ms"
+                    df["timestamp"].astype(float), unit="ms",
                 )
                 for col in ["open", "high", "low", "close", "volume", "turnover"]:
                     df[col] = pd.to_numeric(df[col])
@@ -97,13 +95,13 @@ class BybitDataProvider(DataProvider):
         except AttributeError:
             logger.error(
                 "API session object does not have 'get_kline' method or "
-                "is not properly initialized."
+                "is not properly initialized.",
             )
             return pd.DataFrame()
         except Exception as e:
             logger.error(
                 f"An unexpected error occurred fetching historical data for "
-                f"{symbol}: {e!s}"
+                f"{symbol}: {e!s}",
             )
             return pd.DataFrame()
 

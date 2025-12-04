@@ -157,7 +157,7 @@ def _calculate_ehlers_fisher(klines: list[dict], period: int) -> float:
 
 
 def _calculate_macd(
-    closes: list[float], fast_period: int, slow_period: int, signal_period: int
+    closes: list[float], fast_period: int, slow_period: int, signal_period: int,
 ) -> dict:
     """Calculates Moving Average Convergence Divergence (MACD)."""
     fast_ema = _calculate_ema(closes, fast_period)
@@ -175,7 +175,7 @@ def _calculate_macd(
 
 
 def _calculate_bollinger_bands(
-    closes: list[float], period: int, std_dev: float
+    closes: list[float], period: int, std_dev: float,
 ) -> dict:
     """Calculates Bollinger Bands."""
     middle_band = _calculate_sma(closes, period)
@@ -224,7 +224,7 @@ def calculate_indicators(klines: list[dict], config: dict) -> dict | None:
 
     return {
         "supertrend": _calculate_supertrend(
-            klines, config["supertrend_length"], config["supertrend_multiplier"]
+            klines, config["supertrend_length"], config["supertrend_multiplier"],
         ),
         "rsi": _calculate_rsi(closes, config["rsi_length"]),
         "fisher": _calculate_ehlers_fisher(klines, config["ef_period"]),
@@ -235,6 +235,6 @@ def calculate_indicators(klines: list[dict], config: dict) -> dict | None:
             config["macd_signal_period"],
         ),
         "bollinger_bands": _calculate_bollinger_bands(
-            closes, config["bb_period"], config["bb_std_dev"]
+            closes, config["bb_period"], config["bb_std_dev"],
         ),
     }

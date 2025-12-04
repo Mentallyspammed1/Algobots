@@ -8,9 +8,7 @@ from datetime import datetime
 
 import pandas as pd
 import requests
-from colorama import Fore
-from colorama import Style
-from colorama import init
+from colorama import Fore, Style, init
 from dotenv import load_dotenv
 
 # Initialize Colorama
@@ -76,17 +74,17 @@ class UnifiedTrader:
                     "api_key": self.api_key,
                     "timestamp": str(int(time.time() * 1000)),
                     "recv_window": "5000",
-                }
+                },
             )
             params["sign"] = self.generate_signature(params)
 
             if method == "GET":
                 response = requests.get(
-                    f"{CONFIG['api_endpoint']}{endpoint}", params=params
+                    f"{CONFIG['api_endpoint']}{endpoint}", params=params,
                 )
             else:
                 response = requests.post(
-                    f"{CONFIG['api_endpoint']}{endpoint}", json=params
+                    f"{CONFIG['api_endpoint']}{endpoint}", json=params,
                 )
 
             response.raise_for_status()
@@ -205,7 +203,7 @@ class UnifiedTrader:
                                 {
                                     "signal": signal,
                                     "timestamp": datetime.now().isoformat(),
-                                }
+                                },
                             )
 
                 time.sleep(60)  # Check every minute

@@ -29,19 +29,19 @@ class BybitSizingHelper:
         :param api_secret: Optional. Your Bybit API secret.
         """
         self.market_data_helper = BybitMarketDataHelper(
-            testnet=testnet, api_key=api_key, api_secret=api_secret
+            testnet=testnet, api_key=api_key, api_secret=api_secret,
         )
         # Cache for instrument info: {f"{category}_{symbol}": instrument_details_dict}
         self._instrument_info_cache: dict[str, dict[str, Any]] = {}
         self._cache_expiry_time: dict[
-            str, float
+            str, float,
         ] = {}  # {f"{category}_{symbol}": timestamp_of_expiry}
         self.cache_duration_seconds = 3600  # Cache instrument info for 1 hour
 
         logger.info(f"BybitSizingHelper initialized. Testnet: {testnet}.")
 
     def _get_instrument_info(
-        self, category: str, symbol: str, force_update: bool = False
+        self, category: str, symbol: str, force_update: bool = False,
     ) -> dict[str, Any] | None:
         """Internal method to get instrument information, utilizing a cache.
 
@@ -62,10 +62,10 @@ class BybitSizingHelper:
             return self._instrument_info_cache[cache_key]
 
         logger.info(
-            f"Fetching fresh instrument info for {symbol} (category: {category})."
+            f"Fetching fresh instrument info for {symbol} (category: {category}).",
         )
         info = self.market_data_helper.get_instruments_info(
-            category=category, symbol=symbol
+            category=category, symbol=symbol,
         )
 
         if info and info.get("list"):
@@ -75,12 +75,12 @@ class BybitSizingHelper:
                 current_time + self.cache_duration_seconds
             )
             logger.debug(
-                f"Cached instrument info for {symbol} (expires in {self.cache_duration_seconds}s)."
+                f"Cached instrument info for {symbol} (expires in {self.cache_duration_seconds}s).",
             )
             return instrument_details
 
         logger.error(
-            f"Failed to retrieve instrument info for {symbol} (category: {category})."
+            f"Failed to retrieve instrument info for {symbol} (category: {category}).",
         )
         return None
 
@@ -102,10 +102,10 @@ class BybitSizingHelper:
                     return float(value)
                 except ValueError:
                     logger.error(
-                        f"Invalid numerical value for {key} in {filter_type} for {symbol}: {value}"
+                        f"Invalid numerical value for {key} in {filter_type} for {symbol}: {value}",
                     )
         logger.warning(
-            f"Could not get {key} from {filter_type} for {symbol}. Using default: {default}"
+            f"Could not get {key} from {filter_type} for {symbol}. Using default: {default}",
         )
         return default
 
@@ -118,7 +118,7 @@ class BybitSizingHelper:
         :return: Minimum order quantity as a float. Returns 0.0 if not found.
         """
         return self._get_filter_value(
-            category, symbol, "lotSizeFilter", "minOrderQty", default=0.0
+            category, symbol, "lotSizeFilter", "minOrderQty", default=0.0,
         )
 
     def get_max_order_qty(self, category: str, symbol: str) -> float:
@@ -130,7 +130,7 @@ class BybitSizingHelper:
         """
         # Max order qty might not always be explicitly set, use a large default
         return self._get_filter_value(
-            category, symbol, "lotSizeFilter", "maxOrderQty", default=float("inf")
+            category, symbol, "lotSizeFilter", "maxOrderQty", default=float("inf"),
         )
 
     def get_qty_step(self, category: str, symbol: str) -> float:
@@ -141,7 +141,7 @@ class BybitSizingHelper:
         :return: Quantity step size as a float. Returns 0.0 if not found.
         """
         return self._get_filter_value(
-            category, symbol, "lotSizeFilter", "qtyStep", default=0.0
+            category, symbol, "lotSizeFilter", "qtyStep", default=0.0,
         )
 
     def get_qty_precision(self, category: str, symbol: str) -> int:
@@ -167,7 +167,7 @@ class BybitSizingHelper:
         :return: Minimum price as a float. Returns 0.0 if not found.
         """
         return self._get_filter_value(
-            category, symbol, "priceFilter", "minPrice", default=0.0
+            category, symbol, "priceFilter", "minPrice", default=0.0,
         )
 
     def get_max_price(self, category: str, symbol: str) -> float:
@@ -178,7 +178,7 @@ class BybitSizingHelper:
         :return: Maximum price as a float. Returns a very large number if not found.
         """
         return self._get_filter_value(
-            category, symbol, "priceFilter", "maxPrice", default=float("inf")
+            category, symbol, "priceFilter", "maxPrice", default=float("inf"),
         )
 
     def get_price_tick_size(self, category: str, symbol: str) -> float:
@@ -189,7 +189,7 @@ class BybitSizingHelper:
         :return: Price tick size as a float. Returns 0.0 if not found.
         """
         return self._get_filter_value(
-            category, symbol, "priceFilter", "tickSize", default=0.0
+            category, symbol, "priceFilter", "tickSize", default=0.0,
         )
 
     def get_price_precision(self, category: str, symbol: str) -> int:
@@ -273,12 +273,12 @@ class BybitSizingHelper:
 
         if qty_float < min_qty:
             logger.warning(
-                f"Quantity {qty_float} is less than min_qty {min_qty} for {symbol}."
+                f"Quantity {qty_float} is less than min_qty {min_qty} for {symbol}.",
             )
             return False
         if qty_float > max_qty:
             logger.warning(
-                f"Quantity {qty_float} is greater than max_qty {max_qty} for {symbol}."
+                f"Quantity {qty_float} is greater than max_qty {max_qty} for {symbol}.",
             )
             return False
 
@@ -287,7 +287,7 @@ class BybitSizingHelper:
             qty_step > 0 and (qty_float - min_qty) % qty_step > 1e-9
         ):  # Allow small float tolerance
             logger.warning(
-                f"Quantity {qty_float} is not a multiple of qty_step {qty_step} (min_qty={min_qty}) for {symbol}."
+                f"Quantity {qty_float} is not a multiple of qty_step {qty_step} (min_qty={min_qty}) for {symbol}.",
             )
             return False
 
@@ -313,12 +313,12 @@ class BybitSizingHelper:
 
         if price_float < min_price:
             logger.warning(
-                f"Price {price_float} is less than min_price {min_price} for {symbol}."
+                f"Price {price_float} is less than min_price {min_price} for {symbol}.",
             )
             return False
         if price_float > max_price:
             logger.warning(
-                f"Price {price_float} is greater than max_price {max_price} for {symbol}."
+                f"Price {price_float} is greater than max_price {max_price} for {symbol}.",
             )
             return False
 
@@ -327,7 +327,7 @@ class BybitSizingHelper:
             tick_size > 0 and price_float % tick_size > 1e-9
         ):  # Allow small float tolerance
             logger.warning(
-                f"Price {price_float} is not a multiple of tick_size {tick_size} for {symbol}."
+                f"Price {price_float} is not a multiple of tick_size {tick_size} for {symbol}.",
             )
             return False
 
@@ -343,7 +343,7 @@ if __name__ == "__main__":
     USE_TESTNET = True
 
     sizing_helper = BybitSizingHelper(
-        testnet=USE_TESTNET, api_key=API_KEY, api_secret=API_SECRET
+        testnet=USE_TESTNET, api_key=API_KEY, api_secret=API_SECRET,
     )
 
     SYMBOL = "BTCUSDT"
@@ -390,7 +390,7 @@ if __name__ == "__main__":
     )
     is_valid_step = sizing_helper.is_valid_qty(CATEGORY, SYMBOL, invalid_qty_step)
     print(
-        f"  Is {invalid_qty_step} valid? {is_valid_step} (Expected: False, due to step)"
+        f"  Is {invalid_qty_step} valid? {is_valid_step} (Expected: False, due to step)",
     )
 
     print(f"\n--- Testing Price Rounding and Validation for {SYMBOL} ---")
@@ -403,7 +403,7 @@ if __name__ == "__main__":
 
     invalid_price_low = min_price / 2
     is_valid_low_price = sizing_helper.is_valid_price(
-        CATEGORY, SYMBOL, invalid_price_low
+        CATEGORY, SYMBOL, invalid_price_low,
     )
     print(f"  Is {invalid_price_low} valid? {is_valid_low_price} (Expected: False)")
 
@@ -414,19 +414,19 @@ if __name__ == "__main__":
     )
     is_valid_tick = sizing_helper.is_valid_price(CATEGORY, SYMBOL, invalid_price_tick)
     print(
-        f"  Is {invalid_price_tick} valid? {is_valid_tick} (Expected: False, due to tick size)"
+        f"  Is {invalid_price_tick} valid? {is_valid_tick} (Expected: False, due to tick size)",
     )
 
     # Test with a symbol that might have different rules (e.g., a spot pair)
     SPOT_SYMBOL = "ETHUSDT"
     SPOT_CATEGORY = "spot"
     print(
-        f"\n--- Retrieving Sizing Information for {SPOT_SYMBOL} ({SPOT_CATEGORY}) ---"
+        f"\n--- Retrieving Sizing Information for {SPOT_SYMBOL} ({SPOT_CATEGORY}) ---",
     )
     sizing_helper._get_instrument_info(SPOT_CATEGORY, SPOT_SYMBOL, force_update=True)
     print(
-        f"  Min Order Quantity for {SPOT_SYMBOL}: {sizing_helper.get_min_order_qty(SPOT_CATEGORY, SPOT_SYMBOL)}"
+        f"  Min Order Quantity for {SPOT_SYMBOL}: {sizing_helper.get_min_order_qty(SPOT_CATEGORY, SPOT_SYMBOL)}",
     )
     print(
-        f"  Price Tick Size for {SPOT_SYMBOL}: {sizing_helper.get_price_tick_size(SPOT_CATEGORY, SPOT_SYMBOL)}"
+        f"  Price Tick Size for {SPOT_SYMBOL}: {sizing_helper.get_price_tick_size(SPOT_CATEGORY, SPOT_SYMBOL)}",
     )

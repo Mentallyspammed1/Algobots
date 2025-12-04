@@ -1,6 +1,5 @@
 # config/strategy_config.py
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from typing import Any
 
 

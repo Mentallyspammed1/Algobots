@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-sys.modules['config'] = MagicMock()
+sys.modules["config"] = MagicMock()
 import config
 from mm import MarketMaker
 
@@ -82,5 +82,5 @@ class TestMarketMakerCalculations(unittest.TestCase):
         expected_spread = config.BASE_SPREAD * config.MAX_SPREAD_MULTIPLIER
         self.assertAlmostEqual(self.market_maker.calculate_adaptive_spread(config.BASE_SPREAD, current_vol), expected_spread, places=5)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

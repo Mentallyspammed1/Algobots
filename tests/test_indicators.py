@@ -1,7 +1,6 @@
 import sys
 import unittest
-from decimal import Decimal
-from decimal import getcontext
+from decimal import Decimal, getcontext
 from unittest.mock import patch
 
 import pandas as pd
@@ -11,18 +10,20 @@ sys.path.insert(0, "/data/data/com.termux/files/home/Algobots")
 
 # Mock setup_logging to prevent actual log file creation during tests
 with patch("bot_logger.setup_logging"):
-    from indicators import calculate_atr
-    from indicators import calculate_ehlers_fisher_strategy
-    from indicators import calculate_ehlers_fisher_transform
-    from indicators import calculate_ehlers_super_smoother
-    from indicators import calculate_fibonacci_pivot_points
-    from indicators import calculate_order_book_imbalance
-    from indicators import calculate_sma
-    from indicators import calculate_stochrsi
-    from indicators import calculate_supertrend
-    from indicators import calculate_vwap
-    from indicators import find_pivots
-    from indicators import handle_websocket_kline_data
+    from indicators import (
+        calculate_atr,
+        calculate_ehlers_fisher_strategy,
+        calculate_ehlers_fisher_transform,
+        calculate_ehlers_super_smoother,
+        calculate_fibonacci_pivot_points,
+        calculate_order_book_imbalance,
+        calculate_sma,
+        calculate_stochrsi,
+        calculate_supertrend,
+        calculate_vwap,
+        find_pivots,
+        handle_websocket_kline_data,
+    )
 
 # Set Decimal precision for tests
 getcontext().prec = 38
@@ -106,7 +107,7 @@ class TestIndicators(unittest.TestCase):
 
     def test_calculate_stochrsi(self):
         df_stochrsi = calculate_stochrsi(
-            self.df, rsi_period=14, stoch_k_period=14, stoch_d_period=3
+            self.df, rsi_period=14, stoch_k_period=14, stoch_d_period=3,
         )
         self.assertIn("stoch_rsi", df_stochrsi.columns)
         self.assertIn("stoch_k", df_stochrsi.columns)
@@ -132,7 +133,7 @@ class TestIndicators(unittest.TestCase):
 
     def test_calculate_ehlers_fisher_transform(self):
         fisher, signal = calculate_ehlers_fisher_transform(
-            self.df, length=9, signal_length=1
+            self.df, length=9, signal_length=1,
         )
         self.assertIsInstance(fisher, pd.Series)
         self.assertIsInstance(signal, pd.Series)
@@ -181,8 +182,8 @@ class TestIndicators(unittest.TestCase):
                     "low": "104.5",
                     "close": "105.2",
                     "volume": "1200",
-                }
-            ]
+                },
+            ],
         }
         updated_df = handle_websocket_kline_data(initial_df, message)
         self.assertEqual(len(updated_df), len(initial_df) + 1)
@@ -210,7 +211,7 @@ class TestIndicators(unittest.TestCase):
                     "close": "105.8",
                     "volume": "1300",
                 },
-            ]
+            ],
         }
         updated_df = handle_websocket_kline_data(initial_df, message)
         self.assertEqual(len(updated_df), len(initial_df) + 2)
@@ -229,8 +230,8 @@ class TestIndicators(unittest.TestCase):
                     "low": str(initial_df["low"].iloc[-1]),
                     "close": "999.9",  # Updated close price
                     "volume": str(initial_df["volume"].iloc[-1]),
-                }
-            ]
+                },
+            ],
         }
         updated_df = handle_websocket_kline_data(initial_df, message)
         self.assertEqual(len(updated_df), len(initial_df))  # Length should not change
@@ -246,8 +247,8 @@ class TestIndicators(unittest.TestCase):
                     "low": "99",
                     "close": "100.5",
                     "volume": "1000",
-                }
-            ]
+                },
+            ],
         }
         updated_df = handle_websocket_kline_data(pd.DataFrame(), message)
         self.assertEqual(len(updated_df), 1)

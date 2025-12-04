@@ -27,7 +27,7 @@ async def market_making_strategy(
         for coin_info in wallet_entry.get("coin", []):
             if coin_info.get("coin") == base_currency:
                 logger.info(
-                    f"{base_currency} Balance: Available={coin_info.get('availableToWithdraw')}, Total={coin_info.get('walletBalance')}"
+                    f"{base_currency} Balance: Available={coin_info.get('availableToWithdraw')}, Total={coin_info.get('walletBalance')}",
                 )
                 break
     for symbol in symbols:
@@ -44,13 +44,13 @@ async def market_making_strategy(
         best_ask_price = Decimal(asks[0][0]) if asks and asks[0] else Decimal("0")
         last_price = Decimal(ticker.get("lastPrice", "0")) if ticker else Decimal("0")
         logger.info(
-            f"  {symbol} - Last Price: {last_price}, Best Bid: {best_bid_price}, Best Ask: {best_ask_price}"
+            f"  {symbol} - Last Price: {last_price}, Best Bid: {best_bid_price}, Best Ask: {best_ask_price}",
         )
         position_data = bot_instance.ws_manager.positions.get(symbol, {})
         current_position_size = Decimal(position_data.get("size", "0"))
         position_side = position_data.get("side", "None")
         logger.info(
-            f"  Current position for {symbol}: {position_side} {current_position_size}"
+            f"  Current position for {symbol}: {position_side} {current_position_size}",
         )
         klines_data = await bot_instance.get_historical_klines(symbol, "1", limit=100)
         volatility = Decimal("0.01")
@@ -84,7 +84,7 @@ async def market_making_strategy(
                 < bot_instance.max_open_positions
             ):
                 capital_percentage_per_order = Decimal(
-                    config.get("ORDER_CAPITAL_PERCENTAGE", "0.0001")
+                    config.get("ORDER_CAPITAL_PERCENTAGE", "0.0001"),
                 )
                 buy_qty = await bot_instance.calculate_position_size(
                     symbol,
@@ -135,7 +135,7 @@ async def market_making_strategy(
             logger.warning(f"  Inventory limit reached for {symbol}. Closing position.")
             close_side = "Sell" if position_side == "Buy" else "Buy"
             await bot_instance.place_order(
-                symbol, close_side, "Market", current_position_size.abs()
+                symbol, close_side, "Market", current_position_size.abs(),
             )
 
         for order_id, order in list(bot_instance.ws_manager.orders.items()):

@@ -1,26 +1,29 @@
 #!/usr/bin/env python3
 import asyncio
-import aiohttp
-import json
 import logging
 import re
 import time
+from datetime import datetime
+
+import aiohttp
+import google.generativeai as genai
 import numpy as np
 import pandas as pd
-from datetime import datetime
-from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.live import Live
-from rich.layout import Layout
 from rich import box
-from rich.style import Style
-from rich.text import Text
-import google.generativeai as genai
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from rich.console import Console
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 
 # --- Configuration ---
 class Settings(BaseSettings):
@@ -30,21 +33,21 @@ class Settings(BaseSettings):
     bybit_base_url: str = "https://api.bybit.com"
     gemini_model_name: str = "gemini-2.5-flash-lite"
 
-    symbols: List[str] = [
-        "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", 
-        "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT"
+    symbols: list[str] = [
+        "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
+        "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT",
     ]
-    interval: str = "15" 
+    interval: str = "15"
     category: str = "linear"
     kline_limit: int = 300 # Increased for EMA200 stability
     min_confidence: int = 70
     refresh_rate: int = 30
-    
+
     # Technical Settings
     atr_period: int = 14
     rsi_period: int = 14
-    ehlers_settings: tuple = (10, 3.0) 
-    
+    ehlers_settings: tuple = (10, 3.0)
+
     logging_level: str = "WARNING"
 
 settings = Settings()
@@ -53,7 +56,7 @@ settings = Settings()
 logging.basicConfig(
     level=getattr(logging, settings.logging_level),
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("whalebot_debug.log", mode='w')]
+    handlers=[logging.FileHandler("whalebot_debug.log", mode="w")],
 )
 logger = logging.getLogger("WhaleBot")
 
@@ -66,14 +69,14 @@ class IndicatorData(BaseModel):
     trend_ema_200: float = 0.0
     trend_supertrend: str = "NEUTRAL"
     trend_ichimoku: str = "NEUTRAL"
-    
+
     mom_rsi: float = 50.0
     mom_stoch_k: float = 50.0
     mom_macd_hist: float = 0.0
-    
+
     vol_bb_position: str = "INSIDE"
     vol_atr: float = 0.0
-    
+
     flow_ob_imbalance: float = 0.0
     flow_vwap: float = 0.0
     flow_volume_delta: float = 0.0
@@ -83,11 +86,11 @@ class SignalAnalysis(BaseModel):
     signal: str = Field(..., description="BUY, SELL, or HOLD")
     confidence: int = Field(..., ge=0, le=100)
     explanation: str = Field(..., description="Short reasoning")
-    entry_zone: Optional[str] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    entry_zone: str | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
-    @field_validator('signal', mode='before')
+    @field_validator("signal", mode="before")
     def normalize_signal(cls, v):
         return v.upper().strip()
 
@@ -96,8 +99,8 @@ class MarketSnapshot(BaseModel):
     price: float = 0.0
     timestamp: datetime
     indicators: IndicatorData
-    analysis: Optional[SignalAnalysis] = None
-    error: Optional[str] = None
+    analysis: SignalAnalysis | None = None
+    error: str | None = None
     last_updated: float = 0.0
     latency_ms: float = 0.0
 
@@ -106,7 +109,7 @@ class MarketSnapshot(BaseModel):
 class BybitPublicClient:
     def __init__(self):
         self.base_url = settings.bybit_base_url
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self.timeout = aiohttp.ClientTimeout(total=10)
 
     async def start(self):
@@ -114,9 +117,9 @@ class BybitPublicClient:
             # Disable SSL verify for slight speed bump if safe, else keep default
             connector = aiohttp.TCPConnector(limit=20, ssl=False)
             self.session = aiohttp.ClientSession(
-                headers={"User-Agent": "WhaleBot/2.1"}, 
+                headers={"User-Agent": "WhaleBot/2.1"},
                 timeout=self.timeout,
-                connector=connector
+                connector=connector,
             )
 
     async def close(self):
@@ -124,13 +127,13 @@ class BybitPublicClient:
             await self.session.close()
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=4), retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)))
-    async def fetch_data(self, symbol: str) -> tuple[pd.DataFrame, Dict, Dict, float]:
+    async def fetch_data(self, symbol: str) -> tuple[pd.DataFrame, dict, dict, float]:
         t0 = time.perf_counter()
-        
+
         url_kline = f"{self.base_url}/v5/market/kline"
         url_ob = f"{self.base_url}/v5/market/orderbook"
         url_tick = f"{self.base_url}/v5/market/tickers"
-        
+
         params_base = {"category": settings.category, "symbol": symbol}
         params_kline = {**params_base, "interval": settings.interval, "limit": settings.kline_limit}
         params_ob = {**params_base, "limit": 50}
@@ -141,15 +144,15 @@ class BybitPublicClient:
             task_t = tg.create_task(self.session.get(url_tick, params=params_base))
 
         resp_k, resp_o, resp_t = task_k.result(), task_o.result(), task_t.result()
-        
+
         data_k = await resp_k.json()
         data_o = await resp_o.json()
         data_t = await resp_t.json()
-        
+
         latency = (time.perf_counter() - t0) * 1000
-        
+
         if data_k.get("retCode") != 0: return pd.DataFrame(), {}, {}, latency
-        
+
         # Parse Kline
         df = pd.DataFrame(data_k["result"]["list"], columns=["startTime", "open", "high", "low", "close", "volume", "turnover"])
         df = df.astype(float)
@@ -165,22 +168,22 @@ class BybitPublicClient:
 
 class TechnicalAnalyzer:
     @staticmethod
-    def calculate(df: pd.DataFrame, orderbook: Dict) -> IndicatorData:
-        if df.empty or len(df) < 200: 
+    def calculate(df: pd.DataFrame, orderbook: dict) -> IndicatorData:
+        if df.empty or len(df) < 200:
             # Fail if we don't have enough data for EMA200
             return IndicatorData()
-        
+
         # Helper to safely get scalar float
         def safe_float(val):
             return float(val) if np.isfinite(val) else 0.0
 
-        close = df['close'].values
-        high = df['high'].values
-        low = df['low'].values
-        volume = df['volume'].values
-        
+        close = df["close"].values
+        high = df["high"].values
+        low = df["low"].values
+        volume = df["volume"].values
+
         ind = IndicatorData()
-        
+
         # -- Helper: EMA --
         def get_ema(values, span):
             return pd.Series(values).ewm(span=span, adjust=False).mean().values
@@ -204,8 +207,8 @@ class TechnicalAnalyzer:
         upper_band = hl2[-1] + (st_mult * atr[-1])
         lower_band = hl2[-1] - (st_mult * atr[-1])
         curr_close = close[-1]
-        
-        if curr_close > ind.trend_ema_20 and curr_close > lower_band: 
+
+        if curr_close > ind.trend_ema_20 and curr_close > lower_band:
             ind.trend_supertrend = "BULLISH"
         elif curr_close < ind.trend_ema_20 and curr_close < upper_band:
             ind.trend_supertrend = "BEARISH"
@@ -218,7 +221,7 @@ class TechnicalAnalyzer:
         kijun = get_span(high, low, 26)
         span_a = ((tenkan + kijun) / 2).shift(26)
         span_b = get_span(high, low, 52).shift(26)
-        
+
         # Check if we have valid cloud data
         if not np.isnan(span_a.iloc[-1]):
             cloud_top = max(span_a.iloc[-1], span_b.iloc[-1])
@@ -235,7 +238,7 @@ class TechnicalAnalyzer:
         down[down > 0] = 0
         roll_up = pd.Series(up).ewm(alpha=1/14, adjust=False).mean()
         roll_down = pd.Series(down).abs().ewm(alpha=1/14, adjust=False).mean()
-        
+
         # Avoid div by zero
         rs = roll_up / roll_down.replace(0, 1)
         rsi = 100.0 - (100.0 / (1.0 + rs))
@@ -260,7 +263,7 @@ class TechnicalAnalyzer:
         std20 = pd.Series(close).rolling(20).std().values
         bb_up = sma20[-1] + (std20[-1] * 2)
         bb_low = sma20[-1] - (std20[-1] * 2)
-        
+
         if curr_close > bb_up: ind.vol_bb_position = "UPPER BREAK"
         elif curr_close < bb_low: ind.vol_bb_position = "LOWER BREAK"
         else: ind.vol_bb_position = "INSIDE"
@@ -271,15 +274,15 @@ class TechnicalAnalyzer:
         ind.flow_vwap = safe_float((cum_pv / cum_vol)[-1])
 
         if orderbook:
-            bids = np.array(orderbook.get('b', []), dtype=float)
-            asks = np.array(orderbook.get('a', []), dtype=float)
+            bids = np.array(orderbook.get("b", []), dtype=float)
+            asks = np.array(orderbook.get("a", []), dtype=float)
             if len(bids) > 0 and len(asks) > 0:
                 bid_vol = np.sum(bids[:, 1])
                 ask_vol = np.sum(asks[:, 1])
                 total = bid_vol + ask_vol
                 ind.flow_ob_imbalance = safe_float((bid_vol - ask_vol) / total) if total > 0 else 0.0
 
-        opens = df['open'].values
+        opens = df["open"].values
         dirs = np.where(close >= opens, 1, -1)
         ind.flow_volume_delta = safe_float(np.sum(volume[-5:] * dirs[-5:]))
 
@@ -319,19 +322,19 @@ class GeminiAnalyzer:
             "take_profit": float
         }}
         """
-        
+
         try:
             loop = asyncio.get_running_loop()
             response = await loop.run_in_executor(None, lambda: self.model.generate_content(prompt))
             text = response.text.strip()
-            
+
             # Clean markdown
             match = re.search(r"\{.*\}", text, re.DOTALL)
             if match:
                 json_str = match.group(0)
                 return SignalAnalysis.model_validate_json(json_str)
             raise ValueError("No JSON found")
-            
+
         except Exception as e:
             logger.error(f"AI Error {symbol}: {e}")
             return SignalAnalysis(trend="ERROR", signal="HOLD", confidence=0, explanation="AI Timeout")
@@ -342,16 +345,16 @@ class WhaleBot:
     def __init__(self):
         self.client = BybitPublicClient()
         self.analyzer = GeminiAnalyzer()
-        self.snapshots: Dict[str, MarketSnapshot] = {
-            s: MarketSnapshot(symbol=s, timestamp=datetime.now(), indicators=IndicatorData()) 
+        self.snapshots: dict[str, MarketSnapshot] = {
+            s: MarketSnapshot(symbol=s, timestamp=datetime.now(), indicators=IndicatorData())
             for s in settings.symbols
         }
 
     def generate_table(self) -> Table:
         table = Table(
-            show_header=True, header_style="bold white", box=box.ROUNDED, 
+            show_header=True, header_style="bold white", box=box.ROUNDED,
             title=f"[bold cyan]WhaleBot AI[/bold cyan] | {settings.interval}m Interval",
-            expand=True
+            expand=True,
         )
         table.add_column("Symbol", style="cyan", width=10)
         table.add_column("Price", justify="right", width=10)
@@ -373,14 +376,14 @@ class WhaleBot:
             if snap.error:
                 table.add_row(snap.symbol, f"${snap.price:,.2f}", "[red]ERR[/red]", "", "", snap.error, "", "")
                 continue
-                
+
             an = snap.analysis
             if not an: continue
 
             # Logic Enforcement
             final_signal = an.signal
             final_conf = an.confidence
-            
+
             # Override low confidence
             if final_signal != "HOLD" and final_conf < settings.min_confidence:
                 final_signal = "HOLD"
@@ -398,7 +401,7 @@ class WhaleBot:
                 plan = f"TP:{an.take_profit}\nSL:{an.stop_loss} ({rr:.1f}R)"
 
             age = time.time() - snap.last_updated
-            
+
             table.add_row(
                 snap.symbol,
                 f"${snap.price:,.2f}",
@@ -407,7 +410,7 @@ class WhaleBot:
                 f"{trend_sym} {an.trend[:4]}",
                 an.explanation,
                 plan,
-                f"{age:.0f}s"
+                f"{age:.0f}s",
             )
         return table
 
@@ -418,17 +421,17 @@ class WhaleBot:
                 return
 
             df, ob, ticker, latency = await self.client.fetch_data(symbol)
-            
+
             if df.empty or not ticker:
                 self.snapshots[symbol].error = "No Data"
                 return
 
             current_price = float(ticker.get("lastPrice", 0))
-            
+
             # Calc
             try:
                 indicators = TechnicalAnalyzer.calculate(df, ob)
-            except Exception as e:
+            except Exception:
                 logger.exception(f"Calc failed {symbol}")
                 self.snapshots[symbol].error = "Calc Err"
                 self.snapshots[symbol].price = current_price
@@ -436,7 +439,7 @@ class WhaleBot:
 
             # AI
             analysis = await self.analyzer.analyze(symbol, current_price, indicators)
-            
+
             self.snapshots[symbol] = MarketSnapshot(
                 symbol=symbol,
                 price=current_price,
@@ -444,9 +447,9 @@ class WhaleBot:
                 indicators=indicators,
                 analysis=analysis,
                 last_updated=time.time(),
-                latency_ms=latency
+                latency_ms=latency,
             )
-            
+
         except Exception as e:
             logger.error(f"Process {symbol}: {e}")
             self.snapshots[symbol].error = "Net Err"
@@ -454,17 +457,17 @@ class WhaleBot:
     async def run(self):
         await self.client.start()
         console.clear()
-        
+
         layout = Layout()
         layout.split_column(Layout(name="header", size=3), Layout(name="body"))
 
         try:
             with Live(layout, refresh_per_second=4, screen=True) as live:
                 next_refresh = time.time()
-                
+
                 while True:
                     now = time.time()
-                    
+
                     # Update Data if time
                     if now >= next_refresh:
                         tasks = [self.process_symbol(s) for s in settings.symbols]
@@ -472,21 +475,21 @@ class WhaleBot:
                         for future in asyncio.as_completed(tasks):
                             await future
                             layout["body"].update(self.generate_table())
-                        
+
                         next_refresh = time.time() + settings.refresh_rate
-                    
+
                     # Header Timer
                     wait = max(0, next_refresh - time.time())
                     latencies = [s.latency_ms for s in self.snapshots.values() if s.latency_ms > 0]
                     avg_lat = sum(latencies) / len(latencies) if latencies else 0
-                    
+
                     header = Panel(
                         f"STATUS: [bold green]RUNNING[/bold green] | API Latency: {avg_lat:.0f}ms | Next Scan: [bold yellow]{wait:.0f}s[/bold yellow]",
-                        style="white on blue"
+                        style="white on blue",
                     )
                     layout["header"].update(header)
                     layout["body"].update(self.generate_table())
-                    
+
                     await asyncio.sleep(0.5) # UI Loop Tick
 
         except KeyboardInterrupt:
