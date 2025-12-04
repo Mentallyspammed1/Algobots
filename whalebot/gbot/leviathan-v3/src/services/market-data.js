@@ -6,9 +6,9 @@ import { COLOR } from '../ui.js';
  * Manages market data streams (historical and live) from Bybit.
  */
 export class MarketData {
-    constructor(config, onUpdate) {
+    constructor(config, leviathanInstance) {
         this.config = config;
-        this.onUpdate = onUpdate;
+        this.leviathanInstance = leviathanInstance; // Store the Leviathan instance
         this.ws = null;
         this.buffers = {
             scalping: [], 
@@ -42,7 +42,11 @@ export class MarketData {
                     console.error(COLOR.RED(`[MarketData] Failed loading ${interval} klines: ${res.data.retMsg}`));
                 }
             } catch (e) { 
-                console.error(COLOR.RED(`[MarketData] Failed loading ${interval} klines: ${e.message}`)); 
+                if (e.response && e.response.status === 403) {
+                    console.error(COLOR.RED(`[MarketData] Failed loading ${interval} klines (403 Forbidden): Please check your Bybit API key permissions (read-only access for Market Data is usually sufficient).`));
+                } else {
+                    console.error(COLOR.RED(`[MarketData] Failed loading ${interval} klines: ${e.message}`)); 
+                }
             }
         };
 
@@ -100,14 +104,14 @@ export class MarketData {
         const tickerData = Array.isArray(data) ? data[0] : data;
         if (tickerData?.lastPrice) {
             this.lastPrice = parseFloat(tickerData.lastPrice);
-            this.onUpdate('price');
+            this.leviathanInstance.onTick('price'); // Direct call
         }
     }
 
     handleOrderbook(data) {
         const frame = Array.isArray(data) ? data[0] : data;
         this.orderbook = { bids: frame.b || [], asks: frame.a || [] };
-        this.onUpdate('orderbook');
+        this.leviathanInstance.onTick('orderbook'); // Direct call
     }
 
     handleKline(msg) {
@@ -130,7 +134,7 @@ export class MarketData {
                     buf.shift(); // Maintain buffer size
                 }
             }
-            this.onUpdate('kline');
+            this.leviathanInstance.onTick('kline'); // Direct call
         }
     }
 
