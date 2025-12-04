@@ -16,9 +16,11 @@
         "wsReconnect": 1000
     },
     "ai": {
-        "model": "gemini-2.5-flash-lite",
+        "model": "gemini-1.5-flash",
+        "analysis_model": "gemini-1.5-pro-latest",
         "minConfidence": 0.86,
-        "maxTokens": 300
+        "maxTokens": 300,
+        "analysisMaxTokens": 500
     },
     "risk": {
         "maxDailyLoss": 5.0,

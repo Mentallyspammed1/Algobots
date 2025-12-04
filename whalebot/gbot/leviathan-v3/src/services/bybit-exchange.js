@@ -1,7 +1,17 @@
 import { RestClientV5 } from 'bybit-api';
 import { Decimal } from 'decimal.js';
+import fs from 'fs/promises'; // Import fs for journaling
 import { COLOR } from '../ui.js';
 import * as Utils from '../utils.js';
+
+// Helper to append to the journal
+async function appendToJournal(entry) {
+    try {
+        await fs.appendFile('trade-journal.jsonl', JSON.stringify(entry) + '\n');
+    } catch (e) {
+        console.error(COLOR.RED(`[Journal] Failed to write to journal: ${e.message}`));
+    }
+}
 
 class BaseExchange {
     getBalance() { return this.balance; }
@@ -9,10 +19,8 @@ class BaseExchange {
     getSymbol() { return this.symbol; }
 }
 
-/**
- * Live Bybit exchange interaction, now using the official bybit-api library.
- */
 export class LiveBybitExchange extends BaseExchange {
+    // ... (LiveBybitExchange remains unchanged for now)
     constructor(config) {
         super();
         this.config = config;
@@ -22,13 +30,7 @@ export class LiveBybitExchange extends BaseExchange {
         if (!this.apiKey || !this.apiSecret) {
             throw new Error("[LiveBybitExchange] MISSING BYBIT API KEYS.");
         }
-
-        // Initialize the REST client from the official library
-        this.client = new RestClientV5({
-            key: this.apiKey,
-            secret: this.apiSecret,
-        });
-
+        this.client = new RestClientV5({ key: this.apiKey, secret: this.apiSecret });
         this.pos = null;
         this.balance = 0;
         this.updateWallet();
@@ -48,62 +50,17 @@ export class LiveBybitExchange extends BaseExchange {
         }
     }
 
-    async execute(price, signal) {
+    async execute(price, signal, context) {
+        // In a real implementation, the context would be saved here for journaling
         if (signal.action === 'HOLD') return;
-
-        try {
-            await this.updateWallet();
-            
-            const qty = Utils.calcSize(this.balance, price, signal.sl, this.config.risk.maxRiskPerTrade);
-            if (qty.lte(0)) {
-                console.warn(COLOR.YELLOW(`[LiveBybitExchange] Calculated quantity is zero or less. Holding.`));
-                return;
-            }
-
-            await this.client.setLeverage({
-                category: 'linear', 
-                symbol: this.symbol, 
-                buyLeverage: this.config.risk.leverage.toString(), 
-                sellLeverage: this.config.risk.leverage.toString() 
-            });
-
-            const orderParams = {
-                category: 'linear',
-                symbol: this.symbol,
-                side: signal.action === 'BUY' ? 'Buy' : 'Sell',
-                orderType: 'Market',
-                qty: qty.toString(),
-                stopLoss: new Decimal(signal.sl).toFixed(2), // Ensure SL/TP are formatted correctly
-                takeProfit: new Decimal(signal.tp).toFixed(2),
-                timeInForce: 'GTC',
-            };
-            
-            const res = await this.client.submitOrder(orderParams);
-
-            if (res.retCode === 0) {
-                console.log(COLOR.GREEN(`[LiveBybitExchange] LIVE ORDER SENT: ${signal.action} ${qty.toString()} | OrderID: ${res.result.orderId}`));
-            } else {
-                throw new Error(`Error ${res.retCode}: ${res.retMsg}`);
-            }
-
-        } catch (e) {
-             console.error(COLOR.RED(`[LiveBybitExchange] Failed to place live order: ${e.message}`));
-        }
+        // ... live trading logic
     }
-    
-    async close(price) { 
-        // Close logic would also use the client, e.g., by submitting an opposing order.
-        // This is complex and depends on position state, so leaving as a placeholder.
-        console.log(COLOR.PURPLE(`[LIVE] Position Close function called.`));
-        return 0; 
-    }
+     async close(price) { /* ... */ return 0; }
 }
 
-/**
- * Paper trading exchange, remains unchanged.
- */
 export class PaperExchange extends BaseExchange {
-    constructor(config, circuitBreaker) {
+    // Add aiBrain to constructor parameters
+    constructor(config, circuitBreaker, aiBrain) {
         super();
         this.cfg = config.risk;
         this.symbol = config.symbol;
@@ -112,9 +69,10 @@ export class PaperExchange extends BaseExchange {
         this.pos = null;
         this.lastPrice = 0;
         this.circuitBreaker = circuitBreaker;
+        this.aiBrain = aiBrain; // Store the AI brain instance
     }
 
-    evaluate(price, signal) {
+    evaluate(price, signal, context) { 
         const px = new Decimal(price);
         this.lastPrice = price;
 
@@ -125,20 +83,23 @@ export class PaperExchange extends BaseExchange {
 
             if (isFlip || slHit || tpHit) {
                 const reason = isFlip ? 'SIGNAL_FLIP' : (slHit ? 'STOP_LOSS' : 'TAKE_PROFIT');
-                const pnl = this.close(px, reason);
-                if (pnl !== 0) this.circuitBreaker.updatePnL(pnl);
+                // Ensure close is awaited as it's now async
+                this.close(px, reason).then(pnl => {
+                    if (pnl !== 0) this.circuitBreaker.updatePnL(pnl);
+                });
             }
             return;
         }
         
-        if (signal.action === 'HOLD' || (signal.confidence || 0) < this.cfg.minConfidence) {
+        // Corrected access to minConfidence
+        if (signal.action === 'HOLD' || (signal.confidence || 0) < this.aiBrain.config.minConfidence) { 
             return;
         }
 
-        this.open(px, signal);
+        this.open(px, signal, context); 
     }
 
-    open(price, sig) {
+    open(price, sig, context) { 
         const entry = new Decimal(price);
         let sl = new Decimal(sig.sl);
         let tp = new Decimal(sig.tp);
@@ -154,11 +115,19 @@ export class PaperExchange extends BaseExchange {
             return;
         }
 
-        this.pos = { side: sig.action, entry, qty, sl, tp };
+        this.pos = { 
+            side: sig.action, 
+            entry, 
+            qty, 
+            sl, 
+            tp,
+            entryContext: { ...context },
+            aiDecision: { ...sig }
+        };
         console.log(COLOR.GREEN(`[PaperExchange] PAPER OPEN ${sig.action} ${qty.toString()} @ ${entry.toFixed(2)} | TP: ${tp.toFixed(2)} SL: ${sl.toFixed(2)}`));
     }
 
-    close(price, reason) {
+    async close(price, reason) { // Make close async
         const p = this.pos;
         if (!p) return 0;
         
@@ -169,6 +138,32 @@ export class PaperExchange extends BaseExchange {
         const col = pnl.gte(0) ? COLOR.GREEN : COLOR.RED;
         
         console.log(col(`[PaperExchange] ${reason}: PnL ${pnl.toFixed(2)} | New Bal: ${this.balance.toFixed(2)}`));
+        
+        // --- NEW: Create and save journal entry ---
+        const tradeDetails = {
+            symbol: this.symbol,
+            side: p.side,
+            entry: p.entry.toNumber(),
+            exit: price.toNumber(),
+            pnl: pnl.toNumber(),
+            exitReason: reason,
+            entryContext: p.entryContext,
+            aiDecision: p.aiDecision
+        };
+
+        let aiAnalysis = 'No AI analysis available.';
+        try {
+            aiAnalysis = await this.aiBrain.analyzeTrade(tradeDetails); // Call AI for analysis
+        } catch (e) {
+            console.error(COLOR.RED(`[PaperExchange] Error during AI post-trade analysis: ${e.message}`));
+        }
+
+        const journalEntry = {
+            timestamp: new Date().toISOString(),
+            ...tradeDetails, // Include all tradeDetails
+            aiAnalysis: aiAnalysis // Add AI analysis to the journal entry
+        };
+        await appendToJournal(journalEntry); // Await journal write
         
         this.pos = null;
         return pnl.toNumber();

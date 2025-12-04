@@ -13,8 +13,10 @@ export class ConfigManager {
         delays: { loop: 3000, retry: 2000, wsReconnect: 1000 },
         ai: { 
             model: 'gemini-1.5-flash', 
+            analysis_model: 'gemini-1.5-pro-latest', // New field for post-trade analysis
             minConfidence: 0.86,
-            maxTokens: 300
+            maxTokens: 300,
+            analysisMaxTokens: 500 // New field for analysis prompt
         },
         risk: {
             maxDailyLoss: 5.0,
