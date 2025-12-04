@@ -1,51 +1,13 @@
 {
-    "symbol": "TRUMPUSDT",
-    "live_trading": true,
-    "intervals": {
-        "scalping": "1",
-        "main": "3",
-        "trend": "5"
-    },
-    "limits": {
-        "kline": 300,
-        "orderbook": 30
-    },
-    "delays": {
-        "loop": 3000,
-        "retry": 2000,
-        "wsReconnect": 1000
-    },
+    "symbol": "BTCUSDT",
+    "interval": "1",
+    "live_trading": false,
+    "trade_amount_usd": 10,
     "ai": {
         "model": "gemini-1.5-flash",
-        "analysis_model": "gemini-1.5-pro-latest",
-        "minConfidence": 0.86,
-        "maxTokens": 300,
-        "analysisMaxTokens": 500
+        "minConfidence": 0.7
     },
     "risk": {
-        "maxDailyLoss": 5.0,
-        "maxRiskPerTrade": 1.0,
-        "leverage": 10,
-        "fee": 0.00055,
-        "slippage": 0.0001,
-        "rewardRatio": 1.5
-    },
-    "indicators": {
-        "rsi": 12,
-        "fisher": 10,
-        "atr": 10,
-        "bb": {
-            "period": 20,
-            "std": 2
-        },
-        "laguerre": 0.5,
-        "threshold": 2.5,
-        "scoring": {
-            "fisher_weight": 2.2,
-            "rsi_weight": 1.0,
-            "imbalance_weight": 1.0,
-            "imbalance_threshold": 0.2,
-            "bb_weight": 1.0
-        }
+        "maxDailyLoss": 10.0
     }
 }

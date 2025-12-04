@@ -37,9 +37,12 @@ export class MarketData {
                         t: parseInt(k[0]), o: parseFloat(k[1]), h: parseFloat(k[2]), 
                         l: parseFloat(k[3]), c: parseFloat(k[4]), v: parseFloat(k[5])
                     })).reverse(); // Bybit sends newest first, we want oldest first
+                    console.log(COLOR.GREEN(`[MarketData] Loaded ${interval} klines for buffer: ${targetBuffer}`));
+                } else {
+                    console.error(COLOR.RED(`[MarketData] Failed loading ${interval} klines: ${res.data.retMsg}`));
                 }
             } catch (e) { 
-                console.error(`[MarketData] Failed loading ${interval} klines: ${e.message}`); 
+                console.error(COLOR.RED(`[MarketData] Failed loading ${interval} klines: ${e.message}`)); 
             }
         };
 
@@ -138,5 +141,14 @@ export class MarketData {
                 this.ws.send(JSON.stringify({ op: 'ping' }));
             }
         }, 20000);
+    }
+
+    // New method to get kline data
+    getKlines(bufferType = 'main') {
+        if (this.buffers[bufferType]) {
+            return this.buffers[bufferType];
+        }
+        console.warn(COLOR.YELLOW(`[MarketData] Invalid bufferType requested: ${bufferType}`));
+        return [];
     }
 }

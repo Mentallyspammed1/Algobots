@@ -7,6 +7,7 @@ import { COLOR } from '../ui.js'; // Import COLOR for console output
 export class AIBrain {
     constructor(config) {
         this.config = config.ai;
+        console.log(COLOR.YELLOW(`[AIBrain] Checking GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'Set' : 'Not Set'}`)); // <-- New debug log
         if (!process.env.GEMINI_API_KEY) {
             throw new Error("GEMINI_API_KEY is not set in the environment variables.");
         }
