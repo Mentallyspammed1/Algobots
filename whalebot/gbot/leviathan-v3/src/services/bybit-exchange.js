@@ -72,66 +72,69 @@ export class PaperExchange extends BaseExchange {
         this.aiBrain = aiBrain; // Store the AI brain instance
     }
 
-    evaluate(price, signal, context) { 
-        const px = new Decimal(price);
-        this.lastPrice = price;
+    async placeOrder(symbol, side, amount, price, params = {}) {
+        const priceDec = new Decimal(price);
+        const qty = new Decimal(amount);
 
-        if (this.pos) {
-            const isFlip = signal.action !== 'HOLD' && signal.action !== this.pos.side;
-            const slHit = (this.pos.side === 'BUY' && px.lte(this.pos.sl)) || (this.pos.side === 'SELL' && px.gte(this.pos.sl));
-            const tpHit = (this.pos.side === 'BUY' && px.gte(this.pos.tp)) || (this.pos.side === 'SELL' && px.lte(this.pos.tp));
-
-            if (isFlip || slHit || tpHit) {
-                const reason = isFlip ? 'SIGNAL_FLIP' : (slHit ? 'STOP_LOSS' : 'TAKE_PROFIT');
-                // Ensure close is awaited as it's now async
-                this.close(px, reason).then(pnl => {
-                    if (pnl !== 0) this.circuitBreaker.updatePnL(pnl);
-                });
+        if (side === 'Buy') {
+            if (this.pos) {
+                console.warn(COLOR.YELLOW(`[PaperExchange] Attempted to BUY while already in a position. Ignoring.`));
+                return null;
             }
-            return;
+
+            // Default rewardRatio if not in config
+            const rewardRatio = this.cfg.rewardRatio || 1.5;
+            const slPrice = priceDec.times(new Decimal(1).minus(new Decimal(this.cfg.maxRiskPerTrade).div(100)));
+            const tpPrice = priceDec.times(new Decimal(1).plus(new Decimal(this.cfg.maxRiskPerTrade * rewardRatio).div(100)));
+
+            this.pos = { 
+                side: 'long', 
+                entry: priceDec, 
+                qty, 
+                sl: slPrice, 
+                tp: tpPrice,
+                entryContext: { price: price, timestamp: Date.now() },
+                aiDecision: { decision: 'BUY', from: 'refactored_trader' }
+            };
+            
+            const order = {
+                orderId: `paper-buy-${Date.now()}`,
+                symbol: this.symbol,
+                side: 'Buy',
+                qty: qty.toString(),
+                price: priceDec.toString(),
+                orderStatus: 'Filled'
+            };
+
+            console.log(COLOR.GREEN(`[PaperExchange] PAPER OPEN LONG: ${order.qty} @ ${order.price} | TP: ${this.pos.tp.toFixed(2)} SL: ${this.pos.sl.toFixed(2)}`));
+            return order;
+
+        } else if (side === 'Sell') {
+            if (!this.pos) {
+                console.warn(COLOR.YELLOW(`[PaperExchange] Attempted to SELL with no open position. Ignoring.`));
+                return null;
+            }
+
+            const pnl = await this.close(priceDec, 'SIGNAL_SELL');
+            
+            return { 
+                orderId: `paper-sell-${Date.now()}`, 
+                symbol: this.symbol,
+                side: 'Sell',
+                qty: this.pos?.qty?.toString() || amount.toString(),
+                price: priceDec.toString(),
+                orderStatus: 'Filled',
+                pnl 
+            };
         }
-        
-        // Corrected access to minConfidence
-        if (signal.action === 'HOLD' || (signal.confidence || 0) < this.aiBrain.config.minConfidence) { 
-            return;
-        }
-
-        this.open(px, signal, context); 
-    }
-
-    open(price, sig, context) { 
-        const entry = new Decimal(price);
-        let sl = new Decimal(sig.sl);
-        let tp = new Decimal(sig.tp);
-
-        if (sl.eq(0) || tp.eq(0)) {
-            console.warn(COLOR.YELLOW(`[PaperExchange] AI provided invalid SL/TP. Holding.`));
-            return;
-        }
-
-        const qty = Utils.calcSize(this.balance, entry, sl, this.cfg.maxRiskPerTrade);
-        if (qty.lte(0)) {
-            console.warn(COLOR.YELLOW(`[PaperExchange] Calculated quantity is zero. Holding.`));
-            return;
-        }
-
-        this.pos = { 
-            side: sig.action, 
-            entry, 
-            qty, 
-            sl, 
-            tp,
-            entryContext: { ...context },
-            aiDecision: { ...sig }
-        };
-        console.log(COLOR.GREEN(`[PaperExchange] PAPER OPEN ${sig.action} ${qty.toString()} @ ${entry.toFixed(2)} | TP: ${tp.toFixed(2)} SL: ${sl.toFixed(2)}`));
+        return null;
     }
 
     async close(price, reason) { // Make close async
         const p = this.pos;
         if (!p) return 0;
         
-        const diff = p.side === 'BUY' ? price.sub(p.entry) : p.entry.sub(price);
+        const diff = p.side === 'long' ? price.sub(p.entry) : p.entry.sub(price);
         const pnl = diff.mul(p.qty).mul(new Decimal(1).sub(this.cfg.fee).sub(this.cfg.slippage));
         
         this.balance = this.balance.add(pnl);

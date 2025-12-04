@@ -7,7 +7,16 @@
  * USAGE: node ais.cjs
  */
 
-require('dotenv').config();
+const fs = require('fs');
+const dotenv = require('dotenv');
+try {
+  const envConfig = dotenv.parse(fs.readFileSync('.env'));
+  for (const k in envConfig) {
+    process.env[k] = envConfig[k];
+  }
+} catch (e) {
+    console.error('Could not load .env file', e);
+}
 const { Decimal } = require('decimal.js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { RestClientV5, WebsocketClient } = require('bybit-api');
