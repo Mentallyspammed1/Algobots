@@ -1,0 +1,13 @@
+{
+    "symbol": "BTCUSDT",
+    "interval": "1",
+    "live_trading": false,
+    "trade_amount_usd": 10,
+    "ai": {
+        "model": "gemini-1.5-flash",
+        "minConfidence": 0.7
+    },
+    "risk": {
+        "maxDailyLoss": 10.0
+    }
+}
