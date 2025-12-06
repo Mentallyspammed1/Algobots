@@ -1,10 +1,9 @@
 import { RestClientV5 } from 'bybit-api';
 import { Decimal } from 'decimal.js';
-import fs from 'fs/promises'; // Import fs for journaling
+import fs from 'fs/promises';
 import { COLOR } from '../ui.js';
 import * as Utils from '../utils.js';
 
-// Helper to append to the journal
 async function appendToJournal(entry) {
     try {
         await fs.appendFile('trade-journal.jsonl', JSON.stringify(entry) + '\n');
@@ -20,7 +19,6 @@ class BaseExchange {
 }
 
 export class LiveBybitExchange extends BaseExchange {
-    // ... (LiveBybitExchange remains unchanged for now)
     constructor(config) {
         super();
         this.config = config;
@@ -30,7 +28,7 @@ export class LiveBybitExchange extends BaseExchange {
         if (!this.apiKey || !this.apiSecret) {
             throw new Error("[LiveBybitExchange] MISSING BYBIT API KEYS.");
         }
-        this.client = new RestClientV5({ key: this.apiKey, secret: this.apiSecret });
+        this.client = new RestClientV5({ key: this.apiKey, secret: this.apiSecret, testnet: false });
         this.pos = null;
         this.balance = 0;
         this.updateWallet();
@@ -50,26 +48,40 @@ export class LiveBybitExchange extends BaseExchange {
         }
     }
 
-    async execute(price, signal, context) {
-        // In a real implementation, the context would be saved here for journaling
-        if (signal.action === 'HOLD') return;
-        // ... live trading logic
+    async placeOrder(symbol, side, amount, price, params) {
+        try {
+            const order = await this.client.submitOrder({
+                category: 'linear',
+                symbol,
+                side,
+                orderType: params.type || 'Market',
+                qty: amount.toString(),
+                price: params.type === 'Limit' ? price.toString() : undefined,
+                timeInForce: params.timeInForce || 'GTC',
+            });
+            return order;
+        } catch (e) {
+            console.error(COLOR.RED(`[LiveBybitExchange] Failed to place order: ${e.message}`));
+            return null;
+        }
     }
-     async close(price) { /* ... */ return 0; }
+
+    async maintainPosition(price) {
+        return { positionClosed: false };
+    }
 }
 
 export class PaperExchange extends BaseExchange {
-    // Add aiBrain to constructor parameters
     constructor(config, circuitBreaker, aiBrain) {
         super();
         this.cfg = config.risk;
         this.symbol = config.symbol;
-        this.balance = new Decimal(this.cfg.initialBalance);
+        this.balance = new Decimal(this.cfg.initialBalance || 10000);
         this.startBal = this.balance;
         this.pos = null;
         this.lastPrice = 0;
         this.circuitBreaker = circuitBreaker;
-        this.aiBrain = aiBrain; // Store the AI brain instance
+        this.aiBrain = aiBrain;
     }
 
     async placeOrder(symbol, side, amount, price, params = {}) {
@@ -82,7 +94,6 @@ export class PaperExchange extends BaseExchange {
                 return null;
             }
 
-            // Default rewardRatio if not in config
             const rewardRatio = this.cfg.rewardRatio || 1.5;
             const slPrice = priceDec.times(new Decimal(1).minus(new Decimal(this.cfg.maxRiskPerTrade).div(100)));
             const tpPrice = priceDec.times(new Decimal(1).plus(new Decimal(this.cfg.maxRiskPerTrade * rewardRatio).div(100)));
@@ -118,10 +129,10 @@ export class PaperExchange extends BaseExchange {
             const pnl = await this.close(priceDec, 'SIGNAL_SELL');
             
             return { 
-                orderId: `paper-sell-${Date.now()}`, 
+                orderId: `paper-sell-${Date.now()}`,
                 symbol: this.symbol,
                 side: 'Sell',
-                qty: this.pos?.qty?.toString() || amount.toString(),
+                qty: amount.toString(),
                 price: priceDec.toString(),
                 orderStatus: 'Filled',
                 pnl 
@@ -129,20 +140,35 @@ export class PaperExchange extends BaseExchange {
         }
         return null;
     }
+    
+    async maintainPosition(currentPrice) {
+        if (this.pos) {
+            const px = new Decimal(currentPrice);
 
-    async close(price, reason) { // Make close async
+            const slHit = (this.pos.side === 'long' && px.lte(this.pos.sl));
+            const tpHit = (this.pos.side === 'long' && px.gte(this.pos.tp));
+
+            if (slHit || tpHit) {
+                const reason = slHit ? 'STOP_LOSS' : 'TAKE_PROFIT';
+                await this.close(px, reason);
+                return { positionClosed: true };
+            }
+        }
+        return { positionClosed: false };
+    }
+
+    async close(price, reason) {
         const p = this.pos;
         if (!p) return 0;
         
         const diff = p.side === 'long' ? price.sub(p.entry) : p.entry.sub(price);
-        const pnl = diff.mul(p.qty).mul(new Decimal(1).sub(this.cfg.fee).sub(this.cfg.slippage));
+        const pnl = diff.mul(p.qty).mul(new Decimal(1).sub(this.cfg.fee || 0).sub(this.cfg.slippage || 0));
         
         this.balance = this.balance.add(pnl);
         const col = pnl.gte(0) ? COLOR.GREEN : COLOR.RED;
         
         console.log(col(`[PaperExchange] ${reason}: PnL ${pnl.toFixed(2)} | New Bal: ${this.balance.toFixed(2)}`));
         
-        // --- NEW: Create and save journal entry ---
         const tradeDetails = {
             symbol: this.symbol,
             side: p.side,
@@ -156,17 +182,19 @@ export class PaperExchange extends BaseExchange {
 
         let aiAnalysis = 'No AI analysis available.';
         try {
-            aiAnalysis = await this.aiBrain.analyzeTrade(tradeDetails); // Call AI for analysis
+            if (this.aiBrain) {
+                aiAnalysis = await this.aiBrain.analyzeTrade(tradeDetails);
+            }
         } catch (e) {
             console.error(COLOR.RED(`[PaperExchange] Error during AI post-trade analysis: ${e.message}`));
         }
 
         const journalEntry = {
             timestamp: new Date().toISOString(),
-            ...tradeDetails, // Include all tradeDetails
-            aiAnalysis: aiAnalysis // Add AI analysis to the journal entry
+            ...tradeDetails,
+            aiAnalysis: aiAnalysis
         };
-        await appendToJournal(journalEntry); // Await journal write
+        await appendToJournal(journalEntry);
         
         this.pos = null;
         return pnl.toNumber();

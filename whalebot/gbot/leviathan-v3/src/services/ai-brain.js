@@ -58,7 +58,9 @@ export class AIBrain {
         {
             "decision": "BUY" | "SELL" | "HOLD",
             "confidence": 0.0 to 1.0,
-            "reason": "Short string explanation based on key indicators."
+            "reason": "Short string explanation based on key indicators.",
+            "volatilityForecast": "LOW" | "MEDIUM" | "HIGH",
+            "aiEntry": "A suggested entry price based on your analysis, or 0 if HOLD."
         }`;
 
         try {
@@ -71,12 +73,14 @@ export class AIBrain {
             return {
                 decision: signal.decision || 'HOLD',
                 confidence: signal.confidence || 0,
-                reason: signal.reason || 'AI parse error'
+                reason: signal.reason || 'AI parse error',
+                volatilityForecast: signal.volatilityForecast || 'MEDIUM',
+                aiEntry: signal.aiEntry || 0
             };
         } catch (e) {
             console.error(COLOR.RED(`[AIBrain] Error parsing AI response: ${e.message}`));
             console.error(COLOR.RED(`[AIBrain] AI response that failed to parse: ${rawText}`));
-            return { decision: "HOLD", confidence: 0, reason: 'AI analysis failed' };
+            return { decision: "HOLD", confidence: 0, reason: 'AI analysis failed', volatilityForecast: 'MEDIUM', aiEntry: 0 };
         }
     }
 

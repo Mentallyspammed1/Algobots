@@ -37,7 +37,8 @@ class Leviathan {
             score: 0,
             lastIndicators: {},
             timestamp: null,
-            balance: 0
+            balance: 0,
+            imbalance: 0
         };
     }
 
@@ -62,8 +63,16 @@ class Leviathan {
         
         await this.data.start();
         const balance = await this.exchange.getBalance();
-        this.circuitBreaker.setBalance(balance);
-        this.state.balance = balance;
+        
+        // Handle Decimal object from PaperExchange
+        if (typeof balance === 'object' && balance.isDecimal) {
+             this.circuitBreaker.setBalance(balance.toNumber());
+             this.state.balance = balance.toNumber();
+        } else {
+             this.circuitBreaker.setBalance(balance);
+             this.state.balance = balance;
+        }
+
         console.log(COLOR.CYAN(`[Engine] Leviathan initialized. Symbol: ${this.config.symbol}`));
         console.log(COLOR.GREEN(`[Leviathan] init() completed.`));
     }
@@ -127,12 +136,17 @@ class Leviathan {
         };
         
         const decision = await this.ai.getTradingDecision(context);
-        console.log(COLOR.BLUE(`[AIBrain] Decision: ${decision.decision} (Confidence: ${(decision.confidence * 100).toFixed(1)}%) Reason: ${decision.reason}`));
         return decision;
     }
 
     async updateState(newState) {
-        this.state.balance = await this.exchange.getBalance();
+        const balance = await this.exchange.getBalance();
+        if (typeof balance === 'object' && balance.isDecimal) {
+            this.state.balance = balance.toNumber();
+        } else {
+            this.state.balance = balance;
+        }
+        
         this.state.currentPrice = newState.currentPrice;
         this.state.position = newState.position;
         this.state.entryPrice = newState.entryPrice;
@@ -141,6 +155,7 @@ class Leviathan {
         this.state.aiDecision = newState.aiDecision;
         this.state.score = newState.score;
         this.state.lastIndicators = newState.indicators;
+        this.state.imbalance = newState.imbalance;
         this.state.timestamp = Date.now();
     }
 
@@ -168,22 +183,28 @@ class Leviathan {
                 return;
             }
 
-            // --- Step 1: Calculate Indicators ---
+            // --- Step 0: Maintain Position (for SL/TP in paper mode) ---
+            const maintenance = await this.exchange.maintainPosition(currentPrice);
+            if (maintenance?.positionClosed) {
+                this.state.position = 'none';
+                this.state.entryPrice = null;
+            }
+
+            // --- Step 1: Calculate Indicators & Signals ---
             const indicators = this.strategy.calculateIndicators(cleanKlines);
-
-            // --- Step 2: Generate Signal from Strategy ---
             const { score, signal } = this.strategy.generateSignal(indicators, currentPrice);
+            const imbalance = this.strategy.calculateImbalance(this.data.orderbook);
 
-            // --- Step 3: Get AI Decision ---
+            // --- Step 2: Get AI Decision ---
             let aiDecision = { decision: 'HOLD', confidence: 0, reason: 'No signal' };
             if (signal !== 'HOLD' || this.state.position !== 'none') {
                 aiDecision = await this.getAIDecision(currentPrice, score, indicators);
             }
 
-            // --- Step 4: Execute Trade ---
+            // --- Step 3: Execute Trade ---
             const { newPosition, newEntryPrice } = await this.trader.execute(aiDecision, { ...this.state, currentPrice });
 
-            // --- Step 5: Update State ---
+            // --- Step 4: Update State ---
             await this.updateState({
                 currentPrice,
                 position: newPosition,
@@ -191,7 +212,8 @@ class Leviathan {
                 score,
                 signal,
                 aiDecision,
-                indicators
+                indicators,
+                imbalance
             });
 
             this.output();
@@ -206,8 +228,10 @@ class Leviathan {
 
     output() {
         console.clear();
-        const lastVal = (val) => val && val.length > 0 ? val[val.length-1] : 0;
+        const lastVal = (val) => val && val.length > 0 ? val[val.length - 1] : 0;
         
+        const posObjectForUI = this.state.position === 'long' ? { side: 'LONG' } : null;
+
         const displayData = {
             time: this.state.timestamp ? new Date(this.state.timestamp).toLocaleTimeString() : 'N/A',
             symbol: this.config.symbol,
@@ -217,8 +241,8 @@ class Leviathan {
             rsi: lastVal(this.state.lastIndicators.rsi),
             fisher: lastVal(this.state.lastIndicators.ehlersFisher),
             atr: lastVal(this.state.lastIndicators.atr),
-            imbalance: 0, // Placeholder to prevent crash in ui.js
-            position: this.state.position,
+            imbalance: this.state.imbalance || 0,
+            position: posObjectForUI,
             aiSignal: this.state.aiDecision,
             balance: this.state.balance,
             circuitBreakerTripped: this.circuitBreaker.isOpen(),

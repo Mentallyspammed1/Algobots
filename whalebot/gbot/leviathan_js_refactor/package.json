@@ -1,0 +1,20 @@
+{
+  "name": "leviathan_js_refactor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "bybit-api": "^4.4.2",
+    "decimal.js": "^10.6.0",
+    "dotenv": "^17.2.3",
+    "jest": "^30.2.0"
+  }
+}

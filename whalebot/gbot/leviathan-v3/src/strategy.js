@@ -64,4 +64,21 @@ export class Strategy {
 
         return { score, signal };
     }
+
+    calculateImbalance(orderbook) {
+        if (!orderbook || !orderbook.bids || !orderbook.asks || orderbook.bids.length === 0 || orderbook.asks.length === 0) {
+            return 0;
+        }
+        // Consider top 10 levels of the order book for the calculation
+        const bidVolume = orderbook.bids.slice(0, 10).reduce((acc, level) => acc + parseFloat(level[1]), 0);
+        const askVolume = orderbook.asks.slice(0, 10).reduce((acc, level) => acc + parseFloat(level[1]), 0);
+        const totalVolume = bidVolume + askVolume;
+
+        if (totalVolume === 0) {
+            return 0;
+        }
+
+        const imbalance = (bidVolume - askVolume) / totalVolume;
+        return imbalance;
+    }
 }
