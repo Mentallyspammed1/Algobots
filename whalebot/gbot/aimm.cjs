@@ -48,6 +48,10 @@ const CONFIG = {
   leverage: process.env.MAX_LEVERAGE || '5',
   testnet: process.env.BYBIT_TESTNET === 'true',
   tickSize: process.env.TICK_SIZE || '0.10',
+  // Added for Snippet 1
+  trailingStopDistance: 0.005, // 0.5% trailing distance
+  // Added for Snippet 5
+  maxHoldingDuration: 120 * 60 * 1000, // 120 minutes in milliseconds
 };
 
 // ─── DECIMAL-SAFE HELPERS ───
@@ -353,7 +357,11 @@ class LeviathanEngine {
       price: 0, bestBid: 0, bestAsk: 0, pnl: 0, 
       equity: 0, maxEquity: 0, paused: false,
       consecutiveLosses: 0, 
-      stats: { trades: 0, wins: 0, totalPnl: 0 }
+      stats: { trades: 0, wins: 0, totalPnl: 0 },
+      // Modified for Snippet 1
+      position: { active: false, side: null, entryPrice: 0, currentSl: 0, entryTime: 0 }, // New position state
+      // Added for Snippet 3
+      currentVwap: 0, // New VWAP state variable
     };
   }
 
@@ -446,8 +454,8 @@ class LeviathanEngine {
     }
   }
 
-  async placeIcebergOrder(signal, entryPrice, totalQty) {
-    // 4. ICEBERG EXECUTION
+  // 4. ICEBERG EXECUTION - Modified to accept offsetMultiplier
+  async placeIcebergOrder(signal, entryPrice, totalQty, offsetMultiplier = 0.001) {
     const slices = 3;
     const sliceQty = (parseFloat(totalQty) / slices).toFixed(3);
     const tick = parseFloat(CONFIG.tickSize);
@@ -455,14 +463,16 @@ class LeviathanEngine {
     console.log(`${C.cyan}[ICEBERG] Slicing ${totalQty} into ${slices} orders...${C.reset}`);
 
     for (let i = 0; i < slices; i++) {
-        const offset = i * tick * 0.2; 
+        // Use offsetMultiplier for calculating slice price offset
+        const offset = i * offsetMultiplier; 
         const slicePrice = signal.action === 'BUY' ? entryPrice + offset : entryPrice - offset;
         const formattedPrice = this.formatPrice(slicePrice);
 
         await this.client.submitOrder({
             category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Buy' : 'Sell',
             orderType: 'Limit', price: formattedPrice, qty: sliceQty,
-            stopLoss: String(signal.sl), takeProfit: String(signal.tp), timeInForce: 'PostOnly',
+            stopLoss: String(signal.sl), // Removed takeProfit as per snippet 2 modification
+            timeInForce: 'PostOnly',
         });
         
         // 200ms delay between slices to mask intent
@@ -471,6 +481,7 @@ class LeviathanEngine {
     console.log(`${C.neonGreen}[SUCCESS] Iceberg Orders Sent.${C.reset}\n`);
   }
 
+  // placeMakerOrder modified for Snippet 2, 4 and state updates
   async placeMakerOrder(signal) {
     if (this.state.paused) return;
     if (this.state.consecutiveLosses >= 3) {
@@ -510,9 +521,126 @@ class LeviathanEngine {
           ? Math.max(aggressive, this.state.bestBid + tick) : this.state.bestAsk;
       }
 
-      await this.placeIcebergOrder(signal, entryPrice, qty);
+      // Snippet 4: Volatility-Adjusted Iceberg Entry
+      const atr = this.oracle.buildContext(metrics).atr; // Get current ATR from context
+      const offsetMultiplier = atr * 0.1; // 10% of ATR as offset, adjust as needed
+      await this.placeIcebergOrder(signal, entryPrice, qty, offsetMultiplier);
+
+      // Snippet 1: Update position state after entry
+      this.state.position = {
+          active: true,
+          side: signal.action,
+          entryPrice: entryPrice,
+          currentSl: signal.sl,
+          entryTime: Date.now(),
+      };
+      console.log(`${C.yellow}[TRAILING STOP] Initializing with SL: ${signal.sl}${C.reset}`);
+
+      // Snippet 2: Place partial take profit orders
+      await this.placePartialTakeProfit(signal, entryPrice, qty);
 
     } catch (e) { console.error(`${C.red}[EXEC ERROR] ${e.message}${C.reset}`); }
+  }
+
+  // Snippet 1: DYNAMIC TRAILING STOP LOSS
+  async updateTrailingStop() {
+    if (!this.state.position.active) return;
+
+    const { side, entryPrice, currentSl } = this.state.position;
+    const currentPrice = this.state.price;
+    // Use CONFIG.trailingStopDistance for trailing stop logic
+    const trailingDistance = currentPrice * CONFIG.trailingStopDistance; 
+
+    let newSl = currentSl;
+    if (side === 'BUY') {
+        const potentialSl = currentPrice - trailingDistance;
+        if (potentialSl > currentSl) {
+            newSl = potentialSl;
+        }
+    } else { // SELL
+        const potentialSl = currentPrice + trailingDistance;
+        if (potentialSl < currentSl) {
+            newSl = potentialSl;
+        }
+    }
+
+    if (newSl !== currentSl) {
+        this.state.position.currentSl = newSl;
+        console.log(`${C.yellow}[TRAILING STOP] Updating SL to ${newSl.toFixed(2)}${C.reset}`);
+        // Adjusting to use stopLoss parameter which is more accurate for trailing stops
+        await this.client.setTradingStop({
+            category: 'linear', symbol: CONFIG.symbol, positionIdx: 0,
+            stopLoss: String(newSl), // Use setTradingStop for SL updates
+        });
+    }
+  }
+
+  // Snippet 2: PARTIAL TAKE PROFIT SCALING
+  async placePartialTakeProfit(signal, entryPrice, totalQty) {
+    const qty1 = (parseFloat(totalQty) * 0.5).toFixed(3); // 50% at TP1
+    const qty2 = (parseFloat(totalQty) * 0.5).toFixed(3); // 50% at TP2
+    const tp1 = signal.tp; // Original TP from signal
+    const riskDistance = Math.abs(entryPrice - signal.sl);
+    const tp2 = signal.action === 'BUY' ? entryPrice + riskDistance * 3 : entryPrice - riskDistance * 3; // TP2 = 3x R/R
+
+    console.log(`${C.cyan}[PARTIAL TP] Setting TP1 (${tp1}) for ${qty1} and TP2 (${tp2}) for
+${qty2}${C.reset}`);
+
+    // Order 1: TP1 (50% of position)
+    await this.client.submitOrder({
+        category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Sell' : 'Buy',
+        orderType: 'Limit', price: String(tp1), qty: qty1, timeInForce: 'GTC', reduceOnly: true,
+    });
+
+    // Order 2: TP2 (remaining 50% of position)
+    await this.client.submitOrder({
+        category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Sell' : 'Buy',
+        orderType: 'Limit', price: String(tp2), qty: qty2, timeInForce: 'GTC', reduceOnly: true,
+    });
+  }
+
+  // Snippet 3: VWAP REVERSION EXIT FILTER - Helper function
+  async closePosition(side) {
+    // Using '0' for qty to close the entire position
+    await this.client.submitOrder({
+        category: 'linear', symbol: CONFIG.symbol, side: side === 'BUY' ? 'Sell' : 'Buy',
+        orderType: 'Market', qty: '0', reduceOnly: true,
+    });
+    this.state.position.active = false; // Reset position state
+    console.log(`${C.yellow}[POSITION CLOSED] Position closed due to exit condition.${C.reset}`);
+  }
+
+  // Snippet 3: VWAP REVERSION EXIT FILTER
+  async checkVwapExit() {
+    if (!this.state.position.active) return;
+
+    const { side } = this.state.position;
+    const currentPrice = this.state.price;
+    const currentVwap = this.state.currentVwap;
+
+    let exitSignal = false;
+    if (side === 'BUY' && currentPrice < currentVwap) {
+        exitSignal = true;
+    } else if (side === 'SELL' && currentPrice > currentVwap) {
+        exitSignal = true;
+    }
+
+    if (exitSignal) {
+        console.log(`${C.red}[VWAP EXIT] Price crossed VWAP against position. Closing trade.${C.reset}`);
+        await this.closePosition(side);
+    }
+  }
+
+  // Snippet 5: TIME-BASED EXIT (TIME STOP)
+  async checkTimeStop() {
+    if (!this.state.position.active) return;
+
+    const duration = Date.now() - this.state.position.entryTime;
+    // Use CONFIG.maxHoldingDuration for time stop logic
+    if (duration > CONFIG.maxHoldingDuration) {
+        console.log(`${C.red}[TIME STOP] Position held for too long (${duration / 60000} minutes). Closing trade.${C.reset}`);
+        await this.closePosition(this.state.position.side);
+    }
   }
 
   async start() {
@@ -588,8 +716,21 @@ class LeviathanEngine {
         if (k.confirm) {
           process.stdout.write(`\n`);
           this.oracle.updateKline({ open: D(k.open), high: D(k.high), low: D(k.low), close: D(k.close), volume: D(k.volume) });
+          
+          // Snippet 3: VWAP Reversion Exit Filter
+          this.state.currentVwap = this.oracle.buildContext(m).vwap; // Get VWAP from context
+          
           const signal = await this.oracle.divine(m);
           if (signal.action !== 'HOLD') await this.placeMakerOrder(signal);
+
+          // Snippet 1: Call updateTrailingStop regularly
+          await this.updateTrailingStop();
+
+          // Snippet 3: Call checkVwapExit regularly
+          await this.checkVwapExit();
+
+          // Snippet 5: Call checkTimeStop regularly
+          await this.checkTimeStop();
         }
       }
     });
