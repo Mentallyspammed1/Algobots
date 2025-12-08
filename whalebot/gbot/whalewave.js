@@ -21,21 +21,21 @@ dotenv.config();
 class ConfigManager {
     static CONFIG_FILE = 'config.json';
     static DEFAULTS = {
-        symbol: 'BTCUSDT',
+        symbol: 'BCHUSDT',
         interval: '3',
-        trend_interval: '15',
+        trend_interval: '5',
         limit: 300,
         loop_delay: 15,
-        gemini_model: 'gemini-1.5-flash',
+        gemini_model: 'gemini-robotics-er-1.5-preview',
         min_confidence: 0.60,
         max_drawdown: 10.0,
-        max_positions: 1,
+        max_positions: 3,
         daily_loss_limit: 5.0,
         
         paper_trading: {
-            initial_balance: 1000.00,
+            initial_balance: 100.00,
             risk_percent: 1.0,
-            leverage_cap: 10,
+            leverage_cap: 20,
             fee: 0.00055,
             slippage: 0.0001
         },
@@ -67,7 +67,7 @@ class ConfigManager {
         },
         
         orderbook: {
-            depth: 50,
+            depth: 150,
             wall_threshold: 5.0,
             support_resistance_levels: 5
         },

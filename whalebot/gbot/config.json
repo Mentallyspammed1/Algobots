@@ -18,7 +18,8 @@
     "ai": {
         "model": "gemini-2.5-flash-lite",
         "minConfidence": 0.80,
-        "maxTokens": 300
+        "maxTokens": 300,
+        "geminiApiKey": "process.env.GEMINI_API_KEY"
     },
     "risk": {
         "maxDailyLoss": 5.0,
@@ -38,5 +39,12 @@
         },
         "laguerre": 0.5,
         "threshold": 1.8
+    },
+    "trading_params": {
+        "tickSize": "0.10",
+        "testnet": false,
+        "interval": "15",
+        "trailingStopDistance": 0.005,
+        "maxHoldingDuration": 7200000
     }
 }

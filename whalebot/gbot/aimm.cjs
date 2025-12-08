@@ -4,62 +4,74 @@
  * │   Iceberg Execution · Real-Time PnL Stream · Max Drawdown Guard         │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
- * USAGE: node ais.cjs
+ * USAGE: node aimm.cjs
  */
 
 const fs = require('fs');
+const path = require('path'); // For path manipulation
 const dotenv = require('dotenv');
+const { Decimal } = require('decimal.js');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { RestClientV5, WebsocketClient } = require('bybit-api');
+const winston = require('winston'); // For structured logging
+const Ajv = require('ajv');       // For JSON schema validation
+
+// --- Logger Configuration ---
+const logger = winston.createLogger({
+    level: process.env.LOG_LEVEL || 'info', // Default to 'info', can be set via .env
+    format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.errors({ stack: true }), // Log stack traces
+        winston.format.splat(),
+        winston.format.json(), // Log in JSON format
+    ),
+    defaultMeta: { service: 'leviathan-bot' },
+    transports: [
+        new winston.transports.File({ filename: 'error.log', level: 'error' }),
+        new winston.transports.File({ filename: 'bot_output.log' }), // Log all levels
+        new winston.transports.Console({
+            format: winston.format.combine(
+                winston.format.colorize(), // Colorize console output
+                winston.format.simple(),   // Simple log format for console
+            ),
+        }),
+    ],
+});
+
+// --- Configuration Loading ---
+let CONFIG = {};
+const configPath = path.join(__dirname, 'config.json');
 try {
+  // Load environment variables first
   const envConfig = dotenv.parse(fs.readFileSync('.env'));
   for (const k in envConfig) {
     process.env[k] = envConfig[k];
   }
+  // Load main configuration
+  const loadedConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  // Merge general config with trading-specific params, and add accountType
+  CONFIG = { ...loadedConfig, ...loadedConfig.trading_params, accountType: loadedConfig.accountType || 'UNIFIED' };
+  logger.info(`[CONFIG] Loaded configuration for symbol: ${CONFIG.symbol}, Account Type: ${CONFIG.accountType}`);
 } catch (e) {
-    console.error('Could not load .env file', e);
+  logger.error(`[FATAL] Could not load configuration: ${e.message}`, { stack: e.stack });
+  process.exit(1);
 }
-const { Decimal } = require('decimal.js');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { RestClientV5, WebsocketClient } = require('bybit-api');
 
-// ─── NEON PALETTE ───
+// --- NEON PALETTE ---
 const C = {
-  reset: "\x1b[0m",
-  bright: "\x1b[1m",
-  dim: "\x1b[2m",
-  green: "\x1b[32m",
-  red: "\x1b[31m",
-  cyan: "\x1b[36m",
-  yellow: "\x1b[33m",
-  magenta: "\x1b[35m",
-  neonGreen: "\x1b[92m",
-  neonRed: "\x1b[91m",
-  neonCyan: "\x1b[96m",
-  neonPurple: "\x1b[95m",
-  neonYellow: "\x1b[93m",
-  bgGreen: "\x1b[42m\x1b[30m",
-  bgRed: "\x1b[41m\x1b[37m",
+  reset: "\x1b[0m", bright: "\x1b[1m", dim: "\x1b[2m",
+  green: "\x1b[32m", red: "\x1b[31m", cyan: "\x1b[36m",
+  yellow: "\x1b[33m", magenta: "\x1b[35m", neonGreen: "\x1b[92m",
+  neonRed: "\x1b[91m", neonCyan: "\x1b[96m", neonPurple: "\x1b[95m",
+  neonYellow: "\x1b[93m", bgGreen: "\x1b[42m\x1b[30m", bgRed: "\x1b[41m\x1b[37m",
 };
 
-// ─── CONFIGURATION ───
-const CONFIG = {
-  symbol: process.env.TRADE_SYMBOL || 'BTCUSDT',
-  interval: process.env.TRADE_TIMEFRAME || '15',
-  riskPerTrade: 0.01, // 1% Risk per trade
-  leverage: process.env.MAX_LEVERAGE || '5',
-  testnet: process.env.BYBIT_TESTNET === 'true',
-  tickSize: process.env.TICK_SIZE || '0.10',
-  // Added for Snippet 1
-  trailingStopDistance: 0.005, // 0.5% trailing distance
-  // Added for Snippet 5
-  maxHoldingDuration: 120 * 60 * 1000, // 120 minutes in milliseconds
-};
-
-// ─── DECIMAL-SAFE HELPERS ───
+// --- DECIMAL-SAFE HELPERS ---
 const DArr = (len) => Array(len).fill(null);
 const D0 = () => new Decimal(0);
 const D = (n) => new Decimal(n);
 
-// ─── ADVANCED ORDERBOOK ANALYTICS ───
+// --- ADVANCED ORDERBOOK ANALYTICS ---
 class LocalOrderBook {
   constructor() {
     this.bids = new Map();
@@ -72,6 +84,10 @@ class LocalOrderBook {
   }
 
   update(data, isSnapshot = false) {
+    if (!data || (!data.b && !data.a)) {
+        logger.warn(`[ORDERBOOK] Received invalid orderbook data`, { data: JSON.stringify(data) });
+        return;
+    }
     if (isSnapshot) {
       this.bids.clear();
       this.asks.clear();
@@ -91,17 +107,21 @@ class LocalOrderBook {
     for (const [price, size] of levels) {
       const p = parseFloat(price);
       const s = parseFloat(size);
+      if (isNaN(p) || isNaN(s)) {
+          logger.warn(`[ORDERBOOK] Skipped invalid level: price=${price}, size=${size}`);
+          continue;
+      }
       if (s === 0) map.delete(p);
       else map.set(p, s);
     }
   }
 
   getBestBidAsk() {
-    if (!this.ready || this.bids.size === 0 || this.asks.size === 0) 
+    if (!this.ready || this.bids.size === 0 || this.asks.size === 0)
       return { bid: 0, ask: 0 };
-    return { 
-      bid: Math.max(...this.bids.keys()), 
-      ask: Math.min(...this.asks.keys()) 
+    return {
+      bid: Math.max(...this.bids.keys()),
+      ask: Math.min(...this.asks.keys())
     };
   }
 
@@ -111,23 +131,32 @@ class LocalOrderBook {
     const bids = Array.from(this.bids.entries()).sort((a, b) => b[0] - a[0]).slice(0, 20);
     const asks = Array.from(this.asks.entries()).sort((a, b) => a[0] - b[0]).slice(0, 20);
 
-    const bestBid = bids[0][0];
-    const bestAsk = asks[0][0];
-    const imbWeight = bids[0][1] / (bids[0][1] + asks[0][1]);
-    
-    this.metrics.wmp = (bestBid * (1 - imbWeight)) + (bestAsk * imbWeight);
-    this.metrics.spread = bestAsk - bestBid;
+    const bestBid = bids[0]?.[0] || 0;
+    const bestAsk = asks[0]?.[0] || 0;
+    const totalBidSize = bids.reduce((acc, [, size]) => acc + size, 0);
+    const totalAskSize = asks.reduce((acc, [, size]) => acc + size, 0);
+    const totalLiquidity = totalBidSize + totalAskSize;
 
-    const currentBidWall = Math.max(...bids.map(b => b[1]));
-    const currentAskWall = Math.max(...asks.map(a => a[1]));
-
-    // Wall Exhaustion Logic
-    if (this.metrics.prevBidWall > 0 && currentBidWall < this.metrics.prevBidWall * 0.7) {
-      this.metrics.wallStatus = 'BID_WALL_BROKEN'; 
-    } else if (this.metrics.prevAskWall > 0 && currentAskWall < this.metrics.prevAskWall * 0.7) {
-      this.metrics.wallStatus = 'ASK_WALL_BROKEN'; 
+    if (totalLiquidity === 0) {
+        this.metrics.wmp = 0;
+        this.metrics.spread = bestAsk - bestBid;
+        this.metrics.skew = 0;
     } else {
-      this.metrics.wallStatus = currentBidWall > currentAskWall * 1.5 ? 'BID_SUPPORT' : 
+        const imbWeight = totalBidSize / totalLiquidity;
+        this.metrics.wmp = (bestBid * (1 - imbWeight)) + (bestAsk * imbWeight);
+        this.metrics.spread = bestAsk - bestBid;
+        this.metrics.skew = (totalBidSize - totalAskSize) / totalLiquidity;
+    }
+
+    const currentBidWall = Math.max(...bids.map(([, size]) => size), 0);
+    const currentAskWall = Math.max(...asks.map(([, size]) => size), 0);
+
+    if (this.metrics.prevBidWall > 0 && currentBidWall < this.metrics.prevBidWall * 0.7) {
+      this.metrics.wallStatus = 'BID_WALL_BROKEN';
+    } else if (this.metrics.prevAskWall > 0 && currentAskWall < this.metrics.prevAskWall * 0.7) {
+      this.metrics.wallStatus = 'ASK_WALL_BROKEN';
+    } else {
+      this.metrics.wallStatus = currentBidWall > currentAskWall * 1.5 ? 'BID_SUPPORT' :
                                (currentAskWall > currentBidWall * 1.5 ? 'ASK_RESISTANCE' : 'BALANCED');
     }
 
@@ -135,11 +164,6 @@ class LocalOrderBook {
     this.metrics.prevAskWall = currentAskWall;
     this.metrics.bidWall = currentBidWall;
     this.metrics.askWall = currentAskWall;
-
-    const totalBidVol = bids.reduce((acc, val) => acc + val[1], 0);
-    const totalAskVol = asks.reduce((acc, val) => acc + val[1], 0);
-    const total = totalBidVol + totalAskVol;
-    this.metrics.skew = total === 0 ? 0 : (totalBidVol - totalAskVol) / total;
   }
 
   getAnalysis() {
@@ -147,7 +171,7 @@ class LocalOrderBook {
   }
 }
 
-// ─── TA v2.9 (Session VWAP) ───
+// --- TA v2.9 (Session VWAP) ---
 class TA {
   static sma(src, period) {
     const res = DArr(src.length);
@@ -177,16 +201,15 @@ class TA {
   static vwap(high, low, close, volume) {
     if (!close.length) return D0();
     let cumPV = D0(), cumV = D0();
-    // Rolling 24h VWAP (Approx 96 candles of 15m)
-    const lookback = Math.min(close.length, 96); 
+    const lookback = Math.min(close.length, 96); // Approx 24h for 15m candles
     const start = close.length - lookback;
-    
-    for(let i=start; i<close.length; i++) {
+
+    for (let i = start; i < close.length; i++) {
       const typ = high[i].plus(low[i]).plus(close[i]).div(3);
       cumPV = cumPV.plus(typ.mul(volume[i]));
       cumV = cumV.plus(volume[i]);
     }
-    return cumV.eq(0) ? close[close.length-1] : cumPV.div(cumV);
+    return cumV.eq(0) ? close[close.length - 1] : cumPV.div(cumV);
   }
 
   static fisher(high, low, len = 9) {
@@ -215,11 +238,11 @@ class TA {
       try {
         const v1 = D(1).plus(raw); const v2 = D(1).minus(raw);
         if (v2.abs().lt(EPSILON) || v1.lte(0) || v2.lte(0)) {
-           res[i] = res[i - 1] || D0();
+          res[i] = res[i - 1] || D0();
         } else {
-           const logVal = v1.div(v2).ln();
-           const prevRes = res[i - 1] && res[i - 1].isFinite() ? res[i - 1] : D0();
-           res[i] = D(0.5).mul(logVal).plus(D(0.5).mul(prevRes));
+          const logVal = v1.div(v2).ln();
+          const prevRes = res[i - 1] && res[i - 1].isFinite() ? res[i - 1] : D0();
+          res[i] = D(0.5).mul(logVal).plus(D(0.5).mul(prevRes));
         }
       } catch (e) { res[i] = res[i - 1] || D0(); }
     }
@@ -227,11 +250,33 @@ class TA {
   }
 }
 
-// ─── ORACLE BRAIN (GEMINI 2.5 FLASH LITE STABLE) ───
+// --- LLM Signal Schema ---
+const llmSignalSchema = {
+    type: "object",
+    properties: {
+        action: { type: "string", enum: ["BUY", "SELL", "HOLD"] },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+        sl: { type: "number" },
+        tp: { type: "number" },
+        reason: { type: "string", maxLength: 100 }
+    },
+    required: ["action", "confidence", "sl", "tp", "reason"],
+    additionalProperties: false
+};
+
+const ajv = new Ajv();
+const validateLlmSignal = ajv.compile(llmSignalSchema);
+
+
+// --- ORACLE BRAIN (GEMINI AI) ---
 class OracleBrain {
   constructor() {
+    if (!process.env.GEMINI_API_KEY) {
+        logger.error(`[FATAL] GEMINI_API_KEY not set. Please set it in your .env file.`);
+        throw new Error(`GEMINI_API_KEY not set.`);
+    }
     this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({
-      model: 'gemini-2.5-flash-lite', 
+      model: CONFIG.ai?.model || 'gemini-2.5-flash-lite',
       generationConfig: { responseMimeType: 'application/json' }
     });
     this.klines = [];
@@ -248,10 +293,10 @@ class OracleBrain {
     const l = this.klines.map(k => k.low);
     const v = this.klines.map(k => k.volume);
 
-    const atrSeries = TA.atr(h, l, c, 14);
+    const atrSeries = TA.atr(h, l, c, CONFIG.indicators?.atr || 14);
     const atr = atrSeries[atrSeries.length - 1] || D(1);
     const price = c[c.length - 1];
-    const fisherSeries = TA.fisher(h, l);
+    const fisherSeries = TA.fisher(h, l, CONFIG.indicators?.fisher || 9);
     const fisherVal = fisherSeries[fisherSeries.length - 1] || D0();
     const vwapVal = TA.vwap(h, l, c, v);
 
@@ -275,178 +320,261 @@ class OracleBrain {
     };
   }
 
+  // --- LLM Output Validation ---
   validateSignal(sig, ctx) {
-    if (!sig || typeof sig !== 'object') return { action: 'HOLD', confidence: 0, reason: 'Invalid JSON' };
+    const valid = validateLlmSignal(sig);
+    if (!valid) {
+        logger.warn(`[VALIDATION] AJV failed: ${validateLlmSignal.errors.map(err => `${err.instancePath} ${err.message}`).join(', ')}`, { signal: sig });
+        return { action: 'HOLD', confidence: 0, reason: 'Invalid JSON Schema' };
+    }
+
     const price = D(ctx.price);
-    const atr = D(ctx.atr || 100);
-    if (!['BUY', 'SELL', 'HOLD'].includes(sig.action)) sig.action = 'HOLD';
-    if (typeof sig.confidence !== 'number' || sig.confidence < 0.89) { sig.confidence = 0; sig.action = 'HOLD'; }
+    const atr = D(ctx.atr || 100); // Default ATR if not available
+    const minConfidence = CONFIG.ai?.minConfidence || 0.89;
+    const rewardRatio = CONFIG.risk?.rewardRatio || 1.6;
+
+    if (sig.confidence < minConfidence) {
+        logger.warn(`[VALIDATION] Confidence ${sig.confidence} below threshold ${minConfidence}. Defaulting to HOLD.`);
+        sig.action = 'HOLD';
+        sig.confidence = 0;
+    }
 
     if (sig.action !== 'HOLD') {
       const sl = D(sig.sl);
       const tp = D(sig.tp);
       const maxDist = atr.mul(4);
-      sig.sl = Number(Decimal.max(Decimal.min(sl, price.plus(maxDist)), price.minus(maxDist)).toFixed(2));
-      sig.tp = Number(Decimal.max(Decimal.min(tp, price.plus(maxDist)), price.minus(maxDist)).toFixed(2));
+
+      if (!sl.isFinite() || !tp.isFinite() || !sl.isPositive() || !tp.isPositive()) {
+          logger.error(`[VALIDATION] Invalid SL/TP values: SL=${sig.sl}, TP=${sig.tp}. Defaulting to HOLD.`, { ctxPrice: price.toFixed(2) });
+          sig.action = 'HOLD';
+      } else {
+          const clampedSl = Decimal.max(Decimal.min(sl, price.plus(maxDist)), price.minus(maxDist));
+          const clampedTp = Decimal.max(Decimal.min(tp, price.plus(maxDist)), price.minus(maxDist));
+          sig.sl = Number(clampedSl.toFixed(2));
+          sig.tp = Number(clampedTp.toFixed(2));
+
+          const risk = sig.action === 'BUY' ? price.minus(clampedSl) : clampedSl.minus(price);
+          const reward = sig.action === 'BUY' ? clampedTp.minus(price) : price.minus(clampedTp);
+          const rr = risk.abs().eq(0) ? D(0) : reward.div(risk.abs());
+
+          if (rr.lt(rewardRatio)) {
+              const newTp = sig.action === 'BUY' ? price.plus(risk.mul(rewardRatio)) : price.minus(risk.mul(rewardRatio));
+              sig.tp = Number(newTp.toFixed(2));
+              sig.reason = (sig.reason || '') + ' | R/R Enforced';
+              logger.info(`[VALIDATION] R/R adjusted to ${rewardRatio}. New TP: ${sig.tp}`);
+          }
+      }
     }
-    sig.reason = (sig.reason || 'No reason').slice(0, 100);
+
+    sig.reason = (sig.reason || 'No reason provided').slice(0, 100);
     return sig;
   }
 
   async divine(bookMetrics) {
     const ctx = this.buildContext(bookMetrics);
-    if (!ctx) return { action: 'HOLD', confidence: 0, reason: 'Warming up' };
+    if (!ctx) {
+        logger.warn(`[ORACLE] Context not ready. Waiting for more data.`);
+        return { action: 'HOLD', confidence: 0, reason: 'Warming up' };
+    }
+
+    const symbol = CONFIG.symbol;
 
     const prompt = `You are LEVIATHAN v2.9 QUANTUM.
-Price: ${ctx.price} | ATR: ${ctx.atr} | Fisher: ${ctx.fisher} | VWAP: ${ctx.vwap}
-Orderbook Skew: ${ctx.book.skew}
-Wall Status: ${ctx.book.wallStatus}
-Fast Trend (1m): ${ctx.fastTrend}
+  Current Symbol: ${symbol}
+  Price: ${ctx.price} | ATR: ${ctx.atr} | Fisher: ${ctx.fisher} | VWAP: ${ctx.vwap}
+  Orderbook Skew: ${ctx.book.skew}
+  Wall Status: ${ctx.book.wallStatus}
+  Fast Trend (1m): ${ctx.fastTrend}
 
-RULES:
-1. Signal BUY if Fisher < -1.5 AND Skew > 0.1 AND (Price < VWAP or FastTrend == BULLISH).
-2. Signal SELL if Fisher > 1.5 AND Skew < -0.1 AND (Price > VWAP or FastTrend == BEARISH).
-3. "ASK_WALL_BROKEN" is a strong BUY signal. "BID_WALL_BROKEN" is a strong SELL signal.
-4. Confidence > 0.89 required.
-5. R/R must be > 1.6.
+  RULES:
+  1. Signal BUY if Fisher < -1.5 AND Skew > 0.1 AND (Price < VWAP or FastTrend == BULLISH).
+  2. Signal SELL if Fisher > 1.5 AND Skew < -0.1 AND (Price > VWAP or FastTrend == BEARISH).
+  3. "ASK_WALL_BROKEN" is a strong BUY signal. "BID_WALL_BROKEN" is a strong SELL signal.
+  4. Confidence must be >= ${CONFIG.ai?.minConfidence || 0.89}.
+  5. Minimum R/R must be > ${CONFIG.risk?.rewardRatio || 1.6}.
 
-DATA:
-${JSON.stringify(ctx)}
-
-Output JSON: {"action":"BUY"|"SELL"|"HOLD","confidence":0.90,"sl":123,"tp":456,"reason":"concise reason"}`;
+  Output JSON strictly adhering to this schema:
+  {
+    "action": "BUY" | "SELL" | "HOLD",
+    "confidence": number, // 0.0 to 1.0
+    "sl": number,       // Stop Loss Price
+    "tp": number,       // Take Profit Price
+    "reason": string    // Concise reason for the signal
+  }
+  `;
 
     try {
       const result = await this.gemini.generateContent(prompt);
-      const text = result.response.text();
-      const jsonStr = text.replace(/```json|```/g, '').trim();
-      let signal = JSON.parse(jsonStr);
-
-      const price = D(ctx.price);
-      if (signal.action !== 'HOLD') {
-        const sl = D(signal.sl);
-        const tp = D(signal.tp);
-        const risk = signal.action === 'BUY' ? price.minus(sl) : sl.minus(price);
-        const reward = signal.action === 'BUY' ? tp.minus(price) : price.minus(tp);
-        const rr = risk.abs().eq(0) ? D(0) : reward.div(risk.abs());
-
-        if (rr.lt(1.6)) {
-          const newTp = signal.action === 'BUY' ? price.plus(risk.mul(1.6)) : price.minus(risk.mul(1.6));
-          signal.tp = Number(newTp.toFixed(2));
-          signal.reason += ' | R/R Enforced';
-        }
+      const responseText = result.response.text();
+      let signal;
+      try {
+          const jsonStr = responseText.replace(/```json|```/g, '').trim();
+          signal = JSON.parse(jsonStr);
+      } catch (parseError) {
+          logger.error(`[ORACLE] Failed to parse LLM JSON response: ${parseError.message}`, { rawResponse: responseText });
+          return { action: 'HOLD', confidence: 0, reason: 'LLM JSON parse error' };
       }
+
       return this.validateSignal(signal, ctx);
     } catch (e) {
-      return { action: 'HOLD', confidence: 0, reason: 'Oracle Error' };
+      logger.error(`[ORACLE] Error generating content: ${e.message}`, { stack: e.stack });
+      return { action: 'HOLD', confidence: 0, reason: 'Oracle API error' };
     }
   }
 }
 
-// ─── LEVIATHAN ENGINE ───
+// --- LEVIATHAN ENGINE ---
 class LeviathanEngine {
   constructor() {
     this.oracle = new OracleBrain();
     this.book = new LocalOrderBook();
     this.client = new RestClientV5({
-      key: process.env.BYBIT_API_KEY, secret: process.env.BYBIT_API_SECRET, testnet: CONFIG.testnet,
+      key: process.env.BYBIT_API_KEY, secret: process.env.BYBIT_API_SECRET, testnet: CONFIG.trading_params?.testnet || false,
     });
     this.ws = new WebsocketClient({
-      key: process.env.BYBIT_API_KEY, secret: process.env.BYBIT_API_SECRET, testnet: CONFIG.testnet, market: 'v5',
+      key: process.env.BYBIT_API_KEY, secret: process.env.BYBIT_API_SECRET, testnet: CONFIG.trading_params?.testnet || false, market: 'v5',
     });
     this.state = {
-      price: 0, bestBid: 0, bestAsk: 0, pnl: 0, 
+      price: 0, bestBid: 0, bestAsk: 0, pnl: 0,
       equity: 0, maxEquity: 0, paused: false,
-      consecutiveLosses: 0, 
+      consecutiveLosses: 0,
       stats: { trades: 0, wins: 0, totalPnl: 0 },
-      // Modified for Snippet 1
-      position: { active: false, side: null, entryPrice: 0, currentSl: 0, entryTime: 0 }, // New position state
-      // Added for Snippet 3
-      currentVwap: 0, // New VWAP state variable
+      position: { active: false, side: null, entryPrice: 0, currentSl: 0, entryTime: 0 },
+      currentVwap: 0,
     };
   }
 
   formatPrice(price) {
-    const tick = CONFIG.tickSize;
+    const tickSize = CONFIG.trading_params?.tickSize || '0.10';
     let decimals = 2;
-    if (tick.includes('.')) decimals = tick.split('.')[1].length;
-    return new Decimal(price).toNearest(tick, Decimal.ROUND_DOWN).toFixed(decimals);
+    if (tickSize.includes('.')) decimals = tickSize.split('.')[1].length;
+    return new Decimal(price).toNearest(tickSize, Decimal.ROUND_DOWN).toFixed(decimals);
   }
 
-  // 1. RISK-BASED SIZING
+  // --- RISK-BASED POSITION SIZING ---
   async calculateRiskSize(signal) {
-    if (this.state.equity === 0) return 0.001; 
+    if (this.state.equity === 0 || CONFIG.risk?.maxRiskPerTrade === undefined || CONFIG.risk?.leverage === undefined) {
+        logger.warn(`[RISK] Equity or risk parameters not set. Using default small quantity.`);
+        return '0.001';
+    }
 
-    const riskAmount = this.state.equity * CONFIG.riskPerTrade;
+    const riskAmount = this.state.equity * CONFIG.risk.maxRiskPerTrade;
     const stopDistance = Math.abs(signal.sl - this.state.price);
-    const minStop = this.state.price * 0.002; 
+    const minStop = this.state.price * 0.001;
     const effectiveStop = Math.max(stopDistance, minStop);
 
+    if (effectiveStop === 0) return '0.001';
+
     let qty = riskAmount / effectiveStop;
-    const maxQty = (this.state.equity * parseFloat(CONFIG.leverage)) / this.state.price;
+    const maxQty = (this.state.equity * parseFloat(CONFIG.risk.leverage)) / this.state.price;
     qty = Math.min(qty, maxQty);
 
-    return qty.toFixed(3); 
+    return Math.max(qty, 0.001).toFixed(3); // Ensure minimum quantity
   }
 
-  // 2. FUNDING FILTER
+  // --- FUNDING RATE FILTER ---
   async checkFundingSafe(action) {
     try {
       const res = await this.client.getFundingRateHistory({ category: 'linear', symbol: CONFIG.symbol, limit: 1 });
+      if (res.retCode !== 0 || !res.result?.list?.[0]) {
+          logger.warn(`[FUNDING] Could not fetch funding rate. Skipping check.`);
+          return true;
+      }
       const rate = parseFloat(res.result.list[0].fundingRate);
-      if (action === 'BUY' && rate > 0.0005) return false;
-      if (action === 'SELL' && rate < -0.0005) return false;
+      const fundingThreshold = 0.0005; // Default threshold, could be configurable
+
+      if (action === 'BUY' && rate > fundingThreshold) {
+          logger.info(`[FUNDING] High positive funding rate (${rate.toFixed(4)}). Skipping BUY trade.`);
+          return false;
+      }
+      if (action === 'SELL' && rate < -fundingThreshold) {
+          logger.info(`[FUNDING] High negative funding rate (${rate.toFixed(4)}). Skipping SELL trade.`);
+          return false;
+      }
       return true;
-    } catch (e) { return true; }
+    } catch (e) {
+      logger.error(`[FUNDING] Error fetching funding rate: ${e.message}. Assuming safe.`);
+      return true;
+    }
   }
 
   async refreshEquity() {
     try {
-        const bal = await this.client.getWalletBalance({ accountType: 'UNIFIED', coin: 'USDT' });
-        this.state.equity = parseFloat(bal.result.list[0].totalEquity);
+        // Use configurable accountType from config.json
+        const balanceRes = await this.client.getWalletBalance({ accountType: CONFIG.accountType, coin: 'USDT' });
+        if (!balanceRes || balanceRes.retCode !== 0 || !balanceRes.result?.list?.[0]) {
+            logger.warn(`[EQUITY] Could not fetch wallet balance. Response: ${balanceRes?.retMsg || 'Unexpected response'}`, { retCode: balanceRes?.retCode });
+            return;
+        }
+
+        const accountInfo = balanceRes.result.list[0];
+        if (!accountInfo || !Array.isArray(accountInfo.coin)) {
+            logger.warn(`[EQUITY] No coin list in wallet balance response`);
+            return;
+        }
+
+        const usdtCoinData = accountInfo.coin.find(c => c.coin === 'USDT');
+        if (!usdtCoinData) {
+            logger.warn(`[EQUITY] USDT coin data not found in wallet balance`);
+            return;
+        }
+
+        this.state.equity = parseFloat(usdtCoinData.equity || '0');
         if (this.state.equity > this.state.maxEquity) this.state.maxEquity = this.state.equity;
 
-        // MAX DRAWDOWN GUARD (10%)
-        if (this.state.maxEquity > 0 && this.state.equity < this.state.maxEquity * 0.9) {
-            console.log(`${C.red}[EMERGENCY] Max Drawdown (10%) Hit. Bot Paused.${C.reset}`);
+        const maxDrawdownLimit = CONFIG.risk?.maxDailyLoss || 10; // Use from config
+        if (this.state.maxEquity > 0 && this.state.equity < this.state.maxEquity * (1 - maxDrawdownLimit / 100)) {
+            logger.error(`[EMERGENCY] Max Drawdown (${maxDrawdownLimit}%) Hit. Bot Paused.`);
             this.state.paused = true;
         }
-    } catch(e) {}
+    } catch (e) {
+        logger.error(`[EQUITY] Error fetching equity: ${e.message}`, { stack: e.stack });
+    }
   }
 
   async warmUp() {
-    console.log(`${C.cyan}[INIT] Warming up System...${C.reset}`);
+    logger.info(`[INIT] Warming up System...`);
     try {
       await this.refreshEquity();
-      console.log(`[INIT] Equity: $${this.state.equity.toFixed(2)}`);
+      logger.info(`[INIT] Equity: $${this.state.equity.toFixed(2)}`);
 
-      const res = await this.client.getKline({ category: 'linear', symbol: CONFIG.symbol, interval: CONFIG.interval, limit: 200 });
+      const res = await this.client.getKline({ category: 'linear', symbol: CONFIG.symbol, interval: CONFIG.intervals.main, limit: CONFIG.limits.kline || 300 });
+      if (res.retCode !== 0 || !res.result?.list) {
+          throw new Error(`Failed to fetch klines: ${res.msg || 'Unknown error'}`);
+      }
       const candles = res.result.list.reverse().map(k => ({
         startTime: parseInt(k[0]), open: D(k[1]), high: D(k[2]), low: D(k[3]), close: D(k[4]), volume: D(k[5]),
       }));
       candles.forEach(c => this.oracle.updateKline(c));
       this.state.price = parseFloat(candles[candles.length - 1].close);
 
-      const resFast = await this.client.getKline({ category: 'linear', symbol: CONFIG.symbol, interval: '1', limit: 50 });
+      const resFast = await this.client.getKline({ category: 'linear', symbol: CONFIG.symbol, interval: CONFIG.intervals.scalping || '1', limit: 50 });
+       if (resFast.retCode !== 0 || !resFast.result?.list) {
+          throw new Error(`Failed to fetch fast klines: ${resFast.msg || 'Unknown error'}`);
+      }
       const fastCandles = resFast.result.list.reverse().map(k => ({
         startTime: parseInt(k[0]), open: D(k[1]), high: D(k[2]), low: D(k[3]), close: D(k[4]), volume: D(k[5]),
       }));
       fastCandles.forEach(c => this.oracle.updateMtfKline(c));
 
-      const obRes = await this.client.getOrderbook({ category: 'linear', symbol: CONFIG.symbol, limit: 50 });
-      if(obRes.retCode === 0) this.updateOrderbook({ type: 'snapshot', b: obRes.result.b, a: obRes.result.a });
+      const obRes = await this.client.getOrderbook({ category: 'linear', symbol: CONFIG.symbol, limit: CONFIG.limits.orderbook || 50 });
+      if(obRes.retCode === 0 && obRes.result?.b && obRes.result?.a) {
+          this.updateOrderbook({ type: 'snapshot', b: obRes.result.b, a: obRes.result.a });
+      } else {
+          logger.warn(`[WARMUP] Failed to fetch initial orderbook. ${obRes.msg || ''}`);
+      }
 
-      console.log(`${C.green}[INIT] Ready. Model: Gemini 2.5 Flash Lite.${C.reset}`);
+      logger.info(`[INIT] Ready. Model: ${CONFIG.ai?.model || 'Gemini 2.5 Flash Lite'}.`);
     } catch (e) {
-      console.error(`${C.red}[FATAL] Warmup failed: ${e.message}${C.reset}`);
+      logger.error(`[FATAL] Warmup failed: ${e.message}`, { stack: e.stack });
       process.exit(1);
     }
   }
 
   updateOrderbook(data) {
-    // 3. ROBUST ORDERBOOK PARSING
     const isSnapshot = data.type === 'snapshot' || !this.book.ready;
     this.book.update(data, isSnapshot);
-    
+
     if (this.book.ready) {
       const { bid, ask } = this.book.getBestBidAsk();
       this.state.bestBid = bid;
@@ -454,79 +582,84 @@ class LeviathanEngine {
     }
   }
 
-  // 4. ICEBERG EXECUTION - Modified to accept offsetMultiplier
-  async placeIcebergOrder(signal, entryPrice, totalQty, offsetMultiplier = 0.001) {
+  async placeIcebergOrder(signal, entryPrice, totalQty, offsetMultiplier) {
     const slices = 3;
     const sliceQty = (parseFloat(totalQty) / slices).toFixed(3);
-    const tick = parseFloat(CONFIG.tickSize);
-    
-    console.log(`${C.cyan}[ICEBERG] Slicing ${totalQty} into ${slices} orders...${C.reset}`);
+    const tickSize = CONFIG.trading_params?.tickSize || '0.10';
+    const tick = parseFloat(tickSize);
+
+    logger.info(`[ICEBERG] Slicing ${totalQty} into ${slices} orders...`);
 
     for (let i = 0; i < slices; i++) {
-        // Use offsetMultiplier for calculating slice price offset
-        const offset = i * offsetMultiplier; 
+        const offset = i * offsetMultiplier;
         const slicePrice = signal.action === 'BUY' ? entryPrice + offset : entryPrice - offset;
         const formattedPrice = this.formatPrice(slicePrice);
 
-        await this.client.submitOrder({
-            category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Buy' : 'Sell',
-            orderType: 'Limit', price: formattedPrice, qty: sliceQty,
-            stopLoss: String(signal.sl), // Removed takeProfit as per snippet 2 modification
-            timeInForce: 'PostOnly',
-        });
-        
-        // 200ms delay between slices to mask intent
-        await new Promise(r => setTimeout(r, 200));
+        try {
+            await this.client.submitOrder({
+                category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Buy' : 'Sell',
+                orderType: 'Limit', price: formattedPrice, qty: sliceQty,
+                stopLoss: String(signal.sl),
+                timeInForce: 'PostOnly',
+            });
+            await new Promise(r => setTimeout(r, 200));
+        } catch (e) {
+            logger.error(`[ICEBERG EXEC ERROR] Failed to submit slice order`, { symbol: CONFIG.symbol, price: formattedPrice, qty: sliceQty, error: e.message });
+        }
     }
-    console.log(`${C.neonGreen}[SUCCESS] Iceberg Orders Sent.${C.reset}\n`);
+    logger.info(`[SUCCESS] Iceberg Orders Sent.`);
   }
 
-  // placeMakerOrder modified for Snippet 2, 4 and state updates
   async placeMakerOrder(signal) {
-    if (this.state.paused) return;
+    if (this.state.paused) {
+        logger.info(`[PAUSE] Bot is paused. Skipping trade signal.`);
+        return;
+    }
     if (this.state.consecutiveLosses >= 3) {
-        console.log(`${C.yellow}[PAUSE] Dead Cat Filter: 3x Loss Streak. Waiting...${C.reset}`);
+        logger.warn(`[PAUSE] Dead Cat Filter: 3x Loss Streak. Waiting...`);
         return;
     }
     if (!(await this.checkFundingSafe(signal.action))) {
-      console.log(`${C.red}[FILTER] High Funding Cost. Skipping trade.${C.reset}`);
+      logger.info(`[FILTER] High Funding Cost. Skipping trade.`);
       return;
     }
 
     const qty = await this.calculateRiskSize(signal);
-    console.log(`\n\n${C.bgGreen} ⚡ LEVIATHAN TRIGGER ${C.reset}`);
-    console.log(`${C.bright}ACT: ${signal.action} | CONF: ${(signal.confidence*100).toFixed(0)}% | QTY: ${qty}${C.reset}`);
-    console.log(`${C.dim}${signal.reason}${C.reset}`);
+    logger.info(`⚡ LEVIATHAN TRIGGER`, { action: signal.action, confidence: `${(signal.confidence*100).toFixed(0)}%`, qty: qty, reason: signal.reason });
 
-    if (!this.state.bestBid || !this.state.bestAsk) { console.log(`${C.red}[SKIP] OB Not Ready${C.reset}`); return; }
+    if (!this.state.bestBid || !this.state.bestAsk) {
+        logger.warn(`[SKIP] Order book not ready. Cannot determine entry price.`);
+        return;
+    }
 
     try {
       const posRes = await this.client.getPositionInfo({ category: 'linear', symbol: CONFIG.symbol });
-      if (posRes.result?.list?.[0] && parseFloat(posRes.result.list[0].size) > 0) {
-        console.log(`${C.yellow}[EXEC] Position Active. Skipping.${C.reset}`);
+      if (posRes.retCode !== 0) {
+          logger.warn(`[POSITION] Could not fetch position info: ${posRes.msg}. Assuming no active position.`);
+      } else if (posRes.result?.list?.[0] && parseFloat(posRes.result.list[0].size) > 0) {
+        logger.info(`[EXEC] Position already active. Skipping new entry.`);
         return;
       }
 
       const metrics = this.book.getAnalysis();
-      const tick = parseFloat(CONFIG.tickSize);
+      const tickSize = CONFIG.trading_params?.tickSize || '0.10';
+      const tick = parseFloat(tickSize);
       let entryPrice;
 
       if (signal.action === 'BUY') {
-        const aggressive = this.state.bestBid + tick;
-        entryPrice = (metrics.wallStatus === 'ASK_WALL_BROKEN' || metrics.skew > 0.2) 
-          ? Math.min(aggressive, this.state.bestAsk - tick) : this.state.bestBid;
-      } else {
-        const aggressive = this.state.bestAsk - tick;
-        entryPrice = (metrics.wallStatus === 'BID_WALL_BROKEN' || metrics.skew < -0.2) 
-          ? Math.max(aggressive, this.state.bestBid + tick) : this.state.bestAsk;
+        const aggressiveBid = this.state.bestBid + tick;
+        entryPrice = (metrics.wallStatus === 'ASK_WALL_BROKEN' || metrics.skew > 0.2)
+          ? Math.min(aggressiveBid, this.state.bestAsk - tick) : this.state.bestBid;
+      } else { // SELL
+        const aggressiveAsk = this.state.bestAsk - tick;
+        entryPrice = (metrics.wallStatus === 'BID_WALL_BROKEN' || metrics.skew < -0.2)
+          ? Math.max(aggressiveAsk, this.state.bestBid + tick) : this.state.bestAsk;
       }
 
-      // Snippet 4: Volatility-Adjusted Iceberg Entry
-      const atr = this.oracle.buildContext(metrics).atr; // Get current ATR from context
-      const offsetMultiplier = atr * 0.1; // 10% of ATR as offset, adjust as needed
+      const context = this.oracle.buildContext(metrics);
+      const offsetMultiplier = context?.atr ? context.atr * 0.1 : (CONFIG.risk?.rewardRatio || 1.6);
       await this.placeIcebergOrder(signal, entryPrice, qty, offsetMultiplier);
 
-      // Snippet 1: Update position state after entry
       this.state.position = {
           active: true,
           side: signal.action,
@@ -534,22 +667,22 @@ class LeviathanEngine {
           currentSl: signal.sl,
           entryTime: Date.now(),
       };
-      console.log(`${C.yellow}[TRAILING STOP] Initializing with SL: ${signal.sl}${C.reset}`);
+      logger.info(`[TRAILING STOP] Initializing with SL: ${signal.sl}`);
 
-      // Snippet 2: Place partial take profit orders
       await this.placePartialTakeProfit(signal, entryPrice, qty);
 
-    } catch (e) { console.error(`${C.red}[EXEC ERROR] ${e.message}${C.reset}`); }
+    } catch (e) {
+        logger.error(`[EXEC ERROR] Failed to place maker order`, { error: e.message, stack: e.stack });
+    }
   }
 
-  // Snippet 1: DYNAMIC TRAILING STOP LOSS
   async updateTrailingStop() {
     if (!this.state.position.active) return;
 
     const { side, entryPrice, currentSl } = this.state.position;
     const currentPrice = this.state.price;
-    // Use CONFIG.trailingStopDistance for trailing stop logic
-    const trailingDistance = currentPrice * CONFIG.trailingStopDistance; 
+    const trailingStopDistance = CONFIG.trading_params?.trailingStopDistance || 0.005;
+    const trailingDistance = currentPrice * trailingStopDistance;
 
     let newSl = currentSl;
     if (side === 'BUY') {
@@ -566,57 +699,65 @@ class LeviathanEngine {
 
     if (newSl !== currentSl) {
         this.state.position.currentSl = newSl;
-        console.log(`${C.yellow}[TRAILING STOP] Updating SL to ${newSl.toFixed(2)}${C.reset}`);
-        // Adjusting to use stopLoss parameter which is more accurate for trailing stops
-        await this.client.setTradingStop({
-            category: 'linear', symbol: CONFIG.symbol, positionIdx: 0,
-            stopLoss: String(newSl), // Use setTradingStop for SL updates
-        });
+        logger.info(`[TRAILING STOP] Updating SL to ${newSl.toFixed(2)}`);
+        try {
+            await this.client.setTradingStop({
+                category: 'linear', symbol: CONFIG.symbol, positionIdx: 0,
+                stopLoss: String(newSl),
+            });
+        } catch (e) {
+            logger.error(`[TRAILING STOP ERROR] Failed to update SL: ${e.message}`);
+        }
     }
   }
 
-  // Snippet 2: PARTIAL TAKE PROFIT SCALING
   async placePartialTakeProfit(signal, entryPrice, totalQty) {
     const qty1 = (parseFloat(totalQty) * 0.5).toFixed(3); // 50% at TP1
     const qty2 = (parseFloat(totalQty) * 0.5).toFixed(3); // 50% at TP2
-    const tp1 = signal.tp; // Original TP from signal
+    const tp1 = signal.tp;
     const riskDistance = Math.abs(entryPrice - signal.sl);
-    const tp2 = signal.action === 'BUY' ? entryPrice + riskDistance * 3 : entryPrice - riskDistance * 3; // TP2 = 3x R/R
+    const rewardRatio = CONFIG.risk?.rewardRatio || 3;
+    const tp2 = signal.action === 'BUY' ? entryPrice + riskDistance * rewardRatio : entryPrice - riskDistance * rewardRatio;
 
-    console.log(`${C.cyan}[PARTIAL TP] Setting TP1 (${tp1}) for ${qty1} and TP2 (${tp2}) for
-${qty2}${C.reset}`);
+    logger.info(`[PARTIAL TP] Setting TP1 (${tp1}) for ${qty1} and TP2 (${tp2}) for ${qty2}`);
 
-    // Order 1: TP1 (50% of position)
-    await this.client.submitOrder({
-        category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Sell' : 'Buy',
-        orderType: 'Limit', price: String(tp1), qty: qty1, timeInForce: 'GTC', reduceOnly: true,
-    });
+    try {
+        await this.client.submitOrder({
+            category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Sell' : 'Buy',
+            orderType: 'Limit', price: String(tp1), qty: qty1, timeInForce: 'GTC', reduceOnly: true,
+        });
 
-    // Order 2: TP2 (remaining 50% of position)
-    await this.client.submitOrder({
-        category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Sell' : 'Buy',
-        orderType: 'Limit', price: String(tp2), qty: qty2, timeInForce: 'GTC', reduceOnly: true,
-    });
+        await this.client.submitOrder({
+            category: 'linear', symbol: CONFIG.symbol, side: signal.action === 'BUY' ? 'Sell' : 'Buy',
+            orderType: 'Limit', price: String(tp2), qty: qty2, timeInForce: 'GTC', reduceOnly: true,
+        });
+    } catch (e) {
+        logger.error(`[PARTIAL TP ERROR] Failed to place partial take profit orders: ${e.message}`);
+    }
   }
 
-  // Snippet 3: VWAP REVERSION EXIT FILTER - Helper function
   async closePosition(side) {
-    // Using '0' for qty to close the entire position
-    await this.client.submitOrder({
-        category: 'linear', symbol: CONFIG.symbol, side: side === 'BUY' ? 'Sell' : 'Buy',
-        orderType: 'Market', qty: '0', reduceOnly: true,
-    });
-    this.state.position.active = false; // Reset position state
-    console.log(`${C.yellow}[POSITION CLOSED] Position closed due to exit condition.${C.reset}`);
+    try {
+        await this.client.submitOrder({
+            category: 'linear', symbol: CONFIG.symbol, side: side === 'BUY' ? 'Sell' : 'Buy',
+            orderType: 'Market', qty: '0', reduceOnly: true,
+        });
+        this.state.position.active = false;
+        logger.info(`[POSITION CLOSED] Position closed due to exit condition.`);
+    } catch (e) {
+        logger.error(`[CLOSE POSITION ERROR] Failed to close position: ${e.message}`);
+        this.state.position.active = false; // Reset state even if API fails
+    }
   }
 
-  // Snippet 3: VWAP REVERSION EXIT FILTER
   async checkVwapExit() {
     if (!this.state.position.active) return;
 
     const { side } = this.state.position;
     const currentPrice = this.state.price;
     const currentVwap = this.state.currentVwap;
+
+    if (currentVwap === 0) return; // VWAP not available
 
     let exitSignal = false;
     if (side === 'BUY' && currentPrice < currentVwap) {
@@ -626,19 +767,19 @@ ${qty2}${C.reset}`);
     }
 
     if (exitSignal) {
-        console.log(`${C.red}[VWAP EXIT] Price crossed VWAP against position. Closing trade.${C.reset}`);
+        logger.warn(`[VWAP EXIT] Price crossed VWAP against position. Closing trade.`);
         await this.closePosition(side);
     }
   }
 
-  // Snippet 5: TIME-BASED EXIT (TIME STOP)
   async checkTimeStop() {
     if (!this.state.position.active) return;
 
     const duration = Date.now() - this.state.position.entryTime;
-    // Use CONFIG.maxHoldingDuration for time stop logic
-    if (duration > CONFIG.maxHoldingDuration) {
-        console.log(`${C.red}[TIME STOP] Position held for too long (${duration / 60000} minutes). Closing trade.${C.reset}`);
+    const maxHoldingDuration = CONFIG.trading_params?.maxHoldingDuration || 120 * 60 * 1000; // Default 120 minutes
+
+    if (duration > maxHoldingDuration) {
+        logger.warn(`[TIME STOP] Position held for too long (${(duration / 60000).toFixed(1)} minutes). Closing trade.`);
         await this.closePosition(this.state.position.side);
     }
   }
@@ -646,99 +787,137 @@ ${qty2}${C.reset}`);
   async start() {
     await this.warmUp();
 
-    // 5. FIXED WS SUBSCRIPTIONS
-    // Public Topics
-    this.ws.subscribeV5([
-        `kline.${CONFIG.interval}.${CONFIG.symbol}`, 
-        `kline.1.${CONFIG.symbol}`, 
+    const publicTopics = [
+        `kline.${CONFIG.intervals.main}.${CONFIG.symbol}`,
+        `kline.${CONFIG.intervals.scalping || '1'}.${CONFIG.symbol}`,
         `orderbook.50.${CONFIG.symbol}`
-    ], 'linear');
-    
-    // Private Topics (Correct V5 Format)
-    this.ws.subscribeV5(['execution', 'position'], 'linear');
+    ];
 
-    // Periodic Tasks
+    // Safely subscribe to public topics
+    const publicSubscriptionPromise = this.ws.subscribeV5(publicTopics, 'linear');
+    if (publicSubscriptionPromise && typeof publicSubscriptionPromise.catch === 'function') {
+        publicSubscriptionPromise.catch(e => logger.error(`[WS SUB ERROR] Public topics: ${e.message}`, { stack: e.stack }));
+    } else {
+        logger.warn(`[WS SUB] subscribeV5 for public topics did not return a promise with .catch. Relying on ws.on('error').`);
+    }
+
+    // Safely subscribe to private topics
+    const privateSubscriptionPromise = this.ws.subscribeV5(['execution', 'position'], 'linear');
+    if (privateSubscriptionPromise && typeof privateSubscriptionPromise.catch === 'function') {
+        privateSubscriptionPromise.catch(e => logger.error(`[WS SUB ERROR] Private topics: ${e.message}`, { stack: e.stack }));
+    } else {
+        logger.warn(`[WS SUB] subscribeV5 for private topics did not return a promise with .catch. Relying on ws.on('error').`);
+    }
+
     setInterval(() => this.refreshEquity(), 300000); // Check equity every 5m
-    setInterval(() => {
+    setInterval(() => { // Log stats every 10m
         const s = this.state.stats;
-        const wr = s.trades > 0 ? (s.wins/s.trades*100).toFixed(1) : 0;
-        const dd = this.state.maxEquity > 0 ? ((1 - this.state.equity/this.state.maxEquity)*100).toFixed(2) : 0;
-        console.log(`${C.magenta}[STATS] T:${s.trades} W:${wr}% PnL:$${s.totalPnl.toFixed(2)} DD:${dd}%${C.reset}`);
-    }, 600000); // Log stats every 10m
+        const wr = s.trades > 0 ? (s.wins / s.trades * 100).toFixed(1) : 0;
+        const dd = this.state.maxEquity > 0 ? ((1 - this.state.equity / this.state.maxEquity) * 100).toFixed(2) : 0;
+        logger.info(`[STATS] Trades: ${s.trades} | Win Rate: ${wr}% | PnL: $${s.totalPnl.toFixed(2)} | DD: ${dd}%`);
+    }, 600000);
 
     this.ws.on('update', async (data) => {
-      // 6. REAL-TIME PNL TRACKING
-      if (data.topic === 'execution') {
-        data.data.forEach(exec => {
-            if (exec.execType === 'Trade' && exec.closedSize && parseFloat(exec.closedSize) > 0) {
-                const pnl = parseFloat(exec.execPnl || 0);
-                this.state.stats.totalPnl += pnl;
-                this.state.stats.trades++;
-                
-                if (pnl > 0) {
-                    this.state.consecutiveLosses = 0; // RESET FILTER
-                    this.state.stats.wins++;
-                    console.log(`${C.neonGreen}[WIN] PnL: +$${pnl.toFixed(2)}${C.reset}`);
-                } else {
-                    this.state.consecutiveLosses++;
-                    console.log(`${C.neonRed}[LOSS] PnL: $${pnl.toFixed(2)}${C.reset}`);
+      try {
+        if (!data || !data.data) {
+            logger.warn(`[WS UPDATE] Received data without 'data' field.`);
+            return;
+        }
+
+        if (data.topic === 'execution') {
+            for (const exec of data.data) {
+                if (exec.execType === 'Trade' && exec.closedSize && parseFloat(exec.closedSize) > 0) {
+                    const pnl = parseFloat(exec.execPnl || 0);
+                    this.state.stats.totalPnl += pnl;
+                    this.state.stats.trades++;
+
+                    if (pnl > 0) {
+                        this.state.consecutiveLosses = 0;
+                        this.state.stats.wins++;
+                        logger.info(`[WIN] PnL: +$${pnl.toFixed(2)}`);
+                    } else {
+                        this.state.consecutiveLosses++;
+                        logger.warn(`[LOSS] PnL: $${pnl.toFixed(2)}`);
+                    }
                 }
             }
-        });
-      }
-
-      if (data.topic === 'position') {
-        data.data.forEach(p => {
-            if (p.symbol === CONFIG.symbol) this.state.pnl = parseFloat(p.unrealisedPnl);
-        });
-      }
-
-      if (data.topic?.startsWith('orderbook')) {
-        const frame = Array.isArray(data.data) ? data.data[0] : data.data;
-        const type = data.type ? data.type : (this.book.ready ? 'delta' : 'snapshot');
-        this.updateOrderbook({ type, b: frame.b, a: frame.a });
-      }
-
-      if (data.topic?.includes('kline.1.')) {
-        const k = data.data[0];
-        if (k.confirm) this.oracle.updateMtfKline({ open: D(k.open), high: D(k.high), low: D(k.low), close: D(k.close), volume: D(k.volume) });
-      }
-
-      if (data.topic?.includes(`kline.${CONFIG.interval}`)) {
-        const k = data.data[0];
-        this.state.price = parseFloat(k.close);
-        
-        const m = this.book.getAnalysis();
-        const skewColor = m.skew > 0 ? C.neonGreen : C.neonRed;
-        
-        process.stdout.write(`\r${C.dim}[${new Date().toLocaleTimeString()}]${C.reset} ${CONFIG.symbol} ${this.state.price} | PnL: ${this.state.pnl.toFixed(2)} | Skew: ${skewColor}${m.skew.toFixed(2)}${C.reset} | Wall: ${m.wallStatus}   `);
-
-        if (k.confirm) {
-          process.stdout.write(`\n`);
-          this.oracle.updateKline({ open: D(k.open), high: D(k.high), low: D(k.low), close: D(k.close), volume: D(k.volume) });
-          
-          // Snippet 3: VWAP Reversion Exit Filter
-          this.state.currentVwap = this.oracle.buildContext(m).vwap; // Get VWAP from context
-          
-          const signal = await this.oracle.divine(m);
-          if (signal.action !== 'HOLD') await this.placeMakerOrder(signal);
-
-          // Snippet 1: Call updateTrailingStop regularly
-          await this.updateTrailingStop();
-
-          // Snippet 3: Call checkVwapExit regularly
-          await this.checkVwapExit();
-
-          // Snippet 5: Call checkTimeStop regularly
-          await this.checkTimeStop();
         }
+
+        if (data.topic === 'position') {
+            for (const p of data.data) {
+                if (p.symbol === CONFIG.symbol) {
+                    this.state.pnl = parseFloat(p.unrealisedPnl);
+                    break;
+                }
+            }
+        }
+
+        if (data.topic?.startsWith('orderbook')) {
+            const frame = Array.isArray(data.data) ? data.data[0] : data.data;
+            const type = data.type ? data.type : (this.book.ready ? 'delta' : 'snapshot');
+            this.updateOrderbook({ type, b: frame.b, a: frame.a });
+        }
+
+        if (data.topic?.includes(`kline.${CONFIG.intervals.scalping || '1'}.`)) {
+            const k = data.data[0];
+            if (k.confirm && k.open && k.high && k.low && k.close && k.volume) {
+                this.oracle.updateMtfKline({ open: D(k.open), high: D(k.high), low: D(k.low), close: D(k.close), volume: D(k.volume) });
+            } else {
+                logger.warn(`[WS UPDATE] Invalid fast kline data received`, { klineData: JSON.stringify(k) });
+            }
+        }
+
+        if (data.topic?.includes(`kline.${CONFIG.intervals.main}.`)) {
+            const k = data.data[0];
+            if (k.open && k.high && k.low && k.close && k.volume) {
+                this.state.price = parseFloat(k.close);
+
+                const m = this.book.getAnalysis();
+                const skewColor = m.skew > 0 ? C.neonGreen : C.neonRed;
+
+                process.stdout.write(`\r${C.dim}[${new Date().toLocaleTimeString()}]${C.reset} ${CONFIG.symbol} ${this.state.price} | PnL: ${this.state.pnl.toFixed(2)} | Skew: ${skewColor}${m.skew.toFixed(2)}${C.reset} | Wall: ${m.wallStatus}   `);
+
+                if (k.confirm) {
+                  process.stdout.write(`\n`);
+                  this.oracle.updateKline({ open: D(k.open), high: D(k.high), low: D(k.low), close: D(k.close), volume: D(k.volume) });
+
+                  this.state.currentVwap = this.oracle.buildContext(m)?.vwap || 0;
+
+                  const signal = await this.oracle.divine(m);
+                  if (signal.action !== 'HOLD') await this.placeMakerOrder(signal);
+
+                  await this.updateTrailingStop();
+                  await this.checkVwapExit();
+                  await this.checkTimeStop();
+                }
+            } else {
+                logger.warn(`[WS UPDATE] Invalid main kline data received`, { klineData: JSON.stringify(k) });
+            }
+        }
+      } catch (e) {
+          logger.error(`[WS UPDATE ERROR] Error processing WebSocket data: ${e.message}`, { stack: e.stack, data: JSON.stringify(data) });
       }
     });
 
-    this.ws.on('error', (err) => console.error(`\n${C.red}[WS ERROR] ${err}${C.reset}`));
-    console.log(`\n${C.bgGreen} ▓▓▓ LEVIATHAN v2.9 SINGULARITY ACTIVE ▓▓▓ ${C.reset}\n`);
+    this.ws.on('error', (err) => logger.error(`[WS ERROR] ${err.message}`, { stack: err.stack }));
+    logger.info(`▓▓▓ LEVIATHAN v2.9 SINGULARITY ACTIVE ▓▓▓`);
   }
 }
 
+// --- Main Execution ---
+logger.info('Starting Leviathan Bot...');
 const engine = new LeviathanEngine();
-engine.start().catch(console.error);
+engine.start().catch(error => {
+    // Use logger.error for uncaught errors during startup
+    logger.error(`Uncaught error during engine start: ${error.message}`, { stack: error.stack });
+    process.exit(1); // Exit on critical startup errors
+});
+
+// --- Suggestion for Future Enhancements ---
+logger.info(`\n--- SUGGESTIONS FOR ENHANCEMENT ---`);
+logger.info(`1. To integrate structured logging and JSON validation, please ensure you have run:`);
+logger.info(`   ${C.cyan}npm install winston ajv${C.reset}`);
+logger.info(`   The code is now configured to use 'winston' and 'ajv'.`);
+logger.info(`2. Ensure your .env file is secured and consider a secrets manager for production.`);
+logger.info(`3. Develop comprehensive unit and integration tests.`);
+logger.info(`----------------------------------\n`);
