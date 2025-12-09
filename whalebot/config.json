@@ -15,7 +15,14 @@
         "order_precision": 5,
         "price_precision": 3,
         "slippage_percent": 0.001,
-        "trading_fee_percent": 0.0005
+        "trading_fee_percent": 0.0005,
+        "enable_trailing_stop": true,
+        "trailing_stop_atr_multiple": 0.8,
+        "break_even_atr_trigger": 0.5,
+        "move_to_breakeven_atr_trigger": 1.0,
+        "profit_lock_in_atr_multiple": 0.5,
+        "close_on_opposite_signal": true,
+        "reverse_position_on_opposite_signal": false
     },
     "mtf_analysis": {
         "enabled": true,
@@ -43,7 +50,10 @@
             3,
             5
         ],
-        "cross_validation_folds": 5
+        "cross_validation_folds": 5,
+        "sentiment_analysis_enabled": false,
+        "bullish_sentiment_threshold": 0.6,
+        "bearish_sentiment_threshold": 0.4
     },
     "indicator_settings": {
         "atr_period": 14,
@@ -102,13 +112,22 @@
         "keltner_atr_multiplier": 2.0,
         "roc_period": 12,
         "roc_oversold": -5.0,
-        "roc_overbought": 5.0
+        "roc_overbought": 5.0,
+        "ADX_STRONG_TREND_THRESHOLD": 25,
+        "ADX_WEAK_TREND_THRESHOLD": 20,
+        "enable_volume_confirmation": true,
+        "volume_confirmation_period": 20,
+        "min_volume_multiplier": 1.2,
+        "enable_volatility_filter": true,
+        "optimal_volatility_min": 0.005,
+        "optimal_volatility_max": 0.03
     },
     "indicators": {
         "ema_alignment": true,
         "sma_trend_filter": true,
         "momentum": true,
         "volume_confirmation": true,
+        "volatility_filter": true,
         "stoch_rsi": true,
         "rsi": true,
         "bollinger_bands": true,
@@ -128,15 +147,7 @@
         "cmf": true,
         "volatility_index": true,
         "vwma": true,
-        "volume_delta": true,
-        "kaufman_ama": true,
-        "relative_volume": true,
-        "market_structure": true,
-        "dema": true,
-        "keltner_channels": true,
-        "roc": true,
-        "candlestick_patterns": true,
-        "fibonacci_pivot_points": true
+        "volume_delta": true
     },
     "weight_sets": {
         "default_scalping": {
@@ -175,5 +186,133 @@
         }
     },
     "cooldown_sec": 60,
-    "hysteresis_ratio": 0.85
+    "hysteresis_ratio": 0.85,
+    "current_strategy_profile": "default_scalping",
+    "adaptive_strategy_enabled": true,
+    "strategy_profiles": {
+        "default_scalping": {
+            "description": "Standard scalping strategy for fast markets.",
+            "market_condition_criteria": {
+                "adx_range": [
+                    0,
+                    25
+                ],
+                "volatility_range": [
+                    0.005,
+                    0.02
+                ]
+            },
+            "indicators_enabled": {
+                "ema_alignment": true,
+                "sma_trend_filter": true,
+                "momentum": true,
+                "volume_confirmation": true,
+                "volatility_filter": true,
+                "stoch_rsi": true,
+                "rsi": true,
+                "bollinger_bands": true,
+                "vwap": true,
+                "cci": true,
+                "wr": true,
+                "psar": true,
+                "sma_10": true,
+                "mfi": true,
+                "orderbook_imbalance": true,
+                "fibonacci_levels": true,
+                "ehlers_supertrend": true,
+                "macd": true,
+                "adx": true,
+                "ichimoku_cloud": true,
+                "obv": true,
+                "cmf": true,
+                "volatility_index": true,
+                "vwma": true,
+                "volume_delta": true
+            },
+            "weights": {
+                "ema_alignment": 0.22,
+                "sma_trend_filter": 0.28,
+                "momentum_rsi_stoch_cci_wr_mfi": 0.18,
+                "volume_confirmation": 0.12,
+                "volatility_filter": 0.1,
+                "bollinger_bands": 0.22,
+                "vwap": 0.22,
+                "psar": 0.22,
+                "sma_10": 0.07,
+                "orderbook_imbalance": 0.07,
+                "ehlers_supertrend_alignment": 0.55,
+                "macd_alignment": 0.28,
+                "adx_strength": 0.18,
+                "ichimoku_confluence": 0.38,
+                "obv_momentum": 0.18,
+                "cmf_flow": 0.12,
+                "mtf_trend_confluence": 0.32,
+                "volatility_index_signal": 0.15,
+                "vwma_cross": 0.15,
+                "volume_delta_signal": 0.1,
+                "sentiment_signal": 0.15
+            }
+        },
+        "trend_following": {
+            "description": "Strategy focused on capturing longer trends.",
+            "market_condition_criteria": {
+                "adx_range": [
+                    25,
+                    100
+                ],
+                "volatility_range": [
+                    0.01,
+                    0.05
+                ]
+            },
+            "indicators_enabled": {
+                "ema_alignment": true,
+                "sma_trend_filter": true,
+                "macd": true,
+                "adx": true,
+                "ehlers_supertrend": true,
+                "ichimoku_cloud": true,
+                "mtf_analysis": true,
+                "volume_confirmation": true,
+                "volatility_filter": true,
+                "rsi": false,
+                "stoch_rsi": false
+            },
+            "weights": {
+                "ema_alignment": 0.3,
+                "sma_trend_filter": 0.2,
+                "macd_alignment": 0.4,
+                "adx_strength": 0.35,
+                "ehlers_supertrend_alignment": 0.6,
+                "ichimoku_confluence": 0.5,
+                "mtf_trend_confluence": 0.4,
+                "volume_confirmation": 0.15,
+                "volatility_filter": 0.15,
+                "sentiment_signal": 0.2
+            }
+        }
+    },
+    "active_weights": {
+        "ema_alignment": 0.22,
+        "sma_trend_filter": 0.28,
+        "momentum_rsi_stoch_cci_wr_mfi": 0.18,
+        "volume_confirmation": 0.12,
+        "volatility_filter": 0.1,
+        "bollinger_bands": 0.22,
+        "vwap": 0.22,
+        "psar": 0.22,
+        "sma_10": 0.07,
+        "orderbook_imbalance": 0.07,
+        "ehlers_supertrend_alignment": 0.55,
+        "macd_alignment": 0.28,
+        "adx_strength": 0.18,
+        "ichimoku_confluence": 0.38,
+        "obv_momentum": 0.18,
+        "cmf_flow": 0.12,
+        "mtf_trend_confluence": 0.32,
+        "volatility_index_signal": 0.15,
+        "vwma_cross": 0.15,
+        "volume_delta_signal": 0.1,
+        "sentiment_signal": 0.15
+    }
 }

@@ -1662,13 +1662,24 @@ class TradingAnalyzer:
             self.calculate_fibonacci_levels()
 
         # --- Weighted Scoring Logic Integration ---
-        # Calculate and store the weighted score for the current indicators
-        self.current_signal_score = self.calculate_weighted_score()
+        # Calculate the weighted score and breakdown for the current indicators
+        self.current_signal_score, self.signal_breakdown = self.calculate_weighted_score(
+            current_price=Decimal(str(self.df["close"].iloc[-1])),
+            orderbook_data=orderbook_data,
+            mtf_trends=mtf_trends,
+            sentiment_score=fetch_latest_sentiment(self.symbol, self.logger) if self.config["ml_enhancement"].get("sentiment_analysis_enabled", False) else None,
+        )
         self.logger.debug(f"[{self.symbol}] Calculated weighted score: {self.current_signal_score}")
+        self.logger.debug(f"[{self.symbol}] Signal breakdown: {self.signal_breakdown}")
 
-        # Generate the trading signal based on the score and thresholds
-        self.current_signal = self.generate_signal(self.current_signal_score)
-        self.logger.debug(f"[{self.symbol}] Generated signal: {self.current_signal}")
+        # Generate the final trading signal based on the score, thresholds, hysteresis, and cooldown
+        self.current_signal = self.generate_signal(
+            self.current_signal_score,
+            self.signal_breakdown,
+            current_price=Decimal(str(self.df["close"].iloc[-1])),
+            prev_close=Decimal(str(self.df["close"].iloc[-2])) if len(self.df) > 1 else Decimal(str(self.df["close"].iloc[-1])),
+        )
+        self.logger.debug(f"[{self.symbol}] Generated final signal: {self.current_signal}")
         # --- End Weighted Scoring Logic ---
 
 
@@ -3838,24 +3849,36 @@ class TradingAnalyzer:
         self.logger.debug(f"[{self.symbol}] Market Conditions: {conditions}")
         return conditions
 
-    def generate_trading_signal(
+    def calculate_weighted_score(
         self,
         current_price: Decimal,
         orderbook_data: dict | None,
         mtf_trends: dict[str, str],
         sentiment_score: float | None = None,  # UPGRADE 3: Add sentiment score
-    ) -> tuple[str, float, dict]:
-        """Generate a signal using confluence of indicators, including Ehlers SuperTrend.
-        Returns the final signal, the aggregated signal score, and a breakdown of contributions.
+    ) -> tuple[float, dict]:
+        """
+        Calculates the weighted score for trading signals by aggregating contributions
+        from various indicators.
+
+        Args:
+            current_price: The current market price of the symbol.
+            orderbook_data: Orderbook data for imbalance analysis.
+            mtf_trends: Dictionary containing multi-timeframe trend information.
+            sentiment_score: A float representing market sentiment (0=bearish, 1=bullish).
+
+        Returns:
+            A tuple containing:
+            - signal_score (float): The aggregated weighted score.
+            - signal_breakdown (dict): A dictionary detailing the contribution of each indicator to the score.
         """
         signal_score = 0.0
         signal_breakdown: dict[str, float] = {}  # Initialize breakdown dictionary
 
         if self.df.empty:
             self.logger.warning(
-                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty in generate_trading_signal. Cannot generate signal.{RESET}",
+                f"{NEON_YELLOW}[{self.symbol}] DataFrame is empty in calculate_weighted_score. Cannot calculate score.{RESET}",
             )
-            return "HOLD", 0.0, {}
+            return 0.0, {}
 
         current_close = Decimal(str(self.df["close"].iloc[-1]))
         # Get previous close price, handle case with only one data point
@@ -3958,7 +3981,28 @@ class TradingAnalyzer:
             sentiment_score,
         )
 
-        # --- Final Signal Determination with Hysteresis and Cooldown ---
+        return signal_score, signal_breakdown
+
+    def generate_signal(
+        self,
+        signal_score: float,
+        signal_breakdown: dict,
+        current_price: Decimal,
+        prev_close: Decimal,
+    ) -> str:
+        """
+        Determines the final trading signal (BUY, SELL, HOLD) based on the aggregated
+        weighted score, applying thresholds, hysteresis, and cooldown periods.
+
+        Args:
+            signal_score: The aggregated weighted score from calculate_weighted_score.
+            signal_breakdown: Dictionary detailing the contribution of each indicator.
+            current_price: The current market price.
+            prev_close: The previous closing price.
+
+        Returns:
+            The final trading signal ('BUY', 'SELL', or 'HOLD').
+        """
         threshold = self.config["signal_score_threshold"]
         cooldown_sec = self.config["cooldown_sec"]
         hysteresis_ratio = self.config["hysteresis_ratio"]
@@ -4008,7 +4052,10 @@ class TradingAnalyzer:
         self.logger.info(
             f"{NEON_YELLOW}[{self.symbol}] Raw Signal Score: {signal_score:.2f}, Final Signal: {final_signal}{RESET}",
         )
-        return final_signal, signal_score, signal_breakdown
+        return final_signal
+
+    # ... (rest of the class) ...
+
 
     def calculate_entry_tp_sl(
         self,
