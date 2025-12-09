@@ -840,25 +840,34 @@ class PositionManager:
         # Fallback to configured balance for simulation
         return Decimal(str(self.config["trade_management"]["account_balance"]))
 
+    # Replace the existing _calculate_order_size method with this one
     def _calculate_order_size(
         self,
         current_price: Decimal,
         atr_value: Decimal,
+        category: Literal["linear", "inverse"] = "linear",
     ) -> Decimal:
-        """Calculate order size based on risk per trade and ATR."""
+        """
+        Calculate order size based on risk per trade, ATR, available balance,
+        and exchange-specific symbol constraints (min/max qty, step size, and max position value).
+        """
         if not self.trade_management_enabled:
             return Decimal("0")
 
-        account_balance = self._get_current_balance()
+        # Get actual available balance (from Snippet 1)
+        available_balance = self._get_current_balance(category)
+        if available_balance <= 0:
+            self.logger.warning(f"{NEON_YELLOW}[{self.symbol}] Available balance is zero or negative. Cannot determine order size.{RESET}")
+            return Decimal("0")
+
         risk_per_trade_percent = (
-            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"]))
-            / 100
+            Decimal(str(self.config["trade_management"]["risk_per_trade_percent"])) / 100
         )
         stop_loss_atr_multiple = Decimal(
             str(self.config["trade_management"]["stop_loss_atr_multiple"]),
         )
 
-        risk_amount = account_balance * risk_per_trade_percent
+        risk_amount = available_balance * risk_per_trade_percent
         stop_loss_distance = atr_value * stop_loss_atr_multiple
 
         if stop_loss_distance <= 0:
@@ -867,16 +876,60 @@ class PositionManager:
             )
             return Decimal("0")
 
-        # Order size in USD value
-        order_value = risk_amount / stop_loss_distance
-        # Convert to quantity of the asset (e.g., BTC)
-        order_qty = order_value / current_price
+        # Order size in terms of USD value (or equivalent base currency value for the pair)
+        # This is the capital allocated to the position, based on risk.
+        position_usd_value = risk_amount / stop_loss_distance
 
-        # Round order_qty to appropriate precision for the symbol
-        order_qty = order_qty.quantize(self.qty_quantize_dec, rounding=ROUND_DOWN)
+        # Convert to quantity of the asset (e.g., BTC quantity for BTCUSDT pair)
+        order_qty_raw = position_usd_value / current_price
+
+        # Ensure symbol instrument info is loaded (from Snippet 2)
+        if not self.symbol_info:
+            self.logger.error(f"{NEON_RED}[{self.symbol}] Missing symbol instrument info for order sizing. Cannot ensure compliance. Returning 0.{RESET}")
+            return Decimal("0")
+
+        min_order_qty = self.symbol_info["minOrderQty"]
+        max_order_qty = self.symbol_info["maxOrderQty"]
+        qty_step = self.symbol_info["qtyStep"]
+
+        # Quantize the raw quantity to adhere to exchange's step size
+        # Divide by step, round down, then multiply by step to get valid quantity
+        order_qty = (order_qty_raw / qty_step).quantize(Decimal("1"), rounding=ROUND_DOWN) * qty_step
+
+        # Apply min/max order quantity constraints
+        if order_qty < min_order_qty:
+            self.logger.warning(
+                f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity {order_qty.normalize()} is less than minimum allowed ({min_order_qty.normalize()}). Setting to 0.{RESET}",
+            )
+            return Decimal("0")
+
+        if order_qty > max_order_qty:
+            self.logger.warning(
+                f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity {order_qty.normalize()} exceeds maximum allowed ({max_order_qty.normalize()}). Capping at max.{RESET}",
+            )
+            order_qty = max_order_qty
+
+        # Apply maximum position value constraint (from config and Snippet 2)
+        if self.max_position_value_percent > 0:
+            max_position_value = available_balance * self.max_position_value_percent
+
+            # Calculate the maximum quantity allowed by the max_position_value_percent
+            # Quantize this max quantity to align with the qty_step
+            max_order_qty_by_value = (max_position_value / current_price).quantize(qty_step, rounding=ROUND_DOWN)
+
+            if order_qty > max_order_qty_by_value:
+                self.logger.warning(
+                    f"{NEON_YELLOW}[{self.symbol}] Calculated order quantity {order_qty.normalize()} (value: {(order_qty * current_price).normalize():.2f} USDT) exceeds maximum allowed position value ({max_position_value.normalize():.2f} USDT). Capping at {max_order_qty_by_value.normalize()}.{RESET}",
+                )
+                order_qty = max_order_qty_by_value
+
+        # Final check after all adjustments
+        if order_qty <= 0:
+            self.logger.warning(f"{NEON_YELLOW}[{self.symbol}] Order quantity became zero or negative after all adjustments. Cannot open position.{RESET}")
+            return Decimal("0")
 
         self.logger.info(
-            f"[{self.symbol}] Calculated order size: {order_qty.normalize()} (Risk: {risk_amount.normalize():.2f} USD)",
+            f"[{self.symbol}] Final calculated order size: {order_qty.normalize()} (Position Value: {(order_qty * current_price).normalize():.2f} USDT, Risk Amount: {risk_amount.normalize():.2f} USDT)",
         )
         return order_qty
 
