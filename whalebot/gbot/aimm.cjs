@@ -593,7 +593,7 @@ class VolatilityClampingEngine {
             return { tp: Number(finalTp.toFixed(2)), regime };
         } catch (error) {
             logger.error(`VolatilityClamping clamp error: ${error.message}`);
-            return { tp: signal.tp, regime: this.regime };
+            return { tp: signal.tp, regime: thish.regime };
         }
     }
 }
@@ -702,7 +702,7 @@ Return JSON format:
                 return this.validateSignal(signal, metrics, last.close.toNumber(), atr);
             }
             
-            return this.heuristicDivine(metrics, last, atr);
+            return thisthe heuristicDivine(metrics, last, atr);
         } catch (error) {
             logger.error(`Gemini divine error: ${error.message}`);
             return this.heuristicDivine(metrics, last, atr);
