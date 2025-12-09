@@ -78,7 +78,7 @@ const getConfigPath = () => {
 };
 const configPath = getConfigPath();
 
-const MODEL_CHAIN = ['gemini-2.0-flash-lite-preview-02-05', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+const MODEL_CHAIN = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
 
 const defaultConfig = {
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || "YOUR_ACTUAL_GEMINI_API_KEY_HERE",

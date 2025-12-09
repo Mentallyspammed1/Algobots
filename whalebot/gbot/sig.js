@@ -26,7 +26,7 @@ class ConfigManager {
         trend_interval: '15',
         limit: 300,
         loop_delay: 15,
-        gemini_model: 'gemini-1.5-flash',
+        gemini_model: 'gemini-2.5-flash-lite',
         min_confidence: 0.60,
         max_drawdown: 10.0,
         max_positions: 1,

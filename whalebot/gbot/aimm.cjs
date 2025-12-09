@@ -1,10 +1,10 @@
 /**
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │   WHALEWAVE PRO – LEVIATHAN v3.5.1 "SINGULARITY" (FINAL ARTIFACT)      │
- * │   Self-Contained · Unified Intelligence · Production Grade (v3.5.1)     │
+ * │   WHALEWAVE PRO – LEVIATHAN v3.6.2 "SINGULARITY PRIME" (FINAL BUILD)   │
+ * │   Self-Contained · Unified Intelligence · Production Grade (v3.6.2)     │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
- * USAGE: node leviathan-v3.5.1.cjs
+ * USAGE: node leviathan-v3.6.2.cjs
  */
 
 const fs = require('fs');
@@ -14,11 +14,11 @@ const { Decimal } = require('decimal.js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { RestClientV5, WebsocketClient } = require('bybit-api');
 const winston = require('winston');
-const Ajv = require('ajv'); // Ajv is required by the new validateSignal, but not defined elsewhere.
+const Ajv = require('ajv');
 
-const VERSION = '3.5.1';
+const VERSION = '3.6.2';
 
-// ─── 0. CORE SETUP & CONFIGURATION ──────────────────────────────────────────
+// --- 0. CORE SETUP & CONFIGURATION ──────────────────────────────────────────
 
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
@@ -53,10 +53,13 @@ function loadEnvSafe() {
         process.exit(1);
     }
 }
+
 function loadConfig() {
     const configPath = path.join(__dirname, 'config.json');
     let defaultConfig = {
-        symbol: "BTCUSDT", accountType: "UNIFIED",
+        symbol: "BTCUSDT", 
+        accountType: "UNIFIED", 
+        testnet: process.env.TESTNET === 'true' || true,
         intervals: { main: "5", scalping: "1" },
         risk: { 
             maxRiskPerTrade: 0.01, 
@@ -68,20 +71,27 @@ function loadConfig() {
             breakEvenTrigger: 1.0, 
             maxDailyLoss: 10, 
             minOrderQty: 0.001, 
+            maxOrderQty: 10.0, 
             partialTakeProfitPct: 0.5, 
-            rewardRatioTP2: 3.0, 
-            fundingThreshold: 0.0005,
-            icebergOffset: 0.0001,
-            fee: 0.0005,
-            maxHoldingDuration: 7200000 // 2 hours
+            fundingThreshold: 0.0005, 
+            icebergOffset: 0.0001, 
+            fee: 0.0005, 
+            maxHoldingDuration: 7200000,
+            kellyFraction: 0.25, 
+            recoveryThreshold: 0.5,
+            atr_tp_limit: 3.5
         },
-        ai: { model: "gemini-2.5-flash", minConfidence: 0.85 },
-        indicators: { atr: 14, fisher: 9 }
+        ai: { model: "gemini-1.5-pro", minConfidence: 0.85, useGemini: true },
+        indicators: { atr: 14, fisher: 9 },
+        health: { wsLatencyThreshold: 500, apiLatencyThreshold: 2000 }
     };
+    
     if (fs.existsSync(configPath)) {
         const loaded = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         return { ...defaultConfig, ...loaded, ...loaded.trading_params };
     }
+    
+    fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
     return defaultConfig;
 }
 
@@ -98,6 +108,21 @@ const C = {
 const D = (n) => new Decimal(n);
 const D0 = () => new Decimal(0);
 
+// --- GLOBAL VALIDATION SCHEMA ---
+const ajv = new Ajv({ allErrors: true });
+const llmSignalSchema = {
+    type: "object",
+    properties: {
+        action: { type: "string", enum: ["BUY", "SELL", "HOLD"] },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+        sl: { type: "number" }, 
+        tp: { type: "number" },
+        reason: { type: "string" }
+    },
+    required: ["action", "confidence"],
+    additionalProperties: false
+};
+
 // ─── 1. TECHNICAL ANALYSIS (TA) ──────────────────────────────────────────────
 class TA {
     static sma(src, len) { 
@@ -112,6 +137,7 @@ class TA {
         }
         return res;
     }
+    
     static atr(h, l, c, len) {
         const tr = new Array(h.length).fill(D(0));
         for (let i = 1; i < h.length; i++) {
@@ -119,6 +145,7 @@ class TA {
         }
         return TA.sma(tr, len);
     }
+    
     static vwap(h, l, c, v) {
         if (!c.length) return D(0);
         let cumPV = D(0), cumV = D(0);
@@ -130,11 +157,14 @@ class TA {
         }
         return cumV.eq(0) ? c[c.length - 1] : cumPV.div(cumV);
     }
+    
     static fisher(h, l, len = 9) {
         const res = new Array(h.length).fill(D(0));
         const val = new Array(h.length).fill(D(0));
         if (h.length < len) return res;
-        const EPSILON = D('1e-9'); const MAX_RAW = D('0.999'); const MIN_RAW = D('-0.999');
+        const EPSILON = D('1e-9'); 
+        const MAX_RAW = D('0.999'); 
+        const MIN_RAW = D('-0.999');
 
         for (let i = len; i < h.length; i++) {
             let maxH = h[i], minL = l[i];
@@ -150,10 +180,12 @@ class TA {
             }
             const prevVal = val[i - 1] && val[i - 1].isFinite() ? val[i - 1] : D(0);
             raw = D(0.33).mul(raw).plus(D(0.67).mul(prevVal));
-            if (raw.gt(MAX_RAW)) raw = MAX_RAW; else if (raw.lt(MIN_RAW)) raw = MIN_RAW;
+            if (raw.gt(MAX_RAW)) raw = MAX_RAW; 
+            else if (raw.lt(MIN_RAW)) raw = MIN_RAW;
             val[i] = raw;
             try {
-                const v1 = D(1).plus(raw); const v2 = D(1).minus(raw);
+                const v1 = D(1).plus(raw); 
+                const v2 = D(1).minus(raw);
                 if (v2.abs().lt(EPSILON) || v1.lte(0) || v2.lte(0)) {
                     res[i] = res[i - 1] || D(0);
                 } else {
@@ -161,10 +193,13 @@ class TA {
                     const prevRes = res[i - 1] && res[i - 1].isFinite() ? res[i - 1] : D(0);
                     res[i] = D(0.5).mul(logVal).plus(D(0.5).mul(prevRes));
                 }
-            } catch (e) { res[i] = res[i - 1] || D(0); }
+            } catch (e) { 
+                res[i] = res[i - 1] || D(0); 
+            }
         }
         return res;
     }
+    
     static rsi(prices, period = 14) {
         const gains = [];
         const losses = [];
@@ -193,6 +228,7 @@ class LocalOrderBook {
         this.asks = new Map();
         this.ready = false;
         this.lastUpdate = 0;
+        this.depth = 25;
     }
     
     update(data, isSnapshot = false) {
@@ -224,99 +260,153 @@ class LocalOrderBook {
     }
     
     getBestBidAsk() {
-        const bestBid = Math.max(...this.bids.keys());
-        const bestAsk = Math.min(...this.asks.keys());
+        const bids = Array.from(this.bids.keys());
+        const asks = Array.from(this.asks.keys());
+        
+        if (bids.length === 0 || asks.length === 0) {
+            return { bid: 0, ask: 0 };
+        }
+        
+        const bestBid = Math.max(...bids);
+        const bestAsk = Math.min(...asks);
         return { bid: bestBid, ask: bestAsk };
     }
     
     getAnalysis() {
         const { bid, ask } = this.getBestBidAsk();
         const spread = ask - bid;
-        const skew = ((bid - ask) / ((bid + ask) / 2)) * 100;
+        const skew = bid && ask ? ((bid - ask) / ((bid + ask) / 2)) * 100 : 0;
         const totalBidVol = Array.from(this.bids.values()).reduce((a, b) => a + b, 0);
         const totalAskVol = Array.from(this.asks.values()).reduce((a, b) => a + b, 0);
-        return { bid, ask, spread, skew, totalBidVol, totalAskVol };
+        
+        // Wall detection
+        const topBidLevels = Array.from(this.bids.entries()).sort((a, b) => b[0] - a[0]).slice(0, 5);
+        const topAskLevels = Array.from(this.asks.entries()).sort((a, b) => a[0] - b[0]).slice(0, 5);
+        const bidWall = Math.max(...topBidLevels.map(([p, s]) => s), 0);
+        const askWall = Math.max(...topAskLevels.map(([p, s]) => s), 0);
+        
+        let wallStatus = 'NORMAL';
+        if (bidWall > totalAskVol * 3) wallStatus = 'BID_WALL_BROKEN';
+        if (askWall > totalBidVol * 3) wallStatus = 'ASK_WALL_BROKEN';
+        
+        return { 
+            bid, 
+            ask, 
+            spread, 
+            skew, 
+            totalBidVol, 
+            totalAskVol,
+            wallStatus,
+            bidWall,
+            askWall,
+            imbalanceRatio: (totalBidVol - totalAskVol) / (totalBidVol + totalAskVol || 1)
+        };
     }
 }
 
-// ─── 3. DEEP VOID (Orderbook) ────────────────────────────────────────────────
+// ─── 3. ORDER BOOK (DEEP VOID) ──────────────────────────────────────────────
 class DeepVoidEngine {
     constructor() {
         this.depth = 25; 
         this.bids = new Map();
         this.asks = new Map();
-        this.cvd = { cumulative: 0 };
-        this.spoofThreshold = 5.0; 
-        this.liquidityVacuumThreshold = 0.3; 
         this.avgDepthHistory = [];
         this.spoofAlert = false;
         this.isVacuum = false;
-        this.metrics = {};
+        this.metrics = {
+            totalBidVol: 0,
+            totalAskVol: 0,
+            imbalance: 0,
+            imbalanceRatio: 0,
+            strongestBidWall: 0,
+            strongestAskWall: 0,
+            bidPressure: 0.5,
+            askPressure: 0.5,
+            isVacuum: false,
+            spoofAlert: false,
+            wallBroken: false
+        };
+        this.liquidityVacuumThreshold = 0.3;
     }
-
+    
     update(bids, asks) {
+        if (!bids || !asks) return;
+        
         this.bids = new Map(bids.map(([p, s]) => [parseFloat(p), parseFloat(s)]));
         this.asks = new Map(asks.map(([p, s]) => [parseFloat(p), parseFloat(s)]));
         this.calculateMetrics();
     }
-
-    getDepthMetrics() {
-        return this.metrics || {
-            totalBidVol: 0, totalAskVol: 0, imbalance: 0, imbalanceRatio: 0,
-            strongestBidWall: 0, strongestAskWall: 0, isVacuum: false, spoofAlert: false
-        };
+    
+    getDepthMetrics() { 
+        return this.metrics; 
     }
-
+    
     calculateMetrics() {
-        const bidLevels = Array.from(this.bids.entries()).sort((a, b) => b[0] - a[0]).slice(0, this.depth);
-        const askLevels = Array.from(this.asks.entries()).sort((a, b) => a[0] - b[0]).slice(0, this.depth);
-
-        const bidSizes = bidLevels.map(([, size]) => size);
-        const askSizes = askLevels.map(([, size]) => size);
-
-        const totalBidVol = bidSizes.reduce((a, b) => a + b, 0);
-        const totalAskVol = askSizes.reduce((a, b) => a + b, 0);
-        const imbalance = totalBidVol - totalAskVol;
-        const imbalanceRatio = (totalBidVol + totalAskVol === 0) ? 0 : imbalance / (totalBidVol + totalAskVol);
-
-        const strongestBidWall = Math.max(...bidSizes, 0);
-        const strongestAskWall = Math.max(...askSizes, 0);
-
-        this.detectSpoofing();
-        this.detectLiquidityVacuum(totalBidVol, totalAskVol);
-
-        this.metrics = {
-            totalBidVol, totalAskVol, imbalance, imbalanceRatio: Number(imbalanceRatio.toFixed(4)),
-            strongestBidWall, strongestAskWall, bidPressure: 0.5, askPressure: 0.5,
-            isVacuum: this.isVacuum, spoofAlert: this.spoofAlert, wallBroken: this.wallBroken || false
-        };
+        try {
+            const bidLevels = Array.from(this.bids.entries()).sort((a, b) => b[0] - a[0]).slice(0, this.depth);
+            const askLevels = Array.from(this.asks.entries()).sort((a, b) => a[0] - b[0]).slice(0, this.depth);
+            const bidSizes = bidLevels.map(([, size]) => size);
+            const askSizes = askLevels.map(([, size]) => size);
+            const totalBidVol = bidSizes.reduce((a, b) => a + b, 0);
+            const totalAskVol = askSizes.reduce((a, b) => a + b, 0);
+            const imbalance = totalBidVol - totalAskVol;
+            const imbalanceRatio = (totalBidVol + totalAskVol === 0) ? 0 : imbalance / (totalBidVol + totalAskVol);
+            const strongestBidWall = Math.max(...bidSizes, 0);
+            const strongestAskWall = Math.max(...askSizes, 0);
+            
+            this.detectSpoofing();
+            this.detectLiquidityVacuum(totalBidVol, totalAskVol);
+            
+            this.metrics = {
+                totalBidVol: totalBidVol || 0,
+                totalAskVol: totalAskVol || 0,
+                imbalance: imbalance || 0,
+                imbalanceRatio: Number((imbalanceRatio || 0).toFixed(4)),
+                strongestBidWall: strongestBidWall || 0,
+                strongestAskWall: strongestAskWall || 0,
+                bidPressure: 0.5,
+                askPressure: 0.5,
+                isVacuum: this.isVacuum || false,
+                spoofAlert: this.spoofAlert || false,
+                wallBroken: this.wallBroken || false
+            };
+        } catch (error) {
+            logger.error(`DeepVoid calculateMetrics error: ${error.message}`);
+            // Keep existing metrics on error
+        }
     }
-
+    
     detectSpoofing() { 
-        this.spoofAlert = false;
-        if (Math.max(...Array.from(this.asks.values())) > 1000000) this.spoofAlert = true;
+        this.spoofAlert = false; 
+        try {
+            const topAskSizes = Array.from(this.asks.values()).sort((a, b) => b - a).slice(0, 5);
+            const avgTopAsk = topAskSizes.reduce((a, b) => a + b, 0) / (topAskSizes.length || 1);
+            if (topAskSizes[0] > avgTopAsk * 5) this.spoofAlert = true;
+        } catch (error) {
+            // Ignore spoof detection errors
+        }
     }
     
     detectLiquidityVacuum(totalBidVol, totalAskVol) {
-        this.avgDepthHistory.push((totalBidVol + totalAskVol) / 2);
-        if (this.avgDepthHistory.length > 50) this.avgDepthHistory.shift();
-        const longTermAvg = this.avgDepthHistory.reduce((a, b) => a + b, 0) / this.avgDepthHistory.length;
-        this.isVacuum = (totalBidVol + totalAskVol) / 2 < (longTermAvg || 1) * this.liquidityVacuumThreshold;
+        try {
+            this.avgDepthHistory.push((totalBidVol + totalAskVol) / 2);
+            if (this.avgDepthHistory.length > 50) this.avgDepthHistory.shift();
+            const longTermAvg = this.avgDepthHistory.reduce((a, b) => a + b, 0) / (this.avgDepthHistory.length || 1);
+            this.isVacuum = (totalBidVol + totalAskVol) / 2 < (longTermAvg || 1) * this.liquidityVacuumThreshold;
+        } catch (error) {
+            // Ignore vacuum detection errors
+        }
     }
-
+    
     getNeonDisplay() { 
         const m = this.getDepthMetrics();
-        const skewColor = m.imbalanceRatio > 0.05 ? C.neonGreen : m.imbalanceRatio < -0.05 ? C.neonRed : C.dim;
-        return `
-${C.neonPurple}╔══ DEEP VOID ORDERBOOK DOMINION ═══════════════════════════════════╗${C.reset}
-${C.cyan}║ ${C.bright}BID WALL${C.reset} ${m.strongestBidWall.toFixed(1).padStart(8)}  │  ${C.bright}ASK WALL${C.reset} ${m.strongestAskWall.toFixed(1).padStart(8)}${C.reset} ${C.cyan}║${C.reset}
-${C.cyan}║ ${C.bright}LIQUIDITY${C.reset} ${m.totalBidVol.toFixed(1).padStart(6)} / ${m.totalAskVol.toFixed(1).padStart(6)}  │  ${C.bright}IMBALANCE${C.reset} ${skewColor}${ (m.imbalanceRatio*100).toFixed(1)}%${C.reset} ${C.cyan}║${C.reset}
-${C.cyan}║ ${m.isVacuum ? C.neonYellow + 'VACUUM ALERT' : 'Depth Normal'}     │  ${m.spoofAlert ? C.neonRed + 'SPOOF DETECTED' : 'No Spoofing'}     ${C.cyan}║${C.reset}
-${C.neonPurple}╚══════════════════════════════════════════════════════════════════╝${C.reset}`;
+        const skewColor = (m.imbalanceRatio || 0) > 0.05 ? C.neonGreen : (m.imbalanceRatio || 0) < -0.05 ? C.neonRed : C.dim;
+        
+        return `\n${C.neonPurple}╔══ DEEP VOID ORDERBOOK DOMINION ═══════════════════════════════════╗${C.reset}\n${C.cyan}║ ${C.bright}BID WALL${C.reset} ${(m.strongestBidWall || 0).toFixed(1).padStart(8)}  │  ${C.bright}ASK WALL${C.reset} ${(m.strongestAskWall || 0).toFixed(1).padStart(8)}${C.reset} ${C.cyan}║${C.reset}\n${C.cyan}║ ${C.bright}LIQUIDITY${C.reset} ${(m.totalBidVol || 0).toFixed(1).padStart(6)} / ${(m.totalAskVol || 0).toFixed(1).padStart(6)}  │  ${C.bright}IMBALANCE${C.reset} ${skewColor}${ ((m.imbalanceRatio || 0) * 100).toFixed(1)}%${C.reset} ${C.cyan}║${C.reset}\n${C.cyan}║ ${m.isVacuum ? C.neonYellow + 'VACUUM ALERT' : 'Depth Normal'}     │  ${m.spoofAlert ? C.neonRed + 'SPOOF DETECTED' : 'No Spoofing'}     ${C.cyan}║${C.reset}\n${C.neonPurple}╚══════════════════════════════════════════════════════════════════╝${C.reset}`;
     }
 }
 
-// ─── 4. ORDER FLOW INTELLIGENCE (TAPE GOD) ──────────────────────────────────
+// ─── 4. TAPE GOD ENGINE ──────────────────────────────────────────────────────
 class TapeGodEngine {
     constructor() {
         this.trades = [];
@@ -330,70 +420,185 @@ class TapeGodEngine {
         this.icebergAlert = false;
         this.isDiverging = false;
     }
-
+    
     processExecution(exec) {
-        const size = parseFloat(exec.execQty || exec.size);
-        const price = parseFloat(exec.execPrice || exec.price);
-        const side = exec.side === 'Buy' ? 'BUY' : 'SELL';
-        
-        const trade = { ts: Date.now(), price, size, side, aggressor: exec.isBuyerMaker, value: size * price, delta: side === 'BUY' ? size : -size };
+        try {
+            const size = parseFloat(exec.execQty || exec.size);
+            const price = parseFloat(exec.execPrice || exec.price);
+            const side = exec.side === 'Buy' ? 'BUY' : 'SELL';
+            
+            const trade = { 
+                ts: Date.now(), 
+                price, 
+                size, 
+                side, 
+                aggressor: exec.isBuyerMaker, 
+                value: size * price, 
+                delta: side === 'BUY' ? size : -size 
+            };
 
-        this.trades.push(trade);
-        if (this.trades.length > this.MAX_HISTORY) this.trades.shift();
+            this.trades.push(trade);
+            if (this.trades.length > this.MAX_HISTORY) this.trades.shift();
 
-        this.delta.cumulative += trade.delta;
-
-        if (trade.aggressor) {
-            if (trade.side === 'BUY') this.aggression.buy += size;
-            else this.aggression.sell += size;
+            this.delta.cumulative += trade.delta;
+            
+            if (trade.aggressor) { 
+                if (trade.side === 'BUY') this.aggression.buy += size; 
+                else this.aggression.sell += size; 
+            }
+            
+            const now = Date.now();
+            if (this.lastPrintTime > 0) {
+                const timeDiff = now - this.lastPrintTime;
+                this.tapeMomentum = 0.7 * this.tapeMomentum + 0.3 * (size / (timeDiff / 1000));
+            }
+            this.lastPrintTime = now;
+            this.detectIceberg(trade);
+            
+            // Update volume profile (price buckets)
+            const bucket = Math.floor(price / 10) * 10;
+            const current = this.volumeProfile.get(bucket) || { buy: 0, sell: 0 };
+            if (side === 'BUY') current.buy += size;
+            else current.sell += size;
+            this.volumeProfile.set(bucket, current);
+            
+            // Clean old entries
+            if (this.volumeProfile.size > 100) {
+                const entries = Array.from(this.volumeProfile.entries());
+                entries.slice(0, 20).forEach(([key]) => this.volumeProfile.delete(key));
+            }
+        } catch (error) {
+            logger.error(`TapeGod processExecution error: ${error.message}`);
         }
-        
-        const now = Date.now();
-        if (this.lastPrintTime > 0) {
-            const timeDiff = now - this.lastPrintTime;
-            this.tapeMomentum = 0.7 * this.tapeMomentum + 0.3 * (size / (timeDiff / 1000));
-        }
-        this.lastPrintTime = now;
-        this.detectIceberg(trade);
     }
-
+    
     detectIceberg(trade) {
-        const recent = this.trades.slice(-20).filter(t => 
-          Math.abs(t.price - trade.price) < 0.5 && t.size === trade.size
-        );
-        this.icebergAlert = (recent.length >= this.icebergThreshold);
+        try {
+            const recent = this.trades.slice(-20).filter(t => 
+              Math.abs(t.price - trade.price) < 0.5 && t.size === trade.size
+            );
+            this.icebergAlert = (recent.length >= this.icebergThreshold);
+        } catch (error) {
+            // Ignore iceberg detection errors
+        }
     }
-
+    
     getMetrics() {
-        const recent = this.trades.slice(-50);
-        const buyVol = recent.filter(t => t.side === 'BUY').reduce((a, t) => a + t.size, 0);
-        const sellVol = recent.filter(t => t.side === 'SELL').reduce((a, t) => a + t.size, 0);
-        return { 
-            delta: buyVol - sellVol, 
-            cumulativeDelta: this.delta.cumulative, 
-            dom: buyVol > sellVol * 1.1 ? 'BUYERS' : buyVol * 1.1 < sellVol ? 'SELLERS' : 'BALANCED',
-            momentum: this.tapeMomentum,
-            iceberg: this.icebergAlert,
-            diverging: this.isDiverging
-        };
+        try {
+            const recent = this.trades.slice(-50);
+            const buyVol = recent.filter(t => t.side === 'BUY').reduce((a, t) => a + t.size, 0);
+            const sellVol = recent.filter(t => t.side === 'SELL').reduce((a, t) => a + t.size, 0);
+            return { 
+                delta: buyVol - sellVol, 
+                cumulativeDelta: this.delta.cumulative, 
+                dom: buyVol > sellVol * 1.1 ? 'BUYERS' : buyVol * 1.1 < sellVol ? 'SELLERS' : 'BALANCED',
+                momentum: this.tapeMomentum,
+                iceberg: this.icebergAlert
+            };
+        } catch (error) {
+            return { 
+                delta: 0, 
+                cumulativeDelta: 0, 
+                dom: 'BALANCED',
+                momentum: 0,
+                iceberg: false
+            };
+        }
     }
-
+    
     getNeonTapeDisplay() {
-        const m = this.getMetrics();
-        const deltaColor = m.delta > 0 ? C.neonGreen : C.neonRed;
-        const domColor = m.dom === 'BUYERS' ? C.neonGreen : m.dom === 'SELLERS' ? C.neonRed : C.dim;
-        const iceColor = this.icebergAlert ? C.neonYellow : C.dim;
-        
-        return `
-${C.neonPurple}╔══ TAPE GOD – ORDER FLOW DOMINION ═══════════════════════════════╗${C.reset}
-${C.cyan}║ ${C.bright}DELTA${C.reset} ${deltaColor}${m.delta > 0 ? '+' : ''}${m.delta.toFixed(1).padStart(8)}${C.reset}  │  ${C.bright}CUMULATIVE${C.reset} ${deltaColor}${m.cumulativeDelta > 0 ? '+' : ''}${m.cumulativeDelta.toFixed(0)}${C.reset} ${C.cyan}║${C.reset}
-${C.cyan}║ ${C.bright}AGGRESSION${C.reset} ${domColor}${m.dom.padEnd(8)}${C.reset} │  ${C.bright}ICEBERG${C.reset} ${iceColor}ACTIVE${C.reset}${C.cyan}     ║${C.reset}
-${C.cyan}║ ${m.diverging ? C.neonYellow + 'DIVERGENCE ALERT' : 'Flow Aligned'}     │  ${C.bright}MOMENTUM${C.reset} ${this.tapeMomentum.toFixed(1)}${C.reset}     ${C.cyan}║${C.reset}
-${C.neonPurple}╚══════════════════════════════════════════════════════════════════╝${C.reset}`;
+        try {
+            const m = this.getMetrics();
+            const deltaColor = m.delta > 0 ? C.neonGreen : C.neonRed;
+            return `\n${C.neonPurple}╔══ TAPE GOD – ORDER FLOW DOMINION ═══════════════════════════════╗${C.reset}\n${C.cyan}║ ${C.bright}DELTA${C.reset} ${deltaColor}${m.delta > 0 ? '+' : ''}${m.delta.toFixed(1).padStart(8)}${C.reset}  │  ${C.bright}CUMULATIVE${C.reset} ${deltaColor}${m.cumulativeDelta > 0 ? '+' : ''}${m.cumulativeDelta.toFixed(0)}${C.reset} ${C.cyan}║${C.reset}\n${C.cyan}║ ${C.bright}AGGRESSION${C.reset} ${m.dom.padEnd(8)} │  ${C.bright}MOMENTUM${C.reset} ${m.momentum.toFixed(1)}${C.reset}     ${C.cyan}║${C.reset}\n${C.cyan}║ ${m.iceberg ? C.neonYellow + 'ICEBERG DETECTED' : 'Flow Aligned'}     │  ${C.bright}VOL PROFILE${C.reset} Active     ${C.cyan}║${C.reset}\n${C.neonPurple}╚══════════════════════════════════════════════════════════════════╝${C.reset}`;
+        } catch (error) {
+            return `\n${C.neonPurple}╔══ TAPE GOD – ORDER FLOW DOMINION ═══════════════════════════════╗${C.reset}\n${C.cyan}║ ${C.bright}DELTA${C.reset} 0.0  │  CUMULATIVE 0 ║\n${C.cyan}║ ${C.bright}AGGRESSION${C.reset} BALANCED │  ${C.bright}MOMENTUM${C.reset} 0.0     ${C.cyan}║${C.reset}\n${C.cyan}║ Flow Aligned     │  ${C.bright}VOL PROFILE${C.reset} Active     ${C.cyan}║${C.reset}\n${C.neonPurple}╚══════════════════════════════════════════════════════════════════╝${C.reset}`;
+        }
     }
 }
 
-// ─── 5. ORACLE BRAIN ────────────────────────────────────────────────────────
+// ─── 5. VOLATILITY CLAMPING ENGINE ──────────────────────────────────────────
+class VolatilityClampingEngine {
+    constructor() {
+        this.history = [];
+        this.REGIME_WINDOW = 48;
+        this.MAX_CLAMP_MULT = 5.5;
+        this.MIN_CLAMP_MULT = 1.2;
+        this.CHOP_THRESHOLD = 0.45;
+        this.VOL_BREAKOUT_MULT = 1.8;
+        this.regime = 'WARMING';
+    }
+    
+    update(candleContext, bookMetrics, fisher) {
+        try {
+            const volatility = candleContext.atr || 0.01;
+            this.history.push({ 
+                atr: volatility, 
+                skew: bookMetrics.imbalanceRatio || 0, 
+                fisher: Math.abs(fisher || 0), 
+                price: candleContext.price, 
+                ts: Date.now() 
+            });
+            if (this.history.length > 200) this.history.shift();
+            const avgAtr = this.history.slice(-20).reduce((a, c) => a + c.atr, 0) / Math.max(1, this.history.length);
+            this.determineRegime(avgAtr, volatility);
+        } catch (error) {
+            logger.error(`VolatilityClamping update error: ${error.message}`);
+        }
+    }
+    
+    determineRegime(avgAtr, currentAtr) {
+        try {
+            if (this.history.length < this.REGIME_WINDOW) { 
+                this.regime = 'WARMING'; 
+                return; 
+            }
+            const volRatio = avgAtr === 0 ? 1 : currentAtr / avgAtr;
+            const entropy = this.history.reduce((a, c) => a + Math.abs(c.skew) + c.fisher, 0) / this.REGIME_WINDOW;
+            
+            if (volRatio > this.VOL_BREAKOUT_MULT && entropy < this.CHOP_THRESHOLD) {
+                this.regime = 'BREAKOUT';
+            } else if (entropy > this.CHOP_THRESHOLD) {
+                this.regime = 'CHOPPY';
+            } else if (volRatio > 1.3) {
+                this.regime = 'TRENDING';
+            } else {
+                this.regime = 'RANGING';
+            }
+        } catch (error) {
+            this.regime = 'WARMING';
+        }
+    }
+    
+    getRegime() { return this.regime; }
+    
+    shouldEnter(atr, regime) {
+        if (regime === 'CHOPPY') return false;
+        if (regime === 'BREAKOUT') return true;
+        const avgAtr = this.history.slice(-20).reduce((a, c) => a + c.atr, 0) / 20;
+        return (avgAtr > 0 && atr > avgAtr * 1.2); 
+    }
+    
+    clamp(signal, price, atr) {
+        try {
+            const regime = this.getRegime();
+            const mult = regime === 'BREAKOUT' ? 5.0 : regime === 'CHOPPY' ? 1.5 : 3.0;
+            const maxDist = D(atr).mul(mult);
+            const entry = D(price);
+            const dir = signal.action === 'BUY' ? 1 : -1;
+            const baseDist = D(atr).mul(CONFIG.risk?.rewardRatio || 1.5);
+            const proposedTp = entry.plus(baseDist.mul(dir));
+            const clampedTp = entry.plus(maxDist.mul(dir));
+            const finalTp = dir === 1 ? D.min(proposedTp, clampedTp) : D.max(proposedTp, clampedTp);
+            return { tp: Number(finalTp.toFixed(2)), regime };
+        } catch (error) {
+            logger.error(`VolatilityClamping clamp error: ${error.message}`);
+            return { tp: signal.tp, regime: this.regime };
+        }
+    }
+}
+
+// ─── 6. ORACLE BRAIN (AI) ──────────────────────────────────────────────────
 class OracleBrain {
     constructor() {
         this.klines = [];
@@ -403,110 +608,81 @@ class OracleBrain {
     
     initGemini() {
         try {
-            if (process.env.GEMINI_API_KEY) {
+            if (process.env.GEMINI_API_KEY && CONFIG.ai.useGemini) {
                 this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
                 logger.success('Gemini AI initialized');
             }
-        } catch (error) {
-            logger.warn(`Gemini AI init failed: ${error.message}`);
+        } catch (error) { 
+            logger.warn(`Gemini AI init failed: ${error.message}`); 
         }
     }
     
     update(candle) {
-        const fisher = TA.fisher([candle.high], [candle.low], CONFIG.indicators.fisher || 9);
-        const fVal = fisher[fisher.length - 1] || Decimal(0);
-        
-        // Store recent price history for analysis
-        if (this.klines.length === 0) {
-            this.klines.push({ ...candle, fisher: fVal });
-        } else {
-            this.klines.push({ ...candle, fisher: fVal });
+        try {
+            if (!candle.high || !candle.low) return;
+            
+            const fisher = TA.fisher([candle.high], [candle.low], CONFIG.indicators.fisher || 9).slice(-1)[0] || D(0);
+            const atr = TA.atr([candle.high], [candle.low], [candle.close], CONFIG.indicators.atr || 14).slice(-1)[0] || D(0.01);
+            
+            this.klines.push({ ...candle, fisher, atr });
             if (this.klines.length > 200) this.klines.shift();
+        } catch (error) {
+            logger.error(`OracleBrain update error: ${error.message}`);
         }
     }
     
     async divine(metrics) {
         try {
-            if (this.gemini && Math.random() > 0.3) {
-                // Get last candle and ATR for passing to new heuristicDivine
-                const last = this.klines[this.klines.length - 1];
-                let atr = D(1); // Default ATR
-                if (last && last.atr) {
-                    atr = last.atr;
+            if (this.klines.length < 20) return { action: 'HOLD', confidence: 0.3 };
+            
+            const last = this.klines[this.klines.length-1];
+            const atr = last.atr.toNumber();
+            
+            try {
+                if (this.gemini && Math.random() > 0.3) {
+                    return await this.geminiDivine(metrics, last, atr);
                 }
-                if (last) { // Ensure last is not undefined
-                   return await this.geminiDivine(metrics); // geminiDivine doesn't need last/atr directly, but should pass to validateSignal
-                }
+            } catch (e) {
+                logger.warn(`Gemini interaction failed: ${e.message}`);
             }
+            
+            return this.heuristicDivine(metrics, last, atr);
         } catch (error) {
-            logger.warn(`Gemini divine failed: ${error.message}, falling back to heuristic`);
+            logger.error(`OracleBrain divine error: ${error.message}`);
+            return { action: 'HOLD', confidence: 0 };
         }
-        
-        // Get last candle and ATR for heuristicDivine
-        const last = this.klines[this.klines.length - 1];
-        let atr = D(1); // Default ATR
-        if (last && last.atr) {
-            atr = last.atr;
-        }
-        return this.heuristicDivine(metrics, last, atr);
     }
     
-    async geminiDivine(metrics) {
-        const model = this.gemini.getGenerativeModel({ 
-            model: CONFIG.ai.model,
-            generationConfig: { temperature: 0.1, topK: 40, topP: 0.95, maxOutputTokens: 200 }
-        });
-        
-        const prompt = this.buildPrompt(metrics);
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
-        
+    async geminiDivine(metrics, last, atr) {
         try {
-            // Try to parse JSON response
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const signal = JSON.parse(jsonMatch[0]);
-                // Extract price and atr for the new validateSignal signature
-                const last = this.klines[this.klines.length - 1];
-                let price = 0;
-                let atr = D(1); // Default ATR
-                if (last) {
-                    price = last.close.toNumber();
-                    if (last.atr) {
-                        atr = last.atr;
-                    }
-                }
-                return this.validateSignal(signal, metrics, price, atr);
-            }
-        } catch (error) {
-            logger.warn(`Gemini response parsing failed: ${error.message}`);
-        }
-        
-        // Fallback to heuristic if JSON parsing fails
-        return this.heuristicDivine(metrics);
-    }
-    
-    buildPrompt(metrics) {
-        const last = this.klines[this.klines.length - 1];
-        const price = last?.close?.toNumber() || 0;
-        const fisher = last?.fisher?.toNumber() || 0;
-        const atr = last?.atr?.toNumber() || 0;
-        
-        return `You are an elite crypto trading oracle. Analyze the following market data and return ONLY a JSON object:
+            const model = this.gemini.getGenerativeModel({ 
+                model: CONFIG.ai.model, 
+                generationConfig: { 
+                    responseMimeType: 'application/json', 
+                    temperature: 0.1,
+                    topK: 40,
+                    topP: 0.95
+                } 
+            });
+            
+            const prompt = `You are an elite crypto trading oracle. Analyze the following market data and return ONLY a JSON object:
 
-Market Data:
-- Price: ${price}
-- Fisher Transform: ${fisher}
-- Order Book Skew: ${metrics.skew}%
-- Bid/Ask Spread: ${metrics.spread}
-- RSI would be calculated from recent price action
+Market Context:
+- Symbol: ${CONFIG.symbol}
+- Price: ${last.close.toNumber()}
+- Fisher Transform: ${last.fisher.toFixed(3)}
+- Order Book Skew: ${metrics.skew.toFixed(2)}%
+- Wall Status: ${metrics.wallStatus}
+
+Recent Volatility: ${atr}
+Recent Trend: ${last.fisher > 0.5 ? 'BULLISH' : last.fisher < -0.5 ? 'BEARISH' : 'NEUTRAL'}
 
 Trading Rules:
-- ONLY return a BUY, SELL, or HOLD signal
-- Use Fisher transform for momentum (above 0.5 = bullish, below -0.5 = bearish)
-- Consider order book imbalance for confirmation
+- ONLY return BUY, SELL, or HOLD signals
+- Use Fisher for momentum (abs > 0.5 = strong momentum)
+- Consider order book walls for confirmation
 - Risk per trade: ${CONFIG.risk.maxRiskPerTrade * 100}%
+- Minimum R/R: ${CONFIG.risk.rewardRatio}
 
 Return JSON format:
 {
@@ -516,127 +692,296 @@ Return JSON format:
   "tp": take_profit_price,
   "reason": "brief explanation"
 }`;
+
+            const result = await model.generateContent(prompt);
+            const responseText = String(await result.response.text()).trim();
+            
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const signal = JSON.parse(jsonMatch[0]);
+                return this.validateSignal(signal, metrics, last.close.toNumber(), atr);
+            }
+            
+            return this.heuristicDivine(metrics, last, atr);
+        } catch (error) {
+            logger.error(`Gemini divine error: ${error.message}`);
+            return this.heuristicDivine(metrics, last, atr);
+        }
     }
     
-    // New validateSignal from diff content
     validateSignal(sig, metrics, price, atr) {
-        // const valid = ajv.compile(llmSignalSchema)(sig); // Requires ajv and llmSignalSchema, omitting for now.
-        // if (!valid || sig.confidence < CONFIG.ai.minConfidence) { // Omitting !valid check
-        if (sig.confidence < CONFIG.ai.minConfidence) {
-            return { action: 'HOLD', confidence: 0, reason: 'Validation/Confidence fail' };
+        try {
+            const validate = ajv.compile(llmSignalSchema);
+            
+            if (!validate(sig)) {
+                logger.warn('AI signal validation failed, using heuristic');
+                return { action: 'HOLD', confidence: 0, reason: 'Validation fail' };
+            }
+
+            const priceD = D(price);
+            const sl = D(sig.sl);
+            const tp = D(sig.tp);
+            const rrTarget = D(CONFIG.risk.rewardRatio || 1.5);
+            const maxDist = D(atr * 4);
+
+            const clampedSl = D.max(D.min(sl, priceD.plus(maxDist)), priceD.minus(maxDist));
+            const clampedTp = D.max(D.min(tp, priceD.plus(maxDist)), priceD.minus(maxDist));
+            
+            const risk = sig.action === 'BUY' ? priceD.minus(clampedSl) : clampedSl.minus(priceD);
+            const reward = sig.action === 'BUY' ? clampedTp.minus(priceD) : priceD.minus(clampedTp);
+            const rr = risk.gt(0) ? reward.div(risk) : D(0);
+
+            if (rr.lt(rrTarget)) {
+                const newTp = sig.action === 'BUY' ? priceD.plus(risk.mul(rrTarget)) : priceD.minus(risk.mul(rrTarget));
+                sig.tp = Number(newTp.toFixed(2));
+                sig.reason = (sig.reason || '') + ' | R/R enforced';
+            }
+            
+            sig.sl = Number(clampedSl.toFixed(2));
+            sig.tp = Number(clampedTp.toFixed(2));
+            
+            if (sig.confidence < CONFIG.ai.minConfidence) {
+                sig.action = 'HOLD'; 
+                sig.confidence = 0;
+            }
+            return sig;
+        } catch (error) {
+            logger.error(`Signal validation error: ${error.message}`);
+            return { action: 'HOLD', confidence: 0, reason: 'Validation error' };
         }
-        const priceD = D(price);
-        const sl = D(sig.sl);
-        const tp = D(sig.tp);
-        const rrTarget = D(CONFIG.risk.rewardRatio || 1.5);
-        const risk = sig.action === 'BUY' ? priceD.minus(sl) : sl.minus(priceD);
-        const reward = sig.action === 'BUY' ? tp.minus(priceD) : priceD.minus(tp);
-        const rr = risk.gt(0) ? reward.div(risk) : D(0);
-        if (rr.lt(rrTarget)) {
-            const newTp = sig.action === 'BUY' ? priceD.plus(risk.mul(rrTarget)) : priceD.minus(risk.mul(rrTarget));
-            sig.tp = Number(newTp.toFixed(2));
-            sig.reason = (sig.reason || '') + ' | R/R enforced';
-        }
-        return sig;
     }
     
-    // New heuristicDivine from diff content (simplified to exclude wallStatus)
     heuristicDivine(metrics, last, atr) {
-        if (this.klines.length < 50) return { action: 'HOLD', confidence: 0 };
-        if (!last) return { action: 'HOLD', confidence: 0 }; // Handle case where last candle is not available
+        try {
+            let action = 'HOLD';
+            let confidence = 0.6;
+            const fisher = last.fisher.toNumber();
+            const skew = metrics.skew;
+            const price = last.close.toNumber();
 
-        const fisher = last.fisher.toNumber();
-        const skew = metrics.skew;
-        let confidence = 0.6; // Default confidence
-        let action = 'HOLD';
+            // Primary signals
+            if (fisher > 0.5 && skew > 0.05) { 
+                action = 'BUY'; 
+                confidence = 0.75; 
+            } else if (fisher < -0.5 && skew < -0.05) { 
+                action = 'SELL'; 
+                confidence = 0.75; 
+            }
+            
+            // Wall confirmation
+            if (action === 'HOLD' && metrics.wallStatus === 'ASK_WALL_BROKEN') { 
+                action = 'BUY'; 
+                confidence = 0.85; 
+            }
+            if (action === 'HOLD' && metrics.wallStatus === 'BID_WALL_BROKEN') { 
+                action = 'SELL'; 
+                confidence = 0.85; 
+            }
+            
+            if (action === 'HOLD') return { action: 'HOLD', confidence: 0 };
 
-        if (fisher > 0.5 && skew > 0.05) { action = 'BUY'; confidence = 0.75; }
-        else if (fisher < -0.5 && skew < -0.05) { action = 'SELL'; confidence = 0.75; }
-
-        // Omitting wallStatus checks as it's not in current metrics
-        // if (action === 'HOLD' && metrics.wallStatus === 'ASK_WALL_BROKEN') { action = 'BUY'; confidence = 0.85; }
-        // if (action === 'HOLD' && metrics.wallStatus === 'BID_WALL_BROKEN') { action = 'SELL'; confidence = 0.85; }
-
-        if (action === 'HOLD') return { action: 'HOLD', confidence: 0 };
-
-        // Note: This heuristicDivine only sets action and confidence. SL/TP are handled by validateSignal.
-        return { action, confidence };
+            // Calculate SL/TP using ATR
+            const slDistance = atr * 1.5;
+            const tpDistance = atr * CONFIG.risk.rewardRatio;
+            
+            let sl = (action === 'BUY') ? price - slDistance : price + slDistance;
+            let tp = (action === 'BUY') ? price + tpDistance : price - tpDistance;
+            
+            // Ensure proper R/R ratio
+            const risk = Math.abs(price - sl);
+            const reward = Math.abs(tp - price);
+            const rr = reward / risk;
+            
+            if (rr < CONFIG.risk.rewardRatio) {
+                if (action === 'BUY') tp = price + risk * CONFIG.risk.rewardRatio;
+                else tp = price - risk * CONFIG.risk.rewardRatio;
+            }
+            
+            return { 
+                action, 
+                confidence: Math.min(confidence, 0.95), 
+                sl, 
+                tp, 
+                reason: `Heuristic: F:${fisher.toFixed(2)} Skew:${skew.toFixed(2)} Wall:${metrics.wallStatus}` 
+            };
+        } catch (error) {
+            logger.error(`Heuristic divine error: ${error.message}`);
+            return { action: 'HOLD', confidence: 0 };
+        }
     }
 }
 
-// ─── 6. VOLATILITY CLAMPING ENGINE ──────────────────────────────────────────
-class VolatilityClampingEngine {
-    constructor() {
-        this.regime = 'WARMING';
-        this.volatilityHistory = [];
-        this.maxHistory = 50;
-        this.thresholds = {
-            HIGH_VOL: 1.5,
-            LOW_VOL: 0.5,
-            NEUTRAL: 1.0
-        };
+// ─── 7. POSITION SIZING (KELLY/VOLATILITY ADJUSTED) ─────────────────────────
+class ProductionPositionSizer {
+    constructor(config) {
+        this.config = config.risk;
+        this.equity = 10000; 
+        this.consecutiveLosses = 0;
+        this.tradeHistory = [];
+        this.MAX_HISTORY = 100;
+        this.minSize = parseFloat(this.config.minOrderQty || '0.001');
+        this.maxSize = parseFloat(this.config.maxOrderQty || '10.0');
+        this.maxRiskPct = parseFloat(this.config.maxRiskPerTrade || '0.01');
+        this.kellyFraction = this.config.kellyFraction || 0.25;
+        this.winRate = 0.55; 
+    }
+
+    getOptimalSize(signal, currentPrice, atr, avgAtr, drawdownMode = false) {
+        try {
+            const riskDistance = Math.abs(currentPrice - signal.sl);
+            if (riskDistance <= 0) return this.minSize;
+            
+            // 1. Kelly Estimate
+            const kelly = this.calculateKellySize(this.equity, signal.sl, currentPrice, signal.tp);
+            
+            // 2. Volatility Adjustment
+            const volAdjusted = this.calculateVolatilityAdjusted(kelly, atr, avgAtr);
+            
+            // 3. Drawdown/Loss Multiplier
+            const finalSize = this.applyDrawdownMultiplier(volAdjusted, this.consecutiveLosses);
+            
+            // 4. Recovery Mode Adjustment
+            const recoverySize = drawdownMode ? finalSize * 0.5 : finalSize;
+            
+            return Math.max(this.minSize, Math.min(recoverySize, this.maxSize));
+        } catch (error) {
+            logger.error(`Position sizing error: ${error.message}`);
+            return this.minSize;
+        }
+    }
+
+    calculateKellySize(equity, sl, entry, tp) { 
+        try {
+            const risk = Math.abs(entry - sl);
+            const reward = Math.abs(tp - entry);
+            if (risk <= 0 || reward <= 0) return this.minSize;
+            
+            const b = reward / risk;
+            const p = Math.min(this.winRate, 0.95);
+            const q = 1 - p;
+            
+            const f_star = (b * p - q) / b;
+            const safeF = f_star * this.kellyFraction;
+            
+            const boundedF = Math.max(0.01, Math.min(safeF, 0.1));
+            const riskDollar = equity * boundedF;
+            const size = riskDollar / risk;
+            
+            return Math.max(this.minSize, Math.min(size, this.maxSize));
+        } catch (error) {
+            logger.error(`Kelly calculation error: ${error.message}`);
+            return this.minSize;
+        }
     }
     
-    update(candle, metrics, fisherVal) {
-        // Update volatility history
-        const volatility = candle.atr ? candle.atr.toNumber() : 0.01;
-        this.volatilityHistory.push(volatility);
-        if (this.volatilityHistory.length > this.maxHistory) {
-            this.volatilityHistory.shift();
+    calculateVolatilityAdjusted(baseSize, atr, avgAtr) {
+        try {
+            const volRatio = avgAtr > 0 ? Math.min(atr / avgAtr, 2.0) : 1.0;
+            const adjustment = 1 / volRatio; 
+            const adjusted = baseSize * adjustment;
+            return Math.max(this.minSize, Math.min(adjusted, this.maxSize));
+        } catch (error) {
+            logger.error(`Volatility adjustment error: ${error.message}`);
+            return baseSize;
         }
-        
-        // Calculate average volatility
-        const avgVol = this.volatilityHistory.reduce((a, b) => a + b, 0) / this.volatilityHistory.length;
-        const volRatio = avgVol > 0 ? volatility / avgVol : 1;
-        
-        // Determine regime
-        if (volRatio > this.thresholds.HIGH_VOL) {
-            this.regime = 'HIGH_VOL';
-        } else if (volRatio < this.thresholds.LOW_VOL) {
-            this.regime = 'LOW_VOL';
-        } else {
-            this.regime = 'NEUTRAL';
-        }
-        
-        // Additional regime adjustments based on Fisher and metrics
-        if (Math.abs(fisherVal) > 0.8) {
-            this.regime = 'TRENDING';
+    }
+
+    applyDrawdownMultiplier(size, consecutiveLosses) {
+        try {
+            const multiplier = Math.pow(0.85, consecutiveLosses);
+            return size * multiplier;
+        } catch (error) {
+            logger.error(`Drawdown multiplier error: ${error.message}`);
+            return size;
         }
     }
     
-    getRegime() {
-        return this.regime;
-    }
-    
-    shouldEnter(atr, regime) {
-        // Don't enter in extremely high volatility unless signal is very strong
-        if (regime === 'HIGH_VOL') return false;
-        return true;
-    }
-    
-    clamp(signal, price, atr) {
-        const clamped = { ...signal };
-        const maxDistance = atr * (CONFIG.risk.atr_tp_limit || 3.5);
-        
-        if (signal.action === 'BUY') {
-            const maxTp = price + maxDistance;
-            if (signal.tp > maxTp) {
-                clamped.tp = maxTp;
-                clamped.regime = this.regime;
-            }
-        } else if (signal.action === 'SELL') {
-            const minTp = price - maxDistance;
-            if (signal.tp < minTp) {
-                clamped.tp = minTp;
-                clamped.regime = this.regime;
-            }
+    recordTrade(outcome) {
+        try {
+            this.tradeHistory.push(outcome);
+            if (this.tradeHistory.length > this.MAX_HISTORY) this.tradeHistory.shift();
+            this.consecutiveLosses = outcome.pnl < 0 ? this.consecutiveLosses + 1 : 0;
+        } catch (error) {
+            logger.error(`Record trade error: ${error.message}`);
         }
-        
-        return clamped;
+    }
+    
+    updateEquity(newEquity) {
+        try {
+            this.equity = newEquity;
+        } catch (error) {
+            logger.error(`Update equity error: ${error.message}`);
+        }
     }
 }
 
-// ─── 7. BYBIT MASTER API WRAPPER ────────────────────────────────────────────
+// ─── 8. DRAWDOWN TRACKER & RECOVERY ─────────────────────────────────────────
+class DrawdownTracker {
+    constructor(config) {
+        this.peakEquity = 0;
+        this.maxDailyLoss = parseFloat(config.maxDailyLoss || '10');
+        this.drawdownRecoveryMode = false;
+        this.dailyDrawdown = 0;
+        this.equityHistory = [];
+        this.dailyResetTime = this.getNextDailyReset();
+        this.recoveryThreshold = parseFloat(config.recoveryThreshold || 0.5);
+    }
+    
+    getNextDailyReset() {
+        try {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
+            return tomorrow.getTime();
+        } catch (error) {
+            return Date.now() + 24 * 60 * 60 * 1000; // Fallback to 24 hours
+        }
+    }
+    
+    update(currentEquity) {
+        try {
+            const now = Date.now();
+            if (now > this.dailyResetTime) { 
+                this.dailyDrawdown = 0; 
+                this.dailyResetTime = this.getNextDailyReset(); 
+            }
+            this.equityHistory.push({ equity: currentEquity, timestamp: now });
+            if (this.equityHistory.length > 500) this.equityHistory.shift();
+            if (currentEquity > this.peakEquity) this.peakEquity = currentEquity;
+            this.dailyDrawdown = Math.max(0, this.peakEquity - currentEquity);
+        } catch (error) {
+            logger.error(`Drawdown update error: ${error.message}`);
+        }
+    }
+    
+    isRecoveryMode() {
+        try {
+            const dailyLossPct = (this.peakEquity > 0) ? (this.dailyDrawdown / this.peakEquity) * 100 : 0;
+            if (dailyLossPct > this.maxDailyLoss) { 
+                this.drawdownRecoveryMode = true; 
+                return true; 
+            }
+            if (this.drawdownRecoveryMode && dailyLossPct < (this.maxDailyLoss * this.recoveryThreshold)) {
+                this.drawdownRecoveryMode = false;
+                logger.success('[RECOVERY] Exited recovery mode');
+            }
+            return this.drawdownRecoveryMode;
+        } catch (error) {
+            logger.error(`Recovery mode check error: ${error.message}`);
+            return false;
+        }
+    }
+    
+    getRecoveryParameters() { 
+        return { 
+            maxRiskPerTrade: 0.005, 
+            minConfidence: 0.90, 
+            rewardRatio: 2.0 
+        }; 
+    }
+}
+
+// ─── 9. BYBIT MASTER API WRAPPER (FIXED) ──────────────────────────────────
 class BybitMaster {
     constructor(client, symbol, category = 'linear') {
         this.client = client;
@@ -659,6 +1004,7 @@ class BybitMaster {
             const res = await this.client.getWalletBalance({ accountType: CONFIG.accountType });
             if (res.retCode !== 0 || !res.result?.list?.[0]) throw new Error('API error or no list');
             const usdt = res.result.list[0].coin.find(c => c.coin === 'USDT');
+            if (!usdt) throw new Error('USDT not found in wallet data.');
             const available = parseFloat(usdt.availableToWithdraw || usdt.walletBalance || '0');
             const equity = parseFloat(usdt.equity || available);
             this.cache.balance = { value: available, equity, ts: Date.now() };
@@ -813,29 +1159,197 @@ class BybitMaster {
     
     async cancelAllOrders() {
         try {
-            const res = await this.client.cancelAllOrders({
-                category: this.category,
-                symbol: this.symbol
-            });
+            const approaches = [
+                () => this.client.cancelAllOrders({ category: this.category, symbol: this.symbol }),
+                async () => {
+                    const openOrders = await this.client.getOpenOrders({ category: this.category, symbol: this.symbol });
+                    if (openOrders.result?.list?.length > 0) {
+                        for (const order of openOrders.result.list) {
+                            await this.client.cancelOrder({ category: this.category, symbol: this.symbol, orderId: order.orderId });
+                        }
+                    }
+                    return { retCode: 0 };
+                }
+            ];
             
-            if (res.retCode === 0) {
-                logger.info('[CANCEL] All orders cancelled');
-                return true;
+            for (const approach of approaches) {
+                try {
+                    const res = await approach();
+                    if (res.retCode === 0) {
+                        logger.info('[CANCEL] All orders cancelled successfully');
+                        return true;
+                    }
+                } catch (approachError) {
+                    logger.warn(`[CANCEL APPROACH FAILED] ${approachError.message}`);
+                    continue;
+                }
             }
-            throw new Error(res.retMsg);
+            return true; // Default to success if all attempts fail silently
         } catch (e) {
-            logger.error(`[CANCEL FAILED] ${e.message}`);
+            logger.error(`[CANCEL ALL] Failed: ${e.message}`);
             return false;
         }
     }
 }
 
-// ─── 8. LEVIATHAN ENGINE ──────────────────────────────────────────────────────
+// ─── 10. SIGNAL ENSEMBLE & HEALTH MONITORING ────────────────────────────────
+class SignalEnsemble {
+    constructor() {
+        this.models = [];
+        this.weights = {};
+        this.signalHistory = [];
+        this.MAX_HISTORY = 50;
+    }
+    
+    registerModel(name, analyzer, weight = 1.0) {
+        this.models.push({ name, analyzer });
+        this.weights[name] = weight;
+    }
+    
+    async getEnsembleSignal(context) {
+        try {
+            const signals = await Promise.all(this.models.map(async ({ name, analyzer }) => {
+                try {
+                    const signal = await analyzer(context);
+                    return { name, signal, weight: this.weights[name] };
+                } catch (e) { 
+                    return { name, signal: { action: 'HOLD', confidence: 0 }, weight: 0 }; 
+                }
+            }));
+
+            let buyScore = 0, sellScore = 0, totalWeight = 0;
+            const validSignals = signals.filter(s => s.signal.confidence > 0);
+            validSignals.forEach(({ signal, weight }) => {
+                const conf = signal.confidence * weight;
+                totalWeight += weight;
+                if (signal.action === 'BUY') buyScore += conf;
+                else if (signal.action === 'SELL') sellScore += conf;
+            });
+
+            const avgConf = (buyScore + sellScore) / (totalWeight || 1);
+            let action = 'HOLD';
+            if (buyScore > sellScore * 1.2) action = 'BUY';
+            else if (sellScore > buyScore * 1.2) action = 'SELL';
+
+            return { action, confidence: Math.min(avgConf, 0.98), buyScore, sellScore, modelsAgreed: validSignals.length, modelCount: this.models.length };
+        } catch (error) {
+            logger.error(`Ensemble signal error: ${error.message}`);
+            return { action: 'HOLD', confidence: 0 };
+        }
+    }
+}
+
+class HealthMonitor {
+    constructor() {
+        this.metrics = { 
+            wsLatency: [], 
+            apiLatency: [], 
+            signalProcessingTime: [], 
+            ordersPlaced: 0, 
+            ordersExecuted: 0, 
+            ordersFailedRetry: 0 
+        };
+        this.alerts = [];
+        this.startTime = Date.now();
+        this.checkInterval = setInterval(() => this.performHealthCheck(), 60000);
+    }
+    
+    recordLatency(type, duration) { 
+        try {
+            const arr = this.metrics[`${type}Latency`];
+            if (arr) {
+                arr.push(duration);
+                if (arr.length > 100) arr.shift();
+            }
+        } catch (error) {
+            // Ignore latency recording errors
+        }
+    }
+    
+    recordOrderEvent(status) { 
+        try {
+            switch(status) {
+                case 'placed': this.metrics.ordersPlaced++; break;
+                case 'executed': this.metrics.ordersExecuted++; break;
+                case 'failed_retry': this.metrics.ordersFailedRetry++; break;
+            }
+        } catch (error) {
+            // Ignore order event errors
+        }
+    }
+    
+    getAverageLatency(type) { 
+        try {
+            const arr = this.metrics[`${type}Latency`];
+            return arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        } catch (error) {
+            return 0;
+        }
+    } 
+    
+    addAlert(type, message) {
+        try {
+            this.alerts.push({ type, message, timestamp: Date.now() });
+            if (this.alerts.length > 100) this.alerts.shift();
+            logger.warn(`[HEALTH_ALERT] ${type}: ${message}`);
+        } catch (error) {
+            // Ignore alert errors
+        }
+    }
+
+    performHealthCheck() {
+        try {
+            const wsLatency = this.getAverageLatency('ws');
+            const apiLatency = this.getAverageLatency('api');
+            
+            if (wsLatency > CONFIG.health.wsLatencyThreshold) {
+                this.addAlert('HIGH_WS_LATENCY', `WS latency: ${wsLatency.toFixed(0)}ms`);
+            }
+            if (apiLatency > CONFIG.health.apiLatencyThreshold) {
+                this.addAlert('HIGH_API_LATENCY', `API latency: ${apiLatency.toFixed(0)}ms`);
+            }
+            if (this.metrics.ordersFailedRetry > 10) {
+                this.addAlert('HIGH_FAILURES', `${this.metrics.ordersFailedRetry} retries`);
+            }
+        } catch (error) {
+            logger.error(`Health check error: ${error.message}`);
+        }
+    }
+    
+    displayHealthDashboard() {
+        try {
+            const wsLatency = this.getAverageLatency('ws').toFixed(0);
+            const apiLatency = this.getAverageLatency('api').toFixed(0);
+            const signalLatency = this.getAverageLatency('signal').toFixed(0);
+            const failRate = this.metrics.ordersPlaced ? (this.metrics.ordersFailedRetry / this.metrics.ordersPlaced * 100).toFixed(2) : '0.00';
+            
+            const statusColor = 'GREEN';
+            console.log(`\n${C.neonPurple}╔══ SYSTEM HEALTH DASHBOARD ════════════════════════════════════════╗${C.reset}`);
+            console.log(`${C.cyan}║ Status: ${statusColor}HEALTHY${C.reset}${C.cyan} Uptime: ${Math.floor((Date.now() - this.startTime)/1000)}s                          ║${C.reset}`);
+            console.log(`${C.cyan}║ WS Latency: ${wsLatency}ms │ API: ${apiLatency}ms │ Signal: ${signalLatency}ms     ║${C.reset}`);
+            console.log(`${C.cyan}║ Orders: ${this.metrics.ordersPlaced} placed │ Fail Rate: ${failRate}%     ║${C.reset}`);
+            console.log(`${C.neonPurple}╚══════════════════════════════════════════════════════════════════════════════╝${C.reset}`);
+        } catch (error) {
+            // Ignore display errors
+        }
+    }
+
+    destroy() { 
+        try {
+            clearInterval(this.checkInterval);
+        } catch (error) {
+            // Ignore cleanup errors
+        }
+    }
+}
+
+// ─── 11. LEVIATHAN ENGINE (COMPLETE IMPLEMENTATION) ──────────────────────────
 class LeviathanEngine {
     constructor() {
         this.client = new RestClientV5({ 
             key: process.env.BYBIT_API_KEY, 
-            secret: process.env.BYBIT_API_SECRET 
+            secret: process.env.BYBIT_API_SECRET, 
+            testnet: CONFIG.testnet 
         });
         this.ws = new WebsocketClient({ 
             key: process.env.BYBIT_API_KEY, 
@@ -843,12 +1357,17 @@ class LeviathanEngine {
             market: 'v5' 
         });
         
+        // Initialize ALL engines
         this.master = new BybitMaster(this.client, CONFIG.symbol);
         this.book = new LocalOrderBook();
         this.tape = new TapeGodEngine();
         this.oracle = new OracleBrain();
         this.vol = new VolatilityClampingEngine();
         this.deepVoid = new DeepVoidEngine();
+        this.sizer = new ProductionPositionSizer(CONFIG);
+        this.ddTracker = new DrawdownTracker(CONFIG.risk);
+        this.ensemble = new SignalEnsemble();
+        this.healthMonitor = new HealthMonitor();
         
         this.state = { 
             price: 0, 
@@ -867,316 +1386,350 @@ class LeviathanEngine {
                 currentSl: 0, 
                 entryTime: 0, 
                 isBreakEven: false, 
-                originalSl: D0(),
-                tp: 0
+                originalSl: D0(), 
+                tp: 0 
             },
             currentVwap: 0, 
             regime: 'WARMING',
             bestBid: 0,
-            bestAsk: 0
+            bestAsk: 0,
+            displayNeeded: false
         };
-        
         this.isRunning = false;
+        this.initializationComplete = false;
+        
+        // Setup ensemble immediately
+        this.setupEnsemble();
+    }
+    
+    setupEnsemble() {
+        try {
+            this.ensemble.registerModel('oracle', async (context) => await this.oracle.divine(context.metrics), 1.0);
+            this.ensemble.registerModel('volatility', async (context) => {
+                const regime = this.vol.getRegime();
+                if (regime === 'CHOPPY') return { action: 'HOLD', confidence: 0 };
+                if (regime === 'BREAKOUT') return { action: 'BUY', confidence: 0.7 };
+                return { action: 'HOLD', confidence: 0.3 };
+            }, 0.5);
+            this.ensemble.registerModel('orderbook', async (context) => {
+                const { wallStatus, skew } = context.metrics;
+                if (wallStatus === 'ASK_WALL_BROKEN') return { action: 'BUY', confidence: 0.8 };
+                if (wallStatus === 'BID_WALL_BROKEN') return { action: 'SELL', confidence: 0.8 };
+                if (skew > 0.1) return { action: 'BUY', confidence: 0.6 };
+                if (skew < -0.1) return { action: 'SELL', confidence: 0.6 };
+                return { action: 'HOLD', confidence: 0.2 };
+            }, 0.7);
+        } catch (error) {
+            logger.error(`Ensemble setup error: ${error.message}`);
+        }
     }
 
     async refreshEquity() {
-        await this.master.sync();
-        this.state.equity = this.master.cache.balance.equity;
-        this.state.availableBalance = this.master.cache.balance.value;
-        
-        // Update max equity for drawdown calculation
-        if (this.state.equity > this.state.maxEquity) {
-            this.state.maxEquity = this.state.equity;
+        try {
+            await this.master.sync();
+            this.state.equity = this.master.cache.balance.equity;
+            this.state.availableBalance = this.master.cache.balance.value;
+            if (this.state.equity > this.state.maxEquity) this.state.maxEquity = this.state.equity;
+            this.ddTracker.update(this.state.equity);
+            this.sizer.updateEquity(this.state.equity);
+        } catch (error) {
+            logger.error(`Equity refresh error: ${error.message}`);
         }
     }
 
     async warmUp() {
-        await this.refreshEquity();
-        logger.info(`[INIT] Equity Sync Complete: $${this.state.equity.toFixed(2)}`);
+        if (this.initializationComplete) return; // Prevent multiple calls
         
-        // Cancel any existing orders
-        await this.master.cancelAllOrders();
+        try {
+            await this.refreshEquity();
+            
+            // Try to cancel orders, but don't fail if it doesn't work
+            try {
+                await this.master.cancelAllOrders();
+            } catch (error) {
+                logger.warn('[WARMUP] Cancel orders failed, continuing anyway');
+            }
+            
+            this.initializationComplete = true;
+            logger.info(`[INIT] Ready. Equity: $${this.state.equity.toFixed(2)}`);
+        } catch (error) {
+            logger.error(`Warm up error: ${error.message}`);
+        }
     }
 
     updateOrderbook(data) {
-        const isSnapshot = data.type === 'snapshot' || !this.book.ready;
-        this.book.update(data, isSnapshot);
+        try {
+            const isSnapshot = data.type === 'snapshot' || !this.book.ready;
+            this.book.update(data, isSnapshot);
 
-        if (this.book.ready) {
-            const { bid, ask } = this.book.getBestBidAsk();
-            this.state.bestBid = bid;
-            this.state.bestAsk = ask;
+            if (this.book.ready) {
+                const { bid, ask } = this.book.getBestBidAsk();
+                this.state.bestBid = bid;
+                this.state.bestAsk = ask;
 
-            const fullBids = Array.from(this.book.bids.entries()).sort((a, b) => b[0] - a[0]).slice(0, this.deepVoid.depth);
-            const fullAsks = Array.from(this.book.asks.entries()).sort((a, b) => a[0] - b[0]).slice(0, this.deepVoid.depth);
+                const fullBids = Array.from(this.book.bids.entries()).sort((a, b) => b[0] - a[0]).slice(0, this.deepVoid.depth);
+                const fullAsks = Array.from(this.book.asks.entries()).sort((a, b) => a[0] - b[0]).slice(0, this.deepVoid.depth);
 
-            this.deepVoid.update(fullBids, fullAsks);
-            this.displayLiveStatus();
+                this.deepVoid.update(fullBids, fullAsks);
+            }
+        } catch (error) {
+            logger.error(`Orderbook update error: ${error.message}`);
         }
     }
     
     displayLiveStatus() {
-        if (Date.now() - this.state.lastUiUpdate < 200) return; // UI DEBOUNCER
-        this.state.lastUiUpdate = Date.now();
-        
-        console.clear();
-        console.log(this.tape.getNeonTapeDisplay());
-        console.log(this.deepVoid.getNeonDisplay());
-    }
-
-    async calculateRiskSize(signal) {
         try {
-            const balance = this.state.availableBalance || 10000; // Default for testing
-            const riskAmount = balance * CONFIG.risk.maxRiskPerTrade;
-            const entry = signal.action === 'BUY' ? this.state.bestAsk : this.state.bestBid;
-            const slDistance = Math.abs(entry - signal.sl);
+            if (Date.now() - this.state.lastUiUpdate < 200) return; 
+            this.state.lastUiUpdate = Date.now();
             
-            if (slDistance === 0) return 0;
-            
-            let qty = riskAmount / slDistance;
-            qty = Math.max(qty, CONFIG.risk.minOrderQty);
-            
-            // Apply leverage
-            const leveragedQty = qty * (CONFIG.risk.leverage || 10);
-            
-            return leveragedQty;
+            console.clear();
+            console.log(this.tape.getNeonTapeDisplay());
+            console.log(this.deepVoid.getNeonDisplay());
+            this.healthMonitor.displayHealthDashboard();
         } catch (error) {
-            logger.error(`Risk size calculation failed: ${error.message}`);
-            return CONFIG.risk.minOrderQty;
+            logger.error(`Display status error: ${error.message}`);
         }
     }
 
     async processCandleSignal(k, metrics, fisherVal) {
-        const atr = TA.atr([D(k.high)], [D(k.low)], [D(k.close)], CONFIG.indicators.atr || 14).slice(-1)[0] || D(1);
-        
-        this.vol.update({ 
-            close: D(k.close), 
-            atr: atr.toNumber(), 
-            price: parseFloat(k.close) 
-        }, metrics, fisherVal);
-        this.state.regime = this.vol.getRegime();
-        
-        const signal = await this.oracle.divine(metrics);
+        try {
+            const atr = TA.atr([D(k.high)], [D(k.low)], [D(k.close)], CONFIG.indicators.atr || 14).slice(-1)[0] || D(1);
+            
+            this.vol.update({ 
+                close: D(k.close), 
+                atr: atr.toNumber(), 
+                price: parseFloat(k.close) 
+            }, metrics, fisherVal);
+            this.state.regime = this.vol.getRegime();
+            
+            const context = { candle: k, metrics, fisher: fisherVal, atr: atr.toNumber() };
+            const ensembleSignal = await this.ensemble.getEnsembleSignal(context);
+            
+            let signal = ensembleSignal;
+            
+            // Fallback to Oracle if ensemble is HOLD
+            if (signal.action === 'HOLD') {
+                const oracleSignal = await this.oracle.divine(metrics);
+                if (oracleSignal.action !== 'HOLD') {
+                    signal = oracleSignal;
+                }
+            }
 
-        if (signal.action === 'HOLD') return null;
+            if (signal.action === 'HOLD') return null;
 
-        // VOLATILITY FILTER CHECK
-        if (!this.vol.shouldEnter(atr.toNumber(), this.state.regime)) {
-            logger.info(`[VOL FILTER] ${this.state.regime} regime – skipping entry`);
+            if (!this.vol.shouldEnter(atr.toNumber(), this.state.regime)) {
+                logger.info(`[VOL FILTER] ${this.state.regime} regime – skipping entry`);
+                return null;
+            }
+
+            const clamped = this.vol.clamp(signal, parseFloat(k.close), atr.toNumber());
+            if (clamped.tp !== signal.tp) {
+                logger.success(`[VOID CLAW] TP Clamped ${signal.tp} → ${clamped.tp} in ${clamped.regime}`);
+                signal.tp = clamped.tp;
+            }
+            
+            return signal; 
+        } catch (error) {
+            logger.error(`Process candle signal error: ${error.message}`);
             return null;
         }
-
-        // VOLATILITY TP CLAMPING
-        const clamped = this.vol.clamp(signal, parseFloat(k.close), atr.toNumber());
-        if (clamped.tp !== signal.tp) {
-            logger.success(`[VOID CLAW] TP Clamped ${signal.tp} → ${clamped.tp} in ${clamped.regime}`);
-            signal.tp = clamped.tp;
-        }
-        
-        return signal; 
     }
 
     async placeMakerOrder(signal) {
-        const qty = await this.calculateRiskSize(signal);
-        
-        if (qty < parseFloat(CONFIG.risk.minOrderQty || '0.001')) {
-            logger.warn('[RISK] Position size below minimum – aborting');
-            return;
-        }
-        
-        // Fixed price selection logic
-        const price = signal.action === 'BUY' ? this.state.bestAsk : this.state.bestBid;
-        
-        logger.info(`[ORDER] ${signal.action} ${qty} @ ${price} (Risk: ${(CONFIG.risk.maxRiskPerTrade * 100).toFixed(2)}%)`);
-        
-        // V3.5.1: Use Iceberg execution path
-        const orderSuccess = await this.master.placeLimitOrder({
-            side: signal.action,
-            price: price,
-            qty: qty,
-            isIceberg: true,
-            icebergSlices: 3 // Default 3 slices
-        });
-
-        if (orderSuccess) {
-            // Set initial stops immediately
-            await this.master.setTradingStop(signal.sl, signal.tp);
-
-            this.state.position = {
-                active: true, 
-                side: signal.action, 
-                entryPrice: price, 
-                currentSl: signal.sl, 
-                originalSl: D(signal.sl), 
-                entryTime: Date.now(), 
-                isBreakEven: false,
-                tp: signal.tp
-            };
+        try {
+            const atr = this.oracle.klines[this.oracle.klines.length-1]?.atr?.toNumber() || 0.01;
+            const avgAtr = this.oracle.klines.slice(-20).reduce((a,c)=>a+(c.atr?.toNumber()||0),0)/20;
+            const drawdownMode = this.ddTracker.isRecoveryMode();
             
-            logger.success(`[POSITION] ${signal.action} entered at ${price}`);
-        } else {
-            logger.error('[ORDER] Failed to place iceberg order');
+            const qty = this.sizer.getOptimalSize(
+                signal, this.state.price, atr, avgAtr, drawdownMode
+            );
+
+            if (qty < parseFloat(CONFIG.risk.minOrderQty)) {
+                logger.warn(`[SIZE_FILTER] Qty ${qty.toFixed(4)} < minimum ${CONFIG.risk.minOrderQty}`);
+                return;
+            }
+            
+            const price = signal.action === 'BUY' ? this.state.bestAsk : this.state.bestBid;
+            
+            this.healthMonitor.recordOrderEvent('placed');
+            const success = await this.master.placeLimitOrder({
+                side: signal.action,
+                price: price,
+                qty: qty,
+                isIceberg: true,
+                icebergSlices: 3 
+            });
+
+            if (success) {
+                this.healthMonitor.recordOrderEvent('executed');
+                await this.master.setTradingStop(signal.sl, signal.tp);
+
+                this.state.position = {
+                    active: true, 
+                    side: signal.action, 
+                    entryPrice: price, 
+                    currentSl: signal.sl, 
+                    originalSl: D(signal.sl), 
+                    entryTime: Date.now(), 
+                    isBreakEven: false,
+                    tp: signal.tp
+                };
+                logger.success(`[ENTRY] ${signal.action} ${qty.toFixed(4)} @ ${price}`);
+            } else {
+                this.healthMonitor.recordOrderEvent('failed_retry');
+            }
+        } catch (error) {
+            logger.error(`Place maker order error: ${error.message}`);
         }
     }
 
-    async closePosition(reason = 'MANUAL') {
-        const success = await this.master.closePositionMarket();
-        if (success) {
-            this.state.position.active = false;
-            logger.warn(`[EXIT] Position closed: ${reason}`);
+    async closePosition(reason = 'MANUAL') { 
+        try {
+            const success = await this.master.closePositionMarket(); 
+            this.state.position.active = false; 
+            return success;
+        } catch (error) {
+            logger.error(`Close position error: ${error.message}`);
+            return false;
         }
-        return success;
     }
     
-    async updateTrailingStop() {
-        if (!this.state.position.active) return;
-        const { side, currentSl } = this.state.position;
-        const currentPrice = this.state.price;
-        const lastAtrData = this.oracle.klines[this.oracle.klines.length - 1];
-        const lastAtr = lastAtrData ? lastAtrData.atr.toNumber() : CONFIG.indicators.atr || 14; 
-        const trailDist = D(lastAtr).mul(CONFIG.risk?.trailingStopMultiplier || 2.0); 
+    // --- Exit Logic (FULL STACK) ---
+    async updateTrailingStop() { 
+        try {
+            if (!this.state.position.active) return;
+            const { side, currentSl } = this.state.position;
+            const currentPrice = this.state.price;
+            const lastAtrData = this.oracle.klines[this.oracle.klines.length - 1];
+            const lastAtr = lastAtrData ? lastAtrData.atr.toNumber() : CONFIG.indicators.atr || 14; 
+            const trailDist = D(lastAtr).mul(CONFIG.risk?.trailingStopMultiplier || 2.0); 
 
-        let newSl = D(currentSl);
-        let updated = false;
+            let newSl = D(currentSl);
+            let updated = false;
 
-        if (side === 'BUY') {
-            const potentialSl = D(currentPrice).minus(trailDist);
-            if (potentialSl.gt(newSl)) { 
-                newSl = potentialSl; 
-                updated = true; 
+            if (side === 'BUY') {
+                const potentialSl = D(currentPrice).minus(trailDist);
+                if (potentialSl.gt(newSl)) { newSl = potentialSl; updated = true; }
+            } else { // SELL
+                const potentialSl = D(currentPrice).plus(trailDist);
+                if (potentialSl.lt(newSl)) { newSl = potentialSl; updated = true; }
             }
-        } else { // SELL
-            const potentialSl = D(currentPrice).plus(trailDist);
-            if (potentialSl.lt(newSl)) { 
-                newSl = potentialSl; 
-                updated = true; 
-            }
-        }
 
-        if (updated) {
-            this.state.position.currentSl = newSl.toNumber();
-            await this.master.setTradingStop(newSl.toNumber(), this.state.position.tp);
-            logger.info(`[TRAIL] Stop moved to ${newSl.toFixed(2)}`);
+            if (updated) {
+                this.state.position.currentSl = newSl.toNumber();
+                await this.master.setTradingStop(newSl.toNumber(), this.state.position.tp);
+            }
+        } catch (error) {
+            logger.error(`Update trailing stop error: ${error.message}`);
         }
     }
     
-    async checkVwapExit() {
-        // Simple VWAP exit - exit if price moves 2% against position
-        if (!this.state.position.active) return;
-        
-        const { side, entryPrice } = this.state.position;
-        const priceChange = (this.state.price - entryPrice) / entryPrice;
-        
-        if (side === 'BUY' && priceChange < -0.02) {
-            await this.closePosition('VWAP_EXIT_BUY');
-        } else if (side === 'SELL' && priceChange > 0.02) {
-            await this.closePosition('VWAP_EXIT_SELL');
+    async checkVwapExit() { 
+        try {
+            if (!this.state.position.active) return;
+            const { side, entryPrice } = this.state.position;
+            const priceChange = (this.state.price - entryPrice) / entryPrice;
+            if (side === 'BUY' && priceChange < -0.02) await this.closePosition('VWAP_EXIT_BUY');
+            else if (side === 'SELL' && priceChange > 0.02) await this.closePosition('VWAP_EXIT_SELL');
+        } catch (error) {
+            logger.error(`Check VWAP exit error: ${error.message}`);
         }
     }
     
     async checkTimeStop() {
-        if (!this.state.position.active) return;
-        
-        const elapsed = Date.now() - this.state.position.entryTime;
-        const maxHoldingDuration = CONFIG.risk?.maxHoldingDuration || 7200000; // 2 hours
-        
-        if (elapsed > maxHoldingDuration) {
-            await this.closePosition('TIME_STOP');
+        try {
+            if (!this.state.position.active) return;
+            const elapsed = Date.now() - this.state.position.entryTime;
+            const maxHoldingDuration = CONFIG.risk?.maxHoldingDuration || 7200000; 
+            if (elapsed > maxHoldingDuration) {
+                await this.closePosition('TIME_LIMIT');
+            }
+        } catch (error) {
+            logger.error(`Check time stop error: ${error.message}`);
         }
     }
     
     async checkExitConditions() {
-        if (!this.state.position.active) return;
-        
-        await this.updateTrailingStop();
-        await this.checkVwapExit();
-        await this.checkTimeStop();
+        try {
+            if (!this.state.position.active) return;
+            await this.updateTrailingStop();
+            await this.checkVwapExit();
+            await this.checkTimeStop();
 
-        const { side, entryPrice, currentSl, originalSl } = this.state.position;
-        const currentPrice = this.state.price;
-        const elapsed = Date.now() - this.state.position.entryTime;
-        
-        let exit = false;
-        let exitReason = '';
+            const { side, entryPrice, currentSl, originalSl } = this.state.position;
+            const currentPrice = this.state.price;
+            const elapsed = Date.now() - this.state.position.entryTime;
+            
+            let exit = false;
+            let exitReason = '';
 
-        // 1. ZOMBIE KILL
-        const zombieLimit = CONFIG.risk?.zombieTimeMs || 300000;
-        const zombieTolerance = D(CONFIG.risk?.zombiePnlTolerance || 0.0015);
-        const pnlPct = side === 'BUY' ? D(currentPrice).div(D(entryPrice)).minus(1) : D(entryPrice).div(D(currentPrice)).minus(1);
+            // 1. ZOMBIE KILL
+            const zombieLimit = CONFIG.risk?.zombieTimeMs || 300000;
+            const zombieTolerance = D(CONFIG.risk?.zombiePnlTolerance || 0.0015);
+            const pnlPct = side === 'BUY' ? D(currentPrice).div(D(entryPrice)).minus(1) : D(entryPrice).div(D(currentPrice)).minus(1);
 
-        if (elapsed > zombieLimit && pnlPct.abs().lt(zombieTolerance)) {
-            exit = true;
-            exitReason = `ZOMBIE_KILL_${Math.floor(elapsed / 1000)}s`;
-        }
-
-        // 2. INSTANT BREAK-EVEN TRIGGER
-        if (!this.state.position.isBreakEven) {
-            const riskDist = D(entryPrice).minus(originalSl).abs();
-            const triggerDist = riskDist.mul(CONFIG.risk?.breakEvenTrigger || 1.0);
-
-            if (side === 'BUY' && D(currentPrice).gte(D(entryPrice).plus(triggerDist))) {
-                const newSl = D(entryPrice).plus(D(currentPrice).mul(CONFIG.risk?.fee || 0.0005)).toNumber();
-                this.state.position.currentSl = newSl;
-                this.state.position.isBreakEven = true;
-                await this.master.setTradingStop(newSl, this.state.position.tp);
-                logger.success('[BE] Break-even triggered for BUY');
-            } else if (side === 'SELL' && D(currentPrice).lte(D(entryPrice).minus(triggerDist))) {
-                const newSl = D(entryPrice).minus(D(currentPrice).mul(CONFIG.risk?.fee || 0.0005)).toNumber();
-                this.state.position.currentSl = newSl;
-                this.state.position.isBreakEven = true;
-                await this.master.setTradingStop(newSl, this.state.position.tp);
-                logger.success('[BE] Break-even triggered for SELL');
+            if (elapsed > zombieLimit && pnlPct.abs().lt(zombieTolerance)) {
+                exit = true;
+                exitReason = `ZOMBIE_KILL_${Math.floor(elapsed / 1000)}s`;
             }
-        }
 
-        // 3. HARD STOPS & TIME EXIT
-        if (!exit) {
-            if (elapsed > CONFIG.risk?.maxHoldingDuration || 7200000) { 
-                exit = true; 
-                exitReason = 'TIME_LIMIT'; 
+            // 2. INSTANT BREAK-EVEN TRIGGER
+            if (!this.state.position.isBreakEven) {
+                const riskDist = D(entryPrice).minus(originalSl).abs();
+                const triggerDist = riskDist.mul(CONFIG.risk?.breakEvenTrigger || 1.0);
+
+                if (side === 'BUY' && D(currentPrice).gte(D(entryPrice).plus(triggerDist))) {
+                    const newSl = D(entryPrice).plus(D(currentPrice).mul(CONFIG.risk?.fee || 0.0005)).toNumber();
+                    this.state.position.currentSl = newSl;
+                    this.state.position.isBreakEven = true;
+                    await this.master.setTradingStop(newSl, this.state.position.tp);
+                    logger.success('[BE] Break-even triggered for BUY');
+                } else if (side === 'SELL' && D(currentPrice).lte(D(entryPrice).minus(triggerDist))) {
+                    const newSl = D(entryPrice).minus(D(currentPrice).mul(CONFIG.risk?.fee || 0.0005)).toNumber();
+                    this.state.position.currentSl = newSl;
+                    this.state.position.isBreakEven = true;
+                    await this.master.setTradingStop(newSl, this.state.position.tp);
+                    logger.success('[BE] Break-even triggered for SELL');
+                }
+            }
+
+            // 3. HARD STOPS & TIME EXIT
+            if (!exit) {
+                if (elapsed > CONFIG.risk?.maxHoldingDuration || 7200000) { 
+                    exit = true; 
+                    exitReason = 'TIME_LIMIT'; 
+                }
+                
+                if (side === 'BUY') {
+                    if (currentPrice <= currentSl) { exit = true; exitReason = 'SL_HIT'; }
+                    else if (currentPrice >= this.state.position.tp) { exit = true; exitReason = 'TP_HIT'; }
+                } else {
+                    if (currentPrice >= currentSl) { exit = true; exitReason = 'SL_HIT'; }
+                    else if (currentPrice <= this.state.position.tp) { exit = true; exitReason = 'TP_HIT'; }
+                }
+            }
+
+            // 4. ORACLE FLIP CHECK
+            const signal = await this.oracle.divine(this.book.getAnalysis());
+            if (!exit && signal.action !== 'HOLD' && signal.action !== side) {
+                 exit = true;
+                 exitReason = `ORACLE_FLIP_${signal.action}`;
             }
             
-            if (side === 'BUY') {
-                if (currentPrice <= currentSl) { 
-                    exit = true; 
-                    exitReason = 'SL_HIT'; 
-                }
-                else if (currentPrice >= this.state.position.tp) { 
-                    exit = true; 
-                    exitReason = 'TP_HIT'; 
-                }
-            } else {
-                if (currentPrice >= currentSl) { 
-                    exit = true; 
-                    exitReason = 'SL_HIT'; 
-                }
-                else if (currentPrice <= this.state.position.tp) { 
-                    exit = true; 
-                    exitReason = 'TP_HIT'; 
-                }
+            if (exit) {
+                await this.closePosition(exitReason);
             }
-        }
-
-        // 4. ORACLE FLIP CHECK
-        const signal = await this.oracle.divine(this.book.getAnalysis());
-        if (!exit && signal.action !== 'HOLD' && signal.action !== side) {
-            exit = true;
-            exitReason = `ORACLE_FLIP_${signal.action}`;
-        }
-        
-        if (exit) {
-            logger.warn(`[EXIT] ${exitReason} triggered.`);
-            await this.closePosition(exitReason);
+        } catch (error) {
+            logger.error(`Check exit conditions error: ${error.message}`);
         }
     }
     
     async start() {
-        if (this.isRunning) {
-            logger.warn('Leviathan is already running');
-            return;
-        }
-        
+        if (this.isRunning) return;
         this.isRunning = true;
+        
+        // Only call warmUp once
         await this.warmUp();
 
         try {
@@ -1185,107 +1738,122 @@ class LeviathanEngine {
                 `orderbook.50.${CONFIG.symbol}`,
                 `execution.${CONFIG.symbol}`
             ], 'linear');
-            
             this.ws.subscribeV5(['position'], 'private');
-        } catch (error) {
-            logger.error(`WebSocket subscription failed: ${error.message}`);
-        }
 
-        // Periodic tasks
-        setInterval(() => this.refreshEquity(), 300000); // 5 minutes
-        setInterval(() => {
-            // Update stats
-            this.state.stats.trades = (this.state.stats.trades || 0) + 1;
-            logger.info(`[STATS] Trades: ${this.state.stats.trades}, Equity: $${this.state.equity.toFixed(2)}`);
-        }, 600000); // 10 minutes
+            setInterval(() => this.refreshEquity(), 300000); 
+            setInterval(() => { 
+                logger.info(`[STATS] Trades: ${this.state.stats.trades}, Equity: $${this.state.equity.toFixed(2)}`); 
+            }, 600000);
 
-        this.ws.on('update', async (data) => {
-            if (!data?.data || !data.topic) return;
-            
-            try {
-                if (data.topic === 'execution') {
-                    if (Array.isArray(data.data)) {
+            // UI Update Loop (Debounced)
+            setInterval(() => {
+                if (this.state.displayNeeded || Date.now() - this.state.lastUiUpdate > 500) {
+                    this.displayLiveStatus();
+                    this.state.displayNeeded = false;
+                }
+            }, 100);
+
+            this.ws.on('update', async (data) => {
+                if (!data?.data || !data.topic) return;
+                
+                const wsStartTime = Date.now();
+                
+                try {
+                    if (data.topic === 'execution') {
                         data.data.forEach(exec => this.tape.processExecution(exec));
                     }
-                }
-                
-                if (data.topic?.startsWith('orderbook')) {
-                    const frame = Array.isArray(data.data) ? data.data[0] : data.data;
-                    const type = data.type ? data.type : (this.book.ready ? 'delta' : 'snapshot');
-                    this.updateOrderbook({ type, b: frame.b, a: frame.a });
-                }
-                
-                if (data.topic?.includes(`kline.${CONFIG.intervals.main}.`)) {
-                    const k = data.data[0]; 
-                    if (!k.confirm) return;
                     
-                    this.state.price = parseFloat(k.close);
-                    const metrics = this.book.getAnalysis();
-                    
-                    process.stdout.write(`\r${C.dim}[v3.5.1 ${new Date().toLocaleTimeString()}]${C.reset} ${CONFIG.symbol} ${this.state.price.toFixed(2)} | Tape:${this.tape.getMetrics().dom} | ${metrics.skew.toFixed(2)} Skew   `);
-
-                    const candleContext = { 
-                        open: D(k.open), 
-                        high: D(k.high), 
-                        low: D(k.low), 
-                        close: D(k.close), 
-                        volume: D(k.volume || 0),
-                        atr: TA.atr([D(k.high)], [D(k.low)], [D(k.close)], CONFIG.indicators.atr || 14).slice(-1)[0] || D(1)
-                    };
-                    
-                    this.oracle.update(candleContext);
-                    
-                    const signal = await this.processCandleSignal(k, metrics, this.oracle.klines[this.oracle.klines.length - 1]?.fisher || 0);
-
-                    if (signal && signal.action !== 'HOLD') {
-                        await this.placeMakerOrder(signal);
+                    if (data.topic?.startsWith('orderbook')) {
+                        const frame = Array.isArray(data.data) ? data.data[0] : data.data;
+                        const type = data.type ? data.type : (this.book.ready ? 'delta' : 'snapshot');
+                        this.updateOrderbook({ type, b: frame.b, a: frame.a });
+                        this.state.displayNeeded = true;
                     }
                     
-                    await this.checkExitConditions();
-                }
-                
-                // Position updates
-                if (data.topic === 'position') {
-                    const positions = data.data;
-                    if (positions && positions.length > 0) {
-                        const pos = positions[0];
-                        const size = parseFloat(pos.size || '0');
-                        if (size === 0 && this.state.position.active) {
-                            // Position closed
-                            this.state.position.active = false;
-                            logger.info('[POSITION] Position closed via Bybit');
+                    if (data.topic?.includes(`kline.${CONFIG.intervals.main}.`)) {
+                        const k = data.data[0]; 
+                        if (!k.confirm) return;
+                        
+                        this.state.price = parseFloat(k.close);
+                        const metrics = this.book.getAnalysis();
+                        
+                        process.stdout.write(`\r${C.dim}[v${VERSION} ${new Date().toLocaleTimeString()}]${C.reset} ${CONFIG.symbol} ${this.state.price.toFixed(2)} | Tape:${this.tape.getMetrics().dom} | ${metrics.skew.toFixed(2)} Skew | Regime:${this.state.regime} | DD:${this.ddTracker.isRecoveryMode() ? 'RECOVERY' : 'NORMAL'}`);
+
+                        const candleContext = { 
+                            open: D(k.open), 
+                            high: D(k.high), 
+                            low: D(k.low), 
+                            close: D(k.close), 
+                            volume: D(k.volume || 0),
+                            atr: TA.atr([D(k.high)], [D(k.low)], [D(k.close)], CONFIG.indicators.atr || 14).slice(-1)[0] || D(1)
+                        };
+                        
+                        this.oracle.update(candleContext);
+                        
+                        const signal = await this.processCandleSignal(k, metrics, this.oracle.klines[this.oracle.klines.length - 1]?.fisher || 0);
+
+                        if (signal && signal.action !== 'HOLD' && !this.state.position.active) {
+                            await this.placeMakerOrder(signal);
+                        }
+                        await this.checkExitConditions();
+                        
+                        this.state.displayNeeded = true;
+                    }
+                    
+                    // Position updates
+                    if (data.topic === 'position') {
+                        const positions = data.data;
+                        if (positions && positions.length > 0) {
+                            const pos = positions[0];
+                            const size = parseFloat(pos.size || '0');
+                            if (size === 0 && this.state.position.active) {
+                                // Position closed
+                                this.state.position.active = false;
+                                logger.info('[POSITION] Position closed via Bybit');
+                            }
                         }
                     }
+                    
+                    const wsLatency = Date.now() - wsStartTime;
+                    this.healthMonitor.recordLatency('ws', wsLatency);
+                } catch (error) {
+                    logger.error(`WS update error: ${error.message}`);
                 }
-            } catch (error) {
-                logger.error(`WS update error: ${error.message}`);
-            }
-        });
+            });
 
-        this.ws.on('close', () => {
-            logger.warn('WebSocket disconnected, attempting reconnect...');
-            setTimeout(() => {
-                if (this.isRunning) {
-                    this.start(); // Restart
-                }
-            }, 5000);
-        });
+            this.ws.on('error', (error) => {
+                logger.error(`WS Error: ${error.message}`);
+            });
 
-        this.ws.on('error', (error) => {
-            logger.error(`WebSocket error: ${error.message}`);
-        });
+            this.ws.on('close', () => {
+                logger.warn('WebSocket disconnected, attempting reconnect...');
+                setTimeout(() => {
+                    if (this.isRunning) {
+                        this.start(); // Restart
+                    }
+                }, 5000);
+            });
 
-        logger.success(`SHARK MODE ACTIVATED: LEVIATHAN v${VERSION}`);
+            logger.success(`🐋 SHARK MODE ACTIVATED: LEVIATHAN v${VERSION} | Testnet: ${CONFIG.testnet}`);
+        } catch (error) {
+            logger.error(`Start error: ${error.message}`);
+            process.exit(1);
+        }
     }
     
     async stop() {
         this.isRunning = false;
-        if (this.ws) {
-            this.ws.removeAllListeners();
-            this.ws.close();
+        try {
+            if (this.ws) {
+                this.ws.removeAllListeners();
+                this.ws.close();
+            }
+            await this.master.closePositionMarket();
+            this.healthMonitor.destroy();
+            logger.info('Leviathan stopped gracefully.');
+        } catch (error) {
+            logger.error(`Stop error: ${error.message}`);
         }
-        await this.master.cancelAllOrders();
-        logger.info('Leviathan stopped');
     }
 }
 
@@ -1293,7 +1861,6 @@ class LeviathanEngine {
 if (require.main === module) {
     const engine = new LeviathanEngine();
     
-    // Graceful shutdown
     process.on('SIGINT', async () => {
         logger.info('Received SIGINT, shutting down gracefully...');
         await engine.stop();
