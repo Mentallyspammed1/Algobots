@@ -1661,6 +1661,17 @@ class TradingAnalyzer:
         if self.config["indicators"].get("fibonacci_levels", False):
             self.calculate_fibonacci_levels()
 
+        # --- Weighted Scoring Logic Integration ---
+        # Calculate and store the weighted score for the current indicators
+        self.current_signal_score = self.calculate_weighted_score()
+        self.logger.debug(f"[{self.symbol}] Calculated weighted score: {self.current_signal_score}")
+
+        # Generate the trading signal based on the score and thresholds
+        self.current_signal = self.generate_signal(self.current_signal_score)
+        self.logger.debug(f"[{self.symbol}] Generated signal: {self.current_signal}")
+        # --- End Weighted Scoring Logic ---
+
+
     def _safe_calculate(
         self,
         func: callable,
