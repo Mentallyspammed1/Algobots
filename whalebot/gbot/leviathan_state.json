@@ -1,0 +1,11 @@
+{
+  "position": null,
+  "daily_loss": 0,
+  "last_reset": 1765498941257,
+  "equity": 0,
+  "vwap_session": {
+    "start": 1765498941257,
+    "vol": "412.27",
+    "pv": "38116717.874633333334"
+  }
+}

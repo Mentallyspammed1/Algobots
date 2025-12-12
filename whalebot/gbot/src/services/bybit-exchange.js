@@ -74,25 +74,55 @@ export class LiveBybitExchange extends BaseExchange {
         const qty = Utils.calcSize(this.balance, price, signal.sl, this.config.risk.maxRiskPerTrade);
         if (qty.lte(0)) return;
 
-        await this.apiCall('POST', '/v5/position/set-leverage', { 
-            category: 'linear', 
-            symbol: this.symbol, 
-            buyLeverage: this.config.risk.leverage.toString(), 
-            sellLeverage: this.config.risk.leverage.toString() 
+        await this.apiCall('POST', '/v5/position/set-leverage', {
+            category: 'linear',
+            symbol: this.symbol,
+            buyLeverage: this.config.risk.leverage.toString(),
+            sellLeverage: this.config.risk.leverage.toString()
         });
 
         const side = signal.action === 'BUY' ? 'Buy' : 'Sell';
         const orderParams = {
             category: 'linear', symbol: this.symbol, side, orderType: 'Market',
-            qty: qty.toString(), 
-            stopLoss: new Decimal(signal.sl).toString(), 
-            takeProfit: new Decimal(signal.tp).toString(), 
+            qty: qty.toString(),
+            stopLoss: new Decimal(signal.sl).toString(),
+            takeProfit: new Decimal(signal.tp).toString(),
             timeInForce: 'GTC'
         };
         const res = await this.apiCall('POST', '/v5/order/create', orderParams);
 
         if (res) console.log(COLOR.GREEN(`[LiveBybitExchange] LIVE ORDER SENT: ${signal.action} ${qty.toString()}`));
         else console.error(COLOR.RED(`[LiveBybitExchange] Failed to place live order.`));
+    }
+
+    async placeLimitOrder(side, qty, price, sl, tp) {
+        await this.updateWallet(); // Ensure wallet is updated
+
+        const orderParams = {
+            category: 'linear',
+            symbol: this.symbol,
+            orderType: 'Limit', // Changed to Limit
+            side: side, // 'Buy' or 'Sell'
+            qty: qty.toString(),
+            price: new Decimal(price).toString(), // Limit price
+            stopLoss: sl ? new Decimal(sl).toString() : undefined, // Optional SL
+            takeProfit: tp ? new Decimal(tp).toString() : undefined, // Optional TP
+            timeInForce: 'GTC' // Good Till Cancelled
+        };
+
+        // Remove undefined SL/TP if not provided to avoid API errors
+        if (orderParams.stopLoss === undefined) delete orderParams.stopLoss;
+        if (orderParams.takeProfit === undefined) delete orderParams.takeProfit;
+
+        const res = await this.apiCall('POST', '/v5/order/create', orderParams);
+
+        if (res) {
+            console.log(COLOR.GREEN(`[LiveBybitExchange] LIVE LIMIT ORDER SENT: ${side} ${qty.toString()} @ ${new Decimal(price).toString()}`));
+            return res; // Return order details
+        } else {
+            console.error(COLOR.RED(`[LiveBybitExchange] Failed to place live limit order.`));
+            return null;
+        }
     }
      async close(price) { /* ... */ return 0; }
 }
