@@ -1,1 +1,0 @@
-        const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / period;

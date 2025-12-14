@@ -1,5 +1,0 @@
-{
-  "name": "AI Crypto Trend Analysis Engine",
-  "description": "An advanced, real-time cryptocurrency dashboard that leverages the Google Gemini API and Bybit's V5 market data to provide sophisticated trend analysis, actionable trading signals, and live market monitoring.",
-  "requestFramePermissions": []
-}

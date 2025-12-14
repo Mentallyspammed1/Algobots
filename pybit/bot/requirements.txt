@@ -1,7 +1,0 @@
-pandas
-pandas-ta
-pybit
-colorama
-pytz
-numpy
-pyyaml

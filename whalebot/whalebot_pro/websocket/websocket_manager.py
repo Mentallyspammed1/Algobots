@@ -1,1 +1,0 @@
-# This file is no longer needed as WebSocket management is integrated into BybitClient.

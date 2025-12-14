@@ -1,4 +1,0 @@
-pybit
-pandas
-numpy
-python-dotenv
