@@ -1,0 +1,24 @@
+2025-12-18 01:47:59,485 - INFO - WebSocket Unified V5 attempting connection...
+2025-12-18 01:48:01,976 - INFO - Websocket connected
+2025-12-18 01:48:01,979 - INFO - WebSocket Unified V5 connected
+2025-12-18 01:48:01,988 - INFO - WebSocket Unified V5 (Auth) attempting connection...
+2025-12-18 01:48:03,407 - INFO - Websocket connected
+2025-12-18 01:48:03,408 - INFO - WebSocket Unified V5 (Auth) connected
+2025-12-18 01:50:26,342 - INFO - WebSocket Unified V5 attempting connection...
+2025-12-18 01:50:28,219 - INFO - Websocket connected
+2025-12-18 01:50:28,220 - INFO - WebSocket Unified V5 connected
+2025-12-18 01:50:28,224 - INFO - WebSocket Unified V5 (Auth) attempting connection...
+2025-12-18 01:50:29,423 - INFO - Websocket connected
+2025-12-18 01:50:29,424 - INFO - WebSocket Unified V5 (Auth) connected
+2025-12-18 01:50:29,758 - ERROR - error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x6f7cde0c20>: Authorization for Unified V5 (Auth) failed. Please check your API keys and resync your system time. Raw error: {'success': False, 'ret_msg': 'API key is invalid.', 'op': 'auth', 'conn_id': 'd2a49pvavkf41472uvig-2k64q6'}
+2025-12-18 01:50:30,273 - ERROR - error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x6f7cde0e00>: Authorization for Unified V5 (Auth) failed. Please check your API keys and resync your system time. Raw error: {'success': False, 'ret_msg': 'API key is invalid.', 'op': 'auth', 'conn_id': 'd2a49pvavkf41472uvig-2k64q6'}
+2025-12-18 01:50:30,278 - ERROR - Authorization for Unified V5 (Auth) failed. Please check your API keys and resync your system time. Raw error: {'success': False, 'ret_msg': 'API key is invalid.', 'op': 'auth', 'conn_id': 'd2a49pvavkf41472uvig-2k64q6'} - goodbye
+2025-12-18 01:52:16,617 - INFO - WebSocket Unified V5 attempting connection...
+2025-12-18 01:52:18,478 - INFO - Websocket connected
+2025-12-18 01:52:18,484 - INFO - WebSocket Unified V5 connected
+2025-12-18 01:52:18,493 - INFO - WebSocket Unified V5 (Auth) attempting connection...
+2025-12-18 01:52:19,758 - INFO - Websocket connected
+2025-12-18 01:52:19,758 - INFO - WebSocket Unified V5 (Auth) connected
+2025-12-18 01:52:20,137 - ERROR - error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x718b824b80>: Authorization for Unified V5 (Auth) failed. Please check your API keys and resync your system time. Raw error: {'success': False, 'ret_msg': 'API key is invalid.', 'op': 'auth', 'conn_id': 'd2etkvm0lh599gaea7rg-2cqbvm'}
+2025-12-18 01:52:20,483 - ERROR - error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x718b824d60>: Authorization for Unified V5 (Auth) failed. Please check your API keys and resync your system time. Raw error: {'success': False, 'ret_msg': 'API key is invalid.', 'op': 'auth', 'conn_id': 'd2etkvm0lh599gaea7rg-2cqbvm'}
+2025-12-18 01:52:20,484 - ERROR - Authorization for Unified V5 (Auth) failed. Please check your API keys and resync your system time. Raw error: {'success': False, 'ret_msg': 'API key is invalid.', 'op': 'auth', 'conn_id': 'd2etkvm0lh599gaea7rg-2cqbvm'} - goodbye

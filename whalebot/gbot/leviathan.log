@@ -1,0 +1,167 @@
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"19:46:09","version":"3.6.2"}
+{"level":"info","message":"[CANCEL] All orders cancelled successfully","service":"leviathan-bot","timestamp":"19:46:10","version":"3.6.2"}
+{"level":"info","message":"[INIT] Ready. Equity: $15.86","service":"leviathan-bot","timestamp":"19:46:10","version":"3.6.2"}
+{"level":"info","message":"✅ 🐋 SHARK MODE ACTIVATED: LEVIATHAN v3.6.2 | Testnet: false","service":"leviathan-bot","timestamp":"19:46:10","version":"3.6.2"}
+{"level":"info","message":"Received SIGINT, shutting down gracefully...","service":"leviathan-bot","timestamp":"19:46:20","version":"3.6.2"}
+{"level":"info","message":"Leviathan stopped gracefully.","service":"leviathan-bot","timestamp":"19:46:20","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"19:46:44","version":"3.6.2"}
+{"level":"info","message":"[CANCEL] All orders cancelled successfully","service":"leviathan-bot","timestamp":"19:46:45","version":"3.6.2"}
+{"level":"info","message":"[INIT] Ready. Equity: $15.86","service":"leviathan-bot","timestamp":"19:46:45","version":"3.6.2"}
+{"level":"info","message":"✅ 🐋 SHARK MODE ACTIVATED: LEVIATHAN v3.6.2 | Testnet: false","service":"leviathan-bot","timestamp":"19:46:45","version":"3.6.2"}
+{"level":"info","message":"Received SIGINT, shutting down gracefully...","service":"leviathan-bot","timestamp":"19:46:53","version":"3.6.2"}
+{"level":"info","message":"Leviathan stopped gracefully.","service":"leviathan-bot","timestamp":"19:46:55","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"19:52:04","version":"3.6.2"}
+{"level":"info","message":"[CANCEL] All orders cancelled successfully","service":"leviathan-bot","timestamp":"19:52:05","version":"3.6.2"}
+{"level":"info","message":"[INIT] Ready. Equity: $15.86","service":"leviathan-bot","timestamp":"19:52:05","version":"3.6.2"}
+{"level":"info","message":"✅ 🐋 SHARK MODE ACTIVATED: LEVIATHAN v3.6.2 | Testnet: false","service":"leviathan-bot","timestamp":"19:52:05","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"19:52:47","version":"3.6.2"}
+{"level":"info","message":"[CANCEL] All orders cancelled successfully","service":"leviathan-bot","timestamp":"19:52:48","version":"3.6.2"}
+{"level":"info","message":"[INIT] Ready. Equity: $15.86","service":"leviathan-bot","timestamp":"19:52:48","version":"3.6.2"}
+{"level":"info","message":"✅ 🐋 SHARK MODE ACTIVATED: LEVIATHAN v3.6.2 | Testnet: false","service":"leviathan-bot","timestamp":"19:52:48","version":"3.6.2"}
+{"level":"info","message":"Received SIGTERM, shutting down gracefully...","service":"leviathan-bot","timestamp":"19:53:10","version":"3.6.2"}
+{"level":"info","message":"Leviathan stopped gracefully.","service":"leviathan-bot","timestamp":"19:53:11","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"19:57:50","version":"3.6.2"}
+{"level":"info","message":"[STATS] Trades: 0, Equity: $15.86","service":"leviathan-bot","timestamp":"20:02:48","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:02:50","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:07:52","version":"3.6.2"}
+{"level":"info","message":"[STATS] Trades: 0, Equity: $15.86","service":"leviathan-bot","timestamp":"20:12:48","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:12:50","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:17:50","version":"3.6.2"}
+{"level":"info","message":"[STATS] Trades: 0, Equity: $15.86","service":"leviathan-bot","timestamp":"20:22:48","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:22:50","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:27:50","version":"3.6.2"}
+{"level":"info","message":"Received SIGINT, shutting down gracefully...","service":"leviathan-bot","timestamp":"20:32:46","version":"3.6.2"}
+{"level":"info","message":"Leviathan stopped gracefully.","service":"leviathan-bot","timestamp":"20:32:47","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:32:55","version":"3.6.2"}
+{"level":"info","message":"[CANCEL] All orders cancelled successfully","service":"leviathan-bot","timestamp":"20:32:56","version":"3.6.2"}
+{"level":"info","message":"[INIT] Ready. Equity: $15.86","service":"leviathan-bot","timestamp":"20:32:56","version":"3.6.2"}
+{"level":"info","message":"✅ 🐋 SHARK MODE ACTIVATED: LEVIATHAN v3.6.2 | Testnet: false","service":"leviathan-bot","timestamp":"20:32:56","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:37:58","version":"3.6.2"}
+{"level":"info","message":"[STATS] Trades: 0, Equity: $15.86","service":"leviathan-bot","timestamp":"20:42:56","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:42:58","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:47:57","version":"3.6.2"}
+{"level":"info","message":"[STATS] Trades: 0, Equity: $15.86","service":"leviathan-bot","timestamp":"20:52:56","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:52:58","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"20:58:00","version":"3.6.2"}
+{"level":"info","message":"[STATS] Trades: 0, Equity: $15.86","service":"leviathan-bot","timestamp":"21:02:56","version":"3.6.2"}
+{"level":"warn","message":"[BALANCE] Sync failed: API error or no list","service":"leviathan-bot","timestamp":"21:03:49","version":"3.6.2"}
+{"level":"info","message":"[BALANCE] Synced: $15.86","service":"leviathan-bot","timestamp":"21:07:59","version":"3.6.2"}
+{"level":"info","message":"Received SIGINT, shutting down gracefully...","service":"leviathan-bot","timestamp":"21:08:49","version":"3.6.2"}
+{"level":"info","message":"Leviathan stopped gracefully.","service":"leviathan-bot","timestamp":"21:08:50","version":"3.6.2"}
+[90m[18:06:25][39m INFO: [38;2;188;19;254mINITIATING LEVIATHAN v13.5 [PAPER][39m 
+[90m[18:06:27][39m ERROR: History Fetch Error: bybit GET https://api.bybit.com/v5/asset/coin/query-info? 403 Forbidden <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<HTML><HEAD><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
+<TITLE>ERROR: The request could not be satisfied</TITLE>
+</HEAD><BODY>
+<H1>403 ERROR</H1>
+<H2>The request could not be satisfied.</H2>
+<HR noshade size="1px">
+The Amazon CloudFront distribution is configured to block access from your country.
+We can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.
+<BR clear="all">
+If you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.
+<BR clear="all">
+<HR noshade size="1px">
+<PRE>
+Generated by cloudfront (CloudFront)
+Request ID: ZvywUQgYlBdSMgpnZLrmJY5ZMGdolKfWbqZXkXOEDmnPjo3o0jaOsg==
+</PRE>
+<ADDRESS>
+</ADDRESS>
+</BODY></HTML> 
+[90m[18:06:27][39m ERROR: bybit GET https://api.bybit.com/v5/asset/coin/query-info? 403 Forbidden <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<HTML><HEAD><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
+<TITLE>ERROR: The request could not be satisfied</TITLE>
+</HEAD><BODY>
+<H1>403 ERROR</H1>
+<H2>The request could not be satisfied.</H2>
+<HR noshade size="1px">
+The Amazon CloudFront distribution is configured to block access from your country.
+We can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.
+<BR clear="all">
+If you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.
+<BR clear="all">
+<HR noshade size="1px">
+<PRE>
+Generated by cloudfront (CloudFront)
+Request ID: ZvywUQgYlBdSMgpnZLrmJY5ZMGdolKfWbqZXkXOEDmnPjo3o0jaOsg==
+</PRE>
+<ADDRESS>
+</ADDRESS>
+</BODY></HTML> 
+[2m{"name":"RateLimitExceeded"}[22m
+[90m[18:06:55][39m INFO: [38;2;188;19;254mINITIATING LEVIATHAN v13.5 [PAPER][39m 
+[90m[18:07:01][39m INFO: Balance: $10000.00 
+[90m[18:07:03][39m [38;2;57;255;20m[1mSUCCESS[22m[39m: Bybit Stream V5: CONNECTED 
+[90m[18:07:03][39m ERROR: Subscribe error: {"success":false,"ret_msg":"error:handler not found,topic:kline.5m.BTCUSDT","conn_id":"d4t6ce7uh818o1anqcpg-6w91","req_id":"","op":"subscribe"} 
+[90m[18:11:05][39m INFO: [38;2;188;19;254mINITIATING LEVIATHAN v13.6 [PAPER][39m 
+[90m[18:11:11][39m INFO: Balance: $10000.00 
+[90m[18:11:12][39m [38;2;57;255;20m[1mSUCCESS[22m[39m: Bybit Stream V5: CONNECTED [Topic: kline.5.BTCUSDT] 
+[K[90m[18:18:45][39m INFO: [38;2;188;19;254mLEVIATHAN v14.0 INITIATED [PAPER][39m 
+[K[90m[18:18:51][39m INFO: Equity: $10000.00 
+[K[90m[18:18:53][39m [38;2;57;255;20m[1mSUCCESS[22m[39m: Bybit Stream Connected 
+[K[90m[18:21:49][39m INFO: [38;2;188;19;254mLEVIATHAN v15.0 SYNTHESIS INITIATED [PAPER][39m 
+[K[90m[18:21:50][39m ERROR: CRITICAL STARTUP FAILURE: bybit GET https://api.bybit.com/v5/asset/coin/query-info? 403 Forbidden <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<HTML><HEAD><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
+<TITLE>ERROR: The request could not be satisfied</TITLE>
+</HEAD><BODY>
+<H1>403 ERROR</H1>
+<H2>The request could not be satisfied.</H2>
+<HR noshade size="1px">
+The Amazon CloudFront distribution is configured to block access from your country.
+We can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.
+<BR clear="all">
+If you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.
+<BR clear="all">
+<HR noshade size="1px">
+<PRE>
+Generated by cloudfront (CloudFront)
+Request ID: nt70RMRPiMkOvePrf4kWGs5xFMrRxi5kLXQg-bda5S3gDi18Ne3FQA==
+</PRE>
+<ADDRESS>
+</ADDRESS>
+</BODY></HTML> 
+[2m{"stack":"RateLimitExceeded: bybit GET https://api.bybit.com/v5/asset/coin/query-info? 403 Forbidden <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: nt70RMRPiMkOvePrf4kWGs5xFMrRxi5kLXQg-bda5S3gDi18Ne3FQA==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\n    at bybit.handleHttpStatusCode (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:954:19)\n    at /data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:820:22\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async bybit.fetch2 (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:4821:24)\n    at async bybit.request (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:4846:16)\n    at async bybit.fetchCurrencies (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/bybit.js:1653:26)\n    at async bybit.loadMarketsHelper (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:844:26)\n    at async bybit.fetchOHLCV (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/bybit.js:2622:9)\n    at async Engine.start (/data/data/com.termux/files/home/Algobots/whalebot/gbot/mentally.cjs:371:23)"}[22m
+[K[90m[18:22:21][39m INFO: [38;2;188;19;254mLEVIATHAN v15.0 SYNTHESIS INITIATED [PAPER][39m 
+[K[90m[18:22:28][39m INFO: Equity: $10000.00 
+[K[90m[18:22:29][39m [38;2;57;255;20m[1mSUCCESS[22m[39m: Bybit Stream Connected 
+[K[90m[18:25:02][39m WARN: AI Error: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent: [400 Bad Request] API key not valid. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API key not valid. Please pass a valid API key."}] 
+[K[90m[18:30:01][39m WARN: AI Error: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent: [400 Bad Request] API key not valid. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API key not valid. Please pass a valid API key."}] 
+[K[90m[18:31:01][39m INFO: [38;2;188;19;254mLEVIATHAN v15.2 SYNTHESIS DECISIVE [PAPER][39m 
+[K[90m[18:31:09][39m ERROR: CRITICAL STARTUP FAILURE: Invalid URL: undefined 
+[2m{"stack":"SyntaxError: Invalid URL: undefined\n    at initAsClient (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ws/lib/websocket.js:692:13)\n    at new WebSocket (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ws/lib/websocket.js:88:7)\n    at DataStream.connect (/data/data/com.termux/files/home/Algobots/whalebot/gbot/mentally.cjs:221:19)\n    at Engine.start (/data/data/com.termux/files/home/Algobots/whalebot/gbot/mentally.cjs:337:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)"}[22m
+[K[90m[18:33:03][39m INFO: [38;2;188;19;254mLEVIATHAN v15.2 SYNTHESIS DECISIVE [PAPER][39m 
+[K[90m[18:33:11][39m [38;2;57;255;20m[1mSUCCESS[22m[39m: Bybit Stream Connected 
+[K[90m[19:15:50][39m INFO: [38;2;188;19;254mLEVIATHAN v15.2 SYNTHESIS DECISIVE [PAPER][39m 
+[K[90m[19:15:56][39m ERROR: CRITICAL STARTUP FAILURE: bybit {"retCode":10002,"retMsg":"invalid request, please check your server timestamp or recv_window param: req_timestamp[1765502150375],server_timestamp[1765502156762],recv_window[5000]","result":{},"retExtInfo":{},"time":1765502156762} 
+[2m{"stack":"InvalidNonce: bybit {\"retCode\":10002,\"retMsg\":\"invalid request, please check your server timestamp or recv_window param: req_timestamp[1765502150375],server_timestamp[1765502156762],recv_window[5000]\",\"result\":{},\"retExtInfo\":{},\"time\":1765502156762}\n    at bybit.throwExactlyMatchedException (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:5315:19)\n    at bybit.handleErrors (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/bybit.js:9518:18)\n    at /data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:818:51\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async bybit.fetch2 (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:4821:24)\n    at async bybit.request (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:4846:16)\n    at async bybit.fetchCurrencies (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/bybit.js:1653:26)\n    at async bybit.loadMarketsHelper (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:844:26)\n    at async bybit.fetchOHLCV (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/bybit.js:2622:9)\n    at async Engine.start (/data/data/com.termux/files/home/Algobots/whalebot/gbot/mentally.cjs:324:23)"}[22m
+[K[90m[19:16:40][39m INFO: [38;2;188;19;254mLEVIATHAN v15.2 SYNTHESIS DECISIVE [PAPER][39m 
+[K[90m[19:16:52][39m [38;2;57;255;20m[1mSUCCESS[22m[39m: Bybit Stream Connected 
+[K[23:29:26] INFO: LEVIATHAN v15.2 SYNTHESIS DECISIVE [PAPER] 
+[K[23:29:27] ERROR: CRITICAL STARTUP FAILURE: bybit GET https://api.bybit.com/v5/asset/coin/query-info? 403 Forbidden <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<HTML><HEAD><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
+<TITLE>ERROR: The request could not be satisfied</TITLE>
+</HEAD><BODY>
+<H1>403 ERROR</H1>
+<H2>The request could not be satisfied.</H2>
+<HR noshade size="1px">
+The Amazon CloudFront distribution is configured to block access from your country.
+We can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.
+<BR clear="all">
+If you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.
+<BR clear="all">
+<HR noshade size="1px">
+<PRE>
+Generated by cloudfront (CloudFront)
+Request ID: HRUOyL5SWlO7Y7ZemxH43oQEQo_tusDCp1juq0LxoRj23PV0ruSiLw==
+</PRE>
+<ADDRESS>
+</ADDRESS>
+</BODY></HTML> 
+{"stack":"RateLimitExceeded: bybit GET https://api.bybit.com/v5/asset/coin/query-info? 403 Forbidden <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: HRUOyL5SWlO7Y7ZemxH43oQEQo_tusDCp1juq0LxoRj23PV0ruSiLw==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\n    at bybit.handleHttpStatusCode (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:954:19)\n    at /data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:820:22\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async bybit.fetch2 (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:4821:24)\n    at async bybit.request (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:4846:16)\n    at async bybit.fetchCurrencies (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/bybit.js:1653:26)\n    at async bybit.loadMarketsHelper (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/base/Exchange.js:844:26)\n    at async bybit.fetchOHLCV (/data/data/com.termux/files/home/Algobots/whalebot/gbot/node_modules/ccxt/dist/cjs/src/bybit.js:2622:9)\n    at async Engine.start (/data/data/com.termux/files/home/Algobots/whalebot/gbot/mentally.cjs:324:23)"}
+[K[23:30:29] INFO: LEVIATHAN v15.2 SYNTHESIS DECISIVE [PAPER] 
+[K[23:30:35] SUCCESS: Bybit Stream Connected 
+[K[23:40:15] INFO: LEVIATHAN v15.2 SYNTHESIS DECISIVE [PAPER] 
+[K[23:40:22] SUCCESS: Bybit Stream Connected 
+[K[90m[23:43:07][39m INFO: [38;2;188;19;254mLEVIATHAN v15.2 SYNTHESIS DECISIVE [PAPER][39m 
+[K[90m[23:43:14][39m [38;2;57;255;20m[1mSUCCESS[22m[39m: Bybit Stream Connected 

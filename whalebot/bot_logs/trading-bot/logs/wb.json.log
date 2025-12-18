@@ -1,0 +1,479 @@
+{"timestamp": "2025-10-27 17:34:17,148", "name": "wb", "level": "INFO", "message": "\u001b[36mActive strategy profile 'default_scalping' loaded successfully.\u001b[0m"}
+{"timestamp": "2025-10-27 17:34:17,161", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Whalebot Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:34:17,162", "name": "wb", "level": "INFO", "message": "Symbol: BTCUSDT, Interval: 15"}
+{"timestamp": "2025-10-27 17:34:17,163", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-10-27 17:34:19,536", "name": "wb", "level": "ERROR", "message": "\u001b[91mBybit API Error: error sign! origin_string[1761604457164pXXkHX8ryNx4tJw4oQ20000category=linear&symbol=BTCUSDT] (Code: 10004)\u001b[0m"}
+{"timestamp": "2025-10-27 17:34:19,541", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-10-27 22:34:19) ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:38:28,018", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Wgwhalex Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:38:28,021", "name": "wb", "level": "INFO", "message": "Symbol: BTCUSDT, Interval: 15"}
+{"timestamp": "2025-10-27 17:38:28,023", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-10-27 17:38:28,024", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-10-27 22:38:28) ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:15,254", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Current Market Data & Indicators ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:15,255", "name": "wb", "level": "INFO", "message": "\u001b[92mCurrent Price: 114227.2\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,508", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Indicator Values ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,509", "name": "wb", "level": "INFO", "message": "  \u001b[94mSMA_10: 114354.81000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,510", "name": "wb", "level": "INFO", "message": "  \u001b[34mSMA_Long: 115013.52400000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,510", "name": "wb", "level": "INFO", "message": "  \u001b[95mEMA_Short: 114388.78624224\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,511", "name": "wb", "level": "INFO", "message": "  \u001b[35mEMA_Long: 114651.08438003\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,511", "name": "wb", "level": "INFO", "message": "  \u001b[33mATR: 287.89083634\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,512", "name": "wb", "level": "INFO", "message": "  \u001b[32mRSI: 30.24571772\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,512", "name": "wb", "level": "INFO", "message": "  \u001b[36mStochRSI_K: 71.93297061\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,513", "name": "wb", "level": "INFO", "message": "  \u001b[96mStochRSI_D: 58.03009491\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,513", "name": "wb", "level": "INFO", "message": "  \u001b[31mBB_Upper: 115808.99581622\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,514", "name": "wb", "level": "INFO", "message": "  \u001b[37mBB_Middle: 114784.45500000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,514", "name": "wb", "level": "INFO", "message": "  \u001b[31mBB_Lower: 113759.91418378\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,515", "name": "wb", "level": "INFO", "message": "  \u001b[92mCCI: -88.49155687\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,515", "name": "wb", "level": "INFO", "message": "  \u001b[91mWR: -85.96447953\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,516", "name": "wb", "level": "INFO", "message": "  \u001b[32mMFI: 23.29577533\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,516", "name": "wb", "level": "INFO", "message": "  \u001b[34mOBV: 20919.94400000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,517", "name": "wb", "level": "INFO", "message": "  \u001b[94mOBV_EMA: 23606.19191046\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,517", "name": "wb", "level": "INFO", "message": "  \u001b[35mCMF: -0.16483022\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,518", "name": "wb", "level": "INFO", "message": "  \u001b[36mTenkan_Sen: 114383.90000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,518", "name": "wb", "level": "INFO", "message": "  \u001b[96mKijun_Sen: 114902.95000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,519", "name": "wb", "level": "INFO", "message": "  \u001b[32mSenkou_Span_A: 114922.52500000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,519", "name": "wb", "level": "INFO", "message": "  \u001b[31mSenkou_Span_B: 115399.65000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,520", "name": "wb", "level": "INFO", "message": "  \u001b[33mChikou_Span: 0.00000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,520", "name": "wb", "level": "INFO", "message": "  \u001b[35mPSAR_Val: 114061.86000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,521", "name": "wb", "level": "INFO", "message": "  \u001b[95mPSAR_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,521", "name": "wb", "level": "INFO", "message": "  \u001b[37mVWAP: 109909.29812488\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,522", "name": "wb", "level": "INFO", "message": "  \u001b[34mST_Fast_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,523", "name": "wb", "level": "INFO", "message": "  \u001b[94mST_Fast_Val: 35576.05101846\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,523", "name": "wb", "level": "INFO", "message": "  \u001b[35mST_Slow_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,524", "name": "wb", "level": "INFO", "message": "  \u001b[95mST_Slow_Val: 53161.49803955\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,524", "name": "wb", "level": "INFO", "message": "  \u001b[32mMACD_Line: -256.43357075\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,525", "name": "wb", "level": "INFO", "message": "  \u001b[92mMACD_Signal: -208.44483535\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,525", "name": "wb", "level": "INFO", "message": "  \u001b[33mMACD_Hist: -47.98873540\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,526", "name": "wb", "level": "INFO", "message": "  \u001b[36mADX: 47.78426406\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,526", "name": "wb", "level": "INFO", "message": "  \u001b[96mPlusDI: 14.08799438\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,527", "name": "wb", "level": "INFO", "message": "  \u001b[31mMinusDI: 33.39126336\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,527", "name": "wb", "level": "INFO", "message": "  \u001b[33mVolatility_Index: 0.00259875\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,528", "name": "wb", "level": "INFO", "message": "  \u001b[37mVWMA: 114729.08486668\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,528", "name": "wb", "level": "INFO", "message": "  \u001b[96mVolume_Delta: -0.26040206\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,529", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Fibonacci Levels ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,529", "name": "wb", "level": "INFO", "message": ""}
+{"timestamp": "2025-10-27 17:39:20,530", "name": "wb", "level": "INFO", "message": "  \u001b[33m0.0%: 115756.6\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,531", "name": "wb", "level": "INFO", "message": "  \u001b[33m23.6%: 115353.6772\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,531", "name": "wb", "level": "INFO", "message": "  \u001b[33m38.2%: 115104.4114\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,532", "name": "wb", "level": "INFO", "message": "  \u001b[33m50.0%: 114902.95\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,532", "name": "wb", "level": "INFO", "message": "  \u001b[33m61.8%: 114701.4886\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,533", "name": "wb", "level": "INFO", "message": "  \u001b[33m78.6%: 114414.6622\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,533", "name": "wb", "level": "INFO", "message": "  \u001b[33m100.0%: 114049.3\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,534", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Multi-Timeframe Trends ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,534", "name": "wb", "level": "INFO", "message": ""}
+{"timestamp": "2025-10-27 17:39:20,535", "name": "wb", "level": "INFO", "message": "  \u001b[33m60_ema: UP\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,536", "name": "wb", "level": "INFO", "message": "  \u001b[33m60_ehlers_supertrend: UP\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,536", "name": "wb", "level": "INFO", "message": "  \u001b[33m240_ema: UP\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,537", "name": "wb", "level": "INFO", "message": "  \u001b[33m240_ehlers_supertrend: UP\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:20,537", "name": "wb", "level": "INFO", "message": "\u001b[36m--------------------------------------\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:26,276", "name": "wb", "level": "INFO", "message": "\u001b[33mRaw Signal Score: -0.15, Final Signal: HOLD\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:26,277", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Current Market Data & Indicators ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:26,277", "name": "wb", "level": "INFO", "message": "\u001b[92mCurrent Price: 114227.2\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,530", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Indicator Values ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,531", "name": "wb", "level": "INFO", "message": "  \u001b[94mSMA_10: 114354.81000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,531", "name": "wb", "level": "INFO", "message": "  \u001b[34mSMA_Long: 115013.52400000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,532", "name": "wb", "level": "INFO", "message": "  \u001b[95mEMA_Short: 114388.78624224\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,532", "name": "wb", "level": "INFO", "message": "  \u001b[35mEMA_Long: 114651.08438003\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,533", "name": "wb", "level": "INFO", "message": "  \u001b[33mATR: 287.89083634\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,533", "name": "wb", "level": "INFO", "message": "  \u001b[32mRSI: 30.24571772\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,534", "name": "wb", "level": "INFO", "message": "  \u001b[36mStochRSI_K: 71.93297061\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,534", "name": "wb", "level": "INFO", "message": "  \u001b[96mStochRSI_D: 58.03009491\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,535", "name": "wb", "level": "INFO", "message": "  \u001b[31mBB_Upper: 115808.99581622\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,535", "name": "wb", "level": "INFO", "message": "  \u001b[37mBB_Middle: 114784.45500000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,535", "name": "wb", "level": "INFO", "message": "  \u001b[31mBB_Lower: 113759.91418378\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,536", "name": "wb", "level": "INFO", "message": "  \u001b[92mCCI: -88.49155687\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,536", "name": "wb", "level": "INFO", "message": "  \u001b[91mWR: -85.96447953\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,537", "name": "wb", "level": "INFO", "message": "  \u001b[32mMFI: 23.29577533\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,537", "name": "wb", "level": "INFO", "message": "  \u001b[34mOBV: 20919.94400000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,538", "name": "wb", "level": "INFO", "message": "  \u001b[94mOBV_EMA: 23606.19191046\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,538", "name": "wb", "level": "INFO", "message": "  \u001b[35mCMF: -0.16483022\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,538", "name": "wb", "level": "INFO", "message": "  \u001b[36mTenkan_Sen: 114383.90000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,539", "name": "wb", "level": "INFO", "message": "  \u001b[96mKijun_Sen: 114902.95000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,539", "name": "wb", "level": "INFO", "message": "  \u001b[32mSenkou_Span_A: 114922.52500000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,540", "name": "wb", "level": "INFO", "message": "  \u001b[31mSenkou_Span_B: 115399.65000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,540", "name": "wb", "level": "INFO", "message": "  \u001b[33mChikou_Span: 0.00000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,540", "name": "wb", "level": "INFO", "message": "  \u001b[35mPSAR_Val: 114061.86000000\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,541", "name": "wb", "level": "INFO", "message": "  \u001b[95mPSAR_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,541", "name": "wb", "level": "INFO", "message": "  \u001b[37mVWAP: 109909.29812488\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,542", "name": "wb", "level": "INFO", "message": "  \u001b[34mST_Fast_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,542", "name": "wb", "level": "INFO", "message": "  \u001b[94mST_Fast_Val: 35576.05101846\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,543", "name": "wb", "level": "INFO", "message": "  \u001b[35mST_Slow_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,543", "name": "wb", "level": "INFO", "message": "  \u001b[95mST_Slow_Val: 53161.49803955\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,543", "name": "wb", "level": "INFO", "message": "  \u001b[32mMACD_Line: -256.43357075\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,544", "name": "wb", "level": "INFO", "message": "  \u001b[92mMACD_Signal: -208.44483535\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,544", "name": "wb", "level": "INFO", "message": "  \u001b[33mMACD_Hist: -47.98873540\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,545", "name": "wb", "level": "INFO", "message": "  \u001b[36mADX: 47.78426406\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,545", "name": "wb", "level": "INFO", "message": "  \u001b[96mPlusDI: 14.08799438\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,546", "name": "wb", "level": "INFO", "message": "  \u001b[31mMinusDI: 33.39126336\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,546", "name": "wb", "level": "INFO", "message": "  \u001b[33mVolatility_Index: 0.00259875\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,546", "name": "wb", "level": "INFO", "message": "  \u001b[37mVWMA: 114729.08486668\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,547", "name": "wb", "level": "INFO", "message": "  \u001b[96mVolume_Delta: -0.26040206\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,547", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Fibonacci Levels ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,548", "name": "wb", "level": "INFO", "message": ""}
+{"timestamp": "2025-10-27 17:39:36,548", "name": "wb", "level": "INFO", "message": "  \u001b[33m0.0%: 115756.6\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,549", "name": "wb", "level": "INFO", "message": "  \u001b[33m23.6%: 115353.6772\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,549", "name": "wb", "level": "INFO", "message": "  \u001b[33m38.2%: 115104.4114\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,549", "name": "wb", "level": "INFO", "message": "  \u001b[33m50.0%: 114902.95\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,550", "name": "wb", "level": "INFO", "message": "  \u001b[33m61.8%: 114701.4886\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,550", "name": "wb", "level": "INFO", "message": "  \u001b[33m78.6%: 114414.6622\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,551", "name": "wb", "level": "INFO", "message": "  \u001b[33m100.0%: 114049.3\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,551", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Multi-Timeframe Trends ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,552", "name": "wb", "level": "INFO", "message": ""}
+{"timestamp": "2025-10-27 17:39:36,552", "name": "wb", "level": "INFO", "message": "  \u001b[33m60_ema: UP\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,552", "name": "wb", "level": "INFO", "message": "  \u001b[33m60_ehlers_supertrend: UP\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,553", "name": "wb", "level": "INFO", "message": "  \u001b[33m240_ema: UP\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,553", "name": "wb", "level": "INFO", "message": "  \u001b[33m240_ehlers_supertrend: UP\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,554", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Signal Score Breakdown ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,554", "name": "wb", "level": "INFO", "message": "  \u001b[32mMTF_Trend_Confluence     :  0.32\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,554", "name": "wb", "level": "INFO", "message": "  \u001b[31mSMA_Trend_Filter         : -0.28\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,555", "name": "wb", "level": "INFO", "message": "  \u001b[31mEMA_Alignment            : -0.22\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,555", "name": "wb", "level": "INFO", "message": "  \u001b[31mADX_Strength             : -0.18\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,556", "name": "wb", "level": "INFO", "message": "  \u001b[32mEhlers_SuperTrend_Alignment:  0.17\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,556", "name": "wb", "level": "INFO", "message": "  \u001b[32mPSAR_Signal              :  0.11\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,557", "name": "wb", "level": "INFO", "message": "  \u001b[31mVolume_Delta_Signal      : -0.10\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,557", "name": "wb", "level": "INFO", "message": "  \u001b[31mCMF_Flow                 : -0.10\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,558", "name": "wb", "level": "INFO", "message": "  \u001b[32mVolatility_Index_Signal  :  0.09\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,558", "name": "wb", "level": "INFO", "message": "  \u001b[32mWR_Signal                :  0.07\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,558", "name": "wb", "level": "INFO", "message": "  \u001b[32mVWAP_Signal              :  0.04\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,559", "name": "wb", "level": "INFO", "message": "  \u001b[31mOBV_Momentum             : -0.04\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,559", "name": "wb", "level": "INFO", "message": "  \u001b[31mRSI_Signal               : -0.04\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,560", "name": "wb", "level": "INFO", "message": "  \u001b[31mSMA_10_Signal            : -0.04\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,560", "name": "wb", "level": "INFO", "message": "  \u001b[32mOrderbook_Imbalance      :  0.03\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,561", "name": "wb", "level": "INFO", "message": "  \u001b[33mStochRSI_Signal          :  0.00\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,561", "name": "wb", "level": "INFO", "message": "  \u001b[33mCCI_Signal               :  0.00\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,561", "name": "wb", "level": "INFO", "message": "  \u001b[33mMFI_Signal               :  0.00\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,562", "name": "wb", "level": "INFO", "message": "  \u001b[33mBollinger_Bands_Signal   :  0.00\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,562", "name": "wb", "level": "INFO", "message": "  \u001b[33mMACD_Alignment           :  0.00\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,563", "name": "wb", "level": "INFO", "message": "  \u001b[33mIchimoku_Confluence      :  0.00\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,563", "name": "wb", "level": "INFO", "message": "  \u001b[33mVWMA_Cross               :  0.00\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,564", "name": "wb", "level": "INFO", "message": "\u001b[36m--------------------------------------\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,564", "name": "wb", "level": "INFO", "message": "\u001b[36mNo strong trading signal. Holding. Score: -0.15\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,565", "name": "wb", "level": "INFO", "message": "\u001b[36mNo open positions.\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,565", "name": "wb", "level": "INFO", "message": "\u001b[33mPerformance Summary: Total PnL: 0.00, Wins: 0, Losses: 0, Win Rate: 0.00%\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:36,566", "name": "wb", "level": "INFO", "message": "\u001b[35m--- Analysis Loop Finished. Waiting 15s ---\u001b[0m"}
+{"timestamp": "2025-10-27 17:39:51,567", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-10-27 22:39:51) ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:13:16,157", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Wgwhalex Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:13:16,170", "name": "wb", "level": "INFO", "message": "Symbol: BTCUSDT, Interval: 15"}
+{"timestamp": "2025-10-30 17:13:16,173", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-10-30 17:13:16,176", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-10-30 22:13:16) ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:15:52,605", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Current Market Data & Indicators ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:15:52,614", "name": "wb", "level": "INFO", "message": "\u001b[92mCurrent Price: 107633.1\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,152", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Indicator Values ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,163", "name": "wb", "level": "INFO", "message": "  \u001b[94mSMA_10: 107325.96000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,185", "name": "wb", "level": "INFO", "message": "  \u001b[34mSMA_Long: 108052.40400000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,188", "name": "wb", "level": "INFO", "message": "  \u001b[95mEMA_Short: 107472.50104176\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,211", "name": "wb", "level": "INFO", "message": "  \u001b[35mEMA_Long: 107443.10030760\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,213", "name": "wb", "level": "INFO", "message": "  \u001b[33mATR: 458.79197067\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,216", "name": "wb", "level": "INFO", "message": "  \u001b[32mRSI: 59.59239670\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,219", "name": "wb", "level": "INFO", "message": "  \u001b[36mStochRSI_K: 90.85774768\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,219", "name": "wb", "level": "INFO", "message": "  \u001b[96mStochRSI_D: 96.95258256\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,220", "name": "wb", "level": "INFO", "message": "  \u001b[31mBB_Upper: 107915.36075555\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,221", "name": "wb", "level": "INFO", "message": "  \u001b[37mBB_Middle: 107181.16500000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,222", "name": "wb", "level": "INFO", "message": "  \u001b[31mBB_Lower: 106446.96924445\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,222", "name": "wb", "level": "INFO", "message": "  \u001b[92mCCI: 121.51285291\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,223", "name": "wb", "level": "INFO", "message": "  \u001b[91mWR: -17.53543399\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,224", "name": "wb", "level": "INFO", "message": "  \u001b[32mMFI: 43.20014532\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,224", "name": "wb", "level": "INFO", "message": "  \u001b[34mOBV: -39865.97300000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,225", "name": "wb", "level": "INFO", "message": "  \u001b[94mOBV_EMA: -41338.19259607\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,226", "name": "wb", "level": "INFO", "message": "  \u001b[35mCMF: 0.07488854\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,227", "name": "wb", "level": "INFO", "message": "  \u001b[36mTenkan_Sen: 107095.00000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,227", "name": "wb", "level": "INFO", "message": "  \u001b[96mKijun_Sen: 107198.70000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,228", "name": "wb", "level": "INFO", "message": "  \u001b[32mSenkou_Span_A: 108401.82500000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,229", "name": "wb", "level": "INFO", "message": "  \u001b[31mSenkou_Span_B: 109440.45000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,230", "name": "wb", "level": "INFO", "message": "  \u001b[33mChikou_Span: 0.00000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,230", "name": "wb", "level": "INFO", "message": "  \u001b[35mPSAR_Val: 107054.67671383\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,231", "name": "wb", "level": "INFO", "message": "  \u001b[95mPSAR_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,232", "name": "wb", "level": "INFO", "message": "  \u001b[37mVWAP: 110800.47947818\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,235", "name": "wb", "level": "INFO", "message": "  \u001b[34mST_Fast_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,237", "name": "wb", "level": "INFO", "message": "  \u001b[94mST_Fast_Val: 37797.34375513\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,239", "name": "wb", "level": "INFO", "message": "  \u001b[35mST_Slow_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,243", "name": "wb", "level": "INFO", "message": "  \u001b[95mST_Slow_Val: 56419.39790847\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,246", "name": "wb", "level": "INFO", "message": "  \u001b[32mMACD_Line: -100.39622303\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,284", "name": "wb", "level": "INFO", "message": "  \u001b[92mMACD_Signal: -262.19185820\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,303", "name": "wb", "level": "INFO", "message": "  \u001b[33mMACD_Hist: 161.79563517\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,333", "name": "wb", "level": "INFO", "message": "  \u001b[36mADX: 33.18549188\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,342", "name": "wb", "level": "INFO", "message": "  \u001b[96mPlusDI: 16.99259933\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,352", "name": "wb", "level": "INFO", "message": "  \u001b[31mMinusDI: 8.10283378\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,371", "name": "wb", "level": "INFO", "message": "  \u001b[33mVolatility_Index: 0.00469148\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,374", "name": "wb", "level": "INFO", "message": "  \u001b[37mVWMA: 107083.06890626\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,376", "name": "wb", "level": "INFO", "message": "  \u001b[96mVolume_Delta: 0.58331201\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,387", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Fibonacci Levels ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,395", "name": "wb", "level": "INFO", "message": ""}
+{"timestamp": "2025-10-30 17:16:10,398", "name": "wb", "level": "INFO", "message": "  \u001b[33m0.0%: 111571.9\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,403", "name": "wb", "level": "INFO", "message": "  \u001b[33m23.6%: 110310.0316\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,408", "name": "wb", "level": "INFO", "message": "  \u001b[33m38.2%: 109529.3842\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,416", "name": "wb", "level": "INFO", "message": "  \u001b[33m50.0%: 108898.45\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,428", "name": "wb", "level": "INFO", "message": "  \u001b[33m61.8%: 108267.5158\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,438", "name": "wb", "level": "INFO", "message": "  \u001b[33m78.6%: 107369.2366\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,443", "name": "wb", "level": "INFO", "message": "  \u001b[33m100.0%: 106225\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,454", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Multi-Timeframe Trends ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,464", "name": "wb", "level": "INFO", "message": ""}
+{"timestamp": "2025-10-30 17:16:10,487", "name": "wb", "level": "INFO", "message": "  \u001b[33m60_ema: DOWN\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,490", "name": "wb", "level": "INFO", "message": "  \u001b[33m60_ehlers_supertrend: UP\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,497", "name": "wb", "level": "INFO", "message": "  \u001b[33m240_ema: DOWN\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,510", "name": "wb", "level": "INFO", "message": "  \u001b[33m240_ehlers_supertrend: UP\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:10,519", "name": "wb", "level": "INFO", "message": "\u001b[36m--------------------------------------\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:37,431", "name": "wb", "level": "INFO", "message": "\u001b[33mRaw Signal Score: 0.24, Final Signal: HOLD\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:37,432", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Current Market Data & Indicators ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:37,437", "name": "wb", "level": "INFO", "message": "\u001b[92mCurrent Price: 107633.1\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,534", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Indicator Values ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,536", "name": "wb", "level": "INFO", "message": "  \u001b[94mSMA_10: 107325.96000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,539", "name": "wb", "level": "INFO", "message": "  \u001b[34mSMA_Long: 108052.40400000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,541", "name": "wb", "level": "INFO", "message": "  \u001b[95mEMA_Short: 107472.50104176\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,544", "name": "wb", "level": "INFO", "message": "  \u001b[35mEMA_Long: 107443.10030760\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,548", "name": "wb", "level": "INFO", "message": "  \u001b[33mATR: 458.79197067\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,551", "name": "wb", "level": "INFO", "message": "  \u001b[32mRSI: 59.59239670\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,552", "name": "wb", "level": "INFO", "message": "  \u001b[36mStochRSI_K: 90.85774768\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,553", "name": "wb", "level": "INFO", "message": "  \u001b[96mStochRSI_D: 96.95258256\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,554", "name": "wb", "level": "INFO", "message": "  \u001b[31mBB_Upper: 107915.36075555\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,554", "name": "wb", "level": "INFO", "message": "  \u001b[37mBB_Middle: 107181.16500000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,555", "name": "wb", "level": "INFO", "message": "  \u001b[31mBB_Lower: 106446.96924445\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,556", "name": "wb", "level": "INFO", "message": "  \u001b[92mCCI: 121.51285291\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,566", "name": "wb", "level": "INFO", "message": "  \u001b[91mWR: -17.53543399\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,566", "name": "wb", "level": "INFO", "message": "  \u001b[32mMFI: 43.20014532\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,567", "name": "wb", "level": "INFO", "message": "  \u001b[34mOBV: -39865.97300000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,568", "name": "wb", "level": "INFO", "message": "  \u001b[94mOBV_EMA: -41338.19259607\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,569", "name": "wb", "level": "INFO", "message": "  \u001b[35mCMF: 0.07488854\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,570", "name": "wb", "level": "INFO", "message": "  \u001b[36mTenkan_Sen: 107095.00000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,570", "name": "wb", "level": "INFO", "message": "  \u001b[96mKijun_Sen: 107198.70000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,571", "name": "wb", "level": "INFO", "message": "  \u001b[32mSenkou_Span_A: 108401.82500000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,572", "name": "wb", "level": "INFO", "message": "  \u001b[31mSenkou_Span_B: 109440.45000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,572", "name": "wb", "level": "INFO", "message": "  \u001b[33mChikou_Span: 0.00000000\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,573", "name": "wb", "level": "INFO", "message": "  \u001b[35mPSAR_Val: 107054.67671383\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,574", "name": "wb", "level": "INFO", "message": "  \u001b[95mPSAR_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,575", "name": "wb", "level": "INFO", "message": "  \u001b[37mVWAP: 110800.47947818\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,576", "name": "wb", "level": "INFO", "message": "  \u001b[34mST_Fast_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,576", "name": "wb", "level": "INFO", "message": "  \u001b[94mST_Fast_Val: 37797.34375513\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,580", "name": "wb", "level": "INFO", "message": "  \u001b[35mST_Slow_Dir: 1\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,582", "name": "wb", "level": "INFO", "message": "  \u001b[95mST_Slow_Val: 56419.39790847\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,583", "name": "wb", "level": "INFO", "message": "  \u001b[32mMACD_Line: -100.39622303\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,584", "name": "wb", "level": "INFO", "message": "  \u001b[92mMACD_Signal: -262.19185820\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,585", "name": "wb", "level": "INFO", "message": "  \u001b[33mMACD_Hist: 161.79563517\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,585", "name": "wb", "level": "INFO", "message": "  \u001b[36mADX: 33.18549188\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,586", "name": "wb", "level": "INFO", "message": "  \u001b[96mPlusDI: 16.99259933\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,587", "name": "wb", "level": "INFO", "message": "  \u001b[31mMinusDI: 8.10283378\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,587", "name": "wb", "level": "INFO", "message": "  \u001b[33mVolatility_Index: 0.00469148\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,588", "name": "wb", "level": "INFO", "message": "  \u001b[37mVWMA: 107083.06890626\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,589", "name": "wb", "level": "INFO", "message": "  \u001b[96mVolume_Delta: 0.58331201\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,590", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Fibonacci Levels ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,590", "name": "wb", "level": "INFO", "message": ""}
+{"timestamp": "2025-10-30 17:16:52,591", "name": "wb", "level": "INFO", "message": "  \u001b[33m0.0%: 111571.9\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,592", "name": "wb", "level": "INFO", "message": "  \u001b[33m23.6%: 110310.0316\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,592", "name": "wb", "level": "INFO", "message": "  \u001b[33m38.2%: 109529.3842\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,594", "name": "wb", "level": "INFO", "message": "  \u001b[33m50.0%: 108898.45\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,597", "name": "wb", "level": "INFO", "message": "  \u001b[33m61.8%: 108267.5158\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,601", "name": "wb", "level": "INFO", "message": "  \u001b[33m78.6%: 107369.2366\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,602", "name": "wb", "level": "INFO", "message": "  \u001b[33m100.0%: 106225\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,603", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Multi-Timeframe Trends ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,603", "name": "wb", "level": "INFO", "message": ""}
+{"timestamp": "2025-10-30 17:16:52,604", "name": "wb", "level": "INFO", "message": "  \u001b[33m60_ema: DOWN\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,605", "name": "wb", "level": "INFO", "message": "  \u001b[33m60_ehlers_supertrend: UP\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,606", "name": "wb", "level": "INFO", "message": "  \u001b[33m240_ema: DOWN\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,606", "name": "wb", "level": "INFO", "message": "  \u001b[33m240_ehlers_supertrend: UP\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,607", "name": "wb", "level": "INFO", "message": "\u001b[36m--- Signal Score Breakdown ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,608", "name": "wb", "level": "INFO", "message": "  \u001b[32mEMA_Alignment            :  0.30\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,609", "name": "wb", "level": "INFO", "message": "  \u001b[32mADX_Strength             :  0.25\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,611", "name": "wb", "level": "INFO", "message": "  \u001b[31mStochRSI_Signal          : -0.21\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,613", "name": "wb", "level": "INFO", "message": "  \u001b[31mSMA_Trend_Filter         : -0.20\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,615", "name": "wb", "level": "INFO", "message": "  \u001b[31mCCI_Signal               : -0.14\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,618", "name": "wb", "level": "INFO", "message": "  \u001b[31mWR_Signal                : -0.14\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,621", "name": "wb", "level": "INFO", "message": "  \u001b[32mEhlers_SuperTrend_Alignment:  0.12\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,622", "name": "wb", "level": "INFO", "message": "  \u001b[32mVolume_Delta_Signal      :  0.10\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,623", "name": "wb", "level": "INFO", "message": "  \u001b[32mCMF_Flow                 :  0.08\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,624", "name": "wb", "level": "INFO", "message": "  \u001b[32mPSAR_Signal              :  0.07\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,625", "name": "wb", "level": "INFO", "message": "  \u001b[32mRSI_Signal               :  0.03\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,626", "name": "wb", "level": "INFO", "message": "  \u001b[31mVWAP_Signal              : -0.03\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,626", "name": "wb", "level": "INFO", "message": "  \u001b[31mOrderbook_Imbalance      : -0.03\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,627", "name": "wb", "level": "INFO", "message": "  \u001b[32mSMA_10_Signal            :  0.03\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,628", "name": "wb", "level": "INFO", "message": "  \u001b[33mMFI_Signal               :  0.00\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,629", "name": "wb", "level": "INFO", "message": "  \u001b[33mBollinger_Bands_Signal   :  0.00\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,629", "name": "wb", "level": "INFO", "message": "  \u001b[33mMACD_Alignment           :  0.00\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,630", "name": "wb", "level": "INFO", "message": "  \u001b[33mIchimoku_Confluence      :  0.00\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,631", "name": "wb", "level": "INFO", "message": "  \u001b[33mOBV_Momentum             :  0.00\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,631", "name": "wb", "level": "INFO", "message": "  \u001b[33mVolatility_Index_Signal  :  0.00\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,632", "name": "wb", "level": "INFO", "message": "  \u001b[33mVWMA_Cross               :  0.00\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,633", "name": "wb", "level": "INFO", "message": "  \u001b[33mMTF_Trend_Confluence     :  0.00\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,635", "name": "wb", "level": "INFO", "message": "\u001b[36m--------------------------------------\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,638", "name": "wb", "level": "INFO", "message": "\u001b[36mNo strong trading signal. Holding. Score: 0.24\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,640", "name": "wb", "level": "INFO", "message": "\u001b[36mNo open positions.\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,643", "name": "wb", "level": "INFO", "message": "\u001b[33mPerformance Summary: Total PnL: 0.00, Wins: 0, Losses: 0, Win Rate: 0.00%\u001b[0m"}
+{"timestamp": "2025-10-30 17:16:52,645", "name": "wb", "level": "INFO", "message": "\u001b[35m--- Analysis Loop Finished. Waiting 15s ---\u001b[0m"}
+{"timestamp": "2025-10-30 17:17:07,653", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-10-30 22:17:07) ---\u001b[0m"}
+{"timestamp": "2025-12-08 23:12:18,469", "name": "wb", "level": "INFO", "message": "\u001b[36mActive strategy profile 'default_scalping' loaded successfully.\u001b[0m"}
+{"timestamp": "2025-12-08 23:12:18,474", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Whalebot Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-12-08 23:12:18,474", "name": "wb", "level": "INFO", "message": "Symbol: BCHUSDT, Interval: 1"}
+{"timestamp": "2025-12-08 23:12:18,475", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-12-08 23:12:19,294", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: Js-fZmZA0yd5ZfDlwzM3QWW8-M_An1f-0aVBP24KtW_e3KC7eSiI6g==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-08 23:12:19,300", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 05:12:19) ---\u001b[0m"}
+{"timestamp": "2025-12-08 23:12:19,582", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: aV8H3Go4pVUUKVLsTf9OAOkR_WZp3XJt554mfrhx3O0GAza5DNFTKQ==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-08 23:12:19,589", "name": "wb", "level": "WARNING", "message": "\u001b[33m[BCHUSDT] Could not fetch current price.\u001b[0m"}
+{"timestamp": "2025-12-08 23:12:19,589", "name": "wb", "level": "WARNING", "message": "\u001b[33mALERT: [BCHUSDT] Failed to fetch current price. Skipping loop.\u001b[0m"}
+{"timestamp": "2025-12-09 00:19:17,104", "name": "wb", "level": "INFO", "message": "\u001b[36mActive strategy profile 'default_scalping' loaded successfully.\u001b[0m"}
+{"timestamp": "2025-12-09 00:19:17,113", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Whalebot Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:19:17,115", "name": "wb", "level": "INFO", "message": "Symbol: BCHUSDT, Interval: 1"}
+{"timestamp": "2025-12-09 00:19:17,117", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-12-09 00:19:17,779", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: HKDh8MYiaWnLy83cmPWAoMKco3wdJ_EPBvBx3pz87oyyhgex1zLIsg==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:19:17,785", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:19:17) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:19:18,087", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: 7vhjic6ZWQ1fGP_ZrHML5xmvjBplTODw27TgrV4AZVXFp1SV_9tmTw==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:19:18,093", "name": "wb", "level": "WARNING", "message": "\u001b[33m[BCHUSDT] Could not fetch current price.\u001b[0m"}
+{"timestamp": "2025-12-09 00:19:18,094", "name": "wb", "level": "WARNING", "message": "\u001b[33mALERT: [BCHUSDT] Failed to fetch current price. Skipping loop.\u001b[0m"}
+{"timestamp": "2025-12-09 00:55:11,832", "name": "wb", "level": "INFO", "message": "\u001b[36mActive strategy profile 'default_scalping' loaded successfully.\u001b[0m"}
+{"timestamp": "2025-12-09 00:55:11,840", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Whalebot Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:55:11,842", "name": "wb", "level": "INFO", "message": "Symbol: BCHUSDT, Interval: 1"}
+{"timestamp": "2025-12-09 00:55:11,844", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-12-09 00:55:58,832", "name": "wb", "level": "INFO", "message": "\u001b[36mActive strategy profile 'default_scalping' loaded successfully.\u001b[0m"}
+{"timestamp": "2025-12-09 00:55:58,835", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Whalebot Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:55:58,836", "name": "wb", "level": "INFO", "message": "Symbol: BCHUSDT, Interval: 1"}
+{"timestamp": "2025-12-09 00:55:58,837", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-12-09 00:56:36,507", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: NSjArhQE603pxU01Z1UnvDdQs4LgTaTGcXHbwJwcAp8vhhWjJDdAMw==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:56:36,512", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:56:36) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:56:43,646", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: hFZPTVTQfLzWSAx5FWHRiMFTzf7kO5OvBqpM8Oth0lCZOq13KUceeg==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:56:43,658", "name": "wb", "level": "WARNING", "message": "\u001b[33m[BCHUSDT] Could not fetch current price.\u001b[0m"}
+{"timestamp": "2025-12-09 00:56:43,667", "name": "wb", "level": "WARNING", "message": "\u001b[33mALERT: [BCHUSDT] Failed to fetch current price. Skipping loop.\u001b[0m"}
+{"timestamp": "2025-12-09 00:56:58,672", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:56:58) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:07,672", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: eLadU5QpQIcrogSjwCkTRrgq4hiuwgx19gq1TJ7ij3CpkM0EX58rPA==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:07,678", "name": "wb", "level": "WARNING", "message": "\u001b[33m[BCHUSDT] Could not fetch current price.\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:07,679", "name": "wb", "level": "WARNING", "message": "\u001b[33mALERT: [BCHUSDT] Failed to fetch current price. Skipping loop.\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:22,680", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:57:22) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:24,371", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: gcLMuOdJHKwaMqvbz-Xq3zgHXpcbYF2yOYEKzBPvtAWx9J3TiCOLNA==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:24,379", "name": "wb", "level": "WARNING", "message": "\u001b[33m[BCHUSDT] Could not fetch current price.\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:24,379", "name": "wb", "level": "WARNING", "message": "\u001b[33mALERT: [BCHUSDT] Failed to fetch current price. Skipping loop.\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:39,380", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:57:39) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:44,381", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: NuvNyJqKOCjPnVG1ud8M4pzoLlWx6lrhfSkW01R9x44AJ_HECR0AAA==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:44,392", "name": "wb", "level": "WARNING", "message": "\u001b[33m[BCHUSDT] Could not fetch current price.\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:44,394", "name": "wb", "level": "WARNING", "message": "\u001b[33mALERT: [BCHUSDT] Failed to fetch current price. Skipping loop.\u001b[0m"}
+{"timestamp": "2025-12-09 00:57:59,398", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:57:59) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:00,391", "name": "wb", "level": "INFO", "message": "\u001b[36mActive strategy profile 'default_scalping' loaded successfully.\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:00,400", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Whalebot Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:00,403", "name": "wb", "level": "INFO", "message": "Symbol: BCHUSDT, Interval: 1"}
+{"timestamp": "2025-12-09 00:58:00,406", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-12-09 00:58:06,976", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: jtSN57uLj7ni6EX7XqauaYLTIzKvsCD0Jlku8nzsdtpKz7Et8C_8cw==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:06,987", "name": "wb", "level": "WARNING", "message": "\u001b[33m[BCHUSDT] Could not fetch current price.\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:06,988", "name": "wb", "level": "WARNING", "message": "\u001b[33mALERT: [BCHUSDT] Failed to fetch current price. Skipping loop.\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:09,610", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: YUOVbPvIiSesihrh_8qMLDc67OzpTKh-HyZuyOLTMZfvR3RkWT3Ifw==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:09,616", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:58:09) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:17,210", "name": "wb", "level": "ERROR", "message": "\u001b[91mHTTP Error: 403 - <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n<HTML><HEAD><META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-1\">\n<TITLE>ERROR: The request could not be satisfied</TITLE>\n</HEAD><BODY>\n<H1>403 ERROR</H1>\n<H2>The request could not be satisfied.</H2>\n<HR noshade size=\"1px\">\nThe Amazon CloudFront distribution is configured to block access from your country.\nWe can't connect to the server for this app or website at this time. There might be too much traffic or a configuration error. Try again later, or contact the app or website owner.\n<BR clear=\"all\">\nIf you provide content to customers through CloudFront, you can find steps to troubleshoot and help prevent this error by reviewing the CloudFront documentation.\n<BR clear=\"all\">\n<HR noshade size=\"1px\">\n<PRE>\nGenerated by cloudfront (CloudFront)\nRequest ID: hJtujeYS7gRxXEuygIzHTkfHw6gatrDd8ZBUhl2kHnk0b5NM-eD0Gg==\n</PRE>\n<ADDRESS>\n</ADDRESS>\n</BODY></HTML>\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:17,215", "name": "wb", "level": "WARNING", "message": "\u001b[33m[BCHUSDT] Could not fetch current price.\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:17,215", "name": "wb", "level": "WARNING", "message": "\u001b[33mALERT: [BCHUSDT] Failed to fetch current price. Skipping loop.\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:21,989", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:58:21) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:32,217", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:58:32) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:55,881", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 00:58:55,882", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 00:59:06,397", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 00:59:06,399", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 00:59:25,921", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 06:59:25) ---\u001b[0m"}
+{"timestamp": "2025-12-09 00:59:49,190", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 00:59:49,191", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:00:19,218", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:00:19) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:01:08,255", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:01:08,256", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:01:38,284", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:01:38) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:03:07,989", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:03:07,990", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:03:38,017", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:03:38) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:04:36,979", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:04:36,983", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:05:07,038", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:05:07) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:06:12,582", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:06:12,583", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:06:42,614", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:06:42) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:08:20,267", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:08:20,271", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:08:50,298", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:08:50) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:09:15,826", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:09:15,827", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:09:45,854", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:09:45) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:09:58,713", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:09:58,715", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:10:28,741", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:10:28) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:11:39,681", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:11:39,685", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:12:09,716", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:12:09) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:12:37,694", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: HTTPSConnectionPool(host='api.bybit.com', port=443): Read timed out.\u001b[0m"}
+{"timestamp": "2025-12-09 01:12:37,697", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:13:07,933", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:13:07) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:13:32,929", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:13:32,930", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:14:02,988", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:14:02) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:18:30,212", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: HTTPSConnectionPool(host='api.bybit.com', port=443): Read timed out.\u001b[0m"}
+{"timestamp": "2025-12-09 01:18:30,216", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:19:00,277", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:19:00) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:19:26,226", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:19:26,227", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:19:56,253", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:19:56) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:20:32,147", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:20:32,150", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:21:02,181", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:21:02) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:21:19,836", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:21:19,839", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:21:49,866", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:21:49) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:22:12,840", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:22:12,842", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:22:42,868", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:22:42) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:23:08,430", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:23:08,431", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:23:38,456", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:23:38) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:23:50,229", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:23:50,230", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:24:20,257", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:24:20) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:24:45,837", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:24:45,841", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:25:15,867", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:25:15) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:25:56,521", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:25:56,523", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:26:26,551", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:26:26) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:26:48,748", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:26:48,749", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:27:18,776", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:27:18) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:27:33,375", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:27:33,376", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:28:03,428", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:28:03) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:28:17,922", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:28:17,923", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:28:47,951", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:28:47) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:29:03,502", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:29:03,503", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:29:33,537", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:29:33) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:31:12,940", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:31:12,942", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:31:43,000", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:31:43) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:32:10,063", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:32:10,064", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:32:40,098", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:32:40) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:33:03,846", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:33:03,848", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:33:33,889", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:33:33) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:33:52,378", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:33:52,379", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:34:22,411", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:34:22) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:34:36,515", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:34:36,516", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:35:06,549", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:35:06) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:35:26,581", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:35:26,582", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:35:56,617", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:35:56) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:36:12,035", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:36:12,036", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:36:42,068", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:36:42) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:36:53,804", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:36:53,806", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:37:23,837", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:37:23) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:37:51,022", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:37:51,058", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-09 01:38:21,349", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-09 07:38:21) ---\u001b[0m"}
+{"timestamp": "2025-12-09 01:38:52,221", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-09 01:38:52,224", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-12 10:05:32,987", "name": "wb", "level": "INFO", "message": "\u001b[36mActive strategy profile 'default_scalping' loaded successfully.\u001b[0m"}
+{"timestamp": "2025-12-12 10:05:32,996", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Whalebot Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-12-12 10:05:32,998", "name": "wb", "level": "INFO", "message": "Symbol: BCHUSDT, Interval: 1"}
+{"timestamp": "2025-12-12 10:05:32,999", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-12-12 10:05:34,517", "name": "wb", "level": "ERROR", "message": "\u001b[91mBybit API Error: Your api key has expired. (Code: 33004)\u001b[0m"}
+{"timestamp": "2025-12-12 10:05:34,531", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-12 16:05:34) ---\u001b[0m"}
+{"timestamp": "2025-12-12 10:05:45,205", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-12 10:05:45,207", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}
+{"timestamp": "2025-12-12 10:07:02,964", "name": "wb", "level": "INFO", "message": "\u001b[36mActive strategy profile 'default_scalping' loaded successfully.\u001b[0m"}
+{"timestamp": "2025-12-12 10:07:02,970", "name": "wb", "level": "INFO", "message": "\u001b[92m--- Whalebot Trading Bot Initialized ---\u001b[0m"}
+{"timestamp": "2025-12-12 10:07:02,971", "name": "wb", "level": "INFO", "message": "Symbol: BCHUSDT, Interval: 1"}
+{"timestamp": "2025-12-12 10:07:02,973", "name": "wb", "level": "INFO", "message": "Trade Management Enabled: True"}
+{"timestamp": "2025-12-12 10:07:04,493", "name": "wb", "level": "INFO", "message": "\u001b[35m--- New Analysis Loop Started (2025-12-12 16:07:04) ---\u001b[0m"}
+{"timestamp": "2025-12-12 10:07:14,895", "name": "wb", "level": "ERROR", "message": "\u001b[91mALERT: [BCHUSDT] An unhandled error occurred in the main loop: name 'orderbook_data' is not defined\u001b[0m"}
+{"timestamp": "2025-12-12 10:07:14,897", "name": "wb", "level": "ERROR", "message": "\u001b[91m[BCHUSDT] Unhandled exception in main loop:\u001b[0m"}

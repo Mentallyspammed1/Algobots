@@ -1,0 +1,14 @@
+2025-12-18 08:27:15,730 - fatal - CRITICAL - Abyssal Error: 'execution'
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wb3.2.py", line 270, in <module>
+    main()
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wb3.2.py", line 265, in main
+    bot = WhaleBot(config)
+          ^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wb3.2.py", line 194, in __init__
+    self.client = PybitTradingClient(config, self.logger)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wb3.2.py", line 126, in __init__
+    testnet=config["execution"]["testnet"]
+            ~~~~~~^^^^^^^^^^^^^
+KeyError: 'execution'

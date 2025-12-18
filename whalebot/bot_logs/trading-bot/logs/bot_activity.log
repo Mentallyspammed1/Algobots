@@ -1,0 +1,20 @@
+2025-10-18 07:04:16 - WhaleBot - INFO - [92mStarting WhaleBot...[0m
+2025-10-18 07:04:16 - WhaleBot - INFO - Configuration loaded successfully.
+2025-10-23 14:28:08 - WhaleBot - INFO - [92mStarting WhaleBot...[0m
+2025-10-23 14:28:08 - WhaleBot - ERROR - Error decoding JSON from config.json
+2025-10-23 14:28:08 - WhaleBot - ERROR - Failed to load configuration. Exiting.
+2025-10-23 14:33:25 - WhaleBot - INFO - [92mStarting WhaleBot...[0m
+2025-10-23 14:33:25 - WhaleBot - ERROR - Error decoding JSON from config.json
+2025-10-23 14:33:25 - WhaleBot - ERROR - Failed to load configuration. Exiting.
+2025-10-24 22:16:28 - WhaleBot - INFO - [92mStarting WhaleBot...[0m
+2025-10-24 22:16:28 - WhaleBot - INFO - Configuration loaded successfully.
+2025-10-24 23:02:34 - WhaleBot - INFO - [92mStarting WhaleBot...[0m
+2025-10-24 23:02:34 - WhaleBot - INFO - Configuration loaded successfully.
+2025-10-24 23:02:34 - WhaleBot - INFO - Fetching klines...
+2025-10-24 23:02:34 - WhaleBot - WARNING - [33mCould not fetch klines, skipping loop.[0m
+2025-10-24 23:02:34 - WhaleBot - ERROR - [91mAn unexpected error occurred in the main loop: 'loop_delay'[0m
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/whalebot/whalebot.py", line 229, in main
+    time.sleep(config["loop_delay"])
+               ~~~~~~^^^^^^^^^^^^^^
+KeyError: 'loop_delay'

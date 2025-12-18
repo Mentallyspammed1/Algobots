@@ -1,0 +1,131 @@
+2025-10-27 00:45:32,310 - whalebot - INFO - [92mWhaleBot initialized for TRUMPUSDT[0m
+2025-10-27 00:45:32,311 - whalebot - INFO - [92mStarting WhaleBot for TRUMPUSDT[0m
+2025-10-27 00:45:32,318 - whalebot - ERROR - [91mError in main loop: 'decimal.Decimal' object has no attribute 'replace'[0m
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 2891, in run
+    if not self._check_risk_guardrails():
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 2817, in _check_risk_guardrails
+    if float(self.performance_tracker.max_drawdown.replace("%", "")) > self.config.risk_management.max_drawdown_pct:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'decimal.Decimal' object has no attribute 'replace'
+2025-10-27 00:45:32,327 - whalebot - ERROR - [91mALERT: Error in main loop: 'decimal.Decimal' object has no attribute 'replace'[0m
+2025-10-27 00:45:39,848 - whalebot - INFO - [33mReceived signal 2. Shutting down gracefully...[0m
+2025-10-27 00:47:17,226 - whalebot - INFO - [92mWhaleBot initialized for TRUMPUSDT[0m
+2025-10-27 00:47:17,228 - whalebot - INFO - [92mStarting WhaleBot for TRUMPUSDT[0m
+2025-10-27 00:47:17,430 - whalebot - WARNING - [33mCould not fetch current price for TRUMPUSDT.[0m
+2025-10-27 00:47:17,545 - whalebot - WARNING - [33mCould not fetch klines for TRUMPUSDT 3.[0m
+2025-10-27 00:47:17,550 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 00:47:32,553 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 00:47:47,554 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 00:47:49,707 - whalebot - INFO - [92mWhaleBot initialized for TRUMPUSDT[0m
+2025-10-27 00:47:49,707 - whalebot - INFO - [92mStarting WhaleBot for TRUMPUSDT[0m
+2025-10-27 00:47:49,785 - whalebot - WARNING - [33mCould not fetch current price for TRUMPUSDT.[0m
+2025-10-27 00:47:49,853 - whalebot - WARNING - [33mCould not fetch klines for TRUMPUSDT 3.[0m
+2025-10-27 00:47:49,854 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 00:48:02,557 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 00:48:03,529 - whalebot - INFO - [33mReceived signal 15. Shutting down gracefully...[0m
+2025-10-27 00:48:04,857 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 00:48:17,559 - whalebot - INFO - [33mShutting down WhaleBot...[0m
+2025-10-27 00:48:17,598 - whalebot - WARNING - [33mWebSocket closed: None - None[0m
+2025-10-27 00:48:18,132 - whalebot - WARNING - [33mWebSocket closed: None - None[0m
+2025-10-27 00:48:18,141 - whalebot - INFO - [92mFinal Performance Summary: {'total_trades': 0, 'total_pnl': Decimal('0'), 'daily_pnl': Decimal('0'), 'wins': 0, 'losses': 0, 'win_rate': '0.00%', 'profit_factor': 'inf', 'avg_win': 0, 'avg_loss': 0, 'max_consecutive_losses': 0, 'max_drawdown': '0.00%'}[0m
+2025-10-27 00:48:19,858 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 00:48:24,733 - whalebot - ERROR - [91mWebSocket error: Connection to remote host was lost.[0m
+2025-10-27 00:48:24,742 - whalebot - ERROR - [91mWebSocket error: Connection to remote host was lost.[0m
+2025-10-27 00:48:24,744 - whalebot - WARNING - [33mWebSocket closed: None - None[0m
+2025-10-27 00:48:24,749 - whalebot - WARNING - [33mWebSocket closed: None - None[0m
+2025-10-27 00:48:34,858 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 00:48:57,150 - whalebot - ERROR - [91mBybit API Error: error sign! origin_string[1761544132399pXXkHX8ryNx4tJw4oQ20000category=linear&symbol=TRUMPUSDT] (Code: 10004)[0m
+2025-10-27 00:48:57,156 - whalebot - INFO - [92mWhaleBot initialized for TRUMPUSDT[0m
+2025-10-27 00:48:57,157 - whalebot - INFO - [92mStarting WhaleBot for TRUMPUSDT[0m
+2025-10-27 00:48:59,110 - whalebot - WARNING - [33mVolume too low: $3682.88. Skipping trade.[0m
+2025-10-27 00:49:15,896 - whalebot - WARNING - [33mVolume too low: $3682.88. Skipping trade.[0m
+2025-10-27 00:49:31,337 - whalebot - WARNING - [33mVolume too low: $3682.88. Skipping trade.[0m
+2025-10-27 02:00:39,793 - whalebot - ERROR - [91mFailed to synchronize time with Bybit: 403 Client Error: Forbidden for url: https://api.bybit.com/v5/market/time[0m
+2025-10-27 02:00:39,944 - whalebot - INFO - [92mWhaleBot initialized for TRUMPUSDT[0m
+2025-10-27 02:00:39,945 - whalebot - INFO - [92mStarting WhaleBot for TRUMPUSDT[0m
+2025-10-27 02:00:40,094 - whalebot - WARNING - [33mCould not fetch current price for TRUMPUSDT.[0m
+2025-10-27 02:00:40,261 - whalebot - WARNING - [33mCould not fetch klines for TRUMPUSDT 3.[0m
+2025-10-27 02:00:40,262 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 02:00:55,263 - whalebot - WARNING - [33mCould not fetch current price. Skipping loop iteration.[0m
+2025-10-27 02:02:05,572 - whalebot - ERROR - [91mFailed to synchronize time with Bybit: unsupported operand type(s) for //: 'str' and 'int'[0m
+2025-10-27 02:02:06,262 - whalebot - ERROR - [91mBybit API Error: error sign! origin_string[1761548525575pXXkHX8ryNx4tJw4oQ20000category=linear&symbol=TRUMPUSDT] (Code: 10004)[0m
+2025-10-27 02:02:06,270 - whalebot - INFO - [92mWhaleBot initialized for TRUMPUSDT[0m
+2025-10-27 02:02:06,271 - whalebot - INFO - [92mStarting WhaleBot for TRUMPUSDT[0m
+2025-10-27 02:02:07,874 - whalebot - WARNING - [33mVolume too low: $34385.12. Skipping trade.[0m
+2025-10-27 02:02:23,496 - whalebot - WARNING - [33mVolume too low: $34385.12. Skipping trade.[0m
+2025-10-27 02:02:38,926 - whalebot - WARNING - [33mVolume too low: $34385.12. Skipping trade.[0m
+2025-10-27 02:02:54,337 - whalebot - WARNING - [33mVolume too low: $34385.12. Skipping trade.[0m
+2025-10-27 02:03:10,671 - whalebot - WARNING - [33mVolume too low: $5316.62. Skipping trade.[0m
+2025-10-27 02:03:26,117 - whalebot - WARNING - [33mVolume too low: $5316.62. Skipping trade.[0m
+2025-10-27 02:03:41,570 - whalebot - WARNING - [33mVolume too low: $5316.62. Skipping trade.[0m
+2025-10-27 02:03:56,991 - whalebot - WARNING - [33mVolume too low: $5316.62. Skipping trade.[0m
+2025-10-27 02:04:13,847 - whalebot - WARNING - [33mVolume too low: $16238.61. Skipping trade.[0m
+2025-10-27 02:04:29,276 - whalebot - WARNING - [33mVolume too low: $16238.61. Skipping trade.[0m
+2025-10-27 02:04:44,692 - whalebot - WARNING - [33mVolume too low: $16238.61. Skipping trade.[0m
+2025-10-27 02:05:00,168 - whalebot - WARNING - [33mVolume too low: $16238.61. Skipping trade.[0m
+2025-10-27 02:05:16,573 - whalebot - WARNING - [33mVolume too low: $37482.10. Skipping trade.[0m
+2025-10-27 02:05:32,000 - whalebot - WARNING - [33mVolume too low: $37482.10. Skipping trade.[0m
+2025-10-27 02:05:47,413 - whalebot - WARNING - [33mVolume too low: $37482.10. Skipping trade.[0m
+2025-10-27 02:05:57,051 - whalebot - ERROR - [91mWebSocket error: Connection to remote host was lost.[0m
+2025-10-27 02:05:57,054 - whalebot - WARNING - [33mWebSocket closed: None - None[0m
+2025-10-27 02:06:02,827 - whalebot - WARNING - [33mVolume too low: $37482.10. Skipping trade.[0m
+2025-10-27 02:06:19,422 - whalebot - WARNING - [33mVolume too low: $16378.60. Skipping trade.[0m
+2025-10-27 02:06:35,359 - whalebot - WARNING - [33mVolume too low: $16378.60. Skipping trade.[0m
+2025-10-27 02:06:51,536 - whalebot - WARNING - [33mVolume too low: $16378.60. Skipping trade.[0m
+2025-10-27 02:07:06,962 - whalebot - WARNING - [33mVolume too low: $16378.60. Skipping trade.[0m
+2025-10-27 02:07:23,743 - whalebot - ERROR - [91mError in main loop: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'[0m
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 3002, in run
+    analyzer = TradingAnalyzer(df, self.config, self.logger, self.config.core_settings.symbol)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 1716, in __init__
+    self._calculate_all_indicators()
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 1985, in _calculate_all_indicators
+    self.detect_candlestick_patterns,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'
+2025-10-27 02:07:23,765 - whalebot - ERROR - [91mALERT: Error in main loop: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'[0m
+2025-10-27 02:07:54,205 - whalebot - ERROR - [91mError in main loop: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'[0m
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 3002, in run
+    analyzer = TradingAnalyzer(df, self.config, self.logger, self.config.core_settings.symbol)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 1716, in __init__
+    self._calculate_all_indicators()
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 1985, in _calculate_all_indicators
+    self.detect_candlestick_patterns,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'
+2025-10-27 02:07:54,220 - whalebot - ERROR - [91mALERT: Error in main loop: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'[0m
+2025-10-27 02:08:25,671 - whalebot - ERROR - [91mError in main loop: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'[0m
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 3002, in run
+    analyzer = TradingAnalyzer(df, self.config, self.logger, self.config.core_settings.symbol)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 1716, in __init__
+    self._calculate_all_indicators()
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 1985, in _calculate_all_indicators
+    self.detect_candlestick_patterns,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'
+2025-10-27 02:08:25,684 - whalebot - ERROR - [91mALERT: Error in main loop: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'[0m
+2025-10-27 02:08:54,845 - whalebot - ERROR - [91mWebSocket error: Connection to remote host was lost.[0m
+2025-10-27 02:08:54,846 - whalebot - WARNING - [33mWebSocket closed: None - None[0m
+2025-10-27 02:11:32,970 - whalebot - INFO - [92mTime synchronized with Bybit. Offset: 709 ms[0m
+2025-10-27 02:11:33,330 - whalebot - ERROR - [91mBybit API Error: error sign! origin_string[1761549093681pXXkHX8ryNx4tJw4oQ20000category=linear&symbol=TRUMPUSDT] (Code: 10004)[0m
+2025-10-27 02:11:33,334 - whalebot - INFO - [92mWhaleBot initialized for TRUMPUSDT[0m
+2025-10-27 02:11:33,336 - whalebot - INFO - [92mStarting WhaleBot for TRUMPUSDT[0m
+2025-10-27 02:11:34,827 - whalebot - ERROR - [91mError in main loop: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'[0m
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 3002, in run
+    analyzer = TradingAnalyzer(df, self.config, self.logger, self.config.core_settings.symbol)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 1716, in __init__
+    self._calculate_all_indicators()
+  File "/data/data/com.termux/files/home/Algobots/whalebot/wbglm.py", line 1985, in _calculate_all_indicators
+    self.detect_candlestick_patterns,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'
+2025-10-27 02:11:34,851 - whalebot - ERROR - [91mALERT: Error in main loop: 'TradingAnalyzer' object has no attribute 'detect_candlestick_patterns'[0m

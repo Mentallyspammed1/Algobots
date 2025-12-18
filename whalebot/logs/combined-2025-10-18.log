@@ -1,0 +1,54 @@
+{"level":"info","message":"Utils module initialized","metadata":{"logLevel":"info","service":"trading-bot"},"timestamp":"2025-10-18T23:10:45.852Z"}
+{"level":"info","message":"--- Parser Verification Ritual ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:10:45.903"}
+{"level":"info","message":"Parsing log for symbol: BTCUSDT","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:10:45.913"}
+{"level":"error","message":"Log file not found: ../logs/wgwhalex_bot.log","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:10:45.935"}
+{"level":"error","message":"Verification failed: No data points were extracted.","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:10:45.944"}
+{"level":"warn","message":"Ensure the log file contains entries for the specified symbol and the parser logic is correct.","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:10:45.948"}
+{"level":"info","message":"Utils module initialized","metadata":{"logLevel":"info","service":"trading-bot"},"timestamp":"2025-10-18T23:13:28.494Z"}
+{"level":"info","message":"--- Parser Verification Ritual ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:28.537"}
+{"level":"info","message":"Parsing log for symbol: BTCUSDT","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:28.548"}
+{"level":"error","message":"Log file not found: ./logs/wgwhalex_bot.log","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:28.570"}
+{"level":"error","message":"Verification failed: No data points were extracted.","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:28.574"}
+{"level":"warn","message":"Ensure the log file contains entries for the specified symbol and the parser logic is correct.","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:28.580"}
+{"level":"info","message":"Utils module initialized","metadata":{"logLevel":"info","service":"trading-bot"},"timestamp":"2025-10-18T23:13:56.741Z"}
+{"level":"info","message":"--- Parser Verification Ritual ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:56.805"}
+{"level":"info","message":"Parsing log for symbol: BTCUSDT","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:56.812"}
+{"level":"info","message":"Parsing 13787 lines from log file","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:56.908"}
+{"level":"info","message":"Extracted 214 data points for BTCUSDT","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:57.978"}
+{"level":"info","message":"Parsing completed in 1165ms","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:57.983"}
+{"level":"info","message":"\n--- Latest Parsed Data Point ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:57.985"}
+{"level":"info","message":"\n--- Key Indicator Verification ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:57.992"}
+{"level":"error","message":"❌ currentPrice: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:57.994"}
+{"level":"error","message":"❌ rsi: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:57.998"}
+{"level":"error","message":"❌ macd_hist: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:58.003"}
+{"level":"error","message":"❌ 3_ema: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:58.005"}
+{"level":"error","message":"❌ 15_ema: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:58.007"}
+{"level":"error","message":"\n🔥 Verification failed! Some key indicators were not parsed. Review the patterns and log format. 🔥","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:13:58.009"}
+{"level":"info","message":"Utils module initialized","metadata":{"logLevel":"info","service":"trading-bot"},"timestamp":"2025-10-18T23:15:46.405Z"}
+{"level":"info","message":"--- Parser Verification Ritual ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:46.453"}
+{"level":"info","message":"Parsing log for symbol: BTCUSDT","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:46.461"}
+{"level":"info","message":"Parsing 13787 lines from log file","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:46.551"}
+{"level":"info","message":"Extracted 214 data points for BTCUSDT","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.804"}
+{"level":"info","message":"Parsing completed in 1346ms","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.811"}
+{"level":"info","message":"\n--- Latest Parsed Data Point ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.818"}
+{"level":"info","message":"\n--- Key Indicator Verification ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.832"}
+{"level":"error","message":"❌ currentPrice: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.834"}
+{"level":"error","message":"❌ rsi: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.838"}
+{"level":"error","message":"❌ macd_hist: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.840"}
+{"level":"error","message":"❌ 60_ema: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.842"}
+{"level":"error","message":"❌ 240_ema: Not found!","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.845"}
+{"level":"error","message":"\n🔥 Verification failed! Some key indicators were not parsed. Review the patterns and log format. 🔥","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:15:47.847"}
+{"level":"info","message":"Utils module initialized","metadata":{"logLevel":"info","service":"trading-bot"},"timestamp":"2025-10-18T23:17:21.437Z"}
+{"level":"info","message":"--- Parser Verification Ritual ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:21.491"}
+{"level":"info","message":"Parsing log for symbol: BTCUSDT","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:21.498"}
+{"level":"info","message":"Parsing 13787 lines from log file","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:21.581"}
+{"level":"info","message":"Extracted 107 data points for BTCUSDT","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.372"}
+{"level":"info","message":"Parsing completed in 871ms","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.378"}
+{"level":"info","message":"\n--- Latest Parsed Data Point ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.381"}
+{"level":"info","message":"\n--- Key Indicator Verification ---","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.388"}
+{"level":"info","message":"✅ currentPrice: 107097.3","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.390"}
+{"level":"info","message":"✅ rsi: 0","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.394"}
+{"level":"info","message":"✅ macd_hist: 8.1976097","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.396"}
+{"level":"info","message":"✅ 60_ema: DOWN","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.398"}
+{"level":"info","message":"✅ 240_ema: DOWN","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.399"}
+{"level":"info","message":"\n✨ Verification successful! The parser is correctly extracting key data. ✨","metadata":{"service":"trading-bot"},"timestamp":"2025-10-18 18:17:22.401"}

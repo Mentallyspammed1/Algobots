@@ -1,0 +1,46 @@
+2025-12-18 01:55:02,448 - INFO - WebSocket Unified V5 attempting connection...
+2025-12-18 01:55:04,621 - INFO - Websocket connected
+2025-12-18 01:55:04,622 - INFO - WebSocket Unified V5 connected
+2025-12-18 01:55:04,625 - INFO - WebSocket Unified V5 (Auth) attempting connection...
+2025-12-18 01:55:05,912 - INFO - Websocket connected
+2025-12-18 01:55:05,912 - INFO - WebSocket Unified V5 (Auth) connected
+2025-12-18 01:55:10,790 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:11,142 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:17,037 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:17,463 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:23,410 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:23,856 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:29,751 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:30,498 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:35,922 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:36,294 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:42,190 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:42,777 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:48,898 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:49,621 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:54,988 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:55:55,335 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:01,202 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:01,559 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:07,510 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:07,920 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:13,859 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:14,240 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:20,101 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:20,522 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:26,385 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:26,733 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:32,934 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:33,283 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:38,660 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:56:39,035 - ERROR - Wallet error: could not convert string to float: ''
+2025-12-18 01:57:06,144 - INFO - WebSocket Unified V5 attempting connection...
+2025-12-18 01:57:08,543 - INFO - Websocket connected
+2025-12-18 01:57:08,544 - INFO - WebSocket Unified V5 connected
+2025-12-18 01:57:08,552 - INFO - WebSocket Unified V5 (Auth) attempting connection...
+2025-12-18 01:57:09,744 - INFO - Websocket connected
+2025-12-18 01:57:09,745 - INFO - WebSocket Unified V5 (Auth) connected
+2025-12-18 01:57:14,918 - WARNING - Treasury divination failed: Empty availableToWithdraw field
+2025-12-18 01:57:15,325 - WARNING - Treasury divination failed: Empty availableToWithdraw field
+2025-12-18 01:57:22,636 - WARNING - Treasury divination failed: Empty availableToWithdraw field
+2025-12-18 01:57:23,037 - WARNING - Treasury divination failed: Empty availableToWithdraw field
