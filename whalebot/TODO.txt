@@ -1,0 +1,53 @@
+# TODO.txt - Code Review Suggestions for ehl.py
+
+## Critical Bugs
+
+-   [ ] **Fix `ClientConnection` Error in `public_market_data_manager`:**
+    -   **Action:** Run `ehl.py` to get a full traceback of the `AttributeError`. Diagnose and fix the root cause of `ws` being an `aiohttp.ClientConnection` object. Consider environment/library versions if the issue persists.
+    -   **Priority:** High
+
+-   [ ] **Fix Undefined Constant `COOLDOWN_SECONDS`:**
+    -   **Action:** Replace `COOLDOWN_SECONDS` with `SCALPING_COOLDOWN_SECONDS` in `private_manager`.
+    -   **Priority:** High
+
+## Code Quality & Best Practices
+
+-   [ ] **Refactor Global Constants into `StrategyConfig`:**
+    -   **Action:** Create a `StrategyConfig` class/dict to hold all configurable parameters. Pass this object to relevant functions.
+    -   **Priority:** Medium
+
+-   [ ] **Replace Magic Numbers with Named Constants:**
+    -   **Action:** Define constants for values like `50` (super_smoother), `14` (ATR), `10` (Fisher window), `0.8` (pullback limit).
+    -   **Priority:** Medium
+
+## Performance & Efficiency
+
+-   [ ] **Implement Robust WebSocket Reconnection with Exponential Backoff:**
+    -   **Action:** Re-implement reconnection logic in `public_market_data_manager` (and potentially `private_manager`) using an exponential backoff strategy.
+    -   **Priority:** Medium
+
+## Readability & Maintainability
+
+-   [ ] **Integrate Structured Logging:**
+    -   **Action:** Replace `state.logs.append` with Python's `logging` module for better log management.
+    -   **Priority:** Medium
+
+-   [ ] **Add Comprehensive Docstrings:**
+    -   **Action:** Add detailed docstrings to all classes and functions.
+    -   **Priority:** Low
+
+## Opportunities for Refactoring & Simplification
+
+-   [ ] **Extract Indicator Calculations:**
+    -   **Action:** Break down `update_oracle` into smaller helper functions for individual indicator calculations.
+    -   **Priority:** Medium
+
+-   [ ] **Refactor Trade Management Functions:**
+    -   **Action:** Break down `execute_trade` and `manage_trade` into smaller, more focused helper functions.
+    -   **Priority:** Medium
+
+## Test Coverage
+
+-   [ ] **Implement Unit and Integration Tests:**
+    -   **Action:** Write unit tests for individual functions and integration tests for component interactions using `pytest`.
+    -   **Priority:** High
