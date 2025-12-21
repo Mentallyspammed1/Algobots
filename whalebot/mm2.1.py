@@ -1,32 +1,35 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Arcane Market Maker v11.0 - THE SINGULARITY
 The ultimate high-frequency evolution for Termux & Bybit Mainnet.
 """
 
-import os
-import sys
 import asyncio
-import aiohttp
-import hmac
 import hashlib
+import hmac
 import json
+import os
+import signal
+import sys
 import time
 import urllib.parse
-import logging
-import signal
 from collections import deque
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from typing import Dict, List, Optional, Tuple
+from decimal import ROUND_DOWN
+from decimal import ROUND_UP
+from decimal import Decimal
+
+import aiohttp
 
 # --- Pre-Flight Check & Dependencies ---
 try:
-    from colorama import init, Fore, Back, Style
-    from dotenv import load_dotenv
     import numpy as np
     import websockets
+    from colorama import Back
+    from colorama import Fore
+    from colorama import Style
+    from colorama import init
+    from dotenv import load_dotenv
 except ImportError:
     print("Dependencies missing! Run: pip install aiohttp websockets numpy colorama python-dotenv")
     sys.exit(1)
@@ -77,12 +80,12 @@ class SymbolConfig:
 
 class OrderFlowEngine:
     def __init__(self):
-        self.bids: Dict[Decimal, Decimal] = {}
-        self.asks: Dict[Decimal, Decimal] = {}
+        self.bids: dict[Decimal, Decimal] = {}
+        self.asks: dict[Decimal, Decimal] = {}
         self.prev_imbalance = Decimal('0')
         self.ofi_signal = Decimal('0') # Order Flow Imbalance Signal
 
-    def update(self, data: Dict, is_snapshot: bool):
+    def update(self, data: dict, is_snapshot: bool):
         if is_snapshot:
             self.bids = {Decimal(p): Decimal(q) for p, q in data.get('b', [])}
             self.asks = {Decimal(p): Decimal(q) for p, q in data.get('a', [])}
@@ -103,7 +106,7 @@ class OrderFlowEngine:
         self.ofi_signal = curr_imb - self.prev_imbalance
         self.prev_imbalance = curr_imb
 
-    def get_fair_price(self) -> Tuple[Decimal, Decimal]:
+    def get_fair_price(self) -> tuple[Decimal, Decimal]:
         if not self.bids or not self.asks: return Decimal('0'), Decimal('0')
         best_bid, best_ask = max(self.bids.keys()), min(self.asks.keys())
         v_bid, v_ask = self.bids[best_bid], self.asks[best_ask]
@@ -118,20 +121,20 @@ class ArcaneSingularity:
         self.prices_hist = {s: deque(maxlen=50) for s in self.symbols}
         self.positions = {s: {"size": Decimal('0'), "value": Decimal('0')} for s in self.symbols}
         self.funding_rates = {s: Decimal('0') for s in self.symbols}
-        
+
         self.equity = Decimal('0')
         self.start_equity = Decimal('0')
         self.running = True
         self.session = None
-        self.last_update = {s: 0 for s in self.symbols}
+        self.last_update = dict.fromkeys(self.symbols, 0)
 
-    async def api_call(self, method: str, path: str, params: Dict = None):
+    async def api_call(self, method: str, path: str, params: dict = None):
         ts = str(int(time.time() * 1000))
         query = urllib.parse.urlencode(params) if method == "GET" and params else ""
         body = json.dumps(params) if method == "POST" and params else ""
         raw = ts + str(API_KEY) + "5000" + (query if method == "GET" else body)
         sig = hmac.new(API_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
-        
+
         headers = {
             "X-BAPI-API-KEY": API_KEY, "X-BAPI-SIGN": sig,
             "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": "5000",
@@ -152,7 +155,7 @@ class ArcaneSingularity:
                     self.symbols[s].tick_size = Decimal(i['priceFilter']['tickSize'])
                     self.symbols[s].qty_step = Decimal(i['lotSizeFilter']['qtyStep'])
                     self.symbols[s].min_qty = Decimal(i['lotSizeFilter']['minOrderQty'])
-        
+
         res = await self.api_call("GET", "/v5/account/wallet-balance", {"accountType": "UNIFIED"})
         if res:
             coin = next((c for c in res['result']['list'][0]['coin'] if c['coin'] == 'USDT'), None)
@@ -168,7 +171,7 @@ class ArcaneSingularity:
                 raw = f"GET/realtime{expires}"
                 sig = hmac.new(API_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
                 url = f"{WS_PRIVATE}?api_key={API_KEY}&expire={expires}&signature={sig}"
-                
+
                 async with websockets.connect(url) as ws:
                     await ws.send(json.dumps({"op": "subscribe", "args": ["position", "wallet"]}))
                     async for msg in ws:
@@ -188,7 +191,7 @@ class ArcaneSingularity:
         now = time.time()
         cfg = self.symbols[symbol]
         if now - self.last_update[symbol] < 0.7: return # Throttle
-        
+
         book = self.books[symbol]
         fair_px, density = book.get_fair_price()
         if fair_px == 0: return
@@ -205,9 +208,9 @@ class ArcaneSingularity:
         inv_skew = -(self.positions[symbol]['value'] / cfg.max_pos_usd ** 2)
         ofi_skew = Decimal(str(np.tanh(float(book.ofi_signal / 500))))
         funding_skew = -(self.funding_rates[symbol] * Decimal('15'))
-        
+
         total_skew = (inv_skew * Decimal('0.5')) + (ofi_skew * Decimal('0.3')) + (funding_skew * Decimal('0.2'))
-        
+
         # 3. VOLATILITY SCALING
         self.prices_hist[symbol].append(float(fair_px))
         vol = Decimal('1.0')
@@ -218,9 +221,9 @@ class ArcaneSingularity:
         spread = (fair_px * cfg.base_spread_bps / 10000) * vol
         bid_px = (fair_px - (spread * (1 - total_skew))).quantize(cfg.tick_size, ROUND_DOWN)
         ask_px = (fair_px + (spread * (1 + total_skew))).quantize(cfg.tick_size, ROUND_UP)
-        
+
         qty = (self.equity * cfg.risk_pct / fair_px).quantize(cfg.qty_step, ROUND_DOWN)
-        if qty < cfg.min_qty: qty = cfg.min_qty
+        qty = max(qty, cfg.min_qty)
 
         # 5. API DISPATCH
         asyncio.create_task(self.api_call("POST", "/v5/order/cancel-all", {"category": "linear", "symbol": symbol}))
@@ -229,7 +232,7 @@ class ArcaneSingularity:
             {"symbol": symbol, "side": "Sell", "orderType": "Limit", "qty": str(qty), "price": str(ask_px), "timeInForce": "PostOnly"}
         ]
         await self.api_call("POST", "/v5/order/create-batch", {"category": "linear", "request": batch})
-        
+
         self.last_update[symbol] = now
         self.render(symbol, fair_px, current_pnl, vol)
 
@@ -243,17 +246,17 @@ class ArcaneSingularity:
             self.session = session
             await self.initialize()
             await ArcaneHardware.vibrate("100,200,100")
-            
+
             # Start background tasks
             asyncio.create_task(self.private_stream())
-            
+
             while self.running:
                 try:
                     async with websockets.connect(WS_PUBLIC) as ws:
                         subs = [f"orderbook.50.{s}" for s in self.symbols]
                         subs += [f"tickers.{s}" for s in self.symbols]
                         await ws.send(json.dumps({"op": "subscribe", "args": subs}))
-                        
+
                         async for msg in ws:
                             d = json.loads(msg)
                             topic = d.get('topic', '')

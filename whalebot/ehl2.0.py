@@ -1,28 +1,25 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Arcane Market Maker v17.0 - THE RESOLUTE ORACLE
 Forged with ATR-Risk Parity, Fisher Reversal, and Partial Profit Siphoning.
 """
 
+import asyncio
+import hashlib
+import hmac
+import json
 import os
 import sys
-import asyncio
-import aiohttp
-import hmac
-import hashlib
-import json
 import time
 import urllib.parse
-import logging
-import signal
 from collections import deque
-from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from typing import Dict, List, Optional, Tuple
+from decimal import Decimal
+
+import aiohttp
 import numpy as np
 import websockets
-from colorama import init, Fore, Back, Style
+from colorama import Fore
+from colorama import init
 
 # --- Arcane Initialization ---
 init(autoreset=True)
@@ -71,7 +68,7 @@ class SentinelState:
         self.price = Decimal("0")
         self.price_prec = 4
         self.qty_step = Decimal("0.1")
-        
+
         # Oracle Indicators
         self.ohlc = deque(maxlen=100)
         self.fisher_series = deque(maxlen=5)
@@ -82,7 +79,7 @@ class SentinelState:
         self.trend_strength = 0.0
         self.velocity = 0.0
         self.dynamic_threshold = 1.5
-        
+
         # Ritual Management
         self.last_ritual = 0
         self.cooldown_seconds = COOLDOWN_SECONDS
@@ -98,15 +95,15 @@ state = SentinelState()
 def update_oracle_indicators():
     """Channeling market data into indicators."""
     if len(state.ohlc) < 30: return
-    
+
     closes = np.array([x[2] for x in state.ohlc])
     highs = np.array([x[0] for x in state.ohlc])
     lows = np.array([x[1] for x in state.ohlc])
-    
+
     # 1. ATR (Volatility)
     tr = np.maximum(highs[1:] - lows[1:], np.abs(highs[1:] - closes[:-1]), np.abs(lows[1:] - closes[:-1]))
     state.atr = np.mean(tr[-14:])
-    
+
     # 2. Fisher Transform (Momentum Reversal)
     # Simplified high/low mapping to -0.99, 0.99
     hh = highs[-10:].max()
@@ -116,7 +113,7 @@ def update_oracle_indicators():
     fish = 0.5 * np.log((1 + val) / (1 - val))
     state.fisher_series.append(fish)
     state.fisher = fish
-    
+
     # 3. Trend Oracle
     state.macro_trend = np.mean(closes[-30:])
     state.trend_strength = abs(closes[-1] - state.macro_trend) / state.atr if state.atr > 0 else 0
@@ -132,16 +129,16 @@ class Forge:
         recv_window = "5000"
         query = urllib.parse.urlencode(params) if method == "GET" and params else ""
         body = json.dumps(params) if method == "POST" and params else ""
-        
+
         sign_payload = ts + API_KEY + recv_window + (query if method == "GET" else body)
         signature = hmac.new(API_SECRET.encode(), sign_payload.encode(), hashlib.sha256).hexdigest()
-        
+
         headers = {
             "X-BAPI-API-KEY": API_KEY, "X-BAPI-SIGN": signature,
             "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": recv_window,
             "Content-Type": "application/json"
         }
-        
+
         url = f"{BASE_URL}{path}{'?' + query if query else ''}"
         async with self.session.request(method, url, headers=headers, data=body) as r:
             return await r.json()
@@ -183,7 +180,7 @@ async def execute_trade(forge, side: str):
         "takeProfit": f"{tp:.{state.price_prec}f}", "stopLoss": f"{sl:.{state.price_prec}f}",
         "tpTriggerBy": "LastPrice", "slTriggerBy": "LastPrice"
     }
-    
+
     res = await forge.call("POST", "/v5/order/create", order, signed=True)
     if res.get('retCode') == 0:
         state.last_ritual = time.time()
@@ -203,16 +200,14 @@ async def manage_active_trade(forge):
     # --- Partial Profit Siphoning (Snippet 3) ---
     if state.initial_sl_distance > 0:
         reached_2r = False
-        if state.side == "Buy" and (state.price - state.entry_price) > (state.initial_sl_distance * Decimal("2.0")):
+        if (state.side == "Buy" and (state.price - state.entry_price) > (state.initial_sl_distance * Decimal("2.0"))) or (state.side == "Sell" and (state.entry_price - state.price) > (state.initial_sl_distance * Decimal("2.0"))):
             reached_2r = True
-        elif state.side == "Sell" and (state.entry_price - state.price) > (state.initial_sl_distance * Decimal("2.0")):
-            reached_2r = True
-            
+
         if reached_2r:
             OracleUI.log("🔮 Partial TP: 2R threshold reached. Closing 50%.", Fore.YELLOW)
             close_side = "Sell" if state.side == "Buy" else "Buy"
             await forge.call("POST", "/v5/order/create", {
-                "category": CATEGORY, "symbol": SYMBOL, "side": close_side, 
+                "category": CATEGORY, "symbol": SYMBOL, "side": close_side,
                 "orderType": "Market", "qty": str(state.qty * Decimal("0.5")), "reduceOnly": True
             }, signed=True)
             state.initial_sl_distance = Decimal("0") # Disable partial TP for this trade
@@ -223,7 +218,7 @@ async def manage_active_trade(forge):
         if (state.high_water_mark - state.price) > pullback_amount:
             OracleUI.log("🌪 Pullback Exit: Volatility-adjusted drop.", Fore.RED)
             await forge.call("POST", "/v5/order/create", {
-                "category": CATEGORY, "symbol": SYMBOL, "side": "Sell", 
+                "category": CATEGORY, "symbol": SYMBOL, "side": "Sell",
                 "orderType": "Market", "qty": str(state.qty), "reduceOnly": True
             }, signed=True)
     elif state.side == "Sell":
@@ -231,7 +226,7 @@ async def manage_active_trade(forge):
         if (state.price - state.high_water_mark) > pullback_amount:
             OracleUI.log("🌪 Pullback Exit: Volatility-adjusted rise.", Fore.RED)
             await forge.call("POST", "/v5/order/create", {
-                "category": CATEGORY, "symbol": SYMBOL, "side": "Buy", 
+                "category": CATEGORY, "symbol": SYMBOL, "side": "Buy",
                 "orderType": "Market", "qty": str(state.qty), "reduceOnly": True
             }, signed=True)
 
@@ -251,7 +246,7 @@ async def kline_engine(forge):
                 if not state.trade_active and (time.time() - state.last_ritual > state.cooldown_seconds):
                     is_bull = state.price > state.macro_trend
                     is_strong = state.trend_strength > 0.5
-                    
+
                     if len(state.fisher_series) >= 2 and is_strong:
                         # Reversal Logic (Snippet 1)
                         buy_reversal = state.fisher_series[-1] > state.fisher_series[-2] and state.fisher_series[-2] < -state.dynamic_threshold
@@ -261,7 +256,7 @@ async def kline_engine(forge):
                             await execute_trade(forge, "Buy")
                         elif not is_bull and sell_reversal:
                             await execute_trade(forge, "Sell")
-                
+
                 await manage_active_trade(forge)
             await asyncio.sleep(5)
         except Exception as e:
@@ -288,7 +283,7 @@ async def private_manager(forge):
         while True:
             data = json.loads(await ws.recv())
             topic = data.get("topic")
-            
+
             if topic == "position" and "data" in data:
                 pos = [p for p in data["data"] if p["symbol"] == SYMBOL]
                 if pos and Decimal(pos[0]["size"]) > 0:

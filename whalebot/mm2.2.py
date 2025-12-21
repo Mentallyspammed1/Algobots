@@ -1,32 +1,35 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Arcane Market Maker v15.0 - THE AEGIS OF PROVIDENCE
 The Definitive High-Frequency Grimoire for Termux.
 """
 
-import os
-import sys
 import asyncio
-import aiohttp
-import hmac
 import hashlib
+import hmac
 import json
+import os
+import signal
+import sys
 import time
 import urllib.parse
-import logging
-import signal
 from collections import deque
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from typing import Dict, List, Optional, Tuple
+from decimal import ROUND_DOWN
+from decimal import ROUND_UP
+from decimal import Decimal
+
+import aiohttp
 
 # --- Arcane Dependency Check ---
 try:
-    from colorama import init, Fore, Back, Style
-    from dotenv import load_dotenv
     import numpy as np
     import websockets
+    from colorama import Back
+    from colorama import Fore
+    from colorama import Style
+    from colorama import init
+    from dotenv import load_dotenv
 except ImportError:
     print("Arcane scripts require: pip install aiohttp websockets numpy colorama python-dotenv")
     sys.exit(1)
@@ -52,7 +55,7 @@ class ArcaneUI:
     """The Neon Dashboard HUD"""
     @staticmethod
     def clear_line(): sys.stdout.write("\033[K")
-    
+
     @staticmethod
     def move_up(n): sys.stdout.write(f"\033[{n}A")
 
@@ -61,7 +64,7 @@ class ArcaneUI:
         pnl_col = Fore.GREEN if pnl >= 0 else Fore.RED
         tox_col = Fore.CYAN if vol < 1.4 else Fore.RED
         skew_col = Fore.YELLOW if abs(skew) < 0.5 else Fore.MAGENTA
-        
+
         # We use a 3-line static dashboard
         sys.stdout.write("\r")
         cls.clear_line()
@@ -76,7 +79,7 @@ class ArcaneUI:
 
 class ArcaneHardware:
     @staticmethod
-    async def invoke(cmd: List[str]):
+    async def invoke(cmd: list[str]):
         try:
             proc = await asyncio.create_subprocess_exec(*cmd, stdout=-3, stderr=-3)
             await proc.wait()
@@ -106,12 +109,12 @@ class TokenBucket:
 
 class AegisOrderbook:
     def __init__(self):
-        self.bids: Dict[Decimal, Decimal] = {}
-        self.asks: Dict[Decimal, Decimal] = {}
+        self.bids: dict[Decimal, Decimal] = {}
+        self.asks: dict[Decimal, Decimal] = {}
         self.prev_imb = Decimal('0')
         self.ofi = Decimal('0')
 
-    def update(self, data: Dict, is_snapshot: bool):
+    def update(self, data: dict, is_snapshot: bool):
         if is_snapshot:
             self.bids = {Decimal(p): Decimal(q) for p, q in data.get('b', [])}
             self.asks = {Decimal(p): Decimal(q) for p, q in data.get('a', [])}
@@ -121,13 +124,13 @@ class AegisOrderbook:
                     price, qty = Decimal(p), Decimal(q)
                     if qty == 0: update.pop(price, None)
                     else: update[price] = qty
-        
+
         b_vol = sum(list(self.bids.values())[:5])
         a_vol = sum(list(self.asks.values())[:5])
         self.ofi = (b_vol - a_vol) - self.prev_imb
         self.prev_imb = b_vol - a_vol
 
-    def divine_fair_value(self) -> Tuple[Decimal, Decimal, Decimal]:
+    def divine_fair_value(self) -> tuple[Decimal, Decimal, Decimal]:
         if not self.bids or not self.asks: return Decimal('0'), Decimal('0'), Decimal('0')
         bb, ba = max(self.bids.keys()), min(self.asks.keys())
         vb, va = self.bids[bb], self.asks[ba]
@@ -145,9 +148,8 @@ class AegisOrderbook:
         if side == 'Buy':
             valid = [w for w in walls if w <= price]
             return max(valid) + tick if valid else price
-        else:
-            valid = [w for w in walls if w >= price]
-            return min(valid) - tick if valid else price
+        valid = [w for w in walls if w >= price]
+        return min(valid) - tick if valid else price
 
 @dataclass
 class SymbolConfig:
@@ -169,13 +171,13 @@ class AegisProvidence:
         self.positions = {s: {"size": Decimal('0'), "val": Decimal('0')} for s in self.symbols}
         self.funding = {s: Decimal('0') for s in self.symbols}
         self.prices_hist = {s: deque(maxlen=40) for s in self.symbols}
-        
+
         self.equity = Decimal('0')
         self.initial_equity = Decimal('0')
         self.running = True
         self.session = None
-        self.bucket = TokenBucket(15, 8) 
-        self.last_update = {s: 0 for s in self.symbols}
+        self.bucket = TokenBucket(15, 8)
+        self.last_update = dict.fromkeys(self.symbols, 0)
 
     async def conduct_rite(self, method, path, params=None):
         """Unified API Execution Rite"""
@@ -185,7 +187,7 @@ class AegisProvidence:
         body = json.dumps(params) if method == "POST" and params else ""
         raw = ts + str(API_KEY) + "5000" + (query if method == "GET" else body)
         sig = hmac.new(API_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
-        
+
         headers = {"X-BAPI-API-KEY": API_KEY, "X-BAPI-SIGN": sig, "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": "5000", "Content-Type": "application/json"}
         try:
             url = f"{BASE_URL}{path}{'?' + query if query else ''}"
@@ -215,8 +217,8 @@ class AegisProvidence:
     async def orchestrate(self, symbol):
         now = time.time()
         cfg = self.symbols[symbol]
-        if now - self.last_update[symbol] < 0.8: return 
-        
+        if now - self.last_update[symbol] < 0.8: return
+
         book = self.books[symbol]
         micro, density, spread_bps = book.divine_fair_value()
         if micro == 0 or self.equity == 0: return
@@ -241,18 +243,18 @@ class AegisProvidence:
         total_skew = max(min(total_skew, Decimal('1')), Decimal('-1'))
 
         spread = (micro * cfg.base_spread_bps / 10000) * vol_mult
-        
+
         # 3. VISIONS OF ENTRY (PASSIVE ACCRETION)
         raw_bid = micro - (spread * (1 - total_skew))
         final_bid = book.wall_shield('Buy', raw_bid, cfg.tick_size).quantize(cfg.tick_size, ROUND_DOWN)
-        
+
         # 4. VISIONS OF EXIT (STRATEGIC DISTRIBUTION)
         raw_ask = micro + (spread * (1 + total_skew))
         final_ask = book.wall_shield('Sell', raw_ask, cfg.tick_size).quantize(cfg.tick_size, ROUND_UP)
-        
+
         # 5. EXECUTION RITE
         qty = (self.equity * cfg.risk_pct / micro).quantize(cfg.qty_step, ROUND_DOWN)
-        if qty < cfg.min_qty: qty = cfg.min_qty
+        qty = max(qty, cfg.min_qty)
 
         asyncio.create_task(self.conduct_rite("POST", "/v5/order/cancel-all", {"category": "linear", "symbol": symbol}))
         batch = [
@@ -260,7 +262,7 @@ class AegisProvidence:
             {"symbol": symbol, "side": "Sell", "orderType": "Limit", "qty": str(qty), "price": str(final_ask), "timeInForce": "PostOnly"}
         ]
         asyncio.create_task(self.conduct_rite("POST", "/v5/order/create-batch", {"category": "linear", "request": batch}))
-        
+
         self.last_update[symbol] = now
         ArcaneUI.render_hud(symbol, micro, session_pnl, vol_mult, total_skew, self.bucket.tokens, density)
 
@@ -277,7 +279,7 @@ class AegisProvidence:
                         self.symbols[s].tick_size = Decimal(i['priceFilter']['tickSize'])
                         self.symbols[s].qty_step = Decimal(i['lotSizeFilter']['qtyStep'])
                         self.symbols[s].min_qty = Decimal(i['lotSizeFilter']['minOrderQty'])
-            
+
             w = await self.conduct_rite("GET", "/v5/account/wallet-balance", {"accountType": "UNIFIED"})
             if w:
                 c = next((x for x in w['result']['list'][0]['coin'] if x['coin'] == 'USDT'), None)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 🐳 WhaleBot Supreme v3.0 - The Unified Arcana
 Forged by Pyrmethus: Neon TUI, V5 API Mastery, Multi-Target TP/SL, 
@@ -9,26 +8,28 @@ and Real-Time Exchange Reconciliation.
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
-import hmac
-import hashlib
-import subprocess
-from datetime import datetime, timezone, timedelta
-from decimal import ROUND_DOWN, Decimal, getcontext
+from datetime import timezone
+from decimal import ROUND_DOWN
+from decimal import Decimal
+from decimal import getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Optional, Tuple, Dict, List
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 
 # --- Ritual Dependencies ---
 try:
-    from pybit.unified_trading import HTTP as PybitHTTP
     import pybit.exceptions
+    from pybit.unified_trading import HTTP as PybitHTTP
     PYBIT_AVAILABLE = True
 except ImportError:
     PYBIT_AVAILABLE = False
@@ -85,14 +86,14 @@ class AlertSystem:
 
     def _check_api(self) -> bool:
         try:
-            return subprocess.run(['which', 'termux-toast'], capture_output=True).returncode == 0
+            return subprocess.run(['which', 'termux-toast'], check=False, capture_output=True).returncode == 0
         except: return False
 
     def send_alert(self, message: str, level: str = "INFO"):
         color = NEON_GREEN if level == "INFO" else NEON_RED
         self.logger.info(f"{color}🔮 ALERT: {message}{RESET}")
         if self.has_api:
-            subprocess.run(['termux-toast', f"WhaleBot: {message}"])
+            subprocess.run(['termux-toast', f"WhaleBot: {message}"], check=False)
 
 # --- Indicator Core (Integrated Logic) ---
 class IndicatorEngine:
@@ -122,7 +123,7 @@ class PybitTradingClient:
         self.session = None
         if PYBIT_AVAILABLE and API_KEY and API_SECRET:
             self.session = PybitHTTP(
-                api_key=API_KEY, api_secret=API_SECRET, 
+                api_key=API_KEY, api_secret=API_SECRET,
                 testnet=config["execution"]["testnet"]
             )
             self.logger.info(f"{NEON_GREEN}# Bridge to the Bybit V5 Void established.{RESET}")
@@ -153,10 +154,10 @@ class PositionManager:
 
     def open_position(self, side: str, price: Decimal, atr: float):
         self.logger.info(f"{NEON_PURPLE}# Executing {side} Ritual for {self.config['symbol']}...{RESET}")
-        
+
         # Calculate Stops and TPs from Ritual Scheme
         sl_price = float(price) - (atr * self.config["trade_management"]["stop_loss_atr_multiple"]) if side == "BUY" else float(price) + (atr * self.config["trade_management"]["stop_loss_atr_multiple"])
-        
+
         # Logic for live trade
         if self.client.session:
             try:
@@ -199,13 +200,13 @@ class WhaleBot:
         # Channeling Indicators
         df['rsi'] = IndicatorEngine.calculate_rsi(df)
         df['atr'] = IndicatorEngine.calculate_atr(df)
-        
+
         last_rsi = df['rsi'].iloc[-1]
         last_price = Decimal(str(df['close'].iloc[-1]))
         last_atr = df['atr'].iloc[-1]
-        
+
         self.logger.info(f"{NEON_YELLOW}# Divination: Price {last_price} | RSI {last_rsi:.2f}{RESET}")
-        
+
         # Simple Logic Ward
         if last_rsi < 30: return "BUY", last_price, last_atr
         if last_rsi > 70: return "SELL", last_price, last_atr
@@ -221,7 +222,7 @@ class WhaleBot:
                     if signal != "HOLD":
                         self.pm.open_position(signal, price, atr)
                         self.alerts.send_alert(f"Ritual Performed: {signal} at {price}")
-                
+
                 time.sleep(self.config["loop_delay"])
             except KeyboardInterrupt:
                 self.logger.info(f"{NEON_RED}# Incantation dissolved by mortal hand.{RESET}")
@@ -251,13 +252,13 @@ def load_config(filepath: str, logger: logging.Logger) -> dict:
     if not Path(filepath).exists():
         with open(filepath, 'w') as f: json.dump(default_config, f, indent=4)
         return default_config
-    with open(filepath, 'r') as f: return json.load(f)
+    with open(filepath) as f: return json.load(f)
 
 # --- Entry Portal ---
 def main():
     logger = setup_logger("whale_main")
     config = load_config(CONFIG_FILE, logger)
-    
+
     if not API_KEY or not API_SECRET:
         logger.critical(f"{NEON_RED}# Fatal: API Sigils not found in .env!{RESET}")
         sys.exit(1)

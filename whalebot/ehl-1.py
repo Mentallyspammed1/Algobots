@@ -1,22 +1,20 @@
-import os
 import asyncio
-import hmac
 import hashlib
+import hmac
 import json
+import os
 import time
 import urllib.parse
-import numpy as np
 from collections import deque
-from decimal import Decimal, ROUND_DOWN
-from typing import Optional, Dict, Any, List
+from decimal import Decimal
 
 import aiohttp
+import numpy as np
 import websockets
 from dotenv import load_dotenv
 from rich.layout import Layout
-from rich.panel import Panel
 from rich.live import Live
-from rich.table import Table
+from rich.panel import Panel
 from rich.text import Text
 
 load_dotenv()
@@ -61,7 +59,7 @@ class SentinelState:
 
 state = SentinelState()
 
-def super_smoother(data: List[float], period: int) -> float:
+def super_smoother(data: list[float], period: int) -> float:
     if len(data) < 3: return data[-1] if data else 0.0
     a = np.exp(-1.414 * np.pi / period)
     b = 2 * a * np.cos(1.414 * np.pi / period)

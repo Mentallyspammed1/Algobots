@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 BCH Sentinel v3.2 - The Harmonic Rebirth
 Forged by Pyrmethus: Enhanced Fisher logic, crossover detection, and persistent sessions.
 """
 
-import os
 import asyncio
-import hmac
 import hashlib
+import hmac
 import json
+import os
 import time
 import urllib.parse
-import numpy as np
 from collections import deque
-from decimal import Decimal, ROUND_DOWN
-from typing import Optional, Dict, Any, List
+from decimal import Decimal
 
 import aiohttp
+import numpy as np
 import websockets
 from dotenv import load_dotenv
-from rich.console import Console
 from rich.layout import Layout
-from rich.panel import Panel
 from rich.live import Live
+from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
@@ -56,13 +53,13 @@ class SentinelState:
         self.last_ritual = 0
         self.price_prec = 2
         self.qty_step = Decimal("0.01")
-        
+
         # Buffers
         self.prices = deque(maxlen=50)
         self.smoothed = deque(maxlen=50)
         self.value1 = deque(maxlen=50) # Normalized Price Buffer
         self.fisher_series = deque(maxlen=50)
-        
+
         self.logs = deque(maxlen=8)
         self.is_ready = False
         self.is_connected = False
@@ -78,12 +75,12 @@ def calculate_super_smoother(prices: deque, smoothed_series: deque) -> float:
     b1 = 2 * a1 * np.cos(1.414 * np.pi / 10.0)
     c2, c3 = b1, -a1 * a1
     c1 = 1 - c2 - c3
-    
+
     # Input is the average of current and prior price
     val = (prices[-1] + prices[-2]) / 2.0
     prev1 = smoothed_series[-1] if smoothed_series else val
     prev2 = smoothed_series[-2] if len(smoothed_series) > 1 else val
-    
+
     return c1 * val + c2 * prev1 + c3 * prev2
 
 def update_fisher_oracle():
@@ -94,23 +91,23 @@ def update_fisher_oracle():
     # 1. Get Min/Max over the period
     window = list(state.smoothed)[-FISHER_PERIOD:]
     mx, mn = max(window), min(window)
-    
+
     # 2. Normalize and Smooth 'Value1'
     # Prevents infinite scaling and reduces noise
     raw_val = 0.0
     if (mx - mn) != 0:
         raw_val = 2 * ((window[-1] - mn) / (mx - mn) - 0.5)
-    
+
     # Ehlers smoothing for the normalized value
     prev_v1 = state.value1[-1] if state.value1 else 0.0
     v1 = 0.33 * raw_val + 0.67 * prev_v1
     v1 = np.clip(v1, -0.999, 0.999)
     state.value1.append(v1)
-    
+
     # 3. Calculate Fisher Series
     prev_fish = state.fisher_series[-1] if state.fisher_series else 0.0
     fish = 0.5 * np.log((1 + v1) / (1 - v1)) + 0.5 * prev_fish
-    
+
     # 4. Trigger is the previous bar's Fisher (z^-1)
     state.trigger = prev_fish
     state.fisher = fish
@@ -119,7 +116,7 @@ def update_fisher_oracle():
 # --- The Forge: API Client ---
 class BybitForge:
     def __init__(self):
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self.base = "https://api-testnet.bybit.com" if IS_TESTNET else "https://api.bybit.com"
 
     async def __aenter__(self):
@@ -137,7 +134,7 @@ class BybitForge:
         ts = str(int(time.time() * 1000))
         req_params = params or {}
         param_str = urllib.parse.urlencode(req_params) if method == "GET" else json.dumps(req_params)
-        
+
         headers = {"Content-Type": "application/json"}
         if signed:
             headers.update({
@@ -159,11 +156,11 @@ async def execute_trade(forge, side: str):
         try:
             state.balance = Decimal(bal_res['result']['list'][0]['coin'][0]['walletBalance'])
         except (KeyError, IndexError): pass
-    
+
     if state.price == 0: return
     risk_amt = state.balance * (RISK_PERCENT / 100) * LEVERAGE
     qty = ( (risk_amt / state.price) // state.qty_step) * state.qty_step
-    
+
     if qty <= 0: return
 
     # Adaptive Exit Ward: 0.8% TP, 0.5% SL
@@ -175,7 +172,7 @@ async def execute_trade(forge, side: str):
         "orderType": "Market", "qty": str(qty),
         "takeProfit": f"{tp:.{state.price_prec}f}", "stopLoss": f"{sl:.{state.price_prec}f}"
     }
-    
+
     res = await forge.call("POST", "/v5/order/create", order, signed=True)
     if res.get('retCode') == 0:
         state.last_ritual = time.time()
@@ -194,22 +191,22 @@ def create_layout() -> Layout:
 
 def update_dashboard(layout: Layout):
     layout["header"].update(Panel(Text(f"BCH SENTINEL v3.2 | Oracle: {'LOCKED' if state.is_ready else 'WARMING'} | {time.strftime('%X')}", justify="center", style="bold cyan"), border_style="magenta"))
-    
+
     # Oracle Visualization
     oracle_text = Text()
     oracle_text.append(f"\nPrice:  {state.price} USDT\n", style="white")
-    
+
     # Neon Fisher Crossover Display
     f_style = "bold lime" if state.fisher > state.trigger else "bold red"
     oracle_text.append(f"Fisher: {state.fisher:+.4f}\n", style=f_style)
     oracle_text.append(f"Trigger: {state.trigger:+.4f}\n", style="dim yellow")
-    
+
     # Hysteresis Meter
     meter_color = "green" if abs(state.fisher) > ENTRY_THRESHOLD else "blue"
     oracle_text.append(f"\nConviction: {abs(state.fisher):.2f} / {ENTRY_THRESHOLD}", style=meter_color)
-    
+
     layout["oracle"].update(Panel(oracle_text, title="[bold]Ehlers Fisher Oracle", border_style="blue"))
-    
+
     # Position Info
     pos_table = Table.grid(expand=True)
     pnl_color = "green" if state.upnl >= 0 else "red"
@@ -218,7 +215,7 @@ def update_dashboard(layout: Layout):
     pos_table.add_row("uPnL:", f"[{pnl_color}]{state.upnl:+.2f} USDT[/]")
     pos_table.add_row("BAL:", f"{state.balance:.2f} USDT")
     layout["position"].update(Panel(pos_table, title="[bold]Soul-Bound Position", border_style="purple"))
-    
+
     log_text = Text.from_markup("\n".join(state.logs))
     layout["footer"].update(Panel(log_text, title="Ritual Logs", border_style="dim cyan"))
 
@@ -238,15 +235,15 @@ async def public_stream(ws_url, forge):
                         if "lastPrice" in tick:
                             state.price = Decimal(tick["lastPrice"])
                             state.prices.append(float(state.price))
-                            
+
                             if state.is_ready:
                                 # Apply SuperSmoother
                                 new_smooth = calculate_super_smoother(state.prices, state.smoothed)
                                 state.smoothed.append(new_smooth)
-                                
+
                                 # Update Fisher and Signal Trigger
                                 update_fisher_oracle()
-                                
+
                                 # --- UPGRADED SIGNAL LOGIC ---
                                 # Check for crossover + threshold
                                 cooldown_expired = (time.time() - state.last_ritual > COOLDOWN_SECONDS)
@@ -311,7 +308,7 @@ async def main():
                 while True:
                     update_dashboard(layout)
                     await asyncio.sleep(0.25)
-            
+
             await asyncio.gather(
                 public_stream(pub_url, forge),
                 private_stream(priv_url),

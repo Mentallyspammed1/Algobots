@@ -1,53 +1,88 @@
-# TODO.txt - Code Review Suggestions for ehl.py
+### Code Quality & Best Practices
 
-## Critical Bugs
+1.  **Use Named Constants for Magic Numbers:**
+    *   **Status:** COMPLETED. Replaced most magic numbers with named constants in `ScalperConfig`.
+    *   **Suggestion:** Review remaining numerical literals in the codebase and consider if they should also be moved to `ScalperConfig` as named constants for further clarity and tunability.
 
--   [ ] **Fix `ClientConnection` Error in `public_market_data_manager`:**
-    -   **Action:** Run `ehl.py` to get a full traceback of the `AttributeError`. Diagnose and fix the root cause of `ws` being an `aiohttp.ClientConnection` object. Consider environment/library versions if the issue persists.
-    -   **Priority:** High
+2.  **Consistent Error Handling and Logging:**
+    *   **Status:** REVIEWED. Existing error handling and logging mechanisms (`_report_error`, `s.log`) are in place.
+    *   **Suggestion:** Continue to ensure consistent use of these utilities across all new and modified code paths.
 
--   [ ] **Fix Undefined Constant `COOLDOWN_SECONDS`:**
-    -   **Action:** Replace `COOLDOWN_SECONDS` with `SCALPING_COOLDOWN_SECONDS` in `private_manager`.
-    -   **Priority:** High
+3.  **Docstrings and Type Hinting:**
+    *   **Status:** COMPLETED. Added/updated docstrings for `ScalperConfig`, `SentinelState`, `strike`, `_update_oracle`, `_compute_signal_components`, `_auto_adjust_leverage`, `confirm_order_filled`, `_manage_active_position`, `ws_nexus_public`, `_check_battery_status`, and new helper methods.
+    *   **Suggestion:** Maintain comprehensive docstrings and type hinting for all new and modified functions.
 
-## Code Quality & Best Practices
+### Potential Bugs & Edge Cases
 
--   [ ] **Refactor Global Constants into `StrategyConfig`:**
-    -   **Action:** Create a `StrategyConfig` class/dict to hold all configurable parameters. Pass this object to relevant functions.
-    -   **Priority:** Medium
+1.  **`s.last_order_id` Assumption in `_place_aggressive_entry`:**
+    *   **Status:** COMPLETED. `strike` method now returns `order_id` and `_hybrid_entry_order` (which now calls `_place_order_with_fallback`) correctly handles the returned `order_id`.
 
--   [ ] **Replace Magic Numbers with Named Constants:**
-    -   **Action:** Define constants for values like `50` (super_smoother), `14` (ATR), `10` (Fisher window), `0.8` (pullback limit).
-    -   **Priority:** Medium
+2.  **Division by Zero in `_compute_signal_components`:**
+    *   **Status:** REVIEWED. `s.fisher` and `s.rsi` are initialized and calculations handle potential division by zero.
 
-## Performance & Efficiency
+3.  **`s.atr <= 0` Check in `_evaluate_entry_signals` (Second Version):**
+    *   **Status:** REVIEWED. `s.atr` is always a float, and the check `if s.atr <= 0` is sufficient.
 
--   [ ] **Implement Robust WebSocket Reconnection with Exponential Backoff:**
-    -   **Action:** Re-implement reconnection logic in `public_market_data_manager` (and potentially `private_manager`) using an exponential backoff strategy.
-    -   **Priority:** Medium
+### Performance & Efficiency
 
-## Readability & Maintainability
+1.  **Minimize API Calls for Order Confirmation:**
+    *   **Status:** FUTURE ENHANCEMENT.
+    *   **Suggestion:** Investigate the possibility of integrating Bybit API webhooks or WebSocket streams for real-time order status updates to reduce polling and improve efficiency. This would be a significant change.
 
--   [ ] **Integrate Structured Logging:**
-    -   **Action:** Replace `state.logs.append` with Python's `logging` module for better log management.
-    -   **Priority:** Medium
+### Readability & Maintainability
 
--   [ ] **Add Comprehensive Docstrings:**
-    -   **Action:** Add detailed docstrings to all classes and functions.
-    -   **Priority:** Low
+1.  **Break Down Large Functions:**
+    *   **Status:** COMPLETED (Partial).
+        *   `_evaluate_entry_signals`: Refactored into `_check_entry_cooldown`, `_check_entry_guards`, `_check_bollinger_filter`, `_check_ema_alignment`, `_check_signal_confirmation`.
+        *   `_execute_entry_with_aggression`: Refactored into `_calculate_risk_pct`, `_calculate_position_qty`, `_calculate_tp_sl_prices`.
+        *   `_compute_alpha_score` (within `_update_oracle`): Refactored into `_calculate_obi_component`, `_calculate_fisher_component`, `_calculate_rsi_component`, `_apply_trend_confluence_bonus`, `_apply_rsi_confluence_bonus`, `_apply_volume_boost`.
+    *   **Suggestion:** Continue to identify and refactor other large or complex functions into smaller, more focused helper methods as the codebase evolves.
 
-## Opportunities for Refactoring & Simplification
+2.  **Consistent Naming Conventions:**
+    *   **Status:** COMPLETED. Standardized `entry_ref` to `entry_reference_price` and `limit_anchor` to `limit_anchor_price`.
+    *   **Suggestion:** Maintain consistent `snake_case` naming conventions throughout the project.
 
--   [ ] **Extract Indicator Calculations:**
-    -   **Action:** Break down `update_oracle` into smaller helper functions for individual indicator calculations.
-    -   **Priority:** Medium
+3.  **Clarity of `s` and `cfg` Objects:**
+    *   **Status:** COMPLETED. Added detailed comments to attributes in `ScalperConfig` and `SentinelState`.
+    *   **Suggestion:** Ensure these comments are kept up-to-date with any changes to the attributes.
 
--   [ ] **Refactor Trade Management Functions:**
-    -   **Action:** Break down `execute_trade` and `manage_trade` into smaller, more focused helper functions.
-    -   **Priority:** Medium
+### Opportunities for Refactoring & Simplification
 
-## Test Coverage
+1.  **Consolidate Signal Confirmation Logic:**
+    *   **Status:** REVIEWED. `confirm_signal` is a single function.
+    *   **Suggestion:** If different strategies require different confirmation criteria, consider passing those criteria as parameters to `confirm_signal` or creating specialized confirmation functions.
 
--   [ ] **Implement Unit and Integration Tests:**
-    -   **Action:** Write unit tests for individual functions and integration tests for component interactions using `pytest`.
-    -   **Priority:** High
+2.  **Abstract Order Placement Logic:**
+    *   **Status:** COMPLETED. Created `_place_order_with_fallback` and integrated it into `_hybrid_entry_order` and `logic_loop`.
+
+3.  **Parameterize Partial Scaling-In:**
+    *   **Status:** FUTURE ENHANCEMENT.
+    *   **Suggestion:** Implement configurable parameters in `ScalperConfig` (e.g., `cfg.partial_entry_strength_threshold`, `cfg.partial_entry_first_leg_qty_ratio`) to control partial scaling-in behavior for strong signals.
+
+4.  **Strategy Pattern for Entry/Exit Logic:**
+    *   **Status:** FUTURE ENHANCEMENT.
+    *   **Suggestion:** Explore implementing a Strategy pattern to manage different entry and exit strategies. This would involve defining interfaces for `EntryStrategy` and `ExitStrategy` and creating concrete implementations, allowing for easier addition, modification, and combination of trading behaviors. This is a significant architectural change.
+
+5.  **Hardened Generic Request Wrapper:**
+    *   **Status:** COMPLETED. Replaced the generic `request` method with a hardened version.
+
+6.  **Instrument Info (`sync_instrument`):**
+    *   **Status:** COMPLETED. Created `sync_instrument` and integrated it into `boot_ritual`.
+
+7.  **Wallet Balance (`update_wallet`):**
+    *   **Status:** COMPLETED. Replaced the existing `update_wallet` method.
+
+8.  **Set Leverage (`set_leverage`):**
+    *   **Status:** COMPLETED. Created `set_leverage` and integrated it into `boot_ritual` and `_auto_adjust_leverage`.
+
+9.  **Position List (`get_position`):**
+    *   **Status:** COMPLETED. Created `get_position` and integrated it into `_reconcile_position`.
+
+10. **Create Order (`create_order`):**
+    *   **Status:** COMPLETED. Created `create_order` and integrated it into `strike`.
+
+11. **Realtime Orders (`get_order`):**
+    *   **Status:** COMPLETED. Created `get_order` and integrated it into `confirm_order_filled`.
+
+12. **Trading-stop (`setup_trailing_stop`):**
+    *   **Status:** COMPLETED. Replaced the existing `setup_trailing_stop` method.

@@ -1,33 +1,36 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Arcane Market Maker v16.2 - THE ETHEREAL RESILIENCE
 Finalized Termux Optimization | Adaptive Requote Gating | Latency Protection
 """
 
-import os
-import sys
 import asyncio
-import aiohttp
-import hmac
 import hashlib
+import hmac
 import json
-import time
-import urllib.parse
-import logging
+import os
 import signal
 import statistics
+import sys
+import time
+import urllib.parse
 from collections import deque
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from typing import Dict, List, Optional, Tuple
+from decimal import ROUND_DOWN
+from decimal import ROUND_UP
+from decimal import Decimal
+
+import aiohttp
 
 # --- Arcane Dependency Check ---
 try:
-    from colorama import init, Fore, Back, Style
-    from dotenv import load_dotenv
     import numpy as np
     import websockets
+    from colorama import Back
+    from colorama import Fore
+    from colorama import Style
+    from colorama import init
+    from dotenv import load_dotenv
 except ImportError:
     print(Fore.RED + "# FAULT: Missing scrolls. Run: pip install aiohttp websockets numpy colorama python-dotenv")
     sys.exit(1)
@@ -59,8 +62,8 @@ class RevenantUI:
         bar = ("█" * filled_size).ljust(inv_bar_size, "-")
         bar_col = Fore.RED if abs(inv_ratio) > 0.8 else Fore.CYAN
         hb_char = "⚡" if heartbeat % 2 == 0 else " "
-        
-        sys.stdout.write("\033[H") 
+
+        sys.stdout.write("\033[H")
         print(f"{Fore.MAGENTA}╔════════ {Fore.WHITE}ETHEREAL RESILIENCE v16.2 {Fore.MAGENTA}════════════════════════╗")
         print(f"{Fore.MAGENTA}║ {Fore.CYAN}SYMBOL: {sym:<10} {Fore.MAGENTA}| {Fore.WHITE}PRICE: {px:<10.5f} {Fore.MAGENTA}| {pnl_col}PNL: {pnl:+.2f} {Fore.MAGENTA}║")
         print(f"{Fore.MAGENTA}║ {Fore.WHITE}VOLAT: {vol:.2f}x {Fore.MAGENTA}| {Fore.YELLOW}SKEW: {skew:+.2f} {Fore.MAGENTA}| {Fore.BLUE}LATENCY: {latency:>3}ms {Fore.MAGENTA}| {Fore.WHITE}TOK: {int(tokens)} {Fore.MAGENTA}║")
@@ -96,7 +99,7 @@ class RevenantBook:
         self.ofi_history = deque(maxlen=20)
         self.prev_imb = Decimal('0')
 
-    def update(self, data: Dict, is_snapshot: bool):
+    def update(self, data: dict, is_snapshot: bool):
         if is_snapshot:
             self.bids = {Decimal(p): Decimal(q) for p, q in data.get('b', [])}
             self.asks = {Decimal(p): Decimal(q) for p, q in data.get('a', [])}
@@ -106,14 +109,14 @@ class RevenantBook:
                     price, qty = Decimal(p), Decimal(q)
                     if qty == 0: target.pop(price, None)
                     else: target[price] = qty
-        
+
         b_vol = sum(list(self.bids.values())[:10])
         a_vol = sum(list(self.asks.values())[:10])
         curr_imb = b_vol - a_vol
         self.ofi_history.append(curr_imb - self.prev_imb)
         self.prev_imb = curr_imb
 
-    def get_market_state(self) -> Tuple[Decimal, Decimal, Decimal]:
+    def get_market_state(self) -> tuple[Decimal, Decimal, Decimal]:
         if not self.bids or not self.asks: return Decimal('0'), Decimal('0'), Decimal('0')
         bb, ba = max(self.bids.keys()), min(self.asks.keys())
         vb, va = self.bids[bb], self.asks[ba]
@@ -143,12 +146,12 @@ class OmniRevenant:
         self.positions = {s: {"size": Decimal('0'), "val": Decimal('0')} for s in self.symbols}
         self.active_orders = {s: {"Buy": None, "Sell": None} for s in self.symbols}
         self.prices_hist = {s: deque(maxlen=40) for s in self.symbols}
-        
+
         self.equity, self.initial_equity = Decimal('0'), Decimal('0')
         self.running = True
         self.session = None
         self.bucket = TokenBucket(15, 7)
-        self.last_update = {s: 0 for s in self.symbols}
+        self.last_update = dict.fromkeys(self.symbols, 0)
         self.latency = 0
         self.pulse_count = 0
 
@@ -160,11 +163,11 @@ class OmniRevenant:
         body = json.dumps(params) if method == "POST" and params else ""
         raw = ts + API_KEY + "5000" + (query if method == "GET" else body)
         sig = hmac.new(API_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
-        
+
         headers = {"X-BAPI-API-KEY": API_KEY, "X-BAPI-SIGN": signature, "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": "5000", "Content-Type": "application/json"}
         # Correction: sig used instead of placeholder signature
         headers["X-BAPI-SIGN"] = sig
-        
+
         try:
             url = f"{BASE_URL}{path}{'?' + query if query else ''}"
             async with self.session.request(method, url, headers=headers, data=body) as r:
@@ -195,8 +198,8 @@ class OmniRevenant:
     async def orchestrate(self, symbol):
         now = time.time()
         cfg = self.symbols[symbol]
-        if now - self.last_update[symbol] < 0.8: return 
-        
+        if now - self.last_update[symbol] < 0.8: return
+
         book = self.books[symbol]
         micro, ofi, spread_bps = book.get_market_state()
         if micro == 0 or self.equity == 0: return
@@ -206,7 +209,7 @@ class OmniRevenant:
         vol_mult = Decimal('1.0')
         if len(self.prices_hist[symbol]) > 10:
             vol_mult += Decimal(str(statistics.stdev(self.prices_hist[symbol]) * 18))
-        
+
         # Expand spread if Termux network is laggy
         if self.latency > cfg.latency_threshold:
             vol_mult *= Decimal('1.5')
@@ -222,14 +225,14 @@ class OmniRevenant:
         spread = (micro * cfg.base_spread_bps / 10000) * vol_mult
         bid_px = (micro - (spread * (1 - total_skew))).quantize(cfg.tick_size, ROUND_DOWN)
         ask_px = (micro + (spread * (1 + total_skew))).quantize(cfg.tick_size, ROUND_UP)
-        
+
         qty = (self.equity * cfg.risk_pct / micro).quantize(cfg.qty_step, ROUND_DOWN)
-        if qty < cfg.min_qty: qty = cfg.min_qty
+        qty = max(qty, cfg.min_qty)
 
         # 4. Adaptive Requote Gate
         needs_update = True
         requote_threshold = int(2 * float(vol_mult)) # Move less often in high vol
-        
+
         curr_bid = self.active_orders[symbol]["Buy"]
         curr_ask = self.active_orders[symbol]["Sell"]
         if curr_bid and curr_ask:
@@ -244,10 +247,10 @@ class OmniRevenant:
                 orders.append({"symbol": symbol, "side": "Buy", "orderType": "Limit", "qty": str(qty), "price": str(bid_px), "timeInForce": "PostOnly"})
             if inv_ratio > -0.9:
                 orders.append({"symbol": symbol, "side": "Sell", "orderType": "Limit", "qty": str(qty), "price": str(ask_px), "timeInForce": "PostOnly"})
-            
+
             if orders:
                 asyncio.create_task(self.summon_request("POST", "/v5/order/create-batch", {"category": "linear", "request": orders}))
-            
+
             self.active_orders[symbol]["Buy"] = bid_px
             self.active_orders[symbol]["Sell"] = ask_px
 
@@ -268,7 +271,7 @@ class OmniRevenant:
                         self.symbols[s].tick_size = Decimal(i['priceFilter']['tickSize'])
                         self.symbols[s].qty_step = Decimal(i['lotSizeFilter']['qtyStep'])
                         self.symbols[s].min_qty = Decimal(i['lotSizeFilter']['minOrderQty'])
-            
+
             w = await self.summon_request("GET", "/v5/account/wallet-balance", {"accountType": "UNIFIED"})
             if w:
                 c = next((x for x in w['result']['list'][0]['coin'] if x['coin'] == 'USDT'), None)

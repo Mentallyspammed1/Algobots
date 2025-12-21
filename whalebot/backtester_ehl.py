@@ -1,27 +1,24 @@
-import os
 import asyncio
-import hmac
-import hashlib
-import json
 import time
-import urllib.parse
-import numpy as np
-from collections import deque
-from decimal import Decimal, ROUND_DOWN
-from typing import Optional, Dict, Any, List, Tuple
+from decimal import ROUND_DOWN
+from decimal import Decimal
+from typing import Any
 
-import aiohttp
-import websockets # Not used in backtesting, but kept for consistency if parts are copied
-from dotenv import load_dotenv
-from rich.console import Console
-from rich.layout import Layout
-from rich.panel import Panel
-from rich.live import Live
-from rich.table import Table
-from rich.text import Text
+import numpy as np
+from ehl import BASE_RISK_PERCENT
+from ehl import CATEGORY
+from ehl import SCALPING_COOLDOWN_SECONDS
+from ehl import SCALPING_DYNAMIC_THRESHOLD
+from ehl import SCALPING_SL_MULT
+from ehl import SCALPING_TP_MULT
+from ehl import SCALPING_TREND_STRENGTH_MIN
+from ehl import SYMBOL
 
 # Import necessary components from ehl.py
-from ehl import SentinelState, super_smoother, update_oracle, SYMBOL, CATEGORY, LEVERAGE, BASE_RISK_PERCENT, DAILY_LOSS_LIMIT, SCALPING_COOLDOWN_SECONDS, SCALPING_DYNAMIC_THRESHOLD, SCALPING_TREND_STRENGTH_MIN, SCALPING_SL_MULT, SCALPING_TP_MULT, API_KEY, API_SECRET, IS_TESTNET
+from ehl import SentinelState
+from ehl import update_oracle
+from rich.console import Console
+from rich.panel import Panel
 
 # --- Backtesting Specific Global Constants ---
 # These can be overridden for optimization
@@ -38,7 +35,7 @@ TP_MULT_RANGE = [Decimal("1.2"), Decimal("1.5"), Decimal("1.8")] # Take Profit m
 
 # --- Mock BybitForge for Backtesting ---
 class MockBybitForge:
-    def __init__(self, historical_klines: List[Dict], state: SentinelState):
+    def __init__(self, historical_klines: list[dict], state: SentinelState):
         self.historical_klines = historical_klines
         self.current_kline_index = 0
         self.state = state # Reference to the backtest_state
@@ -63,23 +60,22 @@ class MockBybitForge:
     def _sign(self, ts: str, payload: str) -> str:
         return "mock_signature" # Not actually used in backtesting
 
-    async def call(self, method: str, path: str, params: dict = None, signed: bool = False) -> Dict[str, Any]:
+    async def call(self, method: str, path: str, params: dict = None, signed: bool = False) -> dict[str, Any]:
         if path == "/v5/market/kline":
             if self.current_kline_index < len(self.historical_klines):
                 kline_data = self.historical_klines[self.current_kline_index]
                 # Simulate fetching one kline at a time for the logic engine
                 self.current_kline_index += 1
                 return {"retCode": 0, "result": {"list": [kline_data]}}
-            else:
-                return {"retCode": 1, "retMsg": "No more historical data"}
-        elif path == "/v5/account/wallet-balance":
+            return {"retCode": 1, "retMsg": "No more historical data"}
+        if path == "/v5/account/wallet-balance":
             return {"retCode": 0, "result": {"list": [{"coin": [{"coin": "USDT", "walletBalance": str(self.simulated_balance)}]}]}}
-        elif path == "/v5/order/create":
+        if path == "/v5/order/create":
             # Simulate order creation
             order_side = params["side"]
             order_qty = Decimal(params["qty"])
             order_price = state.price # Use current simulated price for market order
-            
+
             # Update simulated position
             if order_side == "Buy":
                 if self.simulated_position["side"] == "None":
@@ -138,10 +134,10 @@ class MockBybitForge:
                 "timestamp": time.time() # Use current simulated time
             })
             return {"retCode": 0, "result": {"orderId": "mock_order_id"}}
-        elif path == "/v5/market/instruments-info":
+        if path == "/v5/market/instruments-info":
             # Mock instrument info for precision
             return {"retCode": 0, "result": {"list": [{"priceFilter": {"tickSize": "0.01"}, "lotSizeFilter": {"qtyStep": "0.001"}}]}}
-        
+
         return {"retCode": -1, "retMsg": f"Mock API call not implemented for {path}"}
 
 # --- Backtesting Trade Execution and Management ---
@@ -156,17 +152,17 @@ async def execute_trade(forge: MockBybitForge, side: str):
     # Calculate order quantity based on available balance and risk
     available_balance = forge.simulated_balance
     risk_amount = available_balance * BASE_RISK_PERCENT
-    
+
     # Determine position size based on risk and leverage
     # For backtesting, we'll simplify and assume we use a fixed percentage of capital
     # or a calculated amount based on risk.
     # Let's use a simple fixed percentage of initial capital for now.
     # In a real scenario, this would be more dynamic based on SL distance.
-    
+
     # For simplicity, let's assume a fixed order size for now, or a percentage of initial capital
     # This needs to be refined for proper risk management in backtesting
     order_qty_decimal = (INITIAL_CAPITAL * Decimal("0.01") / state.price).quantize(state.qty_step, rounding=ROUND_DOWN) # Example: 1% of initial capital
-    
+
     if order_qty_decimal == Decimal("0.0"):
         state.logs.append("[bold red]❌ Calculated order quantity is zero. Aborting trade.[/bold red]")
         return
@@ -195,9 +191,9 @@ async def execute_trade(forge: MockBybitForge, side: str):
         "triggerDirection": 1 if side == "Buy" else 2,
         "tpslMode": "Full"
     }
-    
+
     state.logs.append(f"[bold yellow]Attempting to place {side} order:[/bold yellow] Qty: {order_qty_decimal}, TP: {take_profit_price:.{state.price_prec}f}, SL: {stop_loss_price:.{state.price_prec}f}")
-    
+
     response = await forge.call("POST", "/v5/order/create", order_params, signed=True)
 
     if response and response.get("retCode") == 0:
@@ -234,7 +230,7 @@ async def manage_trade(forge: MockBybitForge):
     # Check for Take Profit / Stop Loss (simulated)
     # This is a simplified simulation. In a real scenario, the exchange would trigger these.
     # Here, we check if current price crosses the simulated TP/SL levels from the last order.
-    
+
     # Find the active order's TP/SL (simplistic: assumes last order's TP/SL are current)
     active_order_tp = Decimal("0.0")
     active_order_sl = Decimal("0.0")
@@ -247,7 +243,7 @@ async def manage_trade(forge: MockBybitForge):
     pnl = Decimal("0.0")
 
     if position_side == "Buy":
-        if current_price >= active_order_tp and active_order_tp > Decimal("0.0"):
+        if current_price >= active_order_tp > Decimal("0.0"):
             state.logs.append(f"[bold green]🎉 Take Profit hit for Buy position at {current_price:.{state.price_prec}f}![/bold green]")
             pnl = (active_order_tp - entry_price) * position_size
             trade_closed = True
@@ -260,7 +256,7 @@ async def manage_trade(forge: MockBybitForge):
             state.logs.append(f"[bold green]🎉 Take Profit hit for Sell position at {current_price:.{state.price_prec}f}![/bold green]")
             pnl = (entry_price - active_order_tp) * position_size
             trade_closed = True
-        elif current_price >= active_order_sl and active_order_sl > Decimal("0.0"):
+        elif current_price >= active_order_sl > Decimal("0.0"):
             state.logs.append(f"[bold red]💔 Stop Loss hit for Sell position at {current_price:.{state.price_prec}f}![/bold red]")
             pnl = (entry_price - active_order_sl) * position_size
             trade_closed = True
@@ -287,7 +283,7 @@ async def manage_trade(forge: MockBybitForge):
             state.loss_count += 1
             state.total_loss += pnl
             state.logs.append(f"[bold red]Realized PnL: {pnl:.2f} USDT[/bold red]")
-        
+
         state.logs.append(f"New Balance: {forge.simulated_balance:.2f} USDT")
         state.last_ritual = time.time() # Reset cooldown after trade close
 
@@ -318,13 +314,13 @@ async def backtest_logic_engine(forge: MockBybitForge):
 
     while forge.current_kline_index < len(forge.historical_klines):
         kline_response = await forge.call("GET", "/v5/market/kline", {"category": CATEGORY, "symbol": SYMBOL, "interval": "1", "limit": 1})
-        
+
         if kline_response and kline_response.get('retCode') == 0:
             candle = kline_response['result']['list'][0]
             # Update OHLC and price
             state.ohlc.append((float(candle[2]), float(candle[3]), float(candle[4])))
             state.price = Decimal(candle[4])
-            
+
             # Update indicators
             update_oracle(state)
             state.is_ready = True
@@ -354,13 +350,13 @@ async def backtest_logic_engine(forge: MockBybitForge):
                     is_bull = state.price > state.macro_trend
                     buy_confirm = state.fisher_series[-1] > state.fisher_series[-2] and state.fisher_series[-2] < -state.dynamic_threshold
                     sell_confirm = state.fisher_series[-1] < state.fisher_series[-2] and state.fisher_series[-2] > state.dynamic_threshold
-                    
-                    
+
+
                     if is_bull and buy_confirm and state.trend_strength > SCALPING_TREND_STRENGTH_MIN:
                         await execute_trade(forge, "Buy")
                     elif not is_bull and sell_confirm and state.trend_strength > SCALPING_TREND_STRENGTH_MIN:
                         await execute_trade(forge, "Sell")
-            
+
             # Manage existing trade (SL/TP/Pullback)
             await manage_trade(forge)
 
@@ -376,13 +372,13 @@ async def backtest_logic_engine(forge: MockBybitForge):
 
         else:
             backtest_state.logs.append(f"[bold red]❌ Failed to fetch kline data during backtest: {kline_response.get('retMsg')}[/bold red]")
-        
+
         # In backtesting, we process one candle at a time, so no asyncio.sleep is needed here.
 
 # --- Backtesting Main Function ---
-async def backtest_main(historical_klines: List[Dict], state: BacktestingSentinelState):
+async def backtest_main(historical_klines: list[dict], state: BacktestingSentinelState):
     forge = MockBybitForge(historical_klines, state)
-    
+
     # Initialize precision (mocked)
     res = await forge.call("GET", "/v5/market/instruments-info", {"category": CATEGORY, "symbol": SYMBOL})
     if res and res.get('retCode') == 0:
@@ -406,11 +402,11 @@ async def backtest_main(historical_klines: List[Dict], state: BacktestingSentine
     console.print(f"Trade Count: [bold yellow]{backtest_state.trade_count}[/bold yellow]")
     console.print(f"Win Rate: [bold green]{(backtest_state.win_count / backtest_state.trade_count * 100):.2f}%[/bold green]" if backtest_state.trade_count > 0 else "Win Rate: N/A")
     console.print(f"Profit Factor: [bold green]{(backtest_state.total_profit / abs(backtest_state.total_loss)):.2f}[/bold green]" if backtest_state.total_loss != 0 else "Profit Factor: N/A")
-    
+
     # You might want to plot equity curve here using matplotlib or similar
 
 # --- Historical Data Fetching (for actual backtesting) ---
-async def fetch_historical_klines(symbol: str, interval: str, start_date: str, end_date: str) -> List[Dict]:
+async def fetch_historical_klines(symbol: str, interval: str, start_date: str, end_date: str) -> list[dict]:
     # This part would actually fetch data from Bybit API
     # For now, let's create some dummy data
     klines = []
@@ -469,11 +465,11 @@ async def optimize_parameters():
                     for tp_mult in TP_MULT_RANGE:
                         current_combination += 1
                         console.print(f"Running combination {current_combination}/{total_combinations}...")
-                        
+
                         # Reset backtest_state for each new combination
                         global backtest_state
                         backtest_state = BacktestingSentinelState()
-                        
+
                         # Apply current parameters to the state
                         backtest_state.cooldown_seconds = cooldown
                         backtest_state.dynamic_threshold = dynamic_threshold
@@ -492,7 +488,7 @@ async def optimize_parameters():
                         temp_state = BacktestingSentinelState()
                         temp_state.cooldown_seconds = cooldown
                         temp_state.dynamic_threshold = dynamic_threshold
-                        
+
                         # Temporarily override global constants for backtesting context
                         # This is not ideal but works for demonstration.
                         # A better approach would be to pass a config object down.

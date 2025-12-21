@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 BCH Sentinel v3.8 - The Kinetic Sovereign
 Forged by Pyrmethus: Dynamic Thresholds, ATR-TSL, and Pullback Exits.
 """
 
-import os
 import asyncio
-import hmac
 import hashlib
+import hmac
 import json
+import os
 import time
 import urllib.parse
-import numpy as np
 from collections import deque
-from decimal import Decimal, ROUND_DOWN
-from typing import Optional, Dict, Any, List
+from decimal import Decimal
 
 import aiohttp
+import numpy as np
 import websockets
 from dotenv import load_dotenv
-from rich.console import Console
 from rich.layout import Layout
-from rich.panel import Panel
 from rich.live import Live
+from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
@@ -38,10 +35,10 @@ SYMBOL = "BCHUSDT"
 CATEGORY = "linear"
 LEVERAGE = 10
 BASE_RISK_PERCENT = Decimal("1.5")
-DAILY_LOSS_LIMIT = Decimal("5.0") 
+DAILY_LOSS_LIMIT = Decimal("5.0")
 FISHER_PERIOD = 10
 ATR_PERIOD = 14
-MACRO_PERIOD = 50 
+MACRO_PERIOD = 50
 ENTRY_THRESHOLD_BASE = 2.0
 COOLDOWN_SECONDS = 45
 
@@ -54,16 +51,16 @@ class SentinelState:
         self.balance = Decimal("0.0")
         self.initial_balance = Decimal("0.0")
         self.daily_pnl = Decimal("0.0")
-        
+
         # Indicators
         self.fisher = 0.0
         self.trigger = 0.0
         self.atr = 0.0
         self.macro_trend = 0.0
-        self.velocity = 0.0 
+        self.velocity = 0.0
         self.dynamic_threshold = ENTRY_THRESHOLD_BASE
         self.trend_strength = 0.0
-        
+
         # Position State
         self.trade_active = False
         self.side = "HOLD"
@@ -71,24 +68,24 @@ class SentinelState:
         self.qty = Decimal("0.0")
         self.upnl = Decimal("0.0")
         self.last_ritual = 0
-        
+
         # Trailing Stop & Protection
         self.high_water_mark = Decimal("0.0")
         self.current_sl = Decimal("0.0")
         self.sl_last_sent = Decimal("0.0")
         self.sl_trailing_buffer_mult = Decimal("1.5") # ATR Mult
-        
+
         # Precision
         self.price_prec = 2
         self.qty_step = Decimal("0.01")
-        
+
         # Buffers
         self.ohlc = deque(maxlen=100)
         self.value1 = deque(maxlen=100)
         self.fisher_series = deque(maxlen=100)
         self.fisher_sd_deque = deque(maxlen=30)
         self.logs = deque(maxlen=12)
-        
+
         self.is_ready = False
         self.is_connected = False
 
@@ -96,7 +93,7 @@ state = SentinelState()
 
 # --- Alchemy: Technical Indicators ---
 
-def calculate_super_smoother(data_list: List[float], period: int) -> float:
+def calculate_super_smoother(data_list: list[float], period: int) -> float:
     if len(data_list) < 3: return data_list[-1] if data_list else 0.0
     a1 = np.exp(-1.414 * np.pi / period)
     b1 = 2 * a1 * np.cos(1.414 * np.pi / period)
@@ -107,7 +104,7 @@ def calculate_super_smoother(data_list: List[float], period: int) -> float:
 def update_oracle_indicators():
     if len(state.ohlc) < MACRO_PERIOD: return
     closes = [x[2] for x in state.ohlc]
-    
+
     state.macro_trend = calculate_super_smoother(closes, MACRO_PERIOD)
     state.trend_strength = abs(float(state.price) - state.macro_trend) / (state.atr if state.atr > 0 else 1.0)
 
@@ -117,7 +114,7 @@ def update_oracle_indicators():
         pc = state.ohlc[i-1][2]
         tr_list.append(max(h - l, abs(h - pc), abs(l - pc)))
     state.atr = np.mean(tr_list[-ATR_PERIOD:])
-    
+
     recent_changes = np.diff(closes[-20:])
     state.velocity = (recent_changes[-1] - np.mean(recent_changes)) / (np.std(recent_changes) + 1e-9)
 
@@ -127,15 +124,15 @@ def update_oracle_indicators():
         window.append(calculate_super_smoother(closes[:-i] if i > 0 else closes, 10))
     mx, mn = max(window), min(window)
     raw_val = 2 * ((window[-1] - mn) / (mx - mn + 1e-9) - 0.5)
-    
+
     prev_v1 = state.value1[-1] if state.value1 else 0.0
     v1 = 0.33 * raw_val + 0.67 * prev_v1
     v1 = np.clip(v1, -0.999, 0.999)
     state.value1.append(v1)
-    
+
     prev_fish = state.fisher_series[-1] if state.fisher_series else 0.0
     fish = 0.5 * np.log((1 + v1) / (1 - v1)) + 0.5 * prev_fish
-    
+
     state.trigger = prev_fish
     state.fisher = fish
     state.fisher_series.append(fish)
@@ -150,7 +147,7 @@ def update_oracle_indicators():
 # --- The Forge: API Client ---
 class BybitForge:
     def __init__(self):
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self.base = "https://api-testnet.bybit.com" if IS_TESTNET else "https://api.bybit.com"
 
     async def ignite(self):
@@ -184,7 +181,7 @@ class BybitForge:
 
 async def manage_active_trade(forge):
     if not state.trade_active: return
-    
+
     atr_dec = Decimal(str(round(state.atr, 4)))
     pullback_threshold = Decimal("0.005") # 0.5% pullback
 
@@ -237,14 +234,14 @@ async def execute_trade(forge, side: str):
     # Sigma-Risk Weighting
     conviction_mult = Decimal(str(np.clip(abs(state.velocity), 0.8, 1.5)))
     risk_amt = state.balance * (BASE_RISK_PERCENT / 100) * conviction_mult * LEVERAGE
-    
+
     qty = ((risk_amt / state.price) // state.qty_step) * state.qty_step
     if qty <= 0: return
 
     # 4. Dynamic Risk/Reward (Velocity Adjusted)
     atr_dec = Decimal(str(round(state.atr, 4)))
     velocity_adj = Decimal(str(np.clip(1.0 - (abs(state.velocity) * 0.1), 0.7, 1.2)))
-    
+
     tp_mult = Decimal("3.5") * velocity_adj
     sl_mult = Decimal("2.0")
 
@@ -267,23 +264,23 @@ async def execute_trade(forge, side: str):
 
 def update_tui(layout):
     border_col = "lime" if abs(state.velocity) > 1.8 else "cyan"
-    
+
     layout["header"].update(Panel(Text(f"BCH SENTINEL v3.8 | Sovereign Alchemist | Daily: {state.daily_pnl:+.2f}", justify="center", style="bold white"), border_style="magenta"))
-    
+
     oracle_text = Text()
     oracle_text.append(f"\nPrice:    {state.price} USDT\n", style="white")
-    
+
     trend_style = "bold lime" if float(state.price) > state.macro_trend else "bold red"
     oracle_text.append(f"Trend:    {'BULL' if trend_style == 'bold lime' else 'BEAR'} (S:{state.trend_strength:.2f})\n", style=trend_style)
-    
+
     f_col = "bold lime" if state.fisher > state.trigger else "bold red"
     oracle_text.append(f"Fisher:   {state.fisher:+.4f} (T:{state.dynamic_threshold:.2f})\n", style=f_col)
-    
+
     v_col = "bold gold1" if abs(state.velocity) > 1.5 else "dim white"
     oracle_text.append(f"Velocity: {state.velocity:+.2f} σ", style=v_col)
-    
+
     layout["oracle"].update(Panel(oracle_text, title="Harmonic Oracle", border_style=border_col))
-    
+
     pos_table = Table.grid(expand=True)
     pnl_col = "green" if state.upnl >= 0 else "red"
     pos_table.add_row("SIDE:", f"[bold]{state.side}[/]")
@@ -291,7 +288,7 @@ def update_tui(layout):
     pos_table.add_row("SL:", f"{state.current_sl:.2f}")
     pos_table.add_row("BAL:", f"{state.balance:.2f} USDT")
     layout["position"].update(Panel(pos_table, title="Sovereign Position", border_style="purple"))
-    
+
     layout["footer"].update(Panel(Text.from_markup("\n".join(state.logs)), title="Precision Logs", border_style="dim cyan"))
 
 # --- Engine ---
@@ -323,12 +320,12 @@ async def kline_engine(forge):
                     state.ohlc.append((float(k[2]), float(k[3]), float(k[4])))
                 state.is_ready = True
                 update_oracle_indicators()
-                
+
                 # 3. Entry Confirmation with Macro Trend Strength
                 if not state.trade_active and (time.time() - state.last_ritual > COOLDOWN_SECONDS):
                     is_bull = float(state.price) > state.macro_trend
-                    is_strong = state.trend_strength > 0.5 
-                    
+                    is_strong = state.trend_strength > 0.5
+
                     if is_strong and abs(state.velocity) > 0.6:
                         if is_bull and state.fisher > state.trigger and state.fisher < -state.dynamic_threshold:
                             await execute_trade(forge, "Buy")
@@ -344,7 +341,7 @@ async def private_manager(forge):
         sig = hmac.new(API_SECRET.encode(), f"GET/realtime{expires}".encode(), hashlib.sha256).hexdigest()
         await ws.send(json.dumps({"op": "auth", "args": [API_KEY, expires, sig]}))
         await ws.send(json.dumps({"op": "subscribe", "args": ["position", "wallet"]}))
-        
+
         bal_init = await forge.call("GET", "/v5/account/wallet-balance", {"accountType": "UNIFIED"}, signed=True)
         if bal_init.get('retCode') == 0:
             state.balance = Decimal(bal_init['result']['list'][0]['coin'][0]['walletBalance'])

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 🐳 WhaleBot Supreme v3.5 - The Sentinel
 Forged by Pyrmethus: Dynamic Precision, Wallet-Aware Sizing, and EMA Confluence.
@@ -8,14 +7,15 @@ Forged by Pyrmethus: Dynamic Precision, Wallet-Aware Sizing, and EMA Confluence.
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
-import subprocess
-from datetime import datetime, timezone
-from decimal import ROUND_DOWN, Decimal, getcontext
+from datetime import timezone
+from decimal import Decimal
+from decimal import getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Optional, Tuple, Dict
+from typing import ClassVar
 
 # --- Ritual Dependencies ---
 try:
@@ -24,9 +24,10 @@ try:
 except ImportError:
     PYBIT_AVAILABLE = False
 
-import numpy as np
 import pandas as pd
-from colorama import Fore, Style, init
+from colorama import Fore
+from colorama import Style
+from colorama import init
 from dotenv import load_dotenv
 
 # --- Chromatic Initialization ---
@@ -80,12 +81,12 @@ class AlertSystem:
         self.logger = logger
         self.has_api = self._check_api()
     def _check_api(self) -> bool:
-        try: return subprocess.run(['which', 'termux-toast'], capture_output=True).returncode == 0
+        try: return subprocess.run(['which', 'termux-toast'], check=False, capture_output=True).returncode == 0
         except: return False
     def send_alert(self, message: str, level: str = "INFO"):
         color = NEON_GREEN if level == "INFO" else NEON_RED
         self.logger.info(f"{color}🔮 ALERT: {message}{RESET}")
-        if self.has_api: subprocess.run(['termux-toast', f"WhaleBot: {message}"])
+        if self.has_api: subprocess.run(['termux-toast', f"WhaleBot: {message}"], check=False)
 
 # --- Bybit V5 Mastery Client ---
 class PybitTradingClient:
@@ -95,7 +96,7 @@ class PybitTradingClient:
         self.session = None
         if PYBIT_AVAILABLE and API_KEY and API_SECRET:
             self.session = PybitHTTP(
-                api_key=API_KEY, api_secret=API_SECRET, 
+                api_key=API_KEY, api_secret=API_SECRET,
                 testnet=config["execution"]["testnet"]
             )
             self.logger.info(f"{NEON_GREEN}# Bridge to the Bybit V5 Void established.{RESET}")
@@ -151,13 +152,13 @@ class PositionManager:
         """Calculate quantity based on wallet risk and SL distance."""
         res = self.client.api_call("get_wallet_balance", accountType="UNIFIED", coin="USDT")
         if not res: return self._round(self.min_qty, self.qty_prec)
-        
+
         balance = float(res['result']['list'][0]['coin'][0]['walletBalance'])
         risk_per_trade = float(self.config["trade_management"]["risk_per_trade_percent"]) * balance
         sl_dist = abs(price - sl_price)
-        
+
         if sl_dist == 0: return self._round(self.min_qty, self.qty_prec)
-        
+
         qty = risk_per_trade / sl_dist
         return self._round(max(qty, self.min_qty), self.qty_prec)
 
@@ -167,8 +168,8 @@ class PositionManager:
         qty = self.calculate_qty(price, sl_price)
 
         self.logger.info(f"{NEON_PURPLE}# Executing {side} Ritual | Qty: {qty} | SL: {sl_price:.2f}{RESET}")
-        
-        res = self.client.api_call("place_order", 
+
+        res = self.client.api_call("place_order",
             category="linear", symbol=self.config["symbol"], side=side.capitalize(),
             orderType="Market", qty=qty, stopLoss=self._round(sl_price, self.price_prec),
             tpTriggerBy="LastPrice", slTriggerBy="LastPrice"
@@ -191,7 +192,7 @@ class WhaleBot:
         df['rsi'] = self.calculate_rsi(df)
         df['ema'] = df['close'].rolling(window=50).mean()
         df['atr'] = self.calculate_atr(df)
-        
+
         last = df.iloc[-1]
         self.logger.info(f"{NEON_YELLOW}🔍 Divination: {last['close']:.2f} | RSI: {last['rsi']:.2f} | EMA: {last['ema']:.2f}{RESET}")
 
@@ -237,7 +238,7 @@ def load_config(filepath: str, logger: logging.Logger) -> dict:
     if not Path(filepath).exists():
         with open(filepath, 'w') as f: json.dump(default_config, f, indent=4)
         return default_config
-    with open(filepath, 'r') as f:
+    with open(filepath) as f:
         existing = json.load(f)
         # Repair missing sections
         for k, v in default_config.items():
@@ -254,7 +255,7 @@ def main():
         logger.critical(f"{NEON_RED}# Fatal: API keys missing in .env!{RESET}"); sys.exit(1)
     if not PYBIT_AVAILABLE:
         logger.critical(f"{NEON_RED}# Fatal: pybit library missing!{RESET}"); sys.exit(1)
-    
+
     bot = WhaleBot(config)
     bot.start()
 

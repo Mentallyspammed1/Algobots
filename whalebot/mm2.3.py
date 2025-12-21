@@ -1,33 +1,36 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Arcane Market Maker v16.0 - THE OMNI-REVENANT
 The Final Synthesis: Order Persistence, ATR Volatility, & Vectorized OFI.
 """
 
-import os
-import sys
 import asyncio
-import aiohttp
-import hmac
 import hashlib
+import hmac
 import json
-import time
-import urllib.parse
-import logging
+import os
 import signal
 import statistics
+import sys
+import time
+import urllib.parse
 from collections import deque
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from typing import Dict, List, Optional, Tuple
+from decimal import ROUND_DOWN
+from decimal import ROUND_UP
+from decimal import Decimal
+
+import aiohttp
 
 # --- Pre-Flight Check ---
 try:
-    from colorama import init, Fore, Back, Style
-    from dotenv import load_dotenv
     import numpy as np
     import websockets
+    from colorama import Back
+    from colorama import Fore
+    from colorama import Style
+    from colorama import init
+    from dotenv import load_dotenv
 except ImportError:
     print(Fore.RED + "Required: pip install aiohttp websockets numpy colorama python-dotenv")
     sys.exit(1)
@@ -58,7 +61,7 @@ class RevenantUI:
         filled_size = int(abs(inv_ratio) * inv_bar_size)
         bar = ("█" * filled_size).ljust(inv_bar_size, "-")
         bar_col = Fore.RED if abs(inv_ratio) > 0.7 else Fore.CYAN
-        
+
         sys.stdout.write("\033[H") # Move to top
         print(f"{Fore.MAGENTA}╔════════ {Fore.WHITE}OMNI-REVENANT v16.0 {Fore.MAGENTA}══════════════════════════════╗")
         print(f"{Fore.MAGENTA}║ {Fore.CYAN}SYM: {sym:<10} {Fore.MAGENTA}| {Fore.WHITE}PRICE: {px:<10.4f} {Fore.MAGENTA}| {pnl_col}PnL: {pnl:+.2f} {Fore.MAGENTA}║")
@@ -95,7 +98,7 @@ class RevenantBook:
         self.ofi_history = deque(maxlen=10)
         self.prev_imb = Decimal('0')
 
-    def update(self, data: Dict, is_snapshot: bool):
+    def update(self, data: dict, is_snapshot: bool):
         if is_snapshot:
             self.bids = {Decimal(p): Decimal(q) for p, q in data.get('b', [])}
             self.asks = {Decimal(p): Decimal(q) for p, q in data.get('a', [])}
@@ -105,14 +108,14 @@ class RevenantBook:
                     price, qty = Decimal(p), Decimal(q)
                     if qty == 0: target.pop(price, None)
                     else: target[price] = qty
-        
+
         b_vol = sum(list(self.bids.values())[:5])
         a_vol = sum(list(self.asks.values())[:5])
         curr_imb = b_vol - a_vol
         self.ofi_history.append(curr_imb - self.prev_imb)
         self.prev_imb = curr_imb
 
-    def get_fair_value(self) -> Tuple[Decimal, Decimal, Decimal]:
+    def get_fair_value(self) -> tuple[Decimal, Decimal, Decimal]:
         if not self.bids or not self.asks: return Decimal('0'), Decimal('0'), Decimal('0')
         bb, ba = max(self.bids.keys()), min(self.asks.keys())
         vb, va = self.bids[bb], self.asks[ba]
@@ -138,11 +141,11 @@ class OmniRevenant:
         self.books = {s: RevenantBook() for s in self.symbols}
         self.positions = {s: {"size": Decimal('0'), "val": Decimal('0')} for s in self.symbols}
         self.active_orders = {s: {"Buy": None, "Sell": None} for s in self.symbols}
-        
+
         self.equity, self.initial_equity = Decimal('0'), Decimal('0')
         self.running = True
         self.bucket = TokenBucket(20, 10)
-        self.last_update = {s: 0 for s in self.symbols}
+        self.last_update = dict.fromkeys(self.symbols, 0)
         self.latency = 0
 
     async def signed_request(self, method, path, params=None):
@@ -153,7 +156,7 @@ class OmniRevenant:
         body = json.dumps(params) if method == "POST" and params else ""
         raw = ts + API_KEY + "5000" + (query if method == "GET" else body)
         sig = hmac.new(API_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
-        
+
         headers = {"X-BAPI-API-KEY": API_KEY, "X-BAPI-SIGN": sig, "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": "5000", "Content-Type": "application/json"}
         try:
             async with self.session.request(method, f"{BASE_URL}{path}{'?' + query if query else ''}", headers=headers, data=body) as r:
@@ -190,7 +193,7 @@ class OmniRevenant:
         now = time.time()
         cfg = self.symbols[symbol]
         if now - self.last_update[symbol] < 0.6: return
-        
+
         book = self.books[symbol]
         micro, ofi, spread_bps = book.get_fair_value()
         if micro == 0 or self.equity == 0: return
@@ -212,21 +215,21 @@ class OmniRevenant:
         spread = (micro * cfg.base_spread_bps / 10000) * vol_mult
         bid_target = (micro - (spread * (1 - total_skew))).quantize(cfg.tick_size, ROUND_DOWN)
         ask_target = (micro + (spread * (1 + total_skew))).quantize(cfg.tick_size, ROUND_UP)
-        
+
         qty = (self.equity * cfg.risk_pct / micro).quantize(cfg.qty_step, ROUND_DOWN)
-        if qty < cfg.min_qty: qty = cfg.min_qty
+        qty = max(qty, cfg.min_qty)
 
         # 4. Ghost-Tick Filter (Amend vs Replace)
         # Only replace if target deviates by > X ticks
         needs_buy = True
         needs_sell = True
-        
-        # This logic is simplified: In production, use orderId to Amend. 
+
+        # This logic is simplified: In production, use orderId to Amend.
         # Here we optimize by only triggering Cancel-All/Create if the move is significant.
         current_bid = self.active_orders[symbol]["Buy"]
         if current_bid and abs(bid_target - current_bid) < (cfg.tick_size * cfg.requote_threshold_ticks):
             needs_buy = False
-            
+
         current_sell = self.active_orders[symbol]["Sell"]
         if current_sell and abs(ask_target - current_sell) < (cfg.tick_size * cfg.requote_threshold_ticks):
             needs_sell = False
@@ -257,7 +260,7 @@ class OmniRevenant:
                         self.symbols[s].tick_size = Decimal(i['priceFilter']['tickSize'])
                         self.symbols[s].qty_step = Decimal(i['lotSizeFilter']['qtyStep'])
                         self.symbols[s].min_qty = Decimal(i['lotSizeFilter']['minOrderQty'])
-            
+
             w = await self.signed_request("GET", "/v5/account/wallet-balance", {"accountType": "UNIFIED"})
             if w:
                 c = next((x for x in w['result']['list'][0]['coin'] if x['coin'] == 'USDT'), None)
