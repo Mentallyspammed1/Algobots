@@ -1,9 +1,7 @@
 # indicators.py
 import logging
 import pandas as pd
-import pandas_ta as ta
-from typing import Dict, Any, Optional, Union, List
-import time
+from typing import Dict, Any, Optional, List
 
 # Import the market data helper to fetch historical kline data
 from bybit_market_data_helper import BybitMarketDataHelper

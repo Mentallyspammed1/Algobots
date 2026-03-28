@@ -2,10 +2,9 @@
 import argparse
 import logging
 import random
-import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -17,7 +16,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential_jitter,
 )
-import logging # Ensure logging is imported for before_sleep_log
+
 
 class BybitAPIError(Exception):
     def __init__(self, message: str, ret_code: int = -1, ret_msg: str = "Unknown"):

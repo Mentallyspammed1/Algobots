@@ -3,15 +3,17 @@ import argparse
 import json
 import logging
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
-from dataclasses import replace
 
 import optuna
 import pandas as pd
 
 from backtest import BacktestParams, BybitHistoricalData, MarketMakerBacktester, from_ms
-from config_definitions import Config, StrategyConfig, SystemConfig, FilesConfig, InventoryStrategyConfig, DynamicSpreadConfig, CircuitBreakerConfig, TradeMetrics
+from config_definitions import (
+    Config,
+)
 
 logger = logging.getLogger("ProfitOptimizer")
 logging.basicConfig(

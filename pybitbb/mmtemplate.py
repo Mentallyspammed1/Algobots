@@ -3,15 +3,12 @@ import os
 import time
 import logging
 import threading
-from typing import Dict, Any, Optional, Tuple, List
-import math
+from typing import Dict, Any, Optional
 
 # Import your helper modules
 from bybit_account_helper import BybitAccountHelper
-from bybit_trade_helper import BybitTradeHelper
 from bybit_market_data_helper import BybitMarketDataHelper
-from bybit_ws_private_helper import BybitWsPrivateHelper
-from bybit_orderbook_helper import BybitOrderbookHelper, PriceLevel # PriceLevel for type hinting
+from bybit_orderbook_helper import BybitOrderbookHelper # PriceLevel for type hinting
 from bybit_sizing_helper import BybitSizingHelper
 from bybit_unified_order_manager import BybitUnifiedOrderManager, TradingMode # Using unified manager for orders
 
@@ -235,7 +232,7 @@ class MarketMakerBot:
                 self._manage_active_orders() # Clean up old orders
                 self._place_market_making_orders() # Place/amend new orders
                 
-            except Exception as e:
+            except Exception:
                 logger.exception("Error in market maker loop.")
             
             time.sleep(5) # Run every 5 seconds (adjust frequency as needed)
@@ -305,7 +302,7 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Ctrl+C detected. Stopping bot...")
-    except Exception as e:
+    except Exception:
         logger.exception("An unexpected error occurred in the main program.")
     finally:
         bot.stop_bot()

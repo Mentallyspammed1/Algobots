@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/env bash
 # pyrm_setup_v3.sh — Termux aichat + pyrm agent setup with safe logging
 set -euo pipefail
 
@@ -218,7 +218,7 @@ write_web_search() {
   mkdir -p "$TOOLS_DIR"
   local f="${TOOLS_DIR}/web_search.sh"
   cat > "$f" <<'BASH'
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/env bash
 # web_search.sh — DuckDuckGo HTML search (no API keys), TSV/JSON output
 set -euo pipefail
 FORMAT="tsv"
@@ -295,7 +295,7 @@ BASH
 write_weather_plugin() {
   local f="${PLUGINS_DIR}/weather_plugin.sh"
   cat > "$f" <<'BASH'
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/env bash
 set -euo pipefail
 CITY="${1:-New York}"
 FORMAT="${2:-tsv}"
@@ -313,7 +313,7 @@ BASH
 write_wrapper() {
   local f="${LOCAL_BIN}/aichat-pyrm"
   cat > "$f" <<'BASH'
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/env bash
 set -euo pipefail
 ENV_FILE="$HOME/.config/aichat/.env"
 [ -f "$ENV_FILE" ] && . "$ENV_FILE"

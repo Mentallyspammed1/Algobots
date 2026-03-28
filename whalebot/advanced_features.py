@@ -6,7 +6,6 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 import numpy as np
-import math # For math functions not in numpy
 
 # For sentiment analysis placeholder
 try:

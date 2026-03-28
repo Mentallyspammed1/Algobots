@@ -1,10 +1,9 @@
 import os
 import sys
 import time
-import json
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Union
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import numpy as np
@@ -12,7 +11,7 @@ import pandas_ta as pta  # Using pandas_ta for technical indicators
 from bybit import BybitV5
 from dotenv import load_dotenv
 from colorama import init, Fore, Back, Style
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 # --- Initialize Colorama ---

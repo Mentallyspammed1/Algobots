@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/env bash
 
 # Worldguidex Jules VM Setup Script
 # Purpose: Configure Jules VM, generate project files, install system/Python dependencies.

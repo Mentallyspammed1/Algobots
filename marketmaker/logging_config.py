@@ -1,6 +1,8 @@
 import logging
+
 from rich.console import Console
 from rich.logging import RichHandler
+
 
 class ContextFilter(logging.Filter):
     """A logging filter to inject a symbol into log records."""

@@ -1,8 +1,4 @@
 import re
-import json
-import os
-from datetime import datetime
-import zoneinfo # For timezone info in log
 
 def analyze_trade_logs(log_file_path: str) -> list:
     """

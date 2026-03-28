@@ -1,7 +1,6 @@
 # market_analyzer.py
 
 import pandas as pd
-import pandas_ta as ta
 from typing import Dict, Any
 import logging
 

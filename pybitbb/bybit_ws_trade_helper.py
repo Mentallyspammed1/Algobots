@@ -2,7 +2,7 @@ l# bybit_ws_trade_helper.py
 import logging
 import time
 import threading
-from typing import Dict, Any, Optional, Callable, List, Union
+from typing import Dict, Any, Optional, Callable, List
 
 from pybit.unified_trading import WebSocketTrading
 from pybit.exceptions import BybitWebsocketError # Specific WebSocket error
@@ -487,7 +487,7 @@ if __name__ == "__main__":
             time.sleep(1) # Allow time for response
 
             # --- Cancel a batch of orders via WebSocket (using client_order_ids from the batch) ---
-            print(f"\n--- Cancelling Batch Orders via WS ---")
+            print("\n--- Cancelling Batch Orders via WS ---")
             cancel_batch_requests = [
                 {'symbol': SYMBOL, 'orderLinkId': batch_requests[0]['orderLinkId']},
                 {'symbol': SYMBOL, 'orderLinkId': batch_requests[1]['orderLinkId']}
@@ -498,7 +498,7 @@ if __name__ == "__main__":
         else:
             logger.error("Failed to connect to WebSocket Trading. Skipping operations.")
 
-    except Exception as e:
+    except Exception:
         logger.exception("An error occurred in the main execution block.")
     finally:
         ws_trade_helper.disconnect()

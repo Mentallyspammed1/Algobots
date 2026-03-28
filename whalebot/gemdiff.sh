@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/env bash
 # A powerful, enhanced script to merge code files using the Gemini API.
 # Upgraded with advanced prompt engineering, robust error handling, and more.
 # Version 3.0 ✨

@@ -7,9 +7,9 @@ import os
 import signal  # Import the signal module for graceful shutdown
 import subprocess
 import sys
-from asyncio import Lock # For asynchronous locking
 import threading
 import time
+from asyncio import Lock  # For asynchronous locking
 from collections import deque  # For storing recent trades/prices
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field

@@ -5,9 +5,9 @@ import json
 import logging
 import time
 import uuid # For generating unique client order IDs
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from decimal import Decimal, ROUND_DOWN, ROUND_UP
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 import importlib # For dynamic strategy loading
 from zoneinfo import ZoneInfo # For consistent timezone handling
 
@@ -16,7 +16,6 @@ from pybit.unified_trading import HTTP, WebSocket
 
 # Import local modules
 from config import Config
-from logger_setup import setup_logger # Redundant here, but good for context
 from precision_manager import PrecisionManager
 from order_sizing import OrderSizingCalculator
 from trailing_stop import TrailingStopManager
@@ -555,16 +554,16 @@ class BybitTradingBot:
         
         # Strategy Execution: Close opposing position first, then open new if applicable
         if current_position and current_position['side'] == 'Buy' and signal.is_sell():
-            self.logger.info(f"Closing existing LONG position due to SELL signal.")
+            self.logger.info("Closing existing LONG position due to SELL signal.")
             await self.close_position()
         elif current_position and current_position['side'] == 'Sell' and signal.is_buy():
-            self.logger.info(f"Closing existing SHORT position due to BUY signal.")
+            self.logger.info("Closing existing SHORT position due to BUY signal.")
             await self.close_position()
         elif not current_position and signal.is_buy() and can_place_buy_order:
-            self.logger.info(f"Opening LONG position due to BUY signal.")
+            self.logger.info("Opening LONG position due to BUY signal.")
             await self._execute_long_entry(current_price)
         elif not current_position and signal.is_sell() and can_place_sell_order:
-            self.logger.info(f"Opening SHORT position due to SELL signal.")
+            self.logger.info("Opening SHORT position due to SELL signal.")
             await self._execute_short_entry(current_price)
         elif signal.is_hold():
             self.logger.debug("HOLD signal. Managing existing orders/position (e.g., market making).")

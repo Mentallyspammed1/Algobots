@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Gemini File Patcher - Interactive Script with Auto-Apply
 #
 # Enhanced version with improved error handling, backup functionality, and logging

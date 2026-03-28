@@ -2,7 +2,7 @@
 
 import logging
 import pandas as pd
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 class BacktestingEngine:
     """

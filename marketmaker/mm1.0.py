@@ -9,7 +9,7 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal, getcontext
-from typing import Any, Optional
+from typing import Any
 
 import aiofiles
 import aiosqlite
@@ -60,7 +60,7 @@ class TradeMetrics:
     realized_pnl: Decimal = Decimal('0')
     current_asset_holdings: Decimal = Decimal('0')
     average_entry_price: Decimal = Decimal('0') # Weighted average price for current holdings
-    last_pnl_update_timestamp: Optional[datetime] = None
+    last_pnl_update_timestamp: datetime | None = None
 
     @property
     def total_pnl(self) -> Decimal:
@@ -276,7 +276,7 @@ class StateManager:
 class DBManager:
     def __init__(self, db_file: str, logger: logging.Logger):
         self.db_file = db_file
-        self.conn: Optional[aiosqlite.Connection] = None
+        self.conn: aiosqlite.Connection | None = None
         self.logger = logger
 
     async def connect(self):
@@ -304,7 +304,7 @@ class DBManager:
         await self.conn.commit()
         self.logger.info("Database tables checked/created.")
 
-    async def log_order_event(self, o: dict, m: Optional[str] = None):
+    async def log_order_event(self, o: dict, m: str | None = None):
         if not self.conn: return # Don't log if DB connection failed
         try:
             await self.conn.execute("INSERT INTO order_events (timestamp, order_id, order_link_id, symbol, side, order_type, price, qty, status, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (datetime.now(timezone.utc).isoformat(), o.get('orderId'), o.get('orderLinkId'), o.get('symbol'), o.get('side'), o.get('orderType'), str(o.get('price','0')), str(o.get('qty','0')), o.get('orderStatus'), m))
@@ -320,7 +320,7 @@ class DBManager:
         except Exception as e:
             self.logger.error(f"Error logging trade fill to DB: {e}")
 
-    async def log_balance_update(self, c: str, wb: Decimal, ab: Optional[Decimal] = None):
+    async def log_balance_update(self, c: str, wb: Decimal, ab: Decimal | None = None):
         if not self.conn: return
         try:
             await self.conn.execute("INSERT INTO balance_updates (timestamp, currency, wallet_balance, available_balance) VALUES (?, ?, ?, ?)", (datetime.now(timezone.utc).isoformat(), c, str(wb), str(ab) if ab else None))
@@ -344,8 +344,8 @@ class TradingClient:
         self.config = config
         self.logger = logger
         self.http_session = HTTP(testnet=self.config.testnet, api_key=self.config.api_key, api_secret=self.config.api_secret)
-        self.ws_public: Optional[WebSocket] = None
-        self.ws_private: Optional[WebSocket] = None
+        self.ws_public: WebSocket | None = None
+        self.ws_private: WebSocket | None = None
         self.last_cancel_time = 0
 
         # Store original methods to apply tenacity decorator dynamically
@@ -405,16 +405,16 @@ class TradingClient:
         raise Exception(f"API {action} failed: {ret_msg} (ErrCode: {ret_code})")
 
     # Original, undecorated API methods (implementation details)
-    async def get_instruments_info_impl(self) -> Optional[dict]:
+    async def get_instruments_info_impl(self) -> dict | None:
         result = self._handle_response(self.http_session.get_instruments_info(category=self.config.category, symbol=self.config.symbol), "get_instruments_info")
         return result.get('list', [{}])[0] if result else None
 
-    async def get_wallet_balance_impl(self) -> Optional[dict]:
+    async def get_wallet_balance_impl(self) -> dict | None:
         account_type = "UNIFIED" if self.config.category in ['linear', 'inverse'] else "SPOT"
         result = self._handle_response(self.http_session.get_wallet_balance(accountType=account_type), "get_wallet_balance")
         return result.get('list', [{}])[0] if result else None
 
-    async def get_position_info_impl(self) -> Optional[dict]:
+    async def get_position_info_impl(self) -> dict | None:
         if self.config.category not in ['linear', 'inverse']: return None
         response = self.http_session.get_positions(category=self.config.category, symbol=self.config.symbol)
         result = self._handle_response(response, "get_position_info")
@@ -432,10 +432,10 @@ class TradingClient:
         result = self._handle_response(self.http_session.get_open_orders(category=self.config.category, symbol=self.config.symbol, limit=50), "get_open_orders")
         return result.get('list', []) if result else []
 
-    async def place_order_impl(self, params: dict) -> Optional[dict]:
+    async def place_order_impl(self, params: dict) -> dict | None:
         return self._handle_response(self.http_session.place_order(**params), f"place_order ({params.get('side')} {params.get('qty')} @ {params.get('price')})")
 
-    async def cancel_order_impl(self, order_id: str, order_link_id: Optional[str] = None) -> bool:
+    async def cancel_order_impl(self, order_id: str, order_link_id: str | None = None) -> bool:
         current_time = time.time()
         # Respect rate limit within the bot's logic, before API call
         if (current_time - self.last_cancel_time) < self.config.system.cancellation_rate_limit_sec:
@@ -451,13 +451,13 @@ class TradingClient:
         return self._handle_response(self.http_session.cancel_all_orders(**params), "cancel_all_orders") is not None
 
     # Public methods, which will be decorated by tenacity
-    get_instruments_info: Callable[[], Coroutine[Any, Any, Optional[dict]]]
-    get_wallet_balance: Callable[[], Coroutine[Any, Any, Optional[dict]]]
-    get_position_info: Callable[[], Coroutine[Any, Any, Optional[dict]]]
+    get_instruments_info: Callable[[], Coroutine[Any, Any, dict | None]]
+    get_wallet_balance: Callable[[], Coroutine[Any, Any, dict | None]]
+    get_position_info: Callable[[], Coroutine[Any, Any, dict | None]]
     set_leverage: Callable[[Decimal], Coroutine[Any, Any, bool]]
     get_open_orders: Callable[[], Coroutine[Any, Any, list[dict]]]
-    place_order: Callable[[dict], Coroutine[Any, Any, Optional[dict]]]
-    cancel_order: Callable[[str, Optional[str]], Coroutine[Any, Any, bool]]
+    place_order: Callable[[dict], Coroutine[Any, Any, dict | None]]
+    cancel_order: Callable[[str, str | None], Coroutine[Any, Any, bool]]
     cancel_all_orders: Callable[[], Coroutine[Any, Any, bool]]
 
     def _init_public_ws(self, callback: Callable):
@@ -465,7 +465,7 @@ class TradingClient:
         self.ws_public = WebSocket(testnet=self.config.testnet, channel_type=self.config.category)
         self.ws_public.orderbook_stream(symbol=self.config.symbol, depth=1, callback=callback)
 
-    def _init_private_ws(self, order_callback: Callable, position_callback: Optional[Callable] = None):
+    def _init_private_ws(self, order_callback: Callable, position_callback: Callable | None = None):
         self.logger.info("Initializing PRIVATE streams (orders, positions)...")
         self.ws_private = WebSocket(testnet=self.config.testnet, api_key=self.config.api_key, api_secret=self.config.api_secret, channel_type="private")
         self.ws_private.order_stream(callback=order_callback)
@@ -492,7 +492,7 @@ class BybitMarketMaker:
         self.db_manager = DBManager(config.files.db_file, self.logger)
         self.trading_client = TradingClient(self.config, self.logger)
 
-        self.market_info: Optional[MarketInfo] = None
+        self.market_info: MarketInfo | None = None
         self.mid_price = Decimal('0')
         self.current_balance = Decimal('0')
         self.available_balance = Decimal('0')
@@ -519,7 +519,7 @@ class BybitMarketMaker:
         self.pause_end_time = 0
         self.circuit_breaker_cooldown_end_time = 0
         self.ws_reconnect_attempts_left = self.config.system.ws_reconnect_attempts
-        self.loop: Optional[asyncio.AbstractEventLoop] = None # Captured at runtime
+        self.loop: asyncio.AbstractEventLoop | None = None # Captured at runtime
 
         self.logger.info(f"Market Maker Bot Initialized. Trading Mode: {self.config.trading_mode}")
         if self.config.testnet: self.logger.info("Running on Bybit Testnet.")
@@ -938,8 +938,8 @@ class BybitMarketMaker:
         target_bid = self.market_info.format_price(target_bid)
         target_ask = self.market_info.format_price(target_ask)
 
-        cur_bid_order: Optional[dict] = None
-        cur_ask_order: Optional[dict] = None
+        cur_bid_order: dict | None = None
+        cur_ask_order: dict | None = None
         to_cancel_orders = []
 
         async with self.active_orders_lock:
@@ -1148,7 +1148,7 @@ class BybitMarketMaker:
         # Explicitly update balance and position immediately after a fill
         await self._update_balance_and_position()
 
-    async def _cancel_order(self, order_id: str, order_link_id: Optional[str] = None):
+    async def _cancel_order(self, order_id: str, order_link_id: str | None = None):
         self.logger.info(f"Attempting to cancel order {order_id} (OrderLink: {order_link_id})...")
         if self.config.trading_mode == "DRY_RUN" or self.config.trading_mode == "SIMULATION":
             self.logger.info(f"{self.config.trading_mode}: Would cancel order {order_id}.")

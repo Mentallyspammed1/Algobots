@@ -1,15 +1,13 @@
 # supertrend_cross_bot.py
-import os
 import time
 import logging
 import threading
-import pandas as pd
 from typing import Dict, Any, Optional, Tuple, Literal
 
 # Import your helper modules
 from bybit_account_helper import BybitAccountHelper
 from bybit_sizing_helper import BybitSizingHelper
-from bybit_unified_order_manager import BybitUnifiedOrderManager, TradingMode
+from bybit_unified_order_manager import BybitUnifiedOrderManager
 from indicators import BybitIndicators
 
 # Import the configuration
@@ -247,7 +245,7 @@ class SupertrendCrossBot:
                 time.sleep(10) # Wait before next full cycle
                 
 
-            except Exception as e:
+            except Exception:
                 logger.exception("Error in Supertrend bot main loop.")
                 time.sleep(15) # Longer sleep on error to avoid rapid API calls
 
@@ -306,7 +304,7 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Ctrl+C detected. Stopping bot...")
-    except Exception as e:
+    except Exception:
         logger.exception("An unexpected error occurred in the main program.")
     finally:
         bot.stop_bot()

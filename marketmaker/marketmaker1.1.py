@@ -1517,7 +1517,7 @@ class BybitMarketMaker:
             return Decimal('0')
 
         effective_capital = capital * self.config.leverage if self.config.category in ['linear', 'inverse'] else capital
-        
+
         # Calculate quantity based on percentage of balance
         base_order_value = effective_capital * self.config.strategy.base_order_size_pct_of_balance
         qty_from_base_pct = base_order_value / price

@@ -20,7 +20,6 @@ import os
 import platform
 
 import psutil
-import psutil._common
 from psutil import LINUX
 from psutil import MACOS
 from psutil import OPENBSD

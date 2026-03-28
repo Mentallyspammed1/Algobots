@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import json
 import logging
 import os
@@ -8,7 +6,7 @@ import sys
 import threading
 import time
 from collections import defaultdict
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import ROUND_DOWN, Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path

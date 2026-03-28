@@ -1,6 +1,6 @@
 # bybit_account_helper.py
 import logging
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 import time # For potential timestamp in error logging
 
 from pybit.unified_trading import HTTP

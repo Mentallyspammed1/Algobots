@@ -1,6 +1,6 @@
 # bybit_user_helper.py
 import logging
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 
 from pybit.unified_trading import HTTP
 from pybit.exceptions import BybitRequestError, BybitAPIError

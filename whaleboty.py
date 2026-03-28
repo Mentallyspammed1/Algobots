@@ -5,7 +5,7 @@ import logging
 import os
 import time
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal, getcontext, ROUND_DOWN
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -1108,11 +1108,11 @@ class TradingAnalyzer:
                 # High-conviction BUY signal: Slow trend is UP, and fast trend just flipped UP
                 if st_slow_dir == 1 and st_fast_dir == 1 and prev_st_fast_dir == -1:
                     signal_score += weight
-                    self.logger.debug(f"Ehlers SuperTrend: Strong BUY signal (fast flip aligned with slow trend).")
+                    self.logger.debug("Ehlers SuperTrend: Strong BUY signal (fast flip aligned with slow trend).")
                 # High-conviction SELL signal: Slow trend is DOWN, and fast trend just flipped DOWN
                 elif st_slow_dir == -1 and st_fast_dir == -1 and prev_st_fast_dir == 1:
                     signal_score -= weight
-                    self.logger.debug(f"Ehlers SuperTrend: Strong SELL signal (fast flip aligned with slow trend).")
+                    self.logger.debug("Ehlers SuperTrend: Strong SELL signal (fast flip aligned with slow trend).")
                 # Weaker continuation signal: Both trends are aligned
                 elif st_slow_dir == 1 and st_fast_dir == 1:
                     signal_score += weight * 0.3

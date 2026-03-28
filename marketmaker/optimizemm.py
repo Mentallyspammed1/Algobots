@@ -1,11 +1,12 @@
 import asyncio
-import logging
-import optuna
-from decimal import Decimal
-import sys
-import os
-from dataclasses import replace, asdict
 import json
+import logging
+import os
+import sys
+from dataclasses import replace
+from decimal import Decimal
+
+import optuna
 
 # Add the current directory to the Python path to import marketmaker1_0.py
 # This assumes marketmaker1_0.py is in the same directory as this optimizer script.
@@ -13,8 +14,12 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import all necessary classes from marketmaker1_0.py
 from marketmaker1_0 import (
-    Config, BybitMarketMaker, StrategyConfig, InventoryStrategyConfig,
-    DynamicSpreadConfig, FilesConfig, SystemConfig, ConfigurationError
+    BybitMarketMaker,
+    Config,
+    ConfigurationError,
+    FilesConfig,
+    StrategyConfig,
+    SystemConfig,
 )
 
 # Configure logging for the optimizer
@@ -75,7 +80,7 @@ def create_trial_config(base_config: Config, trial_params: dict) -> Config:
         base_config.files,
         log_level="WARNING"
     )
-    
+
     # Finally, create the complete new Config object with the updated strategy and file settings.
     # Ensure trading_mode is always SIMULATION for optimization.
     new_config = replace(
@@ -84,7 +89,7 @@ def create_trial_config(base_config: Config, trial_params: dict) -> Config:
         files=new_files_config,
         trading_mode="SIMULATION"
     )
-    
+
     return new_config
 
 
@@ -105,7 +110,7 @@ async def run_simulation_for_trial(trial_config: Config, duration_ticks: int = 2
     try:
         # Initialize the bot with the trial-specific configuration
         bot = BybitMarketMaker(trial_config)
-        
+
         # Initialize bot without connecting real websockets (as it's SIMULATION mode)
         await bot._initialize_bot()
 
@@ -114,7 +119,7 @@ async def run_simulation_for_trial(trial_config: Config, duration_ticks: int = 2
             # In SIMULATION mode, _main_loop_tick internally handles price updates
             # via a simple random walk and simulates order fills.
             await bot._main_loop_tick()
-            
+
             # Simulate the passage of time. This is crucial for features like
             # order stale checks, circuit breakers, and price history tracking.
             await asyncio.sleep(trial_config.system.loop_interval_sec)
@@ -232,12 +237,12 @@ def objective(trial: optuna.Trial) -> float:
         time_in_force="GTC",
         post_only=True,
         # Provide a default StrategyConfig which will be fully replaced by trial parameters
-        strategy=StrategyConfig(), 
+        strategy=StrategyConfig(),
         # Keep system loop interval consistent for comparable simulations
-        system=SystemConfig(loop_interval_sec=1), 
+        system=SystemConfig(loop_interval_sec=1),
         # Configure file logging for the optimizer (bot's log level will be WARNING)
         files=FilesConfig(
-            log_level="INFO", 
+            log_level="INFO",
             log_file="optimizer_bot.log",
             state_file="optimizer_bot_state.pkl",
             db_file="optimizer_bot_data.db"
@@ -250,7 +255,7 @@ def objective(trial: optuna.Trial) -> float:
 
     # Run the simulation with the generated trial configuration
     net_pnl = asyncio.run(run_simulation_for_trial(trial_config))
-    
+
     # Optuna aims to maximize the objective function, so we return the net realized PnL
     return float(net_pnl)
 
@@ -264,7 +269,7 @@ if __name__ == "__main__":
 
     # --- Optuna Study Setup ---
     # Define a unique name for the study and its storage database
-    study_name = "market_maker_profit_opt_v3" 
+    study_name = "market_maker_profit_opt_v3"
     storage_path = f"sqlite:///{study_name}.db"
 
     optimizer_logger.info(f"Creating/Loading Optuna study: '{study_name}' from '{storage_path}'")
@@ -274,13 +279,13 @@ if __name__ == "__main__":
         direction="maximize", # We aim to maximize the Net Realized PnL
         study_name=study_name,
         storage=storage_path,
-        load_if_exists=True 
+        load_if_exists=True
     )
 
     # --- Optimization Parameters ---
     num_trials = 100 # Number of new trials to run in this optimization session
     timeout_seconds = 7200 # Maximum optimization time in seconds (e.g., 7200s = 2 hours)
-    
+
     optimizer_logger.info(f"Starting optimization for {num_trials} new trials or {timeout_seconds} seconds.")
     optimizer_logger.info("This process will run multiple bot simulations sequentially and might take significant time.")
     optimizer_logger.info("Intermediate results and study state are saved to the SQLite database.")

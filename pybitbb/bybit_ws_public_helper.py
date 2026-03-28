@@ -2,7 +2,7 @@
 import logging
 import time
 import threading
-from typing import Dict, Any, Optional, Callable, List, Tuple
+from typing import Dict, Any, Optional, Callable, Tuple
 
 from pybit.unified_trading import WebSocket
 from pybit.exceptions import BybitWebsocketError
@@ -208,7 +208,7 @@ class BybitWsPublicHelper:
             logger.warning(f"[{self.category}] 'liquidation' stream is deprecated. Consider using 'all_liquidation_stream'.")
             topic = f"liquidation.{symbol}"
         elif stream_type == "all_liquidation":
-            topic = f"liquidation" # This topic is for all symbols
+            topic = "liquidation" # This topic is for all symbols
             symbol = "ALL" # Mark symbol as ALL for internal tracking
         else:
             logger.error(f"[{self.category}] Unsupported stream_type: {stream_type}. Cannot subscribe.")
@@ -277,7 +277,7 @@ class BybitWsPublicHelper:
         elif stream_type == "liquidation":
             topic = f"liquidation.{symbol}"
         elif stream_type == "all_liquidation":
-            topic = f"liquidation"
+            topic = "liquidation"
             symbol = "ALL"
         else:
             logger.error(f"[{self.category}] Unsupported stream_type: {stream_type}. Cannot unsubscribe.")
@@ -368,7 +368,7 @@ if __name__ == "__main__":
         else:
             logger.error("Failed to connect to Public WebSocket. Skipping subscriptions.")
 
-    except Exception as e:
+    except Exception:
         logger.exception("An error occurred in the main execution block.")
     finally:
         public_ws_helper.disconnect()

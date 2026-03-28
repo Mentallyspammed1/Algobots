@@ -1,11 +1,13 @@
-import os
-from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_DOWN
-from datetime import datetime, timezone
 import logging
-from collections import deque
+import os
 import time
-import numpy as np # Added for np.sign
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from decimal import ROUND_DOWN, Decimal
+
+import numpy as np  # Added for np.sign
+
 
 @dataclass
 class TradeMetrics:
@@ -78,7 +80,7 @@ class TradeMetrics:
             else: # Position becomes zero
                 self.average_entry_price = Decimal("0")
             self.current_asset_holdings = new_holdings
-        
+
         self.last_pnl_update_timestamp = datetime.now(timezone.utc)
         self.total_trades += 1 # Count each fill as a trade for win rate purposes
         self.update_win_rate()
@@ -269,9 +271,6 @@ class Config:
                 "max_daily_loss_pct must be between 0 and 1 (exclusive)."
             )
 
-import logging
-from collections import deque
-import time # Added for TradingState
 
 @dataclass(frozen=True)
 class MarketInfo:

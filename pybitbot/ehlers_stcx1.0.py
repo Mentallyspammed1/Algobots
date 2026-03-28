@@ -52,24 +52,20 @@ Instructions for Use:
 """
 
 import asyncio
-import json
 import logging
 import sys
 import os
-import time
 import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal, ROUND_DOWN, getcontext, Context
 from enum import Enum
-from typing import Dict, List, Optional, Callable, Any, Tuple
+from typing import Dict, Optional, Any
 from logging.handlers import RotatingFileHandler
 
-import aiofiles
 import numpy as np
 import pandas as pd
-import pytz
 from dotenv import load_dotenv
 from pybit.unified_trading import HTTP, WebSocket
 

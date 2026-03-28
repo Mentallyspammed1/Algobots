@@ -12,7 +12,7 @@ from datetime import datetime, date
 from decimal import Decimal, ROUND_DOWN, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -1228,7 +1228,7 @@ class PositionManager:
                 # Use AI calculated risk amount and stop distance directly if available
                 risk_amount = ai_risk_amount
                 stop_loss_distance = ai_stop_distance
-                self.logger.debug(f"Using AI-suggested stop distance and risk amount.")
+                self.logger.debug("Using AI-suggested stop distance and risk amount.")
             else:
                 self.logger.warning("AI position sizing info invalid, falling back to ATR-based calculation.")
 

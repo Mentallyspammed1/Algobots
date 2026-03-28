@@ -1,14 +1,21 @@
 import asyncio
 import logging
-import optuna
-from decimal import Decimal
-import sys
 import os
+import sys
+from decimal import Decimal
+
+import optuna
 
 # Add the current directory to the Python path to import marketmaker1.0.py
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from marketmaker1_0 import Config, BybitMarketMaker, StrategyConfig, InventoryStrategyConfig, DynamicSpreadConfig
+from marketmaker1_0 import (
+    BybitMarketMaker,
+    Config,
+    DynamicSpreadConfig,
+    InventoryStrategyConfig,
+    StrategyConfig,
+)
 
 # Configure logging for the optimizer
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -53,9 +60,9 @@ async def run_simulation_for_trial(trial_config: Config, duration_ticks: int = 1
             files=new_files_config,
             initial_dry_run_capital=trial_config.initial_dry_run_capital
         )
-        
+
         bot = BybitMarketMaker(temp_config)
-        
+
         # Initialize bot without connecting real websockets
         await bot._initialize_bot()
 
@@ -90,7 +97,7 @@ def objective(trial: optuna.Trial) -> float:
     base_order_size_pct_of_balance = trial.suggest_float("base_order_size_pct_of_balance", 0.001, 0.01)
     max_outstanding_orders = trial.suggest_int("max_outstanding_orders", 1, 5)
     min_profit_spread_after_fees_pct = trial.suggest_float("min_profit_spread_after_fees_pct", 0.00001, 0.0005, log=True)
-    
+
     # Dynamic spread parameters
     dynamic_spread_enabled = trial.suggest_categorical("dynamic_spread_enabled", [True, False])
     volatility_multiplier = Decimal(str(trial.suggest_float("volatility_multiplier", 0.5, 5.0))) if dynamic_spread_enabled else Decimal('0')
@@ -134,7 +141,7 @@ def objective(trial: optuna.Trial) -> float:
 
     # Run the simulation
     net_pnl = asyncio.run(run_simulation_for_trial(base_config))
-    
+
     return float(net_pnl)
 
 if __name__ == "__main__":

@@ -423,7 +423,7 @@ def display_pivots(pivots_info, current_price, market_info, config):
         print_color("  Pivots: N/A", color=Fore.LIGHTBLACK_EX)
         return
 
-    print_color(f"  Pivots: ", end='')
+    print_color("  Pivots: ", end='')
     for level_key in ['r3', 'r2', 'r1', 'pivot', 's1', 's2', 's3']:
         level_value = pivots_info.get(level_key)
         if level_value is None: continue
@@ -1978,7 +1978,7 @@ def main():
     market_info = get_market_info(exchange, symbol)
     if not market_info:
         while True:
-            new_symbol = input(f"Enter a valid symbol (e.g., BTCUSDT): ").strip().upper()
+            new_symbol = input("Enter a valid symbol (e.g., BTCUSDT): ").strip().upper()
             market_info = get_market_info(exchange, new_symbol)
             if market_info:
                 symbol = new_symbol
@@ -2025,10 +2025,10 @@ def main():
                     if CONFIG['LIMIT_ORDER_SELECTION_TYPE'] == 'interactive':
                         print_color(f"\nSelect a price level for {side.upper()}:", color=Fore.CYAN)
                         if side == 'buy':
-                            price_choice = input(f"Choose BID level (e.g., B1, B5) or type price manually: ").strip().upper()
+                            price_choice = input("Choose BID level (e.g., B1, B5) or type price manually: ").strip().upper()
                             price_val = bid_map.get(price_choice)
                         else:
-                            price_choice = input(f"Choose ASK level (e.g., A1, A5) or type price manually: ").strip().upper()
+                            price_choice = input("Choose ASK level (e.g., A1, A5) or type price manually: ").strip().upper()
                             price_val = ask_map.get(price_choice)
                         
                         if price_val:

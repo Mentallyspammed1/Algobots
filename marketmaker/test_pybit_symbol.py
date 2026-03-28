@@ -1,6 +1,7 @@
 import os
-from pybit.unified_trading import HTTP
+
 from dotenv import load_dotenv
+from pybit.unified_trading import HTTP
 
 load_dotenv()
 

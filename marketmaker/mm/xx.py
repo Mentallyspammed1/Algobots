@@ -2,15 +2,11 @@ import asyncio
 import os
 import signal
 import time
-import logging
 from decimal import Decimal
-from typing import List, Dict
-from pathlib import Path
 
-import pandas as pd
-import pandas_ta as ta
-from pydantic import BaseModel, Field, PositiveInt, PositiveFloat
+from pydantic import BaseModel, Field, PositiveFloat, PositiveInt
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
+
 
 # --- Configuration Classes ---
 class DynamicSpreadConfig(BaseModel):
@@ -55,7 +51,7 @@ class StrategyConfig(BaseModel):
     dynamic_spread: DynamicSpreadConfig = Field(default_factory=DynamicSpreadConfig)
     inventory_skew: InventorySkewConfig = Field(default_factory=InventorySkewConfig)
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
-    order_layers: List[OrderLayer] = Field(default_factory=lambda: [OrderLayer()])
+    order_layers: list[OrderLayer] = Field(default_factory=lambda: [OrderLayer()])
 
 class SystemConfig(BaseModel):
     loop_interval_sec: PositiveFloat = 0.5
@@ -338,7 +334,7 @@ class MarketMaker:
                 order_type='Limit'
             )
             # Log
-        except Exception as e:
+        except Exception:
             # Log warning
             pass
 

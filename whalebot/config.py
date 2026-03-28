@@ -2,11 +2,8 @@
 # config.py
 
 import os
-import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
-from datetime import timedelta # Used for kline offset calculation
-from zoneinfo import ZoneInfo # For consistent timezone objects
+from typing import Dict
 
 @dataclass
 class Config:

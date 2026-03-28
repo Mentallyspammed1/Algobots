@@ -2,7 +2,7 @@
 import logging
 import time
 import threading
-from typing import Dict, Any, Optional, Callable, List, Literal, Union
+from typing import Dict, Any, Optional, Literal
 
 # Import the specific helpers we've already created
 from bybit_trade_helper import BybitTradeHelper
@@ -98,7 +98,7 @@ class BybitUnifiedOrderManager:
                     time.sleep(1) 
             else:
                 logger.error("Failed to connect private WS helper in thread.")
-        except Exception as e:
+        except Exception:
             logger.exception("Error in private WS helper thread.")
         finally:
             self._ws_private_helper.disconnect()
@@ -191,7 +191,7 @@ class BybitUnifiedOrderManager:
             if not self._ws_trade_helper.is_connected():
                 logger.error(f"WebSocket trading client not connected for placing order for {symbol}. Attempting to reconnect...")
                 if not self._ws_trade_helper.connect():
-                    logger.error(f"Failed to connect WebSocket trading client. Cannot place order via WS.")
+                    logger.error("Failed to connect WebSocket trading client. Cannot place order via WS.")
                     return None
             
             # For WS, we need a callback to receive the response.
@@ -528,7 +528,7 @@ if __name__ == "__main__":
             print("  No open orders or failed to retrieve.")
 
         # 6. Place another order, then cancel all orders (always uses HTTP for cancel_all)
-        print(f"\n--- Placing another order for mass cancellation demo ---")
+        print("\n--- Placing another order for mass cancellation demo ---")
         client_order_id_2 = f"unified-sell-{int(time.time())}"
         order_manager.place_order(
             category=CATEGORY, symbol=SYMBOL, side="Sell", order_type="Limit", qty="0.001",
@@ -548,7 +548,7 @@ if __name__ == "__main__":
             print("  Failed to cancel all orders.")
 
 
-    except Exception as e:
+    except Exception:
         logger.exception("An unhandled error occurred in the main execution block.")
     finally:
         order_manager.stop()

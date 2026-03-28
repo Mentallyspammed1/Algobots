@@ -1,8 +1,6 @@
-import asyncio
-import logging
 from pybit.unified_trading import HTTP, WebSocket
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from pybitbot.config.config import Config, APIConfig # Assuming config is in parent directory
+from pybitbot.config.config import Config # Assuming config is in parent directory
 from pybitbot.utils.logger import get_logger # Assuming logger is in utils
 
 class BybitAPIError(Exception): pass

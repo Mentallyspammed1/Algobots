@@ -1,12 +1,9 @@
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import os
 import sys
 import time
-import urllib.parse
 import random # For SkipList random level generation
 from datetime import datetime
 from decimal import ROUND_DOWN, ROUND_HALF_EVEN, Decimal, getcontext
@@ -21,8 +18,6 @@ import requests
 import pandas_ta as ta # Using pandas_ta for some indicators for efficiency
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 # Import pybit clients
 from pybit.unified_trading import HTTP, WebSocket

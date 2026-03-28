@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 from datetime import datetime
@@ -12,8 +11,8 @@ import pandas as pd
 # Import necessary components from bbwb.py
 from bbwb import (
     load_config, setup_logger, BybitClient, IndicatorCalculator, TradingAnalyzer,
-    NEON_GREEN, NEON_YELLOW, NEON_RED, NEON_BLUE, NEON_CYAN, NEON_PURPLE, RESET,
-    PriceLevel, AdvancedOrderbookManager # Imported for mocking purposes
+    NEON_GREEN, NEON_YELLOW, NEON_RED, NEON_BLUE, NEON_CYAN, RESET,
+    PriceLevel # Imported for mocking purposes
 )
 
 # Set Decimal precision

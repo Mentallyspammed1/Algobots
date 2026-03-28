@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 import time
-import urllib.parse
 import warnings
 from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal, getcontext
@@ -26,7 +25,6 @@ from colorama import Fore, Style, init
 from dotenv import load_dotenv
 
 from pybit.unified_trading import HTTP
-from pybit.exceptions import FailedRequestError, InvalidRequestError
 
 # Suppress warnings from libraries like pandas_ta
 warnings.filterwarnings("ignore", category=FutureWarning)

@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import MagicMock, patch
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Assuming the following structure for imports
 # from marketmaker.clients.bybit_rest import BybitRest
@@ -107,7 +108,7 @@ def test_get_kline_api_error(mock_app_config, mock_logging, mock_http):
         client.get_kline(symbol, interval, limit)
 
     mock_logging.getLogger.return_value.error.assert_called_once_with(
-        f"API Error 10001: Account type not supported. Details: accountType only support UNIFIED"
+        "API Error 10001: Account type not supported. Details: accountType only support UNIFIED"
     )
 
 @patch('marketmaker.clients.bybit_rest.HTTP')

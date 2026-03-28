@@ -1,15 +1,11 @@
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import os
 import sys
-import time
-import urllib.parse
 import warnings
 from datetime import UTC, datetime
-from decimal import ROUND_DOWN, Decimal, getcontext
+from decimal import Decimal, getcontext
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import (
@@ -23,11 +19,6 @@ import pandas_ta as ta
 # Import async CCXT
 import ccxt.async_support as ccxt
 from colorama import Fore, Style, init
-import warnings
-from decimal import getcontext
-from colorama import init, Fore, Style
-import os
-from pathlib import Path
 from pytz import UTC # Assuming pytz for UTC, common in financial applications
 from dotenv import load_dotenv
 
@@ -3600,7 +3591,7 @@ async def start_bot():
             )
             class MockGeminiClient:
                 async def analyze_market(self, *args, **kwargs):
-                    logger.warning(f"Mock GeminiClient.analyze_market called.")
+                    logger.warning("Mock GeminiClient.analyze_market called.")
                     # Simulate a response or return None
                     return {"entry": "HOLD", "confidence_level": 50}
             gemini_client = MockGeminiClient()

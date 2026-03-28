@@ -5,19 +5,15 @@ import pandas_ta as ta
 import logging
 import os
 import datetime
-import pytz
 import numpy as np
 import uuid
-import sys
 import json
 import sqlite3
 import pickle
-from typing import Optional, Tuple, Dict, Any, List, Union
-from concurrent.futures import ProcessPoolExecutor
+from typing import Tuple, Dict, Any, List
 from dataclasses import dataclass, asdict
 from enum import Enum
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.model_selection import TimeSeriesSplit
 import optuna
 import smtplib
@@ -49,8 +45,6 @@ from config import BOT_CONFIG
 from ehlerssupertrend import (
     ColoredFormatter,
     Bybit,
-    get_current_time,
-    is_market_open,
     send_termux_toast,
     calculate_pnl,
     calculate_ehl_supertrend_indicators,

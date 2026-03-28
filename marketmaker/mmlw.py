@@ -1,23 +1,21 @@
-import os
 import asyncio
 import json
 import logging
+import math
+import os
+import random
+import sqlite3
+import statistics
 import time
 import uuid
-import random
-import math
-import statistics
-import sqlite3
-from typing import Dict, List, Any, Optional, Tuple, Generic, TypeVar
-from dataclasses import dataclass, field
-from contextlib import asynccontextmanager
 from collections import deque
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from typing import Any, Generic, TypeVar
 
 # --- UPGRADE: Import load_dotenv ---
 from dotenv import load_dotenv
-
 from pybit.unified_trading import HTTP, WebSocket
-import numpy as np
 
 # --- Enhanced Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [%(symbol)s] - %(message)s')
@@ -45,7 +43,7 @@ class InstrumentInfo:
 
 @dataclass
 class BotState:
-    instrument_info: Optional[InstrumentInfo] = None
+    instrument_info: InstrumentInfo | None = None
     recent_prices: deque = field(default_factory=lambda: deque(maxlen=240))
 
 # --- Database Manager for Persistence ---
@@ -58,7 +56,7 @@ class DatabaseManager:
         self.cursor.execute("CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY, timestamp REAL, order_id TEXT, side TEXT, price REAL, qty REAL, pnl REAL, fee REAL, exec_id TEXT UNIQUE)")
         self.cursor.execute("CREATE TABLE IF NOT EXISTS pnl (id INTEGER PRIMARY KEY, timestamp REAL, unrealized_pnl REAL, realized_pnl REAL, total_pnl REAL, position_size REAL)")
         self.conn.commit()
-    def log_trade(self, trade_data: Dict):
+    def log_trade(self, trade_data: dict):
         try:
             self.cursor.execute("INSERT INTO trades VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)", (time.time(), trade_data['orderId'], trade_data['side'], float(trade_data['execPrice']), float(trade_data['execQty']), self._safe_float(trade_data.get('closedPnl')), float(trade_data['execFee']), trade_data['execId']))
             self.conn.commit()
@@ -76,7 +74,7 @@ KT = TypeVar("KT"); VT = TypeVar("VT")
 class OptimizedSkipList(Generic[KT, VT]):
     class Node(Generic[KT, VT]):
         def __init__(self, key: KT, value: VT, level: int):
-            self.key = key; self.value = value; self.forward: List[Optional['OptimizedSkipList.Node']] = [None] * (level + 1)
+            self.key = key; self.value = value; self.forward: list[OptimizedSkipList.Node | None] = [None] * (level + 1)
     def __init__(self, max_level: int = 16, p: float = 0.5):
         self.max_level = max_level; self.p = p; self.level = 0; self.header = self.Node(None, None, max_level)
     def _random_level(self) -> int:
@@ -108,7 +106,7 @@ class OptimizedSkipList(Generic[KT, VT]):
                 if update[i].forward[i] != current: break
                 update[i].forward[i] = current.forward[i]
             while self.level > 0 and not self.header.forward[self.level]: self.level -= 1
-    def get_sorted_items(self, reverse: bool = False) -> List[Tuple[KT, VT]]:
+    def get_sorted_items(self, reverse: bool = False) -> list[tuple[KT, VT]]:
         items = []; current = self.header.forward[0]
         while current: items.append((current.key, current.value)); current = current.forward[0]
         return list(reversed(items)) if reverse else items
@@ -127,13 +125,13 @@ class OrderbookAnalyzer:
         if value is None or value == '': return default
         try: return float(value)
         except (ValueError, TypeError): return default
-    async def process_snapshot(self, data: Dict):
+    async def process_snapshot(self, data: dict):
         async with self._lock_context():
             self.bids = OptimizedSkipList[float, PriceLevel]()
             self.asks = OptimizedSkipList[float, PriceLevel]()
             for p, q in data.get('b', []): self.bids.insert(self._safe_float(p), PriceLevel(price=self._safe_float(p), quantity=self._safe_float(q)))
             for p, q in data.get('a', []): self.asks.insert(self._safe_float(p), PriceLevel(price=self._safe_float(p), quantity=self._safe_float(q)))
-    async def process_delta(self, data: Dict):
+    async def process_delta(self, data: dict):
         async with self._lock_context():
             for p, q in data.get('b', []):
                 price, qty = self._safe_float(p), self._safe_float(q)
@@ -143,12 +141,12 @@ class OrderbookAnalyzer:
                 price, qty = self._safe_float(p), self._safe_float(q)
                 if qty == 0: self.asks.delete(price)
                 else: self.asks.insert(price, PriceLevel(price=price, quantity=qty))
-    async def get_depth(self, depth: int) -> Tuple[List[PriceLevel], List[PriceLevel]]:
+    async def get_depth(self, depth: int) -> tuple[list[PriceLevel], list[PriceLevel]]:
         async with self._lock_context():
             bids = [level for _, level in self.bids.get_sorted_items(reverse=True)[:depth]]
             asks = [level for _, level in self.asks.get_sorted_items()[:depth]]
             return bids, asks
-    async def get_best_bid_ask(self) -> Optional[Tuple[float, float]]:
+    async def get_best_bid_ask(self) -> tuple[float, float] | None:
         async with self._lock_context():
             best_bid_item = self.bids.get_sorted_items(reverse=True)
             best_ask_item = self.asks.get_sorted_items()
@@ -160,14 +158,14 @@ class OrderbookAnalyzer:
         ask_volume = sum(level.quantity * level.price for level in asks)
         if bid_volume + ask_volume == 0: return 0.0
         return (bid_volume - ask_volume) / (bid_volume + ask_volume)
-    async def calculate_microprice(self) -> Optional[float]:
+    async def calculate_microprice(self) -> float | None:
         bids, asks = await self.get_depth(self.config['analysis']['depth'])
         if not bids or not asks: return None
         total_bid_qty = sum(b.quantity for b in bids)
         total_ask_qty = sum(a.quantity for a in asks)
         if total_bid_qty + total_ask_qty == 0: return (bids[0].price + asks[0].price) / 2
         return (bids[0].price * total_ask_qty + asks[0].price * total_bid_qty) / (total_bid_qty + total_ask_qty)
-    async def detect_large_orders(self) -> Dict[str, List[Dict]]:
+    async def detect_large_orders(self) -> dict[str, list[dict]]:
         bids, asks = await self.get_depth(50)
         multiplier = self.config['analysis']['large_order_multiplier']
         results = {"bids": [], "asks": []}
@@ -189,11 +187,11 @@ class PositionManager:
         if value is None or value == '': return default
         try: return float(value)
         except (ValueError, TypeError): return default
-    def update_position(self, data: Dict):
+    def update_position(self, data: dict):
         self.size = self._safe_float(data.get('size'))
         self.avg_entry_price = self._safe_float(data.get('avgPrice'))
         self.unrealized_pnl = self._safe_float(data.get('unrealisedPnl'))
-    def process_fill(self, trade: Dict):
+    def process_fill(self, trade: dict):
         closed_pnl = self._safe_float(trade.get('closedPnl'))
         if closed_pnl != 0: self.realized_pnl += closed_pnl
         self.db.log_trade(trade)
@@ -320,11 +318,11 @@ class BybitMarketMakingBot:
 async def main():
     # --- UPGRADE: Load .env file ---
     load_dotenv()
-    
+
     try:
-        with open('config.json', 'r') as f: config = json.load(f)
+        with open('config.json') as f: config = json.load(f)
     except FileNotFoundError: logger.error("CRITICAL: config.json not found."); return
-    
+
     bot = BybitMarketMakingBot(config)
     loop = asyncio.get_running_loop()
     main_task = asyncio.create_task(bot.run())

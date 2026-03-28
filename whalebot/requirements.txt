@@ -1,0 +1,10 @@
+aiohttp
+python-dotenv
+rich
+colorama
+pyyaml
+numpy
+pandas
+xgboost
+optuna
+# NOTE: pandas is optional – the script will run fine if it is not installed.

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import signal
 import statistics
 import time
@@ -34,11 +33,10 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from rich.console import Console
 from rich.live import Live
-from rich.logging import RichHandler
 from rich.table import Table
-from logging_config import setup_logging, ContextFilter
+
+from logging_config import ContextFilter, setup_logging
 
 logger = None # Declare logger as a global variable
 from tenacity import (

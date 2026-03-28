@@ -1,0 +1,27 @@
+# ~/.config/aichat/agents/trading/config.yaml
+
+# Model settings
+model: "gpt-4o"
+temperature: 0.7
+max_tokens: 4000
+
+# Agent behavior
+auto_confirm_large_orders: false
+large_order_threshold: 100  # USDT
+
+# Risk management
+max_daily_loss: 50  # USDT - stop trading if reached
+max_open_positions: 3
+default_stop_loss_pct: 2   # %
+default_take_profit_pct: 6  # %
+
+# Notifications
+notify_on:
+  - trade_execution
+  - position_closed
+  - large_loss
+
+# Logging
+log_level: "INFO"
+log_trades: true
+log_file: "$HOME/Algobots/logs/trading.log"

@@ -1,0 +1,722 @@
+[
+  {
+    "db_id": 69,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "Laguerre Oversold"
+      ],
+      "stop_loss": "3.3926499999999999982",
+      "take_profit": "3.4136428571428572320",
+      "timestamp": 1771530598.225936,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.392",
+      "market_regime": "bullish",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.392"
+  },
+  {
+    "db_id": 88,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.8,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "Laguerre Oversold",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3926499999999999982",
+      "take_profit": "3.4149285714285714740",
+      "timestamp": 1771533893.095158,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.392",
+      "market_regime": "volatile",
+      "position_size": 1.5,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.392"
+  },
+  {
+    "db_id": 89,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.8,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "Laguerre Oversold",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.394628571428571426",
+      "take_profit": "3.4156428571428571390",
+      "timestamp": 1771533958.5765877,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.394",
+      "market_regime": "bullish",
+      "position_size": 1.5,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.394"
+  },
+  {
+    "db_id": 90,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.391571428571428610",
+      "take_profit": "3.4245714285714285470",
+      "timestamp": 1771534026.1873372,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.401",
+      "market_regime": "bullish",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.401",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 91,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.389571428571428610",
+      "take_profit": "3.41985714285714282920",
+      "timestamp": 1771534092.7982135,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.398",
+      "market_regime": "bullish",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 92,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.8,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "Laguerre Oversold",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.394628571428571426",
+      "take_profit": "3.4167142857142856860",
+      "timestamp": 1771534156.2303677,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.394",
+      "market_regime": "bullish",
+      "position_size": 1.5,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.394"
+  },
+  {
+    "db_id": 93,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.8,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "Laguerre Oversold",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.395628571428571426",
+      "take_profit": "3.4177142857142856860",
+      "timestamp": 1771534219.9420652,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.395",
+      "market_regime": "bullish",
+      "position_size": 1.5,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.395"
+  },
+  {
+    "db_id": 94,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.8,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "Laguerre Oversold",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.389571428571428610",
+      "take_profit": "3.4169999999999999730",
+      "timestamp": 1771534287.3108141,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.396",
+      "market_regime": "bullish",
+      "position_size": 1.5,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.396"
+  },
+  {
+    "db_id": 95,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.8,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "Laguerre Oversold",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.395628571428571426",
+      "take_profit": "3.4159999999999999730",
+      "timestamp": 1771534354.56445,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.395",
+      "market_regime": "bullish",
+      "position_size": 1.5,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.395"
+  },
+  {
+    "db_id": 96,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.389571428571428610",
+      "take_profit": "3.42085714285714282920",
+      "timestamp": 1771534419.554534,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.399",
+      "market_regime": "bullish",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 97,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.390571428571428610",
+      "take_profit": "3.4199285714285713270",
+      "timestamp": 1771534483.2923882,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.4",
+      "market_regime": "bullish",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.4",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 98,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.389571428571428610",
+      "take_profit": "3.4189285714285713270",
+      "timestamp": 1771534547.7213855,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.399",
+      "market_regime": "bullish",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 99,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.389571428571428610",
+      "take_profit": "3.4187857142857141850",
+      "timestamp": 1771534613.2845204,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.398",
+      "market_regime": "bullish",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 100,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.389571428571428610",
+      "take_profit": "3.4168571428571426840",
+      "timestamp": 1771534679.3303244,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.398",
+      "market_regime": "volatile",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 101,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.389571428571428610",
+      "take_profit": "3.4168571428571426840",
+      "timestamp": 1771534743.2458987,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.398",
+      "market_regime": "volatile",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.399",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 102,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3917857142857143485",
+      "take_profit": "3.4194285714285713030",
+      "timestamp": 1771534809.7142365,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.401",
+      "market_regime": "volatile",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.401",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 103,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3907857142857143485",
+      "take_profit": "3.4184285714285713030",
+      "timestamp": 1771534873.9830213,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.4",
+      "market_regime": "volatile",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.4",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 104,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3917857142857143485",
+      "take_profit": "3.4194285714285713030",
+      "timestamp": 1771534939.8758087,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.401",
+      "market_regime": "volatile",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.401",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 105,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3911071428571429315",
+      "take_profit": "3.4177857142857141370",
+      "timestamp": 1771535003.227339,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.4",
+      "market_regime": "volatile",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.4",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 106,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3920000000000000870",
+      "take_profit": "3.4189999999999998260",
+      "timestamp": 1771535066.9262853,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.401",
+      "market_regime": "volatile",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.401",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 107,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3927857142857143485",
+      "take_profit": "3.4204285714285713030",
+      "timestamp": 1771535131.3114073,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.402",
+      "market_regime": "volatile",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.402",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 108,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.392571428571428610",
+      "take_profit": "3.4210714285714284690",
+      "timestamp": 1771535196.9755511,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.402",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.402",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 109,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.392571428571428610",
+      "take_profit": "3.4210714285714284690",
+      "timestamp": 1771535261.417482,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.402",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.402",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 110,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.390571428571428610",
+      "take_profit": "3.419499999999999850",
+      "timestamp": 1771535326.1151345,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.4",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.4",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 111,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.394571428571428610",
+      "take_profit": "3.4230714285714284690",
+      "timestamp": 1771535391.2299523,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.404",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.404",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 112,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.393571428571428610",
+      "take_profit": "3.4220714285714284690",
+      "timestamp": 1771535459.467058,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.403",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.403",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 113,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.7000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish",
+        "Above VWAP"
+      ],
+      "stop_loss": "3.3956785714285715040",
+      "take_profit": "3.4236428571428569920",
+      "timestamp": 1771535585.5265343,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.405",
+      "market_regime": "sideways",
+      "position_size": 1.2500000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.405",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 114,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3946785714285715040",
+      "take_profit": "3.4226428571428569920",
+      "timestamp": 1771535650.9143,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.404",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.404",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 115,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3944285714285715160",
+      "take_profit": "3.4201428571428569680",
+      "timestamp": 1771535717.4431973,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.403",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.403",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 116,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.394321428571428670",
+      "take_profit": "3.420357142857142660",
+      "timestamp": 1771535844.6246283,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.403",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.403",
+    "lowest_price": "3.397"
+  },
+  {
+    "db_id": 117,
+    "signal": {
+      "signal_type": "buy",
+      "confidence": 0.6000000000000001,
+      "conditions_met": [
+        "Oracle Sentiment: +0.10",
+        "Fisher transform Bullish",
+        "SuperTrend Bullish"
+      ],
+      "stop_loss": "3.3960714285714286835",
+      "take_profit": "3.4198571428571426330",
+      "timestamp": 1771535907.9170973,
+      "symbol": "TRUMPUSDT",
+      "timeframe": "3",
+      "entry_price": "3.404",
+      "market_regime": "sideways",
+      "position_size": 1.0000000000000002,
+      "quantity": "0.0"
+    },
+    "highest_price": "3.404",
+    "lowest_price": "3.397"
+  }
+]

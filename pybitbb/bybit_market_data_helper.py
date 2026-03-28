@@ -1,7 +1,7 @@
 # bybit_market_data_helper.py
 import logging
 import time
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 
 from pybit.unified_trading import HTTP
 from pybit.exceptions import BybitRequestError, BybitAPIError

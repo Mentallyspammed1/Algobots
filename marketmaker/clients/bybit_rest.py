@@ -1,6 +1,9 @@
 import logging
+
 from pybit.unified_trading import HTTP
-from ..config import APP_CONFIG, Config # Assuming config is in parent directory
+
+from ..config import APP_CONFIG, Config  # Assuming config is in parent directory
+
 
 class BybitRest:
     def __init__(self, config: Config):

@@ -1,9 +1,7 @@
 # default_strategy.py
 
 import pandas as pd
-import pandas_ta as ta # For technical analysis indicators
-from typing import Dict, List, Any
-import numpy as np
+from typing import Dict, Any
 import logging
 
 from strategy_interface import BaseStrategy, Signal
@@ -185,10 +183,10 @@ class DefaultStrategy(BaseStrategy):
         # 3. MACD Crossover
         if latest['MACD_Line'] > latest['MACD_Signal'] and previous['MACD_Line'] <= previous['MACD_Signal']:
             signal_score += macd_weight * 1.5 # MACD bullish cross
-            reasons.append(f"MACD Bullish Crossover")
+            reasons.append("MACD Bullish Crossover")
         elif latest['MACD_Line'] < latest['MACD_Signal'] and previous['MACD_Line'] >= previous['MACD_Signal']:
             signal_score -= macd_weight * 1.5 # MACD bearish cross
-            reasons.append(f"MACD Bearish Crossover")
+            reasons.append("MACD Bearish Crossover")
         
         # 4. Bollinger Bands (Breakout / Mean Reversion)
         if current_market_price < latest['BB_Lower'] and previous['close'] >= previous['BB_Lower']:
@@ -199,10 +197,10 @@ class DefaultStrategy(BaseStrategy):
             reasons.append(f"Price Break Above BB_Upper ({current_market_price:.2f})")
         elif current_market_price < latest['BB_Middle'] and latest['BB_Middle'] > previous['BB_Middle']: # Below middle, but middle band rising (weak bullish)
              signal_score += bb_weight * 0.2
-             reasons.append(f"Price Below BB_Middle, Middle Rising")
+             reasons.append("Price Below BB_Middle, Middle Rising")
         elif current_market_price > latest['BB_Middle'] and latest['BB_Middle'] < previous['BB_Middle']: # Above middle, but middle band falling (weak bearish)
              signal_score -= bb_weight * 0.2
-             reasons.append(f"Price Above BB_Middle, Middle Falling")
+             reasons.append("Price Above BB_Middle, Middle Falling")
 
 
         # Apply volatility multiplier

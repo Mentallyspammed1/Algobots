@@ -1,15 +1,3 @@
-This enhanced version focuses on improving clarity through better docstrings, comments, and consistent variable naming, conciseness by removing redundancy, and flow by ensuring logical organization and error handling.
-
-Key changes include:
-*   **Comprehensive Docstrings:** Added or improved docstrings for all classes and functions, explaining their purpose, arguments, and returns.
-*   **Consistent Type Hinting:** Ensured type hints are present and consistent.
-*   **Decimal Precision:** Reinforced `Decimal` usage for all financial calculations to prevent floating-point inaccuracies. Conversions to `float` are explicit where necessary (e.g., for `numpy` or `statistics` functions).
-*   **Redundancy Removal:** The standalone `setup_database` function was removed as its functionality is encapsulated within the `DatabaseManager` class.
-*   **Clarity in Logic:** Added comments to explain complex or non-obvious parts of the code, especially in indicator calculations and signal generation.
-*   **Logging Improvements:** Enhanced logging messages for better readability and diagnostic information, consistently using `f-strings` and `colorama` for emphasis.
-*   **Flow Control:** Streamlined the `main` function's flow, clearly separating backtesting and live trading paths.
-
-```python
 import os
 import logging
 import requests
@@ -3382,4 +3370,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```

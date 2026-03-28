@@ -1,13 +1,14 @@
-import asyncio
-import logging
-import optuna
-from decimal import Decimal
-import sys
-import os
-from dataclasses import replace
-import json
 import argparse
-from typing import Dict, Any
+import asyncio
+import json
+import logging
+import os
+import sys
+from dataclasses import replace
+from decimal import Decimal
+from typing import Any
+
+import optuna
 from tqdm import tqdm  # For progress bars; install with: pip install tqdm
 
 # Add the current directory to the Python path to import marketmaker1_0.py
@@ -16,8 +17,12 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import all necessary classes from marketmaker1_0.py
 from marketmaker1_0 import (
-    Config, BybitMarketMaker, StrategyConfig, InventoryStrategyConfig,
-    DynamicSpreadConfig, FilesConfig, SystemConfig, ConfigurationError
+    BybitMarketMaker,
+    Config,
+    ConfigurationError,
+    FilesConfig,
+    StrategyConfig,
+    SystemConfig,
 )
 
 # Configure logging for the optimizer
@@ -25,7 +30,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 optimizer_logger = logging.getLogger('ProfitOptimizer')
 optimizer_logger.setLevel(logging.INFO)  # Ensure optimizer logger is INFO level
 
-def create_trial_config(base_config: Config, trial_params: Dict[str, Any]) -> Config:
+def create_trial_config(base_config: Config, trial_params: dict[str, Any]) -> Config:
     """
     Creates a new Config object by replacing strategy-related parameters
     from the base_config with values suggested by an Optuna trial.
@@ -78,7 +83,7 @@ def create_trial_config(base_config: Config, trial_params: Dict[str, Any]) -> Co
         base_config.files,
         log_level="WARNING"
     )
-    
+
     # Finally, create the complete new Config object with the updated strategy and file settings.
     # Ensure trading_mode is always SIMULATION for optimization.
     new_config = replace(
@@ -87,17 +92,17 @@ def create_trial_config(base_config: Config, trial_params: Dict[str, Any]) -> Co
         files=new_files_config,
         trading_mode="SIMULATION"
     )
-    
+
     # Validate the new config to catch any invalid combinations early
     try:
         new_config.__post_init__()  # Run post-init validation
     except ConfigurationError as e:
         raise ConfigurationError(f"Invalid trial config: {e}")
-    
+
     # Ensure no unused parameters remain in trial_params
     if trial_params:
         raise ValueError(f"Unused trial parameters: {trial_params}")
-    
+
     return new_config
 
 async def run_simulation_for_trial(trial_config: Config, trial_number: int, duration_ticks: int = 2000) -> Decimal:
@@ -116,7 +121,7 @@ async def run_simulation_for_trial(trial_config: Config, trial_number: int, dura
     try:
         # Initialize the bot with the trial-specific configuration
         bot = BybitMarketMaker(trial_config)
-        
+
         # Initialize bot without connecting real websockets (as it's SIMULATION mode)
         await bot._initialize_bot()
 
@@ -125,7 +130,7 @@ async def run_simulation_for_trial(trial_config: Config, trial_number: int, dura
             # In SIMULATION mode, _main_loop_tick internally handles price updates
             # via a simple random walk and simulates order fills.
             await bot._main_loop_tick()
-            
+
             # Simulate the passage of time. This is crucial for features like
             # order stale checks, circuit breakers, and price history tracking.
             await asyncio.sleep(trial_config.system.loop_interval_sec)
@@ -228,12 +233,12 @@ def objective(trial: optuna.Trial) -> float:
         time_in_force="GTC",
         post_only=True,
         # Provide a default StrategyConfig which will be fully replaced by trial parameters
-        strategy=StrategyConfig(), 
+        strategy=StrategyConfig(),
         # Keep system loop interval consistent for comparable simulations
-        system=SystemConfig(loop_interval_sec=1), 
+        system=SystemConfig(loop_interval_sec=1),
         # Configure file logging for the optimizer (bot's log level will be WARNING)
         files=FilesConfig(
-            log_level="INFO", 
+            log_level="INFO",
             log_file="optimizer_bot.log",
             state_file="optimizer_bot_state.pkl",
             db_file="optimizer_bot_data.db"
@@ -246,7 +251,7 @@ def objective(trial: optuna.Trial) -> float:
 
     # Run the simulation with the generated trial configuration
     net_pnl = asyncio.run(run_simulation_for_trial(trial_config, trial.number))
-    
+
     # Optuna aims to maximize the objective function, so we return the net realized PnL
     # If PNL is -inf, Optuna will handle it as a poor performer
     return float(net_pnl)
@@ -289,7 +294,7 @@ if __name__ == "__main__":
     num_trials = args.num_trials  # Number of new trials to run in this optimization session
     timeout_seconds = args.timeout  # Maximum optimization time in seconds
     n_jobs = args.n_jobs  # Parallel jobs (Optuna handles process-based parallelization)
-    
+
     optimizer_logger.info(f"Starting optimization for {num_trials} new trials or {timeout_seconds} seconds with {n_jobs} parallel jobs.")
     optimizer_logger.info("This process will run multiple bot simulations and might take significant time.")
     optimizer_logger.info("Intermediate results and study state are saved to the SQLite database.")

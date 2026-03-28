@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Enhanced Supertrend Trading Bot for Bybit V5 API.
 
@@ -21,6 +20,8 @@ Upgrades and Enhancements:
 - Added backtest mode via env var (BACKTEST_MODE=true) for parameter optimization simulation.
 """
 
+import itertools  # For backtest optimization
+import json
 import logging
 import logging.handlers
 import os
@@ -29,22 +30,18 @@ import sys
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from enum import Enum
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any
 
 import colorlog
+import numpy as np
 import pandas as pd
-import pandas_ta as ta
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
-from pybit.exceptions import InvalidRequestError
 from pybit.unified_trading import HTTP, WebSocket
-import json
-import numpy as np
-import itertools  # For backtest optimization
 
 # Initialize Colorama for terminal colors
 init(autoreset=True)
@@ -103,7 +100,7 @@ class Config:
     RSI_PERIOD: int = int(os.getenv("RSI_PERIOD", 14))
     VOLUME_FILTER_ENABLED: bool = os.getenv("VOLUME_FILTER_ENABLED", "true").lower() in ['true', '1', 't']
     PARTIAL_TP_ENABLED: bool = os.getenv("PARTIAL_TP_ENABLED", "true").lower() in ['true', '1', 't']
-    PARTIAL_TP_TARGETS: List[Dict[str, float]] = field(default_factory=lambda: [
+    PARTIAL_TP_TARGETS: list[dict[str, float]] = field(default_factory=lambda: [
         {"profit_pct": 0.5, "close_qty_pct": 0.5},  # First partial at 0.5% profit, close 50%
         {"profit_pct": 1.0, "close_qty_pct": 0.5}   # Second at 1.0%, close remaining 50%
     ])
@@ -152,12 +149,12 @@ def setup_logger(config: Config) -> logging.Logger:
     handler_file = logging.handlers.RotatingFileHandler("supertrend_bot.log", maxBytes=5*1024*1024, backupCount=3)
     handler_file.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler_file)
-    
+
     # JSON File Handler
     handler_json = logging.handlers.RotatingFileHandler("supertrend_bot.json.log", maxBytes=5*1024*1024, backupCount=3)
     handler_json.setFormatter(JsonFormatter())
     logger.addHandler(handler_json)
-    
+
     return logger
 
 
@@ -186,7 +183,7 @@ class BotState:
     stop_loss: float = 0.0
     take_profit: float = 0.0
     daily_loss: float = 0.0
-    log_messages: Deque[str] = field(default_factory=lambda: deque(maxlen=10))
+    log_messages: deque[str] = field(default_factory=lambda: deque(maxlen=10))
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def update(self, **kwargs):
@@ -194,7 +191,7 @@ class BotState:
             for key, value in kwargs.items():
                 if hasattr(self, key):
                     setattr(self, key, value)
-    
+
     def add_log(self, message: str):
         with self.lock:
             self.log_messages.append(f"{datetime.now().strftime('%H:%M:%S')} - {message}")
@@ -256,7 +253,7 @@ class BotUI(threading.Thread):
             print(Style.BRIGHT + "\n--- Live Log ---" + Style.RESET_ALL)
             for msg in self.state.log_messages:
                 print(msg)
-            
+
             print("\n" + Fore.CYAN + "=====================================================" + Style.RESET_ALL)
             print(Fore.YELLOW + "Press Ctrl+C to exit." + Style.RESET_ALL)
 
@@ -276,9 +273,9 @@ class PrecisionManager:
     def __init__(self, session: HTTP, logger: logging.Logger):
         self.session = session
         self.logger = logger
-        self.instruments: Dict[str, InstrumentSpecs] = {}
+        self.instruments: dict[str, InstrumentSpecs] = {}
 
-    def get_specs(self, symbol: str, category: str) -> Optional[InstrumentSpecs]:
+    def get_specs(self, symbol: str, category: str) -> InstrumentSpecs | None:
         if symbol in self.instruments:
             return self.instruments[symbol]
         try:
@@ -307,7 +304,7 @@ class OrderSizingCalculator:
     def __init__(self, precision_manager: PrecisionManager):
         self.precision = precision_manager
 
-    def calculate(self, specs: InstrumentSpecs, bal: Decimal, risk_pct: float, entry: Decimal, sl: Decimal, lev: int) -> Optional[Decimal]:
+    def calculate(self, specs: InstrumentSpecs, bal: Decimal, risk_pct: float, entry: Decimal, sl: Decimal, lev: int) -> Decimal | None:
         if bal <= 0 or entry <= 0 or lev <= 0 or abs(entry - sl) == 0:
             return None
         risk_amt = bal * Decimal(str(risk_pct / 100))
@@ -331,18 +328,18 @@ class SupertrendBot:
         self.session = HTTP(testnet=config.TESTNET, api_key=config.API_KEY, api_secret=config.API_SECRET)
         self.precision_manager = PrecisionManager(self.session, self.logger)
         self.order_sizer = OrderSizingCalculator(self.precision_manager)
-        
+
         self.position_active = False
-        self.current_position: Optional[Dict[str, Any]] = None
+        self.current_position: dict[str, Any] | None = None
         self.start_balance = self.get_account_balance()
         self.daily_reset_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
         self.daily_loss = Decimal('0')
         self.klines_df = pd.DataFrame()  # For storing kline data
-        
+
         self._stop_requested = False
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
-        
+
         # WebSocket setup for real-time data
         self.ws = WebSocket(testnet=config.TESTNET, channel_type="linear")
         self.ws.kline_stream(callback=self.handle_kline, symbol=config.SYMBOL, interval=config.TIMEFRAME)
@@ -381,7 +378,7 @@ class SupertrendBot:
             return True
         return False
 
-    def fetch_historical_klines(self, limit=1000) -> Optional[pd.DataFrame]:
+    def fetch_historical_klines(self, limit=1000) -> pd.DataFrame | None:
         try:
             res = self.session.get_kline(category=self.config.CATEGORY, symbol=self.config.SYMBOL, interval=self.config.TIMEFRAME, limit=limit)
             if res['retCode'] == 0:
@@ -410,26 +407,26 @@ class SupertrendBot:
     def generate_signal(self, df: pd.DataFrame) -> Signal:
         latest = df.iloc[-1]
         prev = df.iloc[-2] if len(df) > 1 else latest
-        
+
         # ADX Filter
         if self.config.ADX_TREND_FILTER_ENABLED and latest['adx'] < self.config.ADX_MIN_THRESHOLD:
             self.bot_state.add_log("ADX too low, no trade.")
             return Signal.NEUTRAL
-        
+
         # Volume Filter
         if self.config.VOLUME_FILTER_ENABLED and latest['volume'] <= latest['volume_sma']:
             self.bot_state.add_log("Volume too low, no trade.")
             return Signal.NEUTRAL
-        
+
         # Supertrend Signal
         buy_condition = latest['st_dir'] == 1 and prev['st_dir'] == -1
         sell_condition = latest['st_dir'] == -1 and prev['st_dir'] == 1
-        
+
         # RSI Filter
         if self.config.RSI_FILTER_ENABLED:
             buy_condition = buy_condition and latest['rsi'] > 50
             sell_condition = sell_condition and latest['rsi'] < 50
-        
+
         if buy_condition:
             return Signal.BUY
         if sell_condition:
@@ -505,23 +502,23 @@ class SupertrendBot:
         signal = self.generate_signal(self.klines_df)
         if signal == Signal.NEUTRAL:
             return
-        
+
         specs = self.precision_manager.get_specs(self.config.SYMBOL, self.config.CATEGORY)
         if not specs:
             return
-        
+
         entry = Decimal(str(self.bot_state.current_price))
         side = "Buy" if signal == Signal.BUY else "Sell"
         sl_pct = Decimal(str(self.config.STOP_LOSS_PCT / 100))
         tp_pct = Decimal(str(self.config.TAKE_PROFIT_PCT / 100))  # Base TP, but partials override
         sl = entry * (Decimal(1) - sl_pct) if side == "Buy" else entry * (Decimal(1) + sl_pct)
         tp = entry * (Decimal(1) + tp_pct) if side == "Buy" else entry * (Decimal(1) - tp_pct)
-        
+
         qty = self.order_sizer.calculate(specs, self.get_account_balance(), self.config.RISK_PER_TRADE_PCT, entry, sl, self.config.LEVERAGE)
         if not qty:
             self.bot_state.add_log(f"Signal: {side}. Invalid qty.")
             return
-        
+
         self.bot_state.add_log(f"Signal: {side}. Placing entry order...")
         self.place_entry_order(specs, side, qty, entry, sl, tp)
 
@@ -604,7 +601,7 @@ class SupertrendBot:
             except Exception as e:
                 self.logger.error(f"Exception setting breakeven SL: {e}")
 
-    def close_position(self, qty_to_close: Optional[Decimal] = None):
+    def close_position(self, qty_to_close: Decimal | None = None):
         if not self.current_position:
             return
         side = "Sell" if self.current_position['side'] == "Buy" else "Buy"
@@ -642,7 +639,7 @@ class SupertrendBot:
         multipliers = [1.0, 1.5, 2.0]
         best_params = None
         best_return = -np.inf
-        
+
         for atr, mult in itertools.product(atr_lengths, multipliers):
             df_test = self.calculate_indicators(df.copy())
             df_test['signal'] = 0
@@ -650,19 +647,19 @@ class SupertrendBot:
                 temp_df = df_test.iloc[:i+1]
                 sig = self.generate_signal(temp_df)
                 df_test.at[i, 'signal'] = sig.value
-            
+
             df_test['returns'] = df_test['close'].pct_change()
             df_test['strategy_returns'] = df_test['returns'] * df_test['signal'].shift(1)
             cum_returns = (1 + df_test['strategy_returns']).cumprod().iloc[-1] - 1
-            
+
             # Simulate fees
             trades = len(df_test[df_test['signal'] != 0])
             cum_returns -= trades * 0.0002
-            
+
             if cum_returns > best_return:
                 best_return = cum_returns
                 best_params = (atr, mult)
-        
+
         self.logger.info(f"Backtest Complete. Best Params: ATR={best_params}, Mult={best_params}, Return={best_return:.2%}")
         print(f"Best Params: ATR={best_params}, Mult={best_params}, Return={best_return:.2%}")
 
@@ -670,7 +667,7 @@ class SupertrendBot:
         if self.config.BACKTEST_MODE:
             self.run_backtest()
             return
-        
+
         self.logger.info("Starting Supertrend Scalping Bot...")
         self.bot_state.update(bot_status="Running")
         ui_thread = BotUI(self.bot_state)
@@ -683,7 +680,7 @@ class SupertrendBot:
 
         while not self._stop_requested:
             time.sleep(1)  # WS handles updates; minimal loop
-        
+
         ui_thread.stop()
         ui_thread.join()
         self.ws.close()

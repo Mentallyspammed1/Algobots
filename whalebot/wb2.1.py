@@ -1,11 +1,10 @@
 import json
 import logging
 import os
-import random
 import sys
 import time
 import threading
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal, getcontext, InvalidOperation
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -1854,7 +1853,7 @@ class TradingAnalyzer:
         if len(self.df) < initial_len:
             self.logger.debug(f"Dropped {initial_len - len(self.df)} rows with NaNs after indicator calculations.")
         if self.df.empty:
-            self.logger.warning(f"DataFrame became empty after calculations and cleanup. Cannot proceed.")
+            self.logger.warning("DataFrame became empty after calculations and cleanup. Cannot proceed.")
         else:
             self.logger.debug(f"Indicator calculations complete. Final DataFrame shape: {self.df.shape}")
 

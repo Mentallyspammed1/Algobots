@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import json
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
@@ -502,7 +501,7 @@ def get_bybit_data():
     except requests.exceptions.RequestException as e:
         logging.error(f"An unexpected error occurred during Bybit API request: {e}")
         return jsonify({"error": "An unexpected error occurred while fetching data from Bybit."}), 500
-    except Exception as e:
+    except Exception:
         # Catch-all for unexpected errors during data processing
         logging.exception("An unexpected error occurred during data processing.")
         return jsonify({"error": "An internal error occurred while processing data."}), 500

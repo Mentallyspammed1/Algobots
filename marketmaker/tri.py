@@ -76,7 +76,6 @@ from config_definitions import (
 )
 
 
-
 class StateManager:
     def __init__(self, file_path: str, logger: logging.Logger):
         self.file_path = file_path

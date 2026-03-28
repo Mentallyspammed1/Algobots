@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
 # Gemini CLI Installation and Troubleshooting Script for Android/Termux
 

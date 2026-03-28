@@ -14,7 +14,7 @@ from datetime import datetime
 from decimal import Decimal, getcontext
 from email.mime.text import MIMEText
 from enum import Enum
-from typing import Any
+from typing import Any, Tuple
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -23,6 +23,7 @@ import requests
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
 from logger_config import setup_custom_logger
+from indicators import EhlersIndicators, MomentumIndicators, VolatilityIndicators, calculate_supertrend
 
 warnings.filterwarnings('ignore')
 
@@ -67,11 +68,34 @@ class TradingSignal:
     position_size: float | None = None
     risk_reward_ratio: float | None = None
 
+    def to_json(self) -> dict[str, Any]:
+        """Convert the signal to a JSON-serializable dictionary."""
+        return {
+            "signal_type": self.signal_type.value if self.signal_type else None,
+            "confidence": self.confidence,
+            "conditions_met": self.conditions_met,
+            "stop_loss": str(self.stop_loss) if self.stop_loss else None,
+            "take_profit": str(self.take_profit) if self.take_profit else None,
+            "timestamp": self.timestamp,
+            "symbol": self.symbol,
+            "timeframe": self.timeframe,
+            "position_size": self.position_size,
+            "risk_reward_ratio": self.risk_reward_ratio
+        }
+
 @dataclass
 class IndicatorResult:
     name: str
     value: Any
     interpretation: str
+
+    def to_json(self) -> dict[str, Any]:
+        """Convert the result to a JSON-serializable dictionary."""
+        return {
+            "name": self.name,
+            "value": str(self.value) if isinstance(self.value, Decimal) else self.value,
+            "interpretation": self.interpretation
+        }
 
 @dataclass
 class PerformanceMetrics:
@@ -88,6 +112,23 @@ class PerformanceMetrics:
     average_win: Decimal = Decimal('0')
     average_loss: Decimal = Decimal('0')
 
+    def to_json(self) -> dict[str, Any]:
+        """Convert the metrics to a JSON-serializable dictionary."""
+        return {
+            "total_trades": self.total_trades,
+            "winning_trades": self.winning_trades,
+            "losing_trades": self.losing_trades,
+            "win_rate": self.win_rate,
+            "profit_factor": self.profit_factor,
+            "max_drawdown": self.max_drawdown,
+            "sharpe_ratio": self.sharpe_ratio,
+            "total_profit": str(self.total_profit),
+            "total_loss": str(self.total_loss),
+            "net_profit": str(self.net_profit),
+            "average_win": str(self.average_win),
+            "average_loss": str(self.average_loss)
+        }
+
 @dataclass
 class SignalHistory:
     timestamp: float
@@ -103,13 +144,33 @@ class SignalHistory:
     exit_reason: str | None = None
     market_regime: MarketRegime | None = None
 
+    def to_json(self) -> dict[str, Any]:
+        """Convert the history record to a JSON-serializable dictionary."""
+        return {
+            "timestamp": self.timestamp,
+            "symbol": self.symbol,
+            "timeframe": self.timeframe,
+            "signal_type": self.signal_type.value,
+            "confidence": self.confidence,
+            "entry_price": str(self.entry_price),
+            "exit_price": str(self.exit_price) if self.exit_price else None,
+            "stop_loss": str(self.stop_loss) if self.stop_loss else None,
+            "take_profit": str(self.take_profit) if self.take_profit else None,
+            "profit_loss": str(self.profit_loss) if self.profit_loss else None,
+            "exit_reason": self.exit_reason,
+            "market_regime": self.market_regime.value if self.market_regime else None
+        }
+
+# --- Color Codex ---
 # --- Color Codex ---
 NEON_GREEN = Fore.LIGHTGREEN_EX
 NEON_BLUE = Fore.CYAN
 NEON_PURPLE = Fore.MAGENTA
 NEON_YELLOW = Fore.YELLOW
 NEON_RED = Fore.LIGHTRED_EX
-NEON_CYAN = Fore.CYAN # Added NEON_CYAN definition
+NEON_CYAN = Fore.CYAN
+NEON_WHITE = Fore.WHITE
+NEON_ORANGE = Fore.LIGHTYELLOW_EX
 RESET = Style.RESET_ALL
 
 # --- Configuration & Constants ---
@@ -252,19 +313,8 @@ Take Profit: {signal.take_profit}
 Timestamp: {datetime.fromtimestamp(signal.timestamp).strftime('%Y-%m-%d %H:%M:%S')}
 """
 
-        payload = {
-            "signal_type": signal.signal_type.value,
-            "symbol": signal.symbol,
-            "timeframe": signal.timeframe,
-            "confidence": signal.confidence,
-            "conditions_met": signal.conditions_met,
-            "stop_loss": str(signal.stop_loss) if signal.stop_loss else None,
-            "take_profit": str(signal.take_profit) if signal.take_profit else None,
-            "timestamp": signal.timestamp
-        }
-
         self.send_email(subject, message)
-        self.send_webhook(payload)
+        self.send_webhook(signal.to_json())
 
 # --- Configuration Management ---
 def load_config(filepath: str) -> dict:
@@ -1425,6 +1475,39 @@ class IndicatorCalculator:
         # Accumulation/Distribution Line (ADL) is the cumulative sum of MFV
         return self._safe_series_operation(None, 'cumsum', series=money_flow_volume)
 
+    # --- Ehlers DSP Indicators ---
+    def calculate_ehlers_fisher(self, length: int = 10) -> Tuple[pd.Series, pd.Series]:
+        """Calculates Ehlers Fisher Transform."""
+        return EhlersIndicators.fisher_transform(self.df['close'], length)
+
+    def calculate_ehlers_supersmoother(self, length: int = 10) -> pd.Series:
+        """Calculates Ehlers SuperSmoother Filter."""
+        return EhlersIndicators.super_smoother(self.df['close'], length)
+
+    def calculate_ehlers_laguerre_rsi(self, gamma: float = 0.5) -> pd.Series:
+        """Calculates Ehlers Laguerre RSI."""
+        return EhlersIndicators.laguerre_rsi(self.df['close'], gamma)
+
+    def calculate_ehlers_cti(self, length: int = 20) -> pd.Series:
+        """Calculates Ehlers Correlation Trend Indicator."""
+        return EhlersIndicators.correlation_trend_indicator(self.df['close'], length)
+
+    def calculate_ehlers_itrend(self, alpha: float = 0.07) -> pd.Series:
+        """Calculates Ehlers Instantaneous Trendline."""
+        return EhlersIndicators.instant_trendline(self.df['close'], alpha)
+
+    def calculate_ehlers_mesa_sine(self) -> Tuple[pd.Series, pd.Series]:
+        """Calculates Ehlers MESA Sine Wave."""
+        return EhlersIndicators.mesa_sine_wave(self.df['close'])
+
+    def calculate_ehlers_cyber_cycle(self, alpha: float = 0.07) -> Tuple[pd.Series, pd.Series]:
+        """Calculates Ehlers Cyber Cycle."""
+        return EhlersIndicators.cyber_cycle(self.df['close'], alpha)
+
+    def calculate_ehlers_cog(self, length: int = 10) -> Tuple[pd.Series, pd.Series]:
+        """Calculates Ehlers Center of Gravity."""
+        return EhlersIndicators.center_of_gravity(self.df['close'], length)
+
     def calculate_psar(self, acceleration: float = 0.02, max_acceleration: float = 0.2) -> pd.Series:
         """Calculates Parabolic SAR (PSAR)."""
         psar = pd.Series(index=self.df.index, dtype="float64")
@@ -1554,6 +1637,48 @@ class IndicatorCalculator:
         if self.config["indicators"].get("rsi"):
             rsi_series = self.calculate_rsi(window=self.config["indicator_periods"]["rsi"])
             results["rsi"] = rsi_series.iloc[-3:].tolist() if not rsi_series.empty else []
+
+        # SuperTrend Filter
+        st_df = calculate_supertrend(self.df)
+        results["supertrend"] = st_df.iloc[-1].to_dict()
+
+        # Ehlers DSP indicators
+        fisher, fisher_sig = self.calculate_ehlers_fisher(length=10)
+        results["ehlers_fisher"] = {"val": fisher.iloc[-1], "sig": fisher_sig.iloc[-1]}
+        
+        lrsi = self.calculate_ehlers_laguerre_rsi(gamma=0.5)
+        results["ehlers_lrsi"] = lrsi.iloc[-1]
+        
+        cti = self.calculate_ehlers_cti(length=20)
+        results["ehlers_cti"] = cti.iloc[-1]
+
+        # MESA Sine Wave
+        sine, leadsine = self.calculate_ehlers_mesa_sine()
+        results["ehlers_mesa_sine"] = {"sine": sine.iloc[-1], "leadsine": leadsine.iloc[-1]}
+
+        # Cyber Cycle
+        cycle, trigger = self.calculate_ehlers_cyber_cycle()
+        results["ehlers_cyber_cycle"] = {"cycle": cycle.iloc[-1], "trigger": trigger.iloc[-1]}
+
+        # COG
+        cog, cog_sig = self.calculate_ehlers_cog()
+        results["ehlers_cog"] = {"cog": cog.iloc[-1], "sig": cog_sig.iloc[-1]}
+
+        # ITrend
+        itrend = self.calculate_ehlers_itrend()
+        results["ehlers_itrend"] = itrend.iloc[-1]
+
+        # MACD
+        macd, macd_sig, macd_hist = MomentumIndicators.macd(self.df['close'])
+        results["macd_all"] = {"macd": macd.iloc[-1], "sig": macd_sig.iloc[-1], "hist": macd_hist.iloc[-1]}
+
+        # ADX
+        adx = MomentumIndicators.adx(self.df['high'], self.df['low'], self.df['close'])
+        results["adx_val"] = adx.iloc[-1]
+
+        # FVE
+        fve = MomentumIndicators.fve(self.df['close'], self.df['volume'])
+        results["fve_val"] = fve.iloc[-1]
 
         if self.config["indicators"].get("mfi"):
             mfi_series = self.calculate_mfi(window=self.config["indicator_periods"]["mfi"])
@@ -2068,6 +2193,11 @@ class TradingAnalyzer:
 
         # Calculate all indicators
         self.indicator_values = self.indicator_calc.calculate_all_indicators()
+        
+        # New indicators for report
+        hma = MomentumIndicators.hma(self.df['close'], 20).iloc[-1]
+        wma = MomentumIndicators.wma(self.df['close'], 20).iloc[-1]
+        vwap = MomentumIndicators.vwap(self.df).iloc[-1]
 
         # Order Book Analysis
         has_bullish_wall, has_bearish_wall, bullish_wall_details, bearish_wall_details = \
@@ -2080,16 +2210,16 @@ class TradingAnalyzer:
 
         # Prepare output string
         output = f"""
-{NEON_BLUE}Exchange:{RESET} Bybit
-{NEON_BLUE}Symbol:{RESET} {self.symbol}
-{NEON_BLUE}Interval:{RESET} {self.interval}
-{NEON_BLUE}Market Regime:{RESET} {self.market_regime.value.upper()}
-{NEON_BLUE}Timestamp:{RESET} {timestamp}
-{NEON_BLUE}Price History:{RESET} {self.df['close'].iloc[-3]:.2f} | {self.df['close'].iloc[-2]:.2f} | {self.df['close'].iloc[-1]:.2f}
-{NEON_BLUE}Volume History:{RESET} {self.df['volume'].iloc[-3]:,.0f} | {self.df['volume'].iloc[-2]:,.0f} | {self.df['volume'].iloc[-1]:,.0f}
-{NEON_BLUE}Current Price:{RESET} {current_price_dec:.5f}
-{NEON_BLUE}ATR ({self.config['atr_period']}):{RESET} {self.atr_value:.5f}
-{NEON_BLUE}Trend:{RESET} {self.indicator_values.get("mom", {}).get("trend", "N/A")} (Strength: {self.indicator_values.get("mom", {}).get("strength", 0.0):.2f})
+{NEON_BLUE}📊 ANALYSIS REPORT: {self.symbol} [{self.interval}m]{RESET}
+{NEON_CYAN}CURRENT PRICE:{RESET} {current_price_dec:.5f}
+{NEON_BLUE}Market Regime:{RESET} {self.market_regime.value.upper()} | {NEON_YELLOW}CTI:{RESET} {self.indicator_values.get("ehlers_cti", 0):.4f} | {NEON_GREEN}ITrend:{RESET} {self.indicator_values.get("ehlers_itrend", 0):.4f}
+{NEON_WHITE}VWAP:{RESET} {vwap:.5f} | {NEON_ORANGE}HMA(20):{RESET} {hma:.5f} | {NEON_CYAN}WMA(20):{RESET} {wma:.5f}
+{NEON_GREEN}Ehlers Fisher:{RESET} {self.indicator_values.get("ehlers_fisher", {}).get("val", 0):.4f} (Sig: {self.indicator_values.get("ehlers_fisher", {}).get("sig", 0):.4f})
+{NEON_GREEN}Laguerre RSI:{RESET} {self.indicator_values.get("ehlers_lrsi", 0):.4f} | {NEON_CYAN}E-Stoch K/D:{RESET} {self.indicator_values.get("stoch_rsi", [0,0])[0]:.2f}/{self.indicator_values.get("stoch_rsi", [0,0])[1]:.2f}
+{NEON_BLUE}Cyber Cycle:{RESET} {self.indicator_values.get("ehlers_cyber_cycle", {}).get("cycle", 0):.4f} (Sig: {self.indicator_values.get("ehlers_cyber_cycle", {}).get("trigger", 0):.4f}) | {NEON_YELLOW}COG:{RESET} {self.indicator_values.get("ehlers_cog", {}).get("cog", 0):.2f}
+{NEON_BLUE}MESA Sine:{RESET} {self.indicator_values.get("ehlers_mesa_sine", {}).get("sine", 0):.4f} (Lead: {self.indicator_values.get("ehlers_mesa_sine", {}).get("leadsine", 0):.4f})
+{NEON_PURPLE}MACD Hist:{RESET} {self.indicator_values.get("macd_all", {}).get("hist", 0):.5f} | {NEON_YELLOW}ADX:{RESET} {self.indicator_values.get("adx_val", 0):.2f} | {NEON_CYAN}FVE:{RESET} {self.indicator_values.get("fve_val", 0):.2f}
+{NEON_YELLOW}SuperTrend:{RESET} {'BULLISH' if self.indicator_values.get("supertrend", {}).get("direction") == 1 else 'BEARISH'} | {NEON_BLUE}ATR:{RESET} {self.atr_value:.5f}
 """
 
         # Append indicator interpretations
@@ -2149,7 +2279,69 @@ class TradingAnalyzer:
         take_profit = None
 
         # --- Bullish Signal Logic ---
-        # Sum weights of bullish conditions met
+        # SuperTrend Filter (Mandatory or high weight)
+        st_data = self.indicator_values.get("supertrend", {})
+        if st_data.get("direction") == 1:
+            signal_score += Decimal("0.3")
+            conditions_met.append("SuperTrend Bullish")
+
+        # Ehlers Fisher Crossover
+        fisher_data = self.indicator_values.get("ehlers_fisher", {})
+        if fisher_data.get("val", 0) > fisher_data.get("sig", 0):
+            signal_score += Decimal("0.4")
+            conditions_met.append("Ehlers Fisher Bullish Cross")
+
+        # Laguerre RSI
+        lrsi_val = self.indicator_values.get("ehlers_lrsi", 0.5)
+        if lrsi_val < 0.2:
+            signal_score += Decimal("0.3")
+            conditions_met.append("Laguerre RSI Oversold")
+
+        # MESA Sine Wave
+        sine_data = self.indicator_values.get("ehlers_mesa_sine", {})
+        if sine_data.get("sine", 0) > sine_data.get("leadsine", 0):
+            signal_score += Decimal("0.2")
+            conditions_met.append("MESA Sine Wave Bullish")
+
+        # Cyber Cycle
+        cyber_data = self.indicator_values.get("ehlers_cyber_cycle", {})
+        if cyber_data.get("cycle", 0) > cyber_data.get("trigger", 0):
+            signal_score += Decimal("0.2")
+            conditions_met.append("Cyber Cycle Bullish")
+
+        # COG
+        cog_data = self.indicator_values.get("ehlers_cog", {})
+        if cog_data.get("cog", 0) > cog_data.get("sig", 0):
+            signal_score += Decimal("0.2")
+            conditions_met.append("COG Bullish Cross")
+
+        # VWAP & HMA Confluence
+        hma_series = MomentumIndicators.hma(self.df['close'], 20)
+        vwap_series = MomentumIndicators.vwap(self.df)
+        
+        if current_price > Decimal(str(vwap_series.iloc[-1])):
+            signal_score += Decimal("0.1")
+            conditions_met.append("Above VWAP")
+        
+        if current_price > Decimal(str(hma_series.iloc[-1])):
+            signal_score += Decimal("0.1")
+            conditions_met.append("Above HMA(20)")
+
+        # SMA/EMA Confluence
+        sma50 = MomentumIndicators.sma(self.df['close'], 50).iloc[-1]
+        sma200 = MomentumIndicators.sma(self.df['close'], 200).iloc[-1]
+        ema9 = MomentumIndicators.ema(self.df['close'], 9).iloc[-1]
+        ema21 = MomentumIndicators.ema(self.df['close'], 21).iloc[-1]
+
+        if current_price > Decimal(str(sma50)) and current_price > Decimal(str(sma200)):
+            signal_score += Decimal("0.1")
+            conditions_met.append("Above SMA 50/200")
+        
+        if ema9 > ema21:
+            signal_score += Decimal("0.1")
+            conditions_met.append("EMA 9/21 Bullish Cross")
+
+        # Sum weights of original bullish conditions met
         if self.config["indicators"].get("stoch_rsi") and self.indicator_values.get("stoch_rsi_vals") is not None and not self.indicator_values["stoch_rsi_vals"].empty:
             stoch_rsi_k = Decimal(str(self.indicator_values["stoch_rsi_vals"]['k'].iloc[-1]))
             stoch_rsi_d = Decimal(str(self.indicator_values["stoch_rsi_vals"]['d'].iloc[-1]))
@@ -2200,6 +2392,62 @@ class TradingAnalyzer:
         # --- Bearish Signal Logic (similar structure) ---
         bearish_score = Decimal('0.0')
         bearish_conditions: list[str] = []
+
+        # SuperTrend Filter
+        if st_data.get("direction") == -1:
+            bearish_score += Decimal("0.3")
+            bearish_conditions.append("SuperTrend Bearish")
+
+        # Ehlers Fisher Crossover
+        if fisher_data.get("val", 0) < fisher_data.get("sig", 0):
+            bearish_score += Decimal("0.4")
+            bearish_conditions.append("Ehlers Fisher Bearish Cross")
+
+        # Laguerre RSI
+        if lrsi_val > 0.8:
+            bearish_score += Decimal("0.3")
+            bearish_conditions.append("Laguerre RSI Overbought")
+
+        # MESA Sine Wave
+        if sine_data.get("sine", 0) < sine_data.get("leadsine", 0):
+            bearish_score += Decimal("0.2")
+            bearish_conditions.append("MESA Sine Wave Bearish")
+
+        # Cyber Cycle
+        if cyber_data.get("cycle", 0) < cyber_data.get("trigger", 0):
+            bearish_score += Decimal("0.2")
+            bearish_conditions.append("Cyber Cycle Bearish")
+
+        # COG
+        if cog_data.get("cog", 0) < cog_data.get("sig", 0):
+            bearish_score += Decimal("0.2")
+            bearish_conditions.append("COG Bearish Cross")
+
+        # VWAP & HMA Confluence
+        hma_series = MomentumIndicators.hma(self.df['close'], 20)
+        vwap_series = MomentumIndicators.vwap(self.df)
+        
+        if current_price < Decimal(str(vwap_series.iloc[-1])):
+            bearish_score += Decimal("0.1")
+            bearish_conditions.append("Below VWAP")
+        
+        if current_price < Decimal(str(hma_series.iloc[-1])):
+            bearish_score += Decimal("0.1")
+            bearish_conditions.append("Below HMA(20)")
+
+        # SMA/EMA Confluence
+        sma50 = MomentumIndicators.sma(self.df['close'], 50).iloc[-1]
+        sma200 = MomentumIndicators.sma(self.df['close'], 200).iloc[-1]
+        ema9 = MomentumIndicators.ema(self.df['close'], 9).iloc[-1]
+        ema21 = MomentumIndicators.ema(self.df['close'], 21).iloc[-1]
+
+        if current_price < Decimal(str(sma50)) and current_price < Decimal(str(sma200)):
+            bearish_score += Decimal("0.1")
+            bearish_conditions.append("Below SMA 50/200")
+        
+        if ema9 < ema21:
+            bearish_score += Decimal("0.1")
+            bearish_conditions.append("EMA 9/21 Bearish Cross")
 
         if self.config["indicators"].get("stoch_rsi") and self.indicator_values.get("stoch_rsi_vals") is not None and not self.indicator_values["stoch_rsi_vals"].empty:
             stoch_rsi_k = Decimal(str(self.indicator_values["stoch_rsi_vals"]['k'].iloc[-1]))

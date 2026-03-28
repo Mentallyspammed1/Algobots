@@ -2128,14 +2128,14 @@ class TradingAnalyzer:
                     and stoch_k < isd["stoch_rsi_oversold"]
                 ):
                     signal_score += weights.get("stoch_rsi", 0)
-                    self.logger.debug(f"StochRSI: Bullish crossover from oversold.")
+                    self.logger.debug("StochRSI: Bullish crossover from oversold.")
                 elif (
                     stoch_k < stoch_d
                     and prev_stoch_k >= prev_stoch_d
                     and stoch_k > isd["stoch_rsi_overbought"]
                 ):
                     signal_score -= weights.get("stoch_rsi", 0)
-                    self.logger.debug(f"StochRSI: Bearish crossover from overbought.")
+                    self.logger.debug("StochRSI: Bearish crossover from overbought.")
 
         # CCI
         if active_indicators.get("cci", False):

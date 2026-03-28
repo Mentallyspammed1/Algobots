@@ -3,7 +3,7 @@ import asyncio
 import pandas as pd
 import numpy as np
 from decimal import Decimal
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 # Add the bot's directory to the Python path
 import sys
@@ -15,8 +15,6 @@ from supertrend_bot import (
     BybitTradingBot,
     Config,
     StrategySignal,
-    OrderSide,
-    MarketInfo,
     Position
 )
 

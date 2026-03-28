@@ -1,26 +1,21 @@
 import argparse
-import hashlib
-import hmac
 import json
 import logging
-import math
 import os
 import signal
-import subprocess
 import sys
 import threading
 import time
-from collections import deque, defaultdict
+import warnings
+from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, getcontext
 from enum import Enum
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
-import warnings
+from typing import Any
 
 # Ignore common warnings from libraries
 warnings.filterwarnings('ignore')
@@ -79,8 +74,8 @@ class Colors:
     DARK_GRAY = Fore.LIGHTBLACK_EX
 
 # Environment variables
-BYBIT_API_KEY: Optional[str] = os.getenv("BYBIT_API_KEY")
-BYBIT_API_SECRET: Optional[str] = os.getenv("BYBIT_API_SECRET")
+BYBIT_API_KEY: str | None = os.getenv("BYBIT_API_KEY")
+BYBIT_API_SECRET: str | None = os.getenv("BYBIT_API_SECRET")
 
 # Directory setup
 BASE_DIR = Path(os.getenv("HOME", "."))
@@ -151,12 +146,12 @@ class Trade(BaseModel):
     timestamp: int
     fee: Decimal
     trade_id: str
-    entry_price: Optional[Decimal] = None
-    exit_price: Optional[Decimal] = None
-    pnl_percent: Optional[Decimal] = None
-    market_condition: Optional[str] = None
-    signal_strength: Optional[Decimal] = None
-    
+    entry_price: Decimal | None = None
+    exit_price: Decimal | None = None
+    pnl_percent: Decimal | None = None
+    market_condition: str | None = None
+    signal_strength: Decimal | None = None
+
     model_config = ConfigDict(
         json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder),
         json_loads=json_loads_decimal,
@@ -176,7 +171,7 @@ class DynamicSpreadConfig(BaseModel):
 class InventorySkewConfig(BaseModel):
     enabled: bool = True
     skew_factor: PositiveFloat = 0.1
-    max_skew: Optional[PositiveFloat] = 0.002
+    max_skew: PositiveFloat | None = 0.002
     aggressive_rebalance: bool = False
     rebalance_threshold: PositiveFloat = 0.7
 
@@ -238,28 +233,28 @@ class SymbolConfig(BaseModel):
     order_refresh_time: NonNegativeInt = 5
     max_spread: PositiveFloat = 0.005
     inventory_limit: PositiveFloat = 0.01
-    
+
     dynamic_spread: DynamicSpreadConfig = Field(default_factory=DynamicSpreadConfig)
     inventory_skew: InventorySkewConfig = Field(default_factory=InventorySkewConfig)
     market_microstructure: MarketMicrostructure = Field(default_factory=MarketMicrostructure)
     signal_config: SignalConfig = Field(default_factory=SignalConfig)
     orderbook_analysis: OrderbookAnalysisConfig = Field(default_factory=OrderbookAnalysisConfig)
     risk_management: RiskManagement = Field(default_factory=RiskManagement)
-    
-    order_layers: List[OrderLayer] = Field(default_factory=lambda: [
+
+    order_layers: list[OrderLayer] = Field(default_factory=lambda: [
         OrderLayer(spread_offset=0.0, quantity_multiplier=1.0)
     ])
-    
-    min_qty: Optional[Decimal] = None
-    max_qty: Optional[Decimal] = None
-    qty_precision: Optional[int] = None
-    price_precision: Optional[int] = None
-    min_notional: Optional[Decimal] = None
-    tick_size: Optional[Decimal] = None
+
+    min_qty: Decimal | None = None
+    max_qty: Decimal | None = None
+    qty_precision: int | None = None
+    price_precision: int | None = None
+    min_notional: Decimal | None = None
+    tick_size: Decimal | None = None
     kline_interval: str = "1m"
     market_data_stale_timeout_seconds: NonNegativeInt = 30
     use_batch_orders_for_refresh: bool = True
-    
+
     model_config = ConfigDict(
         json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder),
         json_loads=json_loads_decimal,
@@ -274,9 +269,9 @@ class GlobalConfig(BaseModel):
     log_file: str = "market_maker_live.log"
     state_file: str = "state.json"
     symbol_config_file: str = "symbols.json"
-    telegram_bot_token: Optional[str] = None
-    telegram_chat_id: Optional[str] = None
-    
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
     model_config = ConfigDict(
         json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder),
         json_loads=json_loads_decimal,
@@ -287,11 +282,11 @@ class GlobalConfig(BaseModel):
 # region: Configuration Management
 # ==============================================================================
 class ConfigManager:
-    _global_config: Optional[GlobalConfig] = None
-    _symbol_configs: List[SymbolConfig] = []
-    
+    _global_config: GlobalConfig | None = None
+    _symbol_configs: list[SymbolConfig] = []
+
     @classmethod
-    def load_config(cls, prompt_for_symbol: bool = False, input_symbol: Optional[str] = None) -> Tuple[GlobalConfig, List[SymbolConfig]]:
+    def load_config(cls, prompt_for_symbol: bool = False, input_symbol: str | None = None) -> tuple[GlobalConfig, list[SymbolConfig]]:
         global_data = {
             "category": os.getenv("BYBIT_CATEGORY", "linear"),
             "api_max_retries": int(os.getenv("API_MAX_RETRIES", "5")),
@@ -303,13 +298,13 @@ class ConfigManager:
             "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN"),
             "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID"),
         }
-        
+
         try:
             cls._global_config = GlobalConfig(**global_data)
         except ValidationError as e:
             logging.critical(f"Global configuration validation error: {e}")
             sys.exit(1)
-        
+
         cls._symbol_configs = []
         if prompt_for_symbol and input_symbol:
             single_symbol_data = { "symbol": input_symbol }
@@ -325,7 +320,7 @@ class ConfigManager:
                 if symbol_config_path.exists():
                     with open(symbol_config_path) as f:
                         raw_symbol_configs = json.load(f)
-                    
+
                     for s_cfg in raw_symbol_configs:
                         try:
                             cls._symbol_configs.append(SymbolConfig(**s_cfg))
@@ -335,11 +330,11 @@ class ConfigManager:
                     logging.warning(f"Symbol config file not found: {symbol_config_path}")
             except Exception as e:
                 logging.error(f"Error loading symbol configs: {e}")
-        
+
         return cls._global_config, cls._symbol_configs
 
-GLOBAL_CONFIG: Optional[GlobalConfig] = None
-SYMBOL_CONFIGS: List[SymbolConfig] = []
+GLOBAL_CONFIG: GlobalConfig | None = None
+SYMBOL_CONFIGS: list[SymbolConfig] = []
 # endregion
 
 # region: Core Infrastructure (Logging, Notifications, Exchange)
@@ -347,20 +342,20 @@ SYMBOL_CONFIGS: List[SymbolConfig] = []
 def setup_logger(name_suffix: str) -> logging.Logger:
     logger_name = f"market_maker_{name_suffix}"
     logger = logging.getLogger(logger_name)
-    
+
     if logger.hasHandlers():
         return logger
-    
+
     log_level_str = GLOBAL_CONFIG.log_level.upper() if GLOBAL_CONFIG else "INFO"
     logger.setLevel(getattr(logging, log_level_str, logging.INFO))
-    
+
     log_file_path = LOG_DIR / (GLOBAL_CONFIG.log_file if GLOBAL_CONFIG else "market_maker_live.log")
-    
+
     file_handler = RotatingFileHandler(log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8")
     file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - [%(name)s:%(lineno)d] - %(message)s")
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
-    
+
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_formatter = logging.Formatter(
         f"{Colors.NEON_BLUE}%(asctime)s{Colors.RESET} - {Colors.YELLOW}%(levelname)-8s{Colors.RESET} - {Colors.MAGENTA}[%(name)s]{Colors.RESET} - %(message)s",
@@ -368,14 +363,14 @@ def setup_logger(name_suffix: str) -> logging.Logger:
     )
     stream_handler.setFormatter(stream_formatter)
     logger.addHandler(stream_handler)
-    
+
     logger.propagate = False
     return logger
 
 main_logger = logging.getLogger("market_maker_main")
 
 class TelegramNotifier:
-    def __init__(self, token: Optional[str], chat_id: Optional[str], logger: logging.Logger):
+    def __init__(self, token: str | None, chat_id: str | None, logger: logging.Logger):
         self.token = token
         self.chat_id = chat_id
         self.logger = logger
@@ -393,7 +388,7 @@ class TelegramNotifier:
         except requests.RequestException as e:
             self.logger.error(f"Failed to send Telegram message: {e}")
 
-def initialize_exchange(logger: logging.Logger) -> Optional[Any]:
+def initialize_exchange(logger: logging.Logger) -> Any | None:
     if not BYBIT_API_KEY or not BYBIT_API_SECRET:
         logger.critical("API Key and/or Secret not found. Cannot initialize exchange.")
         return None
@@ -419,7 +414,7 @@ def calculate_rsi(prices: pd.Series, period: int = 14) -> pd.Series:
     rs = avg_gain / avg_loss.replace(0, 1)
     return 100 - (100 / (1 + rs))
 
-def calculate_macd(prices: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+def calculate_macd(prices: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> tuple[pd.Series, pd.Series, pd.Series]:
     ema_fast = prices.ewm(span=fast, adjust=False).mean()
     ema_slow = prices.ewm(span=slow, adjust=False).mean()
     macd_line = ema_fast - ema_slow
@@ -427,7 +422,7 @@ def calculate_macd(prices: pd.Series, fast: int = 12, slow: int = 26, signal: in
     histogram = macd_line - signal_line
     return macd_line, signal_line, histogram
 
-def calculate_bollinger_bands(prices: pd.Series, period: int = 20, std_dev: float = 2.0) -> Tuple[pd.Series, pd.Series, pd.Series]:
+def calculate_bollinger_bands(prices: pd.Series, period: int = 20, std_dev: float = 2.0) -> tuple[pd.Series, pd.Series, pd.Series]:
     middle = prices.rolling(window=period).mean()
     std = prices.rolling(window=period).std()
     upper = middle + (std * std_dev)
@@ -448,14 +443,14 @@ def calculate_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int
 def retry_api_call(
     attempts: int = API_RETRY_ATTEMPTS,
     backoff_factor: float = RETRY_BACKOFF_FACTOR,
-    fatal_exceptions: Tuple[type, ...] = (ccxt.AuthenticationError, ccxt.ArgumentsRequired)
+    fatal_exceptions: tuple[type, ...] = (ccxt.AuthenticationError, ccxt.ArgumentsRequired)
 ):
     def decorator(func: Callable[..., Any]):
         @wraps(func)
         def wrapper(self, *args: Any, **kwargs: Any) -> Any:
             logger = self.logger if hasattr(self, "logger") else main_logger
             last_exception = None
-            
+
             for i in range(attempts):
                 try:
                     return func(self, *args, **kwargs)
@@ -475,7 +470,7 @@ def retry_api_call(
                     logger.error(f"BadRequest in {func.__name__}: {e}")
                     last_exception = e
                     break # Do not retry on most bad requests
-            
+
             logger.error(f"API call {func.__name__} failed after {attempts} attempts.")
             if last_exception:
                 raise last_exception
@@ -489,9 +484,9 @@ class BybitWebsocketClient:
     """Handles Bybit V5 WebSocket connections for real-time market data."""
     WS_URL = "wss://stream.bybit.com/v5/public/linear"
 
-    def __init__(self, symbols: List[str], logger: logging.Logger, message_queue: deque):
-        self.ws: Optional[websocket.WebSocketApp] = None
-        self.thread: Optional[threading.Thread] = None
+    def __init__(self, symbols: list[str], logger: logging.Logger, message_queue: deque):
+        self.ws: websocket.WebSocketApp | None = None
+        self.thread: threading.Thread | None = None
         self.logger = logger
         self.symbols = symbols
         self.message_queue = message_queue
@@ -513,7 +508,7 @@ class BybitWebsocketClient:
         for symbol in self.symbols:
             topics.append(f"orderbook.50.{symbol}")
             topics.append(f"publicTrade.{symbol}")
-        
+
         op_data = {"op": "subscribe", "args": topics}
         ws.send(json.dumps(op_data))
         self.logger.info(f"Subscribed to topics: {topics}")
@@ -530,7 +525,7 @@ class BybitWebsocketClient:
             )
             self.is_running = True
             self.ws.run_forever(ping_interval=20, ping_timeout=10)
-            
+
             self.logger.info(f"WebSocket disconnected. Reconnecting in {WS_RECONNECT_INTERVAL} seconds...")
             time.sleep(WS_RECONNECT_INTERVAL)
 
@@ -552,14 +547,14 @@ class BybitWebsocketClient:
 class EnhancedMarketMakerStrategy:
     """The core market making and directional strategy logic."""
 
-    def __init__(self, global_config: GlobalConfig, symbol_configs: List[SymbolConfig], exchange: Any):
+    def __init__(self, global_config: GlobalConfig, symbol_configs: list[SymbolConfig], exchange: Any):
         self.logger = setup_logger("strategy")
         self.global_config = global_config
         self.symbol_configs = {cfg.symbol: cfg for cfg in symbol_configs}
         self.exchange = exchange
         self.running = True
         self.state_file_path = STATE_DIR / global_config.state_file
-        
+
         self.notifier = TelegramNotifier(
             global_config.telegram_bot_token,
             global_config.telegram_chat_id,
@@ -568,18 +563,18 @@ class EnhancedMarketMakerStrategy:
 
         # Data structures
         self.orderbooks = {s: {} for s in self.symbol_configs}
-        self.prev_orderbooks = {s: None for s in self.symbol_configs}
-        self.positions = {s: DECIMAL_ZERO for s in self.symbol_configs}
+        self.prev_orderbooks = dict.fromkeys(self.symbol_configs)
+        self.positions = dict.fromkeys(self.symbol_configs, DECIMAL_ZERO)
         self.open_orders = {s: [] for s in self.symbol_configs}
         self.kline_data = {s: pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']) for s in self.symbol_configs}
         self.signals = {s: {} for s in self.symbol_configs}
-        self.last_market_data_time = {s: 0 for s in self.symbol_configs}
-        
+        self.last_market_data_time = dict.fromkeys(self.symbol_configs, 0)
+
         # State and performance
         self.total_pnl = DECIMAL_ZERO
         self.daily_pnl = DECIMAL_ZERO
         self.last_daily_reset = datetime.now(timezone.utc).date()
-        
+
         # WebSocket
         self.ws_message_queue = deque(maxlen=1000)
         self.ws_client = BybitWebsocketClient(
@@ -599,7 +594,7 @@ class EnhancedMarketMakerStrategy:
     def _load_state(self):
         if self.state_file_path.exists():
             try:
-                with open(self.state_file_path, 'r') as f:
+                with open(self.state_file_path) as f:
                     state = json_loads_decimal(f.read())
                 self.total_pnl = state.get('total_pnl', DECIMAL_ZERO)
                 self.daily_pnl = state.get('daily_pnl', DECIMAL_ZERO)
@@ -639,7 +634,7 @@ class EnhancedMarketMakerStrategy:
         while self.ws_message_queue:
             msg = self.ws_message_queue.popleft()
             topic = msg.get('topic', '')
-            
+
             if 'orderbook' in topic:
                 symbol = msg['data']['s']
                 self.orderbooks[symbol] = {
@@ -650,12 +645,12 @@ class EnhancedMarketMakerStrategy:
                 self.last_market_data_time[symbol] = time.time()
 
     # region: Orderbook Analysis Methods
-    def _get_mid_price(self, symbol: str) -> Optional[Decimal]:
+    def _get_mid_price(self, symbol: str) -> Decimal | None:
         ob = self.orderbooks.get(symbol)
         if not ob or not ob.get('bids') or not ob.get('asks'): return None
         return (ob['bids'][0][0] + ob['asks'][0][0]) / 2
 
-    def _get_weighted_average_price(self, symbol: str) -> Optional[Decimal]:
+    def _get_weighted_average_price(self, symbol: str) -> Decimal | None:
         ob = self.orderbooks.get(symbol)
         if not ob or not ob.get('bids') or not ob.get('asks'): return None
         best_bid_price, best_bid_qty = ob['bids'][0]
@@ -663,7 +658,7 @@ class EnhancedMarketMakerStrategy:
         if best_bid_qty + best_ask_qty == 0: return (best_bid_price + best_ask_price) / 2
         return (best_bid_price * best_ask_qty + best_ask_price * best_bid_qty) / (best_bid_qty + best_ask_qty)
 
-    def _calculate_orderbook_imbalance(self, symbol: str) -> Optional[Decimal]:
+    def _calculate_orderbook_imbalance(self, symbol: str) -> Decimal | None:
         s_cfg = self.symbol_configs[symbol]
         ob = self.orderbooks.get(symbol)
         if not ob or not ob.get('bids') or not ob.get('asks'): return None
@@ -673,21 +668,21 @@ class EnhancedMarketMakerStrategy:
         if bid_volume + ask_volume == 0: return Decimal('0.5')
         return bid_volume / (bid_volume + ask_volume)
 
-    def _get_market_spread(self, symbol: str) -> Optional[Tuple[Decimal, Decimal]]:
+    def _get_market_spread(self, symbol: str) -> tuple[Decimal, Decimal] | None:
         ob = self.orderbooks.get(symbol)
         if not ob or not ob.get('bids') or not ob.get('asks'): return None
         best_bid, best_ask = ob['bids'][0][0], ob['asks'][0][0]
         if best_bid <= 0: return None
         return (best_ask - best_bid) / best_bid, best_ask - best_bid
 
-    def _analyze_liquidity_cliffs(self, symbol: str) -> Tuple[bool, bool]:
+    def _analyze_liquidity_cliffs(self, symbol: str) -> tuple[bool, bool]:
         s_cfg = self.symbol_configs[symbol]
         ob = self.orderbooks.get(symbol)
         depth = s_cfg.orderbook_analysis.cliff_depth
         factor = Decimal(str(s_cfg.orderbook_analysis.cliff_factor))
         if not ob or len(ob.get('bids', [])) < depth or len(ob.get('asks', [])) < depth:
             return False, False
-        
+
         top_bid_qty = ob['bids'][0][1]
         next_bids_avg_qty = sum(q for p, q in ob['bids'][1:depth]) / (depth - 1)
         is_bid_cliff = next_bids_avg_qty > 0 and (top_bid_qty / next_bids_avg_qty) < (1/factor)
@@ -700,7 +695,7 @@ class EnhancedMarketMakerStrategy:
         if is_ask_cliff: self.logger.debug(f"Liquidity cliff detected on ASK side for {symbol}")
         return is_bid_cliff, is_ask_cliff
 
-    def _detect_toxic_flow(self, symbol: str) -> Tuple[bool, bool]:
+    def _detect_toxic_flow(self, symbol: str) -> tuple[bool, bool]:
         is_toxic_on_bid, is_toxic_on_ask = False, False
         prev_ob, curr_ob = self.prev_orderbooks.get(symbol), self.orderbooks.get(symbol)
         if not prev_ob or not curr_ob:
@@ -709,10 +704,10 @@ class EnhancedMarketMakerStrategy:
 
         if curr_ob['bids'][0][0] < prev_ob['bids'][0][0]: is_toxic_on_bid = True
         if curr_ob['asks'][0][0] > prev_ob['asks'][0][0]: is_toxic_on_ask = True
-        
+
         if is_toxic_on_bid: self.logger.warning(f"Potential toxic flow on BID side for {symbol}")
         if is_toxic_on_ask: self.logger.warning(f"Potential toxic flow on ASK side for {symbol}")
-        
+
         self.prev_orderbooks[symbol] = curr_ob
         return is_toxic_on_bid, is_toxic_on_ask
     # endregion
@@ -725,7 +720,7 @@ class EnhancedMarketMakerStrategy:
 
         if s_cfg.signal_config.use_rsi:
             self.signals[symbol]['rsi'] = calculate_rsi(klines['close'], s_cfg.signal_config.rsi_period).iloc[-1]
-        
+
         if s_cfg.signal_config.use_macd:
             _, _, macd_hist = calculate_macd(klines['close'], s_cfg.signal_config.macd_fast, s_cfg.signal_config.macd_slow, s_cfg.signal_config.macd_signal)
             self.signals[symbol]['macd_hist'] = macd_hist.iloc[-1]
@@ -739,11 +734,11 @@ class EnhancedMarketMakerStrategy:
             rsi = signals['rsi']
             if rsi < s_cfg.signal_config.rsi_oversold: score += 1
             if rsi > s_cfg.signal_config.rsi_overbought: score -= 1
-        
+
         if s_cfg.signal_config.use_macd and 'macd_hist' in signals:
             if signals['macd_hist'] > 0: score += 1
             if signals['macd_hist'] < 0: score -= 1
-        
+
         if score >= 2: return TradingBias.STRONG_BULLISH
         if score == 1: return TradingBias.WEAK_BULLISH
         if score == -1: return TradingBias.WEAK_BEARISH
@@ -751,15 +746,15 @@ class EnhancedMarketMakerStrategy:
         return TradingBias.NEUTRAL
     # endregion
 
-    def _calculate_quotes(self, symbol: str) -> Tuple[Optional[Decimal], Optional[Decimal], Optional[Decimal], Optional[Decimal]]:
+    def _calculate_quotes(self, symbol: str) -> tuple[Decimal | None, Decimal | None, Decimal | None, Decimal | None]:
         s_cfg = self.symbol_configs[symbol]
-        
+
         # 1. Get Reference Price
         if s_cfg.orderbook_analysis.wap_instead_of_mid:
             ref_price = self._get_weighted_average_price(symbol)
         else:
             ref_price = self._get_mid_price(symbol)
-        
+
         if ref_price is None: return None, None, None, None
 
         # 2. Determine Trading Bias
@@ -771,7 +766,7 @@ class EnhancedMarketMakerStrategy:
         is_bid_cliff, is_ask_cliff = self._analyze_liquidity_cliffs(symbol)
         if is_bid_cliff: base_qty *= Decimal('0.5')
         if is_ask_cliff: base_qty *= Decimal('0.5')
-        
+
         bid_qty = self.round_quantity(symbol, base_qty)
         ask_qty = self.round_quantity(symbol, base_qty)
 
@@ -780,7 +775,7 @@ class EnhancedMarketMakerStrategy:
             self.logger.info(f"STRONG BULLISH signal for {symbol}. Placing aggressive bid.")
             bid_price = self.round_price(symbol, ref_price * Decimal('1.0001')) # Slightly above WAP
             return bid_price, None, bid_qty, None
-        
+
         if bias == TradingBias.STRONG_BEARISH:
             self.logger.info(f"STRONG BEARISH signal for {symbol}. Placing aggressive ask.")
             ask_price = self.round_price(symbol, ref_price * Decimal('0.9999')) # Slightly below WAP
@@ -789,16 +784,16 @@ class EnhancedMarketMakerStrategy:
         # 5. Market-Making Logic (for NEUTRAL or WEAK bias)
         # Base Spread
         spread = Decimal(str(s_cfg.base_spread))
-        
+
         # Adjust spread for market conditions
         market_spread_pct, _ = self._get_market_spread(symbol)
         if market_spread_pct:
             spread = max(spread, market_spread_pct * Decimal('0.8'))
-        
+
         is_toxic_on_bid, is_toxic_on_ask = self._detect_toxic_flow(symbol)
         if is_toxic_on_bid or is_toxic_on_ask:
             spread *= Decimal(str(s_cfg.orderbook_analysis.toxic_spread_widener))
-        
+
         spread = min(spread, Decimal(str(s_cfg.max_spread)))
         half_spread = spread / 2
 
@@ -806,7 +801,7 @@ class EnhancedMarketMakerStrategy:
         # Inventory Skew
         inventory_pct = self.positions[symbol] / Decimal(str(s_cfg.inventory_limit))
         inventory_skew = (Decimal(str(s_cfg.inventory_skew.skew_factor)) * inventory_pct) * spread
-        
+
         # Orderbook Imbalance Skew
         imbalance = self._calculate_orderbook_imbalance(symbol)
         imbalance_skew = DECIMAL_ZERO
@@ -853,21 +848,21 @@ class EnhancedMarketMakerStrategy:
 
     def _update_status(self):
         self._process_ws_messages()
-        
+
         for symbol, s_cfg in self.symbol_configs.items():
             if not s_cfg.trade_enabled: continue
 
             if time.time() - self.last_market_data_time[symbol] > s_cfg.market_data_stale_timeout_seconds:
                 self.logger.warning(f"Market data for {symbol} is stale. Skipping cycle.")
                 continue
-            
+
             self._update_technical_signals(symbol)
             quotes = self._calculate_quotes(symbol)
             self._reconcile_orders(symbol, *quotes)
 
-    def _reconcile_orders(self, symbol: str, bid_price: Optional[Decimal], ask_price: Optional[Decimal], bid_qty: Optional[Decimal], ask_qty: Optional[Decimal]):
+    def _reconcile_orders(self, symbol: str, bid_price: Decimal | None, ask_price: Decimal | None, bid_qty: Decimal | None, ask_qty: Decimal | None):
         s_cfg = self.symbol_configs[symbol]
-        
+
         if self.open_orders[symbol]:
             try:
                 self.exchange.cancel_all_orders(symbol)
@@ -878,7 +873,7 @@ class EnhancedMarketMakerStrategy:
         orders_to_place = []
         if bid_price and bid_qty and bid_qty > s_cfg.min_qty:
             orders_to_place.append({'symbol': symbol, 'type': 'limit', 'side': 'buy', 'amount': float(bid_qty), 'price': float(bid_price)})
-        
+
         if ask_price and ask_qty and ask_qty > s_cfg.min_qty:
             orders_to_place.append({'symbol': symbol, 'type': 'limit', 'side': 'sell', 'amount': float(ask_qty), 'price': float(ask_price)})
 
@@ -905,7 +900,7 @@ class EnhancedMarketMakerStrategy:
         self._setup_signal_handler()
         self.logger.info("Starting Hybrid Market Maker Bot...")
         self.notifier.send_message("🚀 Hybrid Market Maker Bot Started")
-        
+
         self._load_state()
         self._update_symbol_info()
         self.ws_client.start()
@@ -920,7 +915,7 @@ class EnhancedMarketMakerStrategy:
                 if now - last_status_update > STATUS_UPDATE_INTERVAL:
                     self._fetch_data()
                     last_status_update = now
-                
+
                 self._update_status()
 
                 if now - last_symbol_info_update > SYMBOL_INFO_REFRESH_INTERVAL:
@@ -944,7 +939,7 @@ class EnhancedMarketMakerStrategy:
                 self.logger.info(f"Cancelled all orders for {symbol}.")
             except Exception as e:
                 self.logger.error(f"Error cancelling orders for {symbol} on shutdown: {e}")
-        
+
         self._save_state()
         self.logger.info("Bot has been shut down.")
         self.notifier.send_message("🛑 Hybrid Market Maker Bot Stopped")

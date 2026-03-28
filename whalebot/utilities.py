@@ -2,10 +2,9 @@
 # utilities.py
 
 import logging
-import asyncio
 import time
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple
 import pandas as pd
 from pybit.unified_trading import HTTP
 from zoneinfo import ZoneInfo

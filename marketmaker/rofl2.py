@@ -4,18 +4,24 @@ import hmac
 import json
 import logging
 import os
+import signal  # Import the signal module
 import subprocess
 import sys
 import threading
 import time
-import signal  # Import the signal module
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from decimal import Decimal, getcontext, ROUND_DOWN, ROUND_UP, InvalidOperation, ROUND_HALF_UP
+from decimal import (
+    ROUND_HALF_UP,
+    Decimal,
+    InvalidOperation,
+    getcontext,
+)
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # --- External Libraries ---
 try:
@@ -31,8 +37,8 @@ try:
         NonNegativeFloat,
         NonNegativeInt,
         PositiveFloat,
-        ValidationError,
         PositiveInt,
+        ValidationError,
     )
     # Check for python-dotenv specifically
     try:
@@ -40,7 +46,7 @@ try:
         DOTENV_AVAILABLE = True
     except ImportError:
         DOTENV_AVAILABLE = False
-    
+
     EXTERNAL_LIBS_AVAILABLE = True
 except ImportError as e:
     # Provide a clear message if essential libraries are missing
@@ -326,7 +332,7 @@ if EXTERNAL_LIBS_AVAILABLE:
         telegram_chat_id: Optional[str] = None
         daily_pnl_stop_loss_pct: Optional[PositiveFloat] = Field(default=None, description="Percentage loss threshold for daily PnL (e.g., 0.05 for 5%).")
         daily_pnl_take_profit_pct: Optional[PositiveFloat] = Field(default=None, description="Percentage profit threshold for daily PnL (e.g., 0.10 for 10%).")
-        
+
         model_config = ConfigDict(json_dumps=lambda v: json.dumps(v, cls=JsonDecimalEncoder), json_loads=json_loads_decimal, validate_assignment=True)
 
     class ConfigManager:
@@ -415,7 +421,7 @@ if EXTERNAL_LIBS_AVAILABLE:
                 raw_symbol_configs = []
                 try:
                     symbol_config_path = Path(cls._global_config.symbol_config_file)
-                    with open(symbol_config_path, 'r') as f:
+                    with open(symbol_config_path) as f:
                         raw_symbol_configs = json.load(f)
                     if not isinstance(raw_symbol_configs, list):
                         raise ValueError("Symbol configuration file must contain a JSON list.")
@@ -470,7 +476,7 @@ if EXTERNAL_LIBS_AVAILABLE:
 
                             **s_cfg
                         }
-                        
+
                         # Ensure nested models are Pydantic objects before passing to SymbolConfig
                         if isinstance(merged_config_data.get("dynamic_spread"), dict):
                             merged_config_data["dynamic_spread"] = DynamicSpreadConfig(**merged_config_data["dynamic_spread"])
@@ -565,7 +571,7 @@ def termux_notify(message: str, title: str = "Pyrmethus Bot", is_error: bool = F
     if not EXTERNAL_LIBS_AVAILABLE:
         main_logger.debug("Termux notification skipped: External libraries not available.")
         return
-    
+
     bg_color = "#000000"  # Black background
     if is_error:
         text_color = "#FF0000"  # Red for errors
@@ -609,7 +615,7 @@ def initialize_exchange(logger: logging.Logger) -> Optional[Any]: # Return Any f
     if not EXTERNAL_LIBS_AVAILABLE:
         logger.critical(f"{Colors.NEON_RED}Exchange initialization skipped: External libraries not available.{Colors.RESET}")
         return None
-    
+
     if not BYBIT_API_KEY or not BYBIT_API_SECRET:
         logger.critical(
             f"{Colors.NEON_RED}API Key and/or Secret not found in .env. "
@@ -657,7 +663,7 @@ def retry_api_call(
             if not EXTERNAL_LIBS_AVAILABLE:
                 self.logger.critical(f"{Colors.NEON_RED}API call '{func.__name__}' skipped: External libraries not available.{Colors.RESET}")
                 return None
-            
+
             # Use the instance's logger if available, otherwise a generic one
             logger = self.logger if hasattr(self, "logger") else main_logger
             for i in range(attempts):
@@ -768,7 +774,7 @@ class BybitWebSocket:
         self.trade_thread: Optional[threading.Thread] = None
 
         # List of active SymbolBot instances to route updates
-        self.symbol_bots: List["SymbolBot"] = []
+        self.symbol_bots: List[SymbolBot] = []
 
         # Lock for protecting shared data like symbol_bots, order_books, recent_trades
         self.lock = threading.Lock()
@@ -780,7 +786,7 @@ class BybitWebSocket:
         expires = int((time.time() + 60) * 1000)  # Valid for 60 seconds
         signature = hmac.new(
             self.api_secret.encode("utf-8"),
-            f"GET/realtime{expires}".encode("utf-8"),
+            f"GET/realtime{expires}".encode(),
             hashlib.sha256,
         ).hexdigest()
         return {"op": "auth", "args": [self.api_key, expires, signature]}
@@ -812,7 +818,7 @@ class BybitWebSocket:
         """
         # Bybit V5 public topics often use the format 'SYMBOL' like 'BTCUSDT'.
         # For WS, we need to match Bybit's format.
-        
+
         # Simple normalization for common formats
         if len(bybit_symbol_ws) > 4 and bybit_symbol_ws[-4:].isupper(): # e.g., BTCUSDT
              base = bybit_symbol_ws[:-4]
@@ -822,7 +828,7 @@ class BybitWebSocket:
             # For inverse, Bybit's WS might use BTCUSD. CCXT might normalize this differently.
             # For WS routing, we usually need the format Bybit sends.
             return bybit_symbol_ws
-        
+
         # Fallback for unexpected formats or if no normalization is needed for the specific topic
         return bybit_symbol_ws
 
@@ -860,7 +866,7 @@ class BybitWebSocket:
         # For example, it might include order fills directly.
         # This needs to be mapped to SymbolBot's specific update handlers.
         # For now, let's assume it might include order status updates or execution reports.
-        
+
         # Example: Process execution reports from the trade stream (if applicable)
         if data.get("topic") == "execution" and data.get("data"):
             for exec_data in data["data"]:
@@ -950,7 +956,7 @@ class BybitWebSocket:
         """Callback when WebSocket connection opens."""
         stream_type = "Trade" if is_trade else ("Private" if is_private else "Public")
         self.logger.info(f"{Colors.CYAN}# WS {stream_type} stream connected.{Colors.RESET}")
-        
+
         if is_trade:
             self.ws_trade = ws
             # Trade stream usually requires authentication, and subscriptions are sent after.
@@ -986,7 +992,7 @@ class BybitWebSocket:
         """Manages a single WebSocket connection and its reconnection attempts."""
         on_message_callback = lambda ws, msg: self._on_message(ws, msg, is_private, is_trade)
         on_open_callback = lambda ws: self._on_open(ws, is_private, is_trade)
-        
+
         while not self._stop_event.is_set():
             try:
                 self.logger.info(f"Attempting to connect WebSocket for {url}...")
@@ -999,7 +1005,7 @@ class BybitWebSocket:
                 )
                 # Use ping_interval and ping_timeout to keep connection alive and detect failures
                 ws_app.run_forever(ping_interval=20, ping_timeout=10, sslopt={"check_hostname": False})
-                
+
                 # If run_forever exits, and we are not intentionally stopping, attempt reconnect
                 if not self._stop_event.is_set():
                     self.logger.info(f"WebSocket for {url} exited, attempting reconnect in {WS_RECONNECT_INTERVAL} seconds...")
@@ -1014,7 +1020,7 @@ class BybitWebSocket:
         if not EXTERNAL_LIBS_AVAILABLE:
             self.logger.critical(f"{Colors.NEON_RED}WebSocket streams skipped: External libraries not available.{Colors.RESET}")
             return
-        
+
         # Ensure previous streams are fully stopped before starting new ones
         self.stop_streams() # This also sets _stop_event, so clear it for new threads
         self._stop_event.clear()
@@ -1026,14 +1032,14 @@ class BybitWebSocket:
         # Start Public WebSocket
         self.public_thread = threading.Thread(target=self._connect_websocket, args=(self.public_url, False, False), daemon=True, name="PublicWSThread")
         self.public_thread.start()
-        
+
         # Start Private WebSocket (if API keys are present)
         if self.api_key and self.api_secret:
             self.private_thread = threading.Thread(target=self._connect_websocket, args=(self.private_url, True, False), daemon=True, name="PrivateWSThread")
             self.private_thread.start()
         else:
             self.logger.warning(f"{Colors.YELLOW}# Private WebSocket streams not started due to missing API keys.{Colors.RESET}")
-            
+
         # Start Trade WebSocket (for order operations, if needed)
         # Note: The provided SymbolBot class handles order creation/cancellation via CCXT (REST).
         # If you want direct WebSocket order placement, you'd need to manage ws_trade and its messages.
@@ -1048,7 +1054,7 @@ class BybitWebSocket:
         """Stops all WebSocket streams gracefully."""
         if not EXTERNAL_LIBS_AVAILABLE:
             return # Nothing to stop if not started
-        
+
         if self._stop_event.is_set(): # Already signaled to stop or never started
             return
 
@@ -1076,7 +1082,7 @@ class BybitWebSocket:
             self.private_thread.join(timeout=5)
         if self.trade_thread and self.trade_thread.is_alive():
             self.trade_thread.join(timeout=5)
-        
+
         self.public_thread = None
         self.private_thread = None
         self.trade_thread = None
@@ -1099,7 +1105,7 @@ class MarketMakerStrategy:
         time.sleep(0.5) # Give API a moment to process cancellations
 
         orders_to_place: List[Dict[str, Any]] = []
-        
+
         # Calculate dynamic order quantity
         current_order_qty = self.bot.get_dynamic_order_amount(mid_price)
 
@@ -1161,7 +1167,7 @@ class MarketMakerStrategy:
                 if depth_level["price"] >= bid_price and depth_level["cumulative_qty"] >= bid_qty:
                     sufficient_bid_liquidity = True
                     break
-            
+
             if not sufficient_bid_liquidity:
                 self.logger.warning(f"[{symbol}] Insufficient bid liquidity for layer {i+1} at price {bid_price:.{price_precision if price_precision is not None else 8}f}. Skipping bid order.")
             elif bid_qty > DECIMAL_ZERO:
@@ -1256,21 +1262,21 @@ class SymbolBot(threading.Thread):
 
         if self.state_file.exists():
             try:
-                with open(self.state_file, "r") as f:
+                with open(self.state_file) as f:
                     state_data = json_loads_decimal(f.read())
                     metrics = state_data.get("performance_metrics", {})
                     for key in ["profit", "fees", "net_pnl"]: self.performance_metrics[key] = Decimal(str(metrics.get(key, "0")))
                     self.performance_metrics["trades"] = int(metrics.get("trades", 0))
-                    
+
                     for trade_dict in state_data.get("trade_history", []):
                         try: self.trade_history.append(Trade(**trade_dict))
                         except (ValidationError, TypeError, InvalidOperation) as e: self.logger.error(f"[{self.symbol}] Error loading trade from state: {e}")
-                    
+
                     for date_str, daily_metric_dict in state_data.get("daily_metrics", {}).items():
                         # Convert Decimal values back from string for daily_metric_dict
                         converted_daily_metric_dict = {k: Decimal(v) if isinstance(v, str) and v.replace('.', '', 1).isdigit() else v for k, v in daily_metric_dict.items()}
                         self.daily_metrics[date_str] = converted_daily_metric_dict
-                    
+
                     self.pnl_history_snapshots = state_data.get("pnl_history_snapshots", [])
 
                 self.logger.info(f"[{self.symbol}] State summoned from the archives.")
@@ -1313,7 +1319,7 @@ class SymbolBot(threading.Thread):
         if not hasattr(self, 'today_date'):
             self.today_date = current_utc_date # Initialize if not present
             self.logger.warning(f"[{self.symbol}] 'today_date' not found, initializing to {self.today_date}.")
-        
+
         if self.today_date != current_utc_date:
             self.logger.info(f"[{self.symbol}] New day detected. Resetting daily PnL from {self.today_date} to {current_utc_date}.")
             # Store previous day's snapshot if not already stored
@@ -1455,9 +1461,9 @@ class SymbolBot(threading.Thread):
         """Fetches the current funding rate for the symbol."""
         try:
             funding_rates = self.exchange.fetch_funding_rate(self.symbol)
-            
+
             if funding_rates and funding_rates.get("info") and funding_rates["info"].get("list"):
-                funding_rate_str = funding_rates["info"]["list"][0].get("fundingRate", "0") 
+                funding_rate_str = funding_rates["info"]["list"][0].get("fundingRate", "0")
                 funding_rate = Decimal(str(funding_rate_str))
                 self.logger.debug(f"[{self.symbol}] Fetched funding rate: {funding_rate}")
                 return funding_rate
@@ -1495,7 +1501,7 @@ class SymbolBot(threading.Thread):
                 fee = Decimal(str(order_data.get("cumExecFee", "0")))
                 side = order_data.get("side").lower()
 
-                trade_profit = DECIMAL_ZERO 
+                trade_profit = DECIMAL_ZERO
 
                 trade = Trade(
                     side=side,
@@ -1587,7 +1593,7 @@ class SymbolBot(threading.Thread):
                 f"-> {self.inventory:+.4f}). Triggering TP/SL update."
             )
             self.update_take_profit_stop_loss()
-        
+
         self._reset_daily_metrics_if_new_day()
         current_daily_metrics = self.daily_metrics.setdefault(self.today_date, {"date": self.today_date, "realized_pnl": DECIMAL_ZERO, "unrealized_pnl_snapshot": DECIMAL_ZERO, "total_fees": DECIMAL_ZERO, "trades_count": 0})
         current_daily_metrics["unrealized_pnl_snapshot"] = self.unrealized_pnl
@@ -1660,20 +1666,20 @@ class SymbolBot(threading.Thread):
                                 f"Skipping profitable position close.{Colors.RESET}"
                             )
                             continue
-                        
+
                         bids_df = pd.DataFrame(orderbook["b"], columns=["price", "quantity"]) if orderbook["b"] else pd.DataFrame(columns=["price", "quantity"])
                         asks_df = pd.DataFrame(orderbook["a"], columns=["price", "quantity"]) if orderbook["a"] else pd.DataFrame(columns=["price", "quantity"])
-                        
+
                         required_qty = abs(position_size)
                         estimated_slippage_pct = DECIMAL_ZERO
-                        
+
                         if close_side == "sell": # Closing a long position with a market sell
                             # Ensure bids are sorted descending by price for accurate fill simulation
                             valid_bids = bids_df[bids_df["price"] >= mid_price * Decimal("0.99")].sort_values(by="price", ascending=False) # Slight buffer
                             if valid_bids.empty or valid_bids["quantity"].sum() < required_qty:
                                 self.logger.warning(f"[{self.symbol}] Insufficient bid liquidity or bad bids for market sell (long close). Skipping.")
                                 continue
-                            
+
                             filled_qty = DECIMAL_ZERO
                             total_cost = DECIMAL_ZERO
                             for _, row in valid_bids.iterrows():
@@ -1682,7 +1688,7 @@ class SymbolBot(threading.Thread):
                                 filled_qty += qty_to_fill
                                 if filled_qty >= required_qty:
                                     break
-                            
+
                             if filled_qty >= required_qty:
                                 exec_price_estimate = total_cost / required_qty
                                 estimated_slippage_pct = (
@@ -1699,7 +1705,7 @@ class SymbolBot(threading.Thread):
                             if valid_asks.empty or valid_asks["quantity"].sum() < required_qty:
                                 self.logger.warning(f"[{self.symbol}] Insufficient ask liquidity or bad asks for market buy (short close). Skipping.")
                                 continue
-                            
+
                             filled_qty = DECIMAL_ZERO
                             total_cost = DECIMAL_ZERO
                             for _, row in valid_asks.iterrows():
@@ -1708,7 +1714,7 @@ class SymbolBot(threading.Thread):
                                 filled_qty += qty_to_fill
                                 if filled_qty >= required_qty:
                                     break
-                            
+
                             if filled_qty >= required_qty:
                                 exec_price_estimate = total_cost / required_qty
                                 estimated_slippage_pct = (
@@ -1753,7 +1759,7 @@ class SymbolBot(threading.Thread):
         """Fetches the current available balance for a specified coin."""
         try:
             balances = self.exchange.fetch_balance(params={'accountType': 'UNIFIED'})
-            
+
             if balances and balances.get(coin) and balances[coin].get('free') is not None:
                 balance_amount = Decimal(str(balances[coin]['free']))
                 return balance_amount
@@ -1772,24 +1778,24 @@ class SymbolBot(threading.Thread):
             and self.cached_atr is not None
         ):
             return self.cached_atr if self.cached_atr is not None else DECIMAL_ZERO
-        
+
         if mid_price == DECIMAL_ZERO:
             self.logger.warning(f"[{self.symbol}] Mid-price is zero, cannot calculate ATR. Using cached or {DECIMAL_ZERO}.")
             return self.cached_atr if self.cached_atr is not None else DECIMAL_ZERO
 
         try:
             ohlcv_interval = self.config.kline_interval
-            
+
             ohlcv = self.exchange.fetch_ohlcv(self.symbol, ohlcv_interval, limit=20)
             if not ohlcv or len(ohlcv) < 20:
                 self.logger.warning(f"[{self.symbol}] Not enough OHLCV data ({len(ohlcv)}/{20}) for ATR. Using cached or {DECIMAL_ZERO}.")
                 return self.cached_atr if self.cached_atr is not None else DECIMAL_ZERO
-            
+
             df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
             df["high"] = df["high"].apply(lambda x: Decimal(str(x)))
             df["low"] = df["low"].apply(lambda x: Decimal(str(x)))
             df["close"] = df["close"].apply(lambda x: Decimal(str(x)))
-            
+
             if "high" not in df.columns or "low" not in df.columns or "close" not in df.columns:
                 self.logger.warning(f"[{self.symbol}] Missing columns for ATR calculation in OHLCV data. Using cached or {DECIMAL_ZERO}.")
                 return self.cached_atr if self.cached_atr is not None else DECIMAL_ZERO
@@ -1816,19 +1822,19 @@ class SymbolBot(threading.Thread):
         """Calculates the inventory skew component for spread adjustment."""
         if not self.config.inventory_skew.enabled or self.inventory == DECIMAL_ZERO:
             return DECIMAL_ZERO
-        
+
         normalized_inventory = self.inventory / Decimal(str(self.config.inventory_limit))
         skew_component = normalized_inventory * Decimal(str(self.config.inventory_skew.skew_factor))
-        
+
         max_skew_abs = Decimal(str(self.config.inventory_skew.max_skew)) if self.config.inventory_skew.max_skew is not None else Decimal("0.001")
         skew_component = max(min(skew_component, max_skew_abs), -max_skew_abs)
-        
+
         return abs(skew_component)
 
     def get_dynamic_order_amount(self, mid_price: Decimal) -> Decimal:
         """Calculates dynamic order amount based on ATR and inventory sizing factor."""
         base_qty = Decimal(str(self.config.order_amount))
-        
+
         if self.inventory != DECIMAL_ZERO and self.config.inventory_limit > 0:
             inventory_pressure = abs(self.inventory) / Decimal(str(self.config.inventory_limit))
             inventory_factor = Decimal("1") - (inventory_pressure * Decimal(str(self.config.inventory_sizing_factor)))
@@ -1837,7 +1843,7 @@ class SymbolBot(threading.Thread):
         if self.config.min_qty is not None and base_qty < self.config.min_qty:
             self.logger.warning(f"[{self.symbol}] Calculated quantity {base_qty:.8f} is below min_qty {self.config.min_qty:.8f}. Adjusting to min_qty.")
             base_qty = self.config.min_qty
-        
+
         if self.config.max_qty is not None and base_qty > self.config.max_qty:
             self.logger.warning(f"[{self.symbol}] Calculated quantity {base_qty:.8f} is above max_qty {self.config.max_qty:.8f}. Adjusting to max_qty.")
             base_qty = self.config.max_qty
@@ -1867,7 +1873,7 @@ class SymbolBot(threading.Thread):
         if not orders:
             self.logger.debug(f"[{self.symbol}] No orders to place in batch. Returning empty list.")
             return []
-        
+
         filtered_orders = []
         for order in orders:
             try:
@@ -1892,7 +1898,7 @@ class SymbolBot(threading.Thread):
             # For Bybit V5, it's often 'private_post_v5_order_create_batch' or similar.
             # Assuming CCXT's create_orders handles it or we'd make individual calls.
             # For robustness, we will create individual orders if batch fails or is not supported.
-            
+
             # Try batch first (if GLOBAL_CONFIG.use_batch_orders_for_refresh is True)
             if GLOBAL_CONFIG.use_batch_orders_for_refresh and hasattr(self.exchange, 'create_orders'):
                 responses = self.exchange.create_orders(filtered_orders)
@@ -1928,7 +1934,7 @@ class SymbolBot(threading.Thread):
                         amount = Decimal(str(order_info.get("qty", "0")))
                         price = Decimal(str(order_info.get("price", "0")))
                         status = order_info.get("orderStatus")
-                        
+
                         self.open_orders[client_order_id] = {
                             "side": side,
                             "amount": amount,
@@ -1968,8 +1974,8 @@ class SymbolBot(threading.Thread):
             # For Bybit V5, cancel_order requires 'orderId' or 'orderLinkId' and 'category'.
             # We are passing both, CCXT should handle it.
             self.exchange.cancel_order(
-                order_id, 
-                self.symbol, 
+                order_id,
+                self.symbol,
                 params={'category': GLOBAL_CONFIG.category, 'orderLinkId': client_order_id}
             )
             with self.ws_client.lock:
@@ -2002,7 +2008,7 @@ class SymbolBot(threading.Thread):
         elif self.inventory < DECIMAL_ZERO: # Short position
             take_profit_price = self.entry_price * (Decimal("1") - Decimal(str(self.config.take_profit_target_pct)))
             stop_loss_price = self.entry_price * (Decimal("1") + Decimal(str(self.config.stop_loss_trigger_pct)))
-        
+
         price_precision = self.config.price_precision
         take_profit_price = self._round_to_precision(take_profit_price, price_precision)
         stop_loss_price = self._round_to_precision(stop_loss_price, price_precision)
@@ -2045,12 +2051,12 @@ class SymbolBot(threading.Thread):
         """
         symbol_id_ws = self.symbol.replace("/", "").replace(":", "")
         current_time = time.time()
-        
+
         orderbook_stale = False
         if symbol_id_ws not in self.ws_client.last_orderbook_update_time or \
            (current_time - self.ws_client.last_orderbook_update_time[symbol_id_ws] > self.config.market_data_stale_timeout_seconds):
             orderbook_stale = True
-            
+
         trades_stale = False
         if symbol_id_ws not in self.ws_client.last_trades_update_time or \
            (current_time - self.ws_client.last_trades_update_time[symbol_id_ws] > self.config.market_data_stale_timeout_seconds):
@@ -2079,7 +2085,7 @@ class SymbolBot(threading.Thread):
                 placement_time_seconds = order_info["timestamp"] / 1000 # Convert ms to seconds
                 if (current_time - placement_time_seconds) > self.config.stale_order_max_age_seconds:
                     orders_to_cancel.append((order_info["exchange_id"], client_order_id))
-        
+
         for exchange_id, client_order_id in orders_to_cancel:
             self.logger.warning(
                 f"[{self.symbol}] Order {client_order_id} is stale (open for "
@@ -2098,7 +2104,7 @@ class SymbolBot(threading.Thread):
 
         self._reset_daily_metrics_if_new_day()
         current_daily_metrics = self.daily_metrics.setdefault(self.today_date, {"date": self.today_date, "realized_pnl": DECIMAL_ZERO, "unrealized_pnl_snapshot": DECIMAL_ZERO, "total_fees": DECIMAL_ZERO, "trades_count": 0})
-        
+
         realized_pnl_today = current_daily_metrics.get("realized_pnl", DECIMAL_ZERO)
         # Unrealized PnL is dynamic, use current self.unrealized_pnl
         total_pnl_today = realized_pnl_today + self.unrealized_pnl - current_daily_metrics.get("total_fees", DECIMAL_ZERO) # Include daily fees
@@ -2110,7 +2116,7 @@ class SymbolBot(threading.Thread):
             return False
 
         pnl_percent = total_pnl_today / total_balance
-        
+
         if GLOBAL_CONFIG.daily_pnl_stop_loss_pct and pnl_percent <= -Decimal(str(GLOBAL_CONFIG.daily_pnl_stop_loss_pct)):
             self.logger.critical(
                 f"{Colors.NEON_RED}[{self.symbol}] Daily Stop-Loss hit! PnL: {pnl_percent*100:.2f}%, "
@@ -2120,7 +2126,7 @@ class SymbolBot(threading.Thread):
             self.cancel_all_orders(self.symbol)
             termux_notify(f"{self.symbol}: Daily SL HIT! PnL: {pnl_percent*100:.2f}%", is_error=True)
             return True
-        
+
         if GLOBAL_CONFIG.daily_pnl_take_profit_pct and pnl_percent >= Decimal(str(GLOBAL_CONFIG.daily_pnl_take_profit_pct)):
             self.logger.info(
                 f"{Colors.NEON_GREEN}[{self.symbol}] Daily Take-Profit hit! PnL: {pnl_percent*100:.2f}%, "
@@ -2130,25 +2136,25 @@ class SymbolBot(threading.Thread):
             self.cancel_all_orders(self.symbol)
             termux_notify(f"{self.symbol}: Daily TP HIT! PnL: {pnl_percent*100:.2f}%", is_error=False)
             return True
-        
+
         return False
 
     def _display_status(self):
         """Displays real-time status of the bot in the console."""
         symbol_id_ws = self.symbol.replace("/", "").replace(":", "")
         orderbook = self.ws_client.get_order_book_snapshot(symbol_id_ws)
-        
+
         best_bid = orderbook["b"][0][0] if orderbook and orderbook.get("b") else DECIMAL_ZERO
         best_ask = orderbook["a"][0][0] if orderbook and orderbook.get("a") else DECIMAL_ZERO
         mid_price = (best_bid + best_ask) / Decimal("2") if best_bid and best_ask and best_bid > DECIMAL_ZERO and best_ask > DECIMAL_ZERO else DECIMAL_ZERO
 
         pnl_color = Colors.NEON_GREEN if self.unrealized_pnl >= DECIMAL_ZERO else Colors.NEON_RED
         pos_color = Colors.NEON_GREEN if self.inventory >= DECIMAL_ZERO else Colors.NEON_RED
-        
+
         current_daily_metrics = self.daily_metrics.get(self.today_date, {"realized_pnl": DECIMAL_ZERO, "unrealized_pnl_snapshot": DECIMAL_ZERO, "total_fees": DECIMAL_ZERO, "trades_count": 0})
         realized_pnl_today = current_daily_metrics.get("realized_pnl", DECIMAL_ZERO)
         fees_today = current_daily_metrics.get("total_fees", DECIMAL_ZERO)
-        
+
         # Total daily PnL (realized + current unrealized - fees)
         total_daily_pnl = realized_pnl_today + self.unrealized_pnl - fees_today
         daily_pnl_color = Colors.NEON_GREEN if total_daily_pnl >= DECIMAL_ZERO else Colors.NEON_RED
@@ -2172,14 +2178,14 @@ class SymbolBot(threading.Thread):
     def run(self):
         """The main loop for the SymbolBot."""
         self.logger.info(f"{Colors.CYAN}[{self.symbol}] SymbolBot starting.{Colors.RESET}")
-        
+
         # Initial setup
         if not self._fetch_symbol_info():
             self.logger.critical(f"{Colors.NEON_RED}[{self.symbol}] Failed to fetch symbol info. Stopping bot.{Colors.RESET}")
             termux_notify(f"{self.symbol}: Init Failed (Symbol Info)", is_error=True)
             self._stop_event.set()
             return
-        
+
         if GLOBAL_CONFIG.category == "linear": # Only for perpetuals
             if not self._set_margin_mode_and_position_mode():
                 self.logger.critical(f"{Colors.NEON_RED}[{self.symbol}] Failed to set margin/position mode. Stopping bot.{Colors.RESET}")
@@ -2194,11 +2200,11 @@ class SymbolBot(threading.Thread):
 
         last_status_display_time = time.time()
         last_order_refresh_time = time.time()
-        
+
         while not self._stop_event.is_set():
             try:
                 current_time = time.time()
-                
+
                 # Check market data freshness
                 if not self._check_market_data_freshness():
                     self.logger.warning(f"[{self.symbol}] Stale market data. Skipping order generation cycle.")
@@ -2215,7 +2221,7 @@ class SymbolBot(threading.Thread):
                 best_bid = orderbook["b"][0][0]
                 best_ask = orderbook["a"][0][0]
                 mid_price = (best_bid + best_ask) / Decimal("2")
-                
+
                 if mid_price == DECIMAL_ZERO:
                     self.logger.warning(f"[{self.symbol}] Mid price is zero, cannot proceed with order placement. Waiting...")
                     self._stop_event.wait(MAIN_LOOP_SLEEP_INTERVAL)
@@ -2233,12 +2239,12 @@ class SymbolBot(threading.Thread):
                     if (current_time - last_order_refresh_time) >= self.config.order_refresh_time:
                         self.strategy.generate_orders(self.symbol, mid_price, orderbook)
                         last_order_refresh_time = current_time
-                    
+
                     # Check for stale orders
                     self._check_and_handle_stale_orders()
 
                     # Additional profit taking (optional, as TP/SL is set via exchange)
-                    # self._close_profitable_entities(mid_price) 
+                    # self._close_profitable_entities(mid_price)
                 else:
                     self.logger.debug(f"[{self.symbol}] Trading disabled. Skipping order generation.")
                     self.cancel_all_orders(self.symbol) # Ensure no old orders are left if trading becomes disabled
@@ -2252,7 +2258,7 @@ class SymbolBot(threading.Thread):
             except Exception as e:
                 self.logger.error(f"{Colors.NEON_RED}[{self.symbol}] Unexpected error in main loop: {e}{Colors.RESET}", exc_info=True)
                 termux_notify(f"{self.symbol}: Bot Error: {str(e)[:50]}...", is_error=True)
-            
+
             self._stop_event.wait(MAIN_LOOP_SLEEP_INTERVAL) # Use wait with timeout for graceful shutdown
 
         self.logger.info(f"{Colors.CYAN}[{self.symbol}] SymbolBot stopping. Cancelling all orders and saving state.{Colors.RESET}")
@@ -2309,7 +2315,7 @@ class PyrmethusBot:
         if not self.exchange or not self.ws_client:
             self.logger.critical(f"{Colors.NEON_RED}Exchange or WebSocket client not initialized. Cannot start SymbolBots.{Colors.RESET}")
             return
-        
+
         new_public_topics: List[str] = []
         new_private_topics: List[str] = ["order", "execution", "position"] # Always subscribe to these
         new_trade_topics: List[str] = ["execution", "order", "position"] # If trade stream is used for these
@@ -2319,7 +2325,7 @@ class PyrmethusBot:
         for cfg in symbol_configs:
             if cfg.trade_enabled:
                 active_configs_to_start.append(cfg)
-        
+
         # Sort by symbol for consistent behavior, then take up to max_symbols_termux
         active_configs_to_start = sorted(active_configs_to_start, key=lambda x: x.symbol)[:GLOBAL_CONFIG.max_symbols_termux]
 
@@ -2344,7 +2350,7 @@ class PyrmethusBot:
                 self.symbol_bots[config.symbol] = bot
                 self.active_symbol_configs[config.symbol] = config # Track active config
                 bot.start()
-                
+
             elif self.active_symbol_configs.get(config.symbol) != config:
                 # Configuration for an existing bot changed, need to restart it
                 self.logger.info(f"{Colors.YELLOW}Configuration for {config.symbol} changed. Restarting SymbolBot...{Colors.RESET}")
@@ -2352,20 +2358,20 @@ class PyrmethusBot:
                 self.symbol_bots[config.symbol].join(timeout=10) # Wait for it to stop
                 if self.symbol_bots[config.symbol].is_alive():
                     self.logger.warning(f"[{config.symbol}] SymbolBot did not stop gracefully.")
-                
+
                 del self.symbol_bots[config.symbol]
-                
+
                 # Create and start new bot with updated config
                 bot = SymbolBot(config, self.exchange, self.ws_client, setup_logger(config.symbol.replace('/', '_').replace(':', '')))
                 self.symbol_bots[config.symbol] = bot
                 self.active_symbol_configs[config.symbol] = config
                 bot.start()
-            
+
             # Add WS topics for this symbol (after any restarts)
             symbol_id_ws = config.symbol.replace("/", "").replace(":", "")
             new_public_topics.append(f"orderbook.50.{symbol_id_ws}") # Order book depth 50
             new_public_topics.append(f"publicTrade.{symbol_id_ws}") # Public trades
-        
+
         # Update WebSocket subscriptions if topics have changed
         current_public_subscriptions = sorted(self.ws_client.public_subscriptions)
         current_private_subscriptions = sorted(self.ws_client.private_subscriptions)
@@ -2406,11 +2412,11 @@ class PyrmethusBot:
                 # Check for config changes more frequently than symbol info refresh, but not too often
                 if (time.time() - self.last_config_check_time) > 60: # Check config file every 60 seconds
                     self.logger.info(f"{Colors.CYAN}Periodically checking for symbol configuration changes...{Colors.RESET}")
-                    
+
                     # Reload global config and symbol configs from file
                     global GLOBAL_CONFIG, SYMBOL_CONFIGS
                     global_cfg_reloaded, symbol_configs_reloaded = ConfigManager.load_config(prompt_for_symbol=False)
-                    
+
                     # Update GLOBAL_CONFIG if it changed (important for daily PnL limits, etc.)
                     if global_cfg_reloaded != GLOBAL_CONFIG:
                         self.logger.info(f"{Colors.YELLOW}Global configuration changed. Applying updates.{Colors.RESET}")
@@ -2426,13 +2432,13 @@ class PyrmethusBot:
 
             except Exception as e:
                 self.logger.error(f"{Colors.NEON_RED}Error in config manager thread: {e}{Colors.RESET}", exc_info=True)
-            
+
             self._stop_event.wait(MAIN_LOOP_SLEEP_INTERVAL * 5) # Check less frequently than main bot loops
 
     def run(self):
         """Initiates the Pyrmethus Market Maker Bot."""
         self.logger.info(f"{Colors.NEON_GREEN}Pyrmethus Market Maker Bot starting...{Colors.RESET}")
-        
+
         # --- User Interaction for Symbol Selection ---
         try:
             selected_mode = input(
@@ -2453,11 +2459,11 @@ class PyrmethusBot:
                 except EOFError:
                     self.logger.warning(f"{Colors.YELLOW}No interactive input for symbol. Using default BTC/USDT:USDT.{Colors.RESET}")
                     input_symbol = 'BTC/USDT:USDT'
-            
+
             if not input_symbol:
                 self.logger.critical(f"{Colors.NEON_RED}No symbol entered. Exiting.{Colors.RESET}")
                 sys.exit(1)
-            
+
         # Load configuration (global and symbol-specific) based on user choice
         global GLOBAL_CONFIG, SYMBOL_CONFIGS
         try:
